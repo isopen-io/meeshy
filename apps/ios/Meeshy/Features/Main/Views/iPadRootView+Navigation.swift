@@ -171,16 +171,32 @@ extension iPadRootView {
 
         case .postComment, .legacyPostComment, .commentLike, .commentReply:
             if let postId = notification.context?.postId ?? data?.postId {
-                rightPanelRoute = .postDetail(postId, nil, showComments: true)
+                let postType = notification.metadata?.postType
+                if isStoryPost(postId: postId, postType: postType) {
+                    router.push(.storyNotificationTarget(
+                        storyId: postId,
+                        intent: .comments,
+                        context: StoryNotificationContext.from(notification)
+                    ))
+                } else {
+                    rightPanelRoute = .postDetail(postId, nil, showComments: true)
+                }
             }
 
         case .storyReaction, .statusReaction:
-            if let postId = notification.context?.postId ?? data?.postId,
-               let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
-                showStoryViewerFromConv = true
-            } else if let postId = notification.context?.postId ?? data?.postId {
-                rightPanelRoute = .postDetail(postId)
+            // Phase G follow-up — every story-reaction notification routes
+            // through the dedicated screen (which redirects into the viewer's
+            // viewers/reactions sheet, or surfaces the expired empty state
+            // when the underlying story is gone). Replaces the previous
+            // best-effort `groupIndex(forStoryId:)` lookup that silently
+            // dropped the notification when the local tray hadn't loaded
+            // the story yet.
+            if let postId = notification.context?.postId ?? data?.postId {
+                router.push(.storyNotificationTarget(
+                    storyId: postId,
+                    intent: .reactions,
+                    context: StoryNotificationContext.from(notification)
+                ))
             }
 
         case .missedCall, .callDeclined, .legacyCallMissed,
@@ -228,16 +244,24 @@ extension iPadRootView {
 
         case .postComment, .legacyPostComment, .commentLike, .commentReply:
             if let postId = event.postId {
-                rightPanelRoute = .postDetail(postId, nil, showComments: true)
+                if isStoryPost(postId: postId, postType: event.postType) {
+                    router.push(.storyNotificationTarget(
+                        storyId: postId,
+                        intent: .comments,
+                        context: makeStoryContext(from: event)
+                    ))
+                } else {
+                    rightPanelRoute = .postDetail(postId, nil, showComments: true)
+                }
             }
 
         case .storyReaction, .statusReaction:
-            if let postId = event.postId,
-               let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
-                showStoryViewerFromConv = true
-            } else if let postId = event.postId {
-                rightPanelRoute = .postDetail(postId)
+            if let postId = event.postId {
+                router.push(.storyNotificationTarget(
+                    storyId: postId,
+                    intent: .reactions,
+                    context: makeStoryContext(from: event)
+                ))
             }
 
         default:
@@ -290,16 +314,24 @@ extension iPadRootView {
 
         case .postComment, .legacyPostComment, .commentLike, .commentReply:
             if let postId = payload.postId, !postId.isEmpty {
-                rightPanelRoute = .postDetail(postId, nil, showComments: true)
+                if isStoryPost(postId: postId, postType: payload.postType) {
+                    router.push(.storyNotificationTarget(
+                        storyId: postId,
+                        intent: .comments,
+                        context: makeStoryContext(from: payload)
+                    ))
+                } else {
+                    rightPanelRoute = .postDetail(postId, nil, showComments: true)
+                }
             }
 
         case .storyReaction, .statusReaction:
-            if let postId = payload.postId, !postId.isEmpty,
-               let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                selectedStoryUserIdFromConv = storyViewModel.storyGroups[groupIdx].id
-                showStoryViewerFromConv = true
-            } else if let postId = payload.postId, !postId.isEmpty {
-                rightPanelRoute = .postDetail(postId)
+            if let postId = payload.postId, !postId.isEmpty {
+                router.push(.storyNotificationTarget(
+                    storyId: postId,
+                    intent: .reactions,
+                    context: makeStoryContext(from: payload)
+                ))
             }
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:
@@ -345,5 +377,62 @@ extension iPadRootView {
                 ToastManager.shared.showError("Impossible d'ouvrir la conversation")
             }
         }
+    }
+
+    // MARK: - Story Notification Heuristics
+    //
+    // Mirrors the iPhone (RootView) heuristic: a `.postComment` /
+    // `.commentReply` notification routes to the dedicated story
+    // notification screen when (a) the gateway tagged the post as
+    // `metadata.postType == "STORY"`, OR (b) the local cache holds a post
+    // with a non-nil `expiresAt` (which is, by definition, a story).
+    // Both signals are best-effort — the dedicated screen still degrades
+    // gracefully (`expired` empty state) for posts that no longer exist.
+
+    func isStoryPost(postId: String, postType: String?) -> Bool {
+        if postType?.uppercased() == "STORY" { return true }
+        if let cached = StoryService.shared.cachedPost(id: postId), cached.expiresAt != nil {
+            return true
+        }
+        return false
+    }
+
+    // Push payloads + socket events don't carry the typed metadata that
+    // `StoryNotificationContext.from(APINotification)` consumes, so we
+    // reproduce the fallback chain inline. Matches the iPhone
+    // implementation in `RootView.NotificationNavContext.makeStoryContext`.
+
+    func makeStoryContext(from event: SocketNotificationEvent) -> StoryNotificationContext {
+        let trigger: StoryNotificationContext.Trigger
+        switch event.notificationType {
+        case .storyReaction, .statusReaction:
+            trigger = .reaction(emoji: event.metadata?.emoji ?? "❤️")
+        default:
+            trigger = .comment(preview: event.metadata?.commentPreview ?? "")
+        }
+        return StoryNotificationContext(
+            actorAvatar: event.actor?.avatar,
+            actorDisplayName: event.actor?.displayName ?? event.actor?.username ?? "",
+            trigger: trigger,
+            occurredAt: Date()
+        )
+    }
+
+    func makeStoryContext(from payload: NotificationPayload) -> StoryNotificationContext {
+        let trigger: StoryNotificationContext.Trigger = {
+            switch payload.type ?? "" {
+            case MeeshyNotificationType.storyReaction.rawValue,
+                 MeeshyNotificationType.statusReaction.rawValue:
+                return .reaction(emoji: "❤️")
+            default:
+                return .comment(preview: "")
+            }
+        }()
+        return StoryNotificationContext(
+            actorAvatar: payload.senderAvatar,
+            actorDisplayName: payload.senderDisplayName ?? payload.senderUsername ?? "",
+            trigger: trigger,
+            occurredAt: Date()
+        )
     }
 }

@@ -11,8 +11,15 @@ import MeeshyUI
 /// Identifiable wrapper so the fullScreenCover receives the userId directly in
 /// its content closure, avoiding the SwiftUI race where isPresented flips true
 /// before the sibling @State (userId) has propagated through the view graph.
+///
+/// `initialAction` (Phase F) carries an optional one-shot side-effect for the
+/// presented `StoryViewerView`: when set, the viewer auto-opens either the
+/// comments overlay or the viewers/reactions sheet on first appear. Defaults
+/// to `nil` so every existing call site (tray taps, deep link, notification
+/// reaction tap) preserves the legacy "open viewer normally" behaviour.
 struct StoryViewerRequest: Identifiable, Equatable {
     let id: String
+    var initialAction: StoryViewerInitialAction? = nil
 }
 
 struct RootView: View {
@@ -30,7 +37,12 @@ struct RootView: View {
     @State private var showFeed = false
     @State private var feedWasVisibleBeforeNav = false
     @State private var showMenu = false
-    @State private var storyViewerRequest: StoryViewerRequest?
+    /// Hoisted out of `@State` (Phase H) so deep-stack screens such as
+    /// `StoryNotificationTargetScreen` can present the viewer through
+    /// `.environmentObject` injection without threading a binding through
+    /// every parent view. The coordinator's `pendingRequest` mirrors the
+    /// legacy `Identifiable?` contract expected by `.fullScreenCover(item:)`.
+    @StateObject private var storyViewerCoordinator = StoryViewerCoordinator()
 
     // Free-position button coordinates (persisted as "x,y" strings, 0-1 normalized)
     @AppStorage("feedButtonPosition") private var feedButtonPosition: String = "0.0,0.0"  // Top-left default
@@ -76,7 +88,7 @@ struct RootView: View {
                     onStoryViewRequest: { userId, _ in
                         Logger.messages.info("[RootView] onStoryViewRequest userId=\(userId, privacy: .public) isEmpty=\(userId.isEmpty)")
                         guard !userId.isEmpty else { return }
-                        storyViewerRequest = StoryViewerRequest(id: userId)
+                        storyViewerCoordinator.present(StoryViewerRequest(id: userId))
                     },
                     onNewConversation: { showNewConversation = true }
                 )
@@ -202,6 +214,12 @@ struct RootView: View {
                     case .editProfile:
                         EditProfileView()
                             .navigationBarHidden(true)
+                    case .storyNotificationTarget(let storyId, let intent, let context):
+                        StoryNotificationTargetScreen(
+                            storyId: storyId,
+                            intent: intent,
+                            context: context
+                        )
                     }
                 }
             }
@@ -288,6 +306,7 @@ struct RootView: View {
         .environmentObject(storyViewModel)
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
+        .environmentObject(storyViewerCoordinator)
         .onChange(of: router.sceneTitle) { _, title in
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
@@ -341,20 +360,28 @@ struct RootView: View {
                 PushNotificationManager.shared.clearPendingNotification()
             }
         }
-        .fullScreenCover(item: $storyViewerRequest) { request in
+        .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
             StoryViewerContainer(
                 viewModel: storyViewModel,
                 userId: request.id,
                 isPresented: Binding(
-                    get: { storyViewerRequest != nil },
-                    set: { if !$0 { storyViewerRequest = nil } }
+                    get: { storyViewerCoordinator.pendingRequest != nil },
+                    set: { if !$0 { storyViewerCoordinator.dismiss() } }
                 ),
                 onReplyToStory: { replyContext in
-                    storyViewerRequest = nil
+                    storyViewerCoordinator.dismiss()
                     router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
                 },
-                presentationSource: "RootView.fromConv"
+                presentationSource: "RootView.fromConv",
+                initialAction: request.initialAction
             )
+            // Re-inject the trio that StoryViewerView declares as
+            // @EnvironmentObject (so it can re-inject them onto its inner
+            // SharePickerView sheet). fullScreenCover does not inherit
+            // EnvironmentObjects automatically.
+            .environmentObject(router)
+            .environmentObject(statusViewModel)
+            .environmentObject(conversationViewModel)
         }
         .fullScreenCover(isPresented: Binding(
             get: { isCallActive },
@@ -403,6 +430,15 @@ struct RootView: View {
             let username = info["username"] ?? userId
             router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
         }
+        // Phase H — `StoryExpiredContent` posts `.openStoryComposer` from the
+        // notification flow when the underlying story is gone. Routing the
+        // composer through `StoryViewModel.showStoryComposer` reuses the
+        // single existing presentation surface (`StoryTrayView` listens on
+        // the same flag) so the composer animates in cleanly without
+        // stacking covers.
+        .onReceive(NotificationCenter.default.publisher(for: .openStoryComposer)) { _ in
+            storyViewModel.showStoryComposer = true
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("pushNavigateToRoute"))) { notification in
             guard let routeName = notification.object as? String else { return }
             if routeName.hasPrefix("postDetail:") {
@@ -411,7 +447,7 @@ struct RootView: View {
             } else if routeName.hasPrefix("storyDetail:") {
                 let postId = String(routeName.dropFirst("storyDetail:".count))
                 if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                    storyViewerRequest = StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id)
+                    storyViewerCoordinator.present(StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id))
                 } else {
                     router.push(.postDetail(postId))
                 }
@@ -445,6 +481,12 @@ struct RootView: View {
         }
         .sheet(isPresented: $showSharePicker) {
             if let content = router.pendingShareContent {
+                // SwiftUI sheets create a separate presentation hierarchy and do
+                // NOT inherit EnvironmentObjects from the parent view automatically.
+                // Re-inject the trio that SharePickerView declares as
+                // @EnvironmentObject (conversationListViewModel, router,
+                // statusViewModel), otherwise tapping share crashes with
+                // "EnvironmentObject error → SharePickerView.<missing>".
                 SharePickerView(
                     sharedContent: content,
                     onDismiss: {
@@ -453,6 +495,7 @@ struct RootView: View {
                 )
                 .environmentObject(conversationViewModel)
                 .environmentObject(router)
+                .environmentObject(statusViewModel)
                 .presentationDetents([.medium, .large])
             }
         }
@@ -558,16 +601,30 @@ struct RootView: View {
         let conversationId: String?
         let messageId: String?
         let postId: String?
+        // Phase G — `metadata.postType` distinguishes a story-flavoured
+        // post (`"STORY"`) from a regular feed post for `.postComment` /
+        // `.commentReply`. May be `nil` when the gateway omits it; the
+        // mapping in `navigateFromNotification` falls back to the local
+        // story cache as a secondary signal.
+        let postType: String?
         let senderId: String?
         let senderUsername: String?
+        // Phase G — snapshot fed to `StoryNotificationTargetScreen` so the
+        // expired empty state can render even when the underlying story is
+        // gone. Always present (uses `Date.now` + empty actor fallback when
+        // source data is partial, matching `StoryExpiredContent`'s
+        // resilient rendering contract).
+        let storyContext: StoryNotificationContext
 
         init(from notification: APINotification) {
             type = notification.notificationType
             conversationId = notification.context?.conversationId
             messageId = notification.context?.messageId
             postId = notification.context?.postId ?? notification.metadata?.postId
+            postType = notification.metadata?.postType
             senderId = notification.senderId
             senderUsername = notification.senderName
+            storyContext = StoryNotificationContext.from(notification)
         }
 
         init(from event: SocketNotificationEvent) {
@@ -575,8 +632,10 @@ struct RootView: View {
             conversationId = event.conversationId
             messageId = event.messageId
             postId = event.postId
+            postType = event.postType
             senderId = event.senderId
             senderUsername = event.senderUsername
+            storyContext = NotificationNavContext.makeStoryContext(from: event)
         }
 
         init(from payload: NotificationPayload) {
@@ -584,8 +643,58 @@ struct RootView: View {
             conversationId = payload.conversationId
             messageId = payload.messageId
             postId = payload.postId
+            postType = payload.postType
             senderId = payload.senderId
             senderUsername = payload.senderUsername
+            storyContext = NotificationNavContext.makeStoryContext(from: payload)
+        }
+
+        // MARK: - Story context fabrication
+        //
+        // The gateway-canonical mapping (`StoryNotificationContext.from`)
+        // expects an `APINotification` because that's the typed-metadata
+        // path. The two transient sources (`SocketNotificationEvent`,
+        // `NotificationPayload`) carry the same fields under different
+        // shapes — replicate the fallback chain inline so every entry point
+        // can drive `StoryNotificationTargetScreen` without a fresh fetch.
+
+        private static func makeStoryContext(from event: SocketNotificationEvent) -> StoryNotificationContext {
+            let trigger: StoryNotificationContext.Trigger
+            switch event.notificationType {
+            case .storyReaction, .statusReaction:
+                trigger = .reaction(emoji: event.metadata?.emoji ?? "❤️")
+            default:
+                trigger = .comment(preview: event.metadata?.commentPreview ?? "")
+            }
+            return StoryNotificationContext(
+                actorAvatar: event.actor?.avatar,
+                actorDisplayName: event.actor?.displayName ?? event.actor?.username ?? "",
+                trigger: trigger,
+                occurredAt: Date()
+            )
+        }
+
+        private static func makeStoryContext(from payload: NotificationPayload) -> StoryNotificationContext {
+            // Push payloads don't carry trigger metadata reliably (APN
+            // userInfo is restricted to a small subset). Use a neutral
+            // fallback — the screen renders the actor + a generic icon
+            // when `preview` is empty. Reaction emoji is unknown here; we
+            // fall back to the heart, mirroring `StoryNotificationContext.from`.
+            let trigger: StoryNotificationContext.Trigger = {
+                switch payload.type ?? "" {
+                case MeeshyNotificationType.storyReaction.rawValue,
+                     MeeshyNotificationType.statusReaction.rawValue:
+                    return .reaction(emoji: "❤️")
+                default:
+                    return .comment(preview: "")
+                }
+            }()
+            return StoryNotificationContext(
+                actorAvatar: payload.senderAvatar,
+                actorDisplayName: payload.senderDisplayName ?? payload.senderUsername ?? "",
+                trigger: trigger,
+                occurredAt: Date()
+            )
         }
     }
 
@@ -599,6 +708,21 @@ struct RootView: View {
 
     func handlePushNotificationTap(_ payload: NotificationPayload) {
         navigateFromNotification(NotificationNavContext(from: payload))
+    }
+
+    // Phase G — heuristic for `.postComment` / `.commentReply`: when the
+    // gateway populates `metadata.postType` we trust it (`"STORY"`); when
+    // it doesn't, fall back to the local cache where any post carrying a
+    // non-nil `expiresAt` is, by definition, a story. Both signals are
+    // "best-effort" and we deliberately bias toward the story flow when
+    // either matches because the dedicated screen still degrades gracefully
+    // (`expired` empty state) for posts that no longer exist.
+    private func isStoryNotification(_ ctx: NotificationNavContext, postId: String) -> Bool {
+        if ctx.postType?.uppercased() == "STORY" { return true }
+        if let cached = StoryService.shared.cachedPost(id: postId), cached.expiresAt != nil {
+            return true
+        }
+        return false
     }
 
     private func navigateFromNotification(_ ctx: NotificationNavContext) {
@@ -644,17 +768,39 @@ struct RootView: View {
 
         case .postComment, .legacyPostComment, .commentLike, .commentReply:
             if let postId = ctx.postId, !postId.isEmpty {
-                router.push(.postDetail(postId, nil, showComments: true))
+                // Phase G — story-flavoured comments route to the
+                // notification target screen (which redirects into the
+                // viewer's comments overlay or shows the expired empty
+                // state). Detection: explicit `metadata.postType == "STORY"`
+                // OR a cache hint (cached post carries a non-nil
+                // `expiresAt`). Falls back to the regular post-detail
+                // navigation otherwise.
+                if isStoryNotification(ctx, postId: postId) {
+                    router.push(.storyNotificationTarget(
+                        storyId: postId,
+                        intent: .comments,
+                        context: ctx.storyContext
+                    ))
+                } else {
+                    router.push(.postDetail(postId, nil, showComments: true))
+                }
             } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
             }
 
         case .storyReaction, .statusReaction:
-            if let postId = ctx.postId, !postId.isEmpty,
-               let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                storyViewerRequest = StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id)
-            } else if let postId = ctx.postId, !postId.isEmpty {
-                router.push(.postDetail(postId))
+            // Phase G — every story-reaction notification routes through
+            // the notification target screen so the viewer auto-opens its
+            // viewers/reactions sheet (or the expired empty state surfaces
+            // when the story is gone). Replaces the previous best-effort
+            // `groupIndex(forStoryId:)` lookup which silently dropped the
+            // notification when the local tray hadn't loaded the story yet.
+            if let postId = ctx.postId, !postId.isEmpty {
+                router.push(.storyNotificationTarget(
+                    storyId: postId,
+                    intent: .reactions,
+                    context: ctx.storyContext
+                ))
             }
 
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned:

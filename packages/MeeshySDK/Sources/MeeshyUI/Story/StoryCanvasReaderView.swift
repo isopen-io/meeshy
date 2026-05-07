@@ -406,6 +406,34 @@ public struct StoryCanvasReaderView: View {
                     default: return .center
                     }
                 }()
+                let kfX: CGFloat? = obj.keyframes.flatMap { frames -> CGFloat? in
+                    let xs: [(time: Float, value: CGFloat, easing: StoryEasing)] = frames.compactMap { kf in
+                        kf.x.map { (time: kf.time, value: $0, easing: kf.easing ?? .linear) }
+                    }
+                    return KeyframeInterpolator.interpolate(keyframes: xs, at: Float(time))
+                }
+                let kfY: CGFloat? = obj.keyframes.flatMap { frames -> CGFloat? in
+                    let ys: [(time: Float, value: CGFloat, easing: StoryEasing)] = frames.compactMap { kf in
+                        kf.y.map { (time: kf.time, value: $0, easing: kf.easing ?? .linear) }
+                    }
+                    return KeyframeInterpolator.interpolate(keyframes: ys, at: Float(time))
+                }
+                let kfScale: CGFloat? = obj.keyframes.flatMap { frames -> CGFloat? in
+                    let ss: [(time: Float, value: CGFloat, easing: StoryEasing)] = frames.compactMap { kf in
+                        kf.scale.map { (time: kf.time, value: $0, easing: kf.easing ?? .linear) }
+                    }
+                    return KeyframeInterpolator.interpolate(keyframes: ss, at: Float(time))
+                }
+                let kfOpacity: CGFloat? = obj.keyframes.flatMap { frames -> CGFloat? in
+                    let os: [(time: Float, value: CGFloat, easing: StoryEasing)] = frames.compactMap { kf in
+                        kf.opacity.map { (time: kf.time, value: $0, easing: kf.easing ?? .linear) }
+                    }
+                    return KeyframeInterpolator.interpolate(keyframes: os, at: Float(time))
+                }
+                let renderX = (kfX ?? obj.x) * size.width
+                let renderY = (kfY ?? obj.y) * size.height
+                let renderScale = kfScale ?? obj.scale
+                let renderOpacity = Double(opacity) * Double(kfOpacity ?? 1.0)
                 Text(content)
                     .font(storyFont(for: style, size: fontSize))
                     .foregroundColor(Color(hex: colorHex))
@@ -422,13 +450,13 @@ public struct StoryCanvasReaderView: View {
                     )
                     .shadow(color: style == .neon ? Color(hex: colorHex).opacity(0.6) : .clear, radius: 10)
                     .frame(maxWidth: size.width * 0.75)
-                    .scaleEffect(obj.scale)
-                    .opacity(opacity)
+                    .scaleEffect(renderScale)
+                    .opacity(renderOpacity)
                     .rotationEffect(.degrees(obj.rotation))
-                    .position(x: obj.x * size.width, y: obj.y * size.height)
+                    .position(x: renderX, y: renderY)
                     .zIndex(Double(obj.zIndex ?? 0))
                     .allowsHitTesting(false)
-                    .animation(.easeInOut(duration: 0.15), value: opacity)
+                    .animation(.easeInOut(duration: 0.15), value: renderOpacity)
             }
         }
     }
@@ -463,15 +491,44 @@ public struct StoryCanvasReaderView: View {
 
     // MARK: - Positioned Media Layer (timing-aware visibility + volume fade, skips first = bg)
 
+    /// Applies keyframe overrides (position, scale) to `media` at `time`, returning a mutated copy.
+    private func applyKeyframeOverrides(to media: StoryMediaObject, at time: Float) -> StoryMediaObject {
+        var overridden = media
+        if let pos = ReaderKeyframeResolver.resolvedPosition(
+            for: media, keyframes: media.keyframes, currentTime: time
+        ) {
+            overridden.x = pos.x
+            overridden.y = pos.y
+        }
+        if let scale = ReaderKeyframeResolver.resolvedScale(
+            keyframes: media.keyframes, currentTime: time
+        ) {
+            overridden.scale = scale
+        }
+        return overridden
+    }
+
     @ViewBuilder
     private func foregroundMediaLayer() -> some View {
         let time = state.currentTime
         let foregroundMedia = story.storyEffects?.resolvedForegroundMediaObjects ?? []
+        let transitions = story.storyEffects?.clipTransitions ?? []
         ForEach(foregroundMedia) { media in
             let visible = state.mediaObjectVisible(media, at: time)
             if visible {
+                let overriddenMedia = applyKeyframeOverrides(to: media, at: Float(time))
+                let kfOpacity = ReaderKeyframeResolver.resolvedOpacity(
+                    keyframes: media.keyframes, currentTime: Float(time)
+                )
+                let combinedOpacity = Double(
+                    Float(state.mediaObjectOpacity(for: media, at: time))
+                    * ReaderTransitionResolver.opacity(
+                        for: media, transitions: transitions, currentTime: Float(time)
+                    )
+                    * Float(kfOpacity ?? 1.0)
+                )
                 DraggableMediaView(
-                    mediaObject: .constant(media),
+                    mediaObject: .constant(overriddenMedia),
                     image: state.loadedImages[media.id] ?? preloadedImages[media.id],
                     videoURL: media.kind == .video ? resolvedVideoURL(for: media) : nil,
                     externalPlayer: media.kind == .video ? state.foregroundVideoPlayers[media.id] : nil,
@@ -481,9 +538,9 @@ public struct StoryCanvasReaderView: View {
                         state.mediaAspectRatios[media.id] = resolved
                     }
                 )
-                .opacity(state.mediaObjectOpacity(for: media, at: time))
+                .opacity(combinedOpacity)
                 .zIndex(Double(media.zIndex ?? 0))
-                .animation(.easeInOut(duration: 0.15), value: state.mediaObjectOpacity(for: media, at: time))
+                .animation(.easeInOut(duration: 0.15), value: combinedOpacity)
             }
         }
     }

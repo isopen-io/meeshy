@@ -207,6 +207,103 @@ public final class StoryComposerViewModel {
     var isMuted: Bool = false
     var hasBackgroundImage: Bool = false
 
+    // MARK: - Timeline V2 wiring
+
+    private var _timelineViewModel: TimelineViewModel?
+
+    public var timelineViewModel: TimelineViewModel {
+        if let existing = _timelineViewModel { return existing }
+        let engine = StoryTimelineEngine()
+        let stack = CommandStack()
+        let snap = SnapEngine(toleranceSeconds: 0.06)
+        let vm = TimelineViewModel(engine: engine, commandStack: stack, snapEngine: snap)
+        _timelineViewModel = vm
+        return vm
+    }
+
+    /// Bridges the composer's `currentSlide` into the timeline editor. Call
+    /// this from `onAppear` and whenever the user switches slides.
+    public func loadCurrentSlideIntoTimeline() {
+        let slide = currentSlide
+        let project = TimelineProject(from: slide)
+        let mediaURLs = collectMediaURLs(for: slide)
+        timelineViewModel.bootstrap(
+            project: project,
+            mediaURLs: mediaURLs,
+            images: slideImages
+        )
+        // Clear any selection that no longer exists in the new slide.
+        if let id = timelineViewModel.selection.selectedClipId,
+           !projectContains(clipId: id, in: project) {
+            timelineViewModel.selectClip(id: nil)
+        }
+    }
+
+    /// Writes the current `TimelineViewModel.project` back into `currentSlide.effects`
+    /// so the publish pipeline ships V2 edits (transitions, keyframes, splits, trims).
+    /// Call BEFORE invoking the publish queue.
+    public func commitTimelineToCurrentSlide() {
+        let project = timelineViewModel.project
+        var slide = currentSlide
+        project.apply(to: &slide)
+        currentSlide = slide
+    }
+
+    /// Builds the `mediaURLs` dict passed to the timeline engine for a given slide.
+    ///
+    /// Resolution order per element:
+    /// 1. `loadedVideoURLs` / `loadedAudioURLs` — URLs the composer recorded when the
+    ///    user picked a file from the library during this session (always highest fidelity).
+    /// 2. `CacheCoordinator.videoLocalFileURL` / `audioLocalFileURL` — synchronous disk-
+    ///    cache lookup by the element's `postMediaId`. Used when the composer is
+    ///    initialised from a repost or when the user re-enters the composer after the
+    ///    media was previously downloaded.
+    ///
+    /// Elements whose URL cannot be resolved are omitted — the engine handles missing
+    /// URLs gracefully (logs "skipping … no URL") without crashing.
+    private func collectMediaURLs(for slide: StorySlide) -> [String: URL] {
+        var result: [String: URL] = [:]
+
+        for media in slide.effects.mediaObjects ?? [] {
+            if let url = resolveMediaURL(elementId: media.id, postMediaId: media.postMediaId, kind: .video) {
+                result[media.id] = url
+            }
+        }
+        for audio in slide.effects.audioPlayerObjects ?? [] {
+            if let url = resolveMediaURL(elementId: audio.id, postMediaId: audio.postMediaId, kind: .audio) {
+                result[audio.id] = url
+            }
+        }
+
+        return result
+    }
+
+    private enum MediaKind { case video, audio }
+
+    private func resolveMediaURL(elementId: String, postMediaId: String, kind: MediaKind) -> URL? {
+        // Composer-session in-memory cache (highest priority).
+        switch kind {
+        case .video:
+            if let url = loadedVideoURLs[elementId] { return url }
+        case .audio:
+            if let url = loadedAudioURLs[elementId] { return url }
+        }
+        // Disk cache — synchronous, nonisolated lookup by postMediaId.
+        // `postMediaId` is the remote identifier used as the cache key when the
+        // gateway delivers the media URL.  Falls back to nil when not yet cached.
+        guard !postMediaId.isEmpty else { return nil }
+        switch kind {
+        case .video: return CacheCoordinator.videoLocalFileURL(for: postMediaId)
+        case .audio: return CacheCoordinator.audioLocalFileURL(for: postMediaId)
+        }
+    }
+
+    private func projectContains(clipId: String, in project: TimelineProject) -> Bool {
+        project.mediaObjects.contains(where: { $0.id == clipId })
+        || project.audioPlayerObjects.contains(where: { $0.id == clipId })
+        || project.textObjects.contains(where: { $0.id == clipId })
+    }
+
     // MARK: - Filter
 
     var selectedFilter: String?

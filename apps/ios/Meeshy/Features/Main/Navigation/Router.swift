@@ -28,6 +28,17 @@ enum Route: Hashable {
     case starredMessages
     case friendRequests
     case editProfile
+    /// Phase G — destination for story-related notifications. The screen
+    /// resolves the underlying story (cache-first, network-revalidate) and
+    /// dispatches to the active-story bridge or the expired empty state.
+    /// `intent` decides which surface (.comments / .reactions) the user
+    /// should land on; `context` carries the snapshot needed to render the
+    /// expired state (actor, trigger, occurredAt) without a fresh fetch.
+    case storyNotificationTarget(
+        storyId: String,
+        intent: StoryIntent,
+        context: StoryNotificationContext
+    )
 }
 
 extension Route {
@@ -88,6 +99,8 @@ extension Route {
             return "Demandes d'amis"
         case .editProfile:
             return "Modifier le profil"
+        case .storyNotificationTarget:
+            return "Story"
         }
     }
 }
@@ -95,7 +108,10 @@ extension Route {
 @MainActor
 final class Router: ObservableObject {
     @Published var path: [Route] = [] {
-        didSet { AnalyticsManager.shared.trackRoute(path.last) }
+        didSet {
+            print("[DIAG] Router.path didSet count=\(path.count) last=\(String(describing: path.last))")
+            AnalyticsManager.shared.trackRoute(path.last)
+        }
     }
     @Published var deepLinkProfileUser: ProfileSheetUser?
     @Published var pendingShareContent: SharedContentType? = nil

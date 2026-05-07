@@ -537,6 +537,7 @@ struct ConversationListView: View {
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
             }
             .task {
+                print("[DIAG] ConversationListView.task ENTERED")
                 async let conversations: Void = conversationViewModel.loadConversations()
                 async let communities: Void = loadUserCommunities()
                 _ = await (conversations, communities)

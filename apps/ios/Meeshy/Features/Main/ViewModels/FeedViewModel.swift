@@ -4,6 +4,10 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+// `LanguageProviding` and `AuthManagerLanguageProvider` were extracted to
+// `Features/Main/Services/LanguageProviding.swift` so PostDetailViewModel /
+// BookmarksViewModel can depend on them without importing FeedViewModel.
+
 @MainActor
 class FeedViewModel: ObservableObject {
     @Published var posts: [FeedPost] = []
@@ -25,6 +29,7 @@ class FeedViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket: SocialSocketProviding
     private let postService: PostServiceProviding
+    private let languageProvider: LanguageProviding
     private var cacheSaveTask: Task<Void, Never>?
     private var isFeedLoadInProgress = false
     /// Tracks postIds whose comments are currently being prefetched, to coalesce
@@ -40,11 +45,13 @@ class FeedViewModel: ObservableObject {
     init(
         api: APIClientProviding = APIClient.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
-        postService: PostServiceProviding = PostService.shared
+        postService: PostServiceProviding = PostService.shared,
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
     ) {
         self.api = api
         self.socialSocket = socialSocket
         self.postService = postService
+        self.languageProvider = languageProvider
     }
 
     /// Wire persistence store and socket handler for GRDB-backed feed.
@@ -57,7 +64,7 @@ class FeedViewModel: ObservableObject {
     }
 
     private var preferredLanguages: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        languageProvider.preferredLanguages
     }
 
     private var userLanguage: String {

@@ -1,6 +1,42 @@
 import Foundation
 import GRDB
 
+/// Notification posted after MessagePersistenceActor commits a write that may
+/// have changed the messages of a conversation. MessageStore listens for this
+/// notification instead of using GRDB observation, which crashes under Swift 6
+/// strict concurrency interop with the GRDB Swift module.
+/// The notification's `userInfo["conversationId"]` is a `String` identifying
+/// the conversation. `nil` means "may affect any conversation".
+public extension Notification.Name {
+    static let messageStoreShouldRefresh = Notification.Name("me.meeshy.messageStore.shouldRefresh")
+}
+
+/// Posts the `messageStoreShouldRefresh` notification on the main thread for
+/// the given conversation IDs. Called after any write through
+/// MessagePersistenceActor that may affect the displayed message list.
+///
+/// `MessageStore.startObserving(...)` filters notifications by
+/// `userInfo["conversationId"]` and silently rejects anything else, so
+/// posting with an empty set is a programming error: the GRDB row is
+/// updated but no observer ever fires. We assert in DEBUG to catch
+/// mistakes early (see fix 6c6270d1 + the 15-method follow-up) and
+/// no-op in release rather than emit the misleading wildcard notif
+/// the previous implementation produced.
+fileprivate func postMessageStoreRefresh(conversationIds: Set<String>) {
+    assert(!conversationIds.isEmpty,
+           "postMessageStoreRefresh called with empty Set<String> — every mutation method on MessagePersistenceActor must scope its refresh to the affected conversationId. Otherwise MessageStore observers drop the notification and the UI freezes on its last cached state.")
+    guard !conversationIds.isEmpty else { return }
+    DispatchQueue.main.async {
+        for convId in conversationIds {
+            NotificationCenter.default.post(
+                name: .messageStoreShouldRefresh,
+                object: nil,
+                userInfo: ["conversationId": convId]
+            )
+        }
+    }
+}
+
 public actor MessagePersistenceActor {
     private let dbWriter: any DatabaseWriter
 
@@ -62,11 +98,18 @@ public actor MessagePersistenceActor {
         var r = record
         r.cachedTimeString = MessageRecord.computeTimeString(for: r.createdAt)
         try dbWriter.write { db in try r.insert(db) }
+        postMessageStoreRefresh(conversationIds: [r.conversationId])
     }
 
     public func applyEvent(localId: String, event: MessageEvent) throws -> MessageState? {
-        try dbWriter.write { db in
+        // We need the record's conversationId outside the write block so we
+        // can post a *targeted* refresh notification. MessageStore observers
+        // filter notifications by conversationId — a notification without
+        // one is silently dropped, leaving the bubble stuck in `.sending`.
+        var affectedConversationId: String?
+        let result = try dbWriter.write { db -> MessageState? in
             guard var record = try MessageRecord.fetchOne(db, key: localId) else { return nil }
+            affectedConversationId = record.conversationId
 
             var machine = MessageStateMachine(
                 state: record.state,
@@ -100,16 +143,26 @@ public actor MessagePersistenceActor {
             try record.update(db)
             return newState
         }
+        // Post a refresh scoped to the record's conversation so MessageStore
+        // observers actually re-read. Skip when the row was missing or the
+        // transition was rejected (no DB write happened).
+        if result != nil, let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
+        return result
     }
 
     // MARK: - Buffered Writes
 
     public func bufferIncoming(_ messages: [IncomingMessageData]) {
         writeContinuation.yield(.reconcileBatch(messages))
+        let convIds = Set(messages.map(\.conversationId))
+        postMessageStoreRefresh(conversationIds: convIds)
     }
 
     public func bufferBatchDelivery(conversationId: String, event: MessageEvent) {
         writeContinuation.yield(.batchDeliveryUpdate(conversationId: conversationId, event: event))
+        postMessageStoreRefresh(conversationIds: [conversationId])
     }
 
     private func reconcileBatchSync(_ messages: [IncomingMessageData]) throws {
@@ -207,7 +260,11 @@ public actor MessagePersistenceActor {
     // MARK: - Edit / Delete / Reactions / ViewOnce
 
     public func markEdited(localId: String, newContent: String, editedAt: Date) throws {
+        var affectedConversationId: String?
         try dbWriter.write { db in
+            affectedConversationId = try MessageRecord
+                .filter(Column("localId") == localId)
+                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET content = ?, isEdited = 1, editedAt = ?,
@@ -216,10 +273,17 @@ public actor MessagePersistenceActor {
                 arguments: [newContent, editedAt, Date(), localId]
             )
         }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
     }
 
     public func markDeleted(localId: String, deletedAt: Date) throws {
+        var affectedConversationId: String?
         try dbWriter.write { db in
+            affectedConversationId = try MessageRecord
+                .filter(Column("localId") == localId)
+                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET deletedAt = ?, content = NULL,
@@ -228,12 +292,19 @@ public actor MessagePersistenceActor {
                 arguments: [deletedAt, Date(), localId]
             )
         }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
     }
 
     /// Undo a soft-delete, restoring the message to a non-deleted state.
     /// Used as the optimistic rollback when a delete network call fails.
     public func markUndeleted(localId: String) throws {
+        var affectedConversationId: String?
         try dbWriter.write { db in
+            affectedConversationId = try MessageRecord
+                .filter(Column("localId") == localId)
+                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET deletedAt = NULL,
@@ -242,12 +313,19 @@ public actor MessagePersistenceActor {
                 arguments: [Date(), localId]
             )
         }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
     }
 
     /// Optimistically update the pin state of a message.
     /// Pass `pinnedAt: nil, pinnedBy: nil` to unpin.
     public func updatePinned(localId: String, pinnedAt: Date?, pinnedBy: String?) throws {
+        var affectedConversationId: String?
         try dbWriter.write { db in
+            affectedConversationId = try MessageRecord
+                .filter(Column("localId") == localId)
+                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET pinnedAt = ?, pinnedBy = ?,
@@ -256,14 +334,19 @@ public actor MessagePersistenceActor {
                 arguments: [pinnedAt, pinnedBy, Date(), localId]
             )
         }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
     }
 
     /// Set or clear the blurred effect flag on a message.
     /// Reads the current `effectFlags`, toggles the `.blurred` bit, and writes back.
     public func updateBlurred(localId: String, isBlurred: Bool) throws {
         let blurredBit: UInt32 = 1 << 1
+        var affectedConversationId: String?
         try dbWriter.write { db in
             guard var record = try MessageRecord.fetchOne(db, key: localId) else { return }
+            affectedConversationId = record.conversationId
             if isBlurred {
                 record.effectFlags |= blurredBit
             } else {
@@ -273,25 +356,37 @@ public actor MessagePersistenceActor {
             record.changeVersion += 1
             try record.update(db)
         }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
     }
 
     /// Mark a view-once message as consumed: set `isBlurred` and blank the content.
     /// The view-once count update is handled separately via `updateViewOnceCount`.
     public func markConsumed(localId: String) throws {
         let blurredBit: UInt32 = 1 << 1
+        var affectedConversationId: String?
         try dbWriter.write { db in
             guard var record = try MessageRecord.fetchOne(db, key: localId) else { return }
+            affectedConversationId = record.conversationId
             record.effectFlags |= blurredBit
             record.content = nil
             record.updatedAt = Date()
             record.changeVersion += 1
             try record.update(db)
         }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
     }
 
     public func updateReactions(localId: String, reactionsJson: Data,
                                  reactionCount: Int, currentUserReactionsJson: Data?) throws {
+        var affectedConversationId: String?
         try dbWriter.write { db in
+            affectedConversationId = try MessageRecord
+                .filter(Column("localId") == localId)
+                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET reactionsJson = ?, reactionCount = ?,
@@ -301,10 +396,17 @@ public actor MessagePersistenceActor {
                 arguments: [reactionsJson, reactionCount, currentUserReactionsJson, Date(), localId]
             )
         }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
     }
 
     public func updateViewOnceCount(localId: String, count: Int) throws {
+        var affectedConversationId: String?
         try dbWriter.write { db in
+            affectedConversationId = try MessageRecord
+                .filter(Column("localId") == localId)
+                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET viewOnceCount = ?, updatedAt = ?,
@@ -312,6 +414,9 @@ public actor MessagePersistenceActor {
                     """,
                 arguments: [count, Date(), localId]
             )
+        }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
         }
     }
 
@@ -335,7 +440,11 @@ public actor MessagePersistenceActor {
         readByAllAt: Date?,
         updatedAt: Date
     ) throws {
+        var affectedConversationId: String?
         try dbWriter.write { db in
+            affectedConversationId = try MessageRecord
+                .filter(Column("localId") == localId)
+                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages
@@ -357,13 +466,20 @@ public actor MessagePersistenceActor {
                 ]
             )
         }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
     }
 
     /// Overwrite the attachments blob for an already-persisted message.
     /// Used when the server echoes back an existing message with enriched
     /// attachment data (e.g. processed media URLs).
     public func updateAttachmentsJson(localId: String, attachmentsJson: Data?) throws {
+        var affectedConversationId: String?
         try dbWriter.write { db in
+            affectedConversationId = try MessageRecord
+                .filter(Column("localId") == localId)
+                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET attachmentsJson = ?,
@@ -373,6 +489,9 @@ public actor MessagePersistenceActor {
                 arguments: [attachmentsJson, Date(), localId]
             )
         }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
     }
 
     /// Append a reaction to a persisted message, deduplicating by emoji+participantId.
@@ -380,8 +499,11 @@ public actor MessagePersistenceActor {
     public func appendReaction(localId: String, reactionId: String,
                                 messageId: String, participantId: String?,
                                 emoji: String) throws {
+        var affectedConversationId: String?
+        var didMutate = false
         try dbWriter.write { db in
             guard var record = try MessageRecord.filter(Column("localId") == localId).fetchOne(db) else { return }
+            affectedConversationId = record.conversationId
             var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
                                 from: record.reactionsJson ?? Data())) ?? []
             let alreadyExists = reactions.contains {
@@ -396,22 +518,35 @@ public actor MessagePersistenceActor {
             record.updatedAt = Date()
             record.changeVersion += 1
             try record.update(db)
+            didMutate = true
+        }
+        if didMutate, let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
         }
     }
 
     /// Remove a reaction from a persisted message, matched by emoji+participantId.
     /// The GRDB change triggers store observation so the view re-renders.
     public func removeReaction(localId: String, emoji: String, participantId: String?) throws {
+        var affectedConversationId: String?
+        var didMutate = false
         try dbWriter.write { db in
             guard var record = try MessageRecord.filter(Column("localId") == localId).fetchOne(db) else { return }
+            affectedConversationId = record.conversationId
             var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
                                 from: record.reactionsJson ?? Data())) ?? []
+            let countBefore = reactions.count
             reactions.removeAll { $0.emoji == emoji && $0.participantId == participantId }
+            guard reactions.count != countBefore else { return }
             record.reactionsJson = try JSONEncoder().encode(reactions)
             record.reactionCount = reactions.count
             record.updatedAt = Date()
             record.changeVersion += 1
             try record.update(db)
+            didMutate = true
+        }
+        if didMutate, let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
         }
     }
 
@@ -419,7 +554,11 @@ public actor MessagePersistenceActor {
     /// content — used when an attachment status event (listened/watched/viewed)
     /// arrives so the store fires and bubbles re-render.
     public func touchUpdatedAt(localId: String) throws {
+        var affectedConversationId: String?
         try dbWriter.write { db in
+            affectedConversationId = try MessageRecord
+                .filter(Column("localId") == localId)
+                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET updatedAt = ?,
@@ -428,12 +567,19 @@ public actor MessagePersistenceActor {
                 arguments: [Date(), localId]
             )
         }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
     }
 
     public func updateLayout(localId: String, width: Double, height: Double,
                               lastLineWidth: Double, lineCount: Int, timestampInline: Bool,
                               epoch: Int, maxWidth: Double) throws {
+        var affectedConversationId: String?
         try dbWriter.write { db in
+            affectedConversationId = try MessageRecord
+                .filter(Column("localId") == localId)
+                .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET cachedBubbleWidth = ?, cachedBubbleHeight = ?,
@@ -443,6 +589,9 @@ public actor MessagePersistenceActor {
                 arguments: [width, height, lastLineWidth, lineCount, timestampInline,
                            epoch, maxWidth, localId]
             )
+        }
+        if let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
         }
     }
 
@@ -489,11 +638,22 @@ public actor MessagePersistenceActor {
     /// the authoritative server data without a direct `messages = ...` write.
     public func upsertFromAPIMessages(_ apiMessages: [APIMessage]) async throws {
         let encoder = JSONEncoder()
+        let convIds = Set(apiMessages.map(\.conversationId))
+        defer { postMessageStoreRefresh(conversationIds: convIds) }
         try await dbWriter.write { db in
             for api in apiMessages {
                 let senderName = api.sender?.name
                 let senderUsername = api.sender?.username
                 let senderAvatarURL = api.sender?.resolvedAvatar
+                // The gateway returns `senderId` = conversation-membership id
+                // (participantId), not the actual user id. The real user id
+                // lives on `sender.userId` / `sender.user.id`. Store the
+                // resolved user id in the record's `senderId` column so that
+                // downstream `isMe` checks (record.toMessage → isMe = senderId
+                // == currentUserId) work correctly. Fallback to `api.senderId`
+                // when the gateway omits the sender envelope (older payloads,
+                // system messages).
+                let resolvedSenderUserId = api.sender?.resolvedUserId ?? api.senderId
 
                 let attachmentsJson: Data? = {
                     guard let atts = api.attachments, !atts.isEmpty else { return nil }
@@ -602,6 +762,11 @@ public actor MessagePersistenceActor {
                     existing.deliveredToAllAt = api.deliveredToAllAt
                     existing.readByAllAt = api.readByAllAt
                     existing.state = max(existing.state, computedState)
+                    // Self-heal rows that were upserted before we resolved
+                    // sender.userId — their `senderId` column held the
+                    // gateway's participantId, breaking `isMe` checks. Each
+                    // refresh from the API now backfills the correct user id.
+                    existing.senderId = resolvedSenderUserId
                     existing.senderName = senderName
                     existing.senderUsername = senderUsername
                     existing.senderAvatarURL = senderAvatarURL
@@ -616,7 +781,7 @@ public actor MessagePersistenceActor {
                     let record = MessageRecord(
                         localId: api.id, serverId: api.id,
                         conversationId: api.conversationId,
-                        senderId: api.senderId,
+                        senderId: resolvedSenderUserId,
                         content: api.content,
                         originalLanguage: api.originalLanguage ?? "fr",
                         messageType: api.messageType ?? "text",
@@ -685,15 +850,37 @@ public actor MessagePersistenceActor {
                 .filter(Column("conversationId") == conversationId)
                 .deleteAll(db)
         }
+        // Post a refresh notification scoped to the affected conversation so
+        // MessageStore observers re-read and clear the now-deleted rows from
+        // their in-memory caches. Without this the UI still renders the
+        // revoked conversation's messages until the user navigates away.
+        postMessageStoreRefresh(conversationIds: [conversationId])
     }
 
     /// Delete ephemeral messages whose expiry has passed.
     public func deleteExpiredEphemeral(before: Date) async throws {
-        try await dbWriter.write { db in
+        // Collect the affected conversationIds BEFORE the delete so we can
+        // post one targeted refresh per conversation. A single sweep may
+        // touch multiple conversations at once, and MessageStore observers
+        // filter notifications by conversationId — posting nothing leaves
+        // expired rows rendering until the conversation reloads from
+        // another path. We return the set from the write closure rather
+        // than mutating an outer var (Swift 6 strict concurrency rejects
+        // the latter inside a Sendable closure).
+        let affectedConvIds: Set<String> = try await dbWriter.write { db in
+            let expired = try MessageRecord
+                .filter(Column("expiresAt") != nil)
+                .filter(Column("expiresAt") <= before)
+                .fetchAll(db)
+            let ids = Set(expired.map { $0.conversationId })
             try MessageRecord
                 .filter(Column("expiresAt") != nil)
                 .filter(Column("expiresAt") <= before)
                 .deleteAll(db)
+            return ids
+        }
+        if !affectedConvIds.isEmpty {
+            postMessageStoreRefresh(conversationIds: affectedConvIds)
         }
     }
 
@@ -706,6 +893,8 @@ public actor MessagePersistenceActor {
         deliveredToAllAt: Date?,
         readByAllAt: Date?
     ) throws {
+        var affectedConversationId: String?
+        var didMutate = false
         try dbWriter.write { db in
             guard var record = try MessageRecord.fetchOne(db, key: localId) else { return }
             guard deliveredCount > record.deliveredCount
@@ -713,6 +902,7 @@ public actor MessagePersistenceActor {
                 || (deliveredToAllAt != nil && record.deliveredToAllAt == nil)
                 || (readByAllAt != nil && record.readByAllAt == nil)
             else { return }
+            affectedConversationId = record.conversationId
             record.deliveredCount = max(record.deliveredCount, deliveredCount)
             record.readCount = max(record.readCount, readCount)
             if let dAt = deliveredToAllAt, record.deliveredToAllAt == nil {
@@ -724,6 +914,10 @@ public actor MessagePersistenceActor {
             record.updatedAt = Date()
             record.changeVersion += 1
             try record.update(db)
+            didMutate = true
+        }
+        if didMutate, let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
         }
     }
 

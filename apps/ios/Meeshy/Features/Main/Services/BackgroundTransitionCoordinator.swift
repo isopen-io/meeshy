@@ -54,6 +54,13 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("cache.flushAll") {
             await CacheCoordinator.shared.flushAll()
         }
+        await withBudget("tusCheckpoints.purgeStale") {
+            // Sweep TUS upload checkpoints whose backing server session
+            // has likely been GC'd (>2 days idle). Keeps the table small
+            // and prevents the resume path from chasing a 404 on the
+            // first PATCH of a long-abandoned upload.
+            await TusUploadCheckpointStore.shared.purgeStale()
+        }
         await withBudget("push.flushPendingReceipts") {
             await PushDeliveryReceiptService.shared.flushPending()
         }

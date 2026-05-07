@@ -63,7 +63,8 @@ extension ConversationView {
             composerState.pendingMediaFiles.removeAll()
             composerState.pendingThumbnails.removeAll()
             messageText = ""
-            composerState.pendingReplyReference = nil
+            ReplyContextCleaner(conversationId: viewModel.conversationId)
+                .clear(pendingReplyReference: &composerState.pendingReplyReference)
             viewModel.stopTypingEmission()
             HapticFeedback.light()
             let lang = composerState.selectedLanguage
@@ -73,7 +74,8 @@ extension ConversationView {
 
         // File upload flow: keep attachments visible, show progress
         messageText = ""
-        composerState.pendingReplyReference = nil
+        ReplyContextCleaner(conversationId: viewModel.conversationId)
+            .clear(pendingReplyReference: &composerState.pendingReplyReference)
         viewModel.stopTypingEmission()
         composerState.isUploading = true
         HapticFeedback.light()

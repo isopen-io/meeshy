@@ -167,6 +167,32 @@ public final class AppDatabase: @unchecked Sendable {
             try db.create(index: "idx_translation_cache_messageId", on: "translation_cache", columns: ["messageId"])
         }
 
+        migrator.registerMigration("v6_tus_upload_checkpoint") { db in
+            // Per-file TUS upload checkpoints persisted across app kills so
+            // a retry can PATCH from the last known offset instead of
+            // re-uploading the slide from byte 0. Keyed on the SHA256 of
+            // the file content (computed bytewise by `TusUploadManager`)
+            // — stable across re-encodes that produce the same bytes,
+            // collision-free across distinct files.
+            try db.create(table: "tus_upload_checkpoint") { t in
+                t.column("checkpointKey", .text).primaryKey()
+                t.column("uploadURL", .text).notNull()
+                t.column("byteOffset", .integer).notNull()
+                t.column("fileSize", .integer).notNull()
+                t.column("fileName", .text).notNull()
+                t.column("mimeType", .text).notNull()
+                t.column("uploadContext", .text)
+                t.column("thumbHash", .text)
+                t.column("createdAt", .datetime).notNull()
+                t.column("updatedAt", .datetime).notNull()
+            }
+            try db.create(
+                index: "idx_tus_upload_checkpoint_updatedAt",
+                on: "tus_upload_checkpoint",
+                columns: ["updatedAt"]
+            )
+        }
+
         // FTS5 indexes for conversations + users — sit alongside cache_entries
         // so the search index lives in the same database as the data the
         // GRDBCacheStore persists. Defined in `SearchIndexMigrations`.

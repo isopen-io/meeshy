@@ -3,8 +3,81 @@
 import Foundation
 import Observation
 import Combine
-import GRDB
+// `@preconcurrency` relaxes Swift 6 strict concurrency interop checks for the
+// GRDB module. Without it, the runtime injects `_swift_task_checkIsolatedSwift`
+// at the invocation of @Sendable closures we pass to GRDB observation APIs,
+// which then aborts because GRDB calls the closure from its own reader/writer
+// dispatch queue (not from any actor's executor).
+@preconcurrency import GRDB
 import MeeshySDK
+
+/// Sendable weak-reference box. Used to capture a weak reference to a
+/// `@MainActor`-isolated class in a `@Sendable` closure WITHOUT triggering
+/// Swift 6 strict concurrency's `_swift_task_checkIsolatedSwift` assertion
+/// at closure invocation (which would fire when the closure runs off-actor).
+/// The box itself is `@unchecked Sendable` because the wrapped reference
+/// is `weak` and access is gated by the unwrap site (callers must hop to
+/// the right actor before touching the value).
+private final class WeakBox<T: AnyObject>: @unchecked Sendable {
+    weak var value: T?
+    init(_ value: T) { self.value = value }
+}
+
+// Notification.Name `messageStoreShouldRefresh` is defined in
+// `packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift`
+// so both MessageStore (iOS app) and MessagePersistenceActor (SDK) can use it.
+
+/// Fetches the message window from GRDB based on `WindowMode`. Declared at
+/// file scope so the closure(s) passed to `reader.read` don't inherit any
+/// actor isolation context (which would trigger Swift 6 strict concurrency
+/// runtime checks at GRDB invocation).
+private func fetchMessageWindow(
+    reader: any DatabaseWriter,
+    convId: String,
+    mode: WindowMode,
+    anchor: Date?,
+    windowSize: Int
+) throws -> [MessageRecord] {
+    switch mode {
+    case .around(let centerDate):
+        return try reader.read { db in
+            let half = windowSize / 2
+            let before = try MessageRecord
+                .filter(Column("conversationId") == convId)
+                .filter(Column("createdAt") <= centerDate)
+                .order(Column("createdAt").desc)
+                .limit(half)
+                .fetchAll(db)
+            let after = try MessageRecord
+                .filter(Column("conversationId") == convId)
+                .filter(Column("createdAt") > centerDate)
+                .order(Column("createdAt").asc)
+                .limit(half)
+                .fetchAll(db)
+            return Array(before.reversed()) + after
+        }
+    case .latest:
+        if let anchor {
+            return try reader.read { db in
+                try MessageRecord
+                    .filter(Column("conversationId") == convId)
+                    .filter(Column("createdAt") >= anchor)
+                    .order(Column("createdAt").asc)
+                    .limit(windowSize)
+                    .fetchAll(db)
+            }
+        } else {
+            return try reader.read { db in
+                try Array(MessageRecord
+                    .filter(Column("conversationId") == convId)
+                    .order(Column("createdAt").desc)
+                    .limit(windowSize)
+                    .fetchAll(db)
+                    .reversed())
+            }
+        }
+    }
+}
 
 /// Holds cancellation tokens that must be accessible from `nonisolated deinit`.
 /// Explicitly non-isolated so its methods can be called from any context.
@@ -75,22 +148,34 @@ public final class MessageStore {
     func startObserving(dbPool: any DatabaseWriter) {
         stopObserving()
         let convId = conversationId
-        let request = MessageRecord
-            .filter(Column("conversationId") == convId)
 
-        tokens.regionCancellable = DatabaseRegionObservation(tracking: request)
-            .start(in: dbPool, onError: { _ in }) { [weak self] _ in
-                self?.tokens.refreshTask?.cancel()
-                self?.tokens.refreshTask = Task { [weak self] in
-                    guard let self else { return }
-                    let delay: Duration = self.isUserScrolling
-                        ? .milliseconds(200)
-                        : .milliseconds(16)
-                    try? await Task.sleep(for: delay)
-                    guard !Task.isCancelled else { return }
-                    await self.refreshFromDB()
-                }
+        // GRDB ValueObservation / DatabaseRegionObservation crash under Swift 6
+        // strict concurrency: passing any @Sendable closure to GRDB triggers
+        // _swift_task_checkIsolatedSwift at invocation from GRDB's dispatch
+        // queues, even with @preconcurrency import GRDB and zero isolated
+        // captures. Workaround: subscribe to a NotificationCenter signal that
+        // MessagePersistenceActor posts after every write. The notification
+        // handler already runs on .main queue, so the refresh is dispatched
+        // safely. Real-time updates lose nothing — every code path that
+        // mutates GRDB now also posts the notification.
+        let weakStore = WeakBox(self)
+        let observer = NotificationCenter.default.addObserver(
+            forName: .messageStoreShouldRefresh,
+            object: nil,
+            queue: .main
+        ) { notif in
+            guard let notifConvId = notif.userInfo?["conversationId"] as? String,
+                  notifConvId == convId else { return }
+            Task { @MainActor in
+                guard let store = weakStore.value else { return }
+                await store.refreshFromDB()
             }
+        }
+        // Wrap the NotificationCenter observer in an AnyDatabaseCancellable so
+        // stopObserving() cleans it up via the same `regionCancellable` slot.
+        tokens.regionCancellable = AnyDatabaseCancellable {
+            NotificationCenter.default.removeObserver(observer)
+        }
     }
 
     func stopObserving() {
@@ -118,55 +203,54 @@ public final class MessageStore {
         let windowSize = Self.windowSize
         let reader = persistence.reader
 
-        let newRecords = await Task.detached(priority: .userInitiated) {
-            switch mode {
-            case .around(let centerDate):
-                // Window centered on centerDate: half-window before + half-window after.
-                return try? reader.read { db in
-                    let half = windowSize / 2
-                    let before = try MessageRecord
-                        .filter(Column("conversationId") == convId)
-                        .filter(Column("createdAt") <= centerDate)
-                        .order(Column("createdAt").desc)
-                        .limit(half)
-                        .fetchAll(db)
-                    let after = try MessageRecord
-                        .filter(Column("conversationId") == convId)
-                        .filter(Column("createdAt") > centerDate)
-                        .order(Column("createdAt").asc)
-                        .limit(half)
-                        .fetchAll(db)
-                    return Array(before.reversed()) + after
-                }
-            case .latest:
-                if let anchor {
-                    return try? reader.read { db in
-                        try MessageRecord
-                            .filter(Column("conversationId") == convId)
-                            .filter(Column("createdAt") >= anchor)
-                            .order(Column("createdAt").asc)
-                            .limit(windowSize)
-                            .fetchAll(db)
-                    }
-                } else {
-                    return try? reader.read { db in
-                        try Array(MessageRecord
-                            .filter(Column("conversationId") == convId)
-                            .order(Column("createdAt").desc)
-                            .limit(windowSize)
-                            .fetchAll(db)
-                            .reversed())
-                    }
-                }
-            }
-        }.value
+        // Read on the calling actor (MainActor). Direct reads via GRDB are
+        // fast (a single SELECT) and avoid the Swift 6 strict concurrency
+        // closure-isolation crash that hit Task.detached + reader.read
+        // combinations.
+        let newRecords: [MessageRecord]?
+        do {
+            newRecords = try fetchMessageWindow(
+                reader: reader, convId: convId, mode: mode,
+                anchor: anchor, windowSize: windowSize
+            )
+        } catch {
+            print("[MessageStore] refreshFromDB failed: \(error.localizedDescription)")
+            return
+        }
 
+        let count = newRecords?.count ?? -1
+        print("[DIAG] MessageStore.refreshFromDB conv=\(convId) fetched=\(count) current=\(messages.count)")
         guard let newRecords, newRecords != messages else { return }
+
+        // Yield to a fresh runloop iteration before publishing the @Observable
+        // mutation. When refreshFromDB is invoked from a view's .task /
+        // .onAppear hook (initial conversation load), we are still inside
+        // SwiftUI's view update cycle. Mutating the @Observable `messages`
+        // property here trips "Publishing changes from within view updates is
+        // not allowed", which prevents the view from rendering the new state
+        // and silently shows an empty bubble list. The dispatch hop forces
+        // the mutation onto a fresh runloop tick AFTER the current view
+        // update completes.
+        await yieldToRunLoop()
+
+        // Re-check: state could have changed during the runloop yield (e.g.,
+        // a socket message arrived and another refresh wrote first).
+        guard newRecords != messages else { return }
 
         messages = newRecords
         _idIndex = nil
         recomputeSections()
         messagesDidChange.send()
+    }
+
+    /// Awaits the next main runloop tick. Used to escape the synchronous view
+    /// update cycle before mutating @Observable state.
+    private func yieldToRunLoop() async {
+        await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
+            DispatchQueue.main.async {
+                cont.resume()
+            }
+        }
     }
 
     // MARK: - Load Initial

@@ -26,6 +26,20 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
     private var stubs: [String: Any] = [:]
     var errorToThrow: Error?
 
+    /// Typed error thrown when a request hits an endpoint with no registered stub.
+    /// Replaces the previous `fatalError` which caused process crashes when async
+    /// background tasks (e.g. `ConversationSyncEngine.didReconnect → syncSinceLastCheckpoint`)
+    /// fired against a mock that hadn't seeded the relevant endpoint.
+    enum NoStubError: Error, CustomStringConvertible {
+        case missing(endpoint: String, type: String, available: [String])
+        var description: String {
+            switch self {
+            case .missing(let endpoint, let type, let available):
+                return "MockAPIClient: no stub for '\(endpoint)' returning \(type). Available stubs: \(available)"
+            }
+        }
+    }
+
     func stub<T>(_ endpoint: String, result: T) {
         stubs[endpoint] = result
     }
@@ -51,7 +65,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         recordRequest(endpoint: endpoint, method: method, bodyData: body)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? T else {
-            fatalError("MockAPIClient: no stub for '\(endpoint)' returning \(T.self). Available stubs: \(Array(stubs.keys))")
+            throw NoStubError.missing(endpoint: endpoint, type: "\(T.self)", available: Array(stubs.keys))
         }
         return result
     }
@@ -79,7 +93,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         recordRequest(endpoint: endpoint, method: "POST", encodableBody: body)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
-            fatalError("MockAPIClient: no stub for '\(endpoint)' returning APIResponse<\(T.self)>. Available stubs: \(Array(stubs.keys))")
+            throw NoStubError.missing(endpoint: endpoint, type: "APIResponse<\(T.self)>", available: Array(stubs.keys))
         }
         return result
     }
@@ -91,7 +105,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         recordRequest(endpoint: endpoint, method: "PUT", encodableBody: body)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
-            fatalError("MockAPIClient: no stub for '\(endpoint)' returning APIResponse<\(T.self)>. Available stubs: \(Array(stubs.keys))")
+            throw NoStubError.missing(endpoint: endpoint, type: "APIResponse<\(T.self)>", available: Array(stubs.keys))
         }
         return result
     }
@@ -103,7 +117,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         recordRequest(endpoint: endpoint, method: "PATCH", encodableBody: body)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
-            fatalError("MockAPIClient: no stub for '\(endpoint)' returning APIResponse<\(T.self)>. Available stubs: \(Array(stubs.keys))")
+            throw NoStubError.missing(endpoint: endpoint, type: "APIResponse<\(T.self)>", available: Array(stubs.keys))
         }
         return result
     }
@@ -119,7 +133,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         recordRequest(endpoint: endpoint, method: "DELETE", encodableBody: body)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? APIResponse<T> else {
-            fatalError("MockAPIClient: no stub for '\(endpoint)' returning APIResponse<\(T.self)>. Available stubs: \(Array(stubs.keys))")
+            throw NoStubError.missing(endpoint: endpoint, type: "APIResponse<\(T.self)>", available: Array(stubs.keys))
         }
         return result
     }

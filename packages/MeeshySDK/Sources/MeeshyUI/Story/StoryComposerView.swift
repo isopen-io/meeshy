@@ -39,6 +39,14 @@ public enum StoryBackgroundPalette {
         } while existingSet.contains(hex)
         return hex
     }
+
+    /// SwiftUI-friendly variant of `randomBackgroundColor()`.
+    /// Returns the same random HSB pick as a `Color` so callers (story
+    /// notification thumbnails, in-feed placeholders) can pass it straight
+    /// into a SwiftUI gradient or `.fill(...)` without re-parsing the hex.
+    public static func randomBackgroundColorAsColor() -> Color {
+        Color(hex: randomBackgroundColor())
+    }
 }
 
 // MARK: - Story Composer Draft
@@ -328,6 +336,10 @@ public struct StoryComposerView: View {
         .statusBarHidden()
         .onAppear {
             viewModel.startMemoryObserver()
+            viewModel.loadCurrentSlideIntoTimeline()
+        }
+        .onChange(of: viewModel.currentSlideIndex) { _, _ in
+            viewModel.loadCurrentSlideIntoTimeline()
         }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
@@ -382,7 +394,7 @@ public struct StoryComposerView: View {
             .presentationDetents([.medium])
         }
         .sheet(isPresented: $viewModel.isTimelineVisible) {
-            TimelinePanel(viewModel: viewModel)
+            timelineSection
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -715,6 +727,15 @@ public struct StoryComposerView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: viewModel.activeTool)
     }
 
+    // MARK: - Timeline Section
+
+    @ViewBuilder
+    private var timelineSection: some View {
+        // V2 timeline editor is the product — no feature-flag gating since the
+        // app has not yet shipped to a userbase that requires backwards-compat.
+        TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
+    }
+
     // MARK: - Active Tool Panel
 
     @ViewBuilder
@@ -731,7 +752,7 @@ public struct StoryComposerView: View {
         case .filters:
             StoryFilterGridView(viewModel: viewModel, previewImage: selectedImage)
         case .timeline:
-            TimelinePanel(viewModel: viewModel)
+            timelineSection
         case .none:
             EmptyView()
         }

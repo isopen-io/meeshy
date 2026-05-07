@@ -1,11 +1,20 @@
-// MARK: - Extracted from ConversationView.swift (via ThemedMessageBubble.swift)
+// MARK: - Bubble visual media grid + carousel
+//
+// Was: extension on `ThemedMessageBubble` providing the visual grid and the
+// inline carousel (Task-14 pivot moved the rendering into
+// `BubbleStandardLayout`, but the helpers stay alongside the orchestrator
+// rather than crowding the new layout file).
+//
+// File kept under its legacy name + pbxproj entry; only the extended type
+// changed (now `BubbleStandardLayout`).
+
 import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Visual Media Grid
-extension ThemedMessageBubble {
+// MARK: - Visual Media Grid (extension on BubbleStandardLayout)
+extension BubbleStandardLayout {
 
     @ViewBuilder
     var visualMediaGrid: some View {
@@ -13,13 +22,13 @@ extension ThemedMessageBubble {
 
         switch items.count {
         case 1:
-            gridCell(items[0], solo: true)
+            makeGridCell(items[0], solo: true)
                 .frame(width: gridMaxWidth, height: items[0].type == .video ? 200 : 240)
 
         case 2:
             HStack(spacing: gridSpacing) {
-                gridCell(items[0])
-                gridCell(items[1])
+                makeGridCell(items[0])
+                makeGridCell(items[1])
             }
             .frame(width: gridMaxWidth, height: 180)
 
@@ -27,11 +36,11 @@ extension ThemedMessageBubble {
             let leftW = (gridMaxWidth - gridSpacing) * 0.6
             let rightW = (gridMaxWidth - gridSpacing) * 0.4
             HStack(spacing: gridSpacing) {
-                gridCell(items[0])
+                makeGridCell(items[0])
                     .frame(width: leftW)
                 VStack(spacing: gridSpacing) {
-                    gridCell(items[1])
-                    gridCell(items[2])
+                    makeGridCell(items[1])
+                    makeGridCell(items[2])
                 }
                 .frame(width: rightW)
             }
@@ -41,16 +50,53 @@ extension ThemedMessageBubble {
             let overflow = items.count - 4
             VStack(spacing: gridSpacing) {
                 HStack(spacing: gridSpacing) {
-                    gridCell(items[0])
-                    gridCell(items[1])
+                    makeGridCell(items[0])
+                    makeGridCell(items[1])
                 }
                 HStack(spacing: gridSpacing) {
-                    gridCell(items[2])
-                    gridCell(items[3], overflowCount: max(0, overflow))
+                    makeGridCell(items[2])
+                    makeGridCell(items[3], overflowCount: max(0, overflow))
                 }
             }
             .frame(width: gridMaxWidth, height: 240)
         }
+    }
+
+    /// Builds a `BubbleGridCell` for the given attachment.
+    ///
+    /// Why this exists: The previous in-extension `@ViewBuilder gridCell(...)
+    /// -> some View` produced a deeply nested
+    /// `_ConditionalContent<TupleView<...>, _ConditionalContent<...>>` chain
+    /// (4+ branches: image vs video, overflow overlay, view-once badge,
+    /// blur overlay, download badge overlay). Combined with the 4-branch
+    /// `switch items.count` in `visualMediaGrid` calling `gridCell` 1-4
+    /// times each, the resulting opaque `some View` type was so large that
+    /// the runtime type-demangler hit its recursion limit and crashed in
+    /// `swift_getTypeByMangledNameInContextImpl` -> `decodeMangledType` ->
+    /// `decodeGenericArgs` (~30 levels deep) the moment a message with
+    /// 2+ visual attachments rendered.
+    ///
+    /// Extracting the cell into a concrete `BubbleGridCell` struct collapses
+    /// every call site to a single nominal type. Demangling a named struct
+    /// is bounded; demangling a 4-deep `_ConditionalContent` tree per call
+    /// site is not. This also lets SwiftUI cache the cell's structural
+    /// identity across body re-evaluations.
+    fileprivate func makeGridCell(_ attachment: MessageAttachment, overflowCount: Int = 0, solo: Bool = false) -> BubbleGridCell {
+        BubbleGridCell(
+            attachment: attachment,
+            overflowCount: overflowCount,
+            solo: solo,
+            contactColor: contactColor,
+            allVisualAttachments: visualAttachments,
+            messageId: message.id,
+            revealedAttachmentIds: $revealedAttachmentIds,
+            carouselIndex: $carouselIndex,
+            showCarousel: $showCarousel,
+            fullscreenAttachment: $fullscreenAttachment,
+            shareURL: $shareURL,
+            showShareSheet: $showShareSheet,
+            onConsumeViewOnce: onConsumeViewOnce
+        )
     }
 
     // MARK: - Carousel View (inline within message, for browsing this message's media)
@@ -66,185 +112,7 @@ extension ThemedMessageBubble {
         )
     }
 
-    // MARK: - Grid Cell
-
-    @ViewBuilder
-    private func gridCell(_ attachment: MessageAttachment, overflowCount: Int = 0, solo: Bool = false) -> some View {
-        let attachmentIsProtected = attachment.isViewOnce || attachment.isBlurred
-        let isRevealed = revealedAttachmentIds.contains(attachment.id)
-
-        ZStack {
-                Color.black
-
-                switch attachment.type {
-                case .image:
-                    gridImageView(attachment)
-                case .video:
-                    gridVideoThumbnail(attachment, solo: solo)
-                default:
-                    EmptyView()
-                }
-
-                if overflowCount > 0 {
-                    Color.black.opacity(0.5)
-                    Text("+\(overflowCount)")
-                        .font(.system(size: 24, weight: .bold))
-                        .foregroundColor(.white)
-                }
-
-                // Per-attachment view-once / blur overlay
-                if attachmentIsProtected && !isRevealed {
-                    AttachmentBlurOverlayView(
-                        isViewOnce: attachment.isViewOnce,
-                        onReveal: {
-                            HapticFeedback.medium()
-                            if attachment.isViewOnce {
-                                onConsumeViewOnce?(message.id) { success in
-                                    guard success else { return }
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                        _ = revealedAttachmentIds.insert(attachment.id)
-                                    }
-                                    let attachmentId = attachment.id
-                                    DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-                                        withAnimation(.easeOut(duration: 0.5)) {
-                                            _ = revealedAttachmentIds.remove(attachmentId)
-                                        }
-                                    }
-                                }
-                            } else {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                    _ = revealedAttachmentIds.insert(attachment.id)
-                                }
-                            }
-                        }
-                    )
-                }
-
-                // View count badge (top-trailing)
-                if attachment.isViewOnce && attachment.viewOnceCount > 0 {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            Text("\(attachment.viewOnceCount)")
-                                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                                .foregroundColor(.white)
-                                .frame(width: 18, height: 18)
-                                .background(
-                                    Circle()
-                                        .fill(Color(hex: "FF6B6B").opacity(0.85))
-                                )
-                        }
-                        .padding(6)
-                        Spacer()
-                    }
-                    .accessibilityLabel(Text("\(attachment.viewOnceCount) vue\(attachment.viewOnceCount > 1 ? "s" : "")"))
-                }
-            }
-            .clipped()
-            .contentShape(Rectangle())
-            .onTapGesture {
-                guard !attachmentIsProtected || isRevealed else { return }
-                if overflowCount > 0 {
-                    let items = visualAttachments
-                    carouselIndex = items.firstIndex(where: { $0.id == attachment.id }) ?? 0
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        showCarousel = true
-                    }
-                } else {
-                    fullscreenAttachment = attachment
-                }
-                HapticFeedback.light()
-            }
-            .overlay {
-                if !attachmentIsProtected || isRevealed {
-                    downloadBadge(attachment)
-                }
-            }
-    }
-
-    // MARK: - Grid Image
-
-    @ViewBuilder
-    private func gridImageView(_ attachment: MessageAttachment) -> some View {
-        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
-        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-        let urlStr = fullUrl ?? thumbUrl ?? ""
-        Group {
-            if !urlStr.isEmpty {
-                ProgressiveCachedImage(
-                    thumbHash: attachment.thumbHash,
-                    thumbnailUrl: thumbUrl,
-                    fullUrl: fullUrl
-                ) {
-                    Color(hex: attachment.thumbnailColor).shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                .clipped()
-            } else {
-                Color(hex: attachment.thumbnailColor)
-                    .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
-            }
-        }
-    }
-
-    // MARK: - Grid Video Thumbnail (no inline player -- tap opens gallery)
-
-    @ViewBuilder
-    private func gridVideoThumbnail(_ attachment: MessageAttachment, solo: Bool = false) -> some View {
-        ZStack {
-            let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-            if thumbUrl != nil || attachment.thumbHash != nil {
-                ProgressiveCachedImage(
-                    thumbHash: attachment.thumbHash,
-                    thumbnailUrl: thumbUrl,
-                    fullUrl: thumbUrl
-                ) {
-                    Color(hex: attachment.thumbnailColor).shimmer()
-                }
-                .aspectRatio(contentMode: .fill)
-                .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
-                .clipped()
-            } else {
-                Color(hex: attachment.thumbnailColor)
-            }
-
-            // Play icon overlay
-            ZStack {
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: solo ? 48 : 36, height: solo ? 48 : 36)
-                Circle()
-                    .fill(Color(hex: contactColor).opacity(0.85))
-                    .frame(width: solo ? 42 : 30, height: solo ? 42 : 30)
-                Image(systemName: "play.fill")
-                    .font(.system(size: solo ? 18 : 12, weight: .bold))
-                    .foregroundColor(.white)
-                    .offset(x: solo ? 2 : 1)
-            }
-            .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
-
-            // Duration badge
-            if let formatted = attachment.durationFormatted {
-                VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Text(formatted)
-                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(Color.black.opacity(0.6)))
-                    }
-                    .padding(.trailing, 4)
-                    .padding(.bottom, 4)
-                }
-            }
-        }
-    }
-
-    // MARK: - Download Badge
+    // MARK: - Download Badge (still used by extension callers — kept for backward compat)
 
     func downloadBadge(_ attachment: MessageAttachment) -> some View {
         DownloadBadgeView(
@@ -255,6 +123,270 @@ extension ThemedMessageBubble {
                 showShareSheet = true
             }
         )
+    }
+}
+
+// MARK: - BubbleGridCell (concrete struct, replaces former @ViewBuilder gridCell)
+
+/// Renders one cell of the message-bubble visual media grid.
+///
+/// This struct exists to break the runtime type-demangling crash that hit
+/// `swift_getTypeByMangledNameInContextImpl` once a message contained two or
+/// more visual attachments. The previous `@ViewBuilder gridCell(...) -> some
+/// View` returned an opaque type whose mangled signature (4-branch switch
+/// + 3 conditional overlays + per-call-site re-instantiation in
+/// `visualMediaGrid`) overflowed the demangler's recursion limit.
+///
+/// A nominal struct collapses each call site to a single bounded type, which
+/// the runtime can resolve in O(1) recursion depth. This also lets SwiftUI
+/// preserve the cell's structural identity across `ThemedMessageBubble.body`
+/// re-evaluations and skip rebuild when the bindings haven't actually changed.
+fileprivate struct BubbleGridCell: View {
+    let attachment: MessageAttachment
+    let overflowCount: Int
+    let solo: Bool
+    let contactColor: String
+    let allVisualAttachments: [MessageAttachment]
+    let messageId: String
+
+    @Binding var revealedAttachmentIds: Set<String>
+    @Binding var carouselIndex: Int
+    @Binding var showCarousel: Bool
+    @Binding var fullscreenAttachment: MessageAttachment?
+    @Binding var shareURL: URL?
+    @Binding var showShareSheet: Bool
+
+    /// Forwarded from ThemedMessageBubble — fired when the user reveals a
+    /// view-once attachment. The closure consumes the view-once entitlement
+    /// on the gateway and then calls back with the success flag.
+    let onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
+
+    private var attachmentIsProtected: Bool {
+        attachment.isViewOnce || attachment.isBlurred
+    }
+
+    private var isRevealed: Bool {
+        revealedAttachmentIds.contains(attachment.id)
+    }
+
+    var body: some View {
+        ZStack {
+            Color.black
+            mediaLayer
+            overflowOverlay
+            blurOverlay
+            viewCountBadge
+        }
+        .clipped()
+        .contentShape(Rectangle())
+        .onTapGesture(perform: handleTap)
+        .overlay { downloadBadgeOverlay }
+    }
+
+    // MARK: - Sub-Views (each returns `some View` but at one bounded depth)
+
+    @ViewBuilder
+    private var mediaLayer: some View {
+        switch attachment.type {
+        case .image:
+            BubbleGridImageView(attachment: attachment)
+        case .video:
+            BubbleGridVideoThumbnailView(attachment: attachment, contactColor: contactColor, solo: solo)
+        default:
+            EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var overflowOverlay: some View {
+        if overflowCount > 0 {
+            Color.black.opacity(0.5)
+            Text("+\(overflowCount)")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(.white)
+        }
+    }
+
+    @ViewBuilder
+    private var blurOverlay: some View {
+        if attachmentIsProtected && !isRevealed {
+            AttachmentBlurOverlayView(
+                isViewOnce: attachment.isViewOnce,
+                onReveal: handleReveal
+            )
+        }
+    }
+
+    @ViewBuilder
+    private var viewCountBadge: some View {
+        if attachment.isViewOnce && attachment.viewOnceCount > 0 {
+            VStack {
+                HStack {
+                    Spacer()
+                    Text("\(attachment.viewOnceCount)")
+                        .font(.system(size: 9, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .frame(width: 18, height: 18)
+                        .background(
+                            Circle()
+                                .fill(Color(hex: "FF6B6B").opacity(0.85))
+                        )
+                }
+                .padding(6)
+                Spacer()
+            }
+            .accessibilityLabel(Text("\(attachment.viewOnceCount) vue\(attachment.viewOnceCount > 1 ? "s" : "")"))
+        }
+    }
+
+    @ViewBuilder
+    private var downloadBadgeOverlay: some View {
+        if !attachmentIsProtected || isRevealed {
+            DownloadBadgeView(
+                attachment: attachment,
+                accentColor: contactColor,
+                onShareFile: { url in
+                    shareURL = url
+                    showShareSheet = true
+                }
+            )
+        }
+    }
+
+    // MARK: - Actions
+
+    private func handleTap() {
+        guard !attachmentIsProtected || isRevealed else { return }
+        if overflowCount > 0 {
+            carouselIndex = allVisualAttachments.firstIndex(where: { $0.id == attachment.id }) ?? 0
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+                showCarousel = true
+            }
+        } else {
+            fullscreenAttachment = attachment
+        }
+        HapticFeedback.light()
+    }
+
+    private func handleReveal() {
+        HapticFeedback.medium()
+        if attachment.isViewOnce {
+            onConsumeViewOnce?(messageId) { success in
+                guard success else { return }
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    _ = revealedAttachmentIds.insert(attachment.id)
+                }
+                let attachmentId = attachment.id
+                DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+                    withAnimation(.easeOut(duration: 0.5)) {
+                        _ = revealedAttachmentIds.remove(attachmentId)
+                    }
+                }
+            }
+        } else {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                _ = revealedAttachmentIds.insert(attachment.id)
+            }
+        }
+    }
+}
+
+// MARK: - BubbleGridImageView (extracted so its `some View` is bounded)
+
+fileprivate struct BubbleGridImageView: View {
+    let attachment: MessageAttachment
+
+    var body: some View {
+        let fullUrl = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl
+        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+        let urlStr = fullUrl ?? thumbUrl ?? ""
+
+        if !urlStr.isEmpty {
+            ProgressiveCachedImage(
+                thumbHash: attachment.thumbHash,
+                thumbnailUrl: thumbUrl,
+                fullUrl: fullUrl
+            ) {
+                Color(hex: attachment.thumbnailColor).shimmer()
+            }
+            .aspectRatio(contentMode: .fill)
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+            .clipped()
+        } else {
+            Color(hex: attachment.thumbnailColor)
+                .overlay(Image(systemName: "photo").foregroundColor(.white.opacity(0.5)))
+        }
+    }
+}
+
+// MARK: - BubbleGridVideoThumbnailView (extracted so its `some View` is bounded)
+
+fileprivate struct BubbleGridVideoThumbnailView: View {
+    let attachment: MessageAttachment
+    let contactColor: String
+    let solo: Bool
+
+    var body: some View {
+        ZStack {
+            thumbnailLayer
+            playIconOverlay
+            durationBadge
+        }
+    }
+
+    @ViewBuilder
+    private var thumbnailLayer: some View {
+        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+        if thumbUrl != nil || attachment.thumbHash != nil {
+            ProgressiveCachedImage(
+                thumbHash: attachment.thumbHash,
+                thumbnailUrl: thumbUrl,
+                fullUrl: thumbUrl
+            ) {
+                Color(hex: attachment.thumbnailColor).shimmer()
+            }
+            .aspectRatio(contentMode: .fill)
+            .frame(minWidth: 0, maxWidth: .infinity, minHeight: 0, maxHeight: .infinity)
+            .clipped()
+        } else {
+            Color(hex: attachment.thumbnailColor)
+        }
+    }
+
+    private var playIconOverlay: some View {
+        ZStack {
+            Circle()
+                .fill(.ultraThinMaterial)
+                .frame(width: solo ? 48 : 36, height: solo ? 48 : 36)
+            Circle()
+                .fill(Color(hex: contactColor).opacity(0.85))
+                .frame(width: solo ? 42 : 30, height: solo ? 42 : 30)
+            Image(systemName: "play.fill")
+                .font(.system(size: solo ? 18 : 12, weight: .bold))
+                .foregroundColor(.white)
+                .offset(x: solo ? 2 : 1)
+        }
+        .shadow(color: .black.opacity(0.3), radius: 6, y: 3)
+    }
+
+    @ViewBuilder
+    private var durationBadge: some View {
+        if let formatted = attachment.durationFormatted {
+            VStack {
+                Spacer()
+                HStack {
+                    Spacer()
+                    Text(formatted)
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(Color.black.opacity(0.6)))
+                }
+                .padding(.trailing, 4)
+                .padding(.bottom, 4)
+            }
+        }
     }
 }
 

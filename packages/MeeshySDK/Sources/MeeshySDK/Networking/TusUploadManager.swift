@@ -1,6 +1,8 @@
 import Foundation
 import Combine
+import CryptoKit
 import UIKit
+import os
 
 public enum UploadFileStatus: String, Sendable {
     case queued, uploading, complete, error, paused
@@ -24,6 +26,14 @@ public struct UploadQueueProgress: Sendable {
     public let totalBytes: Int64
     public let uploadedBytes: Int64
     public let globalPercentage: Double
+}
+
+/// Marker error thrown by `TusUploadManager` when an existing TUS session
+/// has been GC'd by the server (404 / 410 on PATCH). The checkpoint store
+/// already drops the stale checkpoint before this is thrown ; the caller's
+/// retry path will see a fresh state and POST a new session.
+public struct TusResumeRetriableError: Error {
+    public init() {}
 }
 
 public struct TusUploadResult: Decodable, Sendable {
@@ -150,7 +160,151 @@ public actor TusUploadManager {
         let fileSize = (attrs[.size] as? Int64) ?? 0
         let fileId = progressMap.first(where: { $0.value.fileName == fileName })?.key ?? UUID().uuidString
 
-        // Step 1: Create upload (POST)
+        // Compute the bytewise checkpoint key once. Same source file +
+        // same compression settings → same bytes → same key, so a queue
+        // retry after kill matches the previous session's checkpoint.
+        let checkpointKey = try sha256Hex(of: fileURL)
+        let store = TusUploadCheckpointStore.shared
+
+        // Step 1: Resolve patchURL — either resume from a stored checkpoint
+        // or POST a fresh upload session.
+        let resumed = await store.find(checkpointKey: checkpointKey)
+        let patchURL: URL
+        var offset: Int64
+
+        if let cp = resumed,
+           let url = URL(string: cp.uploadURL, relativeTo: baseURL),
+           cp.fileSize == fileSize {
+            Self.logger.info("Resuming TUS upload at offset \(cp.byteOffset, privacy: .public) of \(fileSize, privacy: .public) (\(fileName, privacy: .public))")
+            patchURL = url
+            offset = cp.byteOffset
+        } else {
+            let location = try await postCreateUpload(
+                fileSize: fileSize,
+                fileName: fileName,
+                mimeType: mimeType,
+                token: token,
+                uploadContext: uploadContext,
+                thumbHash: thumbHash
+            )
+            guard let url = URL(string: location, relativeTo: baseURL) else {
+                throw URLError(.badURL)
+            }
+            patchURL = url
+            offset = 0
+            await store.save(TusUploadCheckpoint(
+                checkpointKey: checkpointKey,
+                uploadURL: location,
+                byteOffset: 0,
+                fileSize: fileSize,
+                fileName: fileName,
+                mimeType: mimeType,
+                uploadContext: uploadContext,
+                thumbHash: thumbHash
+            ))
+        }
+
+        // Step 2: PATCH chunks from `offset`. Persist after each successful
+        // chunk so an OS suspend / app kill in the middle still leaves the
+        // checkpoint in a state the next attempt can reuse.
+        let fileHandle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? fileHandle.close() }
+        fileHandle.seek(toFileOffset: UInt64(offset))
+
+        while offset < fileSize {
+            let remaining = fileSize - offset
+            let readSize = min(Int64(chunkSize), remaining)
+
+            guard let chunk = try fileHandle.read(upToCount: Int(readSize)),
+                  !chunk.isEmpty else { break }
+
+            var patchReq = URLRequest(url: patchURL)
+            patchReq.httpMethod = "PATCH"
+            patchReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+            patchReq.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
+            patchReq.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
+            patchReq.setValue("\(offset)", forHTTPHeaderField: "Upload-Offset")
+            patchReq.httpBody = chunk
+
+            let (responseData, patchResponse) = try await URLSession.shared.data(for: patchReq)
+            guard let patchHttp = patchResponse as? HTTPURLResponse else {
+                throw URLError(.badServerResponse)
+            }
+
+            switch patchHttp.statusCode {
+            case 204, 200:
+                offset += Int64(chunk.count)
+                await store.updateOffset(checkpointKey: checkpointKey, offset: offset)
+
+                progressMap[fileId] = FileUploadProgress(
+                    fileId: fileId, fileName: fileName, fileSize: fileSize,
+                    status: .uploading, percentage: Double(offset) / Double(fileSize) * 100,
+                    bytesUploaded: offset, error: nil, attachmentId: nil
+                )
+                emitProgress()
+
+                // Last chunk → server's onUploadFinish hook returned the
+                // attachment metadata in the response body.
+                if offset >= fileSize, let responseBody = String(data: responseData, encoding: .utf8),
+                   !responseBody.isEmpty {
+                    let decoder = JSONDecoder()
+                    struct TusResponse: Decodable {
+                        let success: Bool
+                        let data: TusResponseData?
+                    }
+                    struct TusResponseData: Decodable {
+                        let attachment: TusUploadResult
+                    }
+                    if let parsed = try? decoder.decode(TusResponse.self, from: responseData),
+                       let attachment = parsed.data?.attachment {
+                        await store.delete(checkpointKey: checkpointKey)
+                        progressMap[fileId] = FileUploadProgress(
+                            fileId: fileId, fileName: fileName, fileSize: fileSize,
+                            status: .complete, percentage: 100, bytesUploaded: fileSize,
+                            error: nil, attachmentId: attachment.id
+                        )
+                        emitProgress()
+                        return attachment
+                    }
+                }
+
+            case 409:
+                // Server's offset doesn't match. Discover via HEAD and
+                // realign before retrying the same chunk on the next
+                // iteration.
+                Self.logger.warning("PATCH 409 at offset \(offset, privacy: .public); HEAD-recovering")
+                let serverOffset = try await headOffset(patchURL: patchURL, token: token)
+                fileHandle.seek(toFileOffset: UInt64(serverOffset))
+                offset = serverOffset
+                await store.updateOffset(checkpointKey: checkpointKey, offset: serverOffset)
+
+            case 404, 410:
+                // Server has GC'd this upload session. Drop the checkpoint
+                // and surface a retryable error so the caller (queue) can
+                // replay; the next call will see no checkpoint and POST
+                // a fresh session.
+                Self.logger.warning("PATCH \(patchHttp.statusCode, privacy: .public) — TUS session expired, restarting")
+                await store.delete(checkpointKey: checkpointKey)
+                throw TusResumeRetriableError()
+
+            default:
+                throw URLError(.badServerResponse)
+            }
+        }
+
+        throw URLError(.cannotParseResponse)
+    }
+
+    // MARK: - TUS HTTP helpers
+
+    private func postCreateUpload(
+        fileSize: Int64,
+        fileName: String,
+        mimeType: String,
+        token: String,
+        uploadContext: String?,
+        thumbHash: String?
+    ) async throws -> String {
         let uploadURL = baseURL.appendingPathComponent("api/v1/uploads")
         var createReq = URLRequest(url: uploadURL)
         createReq.httpMethod = "POST"
@@ -177,73 +331,38 @@ public actor TusUploadManager {
               let location = httpResponse.value(forHTTPHeaderField: "Location") else {
             throw URLError(.badServerResponse)
         }
-
-        guard let patchURL = URL(string: location, relativeTo: baseURL) else {
-            throw URLError(.badURL)
-        }
-
-        // Step 2: Upload chunks (PATCH)
-        let fileHandle = try FileHandle(forReadingFrom: fileURL)
-        defer { try? fileHandle.close() }
-
-        var offset: Int64 = 0
-        while offset < fileSize {
-            let remaining = fileSize - offset
-            let readSize = min(Int64(chunkSize), remaining)
-
-            fileHandle.seek(toFileOffset: UInt64(offset))
-            guard let chunk = try fileHandle.read(upToCount: Int(readSize)),
-                  !chunk.isEmpty else { break }
-
-            var patchReq = URLRequest(url: patchURL)
-            patchReq.httpMethod = "PATCH"
-            patchReq.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-            patchReq.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
-            patchReq.setValue("application/offset+octet-stream", forHTTPHeaderField: "Content-Type")
-            patchReq.setValue("\(offset)", forHTTPHeaderField: "Upload-Offset")
-            patchReq.httpBody = chunk
-
-            let (responseData, patchResponse) = try await URLSession.shared.data(for: patchReq)
-            guard let patchHttp = patchResponse as? HTTPURLResponse,
-                  patchHttp.statusCode == 204 || patchHttp.statusCode == 200 else {
-                throw URLError(.badServerResponse)
-            }
-
-            offset += Int64(chunk.count)
-
-            progressMap[fileId] = FileUploadProgress(
-                fileId: fileId, fileName: fileName, fileSize: fileSize,
-                status: .uploading, percentage: Double(offset) / Double(fileSize) * 100,
-                bytesUploaded: offset, error: nil, attachmentId: nil
-            )
-            emitProgress()
-
-            // If this is the last chunk, parse onUploadFinish response
-            if offset >= fileSize, let responseBody = String(data: responseData, encoding: .utf8),
-               !responseBody.isEmpty {
-                let decoder = JSONDecoder()
-                struct TusResponse: Decodable {
-                    let success: Bool
-                    let data: TusResponseData?
-                }
-                struct TusResponseData: Decodable {
-                    let attachment: TusUploadResult
-                }
-                if let parsed = try? decoder.decode(TusResponse.self, from: responseData),
-                   let attachment = parsed.data?.attachment {
-                    progressMap[fileId] = FileUploadProgress(
-                        fileId: fileId, fileName: fileName, fileSize: fileSize,
-                        status: .complete, percentage: 100, bytesUploaded: fileSize,
-                        error: nil, attachmentId: attachment.id
-                    )
-                    emitProgress()
-                    return attachment
-                }
-            }
-        }
-
-        throw URLError(.cannotParseResponse)
+        return location
     }
+
+    /// Issues a HEAD against the upload URL to discover the server-side
+    /// offset, used to recover from a 409 Conflict (client + server out of
+    /// sync). Returns 0 if the response is malformed or the server doesn't
+    /// support HEAD.
+    private func headOffset(patchURL: URL, token: String) async throws -> Int64 {
+        var req = URLRequest(url: patchURL)
+        req.httpMethod = "HEAD"
+        req.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        req.setValue("1.0.0", forHTTPHeaderField: "Tus-Resumable")
+        let (_, resp) = try await URLSession.shared.data(for: req)
+        guard let http = resp as? HTTPURLResponse, http.statusCode == 200 else {
+            throw URLError(.badServerResponse)
+        }
+        if let str = http.value(forHTTPHeaderField: "Upload-Offset"),
+           let v = Int64(str) {
+            return v
+        }
+        return 0
+    }
+
+    /// Computes the SHA256 of the file contents and returns it as a lowercase
+    /// hex string. Used as the bytewise-stable checkpoint key.
+    private func sha256Hex(of fileURL: URL) throws -> String {
+        let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
+        let digest = SHA256.hash(data: data)
+        return digest.map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "tus-upload")
 
     private func emitProgress() {
         let files = Array(progressMap.values)

@@ -1129,11 +1129,15 @@ public struct TimelineProject: Codable, Sendable {
     }
 
     public func apply(to slide: inout StorySlide) {
+        // Preserve nil-vs-empty-array idempotence: a project with empty
+        // collections must round-trip to a slide with `nil` collections, not
+        // `[]`, so `TimelineProject(from: slide).apply(to: &slide)` is a true
+        // no-op when the slide had `nil` collections to begin with.
         slide.duration = TimeInterval(slideDuration)
-        slide.effects.mediaObjects = mediaObjects
-        slide.effects.audioPlayerObjects = audioPlayerObjects
-        slide.effects.textObjects = textObjects
-        slide.effects.clipTransitions = clipTransitions
+        slide.effects.mediaObjects = mediaObjects.isEmpty ? nil : mediaObjects
+        slide.effects.audioPlayerObjects = audioPlayerObjects.isEmpty ? nil : audioPlayerObjects
+        slide.effects.textObjects = textObjects.isEmpty ? nil : textObjects
+        slide.effects.clipTransitions = clipTransitions.isEmpty ? nil : clipTransitions
     }
 }
 

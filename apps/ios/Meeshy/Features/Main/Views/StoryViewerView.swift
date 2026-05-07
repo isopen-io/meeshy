@@ -48,6 +48,12 @@ struct StoryViewerView: View {
     var preloadedVideoURLs: [String: URL] = [:]
     var preloadedAudioURLs: [String: URL] = [:]
     var initialStoryIndex: Int = 0
+    /// One-shot side-effect for the notification flow (Phase F): when set, the
+    /// viewer auto-opens either the comments overlay or the viewers sheet on
+    /// first appear, then pauses the timer so the user can read what they
+    /// were notified about. Default `nil` keeps every legacy entry point
+    /// (tray, deep link, story-reaction redirect) on the existing path.
+    var initialAction: StoryViewerInitialAction? = nil
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
@@ -82,6 +88,16 @@ struct StoryViewerView: View {
     @State var showFullLanguagePicker = false // internal for cross-file extension access
     @StateObject private var keyboard = KeyboardObserver()
     @Environment(\.scenePhase) private var scenePhase
+
+    // Required by `SharePickerView` presented via `.sheet(item:)` below. The
+    // sheet creates a separate presentation hierarchy so EnvironmentObjects
+    // from the parent fullScreenCover are NOT inherited automatically — we
+    // must capture them here and re-inject onto SharePickerView (see line
+    // ~257) to avoid the `EnvironmentObject error` crash that previously
+    // happened the moment a user tapped the share button on a story.
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @EnvironmentObject private var router: Router
+    @EnvironmentObject private var statusViewModel: StatusViewModel
 
     // === Transition states ===
 
@@ -124,6 +140,12 @@ struct StoryViewerView: View {
     @State var storyComments: [FeedComment] = []
     @State var isLoadingComments = false
     @State var storyCommentCount: Int = 0
+    /// Latched once the `initialAction` (Phase F notification entry point) has
+    /// been honoured. Guards against re-firing on every `.onAppear` cycle —
+    /// scene phase transitions and parent re-renders both republish onAppear,
+    /// and we only ever want to auto-open the overlay/sheet once per
+    /// presentation.
+    @State var hasTriggeredInitialAction = false
 
     private var screenH: CGFloat { UIScreen.main.bounds.height }
 
@@ -208,6 +230,11 @@ struct StoryViewerView: View {
                 appearScale = 1.0
                 appearCornerRadius = 0
             }
+            // Phase F: when this viewer was launched from a story
+            // notification redirect, auto-open the matching overlay/sheet.
+            // Latched internally so re-fires on scene phase changes are
+            // no-ops.
+            triggerInitialActionIfNeeded()
         }
         .onDisappear {
             timerCancellable?.cancel()
@@ -242,6 +269,14 @@ struct StoryViewerView: View {
                 onDismiss: { sharedContentWrapper = nil },
                 onShareToConversation: nil
             )
+            // SwiftUI sheets run in a separate presentation hierarchy and do
+            // NOT inherit EnvironmentObjects from the parent fullScreenCover.
+            // Re-inject the trio that SharePickerView declares as
+            // @EnvironmentObject, otherwise tapping share crashes with
+            // "EnvironmentObject error → SharePickerView.conversationListViewModel".
+            .environmentObject(conversationListViewModel)
+            .environmentObject(router)
+            .environmentObject(statusViewModel)
             .presentationDetents([.medium, .large])
         }
         // Repost-as-story composer (C.1). Opened from the bottom-bar "Partager"

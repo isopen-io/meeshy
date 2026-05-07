@@ -119,6 +119,20 @@ final class DraftStore: @unchecked Sendable {
         load(for: conversationId) != nil
     }
 
+    /// Purge the reply reference (`replyToId`) of an existing draft so the
+    /// composer reply banner stops re-appearing on conversation re-entry.
+    /// Text, attachments, and effect flags are preserved — this only clears
+    /// the reply context. No-op if no draft exists for the conversation.
+    func clearReplyReference(conversationId: String) {
+        guard var draft = load(for: conversationId) else { return }
+        guard draft.replyToId != nil else { return }
+        draft.replyToId = nil
+        draft.replyAuthorName = nil
+        draft.replyPreviewText = nil
+        draft.replyIsMe = false
+        save(draft, for: conversationId)
+    }
+
     // MARK: - Text-only convenience (legacy callers)
 
     func saveText(_ text: String, for conversationId: String) {

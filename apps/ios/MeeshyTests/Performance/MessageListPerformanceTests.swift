@@ -18,8 +18,13 @@ final class MessageListPerformanceTests: XCTestCase {
     // MARK: - Setup
 
     override func setUpWithError() throws {
-        // Gate disabled for runbook execution — re-enable via the scheme env vars
-        // ("RUN_PERF_BENCHMARKS=1") in normal CI runs to keep the test suite fast.
+        try super.setUpWithError()
+        // Perf benchmarks are gated to avoid bloating regular CI runs.
+        // Run via `RUN_PERF_BENCHMARKS=1 xcodebuild test ...` or the
+        // dedicated `scripts/ios-perf-benchmark.sh` runbook.
+        guard ProcessInfo.processInfo.environment["RUN_PERF_BENCHMARKS"] == "1" else {
+            throw XCTSkip("Perf benchmarks gated. Set RUN_PERF_BENCHMARKS=1 to run.")
+        }
     }
 
     // MARK: - Benchmark: 1000-message load + section recompute

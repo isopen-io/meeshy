@@ -67,8 +67,9 @@ public enum MessageTextRenderer {
             }
         }
 
-        for match in urlDetector.matches(in: text, range: fullRange) {
-            if let url = match.url, url.scheme?.hasPrefix("http") == true {
+        for match in urlRegex.matches(in: text, range: fullRange) {
+            let raw = ns.substring(with: match.range)
+            if let url = URL(string: raw), url.scheme?.hasPrefix("http") == true {
                 urls.append(url)
             }
         }
@@ -138,8 +139,29 @@ public enum MessageTextRenderer {
         (mentionRegex, .mention),
     ]
 
-    private static let urlDetector = try! NSDataDetector(
-        types: NSTextCheckingResult.CheckingType.link.rawValue
+    /// Pure-regex URL matcher that replaces `NSDataDetector` for HTTP(S) link
+    /// detection.
+    ///
+    /// `NSDataDetector` has a stack-recursion bug (`_DDScannerHandleState`
+    /// re-entering itself dozens of frames deep) that blows up the worker
+    /// thread's stack on emoji-rich / Unicode-heavy / multi-paragraph strings
+    /// — even short ones with pathological content. The crash surfaces on
+    /// `com.apple.uikit.datasource.diffing` (smaller stack than main) when a
+    /// `UIHostingConfiguration` cell renders during diff/layout, and bringing
+    /// down the whole conversation list.
+    ///
+    /// Trade-off: we lose Apple's auto-detection of phone numbers / emails /
+    /// addresses (we never used those anyway here) and `www.…` URLs without a
+    /// scheme. In exchange we get deterministic O(n) scanning that never
+    /// recurses, and no random crashes.
+    ///
+    /// Pattern: matches `http://` or `https://` followed by a contiguous run
+    /// of URL-legal characters per RFC 3986. The `(?<![@\\w])` lookbehind
+    /// prevents matching inside an email or word boundary that would otherwise
+    /// produce a misleading link (e.g. `xxxhttp://` shouldn't match).
+    private static let urlRegex = try! NSRegularExpression(
+        pattern: #"(?<![@\w])https?://[\w\-._~:/?#\[\]@!$&'()*+,;=%]+"#,
+        options: []
     )
 
     /// Build display-name mention rules for known `username → displayName` pairs.
@@ -196,8 +218,7 @@ public enum MessageTextRenderer {
                 }
             }
 
-            if let urlMatch = urlDetector.firstMatch(in: text, range: searchRange),
-               urlMatch.url?.scheme?.hasPrefix("http") == true,
+            if let urlMatch = urlRegex.firstMatch(in: text, range: searchRange),
                bestMatch == nil || urlMatch.range.location < bestMatch!.range.location {
                 bestMatch = urlMatch
                 bestKind = .url
@@ -254,11 +275,15 @@ public enum MessageTextRenderer {
                 }
 
             case .url:
-                if let url = match.url {
-                    let display = ns.substring(with: match.range)
-                    segments.append(.urlLink(display: display, url: url))
+                // `match.url` is only populated by `NSDataDetector`. Our pure
+                // regex returns plain `NSTextCheckingResult` values where
+                // `match.url` is nil, so we construct the URL from the raw
+                // substring instead.
+                let raw = ns.substring(with: match.range)
+                if let url = URL(string: raw) {
+                    segments.append(.urlLink(display: raw, url: url))
                 } else {
-                    segments.append(.text(ns.substring(with: match.range), inherited))
+                    segments.append(.text(raw, inherited))
                 }
             }
 

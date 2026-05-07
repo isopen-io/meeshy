@@ -25,6 +25,12 @@ struct StoryTrayView: View {
     // un re-render complet du tray. La présence est rafraîchie lors des refreshs naturels.
     private var presenceManager: PresenceManager { PresenceManager.shared }
     @EnvironmentObject private var statusViewModel: StatusViewModel
+    // Captured solely so we can re-inject them onto the `StoryViewerContainer`
+    // / `StoryViewerView` fullScreenCovers below — those covers create a new
+    // presentation hierarchy and the inner SharePickerView sheet would
+    // otherwise crash on a missing `conversationListViewModel`.
+    @EnvironmentObject private var router: Router
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showOwnStoryViewer = false
     @State private var storyPreviewAssets: StoryPreviewAssets?
@@ -98,6 +104,12 @@ struct StoryTrayView: View {
                     preloadedVideoURLs: assets.videoURLs,
                     preloadedAudioURLs: assets.audioURLs
                 )
+                // Re-inject env objects required by StoryViewerView for its
+                // internal SharePickerView sheet. fullScreenCover does NOT
+                // inherit EnvironmentObjects automatically.
+                .environmentObject(router)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationListViewModel)
             }
         }
         .fullScreenCover(isPresented: $showOwnStoryViewer) {
@@ -107,6 +119,12 @@ struct StoryTrayView: View {
                 isPresented: $showOwnStoryViewer,
                 singleGroup: true
             )
+            // Re-inject env objects required by StoryViewerView for its
+            // internal SharePickerView sheet. fullScreenCover does NOT
+            // inherit EnvironmentObjects automatically.
+            .environmentObject(router)
+            .environmentObject(statusViewModel)
+            .environmentObject(conversationListViewModel)
         }
         .withStatusBubble()
     }

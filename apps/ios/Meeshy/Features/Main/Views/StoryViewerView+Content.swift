@@ -724,6 +724,35 @@ extension StoryViewerView {
     /// Manual resume — only for ending gesture holds.
     func resumeTimer() { isPaused = false }
 
+    // MARK: - Initial Action (Phase F — notification entry point)
+
+    /// Honours the optional `initialAction` (set when this viewer was launched
+    /// from a story notification redirect). The 250 ms delay lets the
+    /// fullScreenCover finish its presentation animation and lets the canvas
+    /// (media + progress bars) mount one frame, otherwise the comments overlay
+    /// or viewers sheet animates in over a half-blank screen on cold start.
+    /// Idempotent via `hasTriggeredInitialAction` — repeated `.onAppear` calls
+    /// (scene phase, parent re-renders) are no-ops.
+    func triggerInitialActionIfNeeded() {
+        guard let action = initialAction, !hasTriggeredInitialAction else { return }
+        hasTriggeredInitialAction = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+            switch action {
+            case .showCommentsOverlay:
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showCommentsOverlay = true
+                }
+                pauseTimer()
+                if storyComments.isEmpty {
+                    loadStoryComments()
+                }
+            case .showViewersSheet:
+                showViewersSheet = true
+                pauseTimer()
+            }
+        }
+    }
+
     // MARK: - Dismiss Composer
 
     func dismissComposer() {

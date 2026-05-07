@@ -18,6 +18,10 @@ struct StoryViewerContainer: View {
     var singleGroup: Bool = false
     var initialStoryIndex: Int = 0
     var presentationSource: String = "unknown"
+    /// Phase F: forwarded to `StoryViewerView` so a notification-launched
+    /// viewer can auto-open the comments overlay or viewers sheet on appear.
+    /// `nil` keeps every legacy entry point on the existing path.
+    var initialAction: StoryViewerInitialAction? = nil
 
     @State private var timedOut = false
     @State private var reloadAttempts = 0
@@ -35,7 +39,8 @@ struct StoryViewerContainer: View {
                         groups: [viewModel.storyGroups[resolvedIndex]],
                         currentGroupIndex: 0,
                         isPresented: $isPresented,
-                        initialStoryIndex: initialStoryIndex
+                        initialStoryIndex: initialStoryIndex,
+                        initialAction: initialAction
                     )
                     .transition(.identity)
                 } else {
@@ -45,7 +50,8 @@ struct StoryViewerContainer: View {
                         currentGroupIndex: resolvedIndex,
                         isPresented: $isPresented,
                         onReplyToStory: onReplyToStory,
-                        initialStoryIndex: initialStoryIndex
+                        initialStoryIndex: initialStoryIndex,
+                        initialAction: initialAction
                     )
                     .transition(.identity)
                 }

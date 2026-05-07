@@ -24,6 +24,7 @@ class PostDetailViewModel: ObservableObject {
     private var commentCursor: String?
     private let postService: PostServiceProviding
     private let socialSocket = SocialSocketManager.shared
+    private let languageProvider: LanguageProviding
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Persistence Layer
@@ -31,8 +32,12 @@ class PostDetailViewModel: ObservableObject {
     private(set) var commentStore: CommentStore?
     private var feedPersistence: FeedPersistenceActor?
 
-    init(postService: PostServiceProviding = PostService.shared) {
+    init(
+        postService: PostServiceProviding = PostService.shared,
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
+    ) {
         self.postService = postService
+        self.languageProvider = languageProvider
     }
 
     /// Wire persistence store for GRDB-backed comments.
@@ -43,7 +48,7 @@ class PostDetailViewModel: ObservableObject {
     }
 
     var preferredLanguages: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        languageProvider.preferredLanguages
     }
 
     var userLanguage: String {

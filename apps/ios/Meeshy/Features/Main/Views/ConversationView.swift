@@ -515,6 +515,12 @@ struct ConversationView: View {
                     singleGroup: true,
                     presentationSource: "ConversationView.header"
                 )
+                // Re-inject env objects required by StoryViewerView for its
+                // internal SharePickerView sheet. fullScreenCover does NOT
+                // inherit EnvironmentObjects automatically.
+                .environmentObject(router)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationListViewModel)
             }
             .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
                 StoryViewerContainer(
@@ -529,6 +535,12 @@ struct ConversationView: View {
                     initialStoryIndex: overlayState.storyViewerSlideIndex,
                     presentationSource: "ConversationView.overlay"
                 )
+                // Re-inject env objects required by StoryViewerView for its
+                // internal SharePickerView sheet. fullScreenCover does NOT
+                // inherit EnvironmentObjects automatically.
+                .environmentObject(router)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationListViewModel)
             }
             .sheet(isPresented: $composerState.showConversationInfo) {
                 if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }
@@ -637,6 +649,7 @@ struct ConversationView: View {
         bodyContent
             .background(InteractivePopEnabler())
             .task {
+                print("[DIAG] ConversationView.task ENTERED conv=\(viewModel.conversationId)")
                 viewModel.observeSync()
                 await viewModel.loadMessages()
                 MessageSocketManager.shared.connect()
@@ -701,6 +714,7 @@ struct ConversationView: View {
                 }
             }
             .onDisappear {
+                print("[DIAG] ConversationView.onDisappear conv=\(viewModel.conversationId)")
                 typingDotConnection?.cancel()
                 typingDotConnection = nil
             }
@@ -728,6 +742,7 @@ struct ConversationView: View {
                 // ViewModel has already wiped per-conversation cache and
                 // local message state. We dismiss the screen here and
                 // surface a toast so the user knows why.
+                print("[DIAG] accessRevoked.onChange revoked=\(revoked)")
                 guard revoked else { return }
                 ToastManager.shared.showError(viewModel.error ?? "Vous n'avez plus acces a cette conversation")
                 dismiss()
@@ -751,10 +766,41 @@ struct ConversationView: View {
             // UIKit bridge powered by GRDB store (always available after eager init)
             MessageListView(
                 store: viewModel.messageStore,
-                currentUserId: viewModel.currentUserIdForView
-            ) { count in
-                scrollState.unreadBadgeCount = count
-            }
+                currentUserId: viewModel.currentUserIdForView,
+                accentColor: accentColor,
+                isDirect: isDirect,
+                bottomInset: composerHeight + 16,
+                onNewMessagesBadge: { count in
+                    scrollState.unreadBadgeCount = count
+                },
+                onScrollToMessage: { targetId in
+                    // Tap on a reply chip inside a bubble: jump to the cited
+                    // message. If the target is in the current window, the
+                    // VC handles the visual scroll itself; here we cover the
+                    // case where it's outside the window by widening the
+                    // store's anchor (loadMessagesAround triggers a
+                    // refreshFromDB which re-emits the snapshot).
+                    Task { await viewModel.loadMessagesAround(messageId: targetId) }
+                },
+                resolveBubbleData: { messageId in
+                    // Pulls live translation/transcription state from the
+                    // ConversationViewModel. The closure runs on main thread
+                    // inside the cell config, so direct property reads are
+                    // safe — the VM is @MainActor and the cell registration
+                    // is invoked by UIKit on the main runloop.
+                    MessageBubbleData(
+                        translations: viewModel.messageTranslations[messageId] ?? [],
+                        preferredTranslation: viewModel.preferredTranslation(for: messageId),
+                        transcription: viewModel.messageTranscriptions[messageId],
+                        translatedAudios: viewModel.messageTranslatedAudios[messageId] ?? [],
+                        userLanguages: (
+                            regional: AuthManager.shared.currentUser?.regionalLanguage,
+                            custom: AuthManager.shared.currentUser?.customDestinationLanguage
+                        ),
+                        mentionDisplayNames: viewModel.mentionDisplayNames
+                    )
+                }
+            )
 
             floatingHeaderSection
 

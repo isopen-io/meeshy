@@ -20,6 +20,12 @@ final class MockStoryService: StoryServiceProviding {
         """)
     )
     var repostResult: Result<Void, Error> = .success(())
+    var cachedPostResult: APIPost?
+    var fetchPostResult: Result<APIPost, Error> = .success(
+        JSONStub.decode("""
+        {"id":"post-stub","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"stub"}}
+        """)
+    )
 
     // MARK: - Call Tracking
 
@@ -43,6 +49,12 @@ final class MockStoryService: StoryServiceProviding {
 
     var repostCallCount = 0
     var lastRepostStoryId: String?
+
+    var cachedPostCallCount = 0
+    var lastCachedPostId: String?
+
+    var fetchPostCallCount = 0
+    var lastFetchPostId: String?
 
     // MARK: - Protocol Conformance
 
@@ -85,6 +97,18 @@ final class MockStoryService: StoryServiceProviding {
         try repostResult.get()
     }
 
+    func cachedPost(id: String) -> APIPost? {
+        cachedPostCallCount += 1
+        lastCachedPostId = id
+        return cachedPostResult
+    }
+
+    func fetchPost(id: String) async throws -> APIPost {
+        fetchPostCallCount += 1
+        lastFetchPostId = id
+        return try fetchPostResult.get()
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -118,5 +142,15 @@ final class MockStoryService: StoryServiceProviding {
         repostResult = .success(())
         repostCallCount = 0
         lastRepostStoryId = nil
+
+        cachedPostResult = nil
+        cachedPostCallCount = 0
+        lastCachedPostId = nil
+
+        fetchPostResult = .success(JSONStub.decode("""
+        {"id":"post-stub","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"stub"}}
+        """))
+        fetchPostCallCount = 0
+        lastFetchPostId = nil
     }
 }
