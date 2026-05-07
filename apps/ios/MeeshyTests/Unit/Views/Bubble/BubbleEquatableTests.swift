@@ -32,8 +32,8 @@ final class BubbleEquatableTests: XCTestCase {
 
     func test_pinnedIndicator_isStateless() {
         XCTAssertEqual(
-            BubblePinnedIndicator(isMe: false, isDark: true),
-            BubblePinnedIndicator(isMe: false, isDark: true)
+            BubblePinnedIndicator(),
+            BubblePinnedIndicator()
         )
     }
 }

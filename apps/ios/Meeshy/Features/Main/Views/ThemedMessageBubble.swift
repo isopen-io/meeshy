@@ -942,14 +942,9 @@ struct ThemedMessageBubble: View {
         )
     }
 
-    @ViewBuilder
-    private var mediaDeliveryCheckmark: some View {
-        BubbleMediaDeliveryCheckmark(status: message.deliveryStatus)
-    }
-
     // MARK: - Reply Preview
     private var pinnedIndicator: some View {
-        BubblePinnedIndicator(isMe: message.isMe, isDark: isDark)
+        BubblePinnedIndicator()
     }
 
     private var forwardedIndicator: some View {

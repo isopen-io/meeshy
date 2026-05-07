@@ -129,13 +129,12 @@ struct BubbleMediaDeliveryCheckmark: View, Equatable {
 
 // MARK: - Pinned Indicator (was: ThemedMessageBubble.pinnedIndicator)
 
-/// Badge "Epingle" affiche au dessus des bulles epinglees. Stateless,
-/// `isMe` et `isDark` sont conserves pour rester aligne avec la signature
-/// des autres badges meme s'ils ne sont pas tous utilises ici.
+/// Badge "Epingle" affiche au dessus des bulles epinglees. Purement stateless —
+/// aucun input requis car `MeeshyColors.pinnedBlue` est theme-invariant. La
+/// conformance `Equatable` synthetisee sur un struct sans champs renvoie
+/// toujours `true`, ce qui est exactement le comportement souhaite pour
+/// preserver le fast-path `.equatable()`.
 struct BubblePinnedIndicator: View, Equatable {
-    let isMe: Bool
-    let isDark: Bool
-
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: "pin.fill")
