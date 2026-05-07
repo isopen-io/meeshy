@@ -360,7 +360,8 @@ struct RootView: View {
                     storyViewerRequest = nil
                     router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
                 },
-                presentationSource: "RootView.fromConv"
+                presentationSource: "RootView.fromConv",
+                initialAction: request.initialAction
             )
         }
         .fullScreenCover(isPresented: Binding(
