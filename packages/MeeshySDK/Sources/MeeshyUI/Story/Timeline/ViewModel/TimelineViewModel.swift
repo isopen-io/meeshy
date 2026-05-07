@@ -332,6 +332,19 @@ public final class TimelineViewModel {
         isSnapEnabled.toggle()
     }
 
+    // MARK: - Playback + mute convenience
+
+    public func togglePlayback() {
+        if isPlaying { engine.pause() } else { engine.play() }
+        isPlaying.toggle()
+    }
+
+    public func toggleMute() {
+        var muted = engine.isMuted
+        muted.toggle()
+        engine.isMuted = muted
+    }
+
     // MARK: - Persistence
 
     public func restoreCommandHistory(_ snapshot: CommandStackSnapshot) {
