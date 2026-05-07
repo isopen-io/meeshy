@@ -1,6 +1,15 @@
 import SwiftUI
 
-public struct KeyframeMarkerView: View {
+public struct KeyframeMarkerView: View, Equatable {
+
+    // MARK: - SOTA P7: Equatable (excludes closures — visual props only)
+    public static func == (lhs: KeyframeMarkerView, rhs: KeyframeMarkerView) -> Bool {
+        lhs.keyframeId == rhs.keyframeId
+            && lhs.absoluteTime == rhs.absoluteTime
+            && lhs.geometry == rhs.geometry
+            && lhs.laneHeight == rhs.laneHeight
+            && lhs.isSelected == rhs.isSelected
+    }
 
     public let keyframeId: String
     public let absoluteTime: Float

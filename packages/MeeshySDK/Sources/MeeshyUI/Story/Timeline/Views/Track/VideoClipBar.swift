@@ -4,7 +4,22 @@ import UIKit
 /// Single video clip rendered inside a track lane.
 /// Includes : color tint (success green), frame strip, fade gradients, trim
 /// handles, drag, accessibility label & VoiceOver actions.
-public struct VideoClipBar: View {
+public struct VideoClipBar: View, Equatable {
+
+    public static func == (lhs: VideoClipBar, rhs: VideoClipBar) -> Bool {
+        lhs.clipId == rhs.clipId
+            && lhs.title == rhs.title
+            && lhs.startTime == rhs.startTime
+            && lhs.duration == rhs.duration
+            && lhs.fadeIn == rhs.fadeIn
+            && lhs.fadeOut == rhs.fadeOut
+            && lhs.isSelected == rhs.isSelected
+            && lhs.isLocked == rhs.isLocked
+            && lhs.isDark == rhs.isDark
+            && lhs.geometry == rhs.geometry
+            && lhs.laneHeight == rhs.laneHeight
+            && lhs.frames.count == rhs.frames.count
+    }
 
     public let clipId: String
     public let title: String

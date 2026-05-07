@@ -1,6 +1,22 @@
 import SwiftUI
 
-public struct AudioClipBar: View {
+public struct AudioClipBar: View, Equatable {
+
+    // MARK: - SOTA P7: Equatable (excludes closures — visual props only)
+    public static func == (lhs: AudioClipBar, rhs: AudioClipBar) -> Bool {
+        lhs.clipId == rhs.clipId
+            && lhs.title == rhs.title
+            && lhs.startTime == rhs.startTime
+            && lhs.duration == rhs.duration
+            && lhs.volume == rhs.volume
+            && lhs.isMuted == rhs.isMuted
+            && lhs.isSelected == rhs.isSelected
+            && lhs.isLocked == rhs.isLocked
+            && lhs.isDark == rhs.isDark
+            && lhs.geometry == rhs.geometry
+            && lhs.laneHeight == rhs.laneHeight
+            && lhs.waveformSamples == rhs.waveformSamples
+    }
 
     public let clipId: String
     public let title: String
@@ -92,6 +108,7 @@ public struct AudioClipBar: View {
             .frame(maxHeight: .infinity, alignment: .center)
         }
         .padding(.horizontal, 3)
+        .drawingGroup()   // SOTA P7: bake to Metal layer, skip re-stroke when props unchanged
         .accessibilityHidden(true)
     }
 

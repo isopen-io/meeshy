@@ -1,6 +1,19 @@
 import SwiftUI
 
-public struct TextClipBar: View {
+public struct TextClipBar: View, Equatable {
+
+    // MARK: - SOTA P7: Equatable (excludes closures — visual props only)
+    public static func == (lhs: TextClipBar, rhs: TextClipBar) -> Bool {
+        lhs.clipId == rhs.clipId
+            && lhs.content == rhs.content
+            && lhs.startTime == rhs.startTime
+            && lhs.duration == rhs.duration
+            && lhs.isSelected == rhs.isSelected
+            && lhs.isLocked == rhs.isLocked
+            && lhs.isDark == rhs.isDark
+            && lhs.geometry == rhs.geometry
+            && lhs.laneHeight == rhs.laneHeight
+    }
 
     public let clipId: String
     public let content: String

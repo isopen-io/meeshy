@@ -1,6 +1,15 @@
 import SwiftUI
 
-public struct PlayheadView: View {
+public struct PlayheadView: View, Equatable {
+
+    // MARK: - SOTA P7: Equatable (excludes closures — visual props only)
+    public static func == (lhs: PlayheadView, rhs: PlayheadView) -> Bool {
+        lhs.currentTime == rhs.currentTime
+            && lhs.totalDuration == rhs.totalDuration
+            && lhs.geometry == rhs.geometry
+            && lhs.laneHeight == rhs.laneHeight
+            && lhs.isDark == rhs.isDark
+    }
 
     public let currentTime: Float
     public let totalDuration: Float

@@ -1,6 +1,14 @@
 import SwiftUI
 
-public struct RulerView: View {
+public struct RulerView: View, Equatable {
+
+    // MARK: - SOTA P7: Equatable (excludes closures — visual props only)
+    public static func == (lhs: RulerView, rhs: RulerView) -> Bool {
+        lhs.totalDuration == rhs.totalDuration
+            && lhs.geometry == rhs.geometry
+            && lhs.isDark == rhs.isDark
+            && lhs.height == rhs.height
+    }
 
     public let totalDuration: Float
     public let geometry: TimelineGeometry
@@ -61,6 +69,7 @@ public struct RulerView: View {
                 tick(at: CGFloat(t) * geometry.pixelsPerSecond, label: Self.formatTick(t))
             }
         }
+        .drawingGroup()   // SOTA P7: bake ticks to Metal layer, skip re-stroke when props unchanged
         .frame(height: height)
         .contentShape(Rectangle())
         .gesture(

@@ -1,7 +1,18 @@
 import SwiftUI
 import MeeshySDK
 
-public struct TransitionBadge: View {
+public struct TransitionBadge: View, Equatable {
+
+    // MARK: - SOTA P7: Equatable (excludes closures — visual props only)
+    public static func == (lhs: TransitionBadge, rhs: TransitionBadge) -> Bool {
+        lhs.id == rhs.id
+            && lhs.kind == rhs.kind
+            && lhs.duration == rhs.duration
+            && lhs.isSelected == rhs.isSelected
+            && lhs.isDark == rhs.isDark
+            && lhs.anchorX == rhs.anchorX
+            && lhs.laneHeight == rhs.laneHeight
+    }
 
     public let id: String
     public let kind: StoryTransitionKind
