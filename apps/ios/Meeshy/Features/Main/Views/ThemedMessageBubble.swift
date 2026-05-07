@@ -1458,38 +1458,11 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Bubble Background
     private var bubbleBackground: some View {
-        let other = Color(hex: otherBubbleColor)
-
-        return RoundedRectangle(cornerRadius: 18)
-            .fill(
-                message.isMe ?
-                LinearGradient(
-                    colors: [MeeshyColors.brandPrimary, MeeshyColors.brandDeep],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ) :
-                LinearGradient(
-                    colors: [
-                        other.opacity(isDark ? 0.35 : 0.25),
-                        other.opacity(isDark ? 0.20 : 0.15)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(
-                        message.isMe ?
-                        LinearGradient(colors: [Color.clear, Color.clear], startPoint: .leading, endPoint: .trailing) :
-                        LinearGradient(
-                            colors: [other.opacity(0.5), other.opacity(0.2)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: message.isMe ? 0 : 1
-                    )
-            )
+        BubbleBackground(
+            isMe: message.isMe,
+            accentHex: otherBubbleColor,
+            isDark: isDark
+        )
     }
 
     // MARK: - Media Standalone View
