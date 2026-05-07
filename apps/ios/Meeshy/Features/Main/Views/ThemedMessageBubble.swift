@@ -753,26 +753,7 @@ struct ThemedMessageBubble: View {
     // MARK: - Ephemeral Timer Overlay
 
     private var ephemeralTimerOverlay: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "flame.fill")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(Color(hex: "FF6B6B"))
-
-            Text(ephemeralTimerText)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(Color(hex: "FF6B6B"))
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(Color(hex: "FF6B6B").opacity(isDark ? 0.15 : 0.1))
-                .overlay(
-                    Capsule()
-                        .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
-                )
-        )
-        .accessibilityLabel("Message ephemere, expire dans \(ephemeralTimerText)")
+        BubbleEphemeralBadge(timerText: ephemeralTimerText, isDark: isDark)
     }
 
     // MARK: - Expandable Text
@@ -944,148 +925,40 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Edited Indicator (top-leading overlay)
     private var editedIndicator: some View {
-        let metaColor: Color = message.isMe
-            ? Color.white.opacity(0.6)
-            : theme.textSecondary.opacity(0.5)
-
-        return HStack(spacing: 3) {
-            if isEditSaving {
-                // Saving feedback: arrow-spin glyph instead of pencil so the
-                // user sees their edit is still propagating to the server.
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 8, weight: .semibold))
-                    .rotationEffect(.degrees(isEditSaving ? 360 : 0))
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isEditSaving)
-                Text("Enregistrement…")
-                    .font(.system(size: 9, weight: .medium))
-                    .italic()
-            } else {
-                Image(systemName: "pencil")
-                    .font(.system(size: 8, weight: .semibold))
-                Text("modifie")
-                    .font(.system(size: 9, weight: .medium))
-                    .italic()
-                if hasEditHistory {
-                    // Dot affordance hinting the detail sheet shows history.
-                    Circle()
-                        .fill(metaColor)
-                        .frame(width: 3, height: 3)
-                        .opacity(0.7)
-                }
-            }
-        }
-        .foregroundColor(metaColor)
+        BubbleEditedIndicator(
+            isMe: message.isMe,
+            isSaving: isEditSaving,
+            hasEditHistory: hasEditHistory,
+            isDark: isDark
+        )
     }
 
     // MARK: - Media Timestamp Overlay (for visual media grid)
     private var mediaTimestampOverlay: some View {
-        HStack(spacing: 3) {
-            Text(timeString)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.white)
-
-            if message.isMe {
-                mediaDeliveryCheckmark
-            }
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(
-            Capsule()
-                .fill(Color.black.opacity(0.55))
+        BubbleMediaTimestampOverlay(
+            time: timeString,
+            isMe: message.isMe,
+            deliveryStatus: message.deliveryStatus
         )
     }
 
     @ViewBuilder
     private var mediaDeliveryCheckmark: some View {
-        switch message.deliveryStatus {
-        case .sending:
-            Image(systemName: "clock")
-                .font(.system(size: 9))
-                .foregroundColor(.white.opacity(0.8))
-        case .sent:
-            Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
-        case .delivered:
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .regular))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .regular))
-                    .offset(x: 3)
-            }
-            .foregroundColor(.white.opacity(0.8))
-            .frame(width: 14)
-        case .read:
-            // Match the bubble identity bar: full-opacity bold double-check on
-            // the dark capsule overlay, sized one point larger than `.delivered`
-            // so the read state is unambiguously distinct.
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .black))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .black))
-                    .offset(x: 3)
-            }
-            .foregroundColor(.white)
-            .frame(width: 15)
-            .accessibilityLabel("Read")
-        case .failed:
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(MeeshyColors.error)
-        }
+        BubbleMediaDeliveryCheckmark(status: message.deliveryStatus)
     }
 
     // MARK: - Reply Preview
     private var pinnedIndicator: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "pin.fill")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundColor(MeeshyColors.pinnedBlue)
-                .rotationEffect(.degrees(45))
-
-            Text("Epingle")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(MeeshyColors.pinnedBlue)
-        }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 2)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Message epingle")
+        BubblePinnedIndicator(isMe: message.isMe, isDark: isDark)
     }
 
     private var forwardedIndicator: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "arrowshape.turn.up.right.fill")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(theme.textMuted)
-
-            if let fwd = message.forwardedFrom {
-                if let convName = fwd.conversationName {
-                    Text("Transf. de \(fwd.senderName) \u{2022} \(convName)")
-                        .font(.system(size: 10))
-                        .italic()
-                        .foregroundColor(theme.textMuted)
-                        .lineLimit(1)
-                } else {
-                    Text("Transf. de \(fwd.senderName)")
-                        .font(.system(size: 10))
-                        .italic()
-                        .foregroundColor(theme.textMuted)
-                        .lineLimit(1)
-                }
-            } else {
-                Text("Transfere")
-                    .font(.system(size: 10))
-                    .italic()
-                    .foregroundColor(theme.textMuted)
-            }
-        }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 2)
-        .accessibilityElement(children: .combine)
+        BubbleForwardedIndicator(
+            isMe: message.isMe,
+            isDark: isDark,
+            senderName: message.forwardedFrom?.senderName,
+            conversationName: message.forwardedFrom?.conversationName
+        )
     }
 
     // MARK: - Quoted Reply View (inside bubble)
