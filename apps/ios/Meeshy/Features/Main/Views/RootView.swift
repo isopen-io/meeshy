@@ -214,6 +214,11 @@ struct RootView: View {
                     case .editProfile:
                         EditProfileView()
                             .navigationBarHidden(true)
+                    case .storyNotificationTarget:
+                        // Filled in G.2 — placeholder keeps the exhaustive
+                        // switch happy when the Route case lands ahead of
+                        // its destination view wiring.
+                        EmptyView()
                     }
                 }
             }
