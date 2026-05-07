@@ -959,141 +959,20 @@ struct ThemedMessageBubble: View {
     // MARK: - Quoted Reply View (inside bubble)
 
     private func quotedReplyView(_ reply: ReplyReference) -> some View {
-        let accentBarColor = Color(hex: reply.isMe ? contactColor : reply.authorColor)
-        let nameColor: Color = message.isMe
-            ? .white.opacity(0.9)
-            : Color(hex: reply.isMe ? contactColor : reply.authorColor)
-        let previewColor: Color = message.isMe
-            ? .white.opacity(0.65)
-            : theme.textMuted
-        let bgColor: Color = message.isMe
-            ? Color.white.opacity(0.15)
-            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-
-        return HStack(spacing: 0) {
-            // Left accent bar
-            RoundedRectangle(cornerRadius: 2)
-                .fill(message.isMe ? Color.white.opacity(0.7) : accentBarColor)
-                .frame(width: 4)
-
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(reply.isMe ? "Vous" : reply.authorName)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(nameColor)
-                        .lineLimit(1)
-
-                    if reply.isStoryReply {
-                        storyReplyPreview(reply, previewColor: previewColor)
-                    } else {
-                        HStack(spacing: 5) {
-                            if let attType = reply.attachmentType {
-                                Image(systemName: replyAttachmentIcon(attType))
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(previewColor)
-                            }
-
-                            MessageTextRenderer.render(
-                                reply.previewText.isEmpty ? "Media" : reply.previewText,
-                                fontSize: 12, color: previewColor,
-                                mentionColor: mentionTint, accentColor: previewColor,
-                                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                            )
-                            .lineLimit(2)
-                            .tint(previewColor)
-                        }
-                    }
-                }
-
-                Spacer(minLength: 0)
-
-                // Attachment thumbnail or story thumbnail
-                if let thumbUrl = (reply.isStoryReply ? reply.storyThumbnailUrl : reply.attachmentThumbnailUrl), !thumbUrl.isEmpty {
-                    CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 38, height: 38)) {
-                        Color(hex: reply.authorColor).opacity(0.3)
-                    }
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 38, height: 38)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-            }
-            .padding(.leading, 8)
-            .padding(.trailing, 10)
-        }
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(bgColor)
+        BubbleQuotedReply(
+            reply: reply,
+            parentIsMe: message.isMe,
+            accentHex: contactColor,
+            isDark: isDark,
+            mentionDisplayNames: mentionDisplayNames
         )
-        .padding(.horizontal, 6)
-        .padding(.top, 6)
-        .contentShape(Rectangle())
+        .equatable()
     }
 
     @ViewBuilder
     private func storyReplyPreview(_ reply: ReplyReference, previewColor: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(previewColor)
-            Text("Story")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(previewColor)
-
-            if let date = reply.storyPublishedAt {
-                Text("\u{2022}")
-                    .font(.system(size: 8))
-                    .foregroundColor(previewColor.opacity(0.6))
-                Text(date, style: .relative)
-                    .font(.system(size: 10))
-                    .foregroundColor(previewColor.opacity(0.8))
-            }
-
-            let reactions = reply.storyReactionCount ?? 0
-            let comments = reply.storyCommentCount ?? 0
-            if reactions > 0 || comments > 0 {
-                Text("(")
-                    .font(.system(size: 10))
-                    .foregroundColor(previewColor.opacity(0.6))
-                if reactions > 0 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 8))
-                        Text("\(reactions)")
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundColor(previewColor.opacity(0.8))
-                }
-                if reactions > 0 && comments > 0 {
-                    Text("\u{2022}")
-                        .font(.system(size: 6))
-                        .foregroundColor(previewColor.opacity(0.5))
-                }
-                if comments > 0 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "bubble.right.fill")
-                            .font(.system(size: 8))
-                        Text("\(comments)")
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundColor(previewColor.opacity(0.8))
-                }
-                Text(")")
-                    .font(.system(size: 10))
-                    .foregroundColor(previewColor.opacity(0.6))
-            }
-        }
-    }
-
-    private func replyAttachmentIcon(_ type: String) -> String {
-        switch type {
-        case "image": return "photo"
-        case "video": return "video"
-        case "audio": return "waveform"
-        case "file": return "doc"
-        case "location": return "mappin"
-        default: return "paperclip"
-        }
+        BubbleStoryReplyPreview(reply: reply, previewColor: previewColor)
+            .equatable()
     }
 
     // See ThemedMessageBubble+Media.swift for: visualMediaGrid, visualGridCell, carouselView, gridImageCell, carouselImageCell, gridVideoCell
