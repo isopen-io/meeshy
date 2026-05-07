@@ -727,15 +727,13 @@ public struct StoryComposerView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: viewModel.activeTool)
     }
 
-    // MARK: - Timeline Section (v2 feature flag gate)
+    // MARK: - Timeline Section
 
     @ViewBuilder
     private var timelineSection: some View {
-        if StoryTimelineFeatureFlag.shared.isV2Enabled {
-            TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
-        } else {
-            TimelinePanel(viewModel: viewModel)
-        }
+        // V2 timeline editor is the product — no feature-flag gating since the
+        // app has not yet shipped to a userbase that requires backwards-compat.
+        TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
     }
 
     // MARK: - Active Tool Panel
