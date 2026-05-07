@@ -242,7 +242,8 @@ extension ConversationView {
 
             Button {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                    composerState.pendingReplyReference = nil
+                    ReplyContextCleaner(conversationId: viewModel.conversationId)
+                        .clear(pendingReplyReference: &composerState.pendingReplyReference)
                 }
             } label: {
                 Image(systemName: "xmark")
