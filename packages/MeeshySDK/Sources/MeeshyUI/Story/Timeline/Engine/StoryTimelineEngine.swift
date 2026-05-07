@@ -253,7 +253,7 @@ public final class StoryTimelineEngine {
         ) { [weak self] cmtime in
             guard let self else { return }
             let seconds = Float(CMTimeGetSeconds(cmtime))
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 self.currentTime = seconds
                 self.onTimeUpdate?(seconds)
             }
@@ -267,8 +267,8 @@ public final class StoryTimelineEngine {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
+            guard let self else { return }
+            MainActor.assumeIsolated {
                 self.isPlaying = false
                 self.onPlaybackEnd?()
             }
