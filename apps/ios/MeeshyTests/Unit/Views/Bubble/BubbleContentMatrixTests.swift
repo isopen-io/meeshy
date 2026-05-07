@@ -6,7 +6,7 @@ final class BubbleContentMatrixTests: XCTestCase {
 
     func test_simpleText_hasOnlyTextAndMeta() {
         let msg = makeMessage(content: "Salut")
-        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
 
         XCTAssertNotNil(content.text)
         XCTAssertNil(content.reply)
@@ -19,7 +19,7 @@ final class BubbleContentMatrixTests: XCTestCase {
 
     func test_emojiOnly_isFlagged() {
         let msg = makeMessage(content: "🔥🔥🔥")
-        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
 
         XCTAssertTrue(content.isEmojiOnly)
     }
@@ -28,7 +28,7 @@ final class BubbleContentMatrixTests: XCTestCase {
         let img1 = makeAttachment(type: .image)
         let img2 = makeAttachment(type: .image)
         let msg = makeMessage(content: "", attachments: [img1, img2])
-        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
 
         guard case .visualGrid(let items) = content.attachments else {
             return XCTFail("expected visualGrid, got \(content.attachments)")
@@ -39,7 +39,7 @@ final class BubbleContentMatrixTests: XCTestCase {
     func test_audioMessage_routesToAudioCase() {
         let audio = makeAttachment(type: .audio)
         let msg = makeMessage(content: "", attachments: [audio])
-        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
 
         guard case .audio = content.attachments else {
             return XCTFail("expected audio")
@@ -48,14 +48,14 @@ final class BubbleContentMatrixTests: XCTestCase {
 
     func test_deletedMessage_routesToDeletedKind() {
         let msg = makeMessage(content: "ignored", deletedAt: Date())
-        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
 
         XCTAssertEqual(content.kind, .deleted)
     }
 
     func test_burnedViewOnce_routesToBurnedKind() {
         let msg = makeMessage(content: "secret", isViewOnce: true, viewOnceCount: 1)
-        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
 
         XCTAssertEqual(content.kind, .burned)
     }

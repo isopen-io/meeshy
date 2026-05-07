@@ -15,7 +15,7 @@ extension BubbleContent {
         userLanguages: (regional: String?, custom: String?) = (nil, nil),
         secondaryLangCode: String? = nil,
         activeDisplayLangCode: String? = nil,
-        currentUserId: String = "",
+        currentUserId: String,
         timeString: String? = nil,
         isEditSaving: Bool = false,
         hasEditHistory: Bool = false
@@ -43,13 +43,19 @@ extension BubbleContent {
             preferredTranslation: preferredTranslation,
             activeLangCode: activeLang
         )
+        // Emoji-only detection MUST analyze the original `message.content`,
+        // not the post-translation `effective`, to mirror the legacy bubble
+        // (ThemedMessageBubble.emojiOnlyResult, lines 157-164). Translated
+        // text may add words for an emoji-only original (or vice-versa);
+        // the visual rendering decision tracks the source. We still display
+        // `effective` (post-translation) in `text.raw` below.
         let emojiResult: EmojiDetector.EmojiOnlyResult = {
-            guard !effective.isEmpty,
+            guard !message.content.isEmpty,
                   message.attachments.isEmpty,
                   message.replyTo == nil else {
                 return .notEmojiOnly
             }
-            return EmojiDetector.analyze(effective)
+            return EmojiDetector.analyze(message.content)
         }()
         let isEmojiOnly = emojiResult != .notEmojiOnly
         self.text = effective.isEmpty ? nil : Text(
@@ -100,6 +106,13 @@ extension BubbleContent {
         let audio = message.attachments.first(where: { $0.type == .audio })
         let nonMedia = message.attachments.filter { $0.type == .file || $0.type == .location }
 
+        // TODO(Task14): the BubbleContent.Attachments enum (Task 1) has no case
+        // carrying audio alongside visual/nonMedia. Below, when a message has BOTH
+        // audio AND visual/nonMedia, audio is silently dropped. Extend the enum
+        // (e.g. add `audio` as an orthogonal optional field, or add .visualGridWithAudio
+        // / .nonMediaWithAudio cases) when migrating ThemedMessageBubble — verify
+        // against legacy rendering: `git -C ../v2_meeshy-bubble show dev:apps/ios/Meeshy/Features/Main/Views/ThemedMessageBubble.swift`
+        // lines 132-148 (visualAttachments + audioAttachments + nonMediaAttachments).
         switch (visual.isEmpty, audio == nil, nonMedia.isEmpty) {
         case (true, true, true):
             self.attachments = .none
