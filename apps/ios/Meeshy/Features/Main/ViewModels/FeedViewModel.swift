@@ -4,23 +4,9 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
-/// Provides the user's resolved content language without coupling consumers
-/// to `AuthManager.shared`. Allows tests to inject deterministic values
-/// instead of fighting singleton state pollution.
-@MainActor
-protocol LanguageProviding {
-    var preferredLanguages: [String] { get }
-}
-
-/// Default implementation that defers to the live `AuthManager` singleton.
-/// Reads `currentUser?.preferredContentLanguages` exactly once per call so
-/// that updates to the authenticated user are picked up automatically.
-@MainActor
-struct AuthManagerLanguageProvider: LanguageProviding {
-    var preferredLanguages: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
-    }
-}
+// `LanguageProviding` and `AuthManagerLanguageProvider` were extracted to
+// `Features/Main/Services/LanguageProviding.swift` so PostDetailViewModel /
+// BookmarksViewModel can depend on them without importing FeedViewModel.
 
 @MainActor
 class FeedViewModel: ObservableObject {

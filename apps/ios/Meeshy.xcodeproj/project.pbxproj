@@ -127,6 +127,7 @@
 		AE4100000000002F41 /* AudioEffectsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE4100000000001F41 /* AudioEffectsPanel.swift */; };
 		AEFX000100010001000100B0 /* AudioEffectTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFX000100010001000100F0 /* AudioEffectTypes.swift */; };
 		ANA00100010001000100B001 /* AnalyticsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANA00100010001000100F001 /* AnalyticsManager.swift */; };
+		LANG0010010010010010002 /* LanguageProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = LANG0010010010010010001 /* LanguageProviding.swift */; };
 		ANONSC00000000002001 /* AnonymousSessionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANONSC00000000001001 /* AnonymousSessionContext.swift */; };
 		ANYCD00000000002001 /* AnyCodable.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANYCD00000000001001 /* AnyCodable.swift */; };
 		AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */; };
@@ -296,6 +297,7 @@
 		MOCK0006000600060006001 /* MockAPIClientForApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK0006000600060006000 /* MockAPIClientForApp.swift */; };
 		MOCK0007000700070007001 /* MockStoryService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK0007000700070007000 /* MockStoryService.swift */; };
 		MOCK0008000800080008001 /* MockPostService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK0008000800080008000 /* MockPostService.swift */; };
+		MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000C000C000C000C000 /* MockLanguageProvider.swift */; };
 		MOCK0009000900090009001 /* MockStatusService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK0009000900090009000 /* MockStatusService.swift */; };
 		MOCK000A000A000A000A001 /* MockUserService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000A000A000A000A000 /* MockUserService.swift */; };
 		MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */ = {isa = PBXBuildFile; fileRef = MOCK000B000B000B000B000 /* MockBlockService.swift */; };
@@ -538,6 +540,7 @@
 		AE4100000000001F41 /* AudioEffectsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectsPanel.swift; sourceTree = "<group>"; };
 		AEFX000100010001000100F0 /* AudioEffectTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectTypes.swift; sourceTree = "<group>"; };
 		ANA00100010001000100F001 /* AnalyticsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsManager.swift; sourceTree = "<group>"; };
+		LANG0010010010010010001 /* LanguageProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LanguageProviding.swift; sourceTree = "<group>"; };
 		ANONSC00000000001001 /* AnonymousSessionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionContext.swift; sourceTree = "<group>"; };
 		ANYCD00000000001001 /* AnyCodable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyCodable.swift; sourceTree = "<group>"; };
 		AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFullscreenView.swift; sourceTree = "<group>"; };
@@ -717,6 +720,7 @@
 		MOCK0006000600060006000 /* MockAPIClientForApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAPIClientForApp.swift; sourceTree = "<group>"; };
 		MOCK0007000700070007000 /* MockStoryService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockStoryService.swift; sourceTree = "<group>"; };
 		MOCK0008000800080008000 /* MockPostService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockPostService.swift; sourceTree = "<group>"; };
+		MOCK000C000C000C000C000 /* MockLanguageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockLanguageProvider.swift; sourceTree = "<group>"; };
 		MOCK0009000900090009000 /* MockStatusService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockStatusService.swift; sourceTree = "<group>"; };
 		MOCK000A000A000A000A000 /* MockUserService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockUserService.swift; sourceTree = "<group>"; };
 		MOCK000B000B000B000B000 /* MockBlockService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockBlockService.swift; sourceTree = "<group>"; };
@@ -1188,6 +1192,7 @@
 				NSEPC001 /* NSEPendingMessageConsumer.swift */,
 				5498C9E6830102135B61B0CC /* CrashlyticsReporter.swift */,
 				ANA00100010001000100F001 /* AnalyticsManager.swift */,
+				LANG0010010010010010001 /* LanguageProviding.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -1445,6 +1450,7 @@
 				MCKS0005000500050005000 /* MockReportService.swift */,
 				MOCK0007000700070007000 /* MockStoryService.swift */,
 				MOCK0008000800080008000 /* MockPostService.swift */,
+				MOCK000C000C000C000C000 /* MockLanguageProvider.swift */,
 				MOCK0009000900090009000 /* MockStatusService.swift */,
 				MOCK000A000A000A000A000 /* MockUserService.swift */,
 				MOCK000B000B000B000B000 /* MockBlockService.swift */,
@@ -1940,6 +1946,7 @@
 				LGCT0100000002F001 /* Logger+Categories.swift in Sources */,
 				CDM00100010001000100B001 /* CrashDiagnosticsManager.swift in Sources */,
 				ANA00100010001000100B001 /* AnalyticsManager.swift in Sources */,
+				LANG0010010010010010002 /* LanguageProviding.swift in Sources */,
 				CM3600000000002F36 /* CallManager.swift in Sources */,
 				BT3600000000002F36 /* BackgroundTaskManager.swift in Sources */,
 				VP3600000000002F36 /* VoIPPushManager.swift in Sources */,
@@ -2062,6 +2069,7 @@
 				HLPR0004000400040004001 /* MessageStoreObservationHelper.swift in Sources */,
 				MOCK0007000700070007001 /* MockStoryService.swift in Sources */,
 				MOCK0008000800080008001 /* MockPostService.swift in Sources */,
+				MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */,
 				MOCK0009000900090009001 /* MockStatusService.swift in Sources */,
 				MOCK000A000A000A000A001 /* MockUserService.swift in Sources */,
 				MOCK000B000B000B000B001 /* MockBlockService.swift in Sources */,

@@ -15,9 +15,14 @@ final class PostDetailViewModelTests: XCTestCase {
     // MARK: - Factory
 
     private func makeSUT(
-        postService: MockPostService = MockPostService()
+        postService: MockPostService = MockPostService(),
+        preferredLanguages: [String] = []
     ) -> (sut: PostDetailViewModel, postService: MockPostService) {
-        let sut = PostDetailViewModel(postService: postService)
+        let languageProvider = MockLanguageProvider(preferredLanguages: preferredLanguages)
+        let sut = PostDetailViewModel(
+            postService: postService,
+            languageProvider: languageProvider
+        )
         return (sut, postService)
     }
 
@@ -232,5 +237,25 @@ final class PostDetailViewModelTests: XCTestCase {
         )
 
         XCTAssertNil(result)
+    }
+
+    // MARK: - LanguageProviding DI
+
+    /// `userLanguage` must come from the injected provider, not from
+    /// `AuthManager.shared`. Without DI this test would be flaky because
+    /// other suites pollute the singleton with their own `currentUser`.
+    func test_userLanguage_usesInjectedLanguageProvider() {
+        let (sut, _) = makeSUT(preferredLanguages: ["es", "pt"])
+
+        XCTAssertEqual(sut.userLanguage, "es")
+        XCTAssertEqual(sut.preferredLanguages, ["es", "pt"])
+    }
+
+    /// Empty preferred-languages list falls back to `"en"` (matches the
+    /// FeedViewModel contract).
+    func test_userLanguage_emptyProvider_fallsBackToEnglish() {
+        let (sut, _) = makeSUT(preferredLanguages: [])
+
+        XCTAssertEqual(sut.userLanguage, "en")
     }
 }

@@ -15,9 +15,14 @@ final class BookmarksViewModelTests: XCTestCase {
     // MARK: - Factory
 
     private func makeSUT(
-        postService: MockPostService = MockPostService()
+        postService: MockPostService = MockPostService(),
+        preferredLanguages: [String] = []
     ) -> (sut: BookmarksViewModel, postService: MockPostService) {
-        let sut = BookmarksViewModel(postService: postService)
+        let languageProvider = MockLanguageProvider(preferredLanguages: preferredLanguages)
+        let sut = BookmarksViewModel(
+            postService: postService,
+            languageProvider: languageProvider
+        )
         return (sut, postService)
     }
 
@@ -147,5 +152,25 @@ final class BookmarksViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.posts.count, 1)
         XCTAssertEqual(sut.posts[0].id, "b2")
+    }
+
+    // MARK: - LanguageProviding DI
+
+    /// The `BookmarksViewModel.fetchBookmarksFromNetwork(...)` path resolves
+    /// translations through the injected `LanguageProviding` instead of
+    /// reading `AuthManager.shared` directly. Even though we can't directly
+    /// observe `preferredLanguages` (it's private), we exercise the load
+    /// path with a stubbed provider to make sure the DI wiring compiles
+    /// and runs end-to-end.
+    func test_loadBookmarks_withInjectedLanguageProvider_succeeds() async {
+        let (sut, mock) = makeSUT(preferredLanguages: ["es"])
+        let posts = [Self.makeAPIPost(id: "b-lang")]
+        mock.getBookmarksResult = .success(Self.makePaginatedPosts(posts: posts))
+
+        await sut.loadBookmarks()
+
+        XCTAssertEqual(sut.posts.count, 1)
+        XCTAssertEqual(sut.posts[0].id, "b-lang")
+        XCTAssertEqual(mock.getBookmarksCallCount, 1)
     }
 }

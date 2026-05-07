@@ -13,16 +13,9 @@ final class FeedViewModelTests: XCTestCase {
 
     // MARK: - Factory
 
-    /// Test double for `LanguageProviding`. Defaults to an empty preferred-language
-    /// list so `userLanguage` falls back to `"en"`, isolating each test from
-    /// `AuthManager.shared` state pollution leaked by other suites.
-    private final class MockLanguageProvider: LanguageProviding {
-        var preferredLanguages: [String]
-
-        init(preferredLanguages: [String] = []) {
-            self.preferredLanguages = preferredLanguages
-        }
-    }
+    // `MockLanguageProvider` is defined in `MeeshyTests/Mocks/MockLanguageProvider.swift`
+    // and shared across `FeedViewModelTests`, `PostDetailViewModelTests`, and
+    // `BookmarksViewModelTests`.
 
     private func makeSUT(
         api: MockAPIClientForApp? = nil,

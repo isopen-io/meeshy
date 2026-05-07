@@ -10,13 +10,18 @@ class BookmarksViewModel: ObservableObject {
 
     private var nextCursor: String?
     private let postService: PostServiceProviding
+    private let languageProvider: LanguageProviding
 
-    init(postService: PostServiceProviding = PostService.shared) {
+    init(
+        postService: PostServiceProviding = PostService.shared,
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
+    ) {
         self.postService = postService
+        self.languageProvider = languageProvider
     }
 
     private var preferredLanguages: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        languageProvider.preferredLanguages
     }
 
     func loadBookmarks() async {
