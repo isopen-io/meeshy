@@ -144,6 +144,34 @@ final class OfflineEditFlowTests: XCTestCase {
                        "dismissOfflineQueuedConfirmation must reset the flag")
     }
 
+    // MARK: - Task 72: mediaURLPaths correctness (HIGH 2 fix)
+
+    func test_handlePublishTap_offline_includesMediaURLPathsFromPendingURLs() async {
+        let testURL = URL(fileURLWithPath: "/tmp/test-clip.mp4")
+        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "media-1", startTime: 0, duration: 5)
+        let engine = MockStoryTimelineEngine()
+        let network = MockNetworkMonitor()
+        network.isOnline = false
+        let queue = MockOfflineQueue()
+        let vm = TimelineViewModel(
+            engine: engine,
+            commandStack: CommandStack(),
+            snapEngine: SnapEngine(toleranceSeconds: 0.06)
+        )
+        vm.bootstrap(project: project, mediaURLs: ["media-1": testURL], images: [:])
+        await vm.awaitConfigured()
+
+        await vm.handlePublishTap(visibility: .public, networkMonitor: network, offlineQueue: queue)
+
+        let enqueued = await queue.enqueuedItems
+        XCTAssertEqual(enqueued.count, 1,
+                       "Offline publish must enqueue exactly one item")
+        XCTAssertEqual(enqueued.first?.mediaURLPaths.count, 1,
+                       "Enqueued item must carry the pending media URL path")
+        XCTAssertEqual(enqueued.first?.mediaURLPaths["media-1"], testURL.path,
+                       "mediaURLPaths[clipId] must match the URL passed to bootstrap")
+    }
+
     // MARK: - Offline project snapshot (draft round-trip via value semantics)
 
     func test_project_snapshotAndRestore_preservesClips() async {

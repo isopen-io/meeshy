@@ -65,6 +65,13 @@ public struct ProTimelineView: View {
         viewModel.selection.selectedClipId != nil
     }
 
+    // MARK: - Hoisted computed properties (MEDIUM 7)
+    // Keyed only on viewModel.project — stable when currentTime / zoomScale change.
+
+    private var hoistedTrackGroups: [TrackGroup] {
+        Self.resolveTrackGroups(project: viewModel.project)
+    }
+
     // MARK: - Body
 
     public var body: some View {
@@ -124,9 +131,10 @@ public struct ProTimelineView: View {
                 height: 22,
                 onTapTime: { _ in }
             )
+            .equatable() // HIGH 3: short-circuit body re-evaluation during playhead scrubbing
             ScrollView([.horizontal, .vertical]) {
                 VStack(alignment: .leading, spacing: 8) {
-                    ForEach(Self.resolveTrackGroups(project: viewModel.project), id: \.section) { group in
+                    ForEach(hoistedTrackGroups, id: \.section) { group in
                         groupHeader(key: group.titleKey)
                         ForEach(group.tracks, id: \.id) { track in
                             TrackBarView(

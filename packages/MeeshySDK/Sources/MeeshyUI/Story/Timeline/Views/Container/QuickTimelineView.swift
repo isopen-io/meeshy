@@ -114,6 +114,21 @@ public struct QuickTimelineView: View {
         isExpanded ? 0.30 : 0.60
     }
 
+    // MARK: - Hoisted computed properties (MEDIUM 7)
+    // Keyed only on viewModel.project — stable when currentTime / zoomScale change.
+
+    private var hoistedAllTracks: [CompactTrack] {
+        Self.resolveAllTracks(project: viewModel.project)
+    }
+
+    private var hoistedCompactTracks: [CompactTrack] {
+        Self.resolveCompactTracks(
+            project: viewModel.project,
+            selectedClipId: viewModel.selection.selectedClipId,
+            maxCount: Self.compactMaxTracks
+        )
+    }
+
     // MARK: - Body
 
     public var body: some View {
@@ -165,16 +180,11 @@ public struct QuickTimelineView: View {
             height: 18,
             onTapTime: { _ in }
         )
+        .equatable() // HIGH 3: short-circuit body re-evaluation during playhead scrubbing
     }
 
     private var tracksRegion: some View {
-        let allTracks = Self.resolveAllTracks(project: viewModel.project)
-        let compact = Self.resolveCompactTracks(
-            project: viewModel.project,
-            selectedClipId: viewModel.selection.selectedClipId,
-            maxCount: Self.compactMaxTracks
-        )
-        let tracks: [CompactTrack] = isExpanded ? allTracks : compact
+        let tracks: [CompactTrack] = isExpanded ? hoistedAllTracks : hoistedCompactTracks
         let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
         let laneWidth = max(geometry.width(for: viewModel.project.slideDuration), 200)
         return ScrollView([.horizontal, isExpanded ? .vertical : []], showsIndicators: isExpanded) {

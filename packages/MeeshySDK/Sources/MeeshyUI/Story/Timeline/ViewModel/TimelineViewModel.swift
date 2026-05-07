@@ -50,6 +50,7 @@ public final class TimelineViewModel {
     public var mode: TimelineMode = .quick
     public var zoomScale: CGFloat = 1.0
     public var errorMessage: String?
+    public internal(set) var showOfflineQueuedConfirmation: Bool = false
 
     // MARK: - Dependencies
 
@@ -59,7 +60,7 @@ public final class TimelineViewModel {
 
     // MARK: - Media state (persisted across reconfigures)
 
-    private var pendingMediaURLs: [String: URL] = [:]
+    internal var pendingMediaURLs: [String: URL] = [:]
     private var pendingImages: [String: UIImage] = [:]
 
     // MARK: - Async bootstrap tracking
