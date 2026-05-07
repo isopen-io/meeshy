@@ -375,6 +375,13 @@ struct RootView: View {
                 presentationSource: "RootView.fromConv",
                 initialAction: request.initialAction
             )
+            // Re-inject the trio that StoryViewerView declares as
+            // @EnvironmentObject (so it can re-inject them onto its inner
+            // SharePickerView sheet). fullScreenCover does not inherit
+            // EnvironmentObjects automatically.
+            .environmentObject(router)
+            .environmentObject(statusViewModel)
+            .environmentObject(conversationViewModel)
         }
         .fullScreenCover(isPresented: Binding(
             get: { isCallActive },

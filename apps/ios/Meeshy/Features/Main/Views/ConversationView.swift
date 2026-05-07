@@ -515,6 +515,12 @@ struct ConversationView: View {
                     singleGroup: true,
                     presentationSource: "ConversationView.header"
                 )
+                // Re-inject env objects required by StoryViewerView for its
+                // internal SharePickerView sheet. fullScreenCover does NOT
+                // inherit EnvironmentObjects automatically.
+                .environmentObject(router)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationListViewModel)
             }
             .fullScreenCover(isPresented: $overlayState.showStoryViewer) {
                 StoryViewerContainer(
@@ -529,6 +535,12 @@ struct ConversationView: View {
                     initialStoryIndex: overlayState.storyViewerSlideIndex,
                     presentationSource: "ConversationView.overlay"
                 )
+                // Re-inject env objects required by StoryViewerView for its
+                // internal SharePickerView sheet. fullScreenCover does NOT
+                // inherit EnvironmentObjects automatically.
+                .environmentObject(router)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationListViewModel)
             }
             .sheet(isPresented: $composerState.showConversationInfo) {
                 if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }

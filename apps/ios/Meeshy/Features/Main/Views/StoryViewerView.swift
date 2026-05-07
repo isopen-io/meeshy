@@ -89,6 +89,16 @@ struct StoryViewerView: View {
     @StateObject private var keyboard = KeyboardObserver()
     @Environment(\.scenePhase) private var scenePhase
 
+    // Required by `SharePickerView` presented via `.sheet(item:)` below. The
+    // sheet creates a separate presentation hierarchy so EnvironmentObjects
+    // from the parent fullScreenCover are NOT inherited automatically — we
+    // must capture them here and re-inject onto SharePickerView (see line
+    // ~257) to avoid the `EnvironmentObject error` crash that previously
+    // happened the moment a user tapped the share button on a story.
+    @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
+    @EnvironmentObject private var router: Router
+    @EnvironmentObject private var statusViewModel: StatusViewModel
+
     // === Transition states ===
 
     // Appear — start visible to avoid blank screen if animation doesn't fire
@@ -259,6 +269,14 @@ struct StoryViewerView: View {
                 onDismiss: { sharedContentWrapper = nil },
                 onShareToConversation: nil
             )
+            // SwiftUI sheets run in a separate presentation hierarchy and do
+            // NOT inherit EnvironmentObjects from the parent fullScreenCover.
+            // Re-inject the trio that SharePickerView declares as
+            // @EnvironmentObject, otherwise tapping share crashes with
+            // "EnvironmentObject error → SharePickerView.conversationListViewModel".
+            .environmentObject(conversationListViewModel)
+            .environmentObject(router)
+            .environmentObject(statusViewModel)
             .presentationDetents([.medium, .large])
         }
         // Repost-as-story composer (C.1). Opened from the bottom-bar "Partager"

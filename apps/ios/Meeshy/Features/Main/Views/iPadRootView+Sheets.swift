@@ -50,6 +50,12 @@ extension iPadRootView {
                     },
                     presentationSource: "iPadRootView.conv"
                 )
+                // Re-inject env objects required by StoryViewerView for its
+                // internal SharePickerView sheet. fullScreenCover does NOT
+                // inherit EnvironmentObjects automatically.
+                .environmentObject(router)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationViewModel)
             }
             // Coordinator-driven viewer cover used by
             // `StoryNotificationTargetScreen` → `StoryActiveBridge`. Mirrors
@@ -72,6 +78,12 @@ extension iPadRootView {
                     presentationSource: "iPadRootView.fromConv",
                     initialAction: request.initialAction
                 )
+                // Re-inject env objects required by StoryViewerView for its
+                // internal SharePickerView sheet. fullScreenCover does NOT
+                // inherit EnvironmentObjects automatically.
+                .environmentObject(router)
+                .environmentObject(statusViewModel)
+                .environmentObject(conversationViewModel)
             }
             .fullScreenCover(isPresented: Binding(
                 get: { callManager.callState.isActive },
