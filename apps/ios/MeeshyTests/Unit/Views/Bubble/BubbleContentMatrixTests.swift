@@ -99,6 +99,25 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(nonMedia.map(\.id), [file.id])
     }
 
+    /// Legacy `ThemedMessageBubble.hasTextOrNonMediaContent` returns false
+    /// for an audio bubble whose only "text" is the transcription — the
+    /// audio sub-view renders the transcription itself, so the text bubble
+    /// must be suppressed. Lock that visual fidelity rule here.
+    func test_audioWithTranscriptionText_suppressesTextBubble() {
+        let audio = makeAttachment(type: .audio)
+        let msg = makeMessage(content: "transcription text", attachments: [audio])
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertFalse(content.hasTextOrNonMediaContent)
+    }
+
+    func test_textOnly_hasTextOrNonMediaContent_isTrue() {
+        let msg = makeMessage(content: "Hello")
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.hasTextOrNonMediaContent)
+    }
+
     func test_audioPlusFile_routesToMixedWithAudioField() {
         let audio = makeAttachment(type: .audio)
         let file = makeAttachment(type: .file)

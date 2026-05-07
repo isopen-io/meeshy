@@ -28,6 +28,12 @@ import MeeshyUI
 struct BubbleStandardLayout: View {
     // MARK: - Inputs (data + visual context)
 
+    /// Pre-built rendering value (Task 15 wiring): the orchestrator branches
+    /// on `content.kind`, `content.text`, `content.attachments`, `content.reply`,
+    /// `content.translation`, `content.reactions`, etc. via clean `if let`/switch
+    /// patterns so a simple "Salut" message only instantiates text + meta-row
+    /// (no quoted-reply, no attachment, no translation panel sub-views).
+    let content: BubbleContent
     let message: Message
     let contactColor: String
     let isDirect: Bool
@@ -46,8 +52,6 @@ struct BubbleStandardLayout: View {
     let isLastReceivedMessage: Bool
     let mentionDisplayNames: [String: String]
     let highlightSearchTerm: String?
-    let isEditSaving: Bool
-    let hasEditHistory: Bool
     let activeVideoURL: String?
     let currentUserId: String
     let userLanguages: (regional: String?, custom: String?)
@@ -94,21 +98,36 @@ struct BubbleStandardLayout: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
 
-    // MARK: - Derived properties (mirror legacy ThemedMessageBubble computed vars)
+    // MARK: - Derived properties (read from BubbleContent where possible)
 
+    /// Visual attachments — derived from `content.attachments`.
+    /// `.visualGrid` carries the items directly; `.mixed` carries them
+    /// alongside audio/non-media. Other variants have no visual.
     var visualAttachments: [MessageAttachment] {
-        message.attachments.filter { [.image, .video].contains($0.type) }
+        switch content.attachments {
+        case .visualGrid(let items): return items
+        case .mixed(let visual, _, _): return visual
+        case .none, .audio, .nonMedia: return []
+        }
     }
 
     private var audioAttachments: [MessageAttachment] {
-        message.attachments.filter { $0.type == .audio }
+        switch content.attachments {
+        case .audio(let att): return [att]
+        case .mixed(_, let audio, _): return audio.map { [$0] } ?? []
+        case .none, .visualGrid, .nonMedia: return []
+        }
     }
 
     private var nonMediaAttachments: [MessageAttachment] {
-        message.attachments.filter { ![.image, .audio, .video].contains($0.type) }
+        switch content.attachments {
+        case .nonMedia(let items): return items
+        case .mixed(_, _, let items): return items
+        case .none, .visualGrid, .audio: return []
+        }
     }
 
-    private var hasReactions: Bool { !message.reactions.isEmpty }
+    private var hasReactions: Bool { !content.reactions.isEmpty }
 
     private var bottomSpacing: CGFloat {
         if isLastInGroup {
@@ -118,34 +137,21 @@ struct BubbleStandardLayout: View {
     }
 
     private var showIdentityBar: Bool {
-        !isDirect && isLastInGroup && !message.isMe
+        !isDirect && isLastInGroup && !content.isMe
     }
 
-    private var hasAnyTranslation: Bool { !textTranslations.isEmpty || !translatedAudios.isEmpty }
-
-    private var currentDisplayLangCode: String {
-        activeDisplayLangCode ?? preferredTranslation?.targetLanguage.lowercased() ?? message.originalLanguage.lowercased()
-    }
+    private var hasAnyTranslation: Bool { content.translation != nil }
 
     private var effectiveContent: String {
-        let code = currentDisplayLangCode
-        if code.lowercased() == message.originalLanguage.lowercased() {
-            return message.content
-        }
-        if let translation = textTranslations.first(where: { $0.targetLanguage.lowercased() == code.lowercased() }) {
-            return translation.translatedContent
-        }
-        return preferredTranslation?.translatedContent ?? message.content
+        // Driven by `content.text?.raw` (post-translation, post-active-lang
+        // resolution by BubbleContentBuilder). Falls back to `message.content`
+        // only when the content has no text payload at all (attachment-only
+        // bubble); legacy linkPreview/etc. read from this.
+        content.text?.raw ?? message.content
     }
 
     private var secondaryContent: String? {
-        guard let code = secondaryLangCode else { return nil }
-        if code.lowercased() == message.originalLanguage.lowercased() {
-            return message.content
-        }
-        return textTranslations.first(where: {
-            $0.targetLanguage.lowercased() == code.lowercased()
-        })?.translatedContent
+        content.translation?.secondaryContent
     }
 
     private var otherBubbleColor: String {
@@ -154,24 +160,13 @@ struct BubbleStandardLayout: View {
     }
 
     private var hasTextOrNonMediaContent: Bool {
-        let hasNonMedia = !nonMediaAttachments.isEmpty
-        let hasText = !message.content.isEmpty
-        let isAudioOnlyWithTranscription = hasText && !audioAttachments.isEmpty && visualAttachments.isEmpty && nonMediaAttachments.isEmpty
-        if isAudioOnlyWithTranscription { return false }
-        return hasText || hasNonMedia
+        content.hasTextOrNonMediaContent
     }
 
-    private var emojiOnlyResult: EmojiDetector.EmojiOnlyResult {
-        guard !message.content.isEmpty,
-              message.attachments.isEmpty,
-              message.replyTo == nil else {
-            return .notEmojiOnly
-        }
-        return EmojiDetector.analyze(message.content)
-    }
+    private var isEmojiOnly: Bool { content.isEmojiOnly }
 
-    private var isEmojiOnly: Bool {
-        emojiOnlyResult != .notEmojiOnly
+    private var emojiFontSize: CGFloat {
+        content.text?.emojiFontSize ?? 15
     }
 
     private var isEphemeralExpired: Bool {
@@ -186,9 +181,7 @@ struct BubbleStandardLayout: View {
         return "0s"
     }
 
-    private var timeString: String {
-        message.cachedTimeString ?? TimeStringCache.shared.format(message.createdAt)
-    }
+    private var timeString: String { content.meta.timeString }
 
     private var deliveryStatusAccessibilityLabel: String {
         switch message.deliveryStatus {
@@ -200,18 +193,17 @@ struct BubbleStandardLayout: View {
         }
     }
 
-    private var reactionSummaries: [ReactionSummary] {
-        BubbleContent.summarizeReactions(message.reactions, currentUserId: currentUserId)
-            .map { ReactionSummary(emoji: $0.emoji, count: $0.count, includesMe: $0.includesMe) }
-    }
+    private var reactionSummaries: [ReactionSummary] { content.reactions }
 
     private var messageAccessibilityLabel: String {
         var parts: [String] = []
-        if !message.isMe {
-            parts.append(message.senderName ?? "Inconnu")
+        if !content.isMe, let senderName = content.senderName {
+            parts.append(senderName)
+        } else if !content.isMe {
+            parts.append("Inconnu")
         }
-        if !message.content.isEmpty {
-            parts.append(message.content)
+        if let raw = content.text?.raw, !raw.isEmpty {
+            parts.append(raw)
         }
         if !visualAttachments.isEmpty {
             let imageCount = visualAttachments.filter { $0.type == .image }.count
@@ -228,14 +220,14 @@ struct BubbleStandardLayout: View {
                 else { parts.append("fichier \(att.originalName)") }
             }
         }
-        parts.append(timeString)
-        if message.isMe {
+        parts.append(content.meta.timeString)
+        if content.isMe {
             parts.append(deliveryStatusAccessibilityLabel)
         }
-        if message.isEdited { parts.append("modifie") }
-        if message.pinnedAt != nil { parts.append("epingle") }
+        if content.editedAt != nil { parts.append("modifie") }
+        if content.isPinned { parts.append("epingle") }
         if message.expiresAt != nil { parts.append("ephemere") }
-        let summaries = reactionSummaries
+        let summaries = content.reactions
         if !summaries.isEmpty {
             let reactionText = summaries.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")
             parts.append("reactions: \(reactionText)")
@@ -246,32 +238,37 @@ struct BubbleStandardLayout: View {
     // MARK: - Body
 
     var body: some View {
+        let isMe = content.isMe
         HStack(alignment: .bottom, spacing: 0) {
-            if message.isMe { Spacer(minLength: 50) }
+            if isMe { Spacer(minLength: 50) }
 
-            VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
+            VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
                 // Pin indicator
-                if message.pinnedAt != nil {
+                if content.isPinned {
                     BubblePinnedIndicator()
                 }
 
                 // Forwarded indicator
-                if message.forwardedFromId != nil {
+                if content.isForwarded {
                     BubbleForwardedIndicator(
-                        isMe: message.isMe,
+                        isMe: isMe,
                         isDark: isDark,
                         senderName: message.forwardedFrom?.senderName,
                         conversationName: message.forwardedFrom?.conversationName
                     )
                 }
 
-                // Ephemeral indicator
+                // Ephemeral indicator — gated on the raw `message.expiresAt`
+                // (not `content.ephemeral`, which is nil for already-past
+                // expiry) to preserve legacy badge behavior. The controller
+                // emits `.expired` on tick to hide the badge once the timer
+                // runs out.
                 if message.expiresAt != nil && !isEphemeralExpired {
                     BubbleEphemeralBadge(timerText: ephemeralTimerText, isDark: isDark)
                 }
 
                 // Message content (blurred if isBlurred and not revealed)
-                let shouldBlur = message.isBlurred && !blurController.isRevealed
+                let shouldBlur = content.isBlurred && !blurController.isRevealed
 
                 ZStack {
                     contentStack(shouldBlur: shouldBlur)
@@ -282,7 +279,7 @@ struct BubbleStandardLayout: View {
                     }
 
                     // Blur peek: tap to reveal for N seconds, then auto re-blur
-                    if message.isBlurred && !blurController.isRevealed {
+                    if content.isBlurred && !blurController.isRevealed {
                         Color.clear
                             .contentShape(Rectangle())
                             .accessibilityElement(children: .combine)
@@ -291,9 +288,9 @@ struct BubbleStandardLayout: View {
                             .onTapGesture { revealBlurredContent() }
                     }
                 }
-                .overlay(alignment: message.isMe ? .bottomTrailing : .bottomLeading) {
+                .overlay(alignment: isMe ? .bottomTrailing : .bottomLeading) {
                     reactionsOverlay
-                        .padding(message.isMe ? .trailing : .leading, 8)
+                        .padding(isMe ? .trailing : .leading, 8)
                         .offset(y: 16)
                 }
 
@@ -306,10 +303,10 @@ struct BubbleStandardLayout: View {
             // intrinsic, so short text bubbles stay compact.
             .frame(
                 maxWidth: UIScreen.main.bounds.width * 0.70,
-                alignment: message.isMe ? .trailing : .leading
+                alignment: isMe ? .trailing : .leading
             )
 
-            if !message.isMe { Spacer(minLength: 50) }
+            if !isMe { Spacer(minLength: 50) }
         }
         .padding(.bottom, bottomSpacing)
         .accessibilityElement(children: .combine)
@@ -365,7 +362,7 @@ struct BubbleStandardLayout: View {
                     longitude: lon,
                     placeName: attachment.originalName.isEmpty ? nil : attachment.originalName,
                     accentColor: contactColor,
-                    senderName: message.senderName
+                    senderName: content.senderName
                 )
             }
         }
@@ -375,7 +372,8 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private func contentStack(shouldBlur: Bool) -> some View {
-        VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
+        let isMe = content.isMe
+        VStack(alignment: isMe ? .trailing : .leading, spacing: 4) {
             // Grille visuelle (images + videos) ou carrousel inline
             if !visualAttachments.isEmpty {
                 if showCarousel {
@@ -390,11 +388,11 @@ struct BubbleStandardLayout: View {
                         .compositingGroup()
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(alignment: .bottomTrailing) {
-                            if !hasTextOrNonMediaContent {
+                            if !content.hasTextOrNonMediaContent {
                                 BubbleMediaTimestampOverlay(
-                                    time: timeString,
-                                    isMe: message.isMe,
-                                    deliveryStatus: message.isMe ? message.deliveryStatus : nil
+                                    time: content.meta.timeString,
+                                    isMe: isMe,
+                                    deliveryStatus: content.meta.deliveryStatus
                                 )
                                 .padding(8)
                                 .transition(.opacity)
@@ -412,7 +410,7 @@ struct BubbleStandardLayout: View {
             // Emoji-only: large emoji without bubble
             if isEmojiOnly {
                 emojiOnlyContent
-            } else if hasTextOrNonMediaContent || message.replyTo != nil {
+            } else if content.hasTextOrNonMediaContent || content.reply != nil {
                 textBubbleContent
             }
         }
@@ -427,16 +425,18 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private var emojiOnlyContent: some View {
-        VStack(alignment: message.isMe ? .trailing : .leading, spacing: 2) {
+        VStack(alignment: content.isMe ? .trailing : .leading, spacing: 2) {
+            // Emoji-only intentionally renders the ORIGINAL `message.content`,
+            // not the translated text — emoji bubbles are not translated.
             Text(message.content)
-                .font(.system(size: emojiOnlyResult.fontSize ?? 15))
+                .font(.system(size: emojiFontSize))
                 .fixedSize(horizontal: false, vertical: true)
                 .onLongPressGesture {
                     HapticFeedback.medium()
-                    onShowTranslationDetail?(message.id)
+                    onShowTranslationDetail?(content.messageId)
                 }
                 .overlay(alignment: .topLeading) {
-                    if message.isEdited {
+                    if content.editedAt != nil {
                         editedIndicator
                             .offset(y: -14)
                     }
@@ -452,18 +452,20 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private var textBubbleContent: some View {
+        let isMe = content.isMe
+        let hasEdited = content.editedAt != nil
         VStack(alignment: .leading, spacing: 0) {
             // Quoted reply preview (inside bubble)
-            if let reply = message.replyTo {
-                quotedReplyView(reply)
+            if let reply = content.reply {
+                quotedReplyView(reply.reference)
                     .padding(.bottom, 4)
                     .onTapGesture {
-                        guard !reply.messageId.isEmpty else { return }
+                        guard !reply.reference.messageId.isEmpty else { return }
                         HapticFeedback.light()
-                        if reply.isStoryReply {
-                            onStoryReplyTap?(reply.messageId)
+                        if reply.isStory {
+                            onStoryReplyTap?(reply.reference.messageId)
                         } else {
-                            onReplyTap?(reply.messageId)
+                            onReplyTap?(reply.reference.messageId)
                         }
                     }
             }
@@ -473,11 +475,11 @@ struct BubbleStandardLayout: View {
                     attachmentView(attachment)
                 }
 
-                if !message.content.isEmpty {
+                if let textRaw = content.text?.raw, !textRaw.isEmpty {
                     expandableTextView
                         .onLongPressGesture {
                             HapticFeedback.medium()
-                            onShowTranslationDetail?(message.id)
+                            onShowTranslationDetail?(content.messageId)
                         }
                 }
 
@@ -495,23 +497,23 @@ struct BubbleStandardLayout: View {
                 secondaryContentView
             }
             .padding(.horizontal, 14)
-            .padding(.vertical, hasTextOrNonMediaContent ? 10 : 4)
+            .padding(.vertical, content.hasTextOrNonMediaContent ? 10 : 4)
 
             // Unified identity bar
             identityBarSection
         }
-        .padding(.top, message.isEdited ? 12 : 0)
+        .padding(.top, hasEdited ? 12 : 0)
         .overlay(alignment: .topLeading) {
-            if message.isEdited {
+            if hasEdited {
                 editedIndicator
                     .padding(.leading, 12)
-                    .padding(.top, 6 + (message.replyTo != nil ? 52 : 0))
+                    .padding(.top, 6 + (content.reply != nil ? 52 : 0))
             }
         }
         .background(bubbleBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18))
         .shadow(
-            color: (message.isMe ? MeeshyColors.brandPrimary : Color(hex: otherBubbleColor)).opacity(message.isMe ? 0.3 : 0.2),
+            color: (isMe ? MeeshyColors.brandPrimary : Color(hex: otherBubbleColor)).opacity(isMe ? 0.3 : 0.2),
             radius: 6,
             y: 3
         )
@@ -521,20 +523,21 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private var identityBarSection: some View {
+        let isMe = content.isMe
         let showTranslation = hasAnyTranslation && !isEmojiOnly
         if showIdentityBar {
             UserIdentityBar.messageBubble(
-                name: message.senderName ?? "?",
+                name: content.senderName ?? "?",
                 username: message.senderUsername.map { "@\($0)" },
                 avatarURL: message.senderAvatarURL,
                 accentColor: message.senderColor ?? contactColor,
                 role: nil,
-                time: timeString,
-                delivery: message.isMe ? message.deliveryStatus : nil,
+                time: content.meta.timeString,
+                delivery: content.meta.deliveryStatus,
                 flags: showTranslation ? buildAvailableFlags() : [],
                 activeFlag: showTranslation ? secondaryLangCode : nil,
                 onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
-                onTranslateTap: showTranslation ? { onShowTranslationDetail?(message.id) } : nil,
+                onTranslateTap: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
                 presenceState: presenceState,
                 moodEmoji: senderMoodEmoji,
                 storyRingState: senderStoryRingState,
@@ -545,13 +548,13 @@ struct BubbleStandardLayout: View {
             .padding(.vertical, 8)
         } else {
             UserIdentityBar.metaRow(
-                time: timeString,
-                delivery: message.isMe ? message.deliveryStatus : nil,
+                time: content.meta.timeString,
+                delivery: content.meta.deliveryStatus,
                 flags: showTranslation ? buildAvailableFlags() : [],
                 activeFlag: showTranslation ? secondaryLangCode : nil,
                 onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
-                onTranslateTap: showTranslation ? { onShowTranslationDetail?(message.id) } : nil,
-                isMe: message.isMe
+                onTranslateTap: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
+                isMe: isMe
             )
             .padding(.horizontal, 14)
             .padding(.bottom, 8)
@@ -562,9 +565,9 @@ struct BubbleStandardLayout: View {
 
     private var editedIndicator: some View {
         BubbleEditedIndicator(
-            isMe: message.isMe,
-            isSaving: isEditSaving,
-            hasEditHistory: hasEditHistory,
+            isMe: content.isMe,
+            isSaving: content.isEditSaving,
+            hasEditHistory: content.hasEditHistory,
             isDark: isDark
         )
     }
@@ -572,7 +575,7 @@ struct BubbleStandardLayout: View {
     // MARK: - Expandable text
 
     private var linkTint: Color {
-        message.isMe ? .white.opacity(0.9) : Color(hex: contactColor)
+        content.isMe ? .white.opacity(0.9) : Color(hex: contactColor)
     }
 
     private var mentionTint: Color {
@@ -583,7 +586,7 @@ struct BubbleStandardLayout: View {
     private var expandableTextView: some View {
         BubbleExpandableText(
             content: effectiveContent,
-            isMe: message.isMe,
+            isMe: content.isMe,
             mentionDisplayNames: mentionDisplayNames,
             highlightTerm: highlightSearchTerm,
             mentionTint: mentionTint,
@@ -595,11 +598,11 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private var secondaryContentView: some View {
-        if let content = secondaryContent, let code = secondaryLangCode {
+        if let secondary = secondaryContent, let code = secondaryLangCode {
             BubbleSecondaryContent(
-                content: content,
+                content: secondary,
                 langCode: code,
-                isMe: message.isMe,
+                isMe: content.isMe,
                 textPrimary: theme.textPrimary,
                 mentionDisplayNames: mentionDisplayNames,
                 mentionTint: mentionTint,
@@ -613,7 +616,7 @@ struct BubbleStandardLayout: View {
     private func quotedReplyView(_ reply: ReplyReference) -> some View {
         BubbleQuotedReply(
             reply: reply,
-            parentIsMe: message.isMe,
+            parentIsMe: content.isMe,
             accentHex: contactColor,
             isDark: isDark,
             mentionDisplayNames: mentionDisplayNames
@@ -627,7 +630,7 @@ struct BubbleStandardLayout: View {
     private func attachmentView(_ attachment: MessageAttachment) -> some View {
         BubbleAttachmentView(
             attachment: attachment,
-            isMe: message.isMe,
+            isMe: content.isMe,
             isDark: isDark,
             accentHex: contactColor,
             transcription: transcription,
@@ -647,9 +650,9 @@ struct BubbleStandardLayout: View {
     @ViewBuilder
     private var reactionsOverlay: some View {
         BubbleReactionsOverlay(
-            messageId: message.id,
+            messageId: content.messageId,
             summaries: reactionSummaries,
-            isMe: message.isMe,
+            isMe: content.isMe,
             isDark: isDark,
             isLastReceivedMessage: isLastReceivedMessage,
             accentHex: contactColor,
@@ -664,7 +667,7 @@ struct BubbleStandardLayout: View {
 
     private var bubbleBackground: some View {
         BubbleBackground(
-            isMe: message.isMe,
+            isMe: content.isMe,
             accentHex: otherBubbleColor,
             isDark: isDark
         )
@@ -674,15 +677,16 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private func mediaStandaloneView(_ attachment: MessageAttachment) -> some View {
+        let isMe = content.isMe
         switch attachment.type {
         case .audio:
             AudioMediaView(
                 attachment: attachment,
                 message: message,
-                contactColor: message.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                contactColor: isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
                 visualAttachments: visualAttachments,
                 isDark: isDark,
-                accentColor: message.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
+                accentColor: isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
                 transcription: transcription,
                 translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
                 textTranslations: textTranslations,
@@ -741,31 +745,16 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Language flag handling
 
+    /// Returns the available language flags for the language strip.
+    /// Reads from `content.translation.availableFlags` when BubbleContent
+    /// has populated them (live binding to active lang), with a fallback
+    /// for the cold-cache cases where Translation is nil. Mirrors legacy
+    /// ThemedMessageBubble.buildAvailableFlags exactly.
     private func buildAvailableFlags() -> [String] {
-        let activeLang = currentDisplayLangCode.lowercased()
-        let origLower = message.originalLanguage.lowercased()
-
-        let hasTranslation: (String) -> Bool = { code in
-            textTranslations.contains(where: { $0.targetLanguage.lowercased() == code })
-            || translatedAudios.contains(where: { $0.targetLanguage.lowercased() == code })
+        if let flags = content.translation?.availableFlags {
+            return flags
         }
-
-        var all: [String] = [origLower]
-        var seen: Set<String> = [origLower]
-
-        if let pc = preferredTranslation?.targetLanguage.lowercased(), !seen.contains(pc) {
-            all.append(pc); seen.insert(pc)
-        }
-
-        if let reg = userLanguages.regional?.lowercased(), !seen.contains(reg), hasTranslation(reg) {
-            all.append(reg); seen.insert(reg)
-        }
-
-        if let custom = userLanguages.custom?.lowercased(), !seen.contains(custom), hasTranslation(custom) {
-            all.append(custom); seen.insert(custom)
-        }
-
-        return all.filter { $0 != activeLang }
+        return []
     }
 
     private func handleFlagTap(_ code: String) {
@@ -790,7 +779,7 @@ struct BubbleStandardLayout: View {
                 secondaryLangCode = outcome.secondaryLangCode
             }
         case .requestTranslation(let target):
-            onRequestTranslation?(message.id, target)
+            onRequestTranslation?(content.messageId, target)
         }
     }
 
@@ -800,8 +789,8 @@ struct BubbleStandardLayout: View {
         HapticFeedback.medium()
         blurController.requestReveal(
             request: BubbleBlurRevealLifecycle.RevealRequest(
-                messageId: message.id,
-                isViewOnce: message.isViewOnce
+                messageId: content.messageId,
+                isViewOnce: content.isViewOnce
             ),
             consumeViewOnce: onConsumeViewOnce
         )

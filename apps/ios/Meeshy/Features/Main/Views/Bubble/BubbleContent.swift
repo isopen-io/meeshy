@@ -106,13 +106,30 @@ struct BubbleContent: Equatable {
 
     /// Convenience pour tests + branch logic du body.
     var isEmojiOnly: Bool { text?.isEmojiOnly ?? false }
+    /// Mirrors legacy `ThemedMessageBubble.hasTextOrNonMediaContent`:
+    /// "audio-only with transcription text" returns false (audio bubble
+    /// renders the transcription itself; no separate text bubble).
+    /// Otherwise: true if text is non-empty OR non-media is present.
     var hasTextOrNonMediaContent: Bool {
-        guard let text else {
-            if case .nonMedia = attachments { return true }
-            if case .mixed(_, _, let nonMedia) = attachments { return !nonMedia.isEmpty }
-            return false
-        }
-        return !text.raw.isEmpty
+        let hasText = !(text?.raw.isEmpty ?? true)
+        let hasNonMedia: Bool = {
+            switch attachments {
+            case .nonMedia: return true
+            case .mixed(_, _, let nm): return !nm.isEmpty
+            case .none, .visualGrid, .audio: return false
+            }
+        }()
+        // Audio-only with transcription text: legacy renders the transcription
+        // inside the audio bubble, so the text bubble must be suppressed.
+        let isAudioOnlyWithText: Bool = {
+            guard hasText else { return false }
+            switch attachments {
+            case .audio: return true
+            default: return false
+            }
+        }()
+        if isAudioOnlyWithText { return false }
+        return hasText || hasNonMedia
     }
 
     static func == (lhs: BubbleContent, rhs: BubbleContent) -> Bool {

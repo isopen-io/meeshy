@@ -100,13 +100,6 @@ struct ThemedMessageBubble: View {
 
     // MARK: - Derived state for kind dispatch
 
-    /// Vrai quand le message view-once a été consommé et n'est plus en cours de révélation.
-    /// Mirrors legacy semantics — does NOT exclude `isMe`: the sender also sees the
-    /// "Vu et effacé" state once their view-once message has been consumed.
-    private var isViewOnceBurned: Bool {
-        message.isViewOnce && message.viewOnceCount > 0 && !blurController.isRevealed
-    }
-
     private var isEphemeralExpired: Bool {
         if case .expired = ephemeralController.state { return true }
         return false
@@ -115,79 +108,114 @@ struct ThemedMessageBubble: View {
     // MARK: - Body (kind dispatch + lifecycle modifiers)
 
     var body: some View {
-        if message.isDeleted {
+        // Build BubbleContent once per body re-eval. Sub-views read from this
+        // value model rather than re-deriving fields from `Message`. The cost
+        // is a single pass through BubbleContentBuilder; the win is that a
+        // simple "Salut" message routes to the `if let` branches in
+        // BubbleStandardLayout that early-exit without instantiating
+        // quoted-reply, attachment, translation-panel, or reactions views.
+        let content = BubbleContent(
+            message: message,
+            translations: textTranslations,
+            preferredTranslation: preferredTranslation,
+            translatedAudios: translatedAudios,
+            userLanguages: userLanguages,
+            secondaryLangCode: secondaryLangCode,
+            activeDisplayLangCode: activeDisplayLangCode,
+            currentUserId: currentUserId,
+            isEditSaving: isEditSaving,
+            hasEditHistory: hasEditHistory
+        )
+
+        // Kind dispatch (mirrors legacy `body`):
+        //   - `.deleted`         → `BubbleDeletedView`
+        //   - `.burned` && !blurController.isRevealed → `BubbleBurnedView`
+        //   - ephemeral expired  → `EmptyView`
+        //   - otherwise (`.standard`, or `.burned` + revealed) → `BubbleStandardLayout`
+        // Note: `.burned` includes `isMe` — the sender also sees "Vu et efface"
+        // once their view-once is consumed (see BubbleContentBuilder).
+        switch content.kind {
+        case .deleted:
             BubbleDeletedView(isMe: message.isMe, isDark: isDark)
-        } else if isViewOnceBurned {
+        case .burned where !blurController.isRevealed:
             BubbleBurnedView(isMe: message.isMe, isDark: isDark)
-        } else if isEphemeralExpired {
-            EmptyView()
-        } else {
-            BubbleStandardLayout(
-                message: message,
-                contactColor: contactColor,
-                isDirect: isDirect,
-                isDark: isDark,
-                transcription: transcription,
-                translatedAudios: translatedAudios,
-                textTranslations: textTranslations,
-                preferredTranslation: preferredTranslation,
-                showAvatar: showAvatar,
-                presenceState: presenceState,
-                senderMoodEmoji: senderMoodEmoji,
-                senderStoryRingState: senderStoryRingState,
-                allAudioItems: allAudioItems,
-                activeAudioLanguage: activeAudioLanguage,
-                isLastInGroup: isLastInGroup,
-                isLastReceivedMessage: isLastReceivedMessage,
-                mentionDisplayNames: mentionDisplayNames,
-                highlightSearchTerm: highlightSearchTerm,
-                isEditSaving: isEditSaving,
-                hasEditHistory: hasEditHistory,
-                activeVideoURL: activeVideoURL,
-                currentUserId: currentUserId,
-                userLanguages: userLanguages,
-                onViewStory: onViewStory,
-                onAddReaction: onAddReaction,
-                onToggleReaction: onToggleReaction,
-                onOpenReactPicker: onOpenReactPicker,
-                onShowReactions: onShowReactions,
-                onReplyTap: onReplyTap,
-                onStoryReplyTap: onStoryReplyTap,
-                onMediaTap: onMediaTap,
-                onConsumeViewOnce: onConsumeViewOnce,
-                onRequestTranslation: onRequestTranslation,
-                onShowTranslationDetail: onShowTranslationDetail,
-                onScrollToMessage: onScrollToMessage,
-                activeDisplayLangCode: $activeDisplayLangCode,
-                secondaryLangCode: $secondaryLangCode,
-                selectedProfileUser: $selectedProfileUser,
-                showShareSheet: $showShareSheet,
-                shareURL: $shareURL,
-                fullscreenAttachment: $fullscreenAttachment,
-                fullscreenLocationAttachment: $fullscreenLocationAttachment,
-                showCarousel: $showCarousel,
-                carouselIndex: $carouselIndex,
-                revealedAttachmentIds: $revealedAttachmentIds,
-                blurController: blurController,
-                ephemeralController: ephemeralController
-            )
-            .messageEffects(message.effects, hasPlayedAppearance: hasPlayedAppearance)
-            .onAppear { hasPlayedAppearance = true }
-            .opacity(isEphemeralExpired ? 0 : 1)
-            .scaleEffect(isEphemeralExpired ? 0.8 : 1)
-            .onAppear {
-                startEphemeralTimerIfNeeded()
-                applyBlurRevealDurationFromPrefs()
+        default:
+            if isEphemeralExpired {
+                EmptyView()
+            } else {
+                standardLayout(content: content)
             }
-            .onDisappear {
-                ephemeralController.stop()
-                blurController.cancel()
-            }
-            .onChange(of: selectedProfileUser) { _, newValue in
-                if let user = newValue {
-                    selectedProfileUser = nil
-                    router.deepLinkProfileUser = user
-                }
+        }
+    }
+
+    // MARK: - Standard layout factory (extracted for branch clarity)
+
+    @ViewBuilder
+    private func standardLayout(content: BubbleContent) -> some View {
+        BubbleStandardLayout(
+            content: content,
+            message: message,
+            contactColor: contactColor,
+            isDirect: isDirect,
+            isDark: isDark,
+            transcription: transcription,
+            translatedAudios: translatedAudios,
+            textTranslations: textTranslations,
+            preferredTranslation: preferredTranslation,
+            showAvatar: showAvatar,
+            presenceState: presenceState,
+            senderMoodEmoji: senderMoodEmoji,
+            senderStoryRingState: senderStoryRingState,
+            allAudioItems: allAudioItems,
+            activeAudioLanguage: activeAudioLanguage,
+            isLastInGroup: isLastInGroup,
+            isLastReceivedMessage: isLastReceivedMessage,
+            mentionDisplayNames: mentionDisplayNames,
+            highlightSearchTerm: highlightSearchTerm,
+            activeVideoURL: activeVideoURL,
+            currentUserId: currentUserId,
+            userLanguages: userLanguages,
+            onViewStory: onViewStory,
+            onAddReaction: onAddReaction,
+            onToggleReaction: onToggleReaction,
+            onOpenReactPicker: onOpenReactPicker,
+            onShowReactions: onShowReactions,
+            onReplyTap: onReplyTap,
+            onStoryReplyTap: onStoryReplyTap,
+            onMediaTap: onMediaTap,
+            onConsumeViewOnce: onConsumeViewOnce,
+            onRequestTranslation: onRequestTranslation,
+            onShowTranslationDetail: onShowTranslationDetail,
+            onScrollToMessage: onScrollToMessage,
+            activeDisplayLangCode: $activeDisplayLangCode,
+            secondaryLangCode: $secondaryLangCode,
+            selectedProfileUser: $selectedProfileUser,
+            showShareSheet: $showShareSheet,
+            shareURL: $shareURL,
+            fullscreenAttachment: $fullscreenAttachment,
+            fullscreenLocationAttachment: $fullscreenLocationAttachment,
+            showCarousel: $showCarousel,
+            carouselIndex: $carouselIndex,
+            revealedAttachmentIds: $revealedAttachmentIds,
+            blurController: blurController,
+            ephemeralController: ephemeralController
+        )
+        .messageEffects(message.effects, hasPlayedAppearance: hasPlayedAppearance)
+        .onAppear { hasPlayedAppearance = true }
+        .opacity(isEphemeralExpired ? 0 : 1)
+        .scaleEffect(isEphemeralExpired ? 0.8 : 1)
+        .onAppear {
+            startEphemeralTimerIfNeeded()
+            applyBlurRevealDurationFromPrefs()
+        }
+        .onDisappear {
+            ephemeralController.stop()
+            blurController.cancel()
+        }
+        .onChange(of: selectedProfileUser) { _, newValue in
+            if let user = newValue {
+                selectedProfileUser = nil
+                router.deepLinkProfileUser = user
             }
         }
     }
