@@ -4,6 +4,24 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
+/// Provides the user's resolved content language without coupling consumers
+/// to `AuthManager.shared`. Allows tests to inject deterministic values
+/// instead of fighting singleton state pollution.
+@MainActor
+protocol LanguageProviding {
+    var preferredLanguages: [String] { get }
+}
+
+/// Default implementation that defers to the live `AuthManager` singleton.
+/// Reads `currentUser?.preferredContentLanguages` exactly once per call so
+/// that updates to the authenticated user are picked up automatically.
+@MainActor
+struct AuthManagerLanguageProvider: LanguageProviding {
+    var preferredLanguages: [String] {
+        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+    }
+}
+
 @MainActor
 class FeedViewModel: ObservableObject {
     @Published var posts: [FeedPost] = []
@@ -25,6 +43,7 @@ class FeedViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket: SocialSocketProviding
     private let postService: PostServiceProviding
+    private let languageProvider: LanguageProviding
     private var cacheSaveTask: Task<Void, Never>?
     private var isFeedLoadInProgress = false
     /// Tracks postIds whose comments are currently being prefetched, to coalesce
@@ -40,11 +59,13 @@ class FeedViewModel: ObservableObject {
     init(
         api: APIClientProviding = APIClient.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
-        postService: PostServiceProviding = PostService.shared
+        postService: PostServiceProviding = PostService.shared,
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
     ) {
         self.api = api
         self.socialSocket = socialSocket
         self.postService = postService
+        self.languageProvider = languageProvider
     }
 
     /// Wire persistence store and socket handler for GRDB-backed feed.
@@ -57,7 +78,7 @@ class FeedViewModel: ObservableObject {
     }
 
     private var preferredLanguages: [String] {
-        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        languageProvider.preferredLanguages
     }
 
     private var userLanguage: String {
