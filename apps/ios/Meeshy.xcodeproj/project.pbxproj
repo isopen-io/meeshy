@@ -354,6 +354,7 @@
 		STIA0001000100010001002 /* StoryViewerInitialAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = STIA0001000100010001001 /* StoryViewerInitialAction.swift */; };
 		STVT0001000100010001002 /* StoryNotificationTargetViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STVT0001000100010001001 /* StoryNotificationTargetViewModelTests.swift */; };
 		STET0001000100010001002 /* StoryExpiredContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STET0001000100010001001 /* StoryExpiredContentTests.swift */; };
+		STAB0001000100010001002 /* StoryActiveBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STAB0001000100010001001 /* StoryActiveBridgeTests.swift */; };
 		TNAV0001000100010001001 /* TabNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TNAV0001000100010001000 /* TabNavigationTests.swift */; };
 		TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */; };
 		TSTM0001000100010001B001 /* ToastManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSTM0001000100010001F001 /* ToastManagerTests.swift */; };
@@ -768,6 +769,7 @@
 		STIA0001000100010001001 /* StoryViewerInitialAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerInitialAction.swift; sourceTree = "<group>"; };
 		STVT0001000100010001001 /* StoryNotificationTargetViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryNotificationTargetViewModelTests.swift; sourceTree = "<group>"; };
 		STET0001000100010001001 /* StoryExpiredContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExpiredContentTests.swift; sourceTree = "<group>"; };
+		STAB0001000100010001001 /* StoryActiveBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryActiveBridgeTests.swift; sourceTree = "<group>"; };
 		TNAV0001000100010001000 /* TabNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNavigationTests.swift; sourceTree = "<group>"; };
 		TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
 		TSTM0001000100010001F001 /* ToastManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManagerTests.swift; sourceTree = "<group>"; };
@@ -1487,6 +1489,7 @@
 			children = (
 				STET0001000100010001001 /* StoryExpiredContentTests.swift */,
 				STVT0001000100010001001 /* StoryNotificationTargetViewModelTests.swift */,
+				STAB0001000100010001001 /* StoryActiveBridgeTests.swift */,
 			);
 			path = Notifications;
 			sourceTree = "<group>";
@@ -2119,6 +2122,7 @@
 				SSOT0001000100010001BLD /* SingleSourceOfTruthTests.swift in Sources */,
 				STVT0001000100010001002 /* StoryNotificationTargetViewModelTests.swift in Sources */,
 				STET0001000100010001002 /* StoryExpiredContentTests.swift in Sources */,
+				STAB0001000100010001002 /* StoryActiveBridgeTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
