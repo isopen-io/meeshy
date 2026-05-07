@@ -733,36 +733,15 @@ struct ThemedMessageBubble: View {
     @ViewBuilder
     private var secondaryContentView: some View {
         if let content = secondaryContent, let code = secondaryLangCode {
-            let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
-            let display = LanguageDisplay.from(code: code)
-            let secondaryTextColor: Color = message.isMe
-                ? .white.opacity(0.85)
-                : theme.textPrimary.opacity(0.8)
-
-            VStack(spacing: 0) {
-                HStack(spacing: 6) {
-                    Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
-                    Circle().fill(langColor).frame(width: 4, height: 4)
-                    Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    if let display = display {
-                        HStack(spacing: 4) {
-                            Text(display.flag).font(.system(size: 11))
-                            Text(display.name)
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(langColor)
-                        }
-                    }
-                    MessageTextRenderer.render(content, fontSize: 13, color: secondaryTextColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(langColor.opacity(0.12))
-            }
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            BubbleSecondaryContent(
+                content: content,
+                langCode: code,
+                isMe: message.isMe,
+                textPrimary: theme.textPrimary,
+                mentionDisplayNames: mentionDisplayNames,
+                mentionTint: mentionTint,
+                linkTint: linkTint
+            )
         }
     }
 
@@ -804,26 +783,29 @@ struct ThemedMessageBubble: View {
     }
 
     private func handleFlagTap(_ code: String) {
-        let isOriginal = code.lowercased() == message.originalLanguage.lowercased()
-        let hasContent = isOriginal || textTranslations.contains(where: { $0.targetLanguage.lowercased() == code.lowercased() })
-
-        if !hasContent {
-            onRequestTranslation?(message.id, code)
-            HapticFeedback.light()
-            return
-        }
-        if isOriginal {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                activeDisplayLangCode = code
-                secondaryLangCode = nil
-            }
-        } else {
-            let isShowing = secondaryLangCode?.lowercased() == code.lowercased()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                secondaryLangCode = isShowing ? nil : code
-            }
-        }
+        let outcome = BubbleLanguageFlagController.handleTap(
+            code: code,
+            current: BubbleLanguageFlagController.Context(
+                activeDisplayLangCode: activeDisplayLangCode,
+                secondaryLangCode: secondaryLangCode
+            ),
+            messageOriginalLang: message.originalLanguage,
+            translations: textTranslations
+        )
         HapticFeedback.light()
+        switch outcome.action {
+        case .switchPrimary:
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                activeDisplayLangCode = outcome.activeDisplayLangCode
+                secondaryLangCode = outcome.secondaryLangCode
+            }
+        case .openSecondary, .closeSecondary:
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                secondaryLangCode = outcome.secondaryLangCode
+            }
+        case .requestTranslation(let target):
+            onRequestTranslation?(message.id, target)
+        }
     }
 
     // MARK: - Edited Indicator (top-leading overlay)
