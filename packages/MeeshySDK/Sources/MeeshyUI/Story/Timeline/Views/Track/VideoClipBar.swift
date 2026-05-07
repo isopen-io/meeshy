@@ -111,9 +111,10 @@ public struct VideoClipBar: View, Equatable {
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
-        .accessibilityValue(
-            "Début \(String(format: "%.2f", startTime))s, durée \(String(format: "%.2f", duration))s"
-        )
+        .accessibilityValue(String(
+            format: String(localized: "story.timeline.a11y.clip.timeRange", bundle: .module),
+            startTime, duration
+        ))
         .accessibilityAddTraits(isSelected ? [.isSelected] : [])
     }
 

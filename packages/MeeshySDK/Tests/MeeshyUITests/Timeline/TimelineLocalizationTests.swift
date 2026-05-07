@@ -91,6 +91,16 @@ final class TimelineLocalizationTests: XCTestCase {
         "story.timeline.a11y.durationHandle",
         "story.timeline.a11y.snap.on",
         "story.timeline.a11y.snap.off",
+        // Transition kind labels
+        "story.timeline.transition.kind.crossfade",
+        "story.timeline.transition.kind.dissolve",
+        // Clip a11y time ranges
+        "story.timeline.a11y.clip.timeRange",
+        "story.timeline.a11y.clip.displayedRange",
+        // Track section uppercase labels
+        "story.timeline.track.section.video",
+        "story.timeline.track.section.audio",
+        "story.timeline.track.section.text",
     ]
 
     func test_allTimelineKeys_resolveToNonEmptyValue() {

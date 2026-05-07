@@ -20,7 +20,8 @@ final class TransitionBadgeTests: XCTestCase {
             onDurationDelta: { _ in }
         )
         _ = badge.body
-        XCTAssertTrue(badge.accessibilityComposed.contains("Fondu"))
+        let expectedCrossfade = String(localized: "story.timeline.transition.kind.crossfade", bundle: .module)
+        XCTAssertTrue(badge.accessibilityComposed.contains(expectedCrossfade))
     }
 
     func test_init_dissolve_label() {
@@ -29,6 +30,7 @@ final class TransitionBadgeTests: XCTestCase {
             isSelected: false, isDark: false, anchorX: 200, laneHeight: 44,
             onTap: {}, onLongPress: {}, onDurationDelta: { _ in }
         )
-        XCTAssertTrue(badge.accessibilityComposed.contains("Dissolution"))
+        let expectedDissolve = String(localized: "story.timeline.transition.kind.dissolve", bundle: .module)
+        XCTAssertTrue(badge.accessibilityComposed.contains(expectedDissolve))
     }
 }

@@ -42,8 +42,8 @@ public struct TransitionBadge: View, Equatable {
     public var accessibilityComposed: String {
         let kindLabel: String
         switch kind {
-        case .crossfade: kindLabel = "Fondu enchaîné"
-        case .dissolve:  kindLabel = "Dissolution"
+        case .crossfade: kindLabel = String(localized: "story.timeline.transition.kind.crossfade", bundle: .module)
+        case .dissolve:  kindLabel = String(localized: "story.timeline.transition.kind.dissolve", bundle: .module)
         }
         return "\(kindLabel) — \(String(format: "%.2f", duration))s"
     }

@@ -89,6 +89,9 @@ public struct TextClipBar: View, Equatable {
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
-        .accessibilityValue("Affiché de \(String(format: "%.1f", startTime))s à \(String(format: "%.1f", startTime + duration))s")
+        .accessibilityValue(String(
+            format: String(localized: "story.timeline.a11y.clip.displayedRange", bundle: .module),
+            startTime, startTime + duration
+        ))
     }
 }

@@ -19934,6 +19934,118 @@
           }
         }
       }
+    },
+    "story.timeline.transition.kind.crossfade": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Fondu enchaîné"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Crossfade"
+          }
+        }
+      }
+    },
+    "story.timeline.transition.kind.dissolve": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dissolution"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Dissolve"
+          }
+        }
+      }
+    },
+    "story.timeline.a11y.clip.timeRange": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Début %.2fs, durée %.2fs"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Start %.2fs, duration %.2fs"
+          }
+        }
+      }
+    },
+    "story.timeline.a11y.clip.displayedRange": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Affiché de %.1fs à %.1fs"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "Displayed from %.1fs to %.1fs"
+          }
+        }
+      }
+    },
+    "story.timeline.track.section.video": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VIDEO %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "VIDEO %lld"
+          }
+        }
+      }
+    },
+    "story.timeline.track.section.audio": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AUDIO %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "AUDIO %lld"
+          }
+        }
+      }
+    },
+    "story.timeline.track.section.text": {
+      "localizations": {
+        "fr": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TEXTE %lld"
+          }
+        },
+        "en": {
+          "stringUnit": {
+            "state": "translated",
+            "value": "TEXT %lld"
+          }
+        }
+      }
     }
   },
   "version": "1.0"

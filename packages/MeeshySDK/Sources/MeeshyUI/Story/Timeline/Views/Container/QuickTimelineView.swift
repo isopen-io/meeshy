@@ -45,21 +45,27 @@ public struct QuickTimelineView: View {
         let videoClips = project.mediaObjects.filter { !($0.mediaType == "audio") }
         if !videoClips.isEmpty {
             allTracks.append(CompactTrack(
-                id: "video-1", title: "VIDEO 1", kind: .bgVideo,
+                id: "video-1",
+                title: String(format: String(localized: "story.timeline.track.section.video", bundle: .module), 1),
+                kind: .bgVideo,
                 clipIds: videoClips.map { $0.id }
             ))
         }
         let audioClips = project.audioPlayerObjects
         if !audioClips.isEmpty {
             allTracks.append(CompactTrack(
-                id: "audio-1", title: "AUDIO 1", kind: .audio,
+                id: "audio-1",
+                title: String(format: String(localized: "story.timeline.track.section.audio", bundle: .module), 1),
+                kind: .audio,
                 clipIds: audioClips.map { $0.id }
             ))
         }
         let textClips = project.textObjects
         if !textClips.isEmpty {
             allTracks.append(CompactTrack(
-                id: "text-1", title: "TEXTE", kind: .text,
+                id: "text-1",
+                title: String(format: String(localized: "story.timeline.track.section.text", bundle: .module), 1),
+                kind: .text,
                 clipIds: textClips.map { $0.id }
             ))
         }
@@ -82,7 +88,7 @@ public struct QuickTimelineView: View {
         for (index, _) in videoClips.enumerated() {
             tracks.append(CompactTrack(
                 id: "video-\(index + 1)",
-                title: "VIDEO \(index + 1)",
+                title: String(format: String(localized: "story.timeline.track.section.video", bundle: .module), index + 1),
                 kind: index == 0 ? .bgVideo : .video,
                 clipIds: [videoClips[index].id]
             ))
@@ -90,7 +96,7 @@ public struct QuickTimelineView: View {
         for (index, audio) in project.audioPlayerObjects.enumerated() {
             tracks.append(CompactTrack(
                 id: "audio-\(index + 1)",
-                title: "AUDIO \(index + 1)",
+                title: String(format: String(localized: "story.timeline.track.section.audio", bundle: .module), index + 1),
                 kind: index == 0 ? .bgAudio : .audio,
                 clipIds: [audio.id]
             ))
@@ -98,7 +104,7 @@ public struct QuickTimelineView: View {
         for (index, text) in project.textObjects.enumerated() {
             tracks.append(CompactTrack(
                 id: "text-\(index + 1)",
-                title: "TEXTE \(index + 1)",
+                title: String(format: String(localized: "story.timeline.track.section.text", bundle: .module), index + 1),
                 kind: .text,
                 clipIds: [text.id]
             ))
