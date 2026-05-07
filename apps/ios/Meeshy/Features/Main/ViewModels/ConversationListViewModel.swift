@@ -392,6 +392,7 @@ class ConversationListViewModel: ObservableObject {
     func loadConversations() async {
         guard !isLoading else { return }
 
+        print("[DIAG] ConversationListViewModel.loadConversations CALLED")
         async let categoriesTask: () = loadCategories()
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")

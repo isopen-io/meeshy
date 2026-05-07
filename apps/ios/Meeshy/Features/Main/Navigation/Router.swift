@@ -95,7 +95,10 @@ extension Route {
 @MainActor
 final class Router: ObservableObject {
     @Published var path: [Route] = [] {
-        didSet { AnalyticsManager.shared.trackRoute(path.last) }
+        didSet {
+            print("[DIAG] Router.path didSet count=\(path.count) last=\(String(describing: path.last))")
+            AnalyticsManager.shared.trackRoute(path.last)
+        }
     }
     @Published var deepLinkProfileUser: ProfileSheetUser?
     @Published var pendingShareContent: SharedContentType? = nil

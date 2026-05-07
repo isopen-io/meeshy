@@ -900,6 +900,7 @@ class ConversationViewModel: ObservableObject {
         isLoadingInitial = true
         error = nil
 
+        print("[DIAG] loadMessages start conv=\(conversationId) storeAtStart=\(messageStore.messages.count)")
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
         case .fresh:
@@ -960,6 +961,7 @@ class ConversationViewModel: ObservableObject {
         // subscription setup blocking the first render.
         socketHandler?.armSocketSubscriptions()
 
+        print("[DIAG] loadMessages done conv=\(conversationId) messages=\(messages.count) storeMessages=\(messageStore.messages.count)")
         // Mark conversation as read + received (fire-and-forget)
         markAsRead()
         markAsReceived()

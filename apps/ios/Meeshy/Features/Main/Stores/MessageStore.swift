@@ -218,6 +218,8 @@ public final class MessageStore {
             return
         }
 
+        let count = newRecords?.count ?? -1
+        print("[DIAG] MessageStore.refreshFromDB conv=\(convId) fetched=\(count) current=\(messages.count)")
         guard let newRecords, newRecords != messages else { return }
 
         // Yield to a fresh runloop iteration before publishing the @Observable
