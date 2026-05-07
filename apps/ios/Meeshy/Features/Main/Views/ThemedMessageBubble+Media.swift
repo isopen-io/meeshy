@@ -1,11 +1,20 @@
-// MARK: - Extracted from ConversationView.swift (via ThemedMessageBubble.swift)
+// MARK: - Bubble visual media grid + carousel
+//
+// Was: extension on `ThemedMessageBubble` providing the visual grid and the
+// inline carousel (Task-14 pivot moved the rendering into
+// `BubbleStandardLayout`, but the helpers stay alongside the orchestrator
+// rather than crowding the new layout file).
+//
+// File kept under its legacy name + pbxproj entry; only the extended type
+// changed (now `BubbleStandardLayout`).
+
 import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Visual Media Grid
-extension ThemedMessageBubble {
+// MARK: - Visual Media Grid (extension on BubbleStandardLayout)
+extension BubbleStandardLayout {
 
     @ViewBuilder
     var visualMediaGrid: some View {

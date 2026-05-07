@@ -1,13 +1,42 @@
-// MARK: - Extracted from ConversationView.swift
+// MARK: - Themed Message Bubble — composition orchestrator
+//
+// Was a 953-line god view. Task-14 of the bubble-decompose refactor pivots
+// this file into a thin orchestrator: it owns the public init API (preserved
+// unchanged for every call site), the local @State ledger, and the kind
+// dispatch. Every rendering decision now lives in a sub-view under
+// `Views/Bubble/`.
+//
+// Kind dispatch (mirrors legacy `body`):
+//   - `.deleted`         → `BubbleDeletedView`
+//   - `.burned`          → `BubbleBurnedView`
+//   - `.ephemeralExpired`→ `EmptyView`
+//   - `.standard`        → `BubbleStandardLayout` (Bubble/BubbleStandardLayout.swift)
+//
+// State ownership: this view keeps the @State for sheets, fullscreen
+// presentations, share URLs, language selection, and the lifecycle
+// controllers (ephemeral timer, blur reveal). They are forwarded to
+// `BubbleStandardLayout` as `@Binding`/`@ObservedObject` so the orchestrator
+// stays a leaf-friendly composition without state ownership chaos.
+//
+// Equatable: the wrapper Equatable gates body re-evaluation — when this
+// returns true, SwiftUI skips body entirely, and the sub-view Equatables
+// never fire. Therefore this comparison must include EVERY input that can
+// change the rendered output without bumping `message.updatedAt`. Granular
+// sub-view Equatables (BubbleBackground, BubbleQuotedReply,
+// BubbleExpandableText, BubbleReactionsOverlay, BubbleSecondaryContent, …)
+// provide secondary invalidation only AFTER body re-runs. Inputs that piggy-
+// back on `updatedAt` bumps (content, isEdited, pinnedAt, expiresAt, etc.)
+// are intentionally NOT compared here — `updatedAt` covers them.
+
 import SwiftUI
 import Combine
-
 import MapKit
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - Themed Message Bubble
 struct ThemedMessageBubble: View {
+    // MARK: - Public init API (preserved unchanged for all call sites)
+
     let message: Message
     let contactColor: String
     var isDirect: Bool = false
@@ -51,1540 +80,216 @@ struct ThemedMessageBubble: View {
     var currentUserId: String = ""
     var userLanguages: (regional: String?, custom: String?) = (nil, nil)
 
+    // MARK: - State (forwarded as bindings to BubbleStandardLayout)
+
     @State private var activeDisplayLangCode: String? = nil
     @State private var secondaryLangCode: String? = nil
-    @EnvironmentObject private var router: Router
     @State private var selectedProfileUser: ProfileSheetUser?
-    @State var showShareSheet = false // internal for cross-file extension access
-    @State var shareURL: URL? = nil // internal for cross-file extension access
-    @State var fullscreenAttachment: MessageAttachment? = nil // internal for cross-file extension access
-    @State var showCarousel: Bool = false // internal for cross-file extension access
-    @State var carouselIndex: Int = 0 // internal for cross-file extension access
-    @State private var isBlurRevealed: Bool = false
-    @State private var blurRevealTask: Task<Void, Never>?
-    @State private var fogOpacity: CGFloat = 0
-    @State private var isTextExpanded: Bool = false
-    @State var revealedAttachmentIds: Set<String> = [] // internal for cross-file extension access
-
-    @State var fullscreenLocationAttachment: MessageAttachment? = nil
-    var theme: ThemeManager { ThemeManager.shared } // non-observed — isDark drives re-renders
-    // Video player state passed as primitive to avoid @ObservedObject on singleton in leaf view
-
-    // Ephemeral timer state
-    @State private var ephemeralSecondsRemaining: TimeInterval = 0
-    @State private var isEphemeralExpired: Bool = false
-    @State private var ephemeralTimerCancellable: AnyCancellable?
+    @State private var showShareSheet = false
+    @State private var shareURL: URL? = nil
+    @State private var fullscreenAttachment: MessageAttachment? = nil
+    @State private var showCarousel: Bool = false
+    @State private var carouselIndex: Int = 0
+    @State private var revealedAttachmentIds: Set<String> = []
+    @State private var fullscreenLocationAttachment: MessageAttachment? = nil
     @State private var hasPlayedAppearance = false
 
-    let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
-    let gridSpacing: CGFloat = 2 // internal for cross-file extension access
+    // MARK: - Lifecycle controllers (encapsulate timers + animations)
 
-    private var showIdentityBar: Bool {
-        !isDirect && isLastInGroup && !message.isMe
+    @StateObject private var blurController = BubbleBlurRevealController()
+    @StateObject private var ephemeralController = BubbleEphemeralController()
+
+    // MARK: - Environment
+
+    @EnvironmentObject private var router: Router
+
+    // MARK: - Derived state for kind dispatch
+
+    private var isEphemeralExpired: Bool {
+        if case .expired = ephemeralController.state { return true }
+        return false
     }
 
-    private var hasAnyTranslation: Bool { !textTranslations.isEmpty || !translatedAudios.isEmpty }
-
-    private var hasReactions: Bool { !message.reactions.isEmpty }
-
-    private var bottomSpacing: CGFloat {
-        if isLastInGroup {
-            return hasReactions ? 22 : 10
-        }
-        return hasReactions ? 20 : 2
-    }
-
-    private var currentDisplayLangCode: String {
-        activeDisplayLangCode ?? preferredTranslation?.targetLanguage.lowercased() ?? message.originalLanguage.lowercased()
-    }
-
-    private var effectiveContent: String {
-        let code = currentDisplayLangCode
-        if code.lowercased() == message.originalLanguage.lowercased() {
-            return message.content
-        }
-        if let translation = textTranslations.first(where: { $0.targetLanguage.lowercased() == code.lowercased() }) {
-            return translation.translatedContent
-        }
-        return preferredTranslation?.translatedContent ?? message.content
-    }
-
-    private var isDisplayingTranslation: Bool {
-        currentDisplayLangCode.lowercased() != message.originalLanguage.lowercased()
-            || secondaryLangCode != nil
-    }
-
-    private var secondaryContent: String? {
-        guard let code = secondaryLangCode else { return nil }
-        if code.lowercased() == message.originalLanguage.lowercased() {
-            return message.content
-        }
-        return textTranslations.first(where: {
-            $0.targetLanguage.lowercased() == code.lowercased()
-        })?.translatedContent
-    }
-
-    private var otherBubbleColor: String {
-        let senderHex = message.senderColor ?? contactColor
-        return DynamicColorGenerator.blendTwo(senderHex, weight1: 0.30, MeeshyColors.brandPrimaryHex, weight2: 0.70)
-    }
-
-    var visualAttachments: [MessageAttachment] { // internal for cross-file extension access
-        message.attachments.filter { [.image, .video].contains($0.type) }
-    }
-
-    private var audioAttachments: [MessageAttachment] {
-        message.attachments.filter { $0.type == .audio }
-    }
-
-    private var nonMediaAttachments: [MessageAttachment] {
-        message.attachments.filter { ![.image, .audio, .video].contains($0.type) }
-    }
-
-    private var isVideoPlaying: Bool {
-        activeVideoURL != nil &&
-        visualAttachments.contains(where: { $0.type == .video && $0.fileUrl == activeVideoURL })
-    }
-
-    private var hasTextOrNonMediaContent: Bool {
-        let hasNonMedia = !nonMediaAttachments.isEmpty
-        let hasText = !message.content.isEmpty
-        let isAudioOnlyWithTranscription = hasText && !audioAttachments.isEmpty && visualAttachments.isEmpty && nonMediaAttachments.isEmpty
-        if isAudioOnlyWithTranscription { return false }
-        return hasText || hasNonMedia
-    }
-
-    private var emojiOnlyResult: EmojiDetector.EmojiOnlyResult {
-        guard !message.content.isEmpty,
-              message.attachments.isEmpty,
-              message.replyTo == nil else {
-            return .notEmojiOnly
-        }
-        return EmojiDetector.analyze(message.content)
-    }
-
-    private var isEmojiOnly: Bool {
-        emojiOnlyResult != .notEmojiOnly
-    }
-
-    // Computed reaction summaries for display — order is stable (first-seen per emoji)
-    private var reactionSummaries: [ReactionSummary] {
-        var emojiCounts: [String: (count: Int, includesMe: Bool)] = [:]
-        var emojiOrder: [String] = []
-        for reaction in message.reactions {
-            let isMe = reaction.participantId == currentUserId
-            if var existing = emojiCounts[reaction.emoji] {
-                existing.count += 1
-                existing.includesMe = existing.includesMe || isMe
-                emojiCounts[reaction.emoji] = existing
-            } else {
-                emojiCounts[reaction.emoji] = (count: 1, includesMe: isMe)
-                emojiOrder.append(reaction.emoji)
-            }
-        }
-        return emojiOrder.compactMap { emoji in
-            guard let data = emojiCounts[emoji] else { return nil }
-            return ReactionSummary(emoji: emoji, count: data.count, includesMe: data.includesMe)
-        }
-    }
-
-    private var messageAccessibilityLabel: String {
-        var parts: [String] = []
-        if !message.isMe {
-            parts.append(message.senderName ?? "Inconnu")
-        }
-        if !message.content.isEmpty {
-            parts.append(message.content)
-        }
-        if !visualAttachments.isEmpty {
-            let imageCount = visualAttachments.filter { $0.type == .image }.count
-            let videoCount = visualAttachments.filter { $0.type == .video }.count
-            if imageCount > 0 { parts.append(imageCount == 1 ? "une image" : "\(imageCount) images") }
-            if videoCount > 0 { parts.append(videoCount == 1 ? "une video" : "\(videoCount) videos") }
-        }
-        if !audioAttachments.isEmpty {
-            parts.append(audioAttachments.count == 1 ? "un audio" : "\(audioAttachments.count) audios")
-        }
-        if !nonMediaAttachments.isEmpty {
-            for att in nonMediaAttachments {
-                if att.type == .location { parts.append("position partagee") }
-                else { parts.append("fichier \(att.originalName)") }
-            }
-        }
-        parts.append(timeString)
-        if message.isMe {
-            parts.append(deliveryStatusAccessibilityLabel)
-        }
-        if message.isEdited { parts.append("modifie") }
-        if message.pinnedAt != nil { parts.append("epingle") }
-        if message.expiresAt != nil { parts.append("ephemere") }
-        if !reactionSummaries.isEmpty {
-            let reactionText = reactionSummaries.map { "\($0.emoji) \($0.count)" }.joined(separator: ", ")
-            parts.append("reactions: \(reactionText)")
-        }
-        return parts.joined(separator: ", ")
-    }
-
-    private var deliveryStatusAccessibilityLabel: String {
-        switch message.deliveryStatus {
-        case .sending: return "en cours d'envoi"
-        case .sent: return "envoye"
-        case .delivered: return "distribue"
-        case .read: return "lu"
-        case .failed: return "echec d'envoi"
-        }
-    }
-
-    // MARK: - Ephemeral Formatting
-
-    private var ephemeralTimerText: String {
-        let total = Int(ephemeralSecondsRemaining)
-        if total <= 0 { return "0s" }
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let seconds = total % 60
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
-        }
-        if minutes > 0 {
-            return "\(minutes)m \(seconds)s"
-        }
-        return "\(seconds)s"
-    }
-
-    // Vrai quand le message view-once a été consommé et n'est plus en cours de révélation
-    private var isViewOnceBurned: Bool {
-        message.isViewOnce && message.viewOnceCount > 0 && !isBlurRevealed
-    }
+    // MARK: - Body (kind dispatch + lifecycle modifiers)
 
     var body: some View {
-        if message.isDeleted {
-            deletedMessageView
-        } else if isViewOnceBurned {
-            burnedMessageView
-        } else if isEphemeralExpired {
-            EmptyView()
-        } else {
-            messageContent
-                .messageEffects(message.effects, hasPlayedAppearance: hasPlayedAppearance)
-                .onAppear { hasPlayedAppearance = true }
-                .opacity(isEphemeralExpired ? 0 : 1)
-                .scaleEffect(isEphemeralExpired ? 0.8 : 1)
-                .onAppear { startEphemeralTimerIfNeeded() }
-                .onDisappear {
-                    ephemeralTimerCancellable?.cancel()
-                    blurRevealTask?.cancel()
-                    fogOpacity = 0
-                }
-        }
-    }
+        // Build BubbleContent once per body re-eval. Sub-views read from this
+        // value model rather than re-deriving fields from `Message`. The cost
+        // is a single pass through BubbleContentBuilder; the win is that a
+        // simple "Salut" message routes to the `if let` branches in
+        // BubbleStandardLayout that early-exit without instantiating
+        // quoted-reply, attachment, translation-panel, or reactions views.
+        let content = BubbleContent(
+            message: message,
+            translations: textTranslations,
+            preferredTranslation: preferredTranslation,
+            translatedAudios: translatedAudios,
+            userLanguages: userLanguages,
+            secondaryLangCode: secondaryLangCode,
+            activeDisplayLangCode: activeDisplayLangCode,
+            currentUserId: currentUserId,
+            isEditSaving: isEditSaving,
+            hasEditHistory: hasEditHistory
+        )
 
-    // MARK: - Ephemeral Timer Logic
-
-    private func startEphemeralTimerIfNeeded() {
-        guard let expiresAt = message.expiresAt else { return }
-        let remaining = expiresAt.timeIntervalSinceNow
-        if remaining <= 0 {
-            withAnimation(.easeOut(duration: 0.4)) {
-                isEphemeralExpired = true
-            }
-            return
-        }
-        ephemeralSecondsRemaining = remaining
-
-        let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-        ephemeralTimerCancellable = timer.sink { _ in
-            let newRemaining = expiresAt.timeIntervalSinceNow
-            if newRemaining <= 0 {
-                withAnimation(.easeOut(duration: 0.5).delay(0.1)) {
-                    isEphemeralExpired = true
-                }
-                ephemeralTimerCancellable?.cancel()
+        // Kind dispatch (mirrors legacy `body`):
+        //   - `.deleted`         → `BubbleDeletedView`
+        //   - `.burned` && !blurController.isRevealed → `BubbleBurnedView`
+        //   - ephemeral expired  → `EmptyView`
+        //   - otherwise (`.standard`, or `.burned` + revealed) → `BubbleStandardLayout`
+        // Note: `.burned` includes `isMe` — the sender also sees "Vu et efface"
+        // once their view-once is consumed (see BubbleContentBuilder).
+        switch content.kind {
+        case .deleted:
+            BubbleDeletedView(isMe: message.isMe, isDark: isDark)
+        case .burned where !blurController.isRevealed:
+            BubbleBurnedView(isMe: message.isMe, isDark: isDark)
+        default:
+            if isEphemeralExpired {
+                EmptyView()
             } else {
-                ephemeralSecondsRemaining = newRemaining
+                standardLayout(content: content)
             }
         }
     }
 
-    // MARK: - Blur Reveal Logic
-
-    private static let defaultBlurRevealDuration: TimeInterval = 5
-
-    private var blurRevealDuration: TimeInterval {
-        if case .double(let value) = UserPreferencesManager.shared.message.extras["blurRevealDuration"] {
-            return value
-        }
-        return Self.defaultBlurRevealDuration
-    }
-
-    private func revealBlurredContent() {
-        HapticFeedback.medium()
-        if message.isViewOnce {
-            onConsumeViewOnce?(message.id) { success in
-                guard success else { return }
-                scheduleBlurReveal()
-            }
-        } else {
-            scheduleBlurReveal()
-        }
-    }
-
-    private func scheduleBlurReveal() {
-        fogOpacity = 0
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            isBlurRevealed = true
-        }
-        blurRevealTask?.cancel()
-        blurRevealTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(blurRevealDuration))
-            guard !Task.isCancelled else { return }
-
-            // Phase 1: Fog condensation appears
-            withAnimation(.easeIn(duration: 0.4)) {
-                fogOpacity = 1
-            }
-            try? await Task.sleep(for: .seconds(0.35))
-            guard !Task.isCancelled else { return }
-
-            // Phase 2: Blur applies behind fog
-            withAnimation(.easeOut(duration: 0.4)) {
-                isBlurRevealed = false
-            }
-            try? await Task.sleep(for: .seconds(0.45))
-            guard !Task.isCancelled else { return }
-
-            // Phase 3: Fog dissipates
-            withAnimation(.easeOut(duration: 0.5)) {
-                fogOpacity = 0
-            }
-        }
-    }
-
-    private var deletedMessageView: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if message.isMe { Spacer(minLength: 50) }
-
-            HStack(spacing: 6) {
-                Image(systemName: "nosign")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                Text("Message supprime")
-                    .font(.system(size: 13, weight: .regular))
-                    .italic()
-                    .foregroundColor(theme.textMuted)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03))
-                    .overlay(
-                        Capsule()
-                            .stroke(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05), lineWidth: 0.5)
-                    )
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Message supprime")
-
-            if !message.isMe { Spacer(minLength: 50) }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 2)
-    }
-
-    private var burnedMessageView: some View {
-        HStack(alignment: .bottom, spacing: 8) {
-            if message.isMe { Spacer(minLength: 50) }
-
-            HStack(spacing: 6) {
-                Image(systemName: "flame.fill")
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(.orange)
-                Text("Vu et effacé")
-                    .font(.system(size: 13, weight: .regular))
-                    .italic()
-                    .foregroundColor(theme.textMuted)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(Color.orange.opacity(0.08))
-                    .overlay(
-                        Capsule()
-                            .stroke(Color.orange.opacity(0.15), lineWidth: 0.5)
-                    )
-            )
-            .accessibilityElement(children: .combine)
-            .accessibilityLabel("Message vu et effacé")
-
-            if !message.isMe { Spacer(minLength: 50) }
-        }
-        .padding(.horizontal, 16)
-        .padding(.vertical, 2)
-    }
+    // MARK: - Standard layout factory (extracted for branch clarity)
 
     @ViewBuilder
-    private var identityBarSection: some View {
-        let showTranslation = hasAnyTranslation && !isEmojiOnly
-        if showIdentityBar {
-            UserIdentityBar.messageBubble(
-                name: message.senderName ?? "?",
-                username: message.senderUsername.map { "@\($0)" },
-                avatarURL: message.senderAvatarURL,
-                accentColor: message.senderColor ?? contactColor,
-                role: nil,
-                time: timeString,
-                delivery: message.isMe ? message.deliveryStatus : nil,
-                flags: showTranslation ? buildAvailableFlags() : [],
-                activeFlag: showTranslation ? secondaryLangCode : nil,
-                onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
-                onTranslateTap: showTranslation ? { onShowTranslationDetail?(message.id) } : nil,
-                presenceState: presenceState,
-                moodEmoji: senderMoodEmoji,
-                storyRingState: senderStoryRingState,
-                onAvatarTap: { selectedProfileUser = .from(message: message) },
-                onViewStory: onViewStory
-            )
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-        } else {
-            UserIdentityBar.metaRow(
-                time: timeString,
-                delivery: message.isMe ? message.deliveryStatus : nil,
-                flags: showTranslation ? buildAvailableFlags() : [],
-                activeFlag: showTranslation ? secondaryLangCode : nil,
-                onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
-                onTranslateTap: showTranslation ? { onShowTranslationDetail?(message.id) } : nil,
-                isMe: message.isMe
-            )
-            .padding(.horizontal, 14)
-            .padding(.bottom, 8)
+    private func standardLayout(content: BubbleContent) -> some View {
+        BubbleStandardLayout(
+            content: content,
+            message: message,
+            contactColor: contactColor,
+            isDirect: isDirect,
+            isDark: isDark,
+            transcription: transcription,
+            translatedAudios: translatedAudios,
+            textTranslations: textTranslations,
+            preferredTranslation: preferredTranslation,
+            showAvatar: showAvatar,
+            presenceState: presenceState,
+            senderMoodEmoji: senderMoodEmoji,
+            senderStoryRingState: senderStoryRingState,
+            allAudioItems: allAudioItems,
+            activeAudioLanguage: activeAudioLanguage,
+            isLastInGroup: isLastInGroup,
+            isLastReceivedMessage: isLastReceivedMessage,
+            mentionDisplayNames: mentionDisplayNames,
+            highlightSearchTerm: highlightSearchTerm,
+            activeVideoURL: activeVideoURL,
+            currentUserId: currentUserId,
+            userLanguages: userLanguages,
+            onViewStory: onViewStory,
+            onAddReaction: onAddReaction,
+            onToggleReaction: onToggleReaction,
+            onOpenReactPicker: onOpenReactPicker,
+            onShowReactions: onShowReactions,
+            onReplyTap: onReplyTap,
+            onStoryReplyTap: onStoryReplyTap,
+            onMediaTap: onMediaTap,
+            onConsumeViewOnce: onConsumeViewOnce,
+            onRequestTranslation: onRequestTranslation,
+            onShowTranslationDetail: onShowTranslationDetail,
+            onScrollToMessage: onScrollToMessage,
+            activeDisplayLangCode: $activeDisplayLangCode,
+            secondaryLangCode: $secondaryLangCode,
+            selectedProfileUser: $selectedProfileUser,
+            showShareSheet: $showShareSheet,
+            shareURL: $shareURL,
+            fullscreenAttachment: $fullscreenAttachment,
+            fullscreenLocationAttachment: $fullscreenLocationAttachment,
+            showCarousel: $showCarousel,
+            carouselIndex: $carouselIndex,
+            revealedAttachmentIds: $revealedAttachmentIds,
+            blurController: blurController,
+            ephemeralController: ephemeralController
+        )
+        .messageEffects(message.effects, hasPlayedAppearance: hasPlayedAppearance)
+        .onAppear { hasPlayedAppearance = true }
+        .opacity(isEphemeralExpired ? 0 : 1)
+        .scaleEffect(isEphemeralExpired ? 0.8 : 1)
+        .onAppear {
+            startEphemeralTimerIfNeeded()
+            applyBlurRevealDurationFromPrefs()
         }
-    }
-
-    private var messageContent: some View {
-        HStack(alignment: .bottom, spacing: 0) {
-            if message.isMe { Spacer(minLength: 50) }
-
-            VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
-                // Pin indicator
-                if message.pinnedAt != nil {
-                    pinnedIndicator
-                }
-
-                // Forwarded indicator
-                if message.forwardedFromId != nil {
-                    forwardedIndicator
-                }
-
-                // Ephemeral indicator
-                if message.expiresAt != nil && !isEphemeralExpired {
-                    ephemeralTimerOverlay
-                }
-
-                // Message content (blurred if isBlurred and not revealed)
-                let shouldBlur = message.isBlurred && !isBlurRevealed
-
-                ZStack {
-                    VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
-                        // Grille visuelle (images + videos) ou carrousel inline
-                        if !visualAttachments.isEmpty {
-                            let mediaTimestampAlignment: Alignment = .bottomTrailing
-
-                            if showCarousel {
-                                carouselView
-                                    .background(Color.black)
-                                    .compositingGroup()
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                            } else {
-                                visualMediaGrid
-                                    .background(Color.black)
-                                    .compositingGroup()
-                                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                                    .overlay(alignment: mediaTimestampAlignment) {
-                                        if !hasTextOrNonMediaContent {
-                                            mediaTimestampOverlay
-                                                .padding(8)
-                                                .transition(.opacity)
-                                        }
-                                    }
-                                    .transition(.opacity.combined(with: .scale(scale: 0.98)))
-                            }
-                        }
-
-                        // Audio standalone (the 70% cap is applied to the whole
-                        // bubble VStack below — see the .frame at the end of
-                        // the outer VStack so audio, video, image grid, file,
-                        // location, and text bubbles all share the same
-                        // alignment limit).
-                        ForEach(audioAttachments) { attachment in
-                            mediaStandaloneView(attachment)
-                        }
-
-                        // Emoji-only: large emoji without bubble
-                        if isEmojiOnly {
-                            VStack(alignment: message.isMe ? .trailing : .leading, spacing: 2) {
-                                Text(message.content)
-                                    .font(.system(size: emojiOnlyResult.fontSize ?? 15))
-                                    .fixedSize(horizontal: false, vertical: true)
-                                    .onLongPressGesture {
-                                        HapticFeedback.medium()
-                                        onShowTranslationDetail?(message.id)
-                                    }
-                                    .overlay(alignment: .topLeading) {
-                                        if message.isEdited {
-                                            editedIndicator
-                                                .offset(y: -14)
-                                        }
-                                    }
-
-                                secondaryContentView
-
-                                identityBarSection
-                            }
-                        } else if hasTextOrNonMediaContent || message.replyTo != nil {
-                            // Bulle texte + non-media attachments (file, location)
-                            // Also show the bubble if we have a reply reference (quoted message)
-                            VStack(alignment: .leading, spacing: 0) {
-                                // Quoted reply preview (inside bubble)
-                                if let reply = message.replyTo {
-                                    quotedReplyView(reply)
-                                        .padding(.bottom, 4)
-                                        .onTapGesture {
-                                            guard !reply.messageId.isEmpty else { return }
-                                            HapticFeedback.light()
-                                            if reply.isStoryReply {
-                                                onStoryReplyTap?(reply.messageId)
-                                            } else {
-                                                onReplyTap?(reply.messageId)
-                                            }
-                                        }
-                                }
-
-                                VStack(alignment: .leading, spacing: 8) {
-                                    ForEach(nonMediaAttachments) { attachment in
-                                        attachmentView(attachment)
-                                    }
-
-                                    if !message.content.isEmpty {
-                                        expandableTextView
-                                            .onLongPressGesture {
-                                                HapticFeedback.medium()
-                                                onShowTranslationDetail?(message.id)
-                                            }
-                                    }
-
-                                    // Inline OpenGraph preview for the first URL in
-                                    // the effective (possibly translated) content.
-                                    // The card is self-loading — it triggers its
-                                    // own fetch via `LinkPreviewStore` and renders
-                                    // a skeleton while the metadata streams in.
-                                    if let url = LinkPreviewFetcher.firstURL(in: effectiveContent) {
-                                        LinkPreviewCard(
-                                            urlString: url,
-                                            accentColor: contactColor,
-                                            isDark: isDark
-                                        )
-                                        .padding(.top, 4)
-                                    }
-
-                                    secondaryContentView
-                                }
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, hasTextOrNonMediaContent ? 10 : 4)
-
-                                // Unified identity bar — extracted to reduce type-checker load
-                                identityBarSection
-                            }
-                            .padding(.top, message.isEdited ? 12 : 0)
-                            .overlay(alignment: .topLeading) {
-                                if message.isEdited {
-                                    editedIndicator
-                                        .padding(.leading, 12)
-                                        .padding(.top, 6 + (message.replyTo != nil ? 52 : 0))
-                                }
-                            }
-                            .background(bubbleBackground)
-                            .clipShape(RoundedRectangle(cornerRadius: 18))
-                            .shadow(
-                                color: (message.isMe ? MeeshyColors.brandPrimary : Color(hex: otherBubbleColor)).opacity(message.isMe ? 0.3 : 0.2),
-                                radius: 6,
-                                y: 3
-                            )
-                        }
-                    }
-                    .blur(radius: shouldBlur ? 20 : 0)
-                    .mask(
-                        RoundedRectangle(cornerRadius: 18, style: .continuous)
-                            .blur(radius: shouldBlur ? 5 : 0)
-                    )
-
-                    // Fog condensation effect (appears when blur returns)
-                    if fogOpacity > 0 {
-                        ZStack {
-                            RadialGradient(
-                                gradient: Gradient(colors: [
-                                    Color.white.opacity(0.35),
-                                    Color.white.opacity(0.12),
-                                    Color.clear
-                                ]),
-                                center: .center,
-                                startRadius: 5,
-                                endRadius: 120
-                            )
-                            .blur(radius: 18)
-                            .scaleEffect(1.3)
-
-                            Circle()
-                                .fill(Color.white.opacity(0.18))
-                                .blur(radius: 25)
-                                .frame(width: 70, height: 70)
-                                .offset(x: -25, y: -18)
-
-                            Circle()
-                                .fill(Color.white.opacity(0.12))
-                                .blur(radius: 30)
-                                .frame(width: 55, height: 55)
-                                .offset(x: 20, y: 12)
-                        }
-                        .opacity(fogOpacity)
-                        .clipShape(RoundedRectangle(cornerRadius: 18))
-                        .allowsHitTesting(false)
-                    }
-
-                    // Blur peek: tap to reveal for N seconds, then auto re-blur
-                    if message.isBlurred && !isBlurRevealed {
-                        Color.clear
-                            .contentShape(Rectangle())
-                            .accessibilityElement(children: .combine)
-                            .accessibilityLabel("Contenu masque")
-                            .accessibilityHint("Toucher pour reveler le contenu")
-                            .onTapGesture { revealBlurredContent() }
-                    }
-                }
-                .overlay(alignment: message.isMe ? .bottomTrailing : .bottomLeading) {
-                    reactionsOverlay
-                        .padding(message.isMe ? .trailing : .leading, 8)
-                        .offset(y: 16)
-                }
-
-            }
-            // Single source of truth for the bubble's horizontal cap. Applied
-            // to the VStack that wraps every kind of bubble content (image
-            // grid, audio, video, file, document, location, text, reply chip,
-            // OG preview, language flags). `.frame(maxWidth:)` is a CAP — it
-            // does NOT force the bubble to that width when the content is
-            // intrinsic, so short text bubbles stay compact.
-            .frame(
-                maxWidth: UIScreen.main.bounds.width * 0.70,
-                alignment: message.isMe ? .trailing : .leading
-            )
-
-            if !message.isMe { Spacer(minLength: 50) }
+        .onDisappear {
+            ephemeralController.stop()
+            blurController.cancel()
         }
-        .padding(.bottom, bottomSpacing)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(messageAccessibilityLabel)
         .onChange(of: selectedProfileUser) { _, newValue in
             if let user = newValue {
                 selectedProfileUser = nil
                 router.deepLinkProfileUser = user
             }
         }
-        .sheet(isPresented: $showShareSheet) {
-            if let url = shareURL {
-                ShareSheet(activityItems: [url])
-            }
-        }
-        .onChange(of: fullscreenAttachment?.id) { _, _ in
-            guard let attachment = fullscreenAttachment else { return }
-            if let onMediaTap {
-                fullscreenAttachment = nil
-                onMediaTap(attachment)
-            }
-            // If onMediaTap is nil, keep fullscreenAttachment set for the local fullScreenCover fallback
-        }
-        .fullScreenCover(item: Binding(
-            get: { onMediaTap == nil ? fullscreenAttachment : nil },
-            set: { fullscreenAttachment = $0 }
-        )) { attachment in
-            switch attachment.type {
-            case .image:
-                let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
-                let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
-                ImageFullscreen(
-                    imageUrl: urlStr.isEmpty ? nil : MeeshyConfig.resolveMediaURL(urlStr),
-                    accentColor: contactColor,
-                    caption: caption,
-                    mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                )
-            case .video:
-                if !attachment.fileUrl.isEmpty {
-                    let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
-                    VideoFullscreenPlayerView(
-                        urlString: attachment.fileUrl,
-                        accentColor: contactColor,
-                        fileName: attachment.originalName,
-                        caption: caption,
-                        mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                    )
-                } else {
-                    Color.black.onAppear { fullscreenAttachment = nil }
-                }
-            default:
-                Color.black.onAppear { fullscreenAttachment = nil }
-            }
-        }
-        .fullScreenCover(item: $fullscreenLocationAttachment) { attachment in
-            if let lat = attachment.latitude, let lon = attachment.longitude {
-                LocationFullscreenView(
-                    latitude: lat,
-                    longitude: lon,
-                    placeName: attachment.originalName.isEmpty ? nil : attachment.originalName,
-                    accentColor: contactColor,
-                    senderName: message.senderName
-                )
-            }
+    }
+
+    // MARK: - Lifecycle helpers (delegated to controllers)
+
+    private func startEphemeralTimerIfNeeded() {
+        guard let expiresAt = message.expiresAt else { return }
+        ephemeralController.start(expiresAt: expiresAt)
+    }
+
+    private func applyBlurRevealDurationFromPrefs() {
+        if case .double(let value) = UserPreferencesManager.shared.message.extras["blurRevealDuration"] {
+            blurController.setVisibilityDuration(value)
         }
     }
-
-    // MARK: - Ephemeral Timer Overlay
-
-    private var ephemeralTimerOverlay: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "flame.fill")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(Color(hex: "FF6B6B"))
-
-            Text(ephemeralTimerText)
-                .font(.system(size: 10, weight: .bold, design: .monospaced))
-                .foregroundColor(Color(hex: "FF6B6B"))
-        }
-        .padding(.horizontal, 8)
-        .padding(.vertical, 4)
-        .background(
-            Capsule()
-                .fill(Color(hex: "FF6B6B").opacity(isDark ? 0.15 : 0.1))
-                .overlay(
-                    Capsule()
-                        .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
-                )
-        )
-        .accessibilityLabel("Message ephemere, expire dans \(ephemeralTimerText)")
-    }
-
-    // MARK: - Expandable Text
-
-    private static let textTruncateLimit = 512
-
-    private var linkTint: Color {
-        message.isMe ? .white.opacity(0.9) : Color(hex: contactColor)
-    }
-
-    private var mentionTint: Color {
-        Color(hex: "818CF8") // indigo400 — distinct des liens URL
-    }
-
-    @ViewBuilder
-    private var expandableTextView: some View {
-        let content = effectiveContent
-        let needsTruncation = content.count > Self.textTruncateLimit && !isTextExpanded
-        let textColor = message.isMe ? Color.white : theme.textPrimary
-
-        if needsTruncation {
-            let truncated = Self.truncateAtWord(content, limit: Self.textTruncateLimit)
-            VStack(alignment: .leading, spacing: 4) {
-                (MessageTextRenderer.render(truncated + "...", fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightSearchTerm)
-                + timestampSpacerText)
-                .fixedSize(horizontal: false, vertical: true)
-                .tint(linkTint)
-
-                Button {
-                    withAnimation(.easeInOut(duration: 0.25)) {
-                        isTextExpanded = true
-                    }
-                } label: {
-                    Image(systemName: "chevron.down")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(textColor.opacity(0.6))
-                        .frame(maxWidth: .infinity, alignment: .center)
-                        .padding(.top, 2)
-                }
-            }
-        } else {
-            VStack(alignment: .leading, spacing: 4) {
-                (MessageTextRenderer.render(content, fontSize: 15, color: textColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames, highlightTerm: highlightSearchTerm)
-                + timestampSpacerText)
-                .fixedSize(horizontal: false, vertical: true)
-                .tint(linkTint)
-
-                if isTextExpanded && content.count > Self.textTruncateLimit {
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.25)) {
-                            isTextExpanded = false
-                        }
-                    } label: {
-                        Image(systemName: "chevron.up")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundColor(textColor.opacity(0.6))
-                            .frame(maxWidth: .infinity, alignment: .center)
-                            .padding(.top, 2)
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Secondary Content (inline translation)
-
-    @ViewBuilder
-    private var secondaryContentView: some View {
-        if let content = secondaryContent, let code = secondaryLangCode {
-            let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
-            let display = LanguageDisplay.from(code: code)
-            let secondaryTextColor: Color = message.isMe
-                ? .white.opacity(0.85)
-                : theme.textPrimary.opacity(0.8)
-
-            VStack(spacing: 0) {
-                HStack(spacing: 6) {
-                    Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
-                    Circle().fill(langColor).frame(width: 4, height: 4)
-                    Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
-                }
-
-                VStack(alignment: .leading, spacing: 4) {
-                    if let display = display {
-                        HStack(spacing: 4) {
-                            Text(display.flag).font(.system(size: 11))
-                            Text(display.name)
-                                .font(.system(size: 10, weight: .semibold))
-                                .foregroundColor(langColor)
-                        }
-                    }
-                    MessageTextRenderer.render(content, fontSize: 13, color: secondaryTextColor, mentionColor: mentionTint, accentColor: linkTint, mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(.vertical, 8)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(langColor.opacity(0.12))
-            }
-            .transition(.opacity.combined(with: .move(edge: .top)))
-        }
-    }
-
-    private static func truncateAtWord(_ text: String, limit: Int) -> String {
-        guard text.count > limit else { return text }
-        let prefix = String(text.prefix(limit))
-        guard let lastSpace = prefix.lastIndex(of: " ") else { return prefix }
-        return String(prefix[prefix.startIndex..<lastSpace])
-    }
-
-    // MARK: - Message Meta (timestamp + delivery status)
-
-    private var timeString: String {
-        message.cachedTimeString ?? TimeStringCache.shared.format(message.createdAt)
-    }
-
-    private var timestampSpacerText: Text {
-        Text("")
-    }
-
-    private func buildAvailableFlags() -> [String] {
-        let activeLang = currentDisplayLangCode.lowercased()
-        let origLower = message.originalLanguage.lowercased()
-
-        let hasTranslation: (String) -> Bool = { code in
-            textTranslations.contains(where: { $0.targetLanguage.lowercased() == code })
-            || translatedAudios.contains(where: { $0.targetLanguage.lowercased() == code })
-        }
-
-        var all: [String] = [origLower]
-        var seen: Set<String> = [origLower]
-
-        if let pc = preferredTranslation?.targetLanguage.lowercased(), !seen.contains(pc) {
-            all.append(pc); seen.insert(pc)
-        }
-
-        if let reg = userLanguages.regional?.lowercased(), !seen.contains(reg), hasTranslation(reg) {
-            all.append(reg); seen.insert(reg)
-        }
-
-        if let custom = userLanguages.custom?.lowercased(), !seen.contains(custom), hasTranslation(custom) {
-            all.append(custom); seen.insert(custom)
-        }
-
-        return all.filter { $0 != activeLang }
-    }
-
-    private func handleFlagTap(_ code: String) {
-        let isOriginal = code.lowercased() == message.originalLanguage.lowercased()
-        let hasContent = isOriginal || textTranslations.contains(where: { $0.targetLanguage.lowercased() == code.lowercased() })
-
-        if !hasContent {
-            onRequestTranslation?(message.id, code)
-            HapticFeedback.light()
-            return
-        }
-        if isOriginal {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                activeDisplayLangCode = code
-                secondaryLangCode = nil
-            }
-        } else {
-            let isShowing = secondaryLangCode?.lowercased() == code.lowercased()
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                secondaryLangCode = isShowing ? nil : code
-            }
-        }
-        HapticFeedback.light()
-    }
-
-    // MARK: - Edited Indicator (top-leading overlay)
-    private var editedIndicator: some View {
-        let metaColor: Color = message.isMe
-            ? Color.white.opacity(0.6)
-            : theme.textSecondary.opacity(0.5)
-
-        return HStack(spacing: 3) {
-            if isEditSaving {
-                // Saving feedback: arrow-spin glyph instead of pencil so the
-                // user sees their edit is still propagating to the server.
-                Image(systemName: "arrow.triangle.2.circlepath")
-                    .font(.system(size: 8, weight: .semibold))
-                    .rotationEffect(.degrees(isEditSaving ? 360 : 0))
-                    .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isEditSaving)
-                Text("Enregistrement…")
-                    .font(.system(size: 9, weight: .medium))
-                    .italic()
-            } else {
-                Image(systemName: "pencil")
-                    .font(.system(size: 8, weight: .semibold))
-                Text("modifie")
-                    .font(.system(size: 9, weight: .medium))
-                    .italic()
-                if hasEditHistory {
-                    // Dot affordance hinting the detail sheet shows history.
-                    Circle()
-                        .fill(metaColor)
-                        .frame(width: 3, height: 3)
-                        .opacity(0.7)
-                }
-            }
-        }
-        .foregroundColor(metaColor)
-    }
-
-    // MARK: - Media Timestamp Overlay (for visual media grid)
-    private var mediaTimestampOverlay: some View {
-        HStack(spacing: 3) {
-            Text(timeString)
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.white)
-
-            if message.isMe {
-                mediaDeliveryCheckmark
-            }
-        }
-        .padding(.horizontal, 7)
-        .padding(.vertical, 3)
-        .background(
-            Capsule()
-                .fill(Color.black.opacity(0.55))
-        )
-    }
-
-    @ViewBuilder
-    private var mediaDeliveryCheckmark: some View {
-        switch message.deliveryStatus {
-        case .sending:
-            Image(systemName: "clock")
-                .font(.system(size: 9))
-                .foregroundColor(.white.opacity(0.8))
-        case .sent:
-            Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
-        case .delivered:
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .regular))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .regular))
-                    .offset(x: 3)
-            }
-            .foregroundColor(.white.opacity(0.8))
-            .frame(width: 14)
-        case .read:
-            // Match the bubble identity bar: full-opacity bold double-check on
-            // the dark capsule overlay, sized one point larger than `.delivered`
-            // so the read state is unambiguously distinct.
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .black))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .black))
-                    .offset(x: 3)
-            }
-            .foregroundColor(.white)
-            .frame(width: 15)
-            .accessibilityLabel("Read")
-        case .failed:
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(MeeshyColors.error)
-        }
-    }
-
-    // MARK: - Reply Preview
-    private var pinnedIndicator: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "pin.fill")
-                .font(.system(size: 9, weight: .bold))
-                .foregroundColor(MeeshyColors.pinnedBlue)
-                .rotationEffect(.degrees(45))
-
-            Text("Epingle")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(MeeshyColors.pinnedBlue)
-        }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 2)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("Message epingle")
-    }
-
-    private var forwardedIndicator: some View {
-        HStack(spacing: 4) {
-            Image(systemName: "arrowshape.turn.up.right.fill")
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(theme.textMuted)
-
-            if let fwd = message.forwardedFrom {
-                if let convName = fwd.conversationName {
-                    Text("Transf. de \(fwd.senderName) \u{2022} \(convName)")
-                        .font(.system(size: 10))
-                        .italic()
-                        .foregroundColor(theme.textMuted)
-                        .lineLimit(1)
-                } else {
-                    Text("Transf. de \(fwd.senderName)")
-                        .font(.system(size: 10))
-                        .italic()
-                        .foregroundColor(theme.textMuted)
-                        .lineLimit(1)
-                }
-            } else {
-                Text("Transfere")
-                    .font(.system(size: 10))
-                    .italic()
-                    .foregroundColor(theme.textMuted)
-            }
-        }
-        .padding(.horizontal, 4)
-        .padding(.bottom, 2)
-        .accessibilityElement(children: .combine)
-    }
-
-    // MARK: - Quoted Reply View (inside bubble)
-
-    private func quotedReplyView(_ reply: ReplyReference) -> some View {
-        let accentBarColor = Color(hex: reply.isMe ? contactColor : reply.authorColor)
-        let nameColor: Color = message.isMe
-            ? .white.opacity(0.9)
-            : Color(hex: reply.isMe ? contactColor : reply.authorColor)
-        let previewColor: Color = message.isMe
-            ? .white.opacity(0.65)
-            : theme.textMuted
-        let bgColor: Color = message.isMe
-            ? Color.white.opacity(0.15)
-            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
-
-        return HStack(spacing: 0) {
-            // Left accent bar
-            RoundedRectangle(cornerRadius: 2)
-                .fill(message.isMe ? Color.white.opacity(0.7) : accentBarColor)
-                .frame(width: 4)
-
-            HStack(spacing: 8) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(reply.isMe ? "Vous" : reply.authorName)
-                        .font(.system(size: 12, weight: .bold))
-                        .foregroundColor(nameColor)
-                        .lineLimit(1)
-
-                    if reply.isStoryReply {
-                        storyReplyPreview(reply, previewColor: previewColor)
-                    } else {
-                        HStack(spacing: 5) {
-                            if let attType = reply.attachmentType {
-                                Image(systemName: replyAttachmentIcon(attType))
-                                    .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(previewColor)
-                            }
-
-                            MessageTextRenderer.render(
-                                reply.previewText.isEmpty ? "Media" : reply.previewText,
-                                fontSize: 12, color: previewColor,
-                                mentionColor: mentionTint, accentColor: previewColor,
-                                mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                            )
-                            .lineLimit(2)
-                            .tint(previewColor)
-                        }
-                    }
-                }
-
-                Spacer(minLength: 0)
-
-                // Attachment thumbnail or story thumbnail
-                if let thumbUrl = (reply.isStoryReply ? reply.storyThumbnailUrl : reply.attachmentThumbnailUrl), !thumbUrl.isEmpty {
-                    CachedAsyncImage(url: thumbUrl, targetSize: CGSize(width: 38, height: 38)) {
-                        Color(hex: reply.authorColor).opacity(0.3)
-                    }
-                    .aspectRatio(contentMode: .fill)
-                    .frame(width: 38, height: 38)
-                    .clipShape(RoundedRectangle(cornerRadius: 6))
-                }
-            }
-            .padding(.leading, 8)
-            .padding(.trailing, 10)
-        }
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(bgColor)
-        )
-        .padding(.horizontal, 6)
-        .padding(.top, 6)
-        .contentShape(Rectangle())
-    }
-
-    @ViewBuilder
-    private func storyReplyPreview(_ reply: ReplyReference, previewColor: Color) -> some View {
-        HStack(spacing: 4) {
-            Image(systemName: "camera.fill")
-                .font(.system(size: 9, weight: .medium))
-                .foregroundColor(previewColor)
-            Text("Story")
-                .font(.system(size: 11, weight: .medium))
-                .foregroundColor(previewColor)
-
-            if let date = reply.storyPublishedAt {
-                Text("\u{2022}")
-                    .font(.system(size: 8))
-                    .foregroundColor(previewColor.opacity(0.6))
-                Text(date, style: .relative)
-                    .font(.system(size: 10))
-                    .foregroundColor(previewColor.opacity(0.8))
-            }
-
-            let reactions = reply.storyReactionCount ?? 0
-            let comments = reply.storyCommentCount ?? 0
-            if reactions > 0 || comments > 0 {
-                Text("(")
-                    .font(.system(size: 10))
-                    .foregroundColor(previewColor.opacity(0.6))
-                if reactions > 0 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "heart.fill")
-                            .font(.system(size: 8))
-                        Text("\(reactions)")
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundColor(previewColor.opacity(0.8))
-                }
-                if reactions > 0 && comments > 0 {
-                    Text("\u{2022}")
-                        .font(.system(size: 6))
-                        .foregroundColor(previewColor.opacity(0.5))
-                }
-                if comments > 0 {
-                    HStack(spacing: 2) {
-                        Image(systemName: "bubble.right.fill")
-                            .font(.system(size: 8))
-                        Text("\(comments)")
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundColor(previewColor.opacity(0.8))
-                }
-                Text(")")
-                    .font(.system(size: 10))
-                    .foregroundColor(previewColor.opacity(0.6))
-            }
-        }
-    }
-
-    private func replyAttachmentIcon(_ type: String) -> String {
-        switch type {
-        case "image": return "photo"
-        case "video": return "video"
-        case "audio": return "waveform"
-        case "file": return "doc"
-        case "location": return "mappin"
-        default: return "paperclip"
-        }
-    }
-
-    // See ThemedMessageBubble+Media.swift for: visualMediaGrid, visualGridCell, carouselView, gridImageCell, carouselImageCell, gridVideoCell
-
-    // MARK: - Attachment View
-    @ViewBuilder
-    private func attachmentView(_ attachment: MessageAttachment) -> some View {
-        switch attachment.type {
-        case .image:
-            ImageViewerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: contactColor
-            )
-
-        case .video:
-            VideoPlayerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: contactColor
-            )
-
-        case .audio:
-            AudioPlayerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: contactColor,
-                transcription: transcription,
-                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id }
-            )
-
-        case .file:
-            if let lang = CodeLanguage.detect(fileName: attachment.originalName, mimeType: attachment.mimeType) {
-                CodeViewerView(
-                    attachment: attachment,
-                    language: lang,
-                    context: .messageBubble,
-                    accentColor: contactColor
-                )
-            } else {
-                DocumentViewerView(
-                    attachment: attachment,
-                    context: .messageBubble,
-                    accentColor: contactColor
-                )
-            }
-
-        case .location:
-            if let lat = attachment.latitude, let lon = attachment.longitude {
-                LocationMessageView(
-                    latitude: lat,
-                    longitude: lon,
-                    placeName: attachment.originalName.isEmpty ? nil : attachment.originalName,
-                    address: nil,
-                    accentColor: contactColor,
-                    onTapFullscreen: {
-                        fullscreenLocationAttachment = attachment
-                    }
-                )
-            } else {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 200, height: 120)
-                    .overlay(
-                        VStack(spacing: 8) {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 36))
-                                .foregroundColor(.white)
-
-                            Text("Position partagee")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.white.opacity(0.9))
-                        }
-                    )
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Position partagee")
-            }
-        }
-    }
-
-    // MARK: - Reactions Overlay (themed, accent-aware)
-
-    private let maxVisibleReactions = 4
-
-    @ViewBuilder
-    private var reactionsOverlay: some View {
-        let accent = Color(hex: contactColor)
-        let hasReactions = !reactionSummaries.isEmpty
-        let visible = Array(reactionSummaries.prefix(maxVisibleReactions))
-        let overflowCount = reactionSummaries.count - visible.count
-
-        if message.isMe {
-            if hasReactions {
-                HStack(spacing: 3) {
-                    ForEach(visible, id: \.emoji) { reaction in
-                        reactionPill(reaction: reaction, isDark: isDark, accent: accent)
-                    }
-                    if overflowCount > 0 {
-                        overflowPill(count: overflowCount, isDark: isDark, accent: accent)
-                    }
-                }
-            }
-        } else {
-            HStack(spacing: 3) {
-                if overflowCount > 0 {
-                    overflowPill(count: overflowCount, isDark: isDark, accent: accent)
-                } else if isLastReceivedMessage {
-                    addReactionButton(isDark: isDark, accent: accent)
-                }
-
-                ForEach(visible, id: \.emoji) { reaction in
-                    reactionPill(reaction: reaction, isDark: isDark, accent: accent)
-                }
-            }
-        }
-    }
-
-    private func addReactionButton(isDark: Bool, accent: Color) -> some View {
-        Image(systemName: "face.smiling")
-            .font(.system(size: 10, weight: .medium))
-            .foregroundColor(isDark ? accent.opacity(0.6) : accent.opacity(0.5))
-            .frame(width: 22, height: 22)
-            .background(
-                Circle()
-                    .fill(isDark ? accent.opacity(0.1) : accent.opacity(0.06))
-                    .overlay(
-                        Circle()
-                            .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
-                    )
-                    .shadow(color: accent.opacity(0.1), radius: 3, y: 1)
-            )
-            .contentShape(Circle())
-            .onTapGesture {
-                HapticFeedback.light()
-                onAddReaction?(message.id)
-            }
-            .onLongPressGesture(minimumDuration: 0.4) {
-                HapticFeedback.medium()
-                onOpenReactPicker?(message.id)
-            }
-            .accessibilityLabel("Ajouter une reaction")
-            .accessibilityHint("Appuyer pour reagir rapidement, maintenir pour choisir un emoji")
-    }
-
-    private func overflowPill(count: Int, isDark: Bool, accent: Color) -> some View {
-        Button {
-            HapticFeedback.light()
-            onShowReactions?(message.id)
-        } label: {
-            Text("+\(count)")
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
-                .foregroundColor(accent)
-        }
-        .frame(height: 22)
-        .padding(.horizontal, 6)
-        .background(
-            Capsule()
-                .fill(isDark ? accent.opacity(0.12) : accent.opacity(0.08))
-                .overlay(
-                    Capsule()
-                        .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 0.5)
-                )
-        )
-        .accessibilityLabel("\(count) reactions supplementaires")
-        .accessibilityHint("Voir toutes les reactions")
-    }
-
-    private func reactionPillAccessibilityLabel(_ reaction: ReactionSummary) -> String {
-        let countLabel = reaction.count == 1 ? "reaction" : "reactions"
-        let meLabel = reaction.includesMe ? ", vous avez reagi" : ""
-        return "\(reaction.emoji) \(reaction.count) \(countLabel)\(meLabel)"
-    }
-
-    private func reactionPill(reaction: ReactionSummary, isDark: Bool, accent: Color) -> some View {
-        let pillContent = HStack(spacing: 2) {
-            Text(reaction.emoji)
-                .font(.system(size: 11))
-            if reaction.count > 1 {
-                Text("\(reaction.count)")
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundColor(
-                        reaction.includesMe
-                            ? (isDark ? .white : .white)
-                            : (isDark ? .white.opacity(0.7) : accent)
-                    )
-            }
-        }
-        .padding(.horizontal, reaction.count > 1 ? 6 : 5)
-        .frame(height: 22)
-
-        let fillColor: Color = reaction.includesMe
-            ? (isDark ? accent.opacity(0.5) : accent.opacity(0.35))
-            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
-
-        let strokeColor: Color = reaction.includesMe
-            ? accent.opacity(isDark ? 0.8 : 0.6)
-            : accent.opacity(isDark ? 0.15 : 0.1)
-
-        let strokeWidth: CGFloat = reaction.includesMe ? 1.5 : 0.5
-
-        let shadowColor: Color = reaction.includesMe ? accent.opacity(0.3) : .clear
-
-        return pillContent
-            .background(
-                Capsule()
-                    .fill(fillColor)
-                    .overlay(
-                        Capsule()
-                            .stroke(strokeColor, lineWidth: strokeWidth)
-                    )
-                    .shadow(color: shadowColor, radius: 4, y: 2)
-            )
-            .onTapGesture {
-                HapticFeedback.light()
-                onToggleReaction?(reaction.emoji)
-            }
-            .onLongPressGesture(minimumDuration: 0.4) {
-                HapticFeedback.medium()
-                onShowReactions?(message.id)
-            }
-            .accessibilityLabel(reactionPillAccessibilityLabel(reaction))
-            .accessibilityHint("Appuyer pour basculer la reaction")
-    }
-
-    // MARK: - Bubble Background
-    private var bubbleBackground: some View {
-        let other = Color(hex: otherBubbleColor)
-
-        return RoundedRectangle(cornerRadius: 18)
-            .fill(
-                message.isMe ?
-                LinearGradient(
-                    colors: [MeeshyColors.brandPrimary, MeeshyColors.brandDeep],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                ) :
-                LinearGradient(
-                    colors: [
-                        other.opacity(isDark ? 0.35 : 0.25),
-                        other.opacity(isDark ? 0.20 : 0.15)
-                    ],
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(
-                        message.isMe ?
-                        LinearGradient(colors: [Color.clear, Color.clear], startPoint: .leading, endPoint: .trailing) :
-                        LinearGradient(
-                            colors: [other.opacity(0.5), other.opacity(0.2)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: message.isMe ? 0 : 1
-                    )
-            )
-    }
-
-    // MARK: - Media Standalone View
-    @ViewBuilder
-    private func mediaStandaloneView(_ attachment: MessageAttachment) -> some View {
-        switch attachment.type {
-        case .audio:
-            AudioMediaView(
-                attachment: attachment,
-                message: message,
-                contactColor: message.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
-                visualAttachments: visualAttachments,
-                isDark: isDark,
-                accentColor: message.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor,
-                transcription: transcription,
-                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
-                textTranslations: textTranslations,
-                allAudioItems: allAudioItems,
-                mentionDisplayNames: mentionDisplayNames,
-                onScrollToMessage: onScrollToMessage,
-                onShareFile: { url in
-                    shareURL = url
-                    showShareSheet = true
-                },
-                onShowTranslationDetail: onShowTranslationDetail,
-                onRequestTranslation: onRequestTranslation,
-                activeAudioLanguageOverride: activeAudioLanguage
-            )
-            .equatable()
-
-        default:
-            EmptyView()
-        }
-    }
-
-    // MARK: - Audio Bubble Background
-    private var audioBubbleBackground: some View {
-        let audioAccent = Color(hex: message.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor)
-        return RoundedRectangle(cornerRadius: 20)
-            .fill(isDark ? audioAccent.opacity(0.15) : audioAccent.opacity(0.08))
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(audioAccent.opacity(isDark ? 0.25 : 0.15), lineWidth: 1)
-            )
-    }
-
-    // See ThemedMessageBubble+Media.swift for downloadBadge
 }
 
-// MARK: - Equatable (permet .equatable() pour eviter les re-renders superflus)
+// MARK: - Equatable
 //
-// NB: any NEW `var` / `let` added to ThemedMessageBubble that affects the
-// rendered output MUST be mirrored below, otherwise SwiftUI's `.equatable()`
-// fast-path will return `true` for a row that actually changed, producing a
-// stale UI. The inputs included here were picked by walking every `@State`,
-// `ObservedObject`, and `var` the body reads.
+// The wrapper Equatable gates body re-evaluation — when it returns true,
+// SwiftUI skips body entirely and the sub-view Equatables never fire. This
+// comparison must therefore include every input that can change the rendered
+// output WITHOUT bumping `message.updatedAt`:
+//   - sender state pushed live by the gateway (presence, mood, story ring)
+//   - group-context flags recomputed by parent on neighbor changes
+//   - user-level prefs (language, audio language) flipped from settings
+//   - effects flags (one-shot or persistent) and reaction identity
+// Fields whose changes are guaranteed to bump `updatedAt` (content, isEdited,
+// pinnedAt, expiresAt, etc.) are intentionally NOT compared here — relying on
+// `updatedAt` keeps the comparison tight while still covering them.
 extension ThemedMessageBubble: @MainActor Equatable {
     static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {
+        // Message identity & server-bumped lifecycle
         lhs.message.id == rhs.message.id &&
-        lhs.message.content == rhs.message.content &&
-        lhs.message.deliveryStatus == rhs.message.deliveryStatus &&
-        // MeeshyReaction isn't Equatable in the SDK — signature-compare
-        // by count + emoji+participantId identity so swapping one emoji
-        // for another (same count) still invalidates the cache.
-        lhs.message.reactions.count == rhs.message.reactions.count &&
-        Set(lhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }) ==
-            Set(rhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }) &&
-        lhs.message.attachments.count == rhs.message.attachments.count &&
-        lhs.message.isEdited == rhs.message.isEdited &&
-        lhs.message.deletedAt == rhs.message.deletedAt &&
-        lhs.message.pinnedAt == rhs.message.pinnedAt &&
         lhs.message.updatedAt == rhs.message.updatedAt &&
-        lhs.message.expiresAt == rhs.message.expiresAt &&
+        lhs.message.deliveryStatus == rhs.message.deliveryStatus &&
+        lhs.message.attachments.count == rhs.message.attachments.count &&
+        lhs.message.reactions.count == rhs.message.reactions.count &&
         lhs.message.viewOnceCount == rhs.message.viewOnceCount &&
+        // Effects (flags can flip without updatedAt for some appearance changes)
         lhs.message.effects.flags.rawValue == rhs.message.effects.flags.rawValue &&
-        lhs.message.deliveredCount == rhs.message.deliveredCount &&
-        lhs.message.readCount == rhs.message.readCount &&
+        // Reaction identity, not just count (emoji swap with same count)
+        Set(lhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" })
+            == Set(rhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }) &&
+        // Display context
         lhs.contactColor == rhs.contactColor &&
-        lhs.isDirect == rhs.isDirect &&
         lhs.isDark == rhs.isDark &&
+        lhs.isDirect == rhs.isDirect &&
+        // Translations / transcription
         lhs.preferredTranslation?.translatedContent == rhs.preferredTranslation?.translatedContent &&
         lhs.textTranslations.count == rhs.textTranslations.count &&
         lhs.transcription?.text == rhs.transcription?.text &&
         lhs.translatedAudios.count == rhs.translatedAudios.count &&
-        lhs.showAvatar == rhs.showAvatar &&
-        lhs.presenceState == rhs.presenceState &&
-        lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
-        lhs.senderStoryRingState == rhs.senderStoryRingState &&
-        lhs.isLastInGroup == rhs.isLastInGroup &&
+        // Edit overlay
         lhs.isLastReceivedMessage == rhs.isLastReceivedMessage &&
-        lhs.activeAudioLanguage == rhs.activeAudioLanguage &&
         lhs.isEditSaving == rhs.isEditSaving &&
         lhs.hasEditHistory == rhs.hasEditHistory &&
         lhs.highlightSearchTerm == rhs.highlightSearchTerm &&
+        // Sender state — pushed by the server without bumping message.updatedAt
+        lhs.presenceState == rhs.presenceState &&
+        lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
+        lhs.senderStoryRingState == rhs.senderStoryRingState &&
+        // Group state — recomputed by parent on neighbor changes
+        lhs.isLastInGroup == rhs.isLastInGroup &&
+        lhs.showAvatar == rhs.showAvatar &&
+        // User-level prefs — flipped from settings without touching the message
         lhs.userLanguages.regional == rhs.userLanguages.regional &&
-        lhs.userLanguages.custom == rhs.userLanguages.custom
+        lhs.userLanguages.custom == rhs.userLanguages.custom &&
+        lhs.activeAudioLanguage == rhs.activeAudioLanguage
     }
 }
