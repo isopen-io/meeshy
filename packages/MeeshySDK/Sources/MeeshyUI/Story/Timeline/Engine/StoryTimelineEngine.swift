@@ -104,36 +104,38 @@ public final class StoryTimelineEngine {
         project: TimelineProject,
         mediaURLs: [String: URL]
     ) async {
-        configureAudioSession()
-        tearDown()
-        currentProject = project
+        await TimelineSignposter.intervalAsync("configure") {
+            configureAudioSession()
+            tearDown()
+            currentProject = project
 
-        let composition = AVMutableComposition()
-        await insertVideoTracks(project: project, mediaURLs: mediaURLs, into: composition)
-        let videoComposition = VideoCompositor.makeComposition(
-            project: project,
-            composition: composition
-        )
-        let item = AVPlayerItem(asset: composition)
-        item.videoComposition = videoComposition
-        let player = AVPlayer(playerItem: item)
-        player.volume = max(0, min(1, masterVolume))
-        player.isMuted = isMuted
+            let composition = AVMutableComposition()
+            await insertVideoTracks(project: project, mediaURLs: mediaURLs, into: composition)
+            let videoComposition = VideoCompositor.makeComposition(
+                project: project,
+                composition: composition
+            )
+            let item = AVPlayerItem(asset: composition)
+            item.videoComposition = videoComposition
+            let player = AVPlayer(playerItem: item)
+            player.volume = max(0, min(1, masterVolume))
+            player.isMuted = isMuted
 
-        self.composition = composition
-        self.videoComposition = videoComposition
-        self.playerItem = item
-        self.player = player
+            self.composition = composition
+            self.videoComposition = videoComposition
+            self.playerItem = item
+            self.player = player
 
-        attachTimeObserver()
-        attachEndObserver()
+            attachTimeObserver()
+            attachEndObserver()
 
-        do {
-            try audioMixer.configure(audios: project.audioPlayerObjects, urls: mediaURLs)
-        } catch {
-            logger.error("AudioMixer configure failed: \(error.localizedDescription)")
+            do {
+                try audioMixer.configure(audios: project.audioPlayerObjects, urls: mediaURLs)
+            } catch {
+                logger.error("AudioMixer configure failed: \(error.localizedDescription)")
+            }
+            audioMixer.prepareAllNodes()
         }
-        audioMixer.prepareAllNodes()
     }
 
     private func insertVideoTracks(
@@ -210,16 +212,18 @@ public final class StoryTimelineEngine {
     // MARK: Seek (D4)
 
     public func seek(to time: Float, precise: Bool = true) {
-        guard let project = currentProject else { return }
-        let clamped = max(0, min(project.slideDuration, time))
-        currentTime = clamped
-        if let player {
-            let cmtime = CMTime(seconds: Double(clamped), preferredTimescale: 600)
-            let tolerance: CMTime = precise ? .zero : CMTime(seconds: 0.05, preferredTimescale: 600)
-            player.seek(to: cmtime, toleranceBefore: tolerance, toleranceAfter: tolerance)
+        TimelineSignposter.interval("seek") {
+            guard let project = currentProject else { return }
+            let clamped = max(0, min(project.slideDuration, time))
+            currentTime = clamped
+            if let player {
+                let cmtime = CMTime(seconds: Double(clamped), preferredTimescale: 600)
+                let tolerance: CMTime = precise ? .zero : CMTime(seconds: 0.05, preferredTimescale: 600)
+                player.seek(to: cmtime, toleranceBefore: tolerance, toleranceAfter: tolerance)
+            }
+            audioMixer.seek(to: clamped)
+            onTimeUpdate?(clamped)
         }
-        audioMixer.seek(to: clamped)
-        onTimeUpdate?(clamped)
     }
 
     // MARK: Stop (D5)
