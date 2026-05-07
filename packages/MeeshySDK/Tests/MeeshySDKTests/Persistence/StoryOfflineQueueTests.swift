@@ -108,6 +108,61 @@ final class StoryOfflineQueueTests: XCTestCase {
         XCTAssertEqual(pending.count, 2, "Both items remain after flush failure")
     }
 
+    // MARK: - Storage security
+
+    /// Asserts that the persisted queue file lives under `.applicationSupportDirectory`
+    /// (hidden from Files.app / iTunes file sharing), NOT under `.documentDirectory`.
+    func test_persistence_storedUnderApplicationSupportDirectory() async {
+        let queue = StoryOfflineQueue.shared
+        await queue.enqueue(makeItem())
+
+        let appSupport = try! FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: false
+        )
+        // Resolve symlinks so both paths are comparable (e.g. /var vs /private/var on iOS sim).
+        let appSupportResolved = appSupport.resolvingSymlinksInPath().path
+
+        // Walk the applicationSupportDirectory to find the queue file.
+        let enumerator = FileManager.default.enumerator(atPath: appSupportResolved)
+        var found = false
+        while let name = enumerator?.nextObject() as? String {
+            if name.hasSuffix("story_offline_queue.json") {
+                found = true
+                break
+            }
+        }
+        XCTAssertTrue(found,
+            "story_offline_queue.json must be stored under applicationSupportDirectory, not documentDirectory")
+    }
+
+    /// Asserts `.completeFileProtection` is requested on each write.
+    ///
+    /// NOTE: File protection is hardware-enforced and is always `.none` on the simulator
+    /// (Secure Enclave is absent). This test is therefore skipped on the simulator — the
+    /// protection attribute is verified manually on a physical device.
+    func test_persistence_fileProtectionIsComplete() async throws {
+        try XCTSkipIf(true,
+            "File protection is enforced by hardware — URLFileProtection always returns .none on the simulator. Verified manually on a physical device.")
+
+        let queue = StoryOfflineQueue.shared
+        await queue.enqueue(makeItem())
+
+        let appSupport = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: false
+        )
+        let queueDir = appSupport.appendingPathComponent("StoryOfflineQueue", isDirectory: true)
+        let fileURL = queueDir.appendingPathComponent("story_offline_queue.json")
+        let resourceValues = try fileURL.resourceValues(forKeys: [.fileProtectionKey])
+        XCTAssertEqual(resourceValues.fileProtection, .complete,
+            "Queue file must have FileProtectionType.complete")
+    }
+
     // MARK: - OfflineQueueProviding conformance
 
     func test_conformsToOfflineQueueProviding() async {

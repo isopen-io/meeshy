@@ -52,4 +52,22 @@ final class TransportBarTests: XCTestCase {
     func test_modeSwitchLabel_proTowardQuick_isQUICK() {
         XCTAssertEqual(TransportBar.modeSwitchLabel(currentMode: .pro), "QUICK ↗")
     }
+
+    // MARK: - HIG Hit Target Contract
+
+    func test_minimumHitTargetSize_width_meetsHIG44pt() {
+        XCTAssertGreaterThanOrEqual(
+            TransportBar.minimumHitTargetSize.width, 44,
+            "TransportBar buttons extend hit zone via .contentShape(Rectangle().inset(by:)) " +
+            "to meet Apple HIG 44pt minimum touch target"
+        )
+    }
+
+    func test_minimumHitTargetSize_height_meetsHIG44pt() {
+        XCTAssertGreaterThanOrEqual(
+            TransportBar.minimumHitTargetSize.height, 44,
+            "TransportBar buttons extend hit zone via .contentShape(Rectangle().inset(by:)) " +
+            "to meet Apple HIG 44pt minimum touch target"
+        )
+    }
 }

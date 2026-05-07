@@ -40,4 +40,22 @@ final class TimelineToolbarTests: XCTestCase {
         XCTAssertEqual(TimelineToolbar.snapAccessibilityKey(isOn: true), "story.timeline.a11y.snap.on")
         XCTAssertEqual(TimelineToolbar.snapAccessibilityKey(isOn: false), "story.timeline.a11y.snap.off")
     }
+
+    // MARK: - HIG Hit Target Contract
+
+    func test_minimumHitTargetSize_width_meetsHIG44pt() {
+        XCTAssertGreaterThanOrEqual(
+            TimelineToolbar.minimumHitTargetSize.width, 44,
+            "TimelineToolbar undo/redo buttons extend hit zone via .contentShape(Rectangle().inset(by:)) " +
+            "to meet Apple HIG 44pt minimum touch target"
+        )
+    }
+
+    func test_minimumHitTargetSize_height_meetsHIG44pt() {
+        XCTAssertGreaterThanOrEqual(
+            TimelineToolbar.minimumHitTargetSize.height, 44,
+            "TimelineToolbar undo/redo buttons extend hit zone via .contentShape(Rectangle().inset(by:)) " +
+            "to meet Apple HIG 44pt minimum touch target"
+        )
+    }
 }

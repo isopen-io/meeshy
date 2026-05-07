@@ -143,11 +143,28 @@ public actor StoryOfflineQueue: OfflineQueueProviding {
 
     // MARK: - Disk persistence
 
+    /// Returns (and creates if needed) the queue storage directory under
+    /// `.applicationSupportDirectory` — hidden from Files.app and iTunes file sharing.
+    /// The directory is created with `FileProtectionType.complete` so its contents
+    /// are encrypted when the device is locked.
+    private static func queueDirectory() throws -> URL {
+        let base = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        let dir = base.appendingPathComponent("StoryOfflineQueue", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: dir,
+            withIntermediateDirectories: true,
+            attributes: [.protectionKey: FileProtectionType.complete]
+        )
+        return dir
+    }
+
     private static func queueFileURL() -> URL? {
-        FileManager.default
-            .urls(for: .documentDirectory, in: .userDomainMask)
-            .first?
-            .appendingPathComponent(queueFileName)
+        try? queueDirectory().appendingPathComponent(queueFileName)
     }
 
     private static func loadFromDisk() -> [StoryOfflineQueueItem] {
@@ -162,7 +179,7 @@ public actor StoryOfflineQueue: OfflineQueueProviding {
         guard let url = Self.queueFileURL() else { return }
         do {
             let data = try encoder.encode(items)
-            try data.write(to: url, options: .atomic)
+            try data.write(to: url, options: [.atomic, .completeFileProtection])
         } catch {
             logger.error("Failed to save StoryOfflineQueue: \(error.localizedDescription)")
         }

@@ -87,6 +87,11 @@ public struct TransportBar: View {
     /// True when this bar wires keyboard shortcuts (always true — used in tests).
     public static let hasKeyboardShortcuts: Bool = true
 
+    /// Documented HIG contract: effective touch target (visual frame + contentShape inset)
+    /// must meet Apple's 44×44pt minimum. Visual icons are 30×30 (or 36×36 for play)
+    /// extended via `.contentShape(Rectangle().inset(by: -7))` / `inset(by: -4)`.
+    public static let minimumHitTargetSize = CGSize(width: 44, height: 44)
+
     // MARK: - Sub-views
 
     private var playButton: some View {
@@ -94,6 +99,7 @@ public struct TransportBar: View {
             Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                 .font(.title3.weight(.semibold))
                 .frame(width: 36, height: 36)
+                .contentShape(Rectangle().inset(by: -4))
         }
         .buttonStyle(.plain)
         .foregroundStyle(MeeshyColors.indigo500)
@@ -118,6 +124,7 @@ public struct TransportBar: View {
             Button(action: onZoomOut) {
                 Image(systemName: "minus.magnifyingglass")
                     .frame(width: 30, height: 30)
+                    .contentShape(Rectangle().inset(by: -7))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "story.timeline.transport.zoomOut", bundle: .module))
@@ -126,6 +133,7 @@ public struct TransportBar: View {
                 Text(Self.zoomLabel(scale: zoomScale))
                     .font(.caption2.weight(.semibold))
                     .frame(minWidth: 36, minHeight: 30)
+                    .contentShape(Rectangle().inset(by: -7))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "story.timeline.transport.zoomReset", bundle: .module))
@@ -133,6 +141,7 @@ public struct TransportBar: View {
             Button(action: onZoomIn) {
                 Image(systemName: "plus.magnifyingglass")
                     .frame(width: 30, height: 30)
+                    .contentShape(Rectangle().inset(by: -7))
             }
             .buttonStyle(.plain)
             .accessibilityLabel(String(localized: "story.timeline.transport.zoomIn", bundle: .module))
@@ -144,6 +153,7 @@ public struct TransportBar: View {
         Button(action: onMuteToggle) {
             Image(systemName: isMuted ? "speaker.slash.fill" : "speaker.wave.2.fill")
                 .frame(width: 30, height: 30)
+                .contentShape(Rectangle().inset(by: -7))
         }
         .buttonStyle(.plain)
         .foregroundStyle(isMuted ? MeeshyColors.error : MeeshyColors.indigo500)

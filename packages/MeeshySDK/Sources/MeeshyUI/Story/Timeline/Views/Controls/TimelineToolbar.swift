@@ -74,12 +74,18 @@ public struct TimelineToolbar: View {
     /// True when this toolbar wires keyboard shortcuts (always true — used in tests).
     public static let hasKeyboardShortcuts: Bool = true
 
+    /// Documented HIG contract: effective touch target (visual frame + contentShape inset)
+    /// must meet Apple's 44×44pt minimum. Undo/redo icons are 30×30 visual, extended
+    /// via `.contentShape(Rectangle().inset(by: -7))` to effective 44×44pt.
+    public static let minimumHitTargetSize = CGSize(width: 44, height: 44)
+
     // MARK: - Sub-views
 
     private var undoButton: some View {
         Button(action: onUndo) {
             Image(systemName: "arrow.uturn.backward")
                 .frame(width: 30, height: 30)
+                .contentShape(Rectangle().inset(by: -7))
         }
         .buttonStyle(.plain)
         .foregroundStyle(canUndo ? MeeshyColors.indigo600 : Color.secondary.opacity(0.4))
@@ -91,6 +97,7 @@ public struct TimelineToolbar: View {
         Button(action: onRedo) {
             Image(systemName: "arrow.uturn.forward")
                 .frame(width: 30, height: 30)
+                .contentShape(Rectangle().inset(by: -7))
         }
         .buttonStyle(.plain)
         .foregroundStyle(canRedo ? MeeshyColors.indigo600 : Color.secondary.opacity(0.4))
