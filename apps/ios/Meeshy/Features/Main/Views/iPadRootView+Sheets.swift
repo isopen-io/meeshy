@@ -19,6 +19,12 @@ extension iPadRootView {
             }
             .sheet(isPresented: $showSharePicker) {
                 if let content = router.pendingShareContent {
+                    // SwiftUI sheets create a separate presentation hierarchy and
+                    // do NOT inherit EnvironmentObjects from the parent view
+                    // automatically. Re-inject the trio that SharePickerView
+                    // declares as @EnvironmentObject (conversationListViewModel,
+                    // router, statusViewModel), otherwise tapping share crashes
+                    // with "EnvironmentObject error → SharePickerView.<missing>".
                     SharePickerView(
                         sharedContent: content,
                         onDismiss: {
@@ -27,6 +33,7 @@ extension iPadRootView {
                     )
                     .environmentObject(conversationViewModel)
                     .environmentObject(router)
+                    .environmentObject(statusViewModel)
                     .presentationDetents([.medium, .large])
                 }
             }
