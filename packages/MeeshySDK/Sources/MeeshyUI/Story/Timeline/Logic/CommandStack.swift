@@ -33,10 +33,11 @@ public struct CommandStackSnapshot: Codable, Sendable {
 
 /// Linear undo/redo stack with FIFO cap and time-based coalescing.
 ///
-/// Thread safety: a single instance is intended to be owned by one
-/// `@MainActor` view model. The class is `@unchecked Sendable` because all
-/// mutation goes through methods, but the contract is "one owner, main actor".
-public final class CommandStack: @unchecked Sendable {
+/// Isolated to `@MainActor`: all access must occur on the main actor, matching
+/// the `TimelineViewModel` that owns this stack. Swift 6 infers `Sendable`
+/// conformance automatically for `@MainActor`-isolated types.
+@MainActor
+public final class CommandStack {
 
     /// Maximum number of commands kept on the stack. Older commands are evicted
     /// FIFO when the cap is reached. Always >= 1.

@@ -207,6 +207,52 @@ public final class StoryComposerViewModel {
     var isMuted: Bool = false
     var hasBackgroundImage: Bool = false
 
+    // MARK: - Timeline V2 wiring
+
+    private var _timelineViewModel: TimelineViewModel?
+
+    public var timelineViewModel: TimelineViewModel {
+        if let existing = _timelineViewModel { return existing }
+        let engine = StoryTimelineEngine()
+        let stack = CommandStack()
+        let snap = SnapEngine(toleranceSeconds: 0.06)
+        let vm = TimelineViewModel(engine: engine, commandStack: stack, snapEngine: snap)
+        _timelineViewModel = vm
+        return vm
+    }
+
+    /// Bridges the composer's `currentSlide` into the timeline editor. Call
+    /// this from `onAppear` and whenever the user switches slides.
+    public func loadCurrentSlideIntoTimeline() {
+        let slide = currentSlide
+        let project = TimelineProject(
+            slideId: slide.id,
+            slideDuration: Float(slide.duration),
+            mediaObjects: slide.effects.mediaObjects ?? [],
+            audioPlayerObjects: slide.effects.audioPlayerObjects ?? [],
+            textObjects: slide.effects.textObjects ?? [],
+            clipTransitions: slide.effects.clipTransitions ?? []
+        )
+        timelineViewModel.bootstrap(
+            project: project,
+            // TODO: Resolve media URLs in a future task — StoryMediaObject has no `url` property,
+            // only `postMediaId`. The engine handles missing URLs gracefully via `onError`.
+            mediaURLs: [:],
+            images: slideImages
+        )
+        // Clear any selection that no longer exists in the new slide.
+        if let id = timelineViewModel.selection.selectedClipId,
+           !projectContains(clipId: id, in: project) {
+            timelineViewModel.selectClip(id: nil)
+        }
+    }
+
+    private func projectContains(clipId: String, in project: TimelineProject) -> Bool {
+        project.mediaObjects.contains(where: { $0.id == clipId })
+        || project.audioPlayerObjects.contains(where: { $0.id == clipId })
+        || project.textObjects.contains(where: { $0.id == clipId })
+    }
+
     // MARK: - Filter
 
     var selectedFilter: String?

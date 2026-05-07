@@ -30,7 +30,7 @@ public final class StoryTimelineEngine {
     public var onTimeUpdate: ((Float) -> Void)?
     public var onPlaybackEnd: (() -> Void)?
     public var onElementBecameActive: ((String) -> Void)?
-    public var onError: ((StoryTimelineEngineError) -> Void)?
+    public var onError: ((Error) -> Void)?
 
     public var currentProjectSnapshot: TimelineProject? { currentProject }
 
@@ -156,7 +156,7 @@ public final class StoryTimelineEngine {
                 asset = try await loadAssetWithRetry(source: source)
             } catch {
                 logger.error("StoryTimelineEngine asset load failed for \(clip.id): \(error.localizedDescription)")
-                onError?(.assetLoadFailed(clipId: clip.id, reason: error.localizedDescription))
+                onError?(StoryTimelineEngineError.assetLoadFailed(clipId: clip.id, reason: error.localizedDescription))
                 continue
             }
             do {
@@ -172,7 +172,7 @@ public final class StoryTimelineEngine {
                 try compositionTrack?.insertTimeRange(assetRange, of: assetTrack, at: start)
             } catch {
                 logger.error("StoryTimelineEngine insertion failed for \(clip.id): \(error.localizedDescription)")
-                onError?(.assetLoadFailed(clipId: clip.id, reason: error.localizedDescription))
+                onError?(StoryTimelineEngineError.assetLoadFailed(clipId: clip.id, reason: error.localizedDescription))
             }
         }
     }
@@ -253,7 +253,7 @@ public final class StoryTimelineEngine {
         ) { [weak self] cmtime in
             guard let self else { return }
             let seconds = Float(CMTimeGetSeconds(cmtime))
-            Task { @MainActor in
+            MainActor.assumeIsolated {
                 self.currentTime = seconds
                 self.onTimeUpdate?(seconds)
             }
@@ -267,8 +267,8 @@ public final class StoryTimelineEngine {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            Task { @MainActor in
-                guard let self else { return }
+            guard let self else { return }
+            MainActor.assumeIsolated {
                 self.isPlaying = false
                 self.onPlaybackEnd?()
             }

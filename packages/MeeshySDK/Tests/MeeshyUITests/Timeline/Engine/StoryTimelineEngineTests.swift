@@ -204,7 +204,9 @@ final class StoryTimelineEngineTests: XCTestCase {
         let mixer = MockAudioMixer()
         let engine = StoryTimelineEngine(audioMixer: mixer)
         var captured: [StoryTimelineEngineError] = []
-        engine.onError = { err in captured.append(err) }
+        engine.onError = { err in
+            if let engineErr = err as? StoryTimelineEngineError { captured.append(engineErr) }
+        }
         let media = StoryMediaObject(
             id: "v1", postMediaId: "pm1",
             mediaType: "video", placement: "media",

@@ -328,6 +328,10 @@ public struct StoryComposerView: View {
         .statusBarHidden()
         .onAppear {
             viewModel.startMemoryObserver()
+            viewModel.loadCurrentSlideIntoTimeline()
+        }
+        .onChange(of: viewModel.currentSlideIndex) { _, _ in
+            viewModel.loadCurrentSlideIntoTimeline()
         }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
@@ -382,7 +386,7 @@ public struct StoryComposerView: View {
             .presentationDetents([.medium])
         }
         .sheet(isPresented: $viewModel.isTimelineVisible) {
-            TimelinePanel(viewModel: viewModel)
+            timelineSection
                 .presentationDetents([.medium, .large])
                 .presentationDragIndicator(.visible)
         }
@@ -715,6 +719,17 @@ public struct StoryComposerView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: viewModel.activeTool)
     }
 
+    // MARK: - Timeline Section (v2 feature flag gate)
+
+    @ViewBuilder
+    private var timelineSection: some View {
+        if StoryTimelineFeatureFlag.shared.isV2Enabled {
+            TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
+        } else {
+            TimelinePanel(viewModel: viewModel)
+        }
+    }
+
     // MARK: - Active Tool Panel
 
     @ViewBuilder
@@ -731,7 +746,7 @@ public struct StoryComposerView: View {
         case .filters:
             StoryFilterGridView(viewModel: viewModel, previewImage: selectedImage)
         case .timeline:
-            TimelinePanel(viewModel: viewModel)
+            timelineSection
         case .none:
             EmptyView()
         }
