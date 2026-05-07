@@ -347,6 +347,7 @@
 		TL6001A001A001A001A00001 /* TrackingLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TL6002A002A002A002A00002 /* TrackingLinksView.swift */; };
 		TM2800000000002F28 /* ToastManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = TM2800000000001F28 /* ToastManager.swift */; };
 		SPS2800000000002F28 /* StoryPublishService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPS2800000000001F28 /* StoryPublishService.swift */; };
+		STNI0001000100010001002 /* StoryNotificationIntent.swift in Sources */ = {isa = PBXBuildFile; fileRef = STNI0001000100010001001 /* StoryNotificationIntent.swift */; };
 		TNAV0001000100010001001 /* TabNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TNAV0001000100010001000 /* TabNavigationTests.swift */; };
 		TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */; };
 		TSTM0001000100010001B001 /* ToastManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSTM0001000100010001F001 /* ToastManagerTests.swift */; };
@@ -754,6 +755,7 @@
 		TL6002A002A002A002A00002 /* TrackingLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TrackingLinksView.swift; sourceTree = "<group>"; };
 		TM2800000000001F28 /* ToastManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManager.swift; sourceTree = "<group>"; };
 		SPS2800000000001F28 /* StoryPublishService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishService.swift; sourceTree = "<group>"; };
+		STNI0001000100010001001 /* StoryNotificationIntent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryNotificationIntent.swift; sourceTree = "<group>"; };
 		TNAV0001000100010001000 /* TabNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNavigationTests.swift; sourceTree = "<group>"; };
 		TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
 		TSTM0001000100010001F001 /* ToastManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManagerTests.swift; sourceTree = "<group>"; };
@@ -1280,8 +1282,25 @@
 				3D60ECC1939C8732A23D9270 /* Main */,
 				B221DC6C45B2A0662AEA790D /* Auth */,
 				CTCT000G000G000G000G0001 /* Contacts */,
+				STRY0001000100010001000 /* Stories */,
 			);
 			path = Features;
+			sourceTree = "<group>";
+		};
+		STRY0001000100010001000 /* Stories */ = {
+			isa = PBXGroup;
+			children = (
+				STRN0001000100010001000 /* Notifications */,
+			);
+			path = Stories;
+			sourceTree = "<group>";
+		};
+		STRN0001000100010001000 /* Notifications */ = {
+			isa = PBXGroup;
+			children = (
+				STNI0001000100010001001 /* StoryNotificationIntent.swift */,
+			);
+			path = Notifications;
 			sourceTree = "<group>";
 		};
 		DD00AA11BB22CC33EE44FF01 /* Models */ = {
@@ -1839,6 +1858,7 @@
 				ML2700000000002F27 /* MagicLinkView.swift in Sources */,
 				TM2800000000002F28 /* ToastManager.swift in Sources */,
 				SPS2800000000002F28 /* StoryPublishService.swift in Sources */,
+				STNI0001000100010001002 /* StoryNotificationIntent.swift in Sources */,
 				PS3900000000002F39 /* ParticipantService.swift in Sources */,
 				OB2900000000002F29 /* OnboardingView.swift in Sources */,
 				OF3000000000002F30 /* OfflineBanner.swift in Sources */,
