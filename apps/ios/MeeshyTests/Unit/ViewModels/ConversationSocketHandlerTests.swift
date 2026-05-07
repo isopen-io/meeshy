@@ -469,21 +469,34 @@ final class ConversationSocketHandlerTests: XCTestCase {
     }
 
     // MARK: - reactionAdded
+    //
+    // Post Phase 1.5: reactionAdded writes via `persistence.appendReaction`.
+    // delegate.messages is no longer mutated — assertions verify the DB row.
 
     func test_reactionAdded_appendsReactionToMessage() async throws {
+        let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()
-        _ = sut
-        delegate.messages = [makeMessage(id: "msg1")]
-        delegate.invalidateIndex()
+        sut.persistence = actor
+        _ = delegate
+
+        // Seed a row so appendReaction has something to update.
+        let record = makeSeedRecord(localId: "msg1", senderId: otherUserId, content: "Hello")
+        try await actor.insertOptimistic(record)
 
         let event = makeReactionEvent(messageId: "msg1", emoji: "thumbsup", participantId: otherUserId, action: "add")
         socket.reactionAdded.send(event)
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 300_000_000)
 
-        XCTAssertEqual(delegate.messages[0].reactions.count, 1)
-        XCTAssertEqual(delegate.messages[0].reactions[0].emoji, "thumbsup")
-        XCTAssertEqual(delegate.messages[0].reactions[0].participantId, otherUserId)
+        let updated = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg1")
+        }
+        XCTAssertNotNil(updated?.reactionsJson, "reactionsJson must be set after appendReaction")
+        let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                                   from: updated!.reactionsJson!)) ?? []
+        XCTAssertEqual(reactions.count, 1)
+        XCTAssertEqual(reactions.first?.emoji, "thumbsup")
+        XCTAssertEqual(reactions.first?.participantId, otherUserId)
     }
 
     func test_reactionAdded_deduplicatesSameEmojiSameUser() async throws {
@@ -499,29 +512,75 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 100_000_000)
 
+        // Without persistence wired, the production reactionAdded path is a no-op
+        // on delegate.messages. The seeded reaction stays as-is — dedup is now
+        // tested at the persistence layer (see appendReaction tests in SDK).
         XCTAssertEqual(delegate.messages[0].reactions.count, 1, "Should not add duplicate reaction")
     }
 
     // MARK: - reactionRemoved
+    //
+    // Post Phase 1.5: reactionRemoved writes via `persistence.removeReaction`.
 
     func test_reactionRemoved_removesMatchingReaction() async throws {
+        let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()
-        _ = sut
-        var msg = makeMessage(id: "msg1")
-        msg.reactions = [
-            Reaction(messageId: "msg1", participantId: otherUserId, emoji: "thumbsup"),
-            Reaction(messageId: "msg1", participantId: currentUserId, emoji: "heart")
-        ]
-        delegate.messages = [msg]
-        delegate.invalidateIndex()
+        sut.persistence = actor
+        _ = delegate
+
+        // Seed a row with two reactions, only one matching the remove event.
+        let r1 = MeeshyReaction(messageId: "msg1", participantId: otherUserId, emoji: "thumbsup")
+        let r2 = MeeshyReaction(messageId: "msg1", participantId: currentUserId, emoji: "heart")
+        let reactionsJson = try? JSONEncoder().encode([r1, r2])
+        var record = makeSeedRecord(localId: "msg1", senderId: otherUserId, content: "Hello")
+        record.reactionsJson = reactionsJson
+        record.reactionCount = 2
+        try await actor.insertOptimistic(record)
 
         let event = makeReactionEvent(messageId: "msg1", emoji: "thumbsup", participantId: otherUserId, action: "remove")
         socket.reactionRemoved.send(event)
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 300_000_000)
 
-        XCTAssertEqual(delegate.messages[0].reactions.count, 1)
-        XCTAssertEqual(delegate.messages[0].reactions[0].emoji, "heart")
+        let after = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg1")
+        }
+        let reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
+                                                   from: after?.reactionsJson ?? Data())) ?? []
+        XCTAssertEqual(reactions.count, 1, "Only the matching reaction must be removed")
+        XCTAssertEqual(reactions.first?.emoji, "heart")
+    }
+
+    // Convenience seed helper used by reaction / read-status tests below.
+    private func makeSeedRecord(localId: String, senderId: String, content: String) -> MessageRecord {
+        MessageRecord(
+            localId: localId, serverId: nil,
+            conversationId: conversationId, senderId: senderId,
+            content: content, originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .delivered, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
     }
 
     // MARK: - typingStarted
@@ -587,16 +646,34 @@ final class ConversationSocketHandlerTests: XCTestCase {
     }
 
     // MARK: - readStatusUpdated
+    //
+    // Post Phase 1.5: readStatusUpdated writes via `persistence.bufferBatchDelivery`,
+    // which transitions every matching row's MessageState through the state machine.
+    // delegate.messages is no longer mutated — assertions verify the DB row state.
 
     func test_readStatusUpdated_updatesDeliveryStatusForOwnMessages() async throws {
+        let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()
-        _ = sut
+        sut.persistence = actor
+        _ = delegate
+
+        // Seed two own-messages in `.sent` state — bufferBatchDelivery only
+        // applies to rows in .sending or .sent states (per actor implementation).
         let msgDate = Date()
-        delegate.messages = [
-            makeMessage(id: "msg1", senderId: currentUserId, isMe: true, deliveryStatus: .sent, createdAt: msgDate),
-            makeMessage(id: "msg2", senderId: currentUserId, isMe: true, deliveryStatus: .sent, createdAt: msgDate.addingTimeInterval(1))
-        ]
-        delegate.invalidateIndex()
+        var record1 = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "First")
+        record1.state = .sent
+        record1.createdAt = msgDate
+        record1.updatedAt = msgDate
+        try await actor.insertOptimistic(record1)
+
+        var record2 = makeSeedRecord(localId: "msg2", senderId: currentUserId, content: "Second")
+        record2.state = .sent
+        record2.createdAt = msgDate.addingTimeInterval(1)
+        record2.updatedAt = msgDate.addingTimeInterval(1)
+        try await actor.insertOptimistic(record2)
+
+        // Boot the actor's write processor so buffered ops are processed.
+        await actor.start()
 
         let event: ReadStatusUpdateEvent = JSONStub.decode("""
         {
@@ -610,20 +687,30 @@ final class ConversationSocketHandlerTests: XCTestCase {
         """)
         socket.readStatusUpdated.send(event)
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        // bufferBatchDelivery is async (queued via AsyncStream); allow it to land.
+        try await Task.sleep(nanoseconds: 600_000_000)
 
-        XCTAssertEqual(delegate.messages[0].deliveryStatus, .read)
-        XCTAssertEqual(delegate.messages[1].deliveryStatus, .read)
+        let after1 = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg1")
+        }
+        let after2 = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg2")
+        }
+        // .read event transitions both rows; readAt is set.
+        XCTAssertNotNil(after1?.readAt, "msg1 must transition to read state via bufferBatchDelivery")
+        XCTAssertNotNil(after2?.readAt, "msg2 must transition to read state via bufferBatchDelivery")
     }
 
     func test_readStatusUpdated_deliveredStatus_updatesCorrectly() async throws {
+        let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()
-        _ = sut
-        let msgDate = Date()
-        delegate.messages = [
-            makeMessage(id: "msg1", senderId: currentUserId, isMe: true, deliveryStatus: .sent, createdAt: msgDate)
-        ]
-        delegate.invalidateIndex()
+        sut.persistence = actor
+        _ = delegate
+
+        var record = makeSeedRecord(localId: "msg1", senderId: currentUserId, content: "Hello")
+        record.state = .sent
+        try await actor.insertOptimistic(record)
+        await actor.start()
 
         let event: ReadStatusUpdateEvent = JSONStub.decode("""
         {
@@ -637,9 +724,13 @@ final class ConversationSocketHandlerTests: XCTestCase {
         """)
         socket.readStatusUpdated.send(event)
 
-        try await Task.sleep(nanoseconds: 100_000_000)
+        try await Task.sleep(nanoseconds: 600_000_000)
 
-        XCTAssertEqual(delegate.messages[0].deliveryStatus, .delivered)
+        let after = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "msg1")
+        }
+        // .delivered event transitions the row to .delivered state and sets deliveredAt.
+        XCTAssertNotNil(after?.deliveredAt, "msg1 must transition to delivered via bufferBatchDelivery")
     }
 
     func test_readStatusUpdated_fromSelf_ignored() async throws {
@@ -834,9 +925,12 @@ final class ConversationSocketHandlerTests: XCTestCase {
         await Task.yield()
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // Verify delegate still got updated (existing behavior preserved)
-        XCTAssertEqual(delegate.messages.count, 1)
-        XCTAssertEqual(delegate.messages[0].content, "Persisted!")
+        // Post Phase 1.5: delegate.messages is no longer appended to. The
+        // socket handler emits UI signals (lastUnreadMessage, newMessageAppended)
+        // and writes the row through persistence — the view layer surfaces
+        // it via store observation. We verify the persistence side here.
+        XCTAssertEqual(delegate.newMessageAppended, 1, "newMessageAppended UI signal must fire")
+        XCTAssertEqual(delegate.lastUnreadMessage?.id, "persist_new", "lastUnreadMessage must be set")
 
         // Verify the record was written to the database
         let records = try await db.read { db in
@@ -891,8 +985,9 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 300_000_000)
 
-        // Delegate still updated
-        XCTAssertTrue(delegate.messages[0].isDeleted)
+        // Post Phase 1.5: delegate.messages is no longer mutated. The
+        // production write goes only through persistence; the view layer
+        // surfaces it via store observation.
 
         // DB record has deletedAt set
         let fetched = try await db.read { db in
@@ -955,9 +1050,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         try await Task.sleep(nanoseconds: 300_000_000)
 
-        // Delegate updated
-        XCTAssertEqual(delegate.messages[0].content, "Edited content")
-        XCTAssertTrue(delegate.messages[0].isEdited)
+        // Post Phase 1.5: delegate.messages is no longer mutated.
 
         // DB record updated
         let fetched = try await db.read { db in
