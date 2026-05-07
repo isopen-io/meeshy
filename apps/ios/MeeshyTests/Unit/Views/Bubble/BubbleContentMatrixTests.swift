@@ -60,6 +60,59 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(content.kind, .burned)
     }
 
+    /// Legacy `ThemedMessageBubble.isViewOnceBurned` does NOT exclude `isMe`:
+    /// the sender also sees the "Vu et efface" state once their view-once
+    /// message has been consumed. BubbleContent.kind must mirror that.
+    func test_burnedViewOnce_includesSenderSide() {
+        let msg = makeMessage(content: "secret", isMe: true, isViewOnce: true, viewOnceCount: 1)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertEqual(content.kind, .burned)
+    }
+
+    func test_mixedVisualAndAudio_carriesBothInMixedCase() {
+        let img = makeAttachment(type: .image)
+        let audio = makeAttachment(type: .audio)
+        let msg = makeMessage(content: "Hi", attachments: [img, audio])
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        guard case .mixed(let visual, let audioAtt, let nonMedia) = content.attachments else {
+            return XCTFail("expected .mixed, got \(content.attachments)")
+        }
+        XCTAssertEqual(visual.map(\.id), [img.id])
+        XCTAssertEqual(audioAtt?.id, audio.id)
+        XCTAssertTrue(nonMedia.isEmpty)
+    }
+
+    func test_mixedVisualAudioFile_carriesAllThreeCategories() {
+        let img = makeAttachment(type: .image)
+        let audio = makeAttachment(type: .audio)
+        let file = makeAttachment(type: .file)
+        let msg = makeMessage(content: "", attachments: [img, audio, file])
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        guard case .mixed(let visual, let audioAtt, let nonMedia) = content.attachments else {
+            return XCTFail("expected .mixed, got \(content.attachments)")
+        }
+        XCTAssertEqual(visual.map(\.id), [img.id])
+        XCTAssertEqual(audioAtt?.id, audio.id)
+        XCTAssertEqual(nonMedia.map(\.id), [file.id])
+    }
+
+    func test_audioPlusFile_routesToMixedWithAudioField() {
+        let audio = makeAttachment(type: .audio)
+        let file = makeAttachment(type: .file)
+        let msg = makeMessage(content: "", attachments: [audio, file])
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        guard case .mixed(let visual, let audioAtt, let nonMedia) = content.attachments else {
+            return XCTFail("expected .mixed, got \(content.attachments)")
+        }
+        XCTAssertTrue(visual.isEmpty)
+        XCTAssertEqual(audioAtt?.id, audio.id)
+        XCTAssertEqual(nonMedia.map(\.id), [file.id])
+    }
+
     // MARK: - Pure helper tests (Step 2.4)
 
     func test_buildAvailableFlags_excludesActiveLang() {

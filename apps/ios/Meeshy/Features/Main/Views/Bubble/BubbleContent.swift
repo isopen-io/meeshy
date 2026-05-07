@@ -18,7 +18,11 @@ struct BubbleContent: Equatable {
         case visualGrid([MeeshyMessageAttachment])    // images + videos
         case audio(MeeshyMessageAttachment)
         case nonMedia([MeeshyMessageAttachment])      // file + location
-        case mixed(visual: [MeeshyMessageAttachment], nonMedia: [MeeshyMessageAttachment])
+        /// Mixed content: any combination of visual + non-media + audio
+        /// when more than one category is present. Mirrors legacy bubble
+        /// rendering which composed visualMediaGrid + audio standalone +
+        /// non-media attachments inside a single bubble.
+        case mixed(visual: [MeeshyMessageAttachment], audio: MeeshyMessageAttachment?, nonMedia: [MeeshyMessageAttachment])
 
         // TODO(Task14): expand equality to cover mutation-prone fields (thumbnailUrl,
         // isBlurred, viewOnceCount, width/height, duration, fileUrl) — id-only comparison
@@ -33,8 +37,10 @@ struct BubbleContent: Equatable {
                 return a.id == b.id
             case (.nonMedia(let a), .nonMedia(let b)):
                 return a.map(\.id) == b.map(\.id)
-            case (.mixed(let av, let an), .mixed(let bv, let bn)):
-                return av.map(\.id) == bv.map(\.id) && an.map(\.id) == bn.map(\.id)
+            case (.mixed(let av, let aa, let an), .mixed(let bv, let ba, let bn)):
+                return av.map(\.id) == bv.map(\.id)
+                    && aa?.id == ba?.id
+                    && an.map(\.id) == bn.map(\.id)
             default:
                 return false
             }
@@ -103,7 +109,7 @@ struct BubbleContent: Equatable {
     var hasTextOrNonMediaContent: Bool {
         guard let text else {
             if case .nonMedia = attachments { return true }
-            if case .mixed = attachments { return true }
+            if case .mixed(_, _, let nonMedia) = attachments { return !nonMedia.isEmpty }
             return false
         }
         return !text.raw.isEmpty

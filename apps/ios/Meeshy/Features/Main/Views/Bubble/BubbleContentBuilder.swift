@@ -25,9 +25,14 @@ extension BubbleContent {
         self.senderName = message.senderName
 
         // --- Kind ---
+        // Note: `.burned` does NOT exclude `isMe`. The sender also sees the
+        // "Vu et efface" state once their view-once message has been consumed,
+        // matching the legacy `ThemedMessageBubble.isViewOnceBurned` semantics
+        // (the wrapper additionally gates on `blurController.isRevealed`,
+        // which is a runtime concern handled in the wrapper, not in BubbleContent).
         if message.isDeleted {
             self.kind = .deleted
-        } else if message.isViewOnce && message.viewOnceCount > 0 && !message.isMe {
+        } else if message.isViewOnce && message.viewOnceCount > 0 {
             self.kind = .burned
         } else {
             self.kind = .standard
@@ -106,26 +111,22 @@ extension BubbleContent {
         let audio = message.attachments.first(where: { $0.type == .audio })
         let nonMedia = message.attachments.filter { $0.type == .file || $0.type == .location }
 
-        // TODO(Task14): the BubbleContent.Attachments enum (Task 1) has no case
-        // carrying audio alongside visual/nonMedia. Below, when a message has BOTH
-        // audio AND visual/nonMedia, audio is silently dropped. Extend the enum
-        // (e.g. add `audio` as an orthogonal optional field, or add .visualGridWithAudio
-        // / .nonMediaWithAudio cases) when migrating ThemedMessageBubble — verify
-        // against legacy rendering: `git -C ../v2_meeshy-bubble show dev:apps/ios/Meeshy/Features/Main/Views/ThemedMessageBubble.swift`
-        // lines 132-148 (visualAttachments + audioAttachments + nonMediaAttachments).
+        // Pure single-category cases route to dedicated enum variants. Anything
+        // mixing two-or-more categories falls into `.mixed` which carries audio
+        // alongside visual/nonMedia so legacy "image + audio + file" rendering
+        // is preserved. Audio is intentionally optional inside `.mixed` because
+        // visual+nonMedia without audio is also a valid mix.
         switch (visual.isEmpty, audio == nil, nonMedia.isEmpty) {
         case (true, true, true):
             self.attachments = .none
-        case (false, _, true):
+        case (false, true, true):
             self.attachments = .visualGrid(visual)
         case (true, false, true):
             self.attachments = .audio(audio!)
         case (true, true, false):
             self.attachments = .nonMedia(nonMedia)
         default:
-            self.attachments = visual.isEmpty
-                ? .nonMedia(nonMedia)
-                : .mixed(visual: visual, nonMedia: nonMedia)
+            self.attachments = .mixed(visual: visual, audio: audio, nonMedia: nonMedia)
         }
 
         // --- Ephemeral ---
@@ -174,6 +175,12 @@ extension BubbleContent {
            pref.targetLanguage.lowercased() == active {
             return pref.translatedContent
         }
+        // TODO(prisme): the last-resort fallback to `preferredTranslation?.translatedContent`
+        // diverges from the Prisme rule #1 ("if no translation matches the preferred
+        // language, return the original content — never tomber sur translations.first").
+        // We mirror legacy ThemedMessageBubble.effectiveContent for visual fidelity
+        // during the bubble-decompose refactor; align with `resolveUserLanguage()`
+        // in a separate audit. Source: apps/ios/CLAUDE.md "Régles critiques du Prisme".
         return preferredTranslation?.translatedContent ?? message.content
     }
 
