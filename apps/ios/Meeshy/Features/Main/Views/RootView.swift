@@ -37,7 +37,12 @@ struct RootView: View {
     @State private var showFeed = false
     @State private var feedWasVisibleBeforeNav = false
     @State private var showMenu = false
-    @State private var storyViewerRequest: StoryViewerRequest?
+    /// Hoisted out of `@State` (Phase H) so deep-stack screens such as
+    /// `StoryNotificationTargetScreen` can present the viewer through
+    /// `.environmentObject` injection without threading a binding through
+    /// every parent view. The coordinator's `pendingRequest` mirrors the
+    /// legacy `Identifiable?` contract expected by `.fullScreenCover(item:)`.
+    @StateObject private var storyViewerCoordinator = StoryViewerCoordinator()
 
     // Free-position button coordinates (persisted as "x,y" strings, 0-1 normalized)
     @AppStorage("feedButtonPosition") private var feedButtonPosition: String = "0.0,0.0"  // Top-left default
@@ -83,7 +88,7 @@ struct RootView: View {
                     onStoryViewRequest: { userId, _ in
                         Logger.messages.info("[RootView] onStoryViewRequest userId=\(userId, privacy: .public) isEmpty=\(userId.isEmpty)")
                         guard !userId.isEmpty else { return }
-                        storyViewerRequest = StoryViewerRequest(id: userId)
+                        storyViewerCoordinator.present(StoryViewerRequest(id: userId))
                     },
                     onNewConversation: { showNewConversation = true }
                 )
@@ -295,6 +300,7 @@ struct RootView: View {
         .environmentObject(storyViewModel)
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
+        .environmentObject(storyViewerCoordinator)
         .onChange(of: router.sceneTitle) { _, title in
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
@@ -348,16 +354,16 @@ struct RootView: View {
                 PushNotificationManager.shared.clearPendingNotification()
             }
         }
-        .fullScreenCover(item: $storyViewerRequest) { request in
+        .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
             StoryViewerContainer(
                 viewModel: storyViewModel,
                 userId: request.id,
                 isPresented: Binding(
-                    get: { storyViewerRequest != nil },
-                    set: { if !$0 { storyViewerRequest = nil } }
+                    get: { storyViewerCoordinator.pendingRequest != nil },
+                    set: { if !$0 { storyViewerCoordinator.dismiss() } }
                 ),
                 onReplyToStory: { replyContext in
-                    storyViewerRequest = nil
+                    storyViewerCoordinator.dismiss()
                     router.navigateToStoryReply(replyContext, conversationListViewModel: conversationViewModel)
                 },
                 presentationSource: "RootView.fromConv",
@@ -411,6 +417,15 @@ struct RootView: View {
             let username = info["username"] ?? userId
             router.deepLinkProfileUser = ProfileSheetUser(userId: userId, username: username)
         }
+        // Phase H — `StoryExpiredContent` posts `.openStoryComposer` from the
+        // notification flow when the underlying story is gone. Routing the
+        // composer through `StoryViewModel.showStoryComposer` reuses the
+        // single existing presentation surface (`StoryTrayView` listens on
+        // the same flag) so the composer animates in cleanly without
+        // stacking covers.
+        .onReceive(NotificationCenter.default.publisher(for: .openStoryComposer)) { _ in
+            storyViewModel.showStoryComposer = true
+        }
         .onReceive(NotificationCenter.default.publisher(for: Notification.Name("pushNavigateToRoute"))) { notification in
             guard let routeName = notification.object as? String else { return }
             if routeName.hasPrefix("postDetail:") {
@@ -419,7 +434,7 @@ struct RootView: View {
             } else if routeName.hasPrefix("storyDetail:") {
                 let postId = String(routeName.dropFirst("storyDetail:".count))
                 if let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                    storyViewerRequest = StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id)
+                    storyViewerCoordinator.present(StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id))
                 } else {
                     router.push(.postDetail(postId))
                 }
@@ -660,7 +675,7 @@ struct RootView: View {
         case .storyReaction, .statusReaction:
             if let postId = ctx.postId, !postId.isEmpty,
                let groupIdx = storyViewModel.groupIndex(forStoryId: postId) {
-                storyViewerRequest = StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id)
+                storyViewerCoordinator.present(StoryViewerRequest(id: storyViewModel.storyGroups[groupIdx].id))
             } else if let postId = ctx.postId, !postId.isEmpty {
                 router.push(.postDetail(postId))
             }
