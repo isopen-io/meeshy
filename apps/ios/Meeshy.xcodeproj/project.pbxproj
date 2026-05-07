@@ -353,6 +353,7 @@
 		STLV0001000100010001002 /* StoryNotificationLoadingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = STLV0001000100010001001 /* StoryNotificationLoadingView.swift */; };
 		STIA0001000100010001002 /* StoryViewerInitialAction.swift in Sources */ = {isa = PBXBuildFile; fileRef = STIA0001000100010001001 /* StoryViewerInitialAction.swift */; };
 		STAV0001000100010001002 /* StoryActiveBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = STAV0001000100010001001 /* StoryActiveBridge.swift */; };
+		STVC0001000100010001002 /* StoryViewerCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = STVC0001000100010001001 /* StoryViewerCoordinator.swift */; };
 		STVT0001000100010001002 /* StoryNotificationTargetViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STVT0001000100010001001 /* StoryNotificationTargetViewModelTests.swift */; };
 		STET0001000100010001002 /* StoryExpiredContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STET0001000100010001001 /* StoryExpiredContentTests.swift */; };
 		STAB0001000100010001002 /* StoryActiveBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STAB0001000100010001001 /* StoryActiveBridgeTests.swift */; };
@@ -769,6 +770,7 @@
 		STLV0001000100010001001 /* StoryNotificationLoadingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryNotificationLoadingView.swift; sourceTree = "<group>"; };
 		STIA0001000100010001001 /* StoryViewerInitialAction.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerInitialAction.swift; sourceTree = "<group>"; };
 		STAV0001000100010001001 /* StoryActiveBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryActiveBridge.swift; sourceTree = "<group>"; };
+		STVC0001000100010001001 /* StoryViewerCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerCoordinator.swift; sourceTree = "<group>"; };
 		STVT0001000100010001001 /* StoryNotificationTargetViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryNotificationTargetViewModelTests.swift; sourceTree = "<group>"; };
 		STET0001000100010001001 /* StoryExpiredContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExpiredContentTests.swift; sourceTree = "<group>"; };
 		STAB0001000100010001001 /* StoryActiveBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryActiveBridgeTests.swift; sourceTree = "<group>"; };
@@ -1320,6 +1322,7 @@
 				STNV0001000100010001001 /* StoryNotificationTargetViewModel.swift */,
 				STIA0001000100010001001 /* StoryViewerInitialAction.swift */,
 				STAV0001000100010001001 /* StoryActiveBridge.swift */,
+				STVC0001000100010001001 /* StoryViewerCoordinator.swift */,
 			);
 			path = Notifications;
 			sourceTree = "<group>";
@@ -1912,6 +1915,7 @@
 				STLV0001000100010001002 /* StoryNotificationLoadingView.swift in Sources */,
 				STIA0001000100010001002 /* StoryViewerInitialAction.swift in Sources */,
 				STAV0001000100010001002 /* StoryActiveBridge.swift in Sources */,
+				STVC0001000100010001002 /* StoryViewerCoordinator.swift in Sources */,
 				PS3900000000002F39 /* ParticipantService.swift in Sources */,
 				OB2900000000002F29 /* OnboardingView.swift in Sources */,
 				OF3000000000002F30 /* OfflineBanner.swift in Sources */,
