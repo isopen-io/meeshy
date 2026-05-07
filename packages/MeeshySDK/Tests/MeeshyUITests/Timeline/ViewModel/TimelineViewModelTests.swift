@@ -255,6 +255,59 @@ final class TimelineViewModelTests: XCTestCase {
         XCTAssertEqual(sut.errorMessage, "boom")
     }
 
+    // MARK: - Wave 2: VM edit methods
+
+    func test_setClipVolume_pushesCommand_andUpdatesProject() async {
+        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "v1", startTime: 0, duration: 5)
+        let (sut, _) = makeSUT(project: project)
+        await sut.awaitConfigured()
+        sut.setClipVolume(id: "v1", volume: 0.5)
+        XCTAssertTrue(sut.canUndo, "setClipVolume should push a command onto the stack")
+        let media = sut.project.mediaObjects.first { $0.id == "v1" }
+        XCTAssertEqual(media?.volume ?? -1, 0.5, accuracy: 0.001,
+                       "project volume must reflect the new value")
+    }
+
+    func test_deleteClip_removesFromProject_andClearsSelection() async {
+        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "v1", startTime: 0, duration: 5)
+        let (sut, _) = makeSUT(project: project)
+        await sut.awaitConfigured()
+        sut.selectClip(id: "v1")
+        sut.deleteClip(id: "v1")
+        XCTAssertEqual(sut.project.mediaObjects.count, 0, "clip must be removed from project")
+        XCTAssertNil(sut.selection.selectedClipId, "selection must be cleared after delete")
+        XCTAssertTrue(sut.canUndo, "deleteClip must push a command")
+    }
+
+    func test_changeTransition_modifiesKindAndDuration() async {
+        let project = TimelineProjectFactory.projectWithTwoContiguousClips()
+        let (sut, _) = makeSUT(project: project)
+        await sut.awaitConfigured()
+        sut.addTransition(fromClipId: "clip-a", toClipId: "clip-b", kind: .crossfade, duration: 0.5)
+        guard let transitionId = sut.project.clipTransitions.first?.id else {
+            return XCTFail("addTransition must create a transition first")
+        }
+        sut.changeTransition(transitionId: transitionId, kind: .dissolve, duration: 0.8)
+        let updated = sut.project.clipTransitions.first
+        XCTAssertEqual(updated?.kind, .dissolve, "transition kind must be updated")
+        XCTAssertEqual(updated?.duration ?? -1, 0.8, accuracy: 0.001,
+                       "transition duration must be updated")
+    }
+
+    func test_removeTransition_clearsFromProject() async {
+        let project = TimelineProjectFactory.projectWithTwoContiguousClips()
+        let (sut, _) = makeSUT(project: project)
+        await sut.awaitConfigured()
+        sut.addTransition(fromClipId: "clip-a", toClipId: "clip-b", kind: .crossfade, duration: 0.5)
+        guard let transitionId = sut.project.clipTransitions.first?.id else {
+            return XCTFail("addTransition must create a transition first")
+        }
+        sut.removeTransition(transitionId: transitionId)
+        XCTAssertEqual(sut.project.clipTransitions.count, 0,
+                       "removeTransition must remove the transition from the project")
+        XCTAssertTrue(sut.canUndo, "removeTransition must push a command")
+    }
+
     // MARK: - Task 15
 
     func test_restoreDraft_reapplysCommandHistory() async {
