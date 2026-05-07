@@ -53,3 +53,31 @@ public extension TimelineMediaSource {
         TimelineMediaSource(id: audio.id, kind: .audio, url: audioURLs[audio.id])
     }
 }
+
+public enum TimelineMediaSourceError: Error, Equatable, Sendable {
+    case missingURL
+    case notApplicableForImage
+    case assetLoadFailed(String)
+}
+
+public extension TimelineMediaSource {
+    /// Charge l'asset AVFoundation associé en chargeant `.tracks` et `.duration` de manière asynchrone.
+    /// Throws si le kind est `.image` (pas d'asset AV) ou si l'URL est nil ou si le chargement échoue.
+    nonisolated func loadAsset() async throws -> AVURLAsset {
+        guard kind != .image else {
+            throw TimelineMediaSourceError.notApplicableForImage
+        }
+        guard let url else {
+            throw TimelineMediaSourceError.missingURL
+        }
+        let asset = AVURLAsset(url: url, options: [
+            AVURLAssetPreferPreciseDurationAndTimingKey: true
+        ])
+        do {
+            _ = try await asset.load(.tracks, .duration)
+            return asset
+        } catch {
+            throw TimelineMediaSourceError.assetLoadFailed(error.localizedDescription)
+        }
+    }
+}

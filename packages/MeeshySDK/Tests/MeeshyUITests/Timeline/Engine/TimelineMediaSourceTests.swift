@@ -53,4 +53,28 @@ final class TimelineMediaSourceTests: XCTestCase {
         XCTAssertEqual(source?.url, url)
         XCTAssertEqual(source?.id, "a1")
     }
+
+    func test_loadAsset_videoSourceWithMissingURL_throwsMissingURL() async {
+        let source = TimelineMediaSource(id: "v1", kind: .video, url: nil)
+        do {
+            _ = try await source.loadAsset()
+            XCTFail("Expected throw")
+        } catch let error as TimelineMediaSourceError {
+            XCTAssertEqual(error, .missingURL)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
+
+    func test_loadAsset_imageSource_throwsNotApplicable() async {
+        let source = TimelineMediaSource(id: "i1", kind: .image, url: nil)
+        do {
+            _ = try await source.loadAsset()
+            XCTFail("Expected throw")
+        } catch let error as TimelineMediaSourceError {
+            XCTAssertEqual(error, .notApplicableForImage)
+        } catch {
+            XCTFail("Unexpected error: \(error)")
+        }
+    }
 }
