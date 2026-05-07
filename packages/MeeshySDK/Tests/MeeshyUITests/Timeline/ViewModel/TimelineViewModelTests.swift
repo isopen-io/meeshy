@@ -176,6 +176,85 @@ final class TimelineViewModelTests: XCTestCase {
         XCTAssertTrue(sut.isSnapEnabled)
     }
 
+    // MARK: - Phase 3+4 VM review fixes
+
+    func test_endClipDrag_skipsCommand_whenDeltaIsZero() async {
+        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "v1", startTime: 0, duration: 5)
+        let (sut, _) = makeSUT(project: project)
+        await sut.awaitConfigured()
+
+        sut.beginClipDrag(clipId: "v1")
+        // Don't move — end immediately at origin
+        sut.endClipDrag()
+
+        XCTAssertFalse(sut.canUndo, "No-op drag must not push a command")
+    }
+
+    func test_splitAtPlayhead_atClipEnd_clampsRightToMinDuration() async {
+        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "v1", startTime: 0, duration: 5)
+        let (sut, _) = makeSUT(project: project)
+        await sut.awaitConfigured()
+        sut.selectClip(id: "v1")
+        sut.scrub(to: 5.0) // exact end of clip
+        sut.splitSelectedAtPlayhead()
+
+        let durations = sut.project.mediaObjects.map { $0.duration ?? 0 }.sorted()
+        XCTAssertEqual(durations.count, 2)
+        XCTAssertGreaterThan(durations[0], 0, "Min duration must be > 0 to satisfy AVPlayer")
+    }
+
+    func test_addTransition_rejectsSelfLoop() async {
+        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "v1", startTime: 0, duration: 5)
+        let (sut, _) = makeSUT(project: project)
+        await sut.awaitConfigured()
+        sut.addTransition(fromClipId: "v1", toClipId: "v1", kind: .crossfade, duration: 0.5)
+        XCTAssertEqual(sut.project.clipTransitions.count, 0)
+    }
+
+    func test_addTransition_rejectsMissingClipIds() async {
+        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "v1", startTime: 0, duration: 5)
+        let (sut, _) = makeSUT(project: project)
+        await sut.awaitConfigured()
+        sut.addTransition(fromClipId: "v1", toClipId: "ghost", kind: .crossfade, duration: 0.5)
+        XCTAssertEqual(sut.project.clipTransitions.count, 0)
+    }
+
+    func test_scrub_NaN_isNoOp() async {
+        let project = TimelineProjectFactory.projectWithVideoClip(startTime: 0, duration: 5)
+        let (sut, _) = makeSUT(project: project)
+        await sut.awaitConfigured()
+        sut.scrub(to: .nan)
+        XCTAssertEqual(sut.currentTime, 0, "scrub with NaN must remain at 0")
+    }
+
+    func test_cancelClipDrag_restoresOriginalStartTime() async {
+        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "v1", startTime: 1.0, duration: 5)
+        let (sut, _) = makeSUT(project: project)
+        await sut.awaitConfigured()
+        sut.beginClipDrag(clipId: "v1")
+        sut.dragClipMoved(rawTime: 3.0, snapCandidates: [])
+        sut.cancelClipDrag()
+        XCTAssertEqual(sut.project.mediaObjects.first?.startTime ?? -1, 1.0, accuracy: 0.001)
+        XCTAssertNil(sut.selection.activeDrag)
+        XCTAssertFalse(sut.canUndo)
+    }
+
+    func test_onError_callback_setsErrorMessage() async {
+        let project = TimelineProjectFactory.emptyProject()
+        let engine = MockStoryTimelineEngine()
+        let sut = TimelineViewModel(
+            engine: engine,
+            commandStack: CommandStack(),
+            snapEngine: SnapEngine(toleranceSeconds: 0.1)
+        )
+        sut.bootstrap(project: project, mediaURLs: [:], images: [:])
+        await sut.awaitConfigured()
+        let testError = NSError(domain: "test", code: 42,
+                                userInfo: [NSLocalizedDescriptionKey: "boom"])
+        engine.onError?(testError)
+        XCTAssertEqual(sut.errorMessage, "boom")
+    }
+
     // MARK: - Task 15
 
     func test_restoreDraft_reapplysCommandHistory() async {

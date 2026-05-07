@@ -28,11 +28,13 @@ extension TimelineViewModel {
     /// Trim the start handle of a clip by `deltaTimeSeconds` (positive = shrink from left).
     /// Pushes a `TrimClipCommand` onto the stack.
     public func trimClipStart(id: String, deltaTimeSeconds: Float) {
+        guard deltaTimeSeconds.isFinite else { return }
         guard let kind = clipKind(forId: id),
               let currentStart = clipStartTime(id: id),
               let currentDuration = clipDuration(id: id) else { return }
-        let newStart = currentStart + deltaTimeSeconds
-        let newDuration = max(0.05, currentDuration - deltaTimeSeconds)
+        let newStart = max(0, currentStart + deltaTimeSeconds)
+        let actualDelta = newStart - currentStart
+        let newDuration = max(0.05, currentDuration - actualDelta)
         let cmd = TrimClipCommand(
             clipId: id, kind: kind,
             oldStartTime: currentStart, oldDuration: currentDuration,
