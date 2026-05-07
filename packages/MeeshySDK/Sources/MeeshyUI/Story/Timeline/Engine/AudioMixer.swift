@@ -14,6 +14,7 @@ public protocol AudioMixerProviding: AnyObject {
     func setVolume(_ volume: Float, for audioId: String)
     func setMute(_ muted: Bool)
     func teardown()
+    func prepareAllNodes()
 }
 
 @MainActor
@@ -128,6 +129,12 @@ public final class AudioMixer: AudioMixerProviding {
             engine.stop()
         }
         _isPlayingStorage = false
+    }
+
+    public func prepareAllNodes() {
+        for node in nodes.values {
+            node.prepare(withFrameCount: 4096)
+        }
     }
 
     private func applyMute() {

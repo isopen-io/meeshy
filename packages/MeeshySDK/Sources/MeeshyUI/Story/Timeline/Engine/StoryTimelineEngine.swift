@@ -85,10 +85,26 @@ public final class StoryTimelineEngine {
     }
     #endif
 
+    private func configureAudioSession() {
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(
+                .playAndRecord,
+                mode: .default,
+                options: [.mixWithOthers, .defaultToSpeaker]
+            )
+            try session.setPreferredIOBufferDuration(0.005)
+            try session.setActive(true, options: [.notifyOthersOnDeactivation])
+        } catch {
+            logger.error("StoryTimelineEngine audio session setup failed: \(error.localizedDescription)")
+        }
+    }
+
     private func configureCore(
         project: TimelineProject,
         mediaURLs: [String: URL]
     ) async {
+        configureAudioSession()
         tearDown()
         currentProject = project
 
@@ -117,6 +133,7 @@ public final class StoryTimelineEngine {
         } catch {
             logger.error("AudioMixer configure failed: \(error.localizedDescription)")
         }
+        audioMixer.prepareAllNodes()
     }
 
     private func insertVideoTracks(

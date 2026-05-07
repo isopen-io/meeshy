@@ -18,6 +18,7 @@ final class MockAudioMixer: AudioMixerProviding {
     private(set) var setVolumeCalls: [(audioId: String, volume: Float)] = []
     private(set) var setMuteCalls: [Bool] = []
     private(set) var teardownCallCount = 0
+    private(set) var prepareAllNodesCallCount = 0
 
     var configureError: Error?
     var playError: Error?
@@ -51,6 +52,8 @@ final class MockAudioMixer: AudioMixerProviding {
 
     func teardown() { teardownCallCount += 1 }
 
+    func prepareAllNodes() { prepareAllNodesCallCount += 1 }
+
     func reset() {
         configureCallCount = 0
         lastConfiguredAudioCount = 0
@@ -61,6 +64,7 @@ final class MockAudioMixer: AudioMixerProviding {
         setVolumeCalls.removeAll()
         setMuteCalls.removeAll()
         teardownCallCount = 0
+        prepareAllNodesCallCount = 0
         configureError = nil
         playError = nil
         isMuted = false
