@@ -51,6 +51,28 @@ extension iPadRootView {
                     presentationSource: "iPadRootView.conv"
                 )
             }
+            // Coordinator-driven viewer cover used by
+            // `StoryNotificationTargetScreen` → `StoryActiveBridge`. Mirrors
+            // RootView (iPhone): assigning `pendingRequest` presents the
+            // viewer, `nil` dismisses. Decoupled from
+            // `showStoryViewerFromConv` so the legacy tray path keeps its
+            // own cover.
+            .fullScreenCover(item: $storyViewerCoordinator.pendingRequest) { request in
+                StoryViewerContainer(
+                    viewModel: storyViewModel,
+                    userId: request.id,
+                    isPresented: Binding(
+                        get: { storyViewerCoordinator.pendingRequest != nil },
+                        set: { if !$0 { storyViewerCoordinator.dismiss() } }
+                    ),
+                    onReplyToStory: { replyContext in
+                        storyViewerCoordinator.dismiss()
+                        handleStoryReply(replyContext)
+                    },
+                    presentationSource: "iPadRootView.fromConv",
+                    initialAction: request.initialAction
+                )
+            }
             .fullScreenCover(isPresented: Binding(
                 get: { callManager.callState.isActive },
                 set: { if !$0 { callManager.endCall() } }
