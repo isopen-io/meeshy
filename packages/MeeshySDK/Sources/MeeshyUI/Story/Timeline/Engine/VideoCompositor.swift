@@ -82,9 +82,22 @@ public struct VideoCompositor: Sendable {
 
         videoComposition.instructions = instructions
 
-        // Attach GPU dissolve compositor when any dissolve transition exists
+        // Attach compositor based on transition kinds present.
+        // Priority: non-built-in kinds → CustomTransitionCompositor (forward compat)
+        //           dissolve only      → DissolveVideoCompositor (CIDissolveTransition)
+        //           crossfade only     → no custom compositor (native opacity ramp)
         let hasDissolve = project.clipTransitions.contains { $0.kind == .dissolve }
-        if hasDissolve {
+        let usesCustomKind = project.clipTransitions.contains { transition in
+            switch transition.kind {
+            case .crossfade, .dissolve:
+                return false
+            @unknown default:
+                return true
+            }
+        }
+        if usesCustomKind {
+            videoComposition.customVideoCompositorClass = CustomTransitionCompositor.self
+        } else if hasDissolve {
             videoComposition.customVideoCompositorClass = DissolveVideoCompositor.self
         }
 
