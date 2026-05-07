@@ -9,18 +9,28 @@ public protocol StoryServiceProviding: Sendable {
     func react(storyId: String, emoji: String) async throws
     func comment(storyId: String, content: String) async throws -> APIPostComment
     func repost(storyId: String) async throws
+    func cachedPost(id: String) -> APIPost?
+    func fetchPost(id: String) async throws -> APIPost
 }
 
 public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     public static let shared = StoryService()
     private let api: APIClientProviding
 
+    // In-memory cache used by notification deep-links and reposts that need a
+    // post by id without re-listing the feed. Stories expire after 24h so a
+    // single-session dictionary is sufficient — no cross-session persistence.
+    private let cacheLock = NSLock()
+    private var postCache: [String: APIPost] = [:]
+
     init(api: APIClientProviding = APIClient.shared) {
         self.api = api
     }
 
     public func list(cursor: String? = nil, limit: Int = 50) async throws -> PaginatedAPIResponse<[APIPost]> {
-        try await api.paginatedRequest(endpoint: "/posts/feed/stories", cursor: cursor, limit: limit)
+        let response: PaginatedAPIResponse<[APIPost]> = try await api.paginatedRequest(endpoint: "/posts/feed/stories", cursor: cursor, limit: limit)
+        cachePosts(response.data)
+        return response
     }
 
     public func markViewed(storyId: String) async throws {
@@ -49,5 +59,31 @@ public final class StoryService: StoryServiceProviding, @unchecked Sendable {
     public func repost(storyId: String) async throws {
         let body = RepostRequest()
         let _: APIResponse<[String: String]> = try await api.post(endpoint: "/posts/\(storyId)/repost", body: body)
+    }
+
+    // MARK: - Single-post cache & fetch
+
+    public func cachedPost(id: String) -> APIPost? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return postCache[id]
+    }
+
+    public func fetchPost(id: String) async throws -> APIPost {
+        let response: APIResponse<APIPost> = try await api.request(endpoint: "/posts/\(id)")
+        cachePost(response.data)
+        return response.data
+    }
+
+    private func cachePost(_ post: APIPost) {
+        cacheLock.lock()
+        postCache[post.id] = post
+        cacheLock.unlock()
+    }
+
+    private func cachePosts(_ posts: [APIPost]) {
+        cacheLock.lock()
+        for post in posts { postCache[post.id] = post }
+        cacheLock.unlock()
     }
 }
