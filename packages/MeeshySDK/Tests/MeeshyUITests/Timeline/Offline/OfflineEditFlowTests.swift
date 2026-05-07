@@ -1,0 +1,167 @@
+import XCTest
+@testable import MeeshyUI
+@testable import MeeshySDK
+
+/// End-to-end offline edit flow tests (Task 70).
+/// Verifies that editing actions work without network, and that publish
+/// enqueues to `StoryOfflineQueue` instead of failing (Task 72).
+///
+/// Pragmatic deviations from plan:
+/// - `TimelineViewModel.addPhoto/addVideo/addAudio` are not part of the Plan 4
+///   API (they exist in `StoryComposerViewModel`). These tests focus on the
+///   ACTUAL offline-publish contract that was implemented: `handlePublishTap`
+///   with injected `MockNetworkMonitor` and `MockOfflineQueue`.
+/// - `saveDraft`/`exportDraftSnapshot`/`loadDraftSnapshot` are not yet in
+///   `TimelineViewModel` (wired in follow-up). Draft round-trip is exercised
+///   via `TimelineProject` value semantics.
+@MainActor
+final class OfflineEditFlowTests: XCTestCase {
+
+    // MARK: - Factory
+
+    private func makeSUT(isOnline: Bool = false) -> (
+        vm: TimelineViewModel,
+        engine: MockStoryTimelineEngine,
+        network: MockNetworkMonitor,
+        queue: MockOfflineQueue
+    ) {
+        let engine = MockStoryTimelineEngine()
+        let network = MockNetworkMonitor()
+        network.isOnline = isOnline
+        let queue = MockOfflineQueue()
+        let sut = TimelineViewModel(
+            engine: engine,
+            commandStack: CommandStack(),
+            snapEngine: SnapEngine(toleranceSeconds: 0.06)
+        )
+        sut.bootstrap(project: TimelineProjectFactory.emptyProject(),
+                      mediaURLs: [:], images: [:])
+        return (sut, engine, network, queue)
+    }
+
+    // MARK: - Task 70: Offline edit — no network required for local operations
+
+    func test_selectClip_worksOffline() async {
+        let (vm, _, _, _) = makeSUT(isOnline: false)
+        let project = TimelineProjectFactory.projectWithVideoClip()
+        vm.bootstrap(project: project, mediaURLs: [:], images: [:])
+        await vm.awaitConfigured()
+
+        vm.selectClip(id: "clip-1")
+        XCTAssertEqual(vm.selection.selectedClipId, "clip-1",
+                       "Clip selection must work without network")
+    }
+
+    func test_undo_redo_worksOffline() async {
+        let (vm, _, _, _) = makeSUT(isOnline: false)
+        let project = TimelineProjectFactory.projectWithVideoClip()
+        vm.bootstrap(project: project, mediaURLs: [:], images: [:])
+        await vm.awaitConfigured()
+
+        // Drag clip to generate a command
+        vm.beginClipDrag(clipId: "clip-1")
+        vm.dragClipMoved(rawTime: 2.0, snapCandidates: [])
+        vm.endClipDrag()
+        XCTAssertTrue(vm.canUndo, "Must be able to undo while offline")
+
+        vm.undo()
+        XCTAssertFalse(vm.canUndo, "Undo must revert the command stack while offline")
+        XCTAssertTrue(vm.canRedo, "Redo must be available after undo while offline")
+
+        vm.redo()
+        XCTAssertTrue(vm.canUndo, "Redo must re-apply the command stack while offline")
+    }
+
+    func test_zoomScale_changesOffline() {
+        let (vm, _, _, _) = makeSUT(isOnline: false)
+        vm.zoomScale = 2.0
+        XCTAssertEqual(vm.zoomScale, 2.0, "Zoom changes must work without network")
+    }
+
+    func test_errorMessage_isNilAfterOfflineEditing() async {
+        let (vm, _, _, _) = makeSUT(isOnline: false)
+        await vm.awaitConfigured()
+        // After normal offline editing, no error should surface
+        XCTAssertNil(vm.errorMessage,
+                     "Offline editing must not set errorMessage")
+    }
+
+    // MARK: - Task 72: Offline publish — enqueues without error
+
+    func test_publish_offline_queuesWithoutError() async {
+        let (vm, _, network, queue) = makeSUT(isOnline: false)
+        XCTAssertFalse(network.isOnline)
+
+        await vm.handlePublishTap(visibility: .friends,
+                                  networkMonitor: network,
+                                  offlineQueue: queue)
+
+        let enqueued = await queue.enqueueCallCount
+        XCTAssertEqual(enqueued, 1, "Offline publish must enqueue exactly one job")
+        XCTAssertNil(vm.errorMessage,
+                     "Offline publish must NOT set errorMessage — it is success, not failure")
+        XCTAssertTrue(vm.showOfflineQueuedConfirmation,
+                      "ViewModel must signal the confirmation snackbar after offline enqueue")
+    }
+
+    func test_publish_offline_doesNotSetErrorMessage() async {
+        let (vm, _, network, queue) = makeSUT(isOnline: false)
+        // Simulate a pre-existing error message (e.g. from a previous operation)
+        vm.errorMessage = "Previous error"
+
+        await vm.handlePublishTap(visibility: .public,
+                                  networkMonitor: network,
+                                  offlineQueue: queue)
+
+        XCTAssertNil(vm.errorMessage,
+                     "Offline enqueue must clear errorMessage — publish is a success, not failure")
+    }
+
+    func test_publish_online_doesNotEnqueue() async {
+        let (vm, _, network, queue) = makeSUT(isOnline: true)
+        network.isOnline = true
+
+        await vm.handlePublishTap(visibility: .friends,
+                                  networkMonitor: network,
+                                  offlineQueue: queue)
+
+        let enqueued = await queue.enqueueCallCount
+        XCTAssertEqual(enqueued, 0,
+                       "Online publish must NOT enqueue (got \(enqueued))")
+    }
+
+    // MARK: - Task 72: dismissOfflineQueuedConfirmation
+
+    func test_dismissOfflineQueuedConfirmation_resetsFlag() async {
+        let (vm, _, network, queue) = makeSUT(isOnline: false)
+        await vm.handlePublishTap(visibility: .friends,
+                                  networkMonitor: network,
+                                  offlineQueue: queue)
+        XCTAssertTrue(vm.showOfflineQueuedConfirmation)
+
+        vm.dismissOfflineQueuedConfirmation()
+        XCTAssertFalse(vm.showOfflineQueuedConfirmation,
+                       "dismissOfflineQueuedConfirmation must reset the flag")
+    }
+
+    // MARK: - Offline project snapshot (draft round-trip via value semantics)
+
+    func test_project_snapshotAndRestore_preservesClips() async {
+        let (vm, _, _, _) = makeSUT(isOnline: false)
+        let project = TimelineProjectFactory.projectWithVideoClip()
+        vm.bootstrap(project: project, mediaURLs: [:], images: [:])
+        await vm.awaitConfigured()
+
+        // Capture the project snapshot
+        let snapshot = vm.project
+
+        // Simulate a "reload" by creating a new VM with the same snapshot
+        let (vm2, _, _, _) = makeSUT(isOnline: false)
+        vm2.bootstrap(project: snapshot, mediaURLs: [:], images: [:])
+        await vm2.awaitConfigured()
+
+        XCTAssertEqual(vm2.project.mediaObjects.count,
+                       vm.project.mediaObjects.count,
+                       "Reloaded ViewModel must have the same clip count as original")
+    }
+}
