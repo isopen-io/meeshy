@@ -39,6 +39,14 @@ public enum StoryBackgroundPalette {
         } while existingSet.contains(hex)
         return hex
     }
+
+    /// SwiftUI-friendly variant of `randomBackgroundColor()`.
+    /// Returns the same random HSB pick as a `Color` so callers (story
+    /// notification thumbnails, in-feed placeholders) can pass it straight
+    /// into a SwiftUI gradient or `.fill(...)` without re-parsing the hex.
+    public static func randomBackgroundColorAsColor() -> Color {
+        Color(hex: randomBackgroundColor())
+    }
 }
 
 // MARK: - Story Composer Draft
