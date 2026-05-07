@@ -10,9 +10,9 @@ import os
 /// `MeeshyApp.init` or the root `.task`). The method is idempotent — multiple
 /// calls after the first are no-ops.
 @MainActor
-final class StoryOfflineQueueBootstrap {
+public final class StoryOfflineQueueBootstrap {
 
-    static let shared = StoryOfflineQueueBootstrap()
+    public static let shared = StoryOfflineQueueBootstrap()
 
     private var cancellables: Set<AnyCancellable> = []
     private var didStart = false
@@ -21,7 +21,7 @@ final class StoryOfflineQueueBootstrap {
     private init() {}
 
     /// Idempotent bootstrap. Wires the publish handler and observes network state.
-    func start() {
+    public func start() {
         guard !didStart else { return }
         didStart = true
 

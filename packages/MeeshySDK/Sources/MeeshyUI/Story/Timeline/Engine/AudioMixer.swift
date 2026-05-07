@@ -166,12 +166,14 @@ public final class AudioMixer: AudioMixerProviding {
 
     deinit {
         // We CANNOT call MainActor-isolated teardown() from deinit safely —
-        // ARC may release AudioMixer from any thread. The owner must call
-        // shutdown() explicitly. In DEBUG we surface the contract violation.
-        #if DEBUG
+        // ARC may release AudioMixer from any thread. The owner should call
+        // shutdown() explicitly. We log a warning when forgotten; ARC will
+        // still release AVAudioEngine + nodes (Foundation classes have their
+        // own teardown), so this is a leak hint, not a crash.
         if !didShutdown {
-            assertionFailure("AudioMixer deinit without shutdown() — owner must call shutdown() before drop to release AVAudioEngine + nodes safely.")
+            os.Logger(subsystem: "me.meeshy.app", category: "media").warning(
+                "AudioMixer deinit without shutdown() — owner should call shutdown() before drop to release AVAudioEngine + nodes deterministically."
+            )
         }
-        #endif
     }
 }

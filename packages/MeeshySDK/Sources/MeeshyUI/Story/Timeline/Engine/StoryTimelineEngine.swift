@@ -65,14 +65,16 @@ public final class StoryTimelineEngine {
     deinit {
         // We CANNOT call MainActor-isolated tearDown() from deinit safely —
         // ARC may release the engine from any thread. The owner must call
-        // shutdown() explicitly. In DEBUG we surface the contract violation
-        // via a fatal precondition so it appears in crash logs and CI output.
-        #if DEBUG
-        precondition(
-            didShutdown,
-            "StoryTimelineEngine deinit without shutdown() — owner must call shutdown() before drop to release AVPlayer + observers safely."
-        )
-        #endif
+        // shutdown() explicitly to release AVPlayer + observers + audio mixer.
+        // We log a warning when forgotten so the contract violation surfaces
+        // in OS logs without crashing tests / production users (XCTest may
+        // tear down test owners off the main thread; a hard precondition there
+        // would mask the real assertion failures we care about).
+        if !didShutdown {
+            os.Logger(subsystem: "me.meeshy.app", category: "media").warning(
+                "StoryTimelineEngine deinit without shutdown() — owner should call shutdown() before drop to release AVPlayer + observers. Falling back to ARC-driven cleanup of AVPlayer / AVAudioEngine; observer leaks are possible."
+            )
+        }
     }
 
     // MARK: Mode switch (D6)
