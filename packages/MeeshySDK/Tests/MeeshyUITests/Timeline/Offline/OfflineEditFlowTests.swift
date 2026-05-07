@@ -117,7 +117,9 @@ final class OfflineEditFlowTests: XCTestCase {
                      "Offline enqueue must clear errorMessage — publish is a success, not failure")
     }
 
-    func test_publish_online_doesNotEnqueue() async {
+    func test_publish_online_stubThrows_fallsBackToOfflineQueue() async {
+        // The default StubOnlinePublisher always throws — online publish falls
+        // back to the offline queue until the real pipeline is wired.
         let (vm, _, network, queue) = makeSUT(isOnline: true)
         network.isOnline = true
 
@@ -126,8 +128,10 @@ final class OfflineEditFlowTests: XCTestCase {
                                   offlineQueue: queue)
 
         let enqueued = await queue.enqueueCallCount
-        XCTAssertEqual(enqueued, 0,
-                       "Online publish must NOT enqueue (got \(enqueued))")
+        XCTAssertEqual(enqueued, 1,
+                       "Online publish with stub must fall back to offline queue (got \(enqueued))")
+        XCTAssertTrue(vm.showOfflineQueuedConfirmation,
+                      "Fallback to offline queue must set showOfflineQueuedConfirmation")
     }
 
     // MARK: - Task 72: dismissOfflineQueuedConfirmation
@@ -170,6 +174,57 @@ final class OfflineEditFlowTests: XCTestCase {
                        "Enqueued item must carry the pending media URL path")
         XCTAssertEqual(enqueued.first?.mediaURLPaths["media-1"], testURL.path,
                        "mediaURLPaths[clipId] must match the URL passed to bootstrap")
+    }
+
+    // MARK: - Phase 1 items 1+2: real serialization + online publish fallback
+
+    func test_handlePublishTap_offline_payloadIsRealJSON_notEmpty() async {
+        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "v1", startTime: 0, duration: 5)
+        let engine = MockStoryTimelineEngine()
+        let network = MockNetworkMonitor()
+        network.isOnline = false
+        let queue = MockOfflineQueue()
+        let vm = TimelineViewModel(
+            engine: engine,
+            commandStack: CommandStack(),
+            snapEngine: SnapEngine(toleranceSeconds: 0.06)
+        )
+        vm.bootstrap(project: project, mediaURLs: [:], images: [:])
+        await vm.awaitConfigured()
+
+        await vm.handlePublishTap(visibility: .public, networkMonitor: network, offlineQueue: queue)
+
+        let items = await queue.enqueuedItems
+        XCTAssertEqual(items.count, 1)
+        let payload = items.first?.slidePayloadJSON ?? ""
+        XCTAssertNotEqual(payload, "{}", "slidePayloadJSON must contain real serialised project, not empty object")
+        XCTAssertTrue(payload.contains("\"slideId\""),
+                      "JSON must include TimelineProject fields — got: \(payload.prefix(200))")
+        XCTAssertTrue(payload.contains("\"mediaObjects\""),
+                      "JSON must include mediaObjects array — got: \(payload.prefix(200))")
+    }
+
+    func test_handlePublishTap_online_attemptsOnlinePublish_fallsBackOnFailure() async {
+        let project = TimelineProjectFactory.projectWithVideoClip(clipId: "v1", startTime: 0, duration: 5)
+        let engine = MockStoryTimelineEngine()
+        let network = MockNetworkMonitor()
+        network.isOnline = true
+        let queue = MockOfflineQueue()
+        let vm = TimelineViewModel(
+            engine: engine,
+            commandStack: CommandStack(),
+            snapEngine: SnapEngine(toleranceSeconds: 0.06)
+        )
+        vm.bootstrap(project: project, mediaURLs: [:], images: [:])
+        await vm.awaitConfigured()
+
+        // Default StubOnlinePublisher always throws → fallback path must run
+        await vm.handlePublishTap(visibility: .public, networkMonitor: network, offlineQueue: queue)
+
+        let enqueued = await queue.enqueueCallCount
+        XCTAssertEqual(enqueued, 1, "Online failure must fall back to offline queue (got \(enqueued))")
+        XCTAssertTrue(vm.showOfflineQueuedConfirmation,
+                      "Fallback must set showOfflineQueuedConfirmation so the UI confirms to the user")
     }
 
     // MARK: - Offline project snapshot (draft round-trip via value semantics)
