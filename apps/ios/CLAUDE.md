@@ -102,6 +102,23 @@ MediaCacheManager.shared    // Disk caching
 - Derive computed state instead of storing redundant `@Published` values
 - Never store view-only state (animations, scroll position) in ViewModels
 
+### Bubble Component Architecture
+La bulle de message est decomposee sous `Meeshy/Features/Main/Views/Bubble/`. Le god object historique a ete elimine — `ThemedMessageBubble.swift` est un orchestrateur fin (~265 lignes) qui :
+1. Construit un `BubbleContent` (value model immuable) depuis le `Message` + contexte de traduction.
+2. Dispatche sur `content.kind` (`.deleted` / `.burned` / `.standard`) vers `BubbleDeletedView`, `BubbleBurnedView`, ou `BubbleStandardLayout`.
+3. Possede les `@StateObject` de cycle de vie (`BubbleEphemeralController`, `BubbleBlurRevealController`) et les `@State` de presentation (sheets, fullscreen) — passes aux sous-vues comme `@ObservedObject`/`@Binding`.
+
+`BubbleStandardLayout` est l'orchestrateur du chemin standard. Il lit `content.text`, `content.attachments`, `content.reply`, `content.translation`, `content.reactions` via des `if let`/`switch` qui early-exit. Une bulle "Salut" n'instancie que le texte + meta-row : pas de quoted-reply, pas de panneau de traduction, pas de grille visuelle.
+
+**Rule absolue : ne JAMAIS reintroduire de logique inline dans `ThemedMessageBubble` ou `BubbleStandardLayout` pour une nouvelle feature.** Toute nouvelle capacite passe par :
+1. **Etendre `BubbleContent`** avec un champ optionnel typé (ex: `let highlight: Highlight?`).
+2. **Creer une sous-vue dediee** `Bubble{Feature}.swift` Equatable, sous `Views/Bubble/`. Inputs primitifs (`isMe: Bool`, `accentHex: String`...) ; pas d'`@ObservedObject` sur des singletons globaux.
+3. **Brancher conditionnellement** dans `BubbleStandardLayout` via `if let feat = content.feature { BubbleFeature(...) }`.
+
+Ce design garantit le pattern "Zero Unnecessary Re-render" pour les cellules de liste : chaque sous-vue ne se re-evalue que si ses inputs Equatable changent, et les sous-vues absentes ne sont jamais instanciees.
+
+Source de verite : `BubbleContent.swift` (value model), `BubbleContentBuilder.swift` (init + helpers purs testables `resolveEffectiveContent`, `buildAvailableFlags`, `summarizeReactions`).
+
 ## Networking
 - REST: `APIClient` with `async/await`, generic `request<T: Decodable>()`
 - WebSocket: Socket.IO with Combine `PassthroughSubject` for events
