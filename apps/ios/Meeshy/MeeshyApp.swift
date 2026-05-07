@@ -123,6 +123,9 @@ struct MeeshyApp: App {
                         MeeshyFocusStore.shared.current.toSDKSnapshot()
                     }
                     await CacheCoordinator.shared.start()
+                    // Wire StoryOfflineQueue publish handler + network-reconnect
+                    // flush. Idempotent — safe to call on every cold start.
+                    StoryOfflineQueueBootstrap.shared.start()
                     // Wire the outbox pool so OfflineQueue and MessageRetryQueue
                     // can persist items to SQLite on enqueue. Must run before
                     // any enqueue calls to avoid silent no-ops.

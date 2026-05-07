@@ -28,10 +28,27 @@ import MetalKit
     private let device: MTLDevice
     private let commandQueue: MTLCommandQueue
 
+    /// Returns `true` when a Metal-capable GPU is available on this device.
+    /// `VideoCompositor.makeComposition` MUST check this before assigning
+    /// `customVideoCompositorClass = CustomTransitionCompositor.self` so that
+    /// Metal-less devices (or unit-test hosts without GPU) never reach the init.
+    public static var isMetalAvailable: Bool {
+        MTLCreateSystemDefaultDevice() != nil
+    }
+
+    /// AVFoundation requires a non-failable `init()` for `customVideoCompositorClass`
+    /// registration. This init is an unreachable contract on production devices:
+    /// `VideoCompositor.makeComposition` gates registration on `isMetalAvailable`.
+    /// Hitting `preconditionFailure` here means the guard was bypassed — a
+    /// programmer error, not a runtime condition.
     public override init() {
         guard let device = MTLCreateSystemDefaultDevice(),
               let queue = device.makeCommandQueue() else {
-            fatalError("CustomTransitionCompositor: Metal not available on this device")
+            preconditionFailure(
+                "CustomTransitionCompositor: Metal is unavailable. " +
+                "VideoCompositor.makeComposition must check isMetalAvailable " +
+                "before registering this compositor class."
+            )
         }
         self.device = device
         self.commandQueue = queue
