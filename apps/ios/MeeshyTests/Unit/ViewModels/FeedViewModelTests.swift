@@ -815,6 +815,10 @@ final class FeedViewModelTests: XCTestCase {
 
     func test_bookmarkPost_callsAPIWithCorrectEndpoint() async {
         let (sut, api, _, _) = makeSUT()
+        // bookmarkPost guards on `posts.first(where:)`, so the SUT must already
+        // know about the post before the API is hit. Without this preload the
+        // method is a no-op and no /bookmark request is issued.
+        sut.posts = [Self.makeFeedPost(id: "bm-post", content: "Bookmark target")]
         let bookmarkResponse: APIResponse<[String: Bool]> = JSONStub.decode("""
         {"success":true,"data":{"bookmarked":true},"error":null}
         """)
