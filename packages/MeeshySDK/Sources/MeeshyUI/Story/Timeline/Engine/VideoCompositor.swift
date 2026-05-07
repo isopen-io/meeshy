@@ -95,7 +95,7 @@ public struct VideoCompositor: Sendable {
                 return true
             }
         }
-        if usesCustomKind {
+        if usesCustomKind && CustomTransitionCompositor.isMetalAvailable {
             videoComposition.customVideoCompositorClass = CustomTransitionCompositor.self
         } else if hasDissolve {
             videoComposition.customVideoCompositorClass = DissolveVideoCompositor.self

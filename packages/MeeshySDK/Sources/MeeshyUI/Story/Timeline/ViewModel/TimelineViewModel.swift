@@ -93,8 +93,14 @@ public final class TimelineViewModel {
         self.project = project
         self.pendingMediaURLs = mediaURLs
         self.pendingImages = images
+
+        // Cancel any in-flight bootstrap before reassigning so we don't race
+        // two configure() calls on the same engine.
+        bootstrapTask?.cancel()
+
         bootstrapTask = Task { [weak self, engine] in
             await engine.configure(project: project, mediaURLs: mediaURLs, images: images)
+            guard !Task.isCancelled else { return }
             await MainActor.run { self?.engine.setMode(.editing) }
         }
     }
@@ -112,6 +118,15 @@ public final class TimelineViewModel {
         }
         engine.onPlaybackEnd = { [weak self] in
             self?.isPlaying = false
+        }
+        engine.onError = { [weak self] error in
+            self?.errorMessage = error.localizedDescription
+        }
+        engine.onElementBecameActive = { [weak self] elementId in
+            // Surface to selection so the inspector reflects the active clip
+            // when playback crosses a clip boundary. Read-only signal — does
+            // NOT push a command.
+            self?.selection.select(elementId)
         }
     }
 
@@ -153,6 +168,14 @@ public final class TimelineViewModel {
     public func endClipDrag() {
         guard let drag = selection.activeDrag,
               let kind = clipKind(forId: drag.clipId) else { return }
+
+        // Skip pushing a no-op command — the user dragged exactly back to origin.
+        let unchanged = abs(drag.currentStartTime - drag.originalStartTime) < 0.0005
+        guard !unchanged else {
+            selection.endDrag()
+            return
+        }
+
         let cmd = MoveClipCommand(
             clipId: drag.clipId,
             kind: kind,
@@ -160,6 +183,16 @@ public final class TimelineViewModel {
             newStartTime: drag.currentStartTime
         )
         commandStack.push(.moveClip(cmd))
+        selection.endDrag()
+    }
+
+    /// Cancels an in-flight clip drag, restoring the clip's startTime to the value
+    /// it had at beginClipDrag. Use this when a SwiftUI view is torn down
+    /// mid-gesture (slide change, mode switch, dismiss) so the project stays
+    /// consistent with the command stack.
+    public func cancelClipDrag() {
+        guard let drag = selection.activeDrag else { return }
+        applyClipPosition(clipId: drag.clipId, newStartTime: drag.originalStartTime)
         selection.endDrag()
     }
 
@@ -246,6 +279,7 @@ public final class TimelineViewModel {
         let snapshot = project
         let urls = pendingMediaURLs
         let images = pendingImages
+        bootstrapTask?.cancel()
         bootstrapTask = Task { [engine] in
             await engine.configure(project: snapshot, mediaURLs: urls, images: images)
         }
@@ -254,6 +288,7 @@ public final class TimelineViewModel {
     // MARK: - Scrub & split
 
     public func scrub(to time: Float) {
+        guard time.isFinite else { return }
         let clamped = max(0, min(time, project.slideDuration))
         currentTime = clamped
         engine.seek(to: clamped, precise: true)
@@ -262,8 +297,16 @@ public final class TimelineViewModel {
     public func splitSelectedAtPlayhead() {
         guard let id = selection.selectedClipId,
               let kind = clipKind(forId: id),
-              let clipStart = clipStartTime(id: id) else { return }
-        let relativeTime = max(0.001, currentTime - clipStart)
+              let clipStart = clipStartTime(id: id),
+              let clipDuration = clipDuration(forId: id) else { return }
+
+        // Clamp BOTH ends so neither resulting half is zero-length, which
+        // would crash AVPlayer on insertTimeRange.
+        let minRel: Float = 0.001
+        let maxRel = max(minRel, clipDuration - minRel)
+        let raw = currentTime - clipStart
+        let relativeTime = max(minRel, min(maxRel, raw))
+
         let cmd = SplitClipCommand(
             clipId: id,
             kind: kind,
@@ -280,9 +323,21 @@ public final class TimelineViewModel {
         }
     }
 
+    /// Returns the duration of any clip (media/audio/text) by id, or nil.
+    private func clipDuration(forId id: String) -> Float? {
+        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration }
+        if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
+        if let t = project.textObjects.first(where: { $0.id == id }) { return t.displayDuration }
+        return nil
+    }
+
     // MARK: - Transitions
 
     public func addTransition(fromClipId: String, toClipId: String, kind: StoryTransitionKind, duration: Float) {
+        guard fromClipId != toClipId else { return }
+        let mediaIds = project.mediaObjects.map(\.id)
+        guard mediaIds.contains(fromClipId), mediaIds.contains(toClipId) else { return }
+        guard duration.isFinite, duration > 0 else { return }
         let transition = StoryClipTransition(
             fromClipId: fromClipId,
             toClipId: toClipId,
@@ -349,14 +404,25 @@ public final class TimelineViewModel {
     // MARK: - Persistence
 
     public func restoreCommandHistory(_ snapshot: CommandStackSnapshot) {
+        let originalProject = project
         commandStack.restore(snapshot)
         let stackSnapshot = commandStack.snapshot()
+
+        var rollback = false
         for index in 0..<stackSnapshot.cursor where index < stackSnapshot.commands.count {
             do {
                 try stackSnapshot.commands[index].underlying.apply(to: &project)
             } catch {
-                errorMessage = error.localizedDescription
+                errorMessage = "Restore failed at command \(index): \(error.localizedDescription)"
+                rollback = true
+                break
             }
+        }
+
+        if rollback {
+            // Atomic: revert everything we just applied + clear the broken stack.
+            project = originalProject
+            commandStack.restore(CommandStackSnapshot(commands: [], cursor: 0))
         }
         scheduleEngineReconfigure()
     }

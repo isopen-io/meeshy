@@ -52,6 +52,8 @@ final class MockAudioMixer: AudioMixerProviding {
 
     func teardown() { teardownCallCount += 1 }
 
+    func shutdown() { teardownCallCount += 1 }
+
     func prepareAllNodes() { prepareAllNodesCallCount += 1 }
 
     func reset() {

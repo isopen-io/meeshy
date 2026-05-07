@@ -205,7 +205,11 @@ public struct QuickTimelineView: View {
                         laneWidth: laneWidth,
                         laneHeight: 36
                     ) {
-                        Color.clear
+                        ZStack(alignment: .leading) {
+                            ForEach(track.clipIds, id: \.self) { clipId in
+                                clipBar(for: clipId, geometry: geometry, laneHeight: 36)
+                            }
+                        }
                     }
                 }
             }
@@ -257,6 +261,103 @@ public struct QuickTimelineView: View {
         case .bgVideo, .video: return "6366F1"
         case .bgAudio, .audio: return "818CF8"
         case .text:            return "A5B4FC"
+        }
+    }
+
+    @ViewBuilder
+    private func clipBar(for clipId: String, geometry: TimelineGeometry, laneHeight: CGFloat) -> some View {
+        if let media = viewModel.project.mediaObjects.first(where: { $0.id == clipId }) {
+            VideoClipBar(
+                clipId: media.id,
+                title: media.postMediaId,
+                startTime: media.startTime ?? 0,
+                duration: media.duration ?? 0,
+                fadeIn: media.fadeIn ?? 0,
+                fadeOut: media.fadeOut ?? 0,
+                isSelected: viewModel.selection.selectedClipId == media.id,
+                isLocked: false,
+                isDark: colorScheme == .dark,
+                geometry: geometry,
+                laneHeight: laneHeight,
+                frames: [],
+                onTap: { viewModel.selectClip(id: media.id) },
+                onDoubleTap: {
+                    viewModel.selectClip(id: media.id)
+                    viewModel.splitSelectedAtPlayhead()
+                },
+                onLongPress: { viewModel.selectClip(id: media.id) },
+                onTrimStartDelta: { delta in
+                    viewModel.trimClipStart(id: media.id,
+                                            deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                },
+                onTrimEndDelta: { delta in
+                    viewModel.trimClipEnd(id: media.id,
+                                          deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                },
+                onMoveDelta: { delta in
+                    let mediaId = media.id
+                    let originalStart = media.startTime ?? 0
+                    viewModel.beginClipDrag(clipId: mediaId)
+                    viewModel.dragClipMoved(
+                        rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
+                        snapCandidates: []
+                    )
+                }
+            )
+            .equatable()
+        } else if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == clipId }) {
+            AudioClipBar(
+                clipId: audio.id,
+                title: audio.postMediaId,
+                startTime: audio.startTime ?? 0,
+                duration: audio.duration ?? 0,
+                volume: audio.volume,
+                isMuted: false,
+                isSelected: viewModel.selection.selectedClipId == audio.id,
+                isLocked: false,
+                isDark: colorScheme == .dark,
+                geometry: geometry,
+                laneHeight: laneHeight,
+                waveformSamples: audio.waveformSamples,
+                onTap: { viewModel.selectClip(id: audio.id) },
+                onDoubleTap: { viewModel.selectClip(id: audio.id) },
+                onLongPress: { viewModel.selectClip(id: audio.id) },
+                onMoveDelta: { delta in
+                    let audioId = audio.id
+                    let originalStart = audio.startTime ?? 0
+                    viewModel.beginClipDrag(clipId: audioId)
+                    viewModel.dragClipMoved(
+                        rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
+                        snapCandidates: []
+                    )
+                }
+            )
+            .equatable()
+        } else if let text = viewModel.project.textObjects.first(where: { $0.id == clipId }) {
+            TextClipBar(
+                clipId: text.id,
+                content: text.content,
+                startTime: text.startTime ?? 0,
+                duration: text.displayDuration ?? 0,
+                isSelected: viewModel.selection.selectedClipId == text.id,
+                isLocked: false,
+                isDark: colorScheme == .dark,
+                geometry: geometry,
+                laneHeight: laneHeight,
+                onTap: { viewModel.selectClip(id: text.id) },
+                onDoubleTap: { viewModel.selectClip(id: text.id) },
+                onLongPress: { viewModel.selectClip(id: text.id) },
+                onMoveDelta: { delta in
+                    let textId = text.id
+                    let originalStart = text.startTime ?? 0
+                    viewModel.beginClipDrag(clipId: textId)
+                    viewModel.dragClipMoved(
+                        rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
+                        snapCandidates: []
+                    )
+                }
+            )
+            .equatable()
         }
     }
 

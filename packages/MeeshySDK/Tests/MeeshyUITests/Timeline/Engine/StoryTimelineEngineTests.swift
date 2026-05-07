@@ -27,12 +27,14 @@ final class StoryTimelineEngineTests: XCTestCase {
     func test_init_defaultMode_isPreview() {
         let engine = StoryTimelineEngine()
         XCTAssertEqual(engine.mode, .preview)
+        engine.shutdown()
     }
 
     func test_init_initialState_isIdle() {
         let engine = StoryTimelineEngine()
         XCTAssertEqual(engine.currentTime, 0)
         XCTAssertFalse(engine.isPlaying)
+        engine.shutdown()
     }
 
     // MARK: - D2 configure
@@ -44,6 +46,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         await engine.configure(project: project, mediaURLs: [:], images: [:])
         XCTAssertNotNil(engine.currentProjectSnapshot)
         XCTAssertEqual(engine.currentProjectSnapshot?.slideId, "slide-1")
+        engine.shutdown()
     }
 
     func test_configure_callsAudioMixerConfigureOnce() async {
@@ -54,6 +57,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         await engine.configure(project: project, mediaURLs: [:], images: [:])
         XCTAssertEqual(mixer.configureCallCount, 1)
         XCTAssertEqual(mixer.lastConfiguredAudioCount, 1)
+        engine.shutdown()
     }
 
     func test_configure_replacesPreviousProject() async {
@@ -63,6 +67,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         await engine.configure(project: makeProject(slideId: "s2"), mediaURLs: [:], images: [:])
         XCTAssertEqual(engine.currentProjectSnapshot?.slideId, "s2")
         XCTAssertEqual(mixer.configureCallCount, 2)
+        engine.shutdown()
     }
 
     // MARK: - D3 transport
@@ -74,6 +79,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         engine.play()
         XCTAssertTrue(engine.isPlaying)
         XCTAssertEqual(mixer.playCallCount, 1)
+        engine.shutdown()
     }
 
     func test_pause_setsIsPlayingFalse_andCallsMixerPause() async {
@@ -84,6 +90,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         engine.pause()
         XCTAssertFalse(engine.isPlaying)
         XCTAssertEqual(mixer.pauseCallCount, 1)
+        engine.shutdown()
     }
 
     func test_toggle_alternatesPlayState() async {
@@ -94,6 +101,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         XCTAssertTrue(engine.isPlaying)
         engine.toggle()
         XCTAssertFalse(engine.isPlaying)
+        engine.shutdown()
     }
 
     func test_play_withoutConfigure_doesNothing() {
@@ -102,6 +110,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         engine.play()
         XCTAssertFalse(engine.isPlaying)
         XCTAssertEqual(mixer.playCallCount, 0)
+        engine.shutdown()
     }
 
     // MARK: - D4 seek
@@ -113,6 +122,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         engine.seek(to: 4.5)
         XCTAssertEqual(mixer.seekCallCount, 1)
         XCTAssertEqual(mixer.lastSeekTime, 4.5, accuracy: 0.001)
+        engine.shutdown()
     }
 
     func test_seek_clampsAboveSlideDuration() async {
@@ -121,6 +131,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         await engine.configure(project: makeProject(slideDuration: 10), mediaURLs: [:], images: [:])
         engine.seek(to: 99)
         XCTAssertEqual(mixer.lastSeekTime, 10, accuracy: 0.001)
+        engine.shutdown()
     }
 
     func test_seek_clampsNegativeToZero() async {
@@ -129,6 +140,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         await engine.configure(project: makeProject(slideDuration: 10), mediaURLs: [:], images: [:])
         engine.seek(to: -3)
         XCTAssertEqual(mixer.lastSeekTime, 0, accuracy: 0.001)
+        engine.shutdown()
     }
 
     func test_seek_emitsTimeUpdateCallback() async {
@@ -139,6 +151,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         engine.onTimeUpdate = { captured = $0 }
         engine.seek(to: 2.0)
         XCTAssertEqual(captured ?? 0, 2.0, accuracy: 0.001)
+        engine.shutdown()
     }
 
     // MARK: - D5 stop
@@ -151,6 +164,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         engine.stop()
         XCTAssertEqual(engine.currentTime, 0)
         XCTAssertFalse(engine.isPlaying)
+        engine.shutdown()
     }
 
     func test_stop_callsMixerPause_andSeeksToZero() async {
@@ -161,6 +175,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         engine.stop()
         XCTAssertGreaterThanOrEqual(mixer.pauseCallCount, 1)
         XCTAssertEqual(mixer.lastSeekTime, 0)
+        engine.shutdown()
     }
 
     // MARK: - D6 mode switch
@@ -173,6 +188,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         engine.setMode(.editing)
         XCTAssertEqual(engine.mode, .editing)
         XCTAssertFalse(engine.isPlaying)
+        engine.shutdown()
     }
 
     func test_setMode_preview_doesNotAlterPlaybackIfAlreadyPaused() async {
@@ -182,6 +198,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         engine.setMode(.preview)
         XCTAssertEqual(engine.mode, .preview)
         XCTAssertFalse(engine.isPlaying)
+        engine.shutdown()
     }
 
     // MARK: - D7 export stub
@@ -196,6 +213,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         } catch {
             XCTFail("Unexpected error: \(error)")
         }
+        engine.shutdown()
     }
 
     // MARK: - D8 retry + onError
@@ -221,6 +239,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         } else {
             XCTFail("Expected assetLoadFailed, got \(String(describing: captured.first))")
         }
+        engine.shutdown()
     }
 
     // MARK: - D9 multi-audio integration
@@ -234,6 +253,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         await engine.configure(project: project, mediaURLs: [:], images: [:])
         XCTAssertEqual(mixer.lastConfiguredAudioCount, 2,
                        "Mixer should receive both background music + foreground voice for parallel playback")
+        engine.shutdown()
     }
 
     func test_multiAudioParallelPlayback_playStartsBothNodes() async {
@@ -246,6 +266,67 @@ final class StoryTimelineEngineTests: XCTestCase {
         engine.play()
         XCTAssertEqual(mixer.playCallCount, 1)
         XCTAssertEqual(mixer.lastConfiguredAudioCount, 2)
+        engine.shutdown()
+    }
+
+    // MARK: - A1 shutdown contract
+
+    func test_shutdown_isIdempotent_andSafeToCallTwice() async {
+        let mixer = MockAudioMixer()
+        let engine = StoryTimelineEngine(audioMixer: mixer)
+        await engine.configure(project: makeProject(), mediaURLs: [:], images: [:])
+        engine.shutdown()
+        engine.shutdown()  // must not crash — idempotent
+        // After shutdown, tearDown() was called: player is nil → play() is a no-op.
+        engine.play()
+        XCTAssertFalse(engine.isPlaying)
+    }
+
+    func test_shutdown_callsMixerTeardown() async {
+        let mixer = MockAudioMixer()
+        let engine = StoryTimelineEngine(audioMixer: mixer)
+        await engine.configure(project: makeProject(), mediaURLs: [:], images: [:])
+        let countBefore = mixer.teardownCallCount
+        engine.shutdown()
+        XCTAssertGreaterThan(mixer.teardownCallCount, countBefore,
+                             "shutdown() must transitively call audioMixer.teardown()")
+    }
+
+    // MARK: - D3 audio session category
+
+    func test_audioSession_categoryIsPlayback_afterConfigure() async {
+        let mixer = MockAudioMixer()
+        let engine = StoryTimelineEngine(audioMixer: mixer)
+        await engine.configure(project: makeProject(), mediaURLs: [:], images: [:])
+        let session = AVAudioSession.sharedInstance()
+        XCTAssertEqual(session.category, .playback,
+                       "Preview must use .playback (not .playAndRecord) to coexist with background music")
+        XCTAssertTrue(session.categoryOptions.contains(.mixWithOthers),
+                      ".mixWithOthers must be set so Apple Music survives the editor")
+        engine.shutdown()
+    }
+
+    // MARK: - D2 onError for audio engine failure
+
+    func test_play_whenMixerThrows_callsOnError_andSetsIsPlayingTrue() async {
+        let mixer = MockAudioMixer()
+        mixer.playError = NSError(domain: "AVAudioSession", code: -1,
+                                  userInfo: [NSLocalizedDescriptionKey: "session interrupted"])
+        let engine = StoryTimelineEngine(audioMixer: mixer)
+        await engine.configure(project: makeProject(), mediaURLs: [:], images: [:])
+        var capturedError: Error?
+        engine.onError = { capturedError = $0 }
+        engine.play()
+        XCTAssertNotNil(capturedError, "onError must be called when audioMixer.play() throws")
+        if let engineErr = capturedError as? StoryTimelineEngineError,
+           case .audioEngineUnavailable = engineErr {
+            // correct
+        } else {
+            XCTFail("Expected StoryTimelineEngineError.audioEngineUnavailable, got \(String(describing: capturedError))")
+        }
+        // Video still plays (isPlaying = true) even when audio fails — silent video is acceptable.
+        XCTAssertTrue(engine.isPlaying, "isPlaying must be true even on audio failure — video continues silently")
+        engine.shutdown()
     }
 
     // MARK: - D10 mute global
@@ -256,6 +337,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         await engine.configure(project: makeProject(), mediaURLs: [:], images: [:])
         engine.isMuted = true
         XCTAssertEqual(mixer.setMuteCalls.last, true)
+        engine.shutdown()
     }
 
     func test_isMuted_setFalse_callsMixerSetMuteFalse() async {
@@ -265,5 +347,6 @@ final class StoryTimelineEngineTests: XCTestCase {
         engine.isMuted = true
         engine.isMuted = false
         XCTAssertEqual(mixer.setMuteCalls.last, false)
+        engine.shutdown()
     }
 }

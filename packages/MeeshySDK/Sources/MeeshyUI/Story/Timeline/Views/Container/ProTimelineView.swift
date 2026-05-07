@@ -146,7 +146,11 @@ public struct ProTimelineView: View {
                                 laneWidth: laneWidth,
                                 laneHeight: 40
                             ) {
-                                Color.clear
+                                ZStack(alignment: .leading) {
+                                    ForEach(track.clipIds, id: \.self) { clipId in
+                                        clipBar(for: clipId, geometry: geometry, laneHeight: 40)
+                                    }
+                                }
                             }
                         }
                     }
@@ -160,16 +164,27 @@ public struct ProTimelineView: View {
     private var inspectorOverlay: some View {
         if Self.shouldShowClipInspector(viewModel: viewModel),
            let snapshot = currentClipSnapshot() {
+            let clipId = snapshot.id
             ClipInspector(
                 presentation: .popover,
                 clip: snapshot,
-                onVolumeChanged: { _ in },
-                onFadeInChanged: { _ in },
-                onFadeOutChanged: { _ in },
-                onLoopToggled: { _ in },
-                onBackgroundToggled: { _ in },
+                onVolumeChanged: { [viewModel] volume in
+                    viewModel.setClipVolume(id: clipId, volume: volume)
+                },
+                onFadeInChanged: { [viewModel] fadeIn in
+                    viewModel.setClipFadeIn(id: clipId, fadeIn: fadeIn)
+                },
+                onFadeOutChanged: { [viewModel] fadeOut in
+                    viewModel.setClipFadeOut(id: clipId, fadeOut: fadeOut)
+                },
+                onLoopToggled: { [viewModel] loop in
+                    viewModel.setClipLoop(id: clipId, isLooping: loop)
+                },
+                onBackgroundToggled: { [viewModel] bg in
+                    viewModel.setClipBackground(id: clipId, isBackground: bg)
+                },
                 onAddKeyframe: { viewModel.addKeyframeAtPlayhead() },
-                onDelete: { viewModel.selectClip(id: nil) }
+                onDelete: { viewModel.deleteClip(id: clipId) }
             )
             .padding(12)
             .transition(.opacity)
@@ -203,6 +218,107 @@ public struct ProTimelineView: View {
         if pps >= 50  { return 0.5 }
         if pps >= 25  { return 1.0 }
         return 2.0
+    }
+
+    @ViewBuilder
+    private func clipBar(for clipId: String, geometry: TimelineGeometry, laneHeight: CGFloat) -> some View {
+        if let media = viewModel.project.mediaObjects.first(where: { $0.id == clipId }) {
+            VideoClipBar(
+                clipId: media.id,
+                title: media.postMediaId,
+                startTime: media.startTime ?? 0,
+                duration: media.duration ?? 0,
+                fadeIn: media.fadeIn ?? 0,
+                fadeOut: media.fadeOut ?? 0,
+                isSelected: viewModel.selection.selectedClipId == media.id,
+                isLocked: false,
+                isDark: colorScheme == .dark,
+                geometry: geometry,
+                laneHeight: laneHeight,
+                frames: [],
+                onTap: { viewModel.selectClip(id: media.id) },
+                onDoubleTap: {
+                    viewModel.selectClip(id: media.id)
+                    viewModel.splitSelectedAtPlayhead()
+                },
+                onLongPress: { viewModel.selectClip(id: media.id) },
+                onTrimStartDelta: { delta in
+                    viewModel.trimClipStart(id: media.id,
+                                            deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                },
+                onTrimEndDelta: { delta in
+                    viewModel.trimClipEnd(id: media.id,
+                                          deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
+                },
+                onMoveDelta: { delta in
+                    // DragGesture.onChanged fires with cumulative translation from gesture start.
+                    // beginClipDrag captures originalStartTime from the project state at the
+                    // moment the drag first began. Subsequent frames re-begin but the guard
+                    // in dragClipMoved keeps state consistent.
+                    let mediaId = media.id
+                    let originalStart = media.startTime ?? 0
+                    viewModel.beginClipDrag(clipId: mediaId)
+                    viewModel.dragClipMoved(
+                        rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
+                        snapCandidates: []
+                    )
+                }
+            )
+            .equatable()
+        } else if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == clipId }) {
+            AudioClipBar(
+                clipId: audio.id,
+                title: audio.postMediaId,
+                startTime: audio.startTime ?? 0,
+                duration: audio.duration ?? 0,
+                volume: audio.volume,
+                isMuted: false,
+                isSelected: viewModel.selection.selectedClipId == audio.id,
+                isLocked: false,
+                isDark: colorScheme == .dark,
+                geometry: geometry,
+                laneHeight: laneHeight,
+                waveformSamples: audio.waveformSamples,
+                onTap: { viewModel.selectClip(id: audio.id) },
+                onDoubleTap: { viewModel.selectClip(id: audio.id) },
+                onLongPress: { viewModel.selectClip(id: audio.id) },
+                onMoveDelta: { delta in
+                    let audioId = audio.id
+                    let originalStart = audio.startTime ?? 0
+                    viewModel.beginClipDrag(clipId: audioId)
+                    viewModel.dragClipMoved(
+                        rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
+                        snapCandidates: []
+                    )
+                }
+            )
+            .equatable()
+        } else if let text = viewModel.project.textObjects.first(where: { $0.id == clipId }) {
+            TextClipBar(
+                clipId: text.id,
+                content: text.content,
+                startTime: text.startTime ?? 0,
+                duration: text.displayDuration ?? 0,
+                isSelected: viewModel.selection.selectedClipId == text.id,
+                isLocked: false,
+                isDark: colorScheme == .dark,
+                geometry: geometry,
+                laneHeight: laneHeight,
+                onTap: { viewModel.selectClip(id: text.id) },
+                onDoubleTap: { viewModel.selectClip(id: text.id) },
+                onLongPress: { viewModel.selectClip(id: text.id) },
+                onMoveDelta: { delta in
+                    let textId = text.id
+                    let originalStart = text.startTime ?? 0
+                    viewModel.beginClipDrag(clipId: textId)
+                    viewModel.dragClipMoved(
+                        rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
+                        snapCandidates: []
+                    )
+                }
+            )
+            .equatable()
+        }
     }
 
     private func currentClipSnapshot() -> ClipInspector.ClipSnapshot? {
