@@ -14,13 +14,18 @@ public extension Notification.Name {
 /// Posts the `messageStoreShouldRefresh` notification on the main thread for
 /// the given conversation IDs. Called after any write through
 /// MessagePersistenceActor that may affect the displayed message list.
+///
+/// `MessageStore.startObserving(...)` filters notifications by
+/// `userInfo["conversationId"]` and silently rejects anything else, so
+/// posting with an empty set is a programming error: the GRDB row is
+/// updated but no observer ever fires. We assert in DEBUG to catch
+/// mistakes early (see fix 6c6270d1 + the 15-method follow-up) and
+/// no-op in release rather than emit the misleading wildcard notif
+/// the previous implementation produced.
 fileprivate func postMessageStoreRefresh(conversationIds: Set<String>) {
-    guard !conversationIds.isEmpty else {
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .messageStoreShouldRefresh, object: nil)
-        }
-        return
-    }
+    assert(!conversationIds.isEmpty,
+           "postMessageStoreRefresh called with empty Set<String> — every mutation method on MessagePersistenceActor must scope its refresh to the affected conversationId. Otherwise MessageStore observers drop the notification and the UI freezes on its last cached state.")
+    guard !conversationIds.isEmpty else { return }
     DispatchQueue.main.async {
         for convId in conversationIds {
             NotificationCenter.default.post(
