@@ -39,6 +39,7 @@ let package = Package(
         .package(url: "https://github.com/socketio/socket.io-client-swift", exact: "16.1.1"),
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "6.29.3"),
         .package(url: "https://github.com/stasel/WebRTC", exact: "146.0.0"),
+        .package(url: "https://github.com/pointfreeco/swift-snapshot-testing", exact: "1.17.6"),
     ],
     targets: [
         .target(
@@ -63,7 +64,12 @@ let package = Package(
         ),
         .testTarget(
             name: "MeeshyUITests",
-            dependencies: ["MeeshyUI", "MeeshySDK"],
+            dependencies: [
+                "MeeshyUI",
+                "MeeshySDK",
+                .product(name: "SnapshotTesting", package: "swift-snapshot-testing"),
+            ],
+            exclude: ["__Snapshots__"],
             // Test target keeps default `nonisolated` to match XCTestCase's
             // parent isolation. UI-touching test bodies opt into `@MainActor`
             // explicitly when they need to. Using `uiSwiftSettings` here
