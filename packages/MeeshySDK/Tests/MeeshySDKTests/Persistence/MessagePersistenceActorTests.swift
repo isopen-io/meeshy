@@ -522,4 +522,89 @@ final class MessagePersistenceActorTests: XCTestCase {
         )
         await fulfillment(of: [exp], timeout: 1.0)
     }
+
+    /// `deleteAll(conversationId:)` runs when the gateway revokes access to a
+    /// conversation (HTTP 403 path). Without a refresh notification, every
+    /// `MessageStore` observer scoped to that conversation keeps showing the
+    /// now-deleted rows from its in-memory cache until the user navigates
+    /// away. The conversationId is already a parameter, so the fix is
+    /// trivial — but the regression must be locked in.
+    func test_deleteAll_postsRefreshWithConversationId() async throws {
+        let record = MessageRecordFactory.make(localId: "del_all_notif", conversationId: "conv_del_all")
+        try await actor.insertOptimistic(record)
+        await drainMainQueueNotifications()
+
+        let (exp, observer) = observeRefresh(
+            conversationId: "conv_del_all",
+            description: "messageStoreShouldRefresh fires for deleteAll"
+        )
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        try await actor.deleteAll(conversationId: "conv_del_all")
+        await fulfillment(of: [exp], timeout: 1.0)
+    }
+
+    /// `deleteExpiredEphemeral(before:)` is a sweep that may target multiple
+    /// conversations at once. It must collect the affected conversationIds
+    /// BEFORE the delete and post one notification per id so every active
+    /// `MessageStore` observer rebinds. Posting nothing leaves expired rows
+    /// rendering until the conversation reloads from another path.
+    func test_deleteExpiredEphemeral_postsRefreshForEachAffectedConversation() async throws {
+        let now = Date()
+        let oneHourAgo = now.addingTimeInterval(-3600)
+        let oneHourAhead = now.addingTimeInterval(3600)
+
+        // Two expired rows in two different conversations + one not-yet-expired
+        // row in a third conversation. Only the first two should trigger a
+        // refresh notification.
+        var expired1 = MessageRecordFactory.make(localId: "eph_exp_1", conversationId: "conv_eph_a")
+        expired1.expiresAt = oneHourAgo
+        var expired2 = MessageRecordFactory.make(localId: "eph_exp_2", conversationId: "conv_eph_b")
+        expired2.expiresAt = oneHourAgo
+        var alive = MessageRecordFactory.make(localId: "eph_alive", conversationId: "conv_eph_c")
+        alive.expiresAt = oneHourAhead
+
+        try await actor.insertOptimistic(expired1)
+        try await actor.insertOptimistic(expired2)
+        try await actor.insertOptimistic(alive)
+        await drainMainQueueNotifications()
+
+        let (expA, obsA) = observeRefresh(
+            conversationId: "conv_eph_a",
+            description: "messageStoreShouldRefresh fires for conv_eph_a"
+        )
+        let (expB, obsB) = observeRefresh(
+            conversationId: "conv_eph_b",
+            description: "messageStoreShouldRefresh fires for conv_eph_b"
+        )
+        defer {
+            NotificationCenter.default.removeObserver(obsA)
+            NotificationCenter.default.removeObserver(obsB)
+        }
+        // Negative observer: conv_eph_c must NOT be notified.
+        var aliveNotified = false
+        let aliveObs = NotificationCenter.default.addObserver(
+            forName: .messageStoreShouldRefresh,
+            object: nil,
+            queue: .main
+        ) { notif in
+            if let cid = notif.userInfo?["conversationId"] as? String, cid == "conv_eph_c" {
+                aliveNotified = true
+            }
+        }
+        defer { NotificationCenter.default.removeObserver(aliveObs) }
+
+        try await actor.deleteExpiredEphemeral(before: now)
+        await fulfillment(of: [expA, expB], timeout: 1.0)
+        await drainMainQueueNotifications()
+        XCTAssertFalse(aliveNotified, "Non-expired conversation must not be refreshed")
+
+        // Sanity: the alive row must still be in the DB, the expired ones must be gone.
+        let aliveRows = try actor.messages(for: "conv_eph_c", limit: 10)
+        let expARows = try actor.messages(for: "conv_eph_a", limit: 10)
+        let expBRows = try actor.messages(for: "conv_eph_b", limit: 10)
+        XCTAssertEqual(aliveRows.count, 1)
+        XCTAssertTrue(expARows.isEmpty)
+        XCTAssertTrue(expBRows.isEmpty)
+    }
 }
