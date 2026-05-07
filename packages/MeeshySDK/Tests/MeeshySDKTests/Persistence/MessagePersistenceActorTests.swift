@@ -58,6 +58,60 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertNil(result)
     }
 
+    // MARK: - Refresh notification
+
+    /// Regression: `applyEvent` must post `messageStoreShouldRefresh` with the
+    /// fetched record's `conversationId` so that conversation-scoped
+    /// `MessageStore` observers (which filter by conversationId) actually
+    /// re-read after state transitions like `serverAck` / `sendFailed`.
+    /// Posting with no conversationId silently breaks every store observer
+    /// since they reject notifications without a matching conversationId.
+    func test_applyEvent_serverAck_postsRefreshNotificationWithConversationId() async throws {
+        let record = MessageRecordFactory.make(localId: "notif_ack", conversationId: "conv_notif_ack")
+        try await actor.insertOptimistic(record)
+
+        let received = expectation(description: "messageStoreShouldRefresh fires for conv_notif_ack")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .messageStoreShouldRefresh,
+            object: nil,
+            queue: .main
+        ) { notif in
+            guard let cid = notif.userInfo?["conversationId"] as? String,
+                  cid == "conv_notif_ack" else { return }
+            received.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        _ = try await actor.applyEvent(
+            localId: "notif_ack",
+            event: .serverAck(serverId: "srv_notif", at: Date())
+        )
+
+        await fulfillment(of: [received], timeout: 1.0)
+    }
+
+    func test_applyEvent_sendFailed_postsRefreshNotificationWithConversationId() async throws {
+        let record = MessageRecordFactory.make(localId: "notif_fail", conversationId: "conv_notif_fail")
+        try await actor.insertOptimistic(record)
+
+        let received = expectation(description: "messageStoreShouldRefresh fires for conv_notif_fail")
+        let observer = NotificationCenter.default.addObserver(
+            forName: .messageStoreShouldRefresh,
+            object: nil,
+            queue: .main
+        ) { notif in
+            guard let cid = notif.userInfo?["conversationId"] as? String,
+                  cid == "conv_notif_fail" else { return }
+            received.fulfill()
+        }
+        defer { NotificationCenter.default.removeObserver(observer) }
+
+        struct E: Error, Sendable {}
+        _ = try await actor.applyEvent(localId: "notif_fail", event: .sendFailed(E()))
+
+        await fulfillment(of: [received], timeout: 1.0)
+    }
+
     // MARK: - Pending IDs
 
     func test_serverAck_createsPendingIdRecord() async throws {
