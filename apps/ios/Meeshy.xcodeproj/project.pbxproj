@@ -62,6 +62,7 @@
 		BBLA0001000100010001BLD /* BubbleMetaBadges.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLA0001000100010001REF /* BubbleMetaBadges.swift */; };
 		BBLR0001000100010001BLD /* BubbleReactionsOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLR0001000100010001REF /* BubbleReactionsOverlay.swift */; };
 		BBLY0001000100010001BLD /* BubbleQuotedReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLY0001000100010001REF /* BubbleQuotedReply.swift */; };
+		BBLZ0001000100010001BLD /* BubbleAttachmentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLZ0001000100010001REF /* BubbleAttachmentView.swift */; };
 		BBLE0001000100010001BLD /* BubbleEquatableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLE0001000100010001REF /* BubbleEquatableTests.swift */; };
 		6E75FBB8A88317499B405448 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */; };
 		72CD89ACB142EA00D2E6AF80 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */; };
@@ -619,6 +620,7 @@
 		BBLA0001000100010001REF /* BubbleMetaBadges.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift; sourceTree = SOURCE_ROOT; };
 		BBLR0001000100010001REF /* BubbleReactionsOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleReactionsOverlay.swift; sourceTree = SOURCE_ROOT; };
 		BBLY0001000100010001REF /* BubbleQuotedReply.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift; sourceTree = SOURCE_ROOT; };
+		BBLZ0001000100010001REF /* BubbleAttachmentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift; sourceTree = SOURCE_ROOT; };
 		BBLE0001000100010001REF /* BubbleEquatableTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleEquatableTests.swift; sourceTree = SOURCE_ROOT; };
 		DA190704EDDA2E1CA660F898 /* OnboardingStepViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingStepViews.swift; sourceTree = "<group>"; };
 		DD0100000000003F01 /* ConversationDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDashboardView.swift; sourceTree = "<group>"; };
@@ -1125,6 +1127,7 @@
 				BBLA0001000100010001REF /* BubbleMetaBadges.swift */,
 				BBLR0001000100010001REF /* BubbleReactionsOverlay.swift */,
 				BBLY0001000100010001REF /* BubbleQuotedReply.swift */,
+				BBLZ0001000100010001REF /* BubbleAttachmentView.swift */,
 			);
 			path = Bubble;
 			sourceTree = "<group>";
@@ -1874,6 +1877,7 @@
 				BBLA0001000100010001BLD /* BubbleMetaBadges.swift in Sources */,
 				BBLR0001000100010001BLD /* BubbleReactionsOverlay.swift in Sources */,
 				BBLY0001000100010001BLD /* BubbleQuotedReply.swift in Sources */,
+				BBLZ0001000100010001BLD /* BubbleAttachmentView.swift in Sources */,
 				9F0935CAA94371C402BE2B6E /* ConversationMediaViews.swift in Sources */,
 				GALLERY001B001B001B00002 /* ConversationMediaGalleryView.swift in Sources */,
 				AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */,

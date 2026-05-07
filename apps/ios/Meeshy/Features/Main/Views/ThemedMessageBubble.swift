@@ -978,85 +978,26 @@ struct ThemedMessageBubble: View {
     // See ThemedMessageBubble+Media.swift for: visualMediaGrid, visualGridCell, carouselView, gridImageCell, carouselImageCell, gridVideoCell
 
     // MARK: - Attachment View
+
+    /// Thin facade over `BubbleAttachmentView`. Dispatch sur le type
+    /// d'attachment vit dans `Bubble/BubbleAttachmentView.swift`.
     @ViewBuilder
     private func attachmentView(_ attachment: MessageAttachment) -> some View {
-        switch attachment.type {
-        case .image:
-            ImageViewerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: contactColor
-            )
-
-        case .video:
-            VideoPlayerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: contactColor
-            )
-
-        case .audio:
-            AudioPlayerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: contactColor,
-                transcription: transcription,
-                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id }
-            )
-
-        case .file:
-            if let lang = CodeLanguage.detect(fileName: attachment.originalName, mimeType: attachment.mimeType) {
-                CodeViewerView(
-                    attachment: attachment,
-                    language: lang,
-                    context: .messageBubble,
-                    accentColor: contactColor
-                )
-            } else {
-                DocumentViewerView(
-                    attachment: attachment,
-                    context: .messageBubble,
-                    accentColor: contactColor
-                )
+        BubbleAttachmentView(
+            attachment: attachment,
+            isMe: message.isMe,
+            isDark: isDark,
+            accentHex: contactColor,
+            transcription: transcription,
+            translatedAudios: translatedAudios,
+            onShareFile: { url in
+                shareURL = url
+                showShareSheet = true
+            },
+            onTapLocation: { att in
+                fullscreenLocationAttachment = att
             }
-
-        case .location:
-            if let lat = attachment.latitude, let lon = attachment.longitude {
-                LocationMessageView(
-                    latitude: lat,
-                    longitude: lon,
-                    placeName: attachment.originalName.isEmpty ? nil : attachment.originalName,
-                    address: nil,
-                    accentColor: contactColor,
-                    onTapFullscreen: {
-                        fullscreenLocationAttachment = attachment
-                    }
-                )
-            } else {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        LinearGradient(
-                            colors: [Color(hex: attachment.thumbnailColor), Color(hex: attachment.thumbnailColor).opacity(0.6)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 200, height: 120)
-                    .overlay(
-                        VStack(spacing: 8) {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.system(size: 36))
-                                .foregroundColor(.white)
-
-                            Text("Position partagee")
-                                .font(.system(size: 12, weight: .medium))
-                                .foregroundColor(.white.opacity(0.9))
-                        }
-                    )
-                    .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Position partagee")
-            }
-        }
+        )
     }
 
     // MARK: - Reactions Overlay (themed, accent-aware)
