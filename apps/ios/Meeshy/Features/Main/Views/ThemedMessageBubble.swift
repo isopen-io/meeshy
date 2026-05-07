@@ -514,7 +514,11 @@ struct ThemedMessageBubble: View {
                             }
                         }
 
-                        // Audio standalone
+                        // Audio standalone (the 70% cap is applied to the whole
+                        // bubble VStack below — see the .frame at the end of
+                        // the outer VStack so audio, video, image grid, file,
+                        // location, and text bubbles all share the same
+                        // alignment limit).
                         ForEach(audioAttachments) { attachment in
                             mediaStandaloneView(attachment)
                         }
@@ -602,7 +606,6 @@ struct ThemedMessageBubble: View {
                                         .padding(.top, 6 + (message.replyTo != nil ? 52 : 0))
                                 }
                             }
-                            .frame(maxWidth: UIScreen.main.bounds.width * 0.75, alignment: .leading)
                             .background(bubbleBackground)
                             .clipShape(RoundedRectangle(cornerRadius: 18))
                             .shadow(
@@ -668,6 +671,16 @@ struct ThemedMessageBubble: View {
                 }
 
             }
+            // Single source of truth for the bubble's horizontal cap. Applied
+            // to the VStack that wraps every kind of bubble content (image
+            // grid, audio, video, file, document, location, text, reply chip,
+            // OG preview, language flags). `.frame(maxWidth:)` is a CAP — it
+            // does NOT force the bubble to that width when the content is
+            // intrinsic, so short text bubbles stay compact.
+            .frame(
+                maxWidth: UIScreen.main.bounds.width * 0.70,
+                alignment: message.isMe ? .trailing : .leading
+            )
 
             if !message.isMe { Spacer(minLength: 50) }
         }
