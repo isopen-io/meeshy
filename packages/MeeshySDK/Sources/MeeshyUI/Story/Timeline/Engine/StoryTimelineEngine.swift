@@ -44,15 +44,35 @@ public final class StoryTimelineEngine {
     private var timeObserver: Any?
     private var currentProject: TimelineProject?
     private var endObserver: NSObjectProtocol?
+    // nonisolated(unsafe): read in deinit (off main thread safe — only written
+    // from shutdown() which is @MainActor, deinit is the sole reader off-actor).
+    private nonisolated(unsafe) var didShutdown: Bool = false
 
     public init(audioMixer: AudioMixerProviding? = nil) {
         self.audioMixer = audioMixer ?? AudioMixer()
     }
 
+    // MARK: - Lifecycle
+
+    /// Explicit teardown — releases AVPlayer, observers, and audio mixer. Must be
+    /// called by the owner before deallocation. Idempotent.
+    public func shutdown() {
+        guard !didShutdown else { return }
+        didShutdown = true
+        tearDown()
+    }
+
     deinit {
-        MainActor.assumeIsolated {
-            self.tearDown()
-        }
+        // We CANNOT call MainActor-isolated tearDown() from deinit safely —
+        // ARC may release the engine from any thread. The owner must call
+        // shutdown() explicitly. In DEBUG we surface the contract violation
+        // via a fatal precondition so it appears in crash logs and CI output.
+        #if DEBUG
+        precondition(
+            didShutdown,
+            "StoryTimelineEngine deinit without shutdown() — owner must call shutdown() before drop to release AVPlayer + observers safely."
+        )
+        #endif
     }
 
     // MARK: Mode switch (D6)
@@ -88,10 +108,14 @@ public final class StoryTimelineEngine {
     private func configureAudioSession() {
         do {
             let session = AVAudioSession.sharedInstance()
+            // Preview is read-only — use .playback (not .playAndRecord) so we
+            // don't deactivate other apps' background audio. .mixWithOthers
+            // lets the user keep listening to Apple Music while editing a story.
+            // .moviePlayback is the canonical mode for video editor previews.
             try session.setCategory(
-                .playAndRecord,
-                mode: .default,
-                options: [.mixWithOthers, .defaultToSpeaker]
+                .playback,
+                mode: .moviePlayback,
+                options: [.mixWithOthers]
             )
             try session.setPreferredIOBufferDuration(0.005)
             try session.setActive(true, options: [.notifyOthersOnDeactivation])
@@ -194,7 +218,10 @@ public final class StoryTimelineEngine {
         do {
             try audioMixer.play()
         } catch {
+            // Audio failure is non-fatal — video still plays (silent).
+            // Surface via onError so the composer can show a banner if needed.
             logger.error("AudioMixer play failed: \(error.localizedDescription)")
+            onError?(StoryTimelineEngineError.audioEngineUnavailable(reason: error.localizedDescription))
         }
         isPlaying = true
     }
@@ -211,6 +238,14 @@ public final class StoryTimelineEngine {
 
     // MARK: Seek (D4)
 
+    /// Seeks the player + audio mixer to the given absolute time.
+    ///
+    /// - Parameter time: Target playback time in seconds. Clamped to [0, slideDuration].
+    /// - Parameter precise: When `true` (default), uses `.zero` tolerance for
+    ///   frame-accurate seek (~100–500ms on H.264 GOPs). Callers performing
+    ///   **continuous scrubbing** (e.g. drag gesture `.onChanged`) should pass
+    ///   `precise: false` for sub-50ms response, then call once more with
+    ///   `precise: true` on gesture `.onEnded` for the final frame-accurate seek.
     public func seek(to time: Float, precise: Bool = true) {
         TimelineSignposter.interval("seek") {
             guard let project = currentProject else { return }
@@ -289,6 +324,6 @@ public final class StoryTimelineEngine {
         playerItem = nil
         videoComposition = nil
         composition = nil
-        audioMixer.teardown()
+        audioMixer.shutdown()
     }
 }

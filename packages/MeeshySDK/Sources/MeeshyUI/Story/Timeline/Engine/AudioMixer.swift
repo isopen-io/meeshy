@@ -14,6 +14,7 @@ public protocol AudioMixerProviding: AnyObject {
     func setVolume(_ volume: Float, for audioId: String)
     func setMute(_ muted: Bool)
     func teardown()
+    func shutdown()
     func prepareAllNodes()
 }
 
@@ -33,9 +34,20 @@ public final class AudioMixer: AudioMixerProviding {
     private var files: [String: AVAudioFile] = [:]
     private var volumes: [String: Float] = [:]
     private var _isPlayingStorage: Bool = false
+    private var didShutdown: Bool = false
 
     public init(maxActiveNodes: Int = 6) {
         self.maxActiveNodes = maxActiveNodes
+    }
+
+    // MARK: - Lifecycle
+
+    /// Explicit teardown — stops all nodes, detaches from engine, releases resources.
+    /// Must be called by the owner before deallocation. Idempotent.
+    public func shutdown() {
+        guard !didShutdown else { return }
+        didShutdown = true
+        teardown()
     }
 
     public func configure(audios: [StoryAudioPlayerObject], urls: [String: URL]) throws {
@@ -71,8 +83,16 @@ public final class AudioMixer: AudioMixerProviding {
             _isPlayingStorage = true
             return
         }
+        // Try to start engine BEFORE flipping _isPlayingStorage. If start fails,
+        // we must NOT lie about playback state.
         if !engine.isRunning {
-            try engine.start()
+            do {
+                try engine.start()
+            } catch {
+                logger.error("AudioMixer.start() failed: \(error.localizedDescription)")
+                _isPlayingStorage = false
+                throw error
+            }
         }
         for (id, node) in nodes {
             if let file = files[id] {
@@ -93,9 +113,10 @@ public final class AudioMixer: AudioMixerProviding {
         let clamped = max(0, time)
         lastSeekTime = clamped
         let wasPlaying = _isPlayingStorage
-        if wasPlaying {
-            for node in nodes.values { node.stop() }
-        }
+        // ALWAYS stop nodes before re-scheduling, even when paused, to avoid
+        // doubling the buffered segment if the caller seeks twice in a row
+        // without a play() in between.
+        for node in nodes.values { node.stop() }
         for (id, node) in nodes {
             guard let file = files[id] else { continue }
             let sampleRate = file.processingFormat.sampleRate
@@ -144,8 +165,13 @@ public final class AudioMixer: AudioMixerProviding {
     }
 
     deinit {
-        MainActor.assumeIsolated {
-            self.teardown()
+        // We CANNOT call MainActor-isolated teardown() from deinit safely —
+        // ARC may release AudioMixer from any thread. The owner must call
+        // shutdown() explicitly. In DEBUG we surface the contract violation.
+        #if DEBUG
+        if !didShutdown {
+            assertionFailure("AudioMixer deinit without shutdown() — owner must call shutdown() before drop to release AVAudioEngine + nodes safely.")
         }
+        #endif
     }
 }

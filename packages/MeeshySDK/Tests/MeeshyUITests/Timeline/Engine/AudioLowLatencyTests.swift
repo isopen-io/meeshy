@@ -28,6 +28,7 @@ final class AudioLowLatencyTests: XCTestCase {
         // reflects the requested value). Accept any value <= 10ms as a valid low-latency config.
         XCTAssertLessThanOrEqual(actual, 0.01,
                                  "Expected preferredIOBufferDuration <= 10ms after configure, got \(actual)")
+        engine.shutdown()
     }
 
     func test_configure_callsPrepareAllNodesOnMixer() async {
@@ -36,5 +37,6 @@ final class AudioLowLatencyTests: XCTestCase {
         await engine.configure(project: makeProject(), mediaURLs: [:], images: [:])
         XCTAssertEqual(mixer.prepareAllNodesCallCount, 1,
                        "Expected mixer.prepareAllNodes() to be called once during configure")
+        engine.shutdown()
     }
 }

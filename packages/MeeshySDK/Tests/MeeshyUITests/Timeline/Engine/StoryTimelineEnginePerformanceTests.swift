@@ -37,6 +37,7 @@ final class StoryTimelineEnginePerformanceTests: XCTestCase {
             let exp = expectation(description: "configure")
             Task { @MainActor in
                 await engine.configure(project: project, mediaURLs: [:], images: [:])
+                engine.shutdown()
                 exp.fulfill()
             }
             wait(for: [exp], timeout: 1.0)
@@ -56,6 +57,7 @@ final class StoryTimelineEnginePerformanceTests: XCTestCase {
                 engine.seek(to: Float(i) * 0.5)
             }
         }
+        engine.shutdown()
     }
 
     // MARK: - F3 repeated configure stays under 250 MB (baseline)
@@ -70,6 +72,7 @@ final class StoryTimelineEnginePerformanceTests: XCTestCase {
                 for _ in 0..<5 {
                     await engine.configure(project: project, mediaURLs: [:], images: [:])
                 }
+                engine.shutdown()
                 exp.fulfill()
             }
             wait(for: [exp], timeout: 5.0)

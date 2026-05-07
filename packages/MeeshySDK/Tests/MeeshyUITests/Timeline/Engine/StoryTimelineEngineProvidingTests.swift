@@ -12,6 +12,7 @@ final class StoryTimelineEngineProvidingTests: XCTestCase {
         let provider: any TimelineEngineProviding = engine
         XCTAssertTrue(provider is StoryTimelineEngine,
                       "StoryTimelineEngine must conform to TimelineEngineProviding")
+        engine.shutdown()
     }
 
     /// Setting the protocol's TimelineEngineMode must reach the concrete engine's mode.
@@ -21,6 +22,7 @@ final class StoryTimelineEngineProvidingTests: XCTestCase {
         provider.setMode(.editing)
         XCTAssertEqual(engine.mode, .editing,
                        "Bridged setMode(.editing) must update the concrete engine's mode")
+        engine.shutdown()
     }
 
     func test_setMode_preview_reachesConcreteEngine() {
@@ -28,6 +30,7 @@ final class StoryTimelineEngineProvidingTests: XCTestCase {
         let provider: any TimelineEngineProviding = engine
         provider.setMode(.preview)
         XCTAssertEqual(engine.mode, .preview)
+        engine.shutdown()
     }
 
     /// The protocol exposes `mode` as a read-only property. The concrete engine's
@@ -39,5 +42,6 @@ final class StoryTimelineEngineProvidingTests: XCTestCase {
         provider.setMode(.editing)
         XCTAssertEqual(provider.mode, .editing,
                        "Reading provider.mode must reflect the concrete engine state")
+        engine.shutdown()
     }
 }
