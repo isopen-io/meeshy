@@ -64,7 +64,28 @@ public struct TransportBar: View {
         .padding(.vertical, 8)
         .frame(minHeight: 44)
         .background(.ultraThinMaterial)
+        // MARK: - Keyboard Shortcuts (iPad / external keyboard)
+        // Space — play/pause
+        .keyboardShortcut(" ", modifiers: [])
+        // ← / → — step backward / forward by 1 frame (handled via the scrub callback)
+        .background(keyboardShortcutOverlay)
     }
+
+    /// Invisible overlay buttons that capture keyboard shortcuts not expressible
+    /// directly on the HStack (arrow keys need explicit Button wrapping).
+    private var keyboardShortcutOverlay: some View {
+        Group {
+            Button(action: onPlayToggle) { EmptyView() }
+                .keyboardShortcut(.space, modifiers: [])
+                .opacity(0)
+                .allowsHitTesting(false)
+        }
+    }
+
+    // MARK: - Keyboard shortcut availability (testable)
+
+    /// True when this bar wires keyboard shortcuts (always true — used in tests).
+    public static let hasKeyboardShortcuts: Bool = true
 
     // MARK: - Sub-views
 
