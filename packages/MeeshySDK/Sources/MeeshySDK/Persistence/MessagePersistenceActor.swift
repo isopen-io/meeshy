@@ -850,15 +850,37 @@ public actor MessagePersistenceActor {
                 .filter(Column("conversationId") == conversationId)
                 .deleteAll(db)
         }
+        // Post a refresh notification scoped to the affected conversation so
+        // MessageStore observers re-read and clear the now-deleted rows from
+        // their in-memory caches. Without this the UI still renders the
+        // revoked conversation's messages until the user navigates away.
+        postMessageStoreRefresh(conversationIds: [conversationId])
     }
 
     /// Delete ephemeral messages whose expiry has passed.
     public func deleteExpiredEphemeral(before: Date) async throws {
-        try await dbWriter.write { db in
+        // Collect the affected conversationIds BEFORE the delete so we can
+        // post one targeted refresh per conversation. A single sweep may
+        // touch multiple conversations at once, and MessageStore observers
+        // filter notifications by conversationId — posting nothing leaves
+        // expired rows rendering until the conversation reloads from
+        // another path. We return the set from the write closure rather
+        // than mutating an outer var (Swift 6 strict concurrency rejects
+        // the latter inside a Sendable closure).
+        let affectedConvIds: Set<String> = try await dbWriter.write { db in
+            let expired = try MessageRecord
+                .filter(Column("expiresAt") != nil)
+                .filter(Column("expiresAt") <= before)
+                .fetchAll(db)
+            let ids = Set(expired.map { $0.conversationId })
             try MessageRecord
                 .filter(Column("expiresAt") != nil)
                 .filter(Column("expiresAt") <= before)
                 .deleteAll(db)
+            return ids
+        }
+        if !affectedConvIds.isEmpty {
+            postMessageStoreRefresh(conversationIds: affectedConvIds)
         }
     }
 
