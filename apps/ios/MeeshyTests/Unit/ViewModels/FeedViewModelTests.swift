@@ -13,10 +13,22 @@ final class FeedViewModelTests: XCTestCase {
 
     // MARK: - Factory
 
+    /// Test double for `LanguageProviding`. Defaults to an empty preferred-language
+    /// list so `userLanguage` falls back to `"en"`, isolating each test from
+    /// `AuthManager.shared` state pollution leaked by other suites.
+    private final class MockLanguageProvider: LanguageProviding {
+        var preferredLanguages: [String]
+
+        init(preferredLanguages: [String] = []) {
+            self.preferredLanguages = preferredLanguages
+        }
+    }
+
     private func makeSUT(
         api: MockAPIClientForApp? = nil,
         socialSocket: MockSocialSocket? = nil,
-        postService: MockPostService? = nil
+        postService: MockPostService? = nil,
+        preferredLanguages: [String] = []
     ) -> (
         sut: FeedViewModel,
         api: MockAPIClientForApp,
@@ -26,7 +38,13 @@ final class FeedViewModelTests: XCTestCase {
         let api = api ?? MockAPIClientForApp()
         let socket = socialSocket ?? MockSocialSocket()
         let postService = postService ?? MockPostService()
-        let sut = FeedViewModel(api: api, socialSocket: socket, postService: postService)
+        let languageProvider = MockLanguageProvider(preferredLanguages: preferredLanguages)
+        let sut = FeedViewModel(
+            api: api,
+            socialSocket: socket,
+            postService: postService,
+            languageProvider: languageProvider
+        )
         return (sut, api, socket, postService)
     }
 
