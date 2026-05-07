@@ -535,6 +535,15 @@ public actor MessagePersistenceActor {
                 let senderName = api.sender?.name
                 let senderUsername = api.sender?.username
                 let senderAvatarURL = api.sender?.resolvedAvatar
+                // The gateway returns `senderId` = conversation-membership id
+                // (participantId), not the actual user id. The real user id
+                // lives on `sender.userId` / `sender.user.id`. Store the
+                // resolved user id in the record's `senderId` column so that
+                // downstream `isMe` checks (record.toMessage → isMe = senderId
+                // == currentUserId) work correctly. Fallback to `api.senderId`
+                // when the gateway omits the sender envelope (older payloads,
+                // system messages).
+                let resolvedSenderUserId = api.sender?.resolvedUserId ?? api.senderId
 
                 let attachmentsJson: Data? = {
                     guard let atts = api.attachments, !atts.isEmpty else { return nil }
@@ -643,6 +652,11 @@ public actor MessagePersistenceActor {
                     existing.deliveredToAllAt = api.deliveredToAllAt
                     existing.readByAllAt = api.readByAllAt
                     existing.state = max(existing.state, computedState)
+                    // Self-heal rows that were upserted before we resolved
+                    // sender.userId — their `senderId` column held the
+                    // gateway's participantId, breaking `isMe` checks. Each
+                    // refresh from the API now backfills the correct user id.
+                    existing.senderId = resolvedSenderUserId
                     existing.senderName = senderName
                     existing.senderUsername = senderUsername
                     existing.senderAvatarURL = senderAvatarURL
@@ -657,7 +671,7 @@ public actor MessagePersistenceActor {
                     let record = MessageRecord(
                         localId: api.id, serverId: api.id,
                         conversationId: api.conversationId,
-                        senderId: api.senderId,
+                        senderId: resolvedSenderUserId,
                         content: api.content,
                         originalLanguage: api.originalLanguage ?? "fr",
                         messageType: api.messageType ?? "text",
