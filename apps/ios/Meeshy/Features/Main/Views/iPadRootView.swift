@@ -29,6 +29,13 @@ struct iPadRootView: View {
     @StateObject var statusViewModel = StatusViewModel()
     @StateObject var conversationViewModel = ConversationListViewModel()
     @StateObject var router = Router()
+    /// Hoisted at the iPad root so deep-stack screens (e.g.
+    /// `StoryNotificationTargetScreen` → `StoryActiveBridge`) can present
+    /// the story viewer through `.environmentObject` injection without
+    /// threading a binding through every parent view. Mirrors RootView's
+    /// (iPhone) coordinator wiring; the cover is wired in
+    /// `iPadRootView+Sheets.swift`.
+    @StateObject var storyViewerCoordinator = StoryViewerCoordinator()
     @ObservedObject var callManager = CallManager.shared
     @ObservedObject var networkMonitor = NetworkMonitor.shared
     @ObservedObject var notificationManager = NotificationManager.shared
@@ -72,6 +79,7 @@ struct iPadRootView: View {
             .environmentObject(storyViewModel)
             .environmentObject(statusViewModel)
             .environmentObject(conversationViewModel)
+            .environmentObject(storyViewerCoordinator)
             .onAppear {
                 router.onRouteRequested = { route in
                     if case .conversation(let conv) = route {
@@ -135,6 +143,15 @@ struct iPadRootView: View {
             }
             .onReceive(NotificationCenter.default.publisher(for: Notification.Name("pushNavigateToRoute"))) { notification in
                 handlePushNavigateToRoute(notification)
+            }
+            // `StoryExpiredContent` posts `.openStoryComposer` from the
+            // notification flow when the underlying story is gone. Routing
+            // the composer through `StoryViewModel.showStoryComposer`
+            // reuses `StoryTrayView`'s existing `.fullScreenCover`, so the
+            // CTA animates in cleanly without stacking covers. Mirrors
+            // RootView (iPhone).
+            .onReceive(NotificationCenter.default.publisher(for: .openStoryComposer)) { _ in
+                storyViewModel.showStoryComposer = true
             }
             .onOpenURL { url in
                 // Only the share intent flows through Router here — every

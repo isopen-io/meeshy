@@ -123,13 +123,17 @@ extension iPadRootView {
                                 .navigationBarHidden(true)
         case .conversation:
             EmptyView()
-        case .storyNotificationTarget:
-            // Phase G — story-notification routing is iPhone-only for now
-            // (the four `groupIndex(forStoryId:)` call sites in
-            // iPadRootView+Navigation.swift are intentionally untouched and
-            // tracked as a follow-up). Returning EmptyView here keeps the
-            // exhaustive switch valid without changing iPad behaviour.
-            EmptyView()
+        case .storyNotificationTarget(let storyId, let intent, let context):
+            // Mirrors iPhone (RootView) so that tapping a story-related
+            // notification on iPad lands on the same Phase E/F screen
+            // (loading → active → expired). The screen presents the viewer
+            // through the shared `StoryViewerCoordinator` env object.
+            StoryNotificationTargetScreen(
+                storyId: storyId,
+                intent: intent,
+                context: context
+            )
+            .navigationBarHidden(true)
         }
     }
 }
