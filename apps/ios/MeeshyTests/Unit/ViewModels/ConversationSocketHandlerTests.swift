@@ -113,9 +113,13 @@ final class ConversationSocketHandlerTests: XCTestCase {
         participantId: String,
         action: String
     ) -> ReactionUpdateEvent {
+        // Include conversationId so the production .filter { $0.conversationId == convId }
+        // subscription accepts the event (post-Phase-1.5 the socket handler filters
+        // strictly on conversationId).
         let json = """
         {
             "messageId": "\(messageId)",
+            "conversationId": "\(conversationId)",
             "participantId": "\(participantId)",
             "emoji": "\(emoji)",
             "action": "\(action)",
@@ -184,12 +188,15 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let (db, actor) = try makeDB()
         let (sut, delegate, socket) = makeSUT()
         sut.persistence = actor
+        // bufferIncoming queues writes via AsyncStream; the processor must be
+        // started for the queued writes to actually land in GRDB.
+        await actor.start()
 
         let apiMsg = makeAPIMessage(id: "newmsg", senderId: otherUserId, content: "Hey!")
         socket.simulateMessage(apiMsg)
 
         // Wait for the buffered write + actor processor to commit.
-        try await Task.sleep(nanoseconds: 500_000_000)
+        try await Task.sleep(nanoseconds: 800_000_000)
 
         // 1. Record landed in the database via persistence.bufferIncoming.
         let records = try await db.read { db in
@@ -918,12 +925,13 @@ final class ConversationSocketHandlerTests: XCTestCase {
         let (sut, delegate, socket) = makeSUT()
         sut.persistence = actor
         _ = delegate
+        await actor.start()
 
         let apiMsg = makeAPIMessage(id: "persist_new", senderId: otherUserId, content: "Persisted!")
         socket.simulateMessage(apiMsg)
 
         await Task.yield()
-        try await Task.sleep(nanoseconds: 500_000_000)
+        try await Task.sleep(nanoseconds: 800_000_000)
 
         // Post Phase 1.5: delegate.messages is no longer appended to. The
         // socket handler emits UI signals (lastUnreadMessage, newMessageAppended)
