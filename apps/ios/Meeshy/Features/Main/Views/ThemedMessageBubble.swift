@@ -60,9 +60,7 @@ struct ThemedMessageBubble: View {
     @State var fullscreenAttachment: MessageAttachment? = nil // internal for cross-file extension access
     @State var showCarousel: Bool = false // internal for cross-file extension access
     @State var carouselIndex: Int = 0 // internal for cross-file extension access
-    @State private var isBlurRevealed: Bool = false
-    @State private var blurRevealTask: Task<Void, Never>?
-    @State private var fogOpacity: CGFloat = 0
+    @StateObject private var blurController = BubbleBlurRevealController()
     @State var revealedAttachmentIds: Set<String> = [] // internal for cross-file extension access
 
     @State var fullscreenLocationAttachment: MessageAttachment? = nil
@@ -248,7 +246,7 @@ struct ThemedMessageBubble: View {
 
     // Vrai quand le message view-once a été consommé et n'est plus en cours de révélation
     private var isViewOnceBurned: Bool {
-        message.isViewOnce && message.viewOnceCount > 0 && !isBlurRevealed
+        message.isViewOnce && message.viewOnceCount > 0 && !blurController.isRevealed
     }
 
     var body: some View {
@@ -264,11 +262,13 @@ struct ThemedMessageBubble: View {
                 .onAppear { hasPlayedAppearance = true }
                 .opacity(isEphemeralExpired ? 0 : 1)
                 .scaleEffect(isEphemeralExpired ? 0.8 : 1)
-                .onAppear { startEphemeralTimerIfNeeded() }
+                .onAppear {
+                    startEphemeralTimerIfNeeded()
+                    applyBlurRevealDurationFromPrefs()
+                }
                 .onDisappear {
                     ephemeralController.stop()
-                    blurRevealTask?.cancel()
-                    fogOpacity = 0
+                    blurController.cancel()
                 }
         }
     }
@@ -280,58 +280,23 @@ struct ThemedMessageBubble: View {
         ephemeralController.start(expiresAt: expiresAt)
     }
 
-    // MARK: - Blur Reveal Logic
+    // MARK: - Blur Reveal Logic — delegated to BubbleBlurRevealController
 
-    private static let defaultBlurRevealDuration: TimeInterval = 5
-
-    private var blurRevealDuration: TimeInterval {
+    private func applyBlurRevealDurationFromPrefs() {
         if case .double(let value) = UserPreferencesManager.shared.message.extras["blurRevealDuration"] {
-            return value
+            blurController.setVisibilityDuration(value)
         }
-        return Self.defaultBlurRevealDuration
     }
 
     private func revealBlurredContent() {
         HapticFeedback.medium()
-        if message.isViewOnce {
-            onConsumeViewOnce?(message.id) { success in
-                guard success else { return }
-                scheduleBlurReveal()
-            }
-        } else {
-            scheduleBlurReveal()
-        }
-    }
-
-    private func scheduleBlurReveal() {
-        fogOpacity = 0
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            isBlurRevealed = true
-        }
-        blurRevealTask?.cancel()
-        blurRevealTask = Task { @MainActor in
-            try? await Task.sleep(for: .seconds(blurRevealDuration))
-            guard !Task.isCancelled else { return }
-
-            // Phase 1: Fog condensation appears
-            withAnimation(.easeIn(duration: 0.4)) {
-                fogOpacity = 1
-            }
-            try? await Task.sleep(for: .seconds(0.35))
-            guard !Task.isCancelled else { return }
-
-            // Phase 2: Blur applies behind fog
-            withAnimation(.easeOut(duration: 0.4)) {
-                isBlurRevealed = false
-            }
-            try? await Task.sleep(for: .seconds(0.45))
-            guard !Task.isCancelled else { return }
-
-            // Phase 3: Fog dissipates
-            withAnimation(.easeOut(duration: 0.5)) {
-                fogOpacity = 0
-            }
-        }
+        blurController.requestReveal(
+            request: BubbleBlurRevealLifecycle.RevealRequest(
+                messageId: message.id,
+                isViewOnce: message.isViewOnce
+            ),
+            consumeViewOnce: onConsumeViewOnce
+        )
     }
 
     /// Thin facade over `BubbleDeletedView`. Implementation lives in
@@ -406,7 +371,7 @@ struct ThemedMessageBubble: View {
                 }
 
                 // Message content (blurred if isBlurred and not revealed)
-                let shouldBlur = message.isBlurred && !isBlurRevealed
+                let shouldBlur = message.isBlurred && !blurController.isRevealed
 
                 ZStack {
                     VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
@@ -544,7 +509,7 @@ struct ThemedMessageBubble: View {
                     )
 
                     // Fog condensation effect (appears when blur returns)
-                    if fogOpacity > 0 {
+                    if blurController.fogOpacity > 0 {
                         ZStack {
                             RadialGradient(
                                 gradient: Gradient(colors: [
@@ -571,13 +536,13 @@ struct ThemedMessageBubble: View {
                                 .frame(width: 55, height: 55)
                                 .offset(x: 20, y: 12)
                         }
-                        .opacity(fogOpacity)
+                        .opacity(blurController.fogOpacity)
                         .clipShape(RoundedRectangle(cornerRadius: 18))
                         .allowsHitTesting(false)
                     }
 
                     // Blur peek: tap to reveal for N seconds, then auto re-blur
-                    if message.isBlurred && !isBlurRevealed {
+                    if message.isBlurred && !blurController.isRevealed {
                         Color.clear
                             .contentShape(Rectangle())
                             .accessibilityElement(children: .combine)
