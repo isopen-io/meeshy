@@ -97,8 +97,14 @@ public actor MessagePersistenceActor {
     }
 
     public func applyEvent(localId: String, event: MessageEvent) throws -> MessageState? {
+        // We need the record's conversationId outside the write block so we
+        // can post a *targeted* refresh notification. MessageStore observers
+        // filter notifications by conversationId — a notification without
+        // one is silently dropped, leaving the bubble stuck in `.sending`.
+        var affectedConversationId: String?
         let result = try dbWriter.write { db -> MessageState? in
             guard var record = try MessageRecord.fetchOne(db, key: localId) else { return nil }
+            affectedConversationId = record.conversationId
 
             var machine = MessageStateMachine(
                 state: record.state,
@@ -132,9 +138,12 @@ public actor MessagePersistenceActor {
             try record.update(db)
             return newState
         }
-        // applyEvent may not know the conversationId; post a global refresh so
-        // any listening MessageStore re-reads.
-        postMessageStoreRefresh(conversationIds: [])
+        // Post a refresh scoped to the record's conversation so MessageStore
+        // observers actually re-read. Skip when the row was missing or the
+        // transition was rejected (no DB write happened).
+        if result != nil, let convId = affectedConversationId {
+            postMessageStoreRefresh(conversationIds: [convId])
+        }
         return result
     }
 

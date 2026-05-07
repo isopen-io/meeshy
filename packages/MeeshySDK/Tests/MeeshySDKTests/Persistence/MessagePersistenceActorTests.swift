@@ -69,8 +69,12 @@ final class MessagePersistenceActorTests: XCTestCase {
     func test_applyEvent_serverAck_postsRefreshNotificationWithConversationId() async throws {
         let record = MessageRecordFactory.make(localId: "notif_ack", conversationId: "conv_notif_ack")
         try await actor.insertOptimistic(record)
+        // Drain the insertOptimistic notification before installing the observer
+        // so we only catch the one fired by applyEvent.
+        await Task.yield()
 
         let received = expectation(description: "messageStoreShouldRefresh fires for conv_notif_ack")
+        received.assertForOverFulfill = false
         let observer = NotificationCenter.default.addObserver(
             forName: .messageStoreShouldRefresh,
             object: nil,
@@ -93,8 +97,10 @@ final class MessagePersistenceActorTests: XCTestCase {
     func test_applyEvent_sendFailed_postsRefreshNotificationWithConversationId() async throws {
         let record = MessageRecordFactory.make(localId: "notif_fail", conversationId: "conv_notif_fail")
         try await actor.insertOptimistic(record)
+        await Task.yield()
 
         let received = expectation(description: "messageStoreShouldRefresh fires for conv_notif_fail")
+        received.assertForOverFulfill = false
         let observer = NotificationCenter.default.addObserver(
             forName: .messageStoreShouldRefresh,
             object: nil,
