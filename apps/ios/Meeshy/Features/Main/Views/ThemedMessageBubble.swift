@@ -69,10 +69,8 @@ struct ThemedMessageBubble: View {
     var theme: ThemeManager { ThemeManager.shared } // non-observed — isDark drives re-renders
     // Video player state passed as primitive to avoid @ObservedObject on singleton in leaf view
 
-    // Ephemeral timer state
-    @State private var ephemeralSecondsRemaining: TimeInterval = 0
-    @State private var isEphemeralExpired: Bool = false
-    @State private var ephemeralTimerCancellable: AnyCancellable?
+    // Ephemeral timer state — encapsule dans BubbleEphemeralController
+    @StateObject private var ephemeralController = BubbleEphemeralController()
     @State private var hasPlayedAppearance = false
 
     let gridMaxWidth: CGFloat = 300 // internal for cross-file extension access
@@ -237,18 +235,15 @@ struct ThemedMessageBubble: View {
     // MARK: - Ephemeral Formatting
 
     private var ephemeralTimerText: String {
-        let total = Int(ephemeralSecondsRemaining)
-        if total <= 0 { return "0s" }
-        let hours = total / 3600
-        let minutes = (total % 3600) / 60
-        let seconds = total % 60
-        if hours > 0 {
-            return "\(hours)h \(minutes)m"
+        if case .running(let remaining) = ephemeralController.state {
+            return BubbleEphemeralLifecycle.format(remaining: remaining)
         }
-        if minutes > 0 {
-            return "\(minutes)m \(seconds)s"
-        }
-        return "\(seconds)s"
+        return "0s"
+    }
+
+    private var isEphemeralExpired: Bool {
+        if case .expired = ephemeralController.state { return true }
+        return false
     }
 
     // Vrai quand le message view-once a été consommé et n'est plus en cours de révélation
@@ -271,7 +266,7 @@ struct ThemedMessageBubble: View {
                 .scaleEffect(isEphemeralExpired ? 0.8 : 1)
                 .onAppear { startEphemeralTimerIfNeeded() }
                 .onDisappear {
-                    ephemeralTimerCancellable?.cancel()
+                    ephemeralController.stop()
                     blurRevealTask?.cancel()
                     fogOpacity = 0
                 }
@@ -282,27 +277,7 @@ struct ThemedMessageBubble: View {
 
     private func startEphemeralTimerIfNeeded() {
         guard let expiresAt = message.expiresAt else { return }
-        let remaining = expiresAt.timeIntervalSinceNow
-        if remaining <= 0 {
-            withAnimation(.easeOut(duration: 0.4)) {
-                isEphemeralExpired = true
-            }
-            return
-        }
-        ephemeralSecondsRemaining = remaining
-
-        let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
-        ephemeralTimerCancellable = timer.sink { _ in
-            let newRemaining = expiresAt.timeIntervalSinceNow
-            if newRemaining <= 0 {
-                withAnimation(.easeOut(duration: 0.5).delay(0.1)) {
-                    isEphemeralExpired = true
-                }
-                ephemeralTimerCancellable?.cancel()
-            } else {
-                ephemeralSecondsRemaining = newRemaining
-            }
-        }
+        ephemeralController.start(expiresAt: expiresAt)
     }
 
     // MARK: - Blur Reveal Logic
