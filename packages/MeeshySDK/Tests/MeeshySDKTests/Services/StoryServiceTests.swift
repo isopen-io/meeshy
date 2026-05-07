@@ -156,4 +156,68 @@ final class StoryServiceTests: XCTestCase {
 
         XCTAssertEqual(mock.requestCount, 1)
     }
+
+    // MARK: - cachedPost
+
+    func testCachedPostWhenAbsentReturnsNil() {
+        XCTAssertNil(service.cachedPost(id: "missing"))
+    }
+
+    func testCachedPostAfterListReturnsCachedItem() async throws {
+        let post = makePost(id: "p1")
+        let response = PaginatedAPIResponse(
+            success: true,
+            data: [post],
+            pagination: CursorPagination(nextCursor: nil, hasMore: false, limit: 50),
+            error: nil
+        )
+        mock.stub("/posts/feed/stories", result: response)
+
+        _ = try await service.list()
+
+        XCTAssertEqual(service.cachedPost(id: "p1")?.id, "p1")
+    }
+
+    // MARK: - fetchPost
+
+    func testFetchPostReturnsAPIPostFromEndpoint() async throws {
+        let post = makePost(id: "p1")
+        let response = APIResponse(success: true, data: post, error: nil)
+        mock.stub("/posts/p1", result: response)
+
+        let result = try await service.fetchPost(id: "p1")
+
+        XCTAssertEqual(result.id, "p1")
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/posts/p1")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+    }
+
+    func testFetchPostThrowsOnError() async {
+        mock.errorToThrow = MeeshyError.network(.noConnection)
+
+        do {
+            _ = try await service.fetchPost(id: "missing")
+            XCTFail("Expected error to be thrown")
+        } catch let error as MeeshyError {
+            if case .network(.noConnection) = error {
+                // expected
+            } else {
+                XCTFail("Expected MeeshyError.network(.noConnection), got \(error)")
+            }
+        } catch {
+            XCTFail("Expected MeeshyError, got \(error)")
+        }
+    }
+
+    func testFetchPostPopulatesCache() async throws {
+        let post = makePost(id: "p1")
+        let response = APIResponse(success: true, data: post, error: nil)
+        mock.stub("/posts/p1", result: response)
+
+        XCTAssertNil(service.cachedPost(id: "p1"))
+        _ = try await service.fetchPost(id: "p1")
+
+        XCTAssertEqual(service.cachedPost(id: "p1")?.id, "p1")
+    }
 }
