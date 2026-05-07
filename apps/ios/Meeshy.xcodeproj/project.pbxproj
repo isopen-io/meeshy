@@ -56,6 +56,8 @@
 		BBLM0001000100010001BLD /* BubbleContentMatrixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLM0001000100010001REF /* BubbleContentMatrixTests.swift */; };
 		BBLC0001000100010001BLD /* BubbleContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLC0001000100010001REF /* BubbleContent.swift */; };
 		BBLB0001000100010001BLD /* BubbleContentBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLB0001000100010001REF /* BubbleContentBuilder.swift */; };
+		BBLS0001000100010001BLD /* BubbleStyle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLS0001000100010001REF /* BubbleStyle.swift */; };
+		BBLK0001000100010001BLD /* BubbleCallbacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLK0001000100010001REF /* BubbleCallbacks.swift */; };
 		6E75FBB8A88317499B405448 /* FeedView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6A9158CD2F0C3B689AB0ACF4 /* FeedView.swift */; };
 		72CD89ACB142EA00D2E6AF80 /* MessageComposer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */; };
 		738E225E02495FB6C1A4D074 /* DiscoverViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B66A6D610352D04764BA347D /* DiscoverViewModel.swift */; };
@@ -606,6 +608,8 @@
 		BBLM0001000100010001REF /* BubbleContentMatrixTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift; sourceTree = SOURCE_ROOT; };
 		BBLC0001000100010001REF /* BubbleContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleContent.swift; sourceTree = SOURCE_ROOT; };
 		BBLB0001000100010001REF /* BubbleContentBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift; sourceTree = SOURCE_ROOT; };
+		BBLS0001000100010001REF /* BubbleStyle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleStyle.swift; sourceTree = SOURCE_ROOT; };
+		BBLK0001000100010001REF /* BubbleCallbacks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleCallbacks.swift; sourceTree = SOURCE_ROOT; };
 		DA190704EDDA2E1CA660F898 /* OnboardingStepViews.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingStepViews.swift; sourceTree = "<group>"; };
 		DD0100000000003F01 /* ConversationDashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationDashboardView.swift; sourceTree = "<group>"; };
 		DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationListViewModel.swift; sourceTree = "<group>"; };
@@ -1105,6 +1109,8 @@
 			children = (
 				BBLC0001000100010001REF /* BubbleContent.swift */,
 				BBLB0001000100010001REF /* BubbleContentBuilder.swift */,
+				BBLS0001000100010001REF /* BubbleStyle.swift */,
+				BBLK0001000100010001REF /* BubbleCallbacks.swift */,
 			);
 			path = Bubble;
 			sourceTree = "<group>";
@@ -1847,6 +1853,8 @@
 				CF236AB810E070AE44B8AE2F /* ThemedMessageBubble+Media.swift in Sources */,
 				BBLC0001000100010001BLD /* BubbleContent.swift in Sources */,
 				BBLB0001000100010001BLD /* BubbleContentBuilder.swift in Sources */,
+				BBLS0001000100010001BLD /* BubbleStyle.swift in Sources */,
+				BBLK0001000100010001BLD /* BubbleCallbacks.swift in Sources */,
 				9F0935CAA94371C402BE2B6E /* ConversationMediaViews.swift in Sources */,
 				GALLERY001B001B001B00002 /* ConversationMediaGalleryView.swift in Sources */,
 				AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */,
