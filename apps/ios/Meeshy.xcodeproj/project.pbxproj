@@ -68,6 +68,7 @@
 		BBLD0001000100010001BLD /* BubbleStandardLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLD0001000100010001REF /* BubbleStandardLayout.swift */; };
 		BBLW0001000100010001BLD /* BubbleExpandableTextStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLW0001000100010001REF /* BubbleExpandableTextStateTests.swift */; };
 		BBLE0001000100010001BLD /* BubbleEquatableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLE0001000100010001REF /* BubbleEquatableTests.swift */; };
+		BBLI0001000100010001BLD /* ThemedMessageBubbleEquatableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLI0001000100010001REF /* ThemedMessageBubbleEquatableTests.swift */; };
 		BBLF0001000100010001BLD /* BubbleLanguageFlagController.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLF0001000100010001REF /* BubbleLanguageFlagController.swift */; };
 		BBLN0001000100010001BLD /* BubbleSecondaryContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLN0001000100010001REF /* BubbleSecondaryContent.swift */; };
 		BBLT0001000100010001BLD /* BubbleLanguageFlagControllerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLT0001000100010001REF /* BubbleLanguageFlagControllerTests.swift */; };
@@ -637,6 +638,7 @@
 		BBLD0001000100010001REF /* BubbleStandardLayout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift; sourceTree = SOURCE_ROOT; };
 		BBLW0001000100010001REF /* BubbleExpandableTextStateTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleExpandableTextStateTests.swift; sourceTree = SOURCE_ROOT; };
 		BBLE0001000100010001REF /* BubbleEquatableTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleEquatableTests.swift; sourceTree = SOURCE_ROOT; };
+		BBLI0001000100010001REF /* ThemedMessageBubbleEquatableTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/ThemedMessageBubbleEquatableTests.swift; sourceTree = SOURCE_ROOT; };
 		BBLF0001000100010001REF /* BubbleLanguageFlagController.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleLanguageFlagController.swift; sourceTree = SOURCE_ROOT; };
 		BBLN0001000100010001REF /* BubbleSecondaryContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleSecondaryContent.swift; sourceTree = SOURCE_ROOT; };
 		BBLT0001000100010001REF /* BubbleLanguageFlagControllerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleLanguageFlagControllerTests.swift; sourceTree = SOURCE_ROOT; };
@@ -1409,6 +1411,7 @@
 			children = (
 				BBLM0001000100010001REF /* BubbleContentMatrixTests.swift */,
 				BBLE0001000100010001REF /* BubbleEquatableTests.swift */,
+				BBLI0001000100010001REF /* ThemedMessageBubbleEquatableTests.swift */,
 				BBLW0001000100010001REF /* BubbleExpandableTextStateTests.swift */,
 				BBLT0001000100010001REF /* BubbleLanguageFlagControllerTests.swift */,
 				BBLQ0001000100010001REF /* BubbleEphemeralLifecycleTests.swift */,
@@ -2139,6 +2142,7 @@
 				SSOT0001000100010001BLD /* SingleSourceOfTruthTests.swift in Sources */,
 				BBLM0001000100010001BLD /* BubbleContentMatrixTests.swift in Sources */,
 				BBLE0001000100010001BLD /* BubbleEquatableTests.swift in Sources */,
+				BBLI0001000100010001BLD /* ThemedMessageBubbleEquatableTests.swift in Sources */,
 				BBLW0001000100010001BLD /* BubbleExpandableTextStateTests.swift in Sources */,
 				BBLT0001000100010001BLD /* BubbleLanguageFlagControllerTests.swift in Sources */,
 				BBLQ0001000100010001BLD /* BubbleEphemeralLifecycleTests.swift in Sources */,

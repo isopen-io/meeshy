@@ -18,10 +18,15 @@
 // `BubbleStandardLayout` as `@Binding`/`@ObservedObject` so the orchestrator
 // stays a leaf-friendly composition without state ownership chaos.
 //
-// Equatable: the simplified extension at the bottom checks the minimal set of
-// fields that affect rendering. Every sub-view has its own granular Equatable
-// — this wrapper Equatable invalidates the cell when the underlying message
-// identity, lifecycle, or display context changes.
+// Equatable: the wrapper Equatable gates body re-evaluation — when this
+// returns true, SwiftUI skips body entirely, and the sub-view Equatables
+// never fire. Therefore this comparison must include EVERY input that can
+// change the rendered output without bumping `message.updatedAt`. Granular
+// sub-view Equatables (BubbleBackground, BubbleQuotedReply,
+// BubbleExpandableText, BubbleReactionsOverlay, BubbleSecondaryContent, …)
+// provide secondary invalidation only AFTER body re-runs. Inputs that piggy-
+// back on `updatedAt` bumps (content, isEdited, pinnedAt, expiresAt, etc.)
+// are intentionally NOT compared here — `updatedAt` covers them.
 
 import SwiftUI
 import Combine
@@ -236,30 +241,55 @@ struct ThemedMessageBubble: View {
 
 // MARK: - Equatable
 //
-// Simplified from a 35-line manual extension reading every input. The
-// composed sub-views (BubbleBackground, BubbleQuotedReply, BubbleExpandableText,
-// BubbleReactionsOverlay, BubbleSecondaryContent, etc.) each have their own
-// granular `.equatable()` which handles intra-bubble cache invalidation. This
-// wrapper Equatable only needs to invalidate the wrapper itself when the
-// message identity / lifecycle / display context changes — every other
-// rendering decision is dominated by the sub-view Equatables.
+// The wrapper Equatable gates body re-evaluation — when it returns true,
+// SwiftUI skips body entirely and the sub-view Equatables never fire. This
+// comparison must therefore include every input that can change the rendered
+// output WITHOUT bumping `message.updatedAt`:
+//   - sender state pushed live by the gateway (presence, mood, story ring)
+//   - group-context flags recomputed by parent on neighbor changes
+//   - user-level prefs (language, audio language) flipped from settings
+//   - effects flags (one-shot or persistent) and reaction identity
+// Fields whose changes are guaranteed to bump `updatedAt` (content, isEdited,
+// pinnedAt, expiresAt, etc.) are intentionally NOT compared here — relying on
+// `updatedAt` keeps the comparison tight while still covering them.
 extension ThemedMessageBubble: @MainActor Equatable {
     static func == (lhs: ThemedMessageBubble, rhs: ThemedMessageBubble) -> Bool {
+        // Message identity & server-bumped lifecycle
         lhs.message.id == rhs.message.id &&
         lhs.message.updatedAt == rhs.message.updatedAt &&
         lhs.message.deliveryStatus == rhs.message.deliveryStatus &&
         lhs.message.attachments.count == rhs.message.attachments.count &&
         lhs.message.reactions.count == rhs.message.reactions.count &&
         lhs.message.viewOnceCount == rhs.message.viewOnceCount &&
+        // Effects (flags can flip without updatedAt for some appearance changes)
+        lhs.message.effects.flags.rawValue == rhs.message.effects.flags.rawValue &&
+        // Reaction identity, not just count (emoji swap with same count)
+        Set(lhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" })
+            == Set(rhs.message.reactions.map { "\($0.emoji)|\($0.participantId ?? "")" }) &&
+        // Display context
         lhs.contactColor == rhs.contactColor &&
         lhs.isDark == rhs.isDark &&
+        lhs.isDirect == rhs.isDirect &&
+        // Translations / transcription
         lhs.preferredTranslation?.translatedContent == rhs.preferredTranslation?.translatedContent &&
         lhs.textTranslations.count == rhs.textTranslations.count &&
         lhs.transcription?.text == rhs.transcription?.text &&
         lhs.translatedAudios.count == rhs.translatedAudios.count &&
+        // Edit overlay
         lhs.isLastReceivedMessage == rhs.isLastReceivedMessage &&
         lhs.isEditSaving == rhs.isEditSaving &&
         lhs.hasEditHistory == rhs.hasEditHistory &&
-        lhs.highlightSearchTerm == rhs.highlightSearchTerm
+        lhs.highlightSearchTerm == rhs.highlightSearchTerm &&
+        // Sender state — pushed by the server without bumping message.updatedAt
+        lhs.presenceState == rhs.presenceState &&
+        lhs.senderMoodEmoji == rhs.senderMoodEmoji &&
+        lhs.senderStoryRingState == rhs.senderStoryRingState &&
+        // Group state — recomputed by parent on neighbor changes
+        lhs.isLastInGroup == rhs.isLastInGroup &&
+        lhs.showAvatar == rhs.showAvatar &&
+        // User-level prefs — flipped from settings without touching the message
+        lhs.userLanguages.regional == rhs.userLanguages.regional &&
+        lhs.userLanguages.custom == rhs.userLanguages.custom &&
+        lhs.activeAudioLanguage == rhs.activeAudioLanguage
     }
 }
