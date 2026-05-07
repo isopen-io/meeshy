@@ -20,6 +20,9 @@ struct BubbleContent: Equatable {
         case nonMedia([MeeshyMessageAttachment])      // file + location
         case mixed(visual: [MeeshyMessageAttachment], nonMedia: [MeeshyMessageAttachment])
 
+        // TODO(Task14): expand equality to cover mutation-prone fields (thumbnailUrl,
+        // isBlurred, viewOnceCount, width/height, duration, fileUrl) — id-only comparison
+        // will miss server-side updates that should invalidate the bubble cache.
         static func == (lhs: Attachments, rhs: Attachments) -> Bool {
             switch (lhs, rhs) {
             case (.none, .none):
@@ -57,6 +60,9 @@ struct BubbleContent: Equatable {
         let reference: ReplyReference
         let isStory: Bool
 
+        // TODO(Task14): expand equality to cover story-side mutations (attachmentThumbnailUrl,
+        // storyThumbnailUrl, storyReactionCount, storyCommentCount, storyPublishedAt) — current
+        // (messageId + previewText + isStory) misses late thumbnail/counter updates.
         static func == (lhs: Reply, rhs: Reply) -> Bool {
             lhs.reference.messageId == rhs.reference.messageId
                 && lhs.reference.previewText == rhs.reference.previewText

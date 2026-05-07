@@ -2,7 +2,6 @@ import XCTest
 import MeeshySDK
 @testable import Meeshy
 
-@MainActor
 final class BubbleContentMatrixTests: XCTestCase {
 
     func test_simpleText_hasOnlyTextAndMeta() {
