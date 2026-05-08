@@ -8,6 +8,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { useCallStore } from '@/stores/call-store';
+import { useAuth } from '@/hooks/use-auth';
 import { CallNotification } from './CallNotification';
 import { VideoCallInterface } from '@/components/video-calls/VideoCallInterface';
 import { logger } from '@/utils/logger';
@@ -25,6 +26,7 @@ import { CLIENT_EVENTS, SERVER_EVENTS } from '@meeshy/shared/types/socketio-even
 const CALL_TIMEOUT_MS = 30000; // 30 seconds
 
 export function CallManager() {
+  const { user, isChecking } = useAuth();
   const {
     currentCall,
     isInCall,

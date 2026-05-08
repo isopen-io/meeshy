@@ -71,8 +71,11 @@ struct StoryViewerView: View {
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
 
-    /// Durée dynamique du slide courant — max(5, durée max des médias vidéo/audio).
-    @State var computedStoryDuration: Double = 5.0 // internal for cross-file extension access
+    /// Durée dynamique du slide courant — max(12, durée max des médias vidéo/audio).
+    /// Static text/image slides default to 12s so the reader has time to take in
+    /// captions and stickers (the previous 5s default felt rushed for anything
+    /// beyond a single-emoji story).
+    @State var computedStoryDuration: Double = 12.0 // internal for cross-file extension access
     @State var timerCancellable: AnyCancellable? // internal for cross-file extension access
     @State var hasFiredFadeOut = false // internal for cross-file extension access
 

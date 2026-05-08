@@ -552,6 +552,18 @@ do_build() {
         err "App bundle not found at: $(app_path)"
         exit 1
     fi
+
+    # Sign every dylib + the app bundle ad-hoc. iOS 26 simulators refuse to
+    # launch unsigned binaries with a misleading SBMainWorkspace denial.
+    # Plain `xcodebuild build` for the simulator destination ships unsigned
+    # debug dylibs (Meeshy Dev.debug.dylib, MeeshyWidgets.debug.dylib, …)
+    # and dyld blows up on first launch with "Trying to load an unsigned
+    # library". Doing it here means every `meeshy.sh build/run/restart`
+    # produces a launchable bundle.
+    if [ "$PLATFORM" != "mac" ]; then
+        find "$(app_path)" -name "*.dylib" -exec codesign --sign - --force {} \; 2>/dev/null
+        codesign --sign - --force --deep "$(app_path)" 2>/dev/null
+    fi
 }
 
 do_install() {

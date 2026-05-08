@@ -237,6 +237,7 @@ final class ConversationSocketHandler {
                     // (delete/edit/react/pin) keep resolving the right server
                     // id, and cache writes swap to the server id only when
                     // persisting (see `ConversationViewModel.serverIdMappedSnapshot`).
+                    print("[SocketRecv] message:new id=\(apiMsg.id) senderId=\(apiMsg.senderId) userId=\(userId) — pendingServerIds keys=\(delegate.pendingServerIds.keys.count) lookup=\(delegate.pendingServerIds.first(where: { $0.value == apiMsg.id })?.key ?? "nil")")
                     if apiMsg.senderId == userId,
                        let tempId = delegate.pendingServerIds.first(where: { $0.value == apiMsg.id })?.key,
                        delegate.messageIndex(for: tempId) != nil {

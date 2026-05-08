@@ -84,7 +84,18 @@ public final class StoryComposerViewModel {
     nonisolated(unsafe) private var preloadTask: Task<Void, Never>?
 
     var currentSlide: StorySlide {
-        get { slides[safe: currentSlideIndex] ?? slides[0] }
+        get {
+            // The composer holds the invariant `slides` is never empty
+            // (init seeds [StorySlide()], removeSlide refuses to drop the
+            // last one). If a future regression breaks that invariant we
+            // must NOT crash with "Index out of range" — fall through to a
+            // freshly-built empty slide instead so the composer keeps
+            // rendering and the bug surfaces visibly rather than as a
+            // hard crash on background queues.
+            if let s = slides[safe: currentSlideIndex] { return s }
+            if let first = slides.first { return first }
+            return StorySlide()
+        }
         set {
             guard slides.indices.contains(currentSlideIndex) else { return }
             slides[currentSlideIndex] = newValue
@@ -221,16 +232,80 @@ public final class StoryComposerViewModel {
         return vm
     }
 
+    /// Prefix used for clips that the timeline editor surfaces for context but
+    /// that are NOT real `slide.effects.mediaObjects`. The flagship example is
+    /// the "background image" lane: a slide that only has a static bg image
+    /// has nothing in `mediaObjects`, but the user still expects to see that
+    /// image represented on the timeline as a locked, full-duration clip.
+    /// Synthetic clips are stripped before persisting back to the slide via
+    /// `commitTimelineToCurrentSlide()`.
+    public static let syntheticTimelineClipIdPrefix = "_synthetic_bg_image_"
+
+    public static func isSyntheticTimelineClipId(_ id: String) -> Bool {
+        id.hasPrefix(syntheticTimelineClipIdPrefix)
+    }
+
+    /// Builds the synthetic background-image clip for a slide that has a static
+    /// `slideImages[id]` image but no real background media object. Returns
+    /// `nil` when the slide either has no bg image, or already has a real
+    /// background media object (in which case the real one wins).
+    public static func makeSyntheticBgImageClip(for slide: StorySlide,
+                                                hasBgImage: Bool,
+                                                existingMediaObjects: [StoryMediaObject]) -> StoryMediaObject? {
+        guard hasBgImage else { return nil }
+        guard !existingMediaObjects.contains(where: { $0.isBackground == true }) else { return nil }
+        return StoryMediaObject(
+            id: "\(syntheticTimelineClipIdPrefix)\(slide.id)",
+            postMediaId: "_bg_image_\(slide.id)",
+            mediaType: StoryMediaKind.image.rawValue,
+            placement: "media",
+            x: 0.5, y: 0.5,
+            scale: 1.0,
+            rotation: 0,
+            volume: 0,
+            isBackground: true,
+            startTime: 0,
+            duration: slide.effects.slideDuration ?? Float(slide.duration)
+        )
+    }
+
     /// Bridges the composer's `currentSlide` into the timeline editor. Call
-    /// this from `onAppear` and whenever the user switches slides.
+    /// this from `onAppear`, whenever the user switches slides, AND whenever
+    /// the timeline sheet becomes visible (so any media added between mount
+    /// and sheet-open is immediately visible).
     public func loadCurrentSlideIntoTimeline() {
         let slide = currentSlide
-        let project = TimelineProject(from: slide)
+        var project = TimelineProject(from: slide)
+
+        // Surface a static background image (stored separately in slideImages)
+        // as a locked synthetic clip on the timeline so the user can see what
+        // is playing under their composition. Stripped on commit so the actual
+        // slide effects stay clean.
+        if let synthetic = Self.makeSyntheticBgImageClip(
+            for: slide,
+            hasBgImage: slideImages[slide.id] != nil,
+            existingMediaObjects: project.mediaObjects
+        ) {
+            var medias = project.mediaObjects
+            medias.insert(synthetic, at: 0)
+            project.mediaObjects = medias
+        }
+
         let mediaURLs = collectMediaURLs(for: slide)
+        // Bootstrap dict is keyed by media.id (the foreground clip identifier).
+        // `slideImages` is keyed by slideId, so we re-key the slide-level
+        // background bitmap under the synthetic clip id so the timeline track
+        // can render its thumbnail. User-added foreground media bitmaps live in
+        // `loadedImages` which is already keyed correctly.
+        var clipImages = loadedImages
+        if let bgImage = slideImages[slide.id],
+           let synthetic = project.mediaObjects.first(where: { Self.isSyntheticTimelineClipId($0.id) }) {
+            clipImages[synthetic.id] = bgImage
+        }
         timelineViewModel.bootstrap(
             project: project,
             mediaURLs: mediaURLs,
-            images: slideImages
+            images: clipImages
         )
         // Clear any selection that no longer exists in the new slide.
         if let id = timelineViewModel.selection.selectedClipId,
@@ -243,7 +318,10 @@ public final class StoryComposerViewModel {
     /// so the publish pipeline ships V2 edits (transitions, keyframes, splits, trims).
     /// Call BEFORE invoking the publish queue.
     public func commitTimelineToCurrentSlide() {
-        let project = timelineViewModel.project
+        var project = timelineViewModel.project
+        // Synthetic clips never persist — they only exist to make the editor
+        // legible. Strip them before the project lands back on the slide.
+        project.mediaObjects.removeAll { Self.isSyntheticTimelineClipId($0.id) }
         var slide = currentSlide
         project.apply(to: &slide)
         currentSlide = slide
@@ -580,6 +658,25 @@ public final class StoryComposerViewModel {
             bringToFront(id: obj.id)
         }
         return obj
+    }
+
+    /// Pin the natural asset duration on a media object so the reader's
+    /// visibility window matches the actual playback length. Idempotent: a
+    /// later trim from the timeline editor overwrites this baseline.
+    func setMediaDuration(id: String, duration: Float, slideId: String? = nil) {
+        let targetIndex: Int = {
+            if let slideId, let idx = slides.firstIndex(where: { $0.id == slideId }) {
+                return idx
+            }
+            return currentSlideIndex
+        }()
+        guard slides.indices.contains(targetIndex) else { return }
+        var effects = slides[targetIndex].effects
+        guard var medias = effects.mediaObjects,
+              let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
+        medias[mediaIdx].duration = duration
+        effects.mediaObjects = medias
+        slides[targetIndex].effects = effects
     }
 
     @discardableResult
@@ -954,14 +1051,14 @@ public final class StoryComposerViewModel {
 
         // Convert StoryItem → StorySlide (composer's internal type). Lossy conversion:
         // we keep the first media URL, the content and the effects ; defaults for
-        // duration (5 s) and order (0 — single slide).
+        // duration (12 s default for static reposts) and order (0).
         var cloned = StorySlide(
             id: UUID().uuidString,
             mediaURL: story.media.first?.url,
             mediaData: nil,
             content: story.content,
             effects: story.storyEffects ?? StoryEffects(),
-            duration: 5,
+            duration: 12,
             order: 0
         )
 

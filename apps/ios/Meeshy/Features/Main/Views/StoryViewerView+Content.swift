@@ -623,18 +623,26 @@ extension StoryViewerView {
     }
 
     /// Calcule la durée du slide courant en fonction des médias (vidéo/audio).
-    /// Minimum 5s pour les slides texte/image seules.
+    /// Minimum 12s pour les slides texte/image seules — l'ancien 5s coupait
+    /// trop tôt la lecture des captions et stickers.
+    ///
+    /// Spec: la story dure `max(longest_media_end_time, configured_slideDuration, 12s_minimum)`.
+    /// Avant ce fix, `effects.slideDuration` early-returned et les médias plus longs
+    /// que la durée configurée étaient coupés (la vidéo apparaissait quelques
+    /// secondes puis disparaissait alors que le son continuait — typique d'un
+    /// timer de slide expirant avant la fin du média).
     private func updateStoryDuration() {
         guard let story = currentStory else {
-            computedStoryDuration = 5.0
+            computedStoryDuration = 12.0
             return
         }
-        var maxDuration: Double = 5.0
+        var maxDuration: Double = 12.0
         let effects = story.storyEffects
 
+        // Configured timeline duration is one CANDIDATE — not authoritative.
+        // We always pick the largest of (configured, longest media, minimum).
         if let authoritative = effects?.slideDuration, authoritative > 0 {
-            computedStoryDuration = Double(authoritative)
-            return
+            maxDuration = max(maxDuration, Double(authoritative))
         }
 
         // Durées des médias foreground (composer écrit `placement: "media"`, jamais
@@ -671,21 +679,32 @@ extension StoryViewerView {
             }
         }
 
-        // Legacy background video duration (when no canvas mediaObjects)
+        // Background loop periods — collected here as a separate signal because
+        // they DON'T extend the story directly to their full duration (bg
+        // audio/video loop). Instead we round the foreground baseline up to
+        // the next multiple of each loop period below, so the loop completes
+        // its Nth cycle before the slide advances. Without this, a 12s slide
+        // with a 5s bg video would cut at 12s mid-third-loop; with it, the
+        // slide extends to 15s (3 full cycles).
+        var bgLoopPeriods: [Double] = []
+        if let bgMedia = effects?.resolvedBackgroundMedia, bgMedia.kind == .video,
+           let dur = story.media.first(where: { $0.id == bgMedia.postMediaId })?.duration, dur > 0 {
+            bgLoopPeriods.append(Double(dur))
+        }
+        // Legacy background video (when no canvas mediaObjects).
         if (effects?.mediaObjects ?? []).isEmpty,
            let legacyMedia = story.media.first,
            legacyMedia.type == .video,
            let dur = legacyMedia.duration, dur > 0 {
-            maxDuration = max(maxDuration, Double(dur))
+            bgLoopPeriods.append(Double(dur))
         }
-
-        // Audio de fond (trimé ou complet)
+        // Background audio (trimmed range or full clip).
         if let bgAudioId = effects?.backgroundAudioId {
             if let start = effects?.backgroundAudioStart, let end = effects?.backgroundAudioEnd, end > start {
-                maxDuration = max(maxDuration, end - start)
+                bgLoopPeriods.append(end - start)
             } else if let feedMedia = story.media.first(where: { $0.id == bgAudioId }),
                       let dur = feedMedia.duration, dur > 0 {
-                maxDuration = max(maxDuration, Double(dur))
+                bgLoopPeriods.append(Double(dur))
             }
         }
 
@@ -694,6 +713,7 @@ extension StoryViewerView {
             let capturedVideoURLs = preloadedVideoURLs
             let capturedAudioURLs = preloadedAudioURLs
             let capturedMaxDuration = maxDuration
+            let capturedBgPeriods = bgLoopPeriods
             Task { @MainActor in
                 var asyncMax = capturedMaxDuration
                 for (_, url) in capturedVideoURLs {
@@ -710,12 +730,29 @@ extension StoryViewerView {
                         if dur > 0 && dur.isFinite { asyncMax = max(asyncMax, dur) }
                     }
                 }
-                computedStoryDuration = asyncMax
+                computedStoryDuration = Self.roundedUpToBgLoops(baseDuration: asyncMax,
+                                                                bgLoopPeriods: capturedBgPeriods)
             }
             return
         }
 
-        computedStoryDuration = maxDuration
+        computedStoryDuration = Self.roundedUpToBgLoops(baseDuration: maxDuration,
+                                                        bgLoopPeriods: bgLoopPeriods)
+    }
+
+    /// For each background loop period, round the base duration up to the
+    /// nearest multiple of that period. Take the maximum across all bg
+    /// sources so the longest-period bg media completes its last cycle.
+    /// Sub-millisecond periods are ignored (avoid div-by-zero / pathological
+    /// results from corrupt metadata).
+    static func roundedUpToBgLoops(baseDuration: Double, bgLoopPeriods: [Double]) -> Double {
+        var effective = baseDuration
+        for period in bgLoopPeriods where period > 0.001 {
+            let cycles = (baseDuration / period).rounded(.up)
+            let extended = cycles * period
+            if extended > effective { effective = extended }
+        }
+        return effective
     }
 
     /// Manual pause — only for direct gesture holds (long press, drag).

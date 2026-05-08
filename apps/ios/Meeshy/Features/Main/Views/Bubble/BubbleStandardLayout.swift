@@ -50,6 +50,7 @@ struct BubbleStandardLayout: View {
     let activeAudioLanguage: String?
     let isLastInGroup: Bool
     let isLastReceivedMessage: Bool
+    let isLastSentMessage: Bool
     let mentionDisplayNames: [String: String]
     let highlightSearchTerm: String?
     let activeVideoURL: String?
@@ -288,23 +289,37 @@ struct BubbleStandardLayout: View {
                             .onTapGesture { revealBlurredContent() }
                     }
                 }
-                .overlay(alignment: isMe ? .bottomTrailing : .bottomLeading) {
+                // Reactions hover at the TOP corner of the bubble in the
+                // iMessage / WhatsApp style — top-trailing for sent,
+                // top-leading for received. A small negative y offset
+                // bleeds them ~8pt above the bubble's top edge so they
+                // read as floating "stickers" attached to the corner,
+                // which matches every modern chat platform's reaction
+                // affordance. Sticking to the BOTTOM of the bubble (the
+                // previous layout) competed with the identity bar that
+                // already lives there and visually merged with the next
+                // bubble below.
+                .overlay(alignment: isMe ? .topTrailing : .topLeading) {
                     reactionsOverlay
                         .padding(isMe ? .trailing : .leading, 8)
-                        .offset(y: 16)
+                        .offset(y: -8)
                 }
 
             }
-            // Single source of truth for the bubble's horizontal cap. Applied
-            // to the VStack that wraps every kind of bubble content (image
-            // grid, audio, video, file, document, location, text, reply chip,
-            // OG preview, language flags). `.frame(maxWidth:)` is a CAP — it
-            // does NOT force the bubble to that width when the content is
-            // intrinsic, so short text bubbles stay compact.
-            .frame(
-                maxWidth: UIScreen.main.bounds.width * 0.70,
-                alignment: isMe ? .trailing : .leading
-            )
+            // Single source of truth for the bubble's horizontal cap. The
+            // alignment parameter positions the (now-compact thanks to
+            // identityBar.fixedSize) bubble at the trailing edge for sent
+            // messages and the leading edge for received ones, INSIDE the
+            // 275pt frame the parent HStack hands us. Without the alignment
+            // param the frame defaults to `.center`, which leaves the
+            // compact bubble floating awkwardly in the middle of the row.
+            //
+            // Stretching the bubble to 70% is no longer a concern: identity
+            // bar and inner content both report their intrinsic widths
+            // (UserIdentityBar's greedy Spacer is collapsed via
+            // `.fixedSize(horizontal: true, vertical: false)` on the bar
+            // inside `textBubbleContent`).
+            .frame(maxWidth: UIScreen.main.bounds.width * 0.70, alignment: isMe ? .trailing : .leading)
 
             if !isMe { Spacer(minLength: 50) }
         }
@@ -428,13 +443,15 @@ struct BubbleStandardLayout: View {
         VStack(alignment: content.isMe ? .trailing : .leading, spacing: 2) {
             // Emoji-only intentionally renders the ORIGINAL `message.content`,
             // not the translated text — emoji bubbles are not translated.
+            // NOTE: no `.onLongPressGesture` here — the BubbleSwipeContainer
+            // wrapping the cell already handles long-press to open the
+            // contextual options menu. A second long-press on the text
+            // would race that handler and pop two presentations at once
+            // (translation sheet + options overlay). Translation detail
+            // remains accessible via the translate icon in the identity bar.
             Text(message.content)
                 .font(.system(size: emojiFontSize))
                 .fixedSize(horizontal: false, vertical: true)
-                .onLongPressGesture {
-                    HapticFeedback.medium()
-                    onShowTranslationDetail?(content.messageId)
-                }
                 .overlay(alignment: .topLeading) {
                     if content.editedAt != nil {
                         editedIndicator
@@ -450,57 +467,104 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Text bubble path (with non-media attachments + reply preview)
 
+    /// Time + delivery indicator visibility depends on conversation type:
+    ///
+    /// - **Group** (`!isDirect`): every message shows the time, rendered
+    ///   inline with the author's username (`@pseudo · today 12:45`). With
+    ///   many speakers in a thread the user needs the timestamp on each
+    ///   bubble to keep context, especially when the conversation
+    ///   pause-and-resumes across days.
+    ///
+    /// - **Direct** (`isDirect`): both the last received message AND the
+    ///   last sent message carry a timestamp. The user wants to see *when
+    ///   their last reply landed* (with the delivery indicator) and *when
+    ///   the peer's last message arrived* — intermediate bubbles stay
+    ///   metadata-free to keep the thread readable.
+    private var shouldShowTimeAndDelivery: Bool {
+        if isDirect {
+            return content.isMe ? isLastSentMessage : isLastReceivedMessage
+        }
+        return true
+    }
+
+    @ViewBuilder
+    private var bubbleInnerContent: some View {
+        // Quoted reply preview (inside bubble)
+        if let reply = content.reply {
+            quotedReplyView(reply.reference)
+                .padding(.bottom, 4)
+                .onTapGesture {
+                    guard !reply.reference.messageId.isEmpty else { return }
+                    HapticFeedback.light()
+                    if reply.isStory {
+                        onStoryReplyTap?(reply.reference.messageId)
+                    } else {
+                        onReplyTap?(reply.reference.messageId)
+                    }
+                }
+        }
+
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(nonMediaAttachments) { attachment in
+                attachmentView(attachment)
+            }
+
+            if let textRaw = content.text?.raw, !textRaw.isEmpty {
+                // No `.onLongPressGesture` — see comment in `emojiOnlyContent`.
+                // The container's long-press opens the options overlay; the
+                // translate icon in the identity bar opens translation detail.
+                expandableTextView
+            }
+
+            // Inline OpenGraph preview for the first URL in the
+            // effective (possibly translated) content. Self-loading.
+            if let url = LinkPreviewFetcher.firstURL(in: effectiveContent) {
+                LinkPreviewCard(
+                    urlString: url,
+                    accentColor: contactColor,
+                    isDark: isDark
+                )
+                .padding(.top, 4)
+            }
+
+            secondaryContentView
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, content.hasTextOrNonMediaContent ? 10 : 4)
+    }
+
     @ViewBuilder
     private var textBubbleContent: some View {
         let isMe = content.isMe
         let hasEdited = content.editedAt != nil
-        VStack(alignment: .leading, spacing: 0) {
-            // Quoted reply preview (inside bubble)
-            if let reply = content.reply {
-                quotedReplyView(reply.reference)
-                    .padding(.bottom, 4)
-                    .onTapGesture {
-                        guard !reply.reference.messageId.isEmpty else { return }
-                        HapticFeedback.light()
-                        if reply.isStory {
-                            onStoryReplyTap?(reply.reference.messageId)
-                        } else {
-                            onReplyTap?(reply.reference.messageId)
-                        }
-                    }
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                ForEach(nonMediaAttachments) { attachment in
-                    attachmentView(attachment)
-                }
-
-                if let textRaw = content.text?.raw, !textRaw.isEmpty {
-                    expandableTextView
-                        .onLongPressGesture {
-                            HapticFeedback.medium()
-                            onShowTranslationDetail?(content.messageId)
-                        }
-                }
-
-                // Inline OpenGraph preview for the first URL in the effective
-                // (possibly translated) content. The card is self-loading.
-                if let url = LinkPreviewFetcher.firstURL(in: effectiveContent) {
-                    LinkPreviewCard(
-                        urlString: url,
-                        accentColor: contactColor,
-                        isDark: isDark
-                    )
-                    .padding(.top, 4)
-                }
-
-                secondaryContentView
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, content.hasTextOrNonMediaContent ? 10 : 4)
-
-            // Unified identity bar
+        // Identity bar (avatar + name + flags ± time + delivery) always
+        // renders inside the bubble. The custom `BubbleContentLayout`
+        // measures the inner content (text, attachments, reply preview)
+        // and the identity bar separately, then places the bar on its
+        // own line at the trailing edge for sent messages, leading edge
+        // for received ones — matching iMessage. Without this layout the
+        // identity bar's HStack would either stretch the bubble to 70%
+        // (greedy Spacer) or sit awkwardly leading-aligned even on sent
+        // bubbles. Time + delivery icon visibility is gated separately
+        // through `identityBarSection` (only the last bubble of each side).
+        // Plain VStack with `.fixedSize(horizontal: true, vertical: false)`
+        // on the identity bar. The custom `BubbleContentLayout` we used
+        // before reported intrinsic content heights to the parent
+        // UICollectionView's `estimated(80)` row, but SwiftUI re-measures
+        // the rendered subviews at a slightly different size — the cell
+        // height gets stuck on the first measurement and consecutive
+        // bubbles end up overlapping vertically. Native SwiftUI VStack
+        // sizing rounds-trips through UIHostingConfiguration cleanly:
+        // each cell computes its real height and the layout flows
+        // without bleed-through. The trade-off is that identity bar
+        // sits at the bubble's leading edge instead of trailing — the
+        // metaRow's inner Spacer still pushes time/delivery to the
+        // right of its (collapsed via fixedSize) row, so the timestamp
+        // visually still hugs the right of compact bubbles.
+        VStack(alignment: .leading, spacing: 4) {
+            bubbleInnerContent
             identityBarSection
+                .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.top, hasEdited ? 12 : 0)
         .overlay(alignment: .topLeading) {
@@ -525,6 +589,14 @@ struct BubbleStandardLayout: View {
     private var identityBarSection: some View {
         let isMe = content.isMe
         let showTranslation = hasAnyTranslation && !isEmojiOnly
+        // Time + delivery are gated to the last message of each side. The
+        // empty string + nil combo is what `UserIdentityBar.messageBubble`
+        // and `.metaRow` interpret as "skip the trailing time/delivery
+        // group" — author info and language flags still render.
+        let timeString = shouldShowTimeAndDelivery ? content.meta.timeString : ""
+        let deliveryStatus: MeeshyMessage.DeliveryStatus? = shouldShowTimeAndDelivery
+            ? content.meta.deliveryStatus
+            : nil
         if showIdentityBar {
             UserIdentityBar.messageBubble(
                 name: content.senderName ?? "?",
@@ -532,8 +604,8 @@ struct BubbleStandardLayout: View {
                 avatarURL: message.senderAvatarURL,
                 accentColor: message.senderColor ?? contactColor,
                 role: nil,
-                time: content.meta.timeString,
-                delivery: content.meta.deliveryStatus,
+                time: timeString,
+                delivery: deliveryStatus,
                 flags: showTranslation ? buildAvailableFlags() : [],
                 activeFlag: showTranslation ? secondaryLangCode : nil,
                 onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
@@ -542,14 +614,20 @@ struct BubbleStandardLayout: View {
                 moodEmoji: senderMoodEmoji,
                 storyRingState: senderStoryRingState,
                 onAvatarTap: { selectedProfileUser = .from(message: message) },
-                onViewStory: onViewStory
+                onViewStory: onViewStory,
+                // Group conversations show the timestamp inline with the
+                // author (`Name · 12:45`); direct conversations keep the
+                // edge-pinned variant for the rare bubble that displays
+                // the trailing time/delivery group (last sent / last
+                // received).
+                inlineTime: !isDirect
             )
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         } else {
             UserIdentityBar.metaRow(
-                time: content.meta.timeString,
-                delivery: content.meta.deliveryStatus,
+                time: timeString,
+                delivery: deliveryStatus,
                 flags: showTranslation ? buildAvailableFlags() : [],
                 activeFlag: showTranslation ? secondaryLangCode : nil,
                 onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
@@ -796,3 +874,4 @@ struct BubbleStandardLayout: View {
         )
     }
 }
+

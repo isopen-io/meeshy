@@ -41,6 +41,11 @@ const registerDeviceTokenSchema = z.object({
 
   // Bundle ID for the app
   bundleId: z.string().max(255).optional(),
+
+  // APNs environment for the token: "development" (sandbox) or "production".
+  // Sent by iOS clients based on their build flavor (debug vs release).
+  // Optional for FCM/Android tokens; defaults to "production" when omitted.
+  apnsEnvironment: z.enum(['development', 'production']).optional(),
 }).refine(
   (data) => data.token || data.apnsToken,
   { message: 'Either token or apnsToken must be provided' }
@@ -109,6 +114,11 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
             type: 'string',
             maxLength: 255,
             description: 'App bundle identifier'
+          },
+          apnsEnvironment: {
+            type: 'string',
+            enum: ['development', 'production'],
+            description: 'APNs environment for the token (iOS only). Required to route to api.sandbox.push.apple.com vs api.push.apple.com.'
           }
         }
       },
@@ -155,7 +165,15 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
       // iOS defaults to 'apns', Android/Web default to 'fcm'
       const tokenType = body.type || (body.platform === 'ios' ? 'apns' : 'fcm');
 
-      fastify.log.info(`[PUSH_TOKEN] Registering ${tokenType} token for user ${userId} on ${body.platform}`);
+      // APNs environment is meaningful only for apns/voip tokens. Default to
+      // "production" so legacy clients that don't send the field stay routed
+      // to the production endpoint (matches pre-fix behaviour).
+      const isApnsLike = tokenType === 'apns' || tokenType === 'voip';
+      const apnsEnvironment = isApnsLike
+        ? (body.apnsEnvironment ?? 'production')
+        : null;
+
+      fastify.log.info(`[PUSH_TOKEN] Registering ${tokenType} token for user ${userId} on ${body.platform} (apnsEnv=${apnsEnvironment ?? 'n/a'})`);
 
       // Upsert the token (create or update if exists)
       const pushToken = await fastify.prisma.pushToken.upsert({
@@ -172,6 +190,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
           deviceName: body.deviceName,
           appVersion: body.appVersion,
           bundleId: body.bundleId,
+          apnsEnvironment,
           isActive: true,
           failedAttempts: 0, // Reset failed attempts on re-registration
           lastError: null,
@@ -186,6 +205,7 @@ export async function pushTokenRoutes(fastify: FastifyInstance) {
           deviceName: body.deviceName,
           appVersion: body.appVersion,
           bundleId: body.bundleId,
+          apnsEnvironment,
           isActive: true
         },
         select: {

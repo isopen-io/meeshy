@@ -40,10 +40,27 @@ struct MessageOverlayMenu: View {
     @State private var isEmojiPickerOpen = false
 
     private let previewCharLimit = 500
-    private let defaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥", "🎉", "💯", "🥰", "😎", "🙏", "💀", "🤣", "✨", "👏"]
+    // Expanded emoji set — far more than fits in the viewport, so the
+    // quick reaction strip becomes horizontally scrollable. The first 6
+    // are the iMessage-style "popular" defaults (still visible without
+    // any scroll); the tail extends with a curated selection so the
+    // user always has something to discover when they swipe.
+    private let defaultEmojis = [
+        "😂", "❤️", "👍", "😮", "😢", "🔥",
+        "🎉", "💯", "🥰", "😎", "🙏", "💀",
+        "🤣", "✨", "👏", "🤔", "🥺", "😍",
+        "🫶", "💪"
+    ]
 
     // Panel takes ~56% of screen, but grid shows 2.5 rows (scrollable)
-    private let gridVisibleHeight: CGFloat = 175
+    // Bottom sheet height — bumped up so two full action rows are
+    // visible at rest (was 143 → 195). The pressed bubble preview is
+    // still the visual focal point because the previewer floats above
+    // the panel with shadow + scale, but the grid no longer feels
+    // hidden / "too low". Pull up via the drag handle to expand to the
+    // full MessageDetailSheet (translations, full react picker, every
+    // action).
+    private let gridVisibleHeight: CGFloat = 195
 
     var body: some View {
         GeometryReader { geometry in
@@ -67,7 +84,15 @@ struct MessageOverlayMenu: View {
                         .contentShape(Rectangle())
                         .onTapGesture { dismiss() }
 
-                    // Message preview tight above emoji bar
+                    // Message preview — composite animation: slides DOWN
+                    // from above + LIFT-OFF (scale 0.92 → 1.04 → 1.0 with
+                    // an over-shoot spring) so it visually detaches from
+                    // its row in the conversation, floats forward, then
+                    // settles into its centered position above the menu.
+                    // The HStack alignment keeps the bubble on its own
+                    // side (right for sent, left for received) so the
+                    // preview "matches" the source row's horizontal axis
+                    // even though it now sits vertically centered.
                     HStack {
                         if message.isMe { Spacer(minLength: 16) }
                         messagePreview
@@ -76,8 +101,17 @@ struct MessageOverlayMenu: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, 4)
                     .opacity(isVisible ? 1 : 0)
+                    .offset(y: isVisible ? 0 : -80)
+                    .scaleEffect(isVisible ? 1.0 : 0.92, anchor: message.isMe ? .topTrailing : .topLeading)
+                    .shadow(color: Color.black.opacity(isVisible ? 0.18 : 0), radius: 18, y: 8)
 
-                    // Emoji quick bar
+                    // Emoji quick bar — also descends to sit between the
+                    // preview and the sheet. The reduced offset (-40)
+                    // versus the preview's -80 staggers the convergence:
+                    // they all reach their resting position together but
+                    // start from slightly different distances, giving a
+                    // gathering / coalescing motion instead of a flat
+                    // simultaneous slide.
                     HStack {
                         if message.isMe { Spacer() }
                         emojiQuickBar
@@ -86,8 +120,11 @@ struct MessageOverlayMenu: View {
                     .padding(.horizontal, 12)
                     .padding(.bottom, 2)
                     .opacity(isVisible ? 1 : 0)
+                    .offset(y: isVisible ? 0 : -40)
 
-                    // Detail panel with drag handle
+                    // Detail panel rises from the bottom — every element
+                    // animates with the same spring so they converge into
+                    // a single visually-linked block at rest.
                     detailPanel(safeBottom: safeBottom)
                         .frame(height: panelHeight)
                         .offset(y: isVisible ? 0 : panelBaseHeight)
@@ -97,9 +134,15 @@ struct MessageOverlayMenu: View {
         .ignoresSafeArea()
         .onAppear {
             HapticFeedback.medium()
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.75)) {
+            // Spring entry — iMessage-grade response curve, but the panel
+            // starts COLLAPSED (`dragOffset = 0`) so the bubble preview
+            // owns the centre of the screen. The user can drag the handle
+            // up to expand the full detail sheet on demand. Auto-expanding
+            // to -400 (the previous behaviour) buried the bubble preview
+            // under the panel.
+            withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
                 isVisible = true
-                dragOffset = -400
+                dragOffset = 0
             }
         }
     }
@@ -107,10 +150,15 @@ struct MessageOverlayMenu: View {
     // MARK: - Emoji Quick Bar (EmojiReactionPicker — shared component)
 
     private var emojiQuickBar: some View {
-        let topEmojis = EmojiUsageTracker.topEmojis(count: 6, defaults: defaultEmojis)
+        // Pull a wider list (20) so the user can swipe horizontally to
+        // discover beyond the 6 visible defaults. Most-used emojis are
+        // always front-loaded — the recency tracker keeps the strip
+        // personal across sessions without losing the long tail.
+        let topEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
         return EmojiReactionPicker(
             quickEmojis: topEmojis,
             style: isDark ? .dark : .light,
+            scrollable: true,
             onReact: { emoji in
                 EmojiUsageTracker.recordUsage(emoji: emoji)
                 onReact?(emoji)
@@ -122,19 +170,30 @@ struct MessageOverlayMenu: View {
                 forceTab = isEmojiPickerOpen ? .react : .language
             }
         )
+        // Constrain the strip's visible width so it sits comfortably
+        // centred between the message preview and the bottom sheet —
+        // without the cap, the ScrollView would grow to fill the row
+        // and the capsule background would lose its "pill" silhouette.
+        .frame(maxWidth: UIScreen.main.bounds.width - 32)
     }
 
-    // MARK: - Dismiss Background (vibrant with bubble form distinction)
+    // MARK: - Dismiss Background (light blur — silhouettes stay readable)
 
     private var dismissBackground: some View {
+        // Light blur (thinMaterial instead of ultraThinMaterial) with a
+        // restrained dim layer. Bubble silhouettes / colors / outlines
+        // remain distinguishable behind, but the text underneath blurs
+        // out so it doesn't compete with the centered preview. iMessage
+        // heavy blur was too aggressive; flat opacity-only had no
+        // material at all and let the text race for attention.
         ZStack {
             Rectangle()
-                .fill(.ultraThinMaterial)
+                .fill(.thinMaterial)
                 .opacity(isVisible ? 1 : 0)
             Color.black
-                .opacity(isVisible ? 0.35 : 0)
+                .opacity(isVisible ? 0.18 : 0)
         }
-        .animation(.easeOut(duration: 0.25), value: isVisible)
+        .animation(.easeOut(duration: 0.22), value: isVisible)
         .onTapGesture { dismiss() }
     }
 

@@ -68,11 +68,22 @@ extension MessageRecord {
         }
 
         let deliveryStatus: MeeshyMessage.DeliveryStatus = {
+            // Server-driven counters take priority — they're the source of
+            // truth for "the recipient(s) have actually received / read".
             if readCount > 0 || readByAllAt != nil { return .read }
             if deliveredCount > 0 || deliveredToAllAt != nil { return .delivered }
+            // State-machine driven fallback. The state machine flips
+            // .sent → .delivered on `.delivered(count, at)` events but
+            // doesn't propagate the count onto the record's
+            // `deliveredCount` column, so without recognising
+            // `state == .delivered` here the bubble would silently
+            // regress to .sent (single check) and the user would never
+            // see the double check (✓✓). Same goes for `state == .read`.
             switch state {
             case .sending: return .sending
             case .failed: return .failed
+            case .delivered: return .delivered
+            case .read: return .read
             default: return .sent
             }
         }()

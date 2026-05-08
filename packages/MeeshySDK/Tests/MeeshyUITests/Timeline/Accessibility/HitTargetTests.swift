@@ -32,9 +32,9 @@ final class HitTargetTests: XCTestCase {
         // The component is constructed and its body is evaluated without crash.
         let bar = TransportBar(
             isPlaying: false, currentTime: 0, duration: 10,
-            zoomScale: 1.0, mode: .quick, isMuted: false,
+            zoomScale: 1.0, isMuted: false,
             onPlayToggle: {}, onMuteToggle: {},
-            onZoomIn: {}, onZoomOut: {}, onZoomReset: {}, onModeSwitch: {}
+            onZoomIn: {}, onZoomOut: {}, onZoomReset: {}
         )
         _ = bar.body  // Does not crash → container parameters are valid
         XCTAssert(true, "TransportBar body renders with minHeight contract intact")

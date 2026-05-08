@@ -33,6 +33,12 @@ public final class AudioMixer: AudioMixerProviding {
     private var nodes: [String: AVAudioPlayerNode] = [:]
     private var files: [String: AVAudioFile] = [:]
     private var volumes: [String: Float] = [:]
+    /// Timeline `startTime` per audio (seconds from t=0). Used by play()/seek()
+    /// to compute sample-accurate `AVAudioTime(hostTime:)` schedules so the
+    /// audio fires at exactly its timeline position, not at engine-start time.
+    /// Without this, every audio clip plays from t=0 regardless of when it's
+    /// supposed to come in — the bug surfaced when authoring multi-clip slides.
+    private var startTimes: [String: Float] = [:]
     private var _isPlayingStorage: Bool = false
     private var didShutdown: Bool = false
 
@@ -55,6 +61,7 @@ public final class AudioMixer: AudioMixerProviding {
         var attached = 0
         for audio in audios {
             volumes[audio.id] = max(0, min(1, audio.volume))
+            startTimes[audio.id] = audio.startTime ?? 0
             guard attached < maxActiveNodes else {
                 logger.info("AudioMixer cap reached at \(self.maxActiveNodes), skipping audio \(audio.id)")
                 continue
@@ -94,13 +101,72 @@ public final class AudioMixer: AudioMixerProviding {
                 throw error
             }
         }
+        let timelineStart = lastSeekTime
         for (id, node) in nodes {
-            if let file = files[id] {
-                node.scheduleFile(file, at: nil, completionHandler: nil)
-            }
+            guard let file = files[id] else { continue }
+            scheduleNodeFromTimelineTime(audioId: id, node: node, file: file, time: timelineStart)
             node.play()
         }
         _isPlayingStorage = true
+    }
+
+    /// Sample-accurate scheduling: places the file at the exact host-time the
+    /// timeline says it should start, derived from `clip.startTime` minus
+    /// `currentTimelineTime`. Falls back to immediate scheduling at a file
+    /// offset when the timeline already passed `startTime` (mid-flight seek).
+    ///
+    /// Why hostTime rather than sampleTime: per Apple Core Audio guidance,
+    /// `AVAudioTime(sampleTime:atRate:)` is unreliable across nodes (input vs
+    /// output may report different timestamps), whereas `hostTime` resolves
+    /// from `mach_absolute_time()` and is consistent for every node connected
+    /// to the same engine. This is the canonical pattern Apple ships in their
+    /// AVAEMixerSample sample code.
+    private func scheduleNodeFromTimelineTime(
+        audioId: String,
+        node: AVAudioPlayerNode,
+        file: AVAudioFile,
+        time timelineTime: Float
+    ) {
+        let startTime = startTimes[audioId] ?? 0
+        let sampleRate = file.processingFormat.sampleRate
+        let totalFrames = file.length
+
+        if timelineTime < startTime {
+            // Future schedule. Translate the (startTime - timelineTime)
+            // delay into mach host ticks and pin the file at that hostTime.
+            let delaySeconds = Double(startTime - timelineTime)
+            let hostDelay = AudioMixer.hostTime(forDelaySeconds: delaySeconds)
+            let scheduleAt = AVAudioTime(hostTime: mach_absolute_time() + hostDelay)
+            node.scheduleFile(file, at: scheduleAt, completionHandler: nil)
+        } else {
+            // Already past startTime — schedule immediate playback from a
+            // file offset so the audio is positionally correct.
+            let offset = Double(timelineTime - startTime)
+            let startFrame = AVAudioFramePosition(offset * sampleRate)
+            guard startFrame < totalFrames else { return }
+            let remaining = AVAudioFrameCount(totalFrames - startFrame)
+            node.scheduleSegment(file,
+                                 startingFrame: startFrame,
+                                 frameCount: remaining,
+                                 at: nil,
+                                 completionHandler: nil)
+        }
+    }
+
+    /// Convert a wall-clock delay in seconds to the `mach_absolute_time()`
+    /// host-tick delta required by `AVAudioTime(hostTime:)`. Cached
+    /// `mach_timebase_info` so we don't pay the syscall on every schedule.
+    private static let hostTimebase: mach_timebase_info_data_t = {
+        var info = mach_timebase_info_data_t()
+        mach_timebase_info(&info)
+        return info
+    }()
+
+    fileprivate static func hostTime(forDelaySeconds seconds: Double) -> UInt64 {
+        guard seconds > 0 else { return 0 }
+        let nanos = UInt64(seconds * 1_000_000_000)
+        // hostTime = nanos * (denom / numer)
+        return nanos * UInt64(hostTimebase.denom) / UInt64(hostTimebase.numer)
     }
 
     public func pause() {
@@ -119,12 +185,7 @@ public final class AudioMixer: AudioMixerProviding {
         for node in nodes.values { node.stop() }
         for (id, node) in nodes {
             guard let file = files[id] else { continue }
-            let sampleRate = file.processingFormat.sampleRate
-            let frame = AVAudioFramePosition(Double(clamped) * sampleRate)
-            let totalFrames = file.length
-            guard frame < totalFrames else { continue }
-            let remaining = AVAudioFrameCount(totalFrames - frame)
-            node.scheduleSegment(file, startingFrame: frame, frameCount: remaining, at: nil, completionHandler: nil)
+            scheduleNodeFromTimelineTime(audioId: id, node: node, file: file, time: clamped)
         }
         if wasPlaying {
             for node in nodes.values { node.play() }
@@ -146,6 +207,7 @@ public final class AudioMixer: AudioMixerProviding {
         nodes.removeAll()
         files.removeAll()
         volumes.removeAll()
+        startTimes.removeAll()
         if engine.isRunning {
             engine.stop()
         }

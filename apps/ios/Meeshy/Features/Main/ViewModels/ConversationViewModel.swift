@@ -64,6 +64,7 @@ class ConversationViewModel: ObservableObject {
 
         _messageIdIndex = nil
         _cachedLastReceivedIndex = nil
+        _cachedLastSentIndex = nil
 
         if structureChanged {
             _messagesByDate = nil
@@ -86,6 +87,22 @@ class ConversationViewModel: ObservableObject {
         _cachedLastReceivedIndex = .some(result)
         return result
     }
+
+    private var _cachedLastSentIndex: Int?? = nil
+    var cachedLastSentIndex: Int? {
+        if let cached = _cachedLastSentIndex { return cached }
+        let result = messages.indices.last(where: { messages[$0].isMe })
+        _cachedLastSentIndex = .some(result)
+        return result
+    }
+
+    var lastReceivedMessageId: String? {
+        cachedLastReceivedIndex.map { messages[$0].id }
+    }
+    var lastSentMessageId: String? {
+        cachedLastSentIndex.map { messages[$0].id }
+    }
+
     @Published var isLoadingInitial = false
     @Published var isLoadingOlder = false
     @Published var isLoadingNewer = false
@@ -1176,7 +1193,9 @@ class ConversationViewModel: ObservableObject {
 
     func loadOlderMessages() async {
         guard hasOlderMessages, !isLoadingOlder, !isLoadingInitial, !isProgrammaticScroll else { return }
-        guard let oldestId = messages.first?.id else { return }
+        guard let oldestMsg = messages.first else { return }
+        let oldestId = oldestMsg.id
+        let oldestCreatedAt = oldestMsg.createdAt
 
         // Debounce: ignore calls that arrive too soon after the last one
         let now = Date()
@@ -1189,18 +1208,50 @@ class ConversationViewModel: ObservableObject {
 
         let beforeValue = nextMessageCursor ?? oldestId
 
-        await syncEngine.fetchOlderMessages(for: conversationId, before: beforeValue)
+        do {
+            // Direct REST + GRDB persistence path. We DO NOT route through
+            // ConversationSyncEngine.fetchOlderMessages because it only writes
+            // to the legacy CacheCoordinator. MessageStore reads MessageRecord
+            // rows from GRDB, so going through the sync engine would leave the
+            // GRDB window stuck on the initial 200 messages and latch
+            // hasOlderMessages to false on the very first scroll trigger.
+            let response = try await messageService.listBefore(
+                conversationId: conversationId,
+                before: beforeValue,
+                limit: 30,
+                includeReplies: true
+            )
 
-        // Slide the GRDB window anchor backwards; store observation surfaces the
-        // prepended older rows to `messages` automatically — no direct assignment.
-        let previousCount = messages.count
-        guard let oldestMsg = messages.first else {
-            isLoadingOlder = false
-            return
+            // GRDB write and legacy CacheCoordinator processing are
+            // independent — race them so the slower path (network-bound
+            // GRDB on a background actor) doesn't gate the legacy cache
+            // coherence path that the unread badge / preview rely on.
+            async let persistTask: Void? = try? messagePersistence.upsertFromAPIMessages(response.data)
+            async let olderProcessedTask = processAPIMessages(response.data)
+            _ = await persistTask
+            let olderProcessed = await olderProcessedTask
+
+            extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
+            await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { existing in
+                let existingIds = Set(existing.map(\.id))
+                let newOnly = olderProcessed.filter { !existingIds.contains($0.id) }
+                return (newOnly + existing).sorted { $0.createdAt < $1.createdAt }
+            }
+
+            // Slide the GRDB window anchor backwards; store observation
+            // surfaces the prepended older rows to `messages` automatically.
+            let didLoad = await messageStore.loadOlder(before: oldestCreatedAt)
+            if didLoad { prefetchRecentMedia() }
+
+            // Server is the source of truth for pagination state.
+            nextMessageCursor = response.cursorPagination?.nextCursor
+            hasOlderMessages = response.cursorPagination?.hasMore ?? false
+        } catch {
+            // Transient failure — keep hasOlderMessages so the next scroll
+            // retries. Debounce prevents tight retry loops.
+            Logger.messages.error("loadOlderMessages failed: \(error.localizedDescription)")
         }
-        let didLoad = await messageStore.loadOlder(before: oldestMsg.createdAt)
-        hasOlderMessages = didLoad && messages.count > previousCount
-        if didLoad { prefetchRecentMedia() }
 
         isLoadingOlder = false
     }
@@ -1242,6 +1293,16 @@ class ConversationViewModel: ObservableObject {
     func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
         let text = content.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty || !(attachmentIds ?? []).isEmpty else { return false }
+        // Debounce: a fast double-tap on the send button used to trigger two
+        // concurrent `sendMessage` runs, both inserting their own optimistic
+        // record with a fresh `tempId`, both POSTing the request — the user
+        // saw the same content twice in the bubble list. The `isSending`
+        // flag flips to `true` for the duration of the send (cleared in
+        // both the success and failure paths), so the second tap exits
+        // early instead of duplicating. Retries from the offline / retry
+        // queues bypass this entry point — they call lower-level paths
+        // directly with the same `tempId` already used by the original send.
+        guard !isSending else { return false }
 
         // Offline: enqueue for later delivery + show optimistic message
         if NetworkMonitor.shared.isOffline {
@@ -1434,7 +1495,12 @@ class ConversationViewModel: ObservableObject {
                 layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0
             )
-            try? await persistence.insertOptimistic(optimisticRecord)
+            do {
+                try await persistence.insertOptimistic(optimisticRecord)
+                print("[SendFlow] insertOptimistic OK tempId=\(tempId) state=.sending convId=\(conversationId)")
+            } catch {
+                print("[SendFlow] insertOptimistic FAILED tempId=\(tempId) error=\(error.localizedDescription)")
+            }
         }
 
         do {
@@ -1474,9 +1540,11 @@ class ConversationViewModel: ObservableObject {
                 isEncrypted: isEncrypted ? true : nil,
                 encryptionMode: encryptionMode
             )
+            print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
             let responseData = try await messageService.send(
                 conversationId: conversationId, request: body
             )
+            print("[SendFlow] POST OK tempId=\(tempId) serverId=\(responseData.id) createdAt=\(responseData.createdAt)")
 
             // Register tempId → serverId mapping so the socket handler can reconcile
             // the `message:new` broadcast without creating a duplicate row.
@@ -1485,10 +1553,14 @@ class ConversationViewModel: ObservableObject {
 
             // GRDB server ack — state machine transitions to .sent; store observation
             // surfaces the change to the view without a direct messages[idx] write.
-            _ = try? await messagePersistence.applyEvent(
+            // Logging the result so we can see whether the ⏱→✓ transition actually
+            // took effect (the `try?` swallows both errors AND a nil return when
+            // the state machine rejects the event or the record is missing).
+            let ackResult = try? await messagePersistence.applyEvent(
                 localId: tempId,
                 event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
             )
+            print("[SendFlow] applyEvent serverAck tempId=\(tempId) → resultState=\(ackResult.map { String(describing: $0) } ?? "nil")")
 
             // Move conversation to top of list immediately (optimistic)
             let convId = conversationId

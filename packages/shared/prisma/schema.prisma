@@ -2526,6 +2526,15 @@ model PushToken {
   /// App bundle ID (e.g., "com.meeshy.app", "com.meeshy.app.voip")
   bundleId   String?
 
+  /// APNs environment for this token: "development" (sandbox) or "production".
+  /// Required to route APNs sends to the correct Apple endpoint
+  /// (api.sandbox.push.apple.com vs api.push.apple.com). Sandbox tokens come
+  /// from iOS debug builds (aps-environment=development); production tokens
+  /// come from TestFlight/App Store builds. Sending a sandbox token to the
+  /// production endpoint (or vice versa) returns BadDeviceToken from Apple.
+  /// Null/missing = "production" (safe default for legacy rows).
+  apnsEnvironment String?  @default("production")
+
   /// Whether this token is currently active/valid
   isActive  Boolean  @default(true)
 

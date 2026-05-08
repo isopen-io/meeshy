@@ -60,6 +60,11 @@ public struct EmojiReactionPicker: View {
     public var style: Style
     /// Scale factor applied to all sizes (default 1.0). Use < 1.0 for compact contexts.
     public var scale: CGFloat
+    /// When true, the emoji strip is wrapped in a horizontal ScrollView so callers can
+    /// pass more emojis than fit on-screen and let the user swipe to access the rest.
+    /// The capsule background is rendered around the visible viewport so the strip
+    /// keeps its anchored "pill" look even with overflow content.
+    public var scrollable: Bool
     public var onReact: ((String) -> Void)?
     public var onDismiss: (() -> Void)?
     /// When nil, the "+" expand button is hidden.
@@ -71,20 +76,26 @@ public struct EmojiReactionPicker: View {
         quickEmojis: [String] = ["❤️", "😂", "😮", "🔥", "😢", "👏"],
         style: Style = .dark,
         scale: CGFloat = 1.0,
+        scrollable: Bool = false,
         onReact: ((String) -> Void)? = nil,
         onDismiss: (() -> Void)? = nil,
         onExpandFullPicker: (() -> Void)? = nil
     ) {
         self.quickEmojis = quickEmojis; self.style = style; self.scale = scale
+        self.scrollable = scrollable
         self.onReact = onReact; self.onDismiss = onDismiss
         self.onExpandFullPicker = onExpandFullPicker
     }
 
     public var body: some View {
-        quickEmojiStrip
+        if scrollable {
+            scrollableQuickEmojiStrip
+        } else {
+            quickEmojiStrip
+        }
     }
 
-    private var quickEmojiStrip: some View {
+    private var emojiButtons: some View {
         HStack(spacing: 6 * scale) {
             ForEach(quickEmojis, id: \.self) { emoji in
                 Button {
@@ -112,8 +123,22 @@ public struct EmojiReactionPicker: View {
                 }
             }
         }
-        .padding(.horizontal, 10 * scale)
-        .padding(.vertical, 6 * scale)
+    }
+
+    private var quickEmojiStrip: some View {
+        emojiButtons
+            .padding(.horizontal, 10 * scale)
+            .padding(.vertical, 6 * scale)
+            .background(stripBackground)
+    }
+
+    private var scrollableQuickEmojiStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            emojiButtons
+                .padding(.horizontal, 10 * scale)
+                .padding(.vertical, 6 * scale)
+        }
+        .clipShape(Capsule())
         .background(stripBackground)
     }
 

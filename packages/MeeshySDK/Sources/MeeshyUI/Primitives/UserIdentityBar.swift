@@ -393,11 +393,22 @@ extension UserIdentityBar {
         moodEmoji: String? = nil,
         storyRingState: StoryRingState = .none,
         onAvatarTap: (() -> Void)?,
-        onViewStory: (() -> Void)? = nil
+        onViewStory: (() -> Void)? = nil,
+        /// Group conversations want the timestamp inline with the author
+        /// (`Name · 12:45`) so each speaker carries its own time without a
+        /// separate edge-pinned chip per bubble. Direct conversations keep
+        /// the legacy "trailing time" layout where time + delivery hug the
+        /// trailing edge of the bar — only the last bubble of each side
+        /// shows them, no point putting them inline.
+        inlineTime: Bool = false
     ) -> UserIdentityBar {
         var leading1: [IdentityBarElement] = [.name]
         if let role, role != .member {
             leading1.append(.roleBadge(role))
+        }
+        if inlineTime, !time.isEmpty {
+            leading1.append(.text("·"))
+            leading1.append(.time(time))
         }
         if !flags.isEmpty || onTranslateTap != nil {
             leading1.append(.text("·"))
@@ -409,7 +420,16 @@ extension UserIdentityBar {
             leading1.append(.translateButton(action: onTranslateTap))
         }
 
-        var trailing1: [IdentityBarElement] = [.time(time)]
+        // Empty `time` + nil `delivery` is the convention chat callers use
+        // to mean "skip the trailing meta group entirely". Without this
+        // omission the bar would still emit a `.time("")` element with the
+        // greedy `Spacer(minLength: 4)` ahead of it, stretching the row.
+        // When `inlineTime` is set the time has already been inserted into
+        // the leading group above — only the delivery icon remains here.
+        var trailing1: [IdentityBarElement] = []
+        if !inlineTime, !time.isEmpty {
+            trailing1.append(.time(time))
+        }
         if let delivery {
             trailing1.append(.delivery(delivery))
         }
@@ -582,7 +602,14 @@ extension UserIdentityBar {
             leading1.append(.translateButton(action: onTranslateTap))
         }
 
-        var trailing1: [IdentityBarElement] = [.time(time)]
+        // Same chat-callers convention as `messageBubble`: empty `time` +
+        // nil `delivery` skips the trailing time/delivery group so the
+        // row can render flags-only on intermediate messages without a
+        // greedy Spacer pushing them to opposite edges.
+        var trailing1: [IdentityBarElement] = []
+        if !time.isEmpty {
+            trailing1.append(.time(time))
+        }
         if let delivery {
             trailing1.append(.delivery(delivery))
         }

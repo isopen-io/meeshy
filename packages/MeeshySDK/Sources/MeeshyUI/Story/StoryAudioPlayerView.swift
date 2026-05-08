@@ -12,6 +12,13 @@ public struct StoryAudioPlayerView: View {
     /// This prevents the double-playback bug where both ReaderState and this view
     /// would independently instantiate an AVPlayer for the same audio.
     public let externalPlayer: AVPlayer?
+    /// True when the parent (ReaderState) is the authoritative playback owner —
+    /// even if `externalPlayer` is momentarily nil at first onAppear (the parent
+    /// hasn't reached this clip's startTime yet). Suppresses the internal
+    /// auto-play fallback that would otherwise spawn a duplicate AVPlayer
+    /// playing the same file in parallel — surfaced as "le son n'est pas net"
+    /// (audible echo / phasing) in the preview viewer.
+    public let parentManagesPlayback: Bool
     public let onDragEnd: () -> Void
 
     @State private var isPlaying = false
@@ -29,11 +36,13 @@ public struct StoryAudioPlayerView: View {
                 url: URL? = nil,
                 isEditing: Bool = false,
                 externalPlayer: AVPlayer? = nil,
+                parentManagesPlayback: Bool = false,
                 onDragEnd: @escaping () -> Void = {}) {
         self._audioObject = audioObject
         self.url = url
         self.isEditing = isEditing
         self.externalPlayer = externalPlayer
+        self.parentManagesPlayback = parentManagesPlayback
         self.onDragEnd = onDragEnd
     }
 
@@ -56,8 +65,21 @@ public struct StoryAudioPlayerView: View {
                         // Reader mode with shared player — just attach the progress observer.
                         attachProgressObserver(to: externalPlayer)
                         isPlaying = (externalPlayer?.rate ?? 0) > 0
+                    } else if parentManagesPlayback {
+                        // Parent will provide the player at clip startTime.
+                        // Skip the internal autoplay so we don't echo the
+                        // parent-owned playback when it kicks in shortly.
                     } else {
                         startAutoPlay()
+                    }
+                }
+                .onChange(of: externalPlayer != nil) { _, hasExternal in
+                    // Late-arriving external player (parent reached startTime
+                    // after our onAppear) — attach the progress observer once
+                    // it shows up so the UI tracks playback correctly.
+                    if hasExternal {
+                        attachProgressObserver(to: externalPlayer)
+                        isPlaying = (externalPlayer?.rate ?? 0) > 0
                     }
                 }
                 .onDisappear { teardownPlayer() }

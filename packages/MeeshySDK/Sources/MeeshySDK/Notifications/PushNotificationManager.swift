@@ -24,6 +24,22 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         deviceToken = UserDefaults.standard.string(forKey: Self.persistedTokenKey)
     }
 
+    // MARK: - APNs Environment
+
+    /// The APNs environment baked into this build. Mirrors the entitlement's
+    /// `aps-environment` key — debug builds get sandbox tokens; release builds
+    /// get production tokens. The gateway uses this to route to the correct
+    /// Apple endpoint (api.sandbox.push.apple.com vs api.push.apple.com).
+    /// Hard-coded at compile time so a release build cannot accidentally
+    /// claim to be sandbox (or vice-versa) at runtime.
+    public static let apnsEnvironment: String = {
+        #if DEBUG
+        return "development"
+        #else
+        return "production"
+        #endif
+    }()
+
     // MARK: - Permission
 
     /// Request notification permission and register for remote notifications. Returns true if granted.
@@ -155,7 +171,8 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         let request = RegisterDeviceTokenRequest(
             token: token,
             platform: "ios",
-            type: "apns"
+            type: "apns",
+            apnsEnvironment: Self.apnsEnvironment
         )
 
         do {
@@ -163,7 +180,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
                 endpoint: "/users/register-device-token",
                 body: request
             )
-            logger.info("Device token registered with backend")
+            logger.info("Device token registered with backend (env=\(Self.apnsEnvironment))")
         } catch {
             logger.error("Failed to register device token: \(error.localizedDescription)")
         }

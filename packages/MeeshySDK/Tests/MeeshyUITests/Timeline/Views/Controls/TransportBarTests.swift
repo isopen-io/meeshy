@@ -10,7 +10,6 @@ final class TransportBarTests: XCTestCase {
         currentTime: Float = 4.25,
         duration: Float = 10,
         zoomScale: CGFloat = 1.0,
-        mode: TimelineMode = .quick,
         isMuted: Bool = false
     ) -> TransportBar {
         TransportBar(
@@ -18,14 +17,12 @@ final class TransportBarTests: XCTestCase {
             currentTime: currentTime,
             duration: duration,
             zoomScale: zoomScale,
-            mode: mode,
             isMuted: isMuted,
             onPlayToggle: {},
             onMuteToggle: {},
             onZoomIn: {},
             onZoomOut: {},
-            onZoomReset: {},
-            onModeSwitch: {}
+            onZoomReset: {}
         )
     }
 

@@ -27,7 +27,44 @@ final class MessageListViewController: UIViewController {
     /// store directly would bypass the network fallback and silently
     /// stall pagination once the local GRDB window is exhausted.
     var onLoadOlder: (() async -> Void)?
-    var resolveBubbleData: (String) -> MessageBubbleData = { _ in MessageBubbleData() }
+    /// Invoked when the user taps a story reply preview inside a bubble.
+    /// Receives the story id (NOT the message id). Wire to the parent's
+    /// story viewer presentation logic.
+    var onStoryReplyTap: ((String) -> Void)?
+    /// Invoked when the user swipes a bubble far enough to commit a reply
+    /// gesture. Receives the message id of the swiped bubble.
+    var onSwipeReply: ((String) -> Void)?
+    /// Invoked when the user swipes a bubble in the opposite direction
+    /// (forward gesture). Receives the message id of the swiped bubble.
+    var onSwipeForward: ((String) -> Void)?
+    /// Long press on a bubble — opens the contextual options menu.
+    var onLongPress: ((String) -> Void)?
+    /// Add reaction (typically opens an inline emoji picker).
+    var onAddReaction: ((String) -> Void)?
+    /// Toggle an existing reaction emoji on a message.
+    var onToggleReaction: ((String, String) -> Void)?
+    /// Open the full reaction picker / list for a message.
+    var onOpenReactPicker: ((String) -> Void)?
+    /// Open the detail sheet on the message-info tab.
+    var onShowMessageInfo: ((String) -> Void)?
+    /// Open the detail sheet on the reactions tab.
+    var onShowReactions: ((String) -> Void)?
+    /// Open the detail sheet on the language / translation tab.
+    var onShowTranslationDetail: ((String) -> Void)?
+    /// Tap on a media attachment — typically presents a fullscreen viewer.
+    var onMediaTap: ((MessageAttachment) -> Void)?
+    /// Consume a view-once message.
+    var onConsumeViewOnce: ((String, @escaping (Bool) -> Void) -> Void)?
+    /// Request an on-demand translation for a message into a target language.
+    var onRequestTranslation: ((String, String) -> Void)?
+    /// Live source of dynamic per-message data (translations, transcriptions,
+    /// audio translations, last-message gating). Held weakly: the cell
+    /// registration closure runs on the main runloop alongside the VM, but
+    /// the controller is otherwise owned by a SwiftUI `Representable` and
+    /// must not retain its parent's state. When nil (deallocating), cells
+    /// render with empty translation state — the next `applySnapshot` after
+    /// re-attachment will refresh them.
+    weak var conversationViewModel: ConversationViewModel?
 
     init(
         store: MessageStore,
@@ -107,7 +144,8 @@ final class MessageListViewController: UIViewController {
             let group = NSCollectionLayoutGroup.vertical(layoutSize: groupSize, subitems: [item])
             let section = NSCollectionLayoutSection(group: group)
             section.interGroupSpacing = 0
-            section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 0, bottom: 8, trailing: 0)
+            // 12pt horizontal breathing room so bubbles don't kiss the screen edge.
+            section.contentInsets = NSDirectionalEdgeInsets(top: 8, leading: 12, bottom: 8, trailing: 12)
             return section
         }
 
@@ -148,7 +186,23 @@ final class MessageListViewController: UIViewController {
             let stories = self.storyViewModel
             let statuses = self.statusViewModel
             let convList = self.conversationListViewModel
-            let bubbleData = self.resolveBubbleData(message.id)
+
+            // Snap dynamic VM-owned state into immutable lets. SwiftUI then
+            // sees the bubble depend only on these primitive inputs (Equatable),
+            // so VM @Published changes elsewhere don't re-render this cell.
+            let vm = self.conversationViewModel
+            let translations = vm?.messageTranslations[message.id] ?? []
+            let preferred = vm?.preferredTranslation(for: message.id)
+            let transcription = vm?.messageTranscriptions[message.id]
+            let translatedAudios = vm?.messageTranslatedAudios[message.id] ?? []
+            let mentionDisplayNames = vm?.mentionDisplayNames ?? [:]
+            let isLastReceived = (vm?.lastReceivedMessageId == message.id)
+            let isLastSent = (vm?.lastSentMessageId == message.id)
+            let user = AuthManager.shared.currentUser
+            let userLanguages: (regional: String?, custom: String?) = (
+                user?.regionalLanguage,
+                user?.customDestinationLanguage
+            )
 
             // Capture self weakly inside the @Sendable closure passed as
             // ThemedMessageBubble.onReplyTap. The bubble fires it on tap of
@@ -156,25 +210,70 @@ final class MessageListViewController: UIViewController {
             let scrollHandler: ((String) -> Void) = { [weak self] targetId in
                 self?.scrollToMessage(localId: targetId)
             }
+            let storyReplyHandler = self.onStoryReplyTap
+            let swipeReplyHandler = self.onSwipeReply
+            let swipeForwardHandler = self.onSwipeForward
+            let longPressHandler = self.onLongPress
+            let addReactionHandler = self.onAddReaction
+            let toggleReactionHandler = self.onToggleReaction
+            let openReactPickerHandler = self.onOpenReactPicker
+            let showInfoHandler = self.onShowMessageInfo
+            let showReactionsHandler = self.onShowReactions
+            let showTranslationHandler = self.onShowTranslationDetail
+            let mediaTapHandler = self.onMediaTap
+            let consumeViewOnceHandler = self.onConsumeViewOnce
+            let requestTranslationHandler = self.onRequestTranslation
+            let messageId = message.id
+            let isMine = message.isMe
+
+            // No UIContextMenuInteraction here — the user wants a custom
+            // overlay (light blur backdrop, re-rendered bubble centered,
+            // compact action menu sliding from the bottom). The native
+            // UIMenu can't be styled to match. The long press gesture is
+            // owned by the SwiftUI BubbleSwipeContainer and surfaces via
+            // `onLongPress` to set ConversationView's overlay state.
+            cell.interactions
+                .filter { $0 is UIContextMenuInteraction }
+                .forEach { cell.removeInteraction($0) }
 
             cell.contentConfiguration = UIHostingConfiguration {
-                ThemedMessageBubble(
-                    message: message,
-                    contactColor: accent,
-                    isDirect: direct,
-                    isDark: dark,
-                    transcription: bubbleData.transcription,
-                    translatedAudios: bubbleData.translatedAudios,
-                    textTranslations: bubbleData.translations,
-                    preferredTranslation: bubbleData.preferredTranslation,
-                    showAvatar: !direct,
-                    onReplyTap: scrollHandler,
-                    onScrollToMessage: scrollHandler,
-                    isLastInGroup: true,
-                    mentionDisplayNames: bubbleData.mentionDisplayNames,
-                    currentUserId: myId,
-                    userLanguages: bubbleData.userLanguages
-                )
+                BubbleSwipeContainer(
+                    isMine: isMine,
+                    messageCreatedAt: message.createdAt,
+                    onSwipeReply: { swipeReplyHandler?(messageId) },
+                    onSwipeForward: { swipeForwardHandler?(messageId) },
+                    onLongPress: { longPressHandler?(messageId) }
+                ) {
+                    ThemedMessageBubble(
+                        message: message,
+                        contactColor: accent,
+                        isDirect: direct,
+                        isDark: dark,
+                        transcription: transcription,
+                        translatedAudios: translatedAudios,
+                        textTranslations: translations,
+                        preferredTranslation: preferred,
+                        showAvatar: !direct,
+                        onAddReaction: addReactionHandler,
+                        onToggleReaction: { emoji in toggleReactionHandler?(messageId, emoji) },
+                        onOpenReactPicker: openReactPickerHandler,
+                        onShowInfo: { showInfoHandler?(messageId) },
+                        onShowReactions: showReactionsHandler,
+                        onReplyTap: scrollHandler,
+                        onStoryReplyTap: storyReplyHandler,
+                        onMediaTap: mediaTapHandler,
+                        onConsumeViewOnce: consumeViewOnceHandler,
+                        onRequestTranslation: requestTranslationHandler,
+                        onShowTranslationDetail: showTranslationHandler,
+                        onScrollToMessage: scrollHandler,
+                        isLastInGroup: true,
+                        isLastReceivedMessage: isLastReceived,
+                        isLastSentMessage: isLastSent,
+                        mentionDisplayNames: mentionDisplayNames,
+                        currentUserId: myId,
+                        userLanguages: userLanguages
+                    )
+                }
                 .environmentObject(host)
                 .environmentObject(stories)
                 .environmentObject(statuses)
@@ -198,6 +297,16 @@ final class MessageListViewController: UIViewController {
         snapshot.appendSections([.main])
         let items = store.messages.reversed().map { MessageListItem.message(localId: $0.localId) }
         snapshot.appendItems(items, toSection: .main)
+        // The diffable datasource only re-runs the cell registration closure
+        // when an item's IDENTIFIER changes — we key items by `localId` which
+        // stays stable across `.sending → .sent → .delivered`, so without
+        // explicitly reconfiguring the rows the bubble would render with its
+        // first state forever and only flip after the user leaves and re-opens
+        // the conversation (which throws the cells away). `reconfigureItems`
+        // forces the registration to re-run for every visible row, picking up
+        // GRDB-driven state / content / delivery / reaction changes in place
+        // without triggering the costly insert/move/delete diff animation.
+        snapshot.reconfigureItems(items)
         dataSource.apply(snapshot, animatingDifferences: animated)
     }
 
@@ -210,6 +319,30 @@ final class MessageListViewController: UIViewController {
                 self?.applySnapshot()
             }
             .store(in: &cancellables)
+
+        // GRDB-driven changes (insert / state transition / delivery / read)
+        // already trigger `messagesDidChange` and re-snapshot. But translation
+        // / transcription / audio-translation events arrive via Socket.IO
+        // and only update `@Published` dictionaries on the ViewModel — they
+        // never touch GRDB so the diffable datasource never sees them. Force
+        // a snapshot reconfigure when those publishers fire so the cell
+        // registration re-runs and `resolveBubbleData` picks the new payload
+        // up. Coalesce by 80ms to absorb multilingual bursts (the SDK
+        // already collects translation events on that interval, so two
+        // collapsed re-snapshots is the worst case).
+        guard let vm = conversationViewModel else { return }
+        Publishers.MergeMany(
+            vm.$messageTranslations.map { _ in () }.eraseToAnyPublisher(),
+            vm.$messageTranscriptions.map { _ in () }.eraseToAnyPublisher(),
+            vm.$messageTranslatedAudios.map { _ in () }.eraseToAnyPublisher(),
+            vm.$activeTranslationOverrides.map { _ in () }.eraseToAnyPublisher()
+        )
+        .dropFirst() // skip the @Published initial emission
+        .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)
+        .sink { [weak self] in
+            self?.applySnapshot(animated: false)
+        }
+        .store(in: &cancellables)
     }
 
     // MARK: - Scroll to Bottom
