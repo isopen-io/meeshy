@@ -328,49 +328,91 @@ public enum LoadState: Equatable {
 
 ### 5.2 Helper reutilisable
 
-`packages/MeeshySDK/Sources/MeeshyUI/Cache/CacheFirstLoader.swift` :
+**Decision : helper dans `MeeshySDK core`** (pas `MeeshyUI`). Le helper manipule des stores SDK + LoadState, n'a pas de dependance SwiftUI. Le placer dans le core target permet a tout futur ViewModel/SyncEngine de s'en servir sans pulling la dependance UI.
+
+`packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheFirstLoader.swift` :
 
 ```swift
-@MainActor
-public protocol CacheFirstLoading: ObservableObject {
-    var loadState: LoadState { get set }
-}
+public actor CacheFirstLoader<T: Codable & Sendable> {
+    private let store: any CacheStore<T>
+    private let key: String
 
-public extension CacheFirstLoading {
-    func loadWithCacheFirst<T: Codable & Sendable>(
-        store: any CacheStore<T>,
-        key: String,
+    public init(store: any CacheStore<T>, key: String) {
+        self.store = store
+        self.key = key
+    }
+
+    public func load(
         fetch: @Sendable () async throws -> T,
-        apply: @MainActor (T) -> Void
-    ) async {
+        setLoadState: @MainActor @Sendable (LoadState) -> Void,
+        apply: @MainActor @Sendable (T) -> Void
+    ) async -> Task<Void, Never>? {
         let result = await store.load(for: key)
         switch result {
         case .fresh(let data, _):
-            apply(data); loadState = .cachedFresh
+            await MainActor.run { apply(data); setLoadState(.cachedFresh) }
+            return nil
         case .stale(let data, _):
-            apply(data); loadState = .cachedStale
-            Task { @MainActor in
-                await self.silentRevalidate(store: store, key: key, fetch: fetch, apply: apply)
-            }
-        case .expired, .empty:
-            loadState = .loading
-            do {
-                let data = try await fetch()
-                apply(data); loadState = .loaded
-                await store.save(data, for: key)
-            } catch {
-                if NetworkMonitor.shared.isOffline {
-                    loadState = .offline
-                } else {
-                    loadState = .error(error.localizedDescription)
+            await MainActor.run { apply(data); setLoadState(.cachedStale) }
+            // Return revalidation task so caller can store + cancel
+            return Task { [store, key] in
+                guard !Task.isCancelled else { return }
+                do {
+                    let fresh = try await fetch()
+                    guard !Task.isCancelled else { return }
+                    await MainActor.run { apply(fresh); setLoadState(.loaded) }
+                    await store.save(fresh, for: key)
+                } catch {
+                    // Silent revalidate failure — keep stale displayed
+                    Logger.cache.warning("Silent revalidate failed for \(key): \(error)")
                 }
             }
+        case .expired, .empty:
+            await MainActor.run { setLoadState(.loading) }
+            do {
+                let data = try await fetch()
+                await MainActor.run { apply(data); setLoadState(.loaded) }
+                await store.save(data, for: key)
+            } catch {
+                let isOffline = await NetworkMonitor.shared.isOffline
+                await MainActor.run {
+                    setLoadState(isOffline ? .offline : .error(error.localizedDescription))
+                }
+            }
+            return nil
         }
     }
-
-    private func silentRevalidate<T>(...) async { /* ... */ }
 }
 ```
+
+Le helper retourne `Task<Void, Never>?` (le revalidation task quand applicable) que le ViewModel **doit stocker pour pouvoir annuler** au teardown.
+
+### 5.2.1 Discipline Task — eviter les Tasks orphelines
+
+Tout ViewModel utilisant `loadWithCacheFirst` declare :
+
+```swift
+@MainActor
+final class ExampleViewModel: ObservableObject, CacheFirstLoading {
+    @Published private(set) var loadState: LoadState = .idle
+    private var activeTasks: Set<Task<Void, Never>> = []
+
+    func load() async {
+        let revalidate = await CacheFirstLoader(store: ..., key: ...)
+            .load(fetch: { ... }, setLoadState: { [weak self] in self?.loadState = $0 },
+                  apply: { [weak self] in self?.items = $0 })
+        if let revalidate { activeTasks.insert(revalidate) }
+    }
+
+    deinit {
+        activeTasks.forEach { $0.cancel() }
+    }
+}
+```
+
+Sans cette discipline, un user qui change rapidement d'ecran pendant un revalidate peut accumuler des Tasks zombies qui consomment CPU/network plusieurs secondes.
+
+**Note** : `deinit` n'est pas `@MainActor`-isole. `activeTasks.forEach { $0.cancel() }` est safe car `Task.cancel()` est `Sendable` et thread-safe.
 
 ### 5.3 ViewModels a corriger
 
@@ -399,11 +441,13 @@ public extension CacheFirstLoading {
 
 ### 5.5 Tests
 
-5 ViewModels × 4 tests = 20 tests :
+5 ViewModels × 4 tests + 2 tests helper = 22 tests :
 - `test_load_withCachedFreshData_doesNotFetch`
 - `test_load_withCachedStaleData_displaysImmediatelyAndRefreshesInBackground`
 - `test_load_withEmptyCache_showsLoadingThenLoaded`
 - `test_load_offlineWithStaleData_keepsDisplayingCache`
+- `test_loader_revalidateTask_cancelsOnViewModelDeinit` (helper)
+- `test_loader_concurrentLoads_lastApplyWins` (helper)
 
 ### 5.6 Acceptance criteria
 
