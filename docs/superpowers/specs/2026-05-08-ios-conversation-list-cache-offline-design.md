@@ -105,21 +105,38 @@ Quatre phases independantes, mergeable separement :
 ```swift
 private var conversationsRaw: [MeeshyConversation] = []
 @Published private(set) var conversations: [MeeshyConversation] = []
+@Published private(set) var groupedConversations: [ConversationSection] = []
 
 private func setConversations(_ items: [MeeshyConversation]) {
     conversationsRaw = items
-    conversations = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
+    let sorted = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
+    conversations = sorted
+    groupedConversations = computeSections(from: sorted)  // memoize
 }
 
 private func appendConversations(_ items: [MeeshyConversation]) {
     let merged = (conversationsRaw + items).deduplicatedById()
     setConversations(merged)
 }
+
+/// Move single conversation to top — O(n) instead of O(n log n) full re-sort.
+/// Used when a socket message:new arrives for an existing conversation.
+private func bumpToTop(conversationId: String, newLastMessageAt: Date) {
+    guard let idx = conversationsRaw.firstIndex(where: { $0.id == conversationId }) else { return }
+    var updated = conversationsRaw[idx]
+    updated.lastMessageAt = newLastMessageAt
+    conversationsRaw.remove(at: idx)
+    conversationsRaw.insert(updated, at: 0)
+    conversations = conversationsRaw  // already sorted by invariant
+    groupedConversations = computeSections(from: conversationsRaw)
+}
 ```
 
-Tous les sites d'ecriture (`reloadFromCache`, `loadConversations`, `loadMore`, optimistic insert sur creation conv, sync engine merge) passent par ces helpers. **Plus aucun assignement direct a `conversations`.**
+Tous les sites d'ecriture (`reloadFromCache`, `loadConversations`, `loadMore`, optimistic insert sur creation conv, sync engine merge) passent par ces helpers. **Plus aucun assignement direct a `conversations`.** Les arrivees socket `message:new` sur conversation existante passent par `bumpToTop` (insertion-sort incremental), pas un re-sort complet.
 
-`groupedConversations` (computed) peut alors arreter de retrier en interne (chaque section recoit deja une sous-liste triee). Gain CPU sur grosses listes.
+`groupedConversations` est **memoized comme `@Published private(set)`**, plus computed property. Cela evite la recomputation a chaque body re-eval pendant le scroll. Le timer minuit (qui peut faire glisser une conversation entre "Today" et "Yesterday") est gere via `Timer.publish(every: 60)` qui appelle `groupedConversations = computeSections(from: conversationsRaw)` quand le wall-clock change de jour.
+
+**Note performance** : a 1000 conversations, `sorted()` ~0.3-0.8ms, computeSections ~5ms — acceptable. A 10k+, le full re-sort devient sensible (5-10ms par event), d'ou l'importance de `bumpToTop` pour le hot path socket.
 
 ### 3.2 Modifications SDK
 
@@ -137,7 +154,8 @@ Tous les sites d'ecriture (`reloadFromCache`, `loadConversations`, `loadMore`, o
 
 1. Au demarrage froid, `conversations` est trie `lastMessageAt DESC` des la lecture cache stale (avant le fetch reseau)
 2. Apres `loadMore`, l'ordre est conserve (pas de "queue" de conversations plus anciennes au milieu de recentes)
-3. Quand un nouveau message arrive sur une conversation X, X remonte en position 1 instantanement
+3. Quand un nouveau message arrive sur une conversation X, X remonte en position 1 instantanement (via `bumpToTop`, sans full re-sort)
+4. `groupedConversations` ne se recompute qu'a (a) chaque setter `setConversations`/`bumpToTop`, (b) tick minuit (changement de jour), (c) jamais pendant le scroll
 
 ---
 
@@ -172,16 +190,36 @@ public struct ConversationPage {
 
 L'ancienne signature `list(offset:limit:)` reste pour compatibilite interne (sync engine peut continuer a l'utiliser pour la premiere page sans cursor).
 
-### 4.3 Cache : append des pages dans le store unique `"list"`
+### 4.3 Cache : table dediee row-per-conversation
 
-Plutot que de fragmenter en cles `"list:page1"`, `"list:page2"`, on utilise `mergeUpdate` (existant `GRDBCacheStore.swift:137`) :
+**Changement de schema GRDB** : aujourd'hui le store `conversations` stocke un blob JSON unique sous cle `"list"`. A 5k+ conversations, l'encode/decode de ce blob bloque le MainActor 200-500ms au cold start. **On migre vers une table dediee row-per-conversation** :
 
-1. Lire le cache courant (n items deja dedans)
-2. Merge les nouveaux items (dedupe par id)
-3. Re-trier par `lastMessageAt DESC`
-4. Sauvegarder le tout sous `"list"`
+```sql
+CREATE TABLE cached_conversations (
+    id TEXT PRIMARY KEY,
+    last_message_at INTEGER NOT NULL,  -- epoch ms, indexed
+    payload BLOB NOT NULL,             -- JSON encoded MeeshyConversation
+    fetched_at INTEGER NOT NULL,
+    INDEX idx_last_message_at (last_message_at DESC)
+);
+```
 
-**Pas de plafond explicite.** Le cache croit avec ce que l'utilisateur charge via `loadMore()`. GRDB SQLite + SwiftUI `LazyVStack` gerent confortablement 10k+ rows sans degradation perceptible. Si dans le futur on observe un bloat (instrumentation Allocations / Time Profiler), on ajoutera une politique de purge LRU sur `lastMessageAt` (par ex. > 6 mois sans activite) — hors scope de ce spec.
+Avantages :
+- Reads partiels possibles (page d'affichage par exemple LIMIT 30 ORDER BY last_message_at DESC)
+- Decode incremental (seules les rows visibles sont decodees)
+- `mergeUpdate` devient un INSERT ON CONFLICT REPLACE par row
+- LRU efficace via `DELETE WHERE id NOT IN (SELECT id ORDER BY last_message_at DESC LIMIT N)`
+
+**Plafond LRU pragmatique : 2000 conversations cachees.** Au-dela, purge des plus anciennes par `lastMessageAt` ascendant. 99% des utilisateurs n'atteindront jamais 500 ; 2000 couvre les power users sans risque de bloat. Si l'utilisateur scrolle au-dela des 2000 cachees, les anciennes pages sont re-fetched depuis le backend.
+
+**WAL mode obligatoire** : verifier que GRDB utilise `DatabasePool` (pas `DatabaseQueue`) avec `prepareDatabase { try $0.execute(sql: "PRAGMA journal_mode = WAL") }`. Sans WAL, les writes bloquent les reads → jank UI lors d'un fetch reseau pendant scroll.
+
+Procedure de fetch :
+
+1. Lire la page courante via `SELECT * FROM cached_conversations ORDER BY last_message_at DESC LIMIT 30 OFFSET <n>`
+2. Merge les nouveaux items via `INSERT OR REPLACE` (un par row)
+3. Pas besoin de re-trier en memoire — l'index BTREE garantit l'ordre
+4. Trigger LRU si count > 2000 : `DELETE FROM cached_conversations WHERE id IN (SELECT id ... LIMIT count - 2000)`
 
 ### 4.4 ViewModel
 
@@ -259,6 +297,8 @@ Detection 2 lignes avant la fin pour eviter que l'utilisateur ne voit le Progres
 - `test_loadMore_concurrentCalls_onlyOneInFlight`
 - `test_cache_persistsMultiplePages_acrossRestart` (integration GRDB)
 - `test_pullToRefresh_resetsCursorAndRefetches`
+- `test_cache_lruPurge_keepsOnly2000RecentConversations` (integration GRDB)
+- `test_bumpToTop_singleConversation_doesNotFullSort` (perf — assert max ms)
 
 ### 4.8 Acceptance criteria
 
