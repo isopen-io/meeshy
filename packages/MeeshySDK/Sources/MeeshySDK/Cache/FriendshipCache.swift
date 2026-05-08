@@ -19,6 +19,22 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     private var _sentPending: [String: String] = [:]      // receiverId -> requestId
     private var _receivedPending: [String: String] = [:]   // senderId -> requestId
     private var _isHydrated = false
+    /// Currently running hydration task. Used to coalesce concurrent
+    /// `hydrate()` callers — without this, MeeshyApp dispatched two
+    /// hydrations on warm-start (one from `task { }` at launch and one
+    /// from the auth `onChange`) and the second `applyHydration`'s
+    /// `removeAll()` crashed in `swift_deallocClassInstance` on iOS 26
+    /// because the dictionary's storage was being released while the
+    /// first hydration's task graph still held strong references to
+    /// the same FriendRequest values. Coalescing makes hydrate()
+    /// idempotent: parallel callers share the same network roundtrip
+    /// and the same applyHydration call.
+    private var _hydrationTask: Task<Void, Never>?
+    /// Generation counter bumped every time the in-flight slot changes.
+    /// Lets the owner of a finishing task tell whether its slot is still
+    /// theirs (versus reset by `clear()` or replaced by a later hydrate)
+    /// before clearing it — avoids wiping a fresh task's pointer.
+    private var _hydrationGen: UInt64 = 0
 
     public var isHydrated: Bool {
         lock.lock()
@@ -66,6 +82,44 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     // MARK: - Hydrate (call once after login)
 
     public func hydrate(friendService: FriendServiceProviding = FriendService.shared) async {
+        // Fast path: already hydrated, nothing to do. The check is intentionally
+        // outside the lock — `isHydrated` takes the lock itself, and a stale
+        // false-read just falls through to the coalescer below where the
+        // in-flight task does the actual deduplication.
+        if isHydrated { return }
+
+        // Coalesce concurrent callers onto a single in-flight task.
+        let task: Task<Void, Never>
+        let myGen: UInt64?
+        lock.lock()
+        if let existing = _hydrationTask {
+            task = existing
+            myGen = nil // not the owner; never clears the slot
+            lock.unlock()
+        } else {
+            _hydrationGen &+= 1
+            myGen = _hydrationGen
+            let newTask = Task { [weak self] in
+                await self?.performHydration(friendService: friendService)
+            }
+            _hydrationTask = newTask
+            lock.unlock()
+            task = newTask
+        }
+        await task.value
+        // Only the owner clears the slot, and only if its generation is still
+        // current — otherwise a logout-clear-then-login-rehydrate sequence
+        // could let the old task's cleanup wipe the new task's pointer.
+        if let myGen {
+            lock.lock()
+            if _hydrationGen == myGen {
+                _hydrationTask = nil
+            }
+            lock.unlock()
+        }
+    }
+
+    private func performHydration(friendService: FriendServiceProviding) async {
         logger.info("Hydrating friendship cache...")
 
         do {
@@ -104,6 +158,11 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
 
     private func applyHydration(sent: [FriendRequest], received: [FriendRequest]) {
         lock.lock()
+        // `defer` guarantees the lock is released even if a Swift runtime
+        // fatal error fires inside `removeAll()` or one of the `insert`
+        // calls — without this, a single bad mutation would deadlock every
+        // subsequent reader on the singleton lock.
+        defer { lock.unlock() }
 
         _friendIds.removeAll()
         _sentPending.removeAll()
@@ -132,7 +191,6 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         }
 
         _isHydrated = true
-        lock.unlock()
     }
 
     // MARK: - Pagination Helper
@@ -218,11 +276,21 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
 
     public func clear() {
         lock.lock()
+        // Cancel any in-flight hydration so an old user's response doesn't
+        // overwrite the freshly-cleared state when its applyHydration() lands
+        // after this clear() — a leak that would re-expose the previous
+        // account's friend graph to the new session on logout/login. Bump the
+        // generation so the cancelled task's owner-cleanup in hydrate()
+        // recognises its slot is no longer current and skips the clear.
+        let inflight = _hydrationTask
+        _hydrationTask = nil
+        _hydrationGen &+= 1
         _friendIds.removeAll()
         _sentPending.removeAll()
         _receivedPending.removeAll()
         _isHydrated = false
         lock.unlock()
+        inflight?.cancel()
         Task { @MainActor in self.objectWillChange.send() }
     }
 }
