@@ -623,13 +623,14 @@ extension StoryViewerView {
     }
 
     /// Calcule la durée du slide courant en fonction des médias (vidéo/audio).
-    /// Minimum 5s pour les slides texte/image seules.
+    /// Minimum 12s pour les slides texte/image seules — l'ancien 5s coupait
+    /// trop tôt la lecture des captions et stickers.
     private func updateStoryDuration() {
         guard let story = currentStory else {
-            computedStoryDuration = 5.0
+            computedStoryDuration = 12.0
             return
         }
-        var maxDuration: Double = 5.0
+        var maxDuration: Double = 12.0
         let effects = story.storyEffects
 
         if let authoritative = effects?.slideDuration, authoritative > 0 {

@@ -419,7 +419,7 @@ public struct StorySlide: Identifiable, Codable, Sendable {
 
     public init(id: String = UUID().uuidString, mediaURL: String? = nil, mediaData: Data? = nil,
                 content: String? = nil, effects: StoryEffects = StoryEffects(),
-                duration: TimeInterval = 5, order: Int = 0) {
+                duration: TimeInterval = 12, order: Int = 0) {
         self.id = id; self.mediaURL = mediaURL; self.mediaData = mediaData
         self.content = content; self.effects = effects
         self.duration = duration; self.order = order
@@ -436,7 +436,7 @@ public struct StorySlide: Identifiable, Codable, Sendable {
         mediaData = nil
         content = try container.decodeIfPresent(String.self, forKey: .content)
         effects = try container.decodeIfPresent(StoryEffects.self, forKey: .effects) ?? StoryEffects()
-        duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 5
+        duration = try container.decodeIfPresent(TimeInterval.self, forKey: .duration) ?? 12
         order = try container.decodeIfPresent(Int.self, forKey: .order) ?? 0
     }
 
