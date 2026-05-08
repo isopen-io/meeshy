@@ -1,7 +1,9 @@
 import XCTest
 import UIKit
+import CoreMedia
 @testable import MeeshyUI
 
+@MainActor
 final class StoryCanvasSnapshotTests: XCTestCase {
 
     func test_snapshot_complexSlide_iPhone16Pro_t0s() {
