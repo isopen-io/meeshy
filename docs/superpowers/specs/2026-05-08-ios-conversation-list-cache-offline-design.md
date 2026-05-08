@@ -1,7 +1,7 @@
 # iOS Conversation List, Cache-First Coverage & Offline Queue Hardening — Design
 
 **Date:** 2026-05-08
-**Scope:** apps/ios + packages/MeeshySDK + services/gateway + packages/shared (Prisma)
+**Scope:** apps/ios + packages/MeeshySDK + services/gateway + packages/shared (Prisma) + apps/web (Phase 4 uniquement, pour la migration coordonnee de `clientMessageId`)
 **Objectif:** corriger trois bugs critiques (tri stale, drop multi-send offline, perte d'erreurs silencieuse), ajouter la pagination infinite scroll des conversations, etendre le pattern cache-first stale-while-revalidate aux 5 ViewModels qui y derogent, durcir l'envoi offline (idempotence end-to-end via clientMessageId, edit/delete/reactions/audio offline robustes).
 
 ---
@@ -62,7 +62,14 @@ Symptome utilisateur : le 1er message apparait avec icone horloge, les suivants 
 - **Edit message offline** : `OutboxKind.editMessage` existe mais `OutboxDispatcher.dispatch` est no-op pour ce cas
 - **Delete message offline** : idem, no-op
 - **Audio offline** : upload TUS synchrone bloquant ; `attachmentId` peut etre invalide si reseau coupe pendant l'upload
-- **Idempotence cross-device** : aucun champ `clientMessageId` dans `SendMessageRequest`. Le serveur ne peut pas dedupliquer un message rejoue. Le `tempId` (`offline_<uuid>`) est purement local SDK iOS, jamais transmis au backend.
+- **Idempotence cross-device** : `clientMessageId` existe **partiellement** cote backend mais n'est ni persiste ni dedupe :
+  - Cote contrat WebSocket : `services/gateway/src/validation/socket-event-schemas.ts:14` valide `clientMessageId: z.string().optional()` (optionnel)
+  - Cote ACK : le serveur retourne le `clientMessageId` dans le ack quand fourni (`services/gateway/src/socketio/__tests__/message-ack.test.ts:45-50`)
+  - Cote broadcast : `clientMessageId` est **volontairement omis** du broadcast `message:new` (`message-ack.test.ts:61-75`) pour ne pas leak l'identifiant d'un client a un autre
+  - Cote web (Next.js) : `apps/web/services/socketio/messaging.service.ts` envoie deja `clientMessageId` (optionnel)
+  - Cote iOS : RIEN — le `tempId` (`offline_<uuid>`) est purement local SDK iOS, jamais transmis au backend
+  - Cote DB : pas de champ `clientMessageId` en Prisma, pas d'index unique
+  - Cote dedup : aucune. Si un message est rejoue, le serveur cree un doublon
 
 ---
 
@@ -75,7 +82,7 @@ Quatre phases independantes, mergeable separement :
 | 1 | Fix tri stale conversations | Non | Faible | XS (~80 LoC + 3 tests) |
 | 2 | Pagination infinite scroll cursor-based | Non (route prete) | Moyen | M (~250 LoC + 6 tests) |
 | 3 | Cache-first sur 5 ViewModels en breche | Non | Moyen | M (~400 LoC + 20 tests) |
-| 4 | Offline queue durcie + clientMessageId end-to-end | Oui (Prisma + routes) | Eleve | L (~900 LoC + 25 tests) |
+| 4 | Offline queue durcie + clientMessageId end-to-end (iOS + gateway + Prisma + web) | Oui (Prisma + routes + web migration) | Eleve | L (~900 LoC iOS + ~200 LoC gateway + ~150 LoC web + 25 tests) |
 
 **Ordre logique** : 1 → 2 → 3 → 4. Les phases sont **independantes** et peuvent partir en parallele sur 4 worktrees `feat/ios-conv-listing-{phase}` si plusieurs sessions sont disponibles.
 
@@ -174,7 +181,7 @@ Plutot que de fragmenter en cles `"list:page1"`, `"list:page2"`, on utilise `mer
 3. Re-trier par `lastMessageAt DESC`
 4. Sauvegarder le tout sous `"list"`
 
-**Plafond** : `maxCachedConversations = 500` (LRU sur `lastMessageAt`). Au-dela, anciennes conversations re-fetched si l'utilisateur scrolle si loin.
+**Pas de plafond explicite.** Le cache croit avec ce que l'utilisateur charge via `loadMore()`. GRDB SQLite + SwiftUI `LazyVStack` gerent confortablement 10k+ rows sans degradation perceptible. Si dans le futur on observe un bloat (instrumentation Allocations / Time Profiler), on ajoutera une politique de purge LRU sur `lastMessageAt` (par ex. > 6 mois sans activite) — hors scope de ce spec.
 
 ### 4.4 ViewModel
 
@@ -421,8 +428,18 @@ func sendMessage(_ content: String, attachments: [Attachment] = []) async -> Boo
 
 ### 6.2 clientMessageId end-to-end
 
+#### Etat existant a fixer
+- WebSocket : champ deja accepte mais `optional()` (`services/gateway/src/validation/socket-event-schemas.ts:14`) — a passer en obligatoire
+- ACK socket : retourne deja le champ (existant, garder)
+- Broadcast `message:new` : **volontairement sans clientMessageId** (privacy-preserving, garder ce design)
+- Persistance DB : absente — a ajouter
+- Dedup : absente — a ajouter
+- Cote web : envoi optionnel deja en place (`apps/web/services/socketio/messaging.service.ts`) — a rendre obligatoire
+- Cote iOS : envoi absent — a ajouter
+- Route REST `POST /messages` : champ absent — a ajouter
+
 #### Format
-`cid_<UUID v4>` — prefixe pour distinguer des MongoDB ObjectIds (24 hex) et anciens tempIds locaux.
+`cid_<UUID v4>` — prefixe pour distinguer des MongoDB ObjectIds (24 hex) et anciens tempIds locaux. Le format actuel cote web est libre (`client-temp-abc` dans les tests) — **on standardise tous les clients sur le prefixe `cid_`** au moment du shipping.
 
 #### Contrat shared
 `packages/shared/types/messages.ts` :
@@ -430,7 +447,7 @@ func sendMessage(_ content: String, attachments: [Attachment] = []) async -> Boo
 ```typescript
 export type SendMessageRequest = {
     content: string;
-    clientMessageId: string;  // OBLIGATOIRE
+    clientMessageId: string;  // OBLIGATOIRE — minLength 5, maxLength 64
     originalLanguage?: string;
     replyToId?: string;
     attachmentIds?: string[];
@@ -438,13 +455,15 @@ export type SendMessageRequest = {
 };
 ```
 
-Validation Zod gateway :
+Validation Zod gateway (REST + WS unifies) :
 ```typescript
-clientMessageId: z.string().regex(/^cid_[a-f0-9-]{36}$/)
+clientMessageId: z.string().regex(/^cid_[a-f0-9-]{36}$/)  // strict
 ```
 
+Migration : `services/gateway/src/validation/socket-event-schemas.ts:14` passe de `optional()` a `regex(...)`.
+
 #### Gateway
-`services/gateway/src/routes/messages.ts` (POST) + `MessageSocketManager` (`message:send-with-attachments`) :
+`services/gateway/src/routes/messages.ts` (POST) + `services/gateway/src/socketio/message-handler.ts` (event `message:send-with-attachments`) :
 
 ```typescript
 const existing = await prisma.message.findUnique({
@@ -453,9 +472,9 @@ const existing = await prisma.message.findUnique({
     }
 });
 if (existing) {
-    return sendSuccess(reply, existing);  // idempotent
+    return sendSuccess(reply, existing);  // idempotent — pas de re-broadcast non plus
 }
-// Sinon creation normale
+// Sinon creation normale + broadcast (sans clientMessageId comme aujourd'hui)
 ```
 
 `MessageTranslationService` ne re-traduit pas si dedup (le message existant a deja ses traductions).
@@ -472,7 +491,7 @@ model Message {
 ```
 
 #### Migration MongoDB
-Index unique partiel (uniquement quand `clientMessageId` non-null) — compatible messages historiques :
+Index unique partiel (uniquement quand `clientMessageId` non-null **et non-vide**) — compatible messages historiques :
 
 ```javascript
 db.messages.createIndex(
@@ -480,17 +499,37 @@ db.messages.createIndex(
     {
         unique: true,
         partialFilterExpression: {
-            clientMessageId: { $exists: true, $type: "string" }
+            clientMessageId: { $exists: true, $type: "string", $ne: "" }
         }
     }
 );
 ```
 
-#### Reconciliation iOS
-- `Message.clientMessageId` est la cle locale ET la cle de reconciliation socket
-- A la reception de `message:new`, on cherche le message local par `clientMessageId` ; s'il existe, on le promote (status `.sent`, store `id` serveur)
-- La map `pendingServerIds[tempId]` est supprimee
-- Le `tempId` (`offline_*`) disparait du SDK iOS
+#### Reconciliation iOS — basee sur l'ACK, pas le broadcast
+Le broadcast `message:new` n'inclut pas `clientMessageId` par design (privacy). **La reconciliation se fait via l'ACK socket** :
+
+```swift
+socket.emitWithAck("message:send-with-attachments", payload) { ack in
+    if let serverMessage = ack["data"]?["message"], let cid = ack["data"]?["clientMessageId"] {
+        // Promote optimistic by clientMessageId
+        promoteOptimistic(clientMessageId: cid, serverId: serverMessage["id"])
+    }
+}
+```
+
+Pour le cas REST (offline replay) : la reponse HTTP du POST contient le message complet ; le SDK match par `clientMessageId` du payload envoye.
+
+Pour le cas du broadcast `message:new` arrivant en doublon (l'expediteur recoit aussi le broadcast en plus de son ACK) : on detecte le doublon par comparaison `id` server avec les messages deja present dans `messages` apres promotion via ACK. Si `id` deja present, on ignore.
+
+La map `pendingServerIds[tempId]` est supprimee. Le `tempId` (`offline_*`) disparait du SDK iOS — `clientMessageId` est l'unique cle de reconciliation.
+
+#### Cote web (Next.js) — migration en meme PR que backend
+`apps/web/services/socketio/messaging.service.ts` :
+- `clientMessageId` actuellement optionnel → rendre **obligatoire** pour tous les sites d'appel
+- Standardiser le format en `cid_<UUID v4>` (au lieu du format libre actuel)
+- Ajouter le meme champ aux appels REST `POST /messages` (si le web a un fallback REST)
+
+`apps/web/services/socketio/orchestrator.service.ts:319` et `apps/web/services/messages.service.ts` : audit complet des sites d'envoi pour s'assurer que tous passent un `clientMessageId` genere localement.
 
 ### 6.3 Extension de la queue
 
@@ -627,15 +666,19 @@ Au terme des 4 phases :
 - Ajouter `clientMessageId: { $ne: "" }` au `partialFilterExpression`
 - Migration en deux temps : (1) deploy schema sans contrainte unique, observer 24h, (2) ajout contrainte unique
 
-### 10.2 Compatibilite anciens clients iOS
+### 10.2 Compatibilite anciens clients (iOS et web)
 
-**Risque** : un client iOS pre-Phase-4 envoie `SendMessageRequest` sans `clientMessageId`. Si le serveur exige le champ, requete rejetee.
+**Risque** : un client pre-Phase-4 envoie `SendMessageRequest` sans `clientMessageId`. Si le serveur exige le champ, requete rejetee.
 
 **Decision** : **strict d'emblee.** Le projet est pre-launch (cf. memoire projet `StoryTimelineFeatureFlag DROPPED` 2026-05-07 — pas de retrocompat soft sur breaking changes). On ship `clientMessageId` obligatoire serveur ET client en meme deploiement.
 
-**Mitigation operationnelle** :
-- Le client web (Next.js) sera migre dans la meme PR que le backend pour eviter une regression sur web pendant la transition
-- Si necessaire, on peut deployer le backend en mode "warning logs only" (accepte sans `clientMessageId`, log une alerte) pendant 24h pour detecter d'eventuels appels non identifies, puis on bascule en strict
+**Migration coordonnee dans la meme PR backend** :
+- Gateway : valide `clientMessageId` obligatoire (REST + WS), persiste, dedup
+- Web (Next.js) : passe son `clientMessageId` deja present de `optional` a `obligatoire` pour tous les sites d'envoi, standardise le format `cid_<uuid>`
+- Prisma + migration MongoDB : index unique partiel
+- Aucun client n'envoie sans clientMessageId au moment du deploiement → pas de regression
+
+**Mitigation operationnelle** : si l'audit revele un site d'appel oublie cote web (par exemple un fallback REST mal documente), deployer le backend en mode "warning logs only" (accepte sans `clientMessageId`, log une alerte) pendant 24h pour detecter, puis bascule en strict.
 
 ### 10.3 Regression visuelle pagination
 
@@ -682,14 +725,27 @@ Au terme des 4 phases :
 - `Tests/MeeshySDKTests/*Tests.swift`
 
 ### services/gateway/
-- `src/routes/messages.ts` (Phase 4 — dedup)
-- `src/services/MessageSocketManager.ts` (Phase 4 — dedup socket)
+- `src/routes/messages.ts` (Phase 4 — dedup REST)
+- `src/socketio/message-handler.ts` (Phase 4 — dedup WS)
+- `src/services/MessageSocketManager.ts` (Phase 4 — flow envoi)
 - `src/services/MessageTranslationService.ts` (Phase 4 — skip retranslate sur dedup)
+- `src/validation/socket-event-schemas.ts` (Phase 4 — clientMessageId obligatoire)
+- `src/socketio/__tests__/message-ack.test.ts` (Phase 4 — etendre tests dedup)
+- Tests integration nouveaux : `src/routes/__tests__/messages-dedup.test.ts`, `src/socketio/__tests__/message-dedup.test.ts`
 
 ### packages/shared/
-- `types/messages.ts` (Phase 4 — clientMessageId)
+- `types/messages.ts` (Phase 4 — clientMessageId obligatoire)
+- `types/socketio-events.ts` (Phase 4 — payload `message:send-with-attachments`)
 - `prisma/schema.prisma` (Phase 4 — champ + index unique partiel)
-- Migration MongoDB script (Phase 4)
+- `prisma/migrations/<timestamp>-add-clientMessageId/migration.sql` ou script MongoDB (Phase 4)
+
+### apps/web/ (Phase 4 — migration coordonnee)
+- `services/socketio/messaging.service.ts` (clientMessageId optionnel → obligatoire)
+- `services/socketio/orchestrator.service.ts` (idem)
+- `services/socketio/types.ts` (typage)
+- `services/conversations/messages.service.ts` (REST POST avec clientMessageId)
+- `services/messages.service.ts` (idem si point d'entree principal)
+- Audit complet de tous les sites d'envoi pour aligner sur `cid_<uuid>` standardise
 
 ---
 
