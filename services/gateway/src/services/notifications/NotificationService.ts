@@ -373,6 +373,11 @@ export class NotificationService {
 
           this.pushService.sendToUser({
             userId: params.userId,
+            // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be
+            // delivered to PushKit, otherwise iOS shows a fake CallKit incoming call
+            // for every message/friend-request/conversation-creation. Real call
+            // pushes are dispatched separately from CallEventsHandler with types: ['voip'].
+            types: ['apns', 'fcm'],
             payload: {
               title: pushTitle,
               body: pushBody,
