@@ -88,34 +88,48 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         // in-flight task does the actual deduplication.
         if isHydrated { return }
 
-        // Coalesce concurrent callers onto a single in-flight task.
-        let task: Task<Void, Never>
-        let myGen: UInt64?
-        lock.lock()
-        if let existing = _hydrationTask {
-            task = existing
-            myGen = nil // not the owner; never clears the slot
-            lock.unlock()
-        } else {
-            _hydrationGen &+= 1
-            myGen = _hydrationGen
-            let newTask = Task { [weak self] in
-                await self?.performHydration(friendService: friendService)
-            }
-            _hydrationTask = newTask
-            lock.unlock()
-            task = newTask
+        // Coalesce concurrent callers onto a single in-flight task. The
+        // claim/release dance lives in synchronous helpers because Swift 6
+        // forbids calling `NSLock.lock()/unlock()` directly from an async
+        // context (it would risk a thread-hop while the lock is held).
+        let claim = claimOrJoinHydration(friendService: friendService)
+        await claim.task.value
+        if let myGen = claim.ownerGen {
+            releaseHydrationOwnership(gen: myGen)
         }
-        await task.value
-        // Only the owner clears the slot, and only if its generation is still
-        // current — otherwise a logout-clear-then-login-rehydrate sequence
-        // could let the old task's cleanup wipe the new task's pointer.
-        if let myGen {
-            lock.lock()
-            if _hydrationGen == myGen {
-                _hydrationTask = nil
-            }
-            lock.unlock()
+    }
+
+    /// Synchronous critical section that picks an existing in-flight task
+    /// to await, or installs a new one. Returns the task to await and, if
+    /// the caller is the *owner* (i.e. installed a new task), the generation
+    /// number so it can later release the slot.
+    private func claimOrJoinHydration(
+        friendService: FriendServiceProviding
+    ) -> (task: Task<Void, Never>, ownerGen: UInt64?) {
+        lock.lock()
+        defer { lock.unlock() }
+        if let existing = _hydrationTask {
+            return (existing, nil)
+        }
+        _hydrationGen &+= 1
+        let myGen = _hydrationGen
+        let newTask: Task<Void, Never> = Task { [weak self] in
+            guard let self else { return }
+            await self.performHydration(friendService: friendService)
+        }
+        _hydrationTask = newTask
+        return (newTask, myGen)
+    }
+
+    /// Release the in-flight slot — but only if its generation is still
+    /// current. A logout that called `clear()` mid-flight bumps the
+    /// generation, so the cancelled task's owner harmlessly skips the
+    /// release here and the freshly-started hydration keeps its slot.
+    private func releaseHydrationOwnership(gen: UInt64) {
+        lock.lock()
+        defer { lock.unlock() }
+        if _hydrationGen == gen {
+            _hydrationTask = nil
         }
     }
 
