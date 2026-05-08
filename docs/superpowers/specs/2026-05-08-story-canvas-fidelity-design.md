@@ -140,6 +140,72 @@ Rendu sticker = `baseSize × scale × scaleFactor`.
 - Moteur AVFoundation : `CMTime(value: Int64(time × 600_000), timescale: 600_000)`. Un seul timescale partout.
 - Keyframe interpolation : tous calculs en `Double`. Conversion `CGFloat` uniquement à l'attache CALayer finale.
 
+### 3.6 Loop completion : durée effective de slide
+
+**Problème** : si un fond audio/vidéo en boucle a une durée qui ne divise pas la durée de slide, la story se termine au milieu d'une lecture (cut visuel/sonore brutal).
+
+**Règle** : la durée de slide effective est la plus petite valeur ≥ durée statique de base qui complète exactement N répétitions de chaque média de fond en boucle.
+
+**Modèle** :
+
+| Champ | Type | Sémantique | Défaut |
+|-------|------|------------|--------|
+| `staticBaseDuration` | `Double` | Durée minimale pour contenu statique (texte/image fixe) | 12.0 |
+
+`slideDuration` n'est plus stocké directement ; il est **calculé** au moment de la composition de la timeline :
+
+```swift
+extension StorySlide {
+    public func effectiveSlideDuration() -> Double {
+        let loopingBackgrounds = mediaObjects.filter { $0.isBackground && $0.loop }
+        guard !loopingBackgrounds.isEmpty else {
+            return staticBaseDuration  // 12s par défaut
+        }
+
+        // Pour chaque média en boucle, calcule la durée extension nécessaire
+        // pour compléter N répétitions ≥ staticBaseDuration.
+        let perMediaCompletions = loopingBackgrounds.map { media -> Double in
+            let mediaDur = media.intrinsicDuration  // durée de l'asset
+            guard mediaDur > 0 else { return staticBaseDuration }
+            let n = ceil(staticBaseDuration / mediaDur)
+            return n * mediaDur
+        }
+
+        // Durée effective = max sur tous les médias bouclés (chaque média termine sur un cycle entier)
+        return perMediaCompletions.max() ?? staticBaseDuration
+    }
+}
+```
+
+**Exemples** (avec `staticBaseDuration = 12 s`) :
+
+| Média de fond | Durée intrinsèque | Calcul `ceil(12/d) × d` | Durée slide effective |
+|---------------|-------------------|--------------------------|-----------------------|
+| Vidéo 5 s en boucle | 5 s | ceil(12/5) × 5 = 3 × 5 | **15 s** |
+| Vidéo 6 s en boucle | 6 s | ceil(12/6) × 6 = 2 × 6 | **12 s** |
+| Vidéo 4 s en boucle | 4 s | ceil(12/4) × 4 = 3 × 4 | **12 s** |
+| Vidéo 7 s en boucle | 7 s | ceil(12/7) × 7 = 2 × 7 | **14 s** |
+| Vidéo 15 s en boucle | 15 s | ceil(12/15) × 15 = 1 × 15 | **15 s** (plus longue que base) |
+| Vidéo 5 s + audio 8 s, tous deux en boucle | 5 s, 8 s | max(15 s, 16 s) | **16 s** (les deux complètent au moins un cycle entier) |
+| Aucun fond en boucle | — | — | **12 s** (base statique) |
+
+**Conséquences** :
+- **Composer canvas (Edit)** : la timeline ruler affiche la durée effective. Quand l'utilisateur ajoute/remplace un média de fond, la durée se recalcule automatiquement et la ruler s'ajuste.
+- **Composer Play / Viewer** : `currentTime` itère de 0 à `effectiveSlideDuration()`. Le média de fond joue ses N répétitions complètes.
+- **Export AVFoundation** : `videoComposition` durée = `effectiveSlideDuration()`. La piste vidéo de fond est insérée N fois (ou avec `AVPlayerItem.actionAtItemEnd = .none` + boucle programmatique).
+- **Médias non-fond (overlays texte, sticker, vidéo non-fond)** : leurs `startTime/duration` restent inchangés. Si un overlay dépasse `effectiveSlideDuration`, il est tronqué (logique existante préservée).
+
+**Tests dédiés** :
+- `test_effectiveSlideDuration_noLoopingBackground_returnsStaticBase` (12 s)
+- `test_effectiveSlideDuration_video5s_returns15s`
+- `test_effectiveSlideDuration_video6s_returns12s`
+- `test_effectiveSlideDuration_video4s_returns12s`
+- `test_effectiveSlideDuration_video15s_returns15s` (média plus long que base)
+- `test_effectiveSlideDuration_video5s_audio8s_returns16s` (max sur médias)
+- `test_effectiveSlideDuration_changesWhenBackgroundReplaced`
+- `test_avComposition_durationMatchesEffectiveSlideDuration`
+- `test_viewerCurrentTime_iteratesUpTo_effectiveSlideDuration`
+
 ---
 
 ## 4. Paquet 2 — `StoryCanvasUIView` : single renderer CALayer
@@ -552,7 +618,7 @@ Targets du paquet 2 (table par device) deviennent des asserts. Run manuel via `M
 | Phase | Livrables | Estimation | Mergeable seul ? |
 |-------|-----------|-----------:|:----------------:|
 | **P0 — Tests contrat** | Property tests (50) + equivalence math (15) + structure snapshot tests (sans baselines). Toutes échouent au début. Définit l'oracle. | 3-4 j | ✅ |
-| **P1 — Modèle + CanvasGeometry** | Migration franche modèle Story (paquet 1) : `fontSize`, `aspectRatio` stocké, `anchor`, `zIndex` obligatoire, `Double` partout. `CanvasGeometry`, `StoryRenderingContext.shared`. Property tests passent. | 5 j | ✅ (vues SwiftUI cassent — P2 les remplace) |
+| **P1 — Modèle + CanvasGeometry** | Migration franche modèle Story (paquet 1) : `fontSize`, `aspectRatio` stocké, `anchor`, `zIndex` obligatoire, `Double` partout. `staticBaseDuration` + `effectiveSlideDuration()` pour loop completion (3.6). `CanvasGeometry`, `StoryRenderingContext.shared`. Property tests passent. | 5 j | ✅ (vues SwiftUI cassent — P2 les remplace) |
 | **P2 — `StoryCanvasUIView` CALayer** | Renderer mono-fonction `StoryRenderer.render()`. `StoryCanvasUIView` modes `.edit`/`.play`. Layers spécialisés. 11 ajouts cross-device. **Suppression totale** des fichiers SwiftUI canvas (8 fichiers, ~3200 lignes). | 10 j | ✅ |
 | **P3 — Pipeline GPU explicite (réduit)** | 4 hot paths Metal : custom kernel filtres + MPSImageGaussianBlur + VideoToolbox decode + PencilKit. `CIContext(mtlDevice:)` singleton. ~250 lignes Metal. | 3 j | ✅ |
 | **P4 — AVFoundation custom compositor** | `StoryAVCompositor` utilise `StoryRenderer.render()`. `AVMutableVideoComposition` aligné. Test équivalence pixel live preview = export. | 3 j | ✅ |
@@ -651,6 +717,7 @@ Le design est considéré comme implémenté correctement quand :
 6. ✅ Tous les tests P0 (property + equivalence + repost) passent en local.
 7. ✅ Code SwiftUI canvas legacy supprimé (8 fichiers).
 8. ✅ `decisions.md` et `CLAUDE.md` mis à jour.
+9. ✅ Loop completion : pour toute slide avec fond en boucle, `effectiveSlideDuration()` retourne la plus petite valeur ≥ `staticBaseDuration` complétant N répétitions de chaque média de fond. Tests dédiés (3.6) passent.
 
 ---
 
