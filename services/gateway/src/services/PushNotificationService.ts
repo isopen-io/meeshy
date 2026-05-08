@@ -84,7 +84,13 @@ const config = {
 export class PushNotificationService {
   private prisma: PrismaClient;
   private firebaseAdmin: any = null;
-  private apnsClient: any = null;
+  // Two APNs Provider instances: one for sandbox (debug builds, aps-environment=development),
+  // one for production (TestFlight/App Store, aps-environment=production). The token's
+  // apnsEnvironment field decides which one is used. Same Apple p8 key works for both —
+  // only the host differs (api.sandbox.push.apple.com vs api.push.apple.com), set via the
+  // `production` boolean of @parse/node-apn's Provider.
+  private apnsClientProduction: any = null;
+  private apnsClientSandbox: any = null;
   private initialized = false;
 
   constructor(prisma: PrismaClient) {
@@ -133,25 +139,30 @@ export class PushNotificationService {
       }
     }
 
-    // Initialize APNS client
+    // Initialize APNS clients (one per environment)
     if (config.apnsEnabled && config.apns.keyId && config.apns.teamId) {
       try {
-        // Using @parse/node-apn or similar library
-        // Note: You may need to install: npm install @parse/node-apn
         const apn = await import('@parse/node-apn').catch(() => null);
 
         if (apn) {
-          const apnOptions: any = {
+          const baseTokenOptions = {
             token: {
               key: config.apns.keyPath || config.apns.keyContent,
               keyId: config.apns.keyId,
               teamId: config.apns.teamId,
             },
-            production: config.apns.environment === 'production',
           };
 
-          this.apnsClient = new apn.Provider(apnOptions);
-          console.log('[PUSH] APNS client initialized');
+          this.apnsClientProduction = new apn.Provider({
+            ...baseTokenOptions,
+            production: true,
+          });
+          this.apnsClientSandbox = new apn.Provider({
+            ...baseTokenOptions,
+            production: false,
+          });
+
+          console.log('[PUSH] APNS clients initialized (production + sandbox)');
         } else {
           console.warn('[PUSH] @parse/node-apn not installed, APNS push disabled');
         }
@@ -243,6 +254,7 @@ export class PushNotificationService {
         type: true,
         platform: true,
         bundleId: true,
+        apnsEnvironment: true,
       },
     });
 
@@ -423,15 +435,29 @@ export class PushNotificationService {
   }
 
   /**
-   * Send notification via Apple Push Notification Service
+   * Send notification via Apple Push Notification Service.
+   *
+   * Routes to either the sandbox or production APNs Provider based on the
+   * token's `apnsEnvironment`. Sandbox tokens (from iOS debug builds) MUST
+   * be sent via `api.sandbox.push.apple.com`; production tokens (TestFlight,
+   * App Store) MUST be sent via `api.push.apple.com`. Cross-routing returns
+   * `BadDeviceToken` from Apple — this is exactly the bug this method fixes.
    */
   private async sendViaAPNS(
-    tokenRecord: { id: string; token: string; bundleId?: string | null },
+    tokenRecord: {
+      id: string;
+      token: string;
+      bundleId?: string | null;
+      apnsEnvironment?: string | null;
+    },
     payload: PushNotificationPayload,
     isVoIP: boolean
   ): Promise<PushResult> {
-    if (!this.apnsClient) {
-      return { success: false, tokenId: tokenRecord.id, error: 'APNS not initialized' };
+    const env = tokenRecord.apnsEnvironment === 'development' ? 'sandbox' : 'production';
+    const client = env === 'sandbox' ? this.apnsClientSandbox : this.apnsClientProduction;
+
+    if (!client) {
+      return { success: false, tokenId: tokenRecord.id, error: `APNS ${env} client not initialized` };
     }
 
     try {
@@ -493,7 +519,7 @@ export class PushNotificationService {
         if (payload.callerAvatar) notification.payload.callerAvatar = payload.callerAvatar;
       }
 
-      const result = await this.apnsClient.send(notification, tokenRecord.token);
+      const result = await client.send(notification, tokenRecord.token);
 
       if (result.failed.length > 0) {
         const failure = result.failed[0];
@@ -579,8 +605,11 @@ export class PushNotificationService {
    * Shutdown the service
    */
   async shutdown(): Promise<void> {
-    if (this.apnsClient) {
-      await this.apnsClient.shutdown();
+    if (this.apnsClientProduction) {
+      await this.apnsClientProduction.shutdown();
+    }
+    if (this.apnsClientSandbox) {
+      await this.apnsClientSandbox.shutdown();
     }
     this.initialized = false;
   }
