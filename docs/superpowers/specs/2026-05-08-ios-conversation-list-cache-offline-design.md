@@ -470,7 +470,9 @@ func sendMessage(_ content: String, attachments: [Attachment] = []) async -> Boo
     isInputLocked = true
     defer { isInputLocked = false }
 
-    let clientMessageId = "cid_\(UUID().uuidString)"
+    // UUID Swift produit des MAJUSCULES par defaut. La regex Zod serveur
+    // accepte uniquement [a-f0-9]. .lowercased() est OBLIGATOIRE.
+    let clientMessageId = "cid_\(UUID().uuidString.lowercased())"
     let optimistic = makeOptimisticMessage(content: content, clientMessageId: clientMessageId, ...)
 
     // 1. Optimistic UI — synchrone
@@ -509,6 +511,51 @@ func sendMessage(_ content: String, attachments: [Attachment] = []) async -> Boo
 - Tous les `try?` remplaces par `try` propages
 - `OfflineQueue.enqueue` devient `throws async`
 - `Logger.error` sur chaque chemin d'erreur
+- `clientMessageId` **toujours en lowercase** (`UUID().uuidString.lowercased()`) — Swift produit des majuscules par defaut, mais le contrat serveur exige `[a-f0-9]`
+
+### 6.1.1 Boot recovery des OutboxRecord en `.sending`
+
+Si l'app crash pendant qu'un message est en cours d'envoi, son `OutboxRecord` reste en statut `.sending` avec `attempts > 0`. Sans recovery, le record est ignore par le `OutboxFlusher` (qui ne traite que `.pending`) → message coince eternellement.
+
+**Boot sequence** dans `MeeshyApp.swift` :
+
+```swift
+Task.detached {
+    // Etape 1 : recovery — reset .sending → .pending
+    try? await pool.write { db in
+        try db.execute(sql: """
+            UPDATE outbox_records
+            SET status = ?, last_error = ?
+            WHERE status = ?
+        """, arguments: [
+            OutboxStatus.pending.rawValue,
+            "Reset on boot after presumed crash",
+            OutboxStatus.sending.rawValue
+        ])
+    }
+
+    // Etape 2 : flush normal
+    let flusher = OutboxFlusher(pool: pool, dispatcher: OutboxDispatcher())
+    await flusher.flush()
+}
+```
+
+Le `clientMessageId` etant idempotent end-to-end (cf. 6.2), un message qui a effectivement ete recu par le serveur avant le crash sera dedupe au replay — pas de doublon.
+
+### 6.1.2 OfflineQueue declaree comme actor
+
+Pour respecter Swift 6 strict concurrency, `OfflineQueue` doit etre un `actor` explicite (pas une classe singleton avec lock manuel) :
+
+```swift
+public actor OfflineQueue {
+    public static let shared = OfflineQueue()
+    private var items: [OfflineQueueItem] = []
+    private let outboxPool: DatabasePool
+    // ...
+}
+```
+
+`OfflineQueueItem` doit etre `Sendable` (struct avec uniquement value types). `OutboxRecord` egalement.
 
 ### 6.2 clientMessageId end-to-end
 
@@ -546,22 +593,52 @@ clientMessageId: z.string().regex(/^cid_[a-f0-9-]{36}$/)  // strict
 
 Migration : `services/gateway/src/validation/socket-event-schemas.ts:14` passe de `optional()` a `regex(...)`.
 
-#### Gateway
+#### Gateway — pattern catch-on-conflict (atomique)
 `services/gateway/src/routes/messages.ts` (POST) + `services/gateway/src/socketio/message-handler.ts` (event `message:send-with-attachments`) :
 
+**Le pattern `findUnique → INSERT` n'est PAS atomique** : deux requetes concurrentes avec le meme `clientMessageId` (retry reseau rapide, deux onglets web) passent toutes deux le `findUnique` avec `null`, puis l'une echoue sur la contrainte unique MongoDB → `PrismaClientKnownRequestError P2002`. Solution : INSERT direct + catch P2002.
+
 ```typescript
-const existing = await prisma.message.findUnique({
-    where: {
-        conversationId_clientMessageId: { conversationId, clientMessageId }
+async function createMessageIdempotent(
+    conversationId: string,
+    clientMessageId: string,
+    payload: SendMessagePayload
+): Promise<{ message: Message; isDuplicate: boolean }> {
+    try {
+        const message = await prisma.message.create({
+            data: { ...payload, conversationId, clientMessageId },
+            include: { translations: true }  // necessaire pour 6.2.1
+        });
+        return { message, isDuplicate: false };
+    } catch (e) {
+        if (isPrismaUniqueViolation(e)) {  // e.code === 'P2002'
+            const existing = await prisma.message.findUnique({
+                where: { conversationId_clientMessageId: { conversationId, clientMessageId } },
+                include: { translations: true }
+            });
+            if (!existing) throw new Error('Race condition: P2002 but no existing record');
+            return { message: existing, isDuplicate: true };
+        }
+        throw e;
     }
-});
-if (existing) {
-    return sendSuccess(reply, existing);  // idempotent — pas de re-broadcast non plus
 }
-// Sinon creation normale + broadcast (sans clientMessageId comme aujourd'hui)
 ```
 
-`MessageTranslationService` ne re-traduit pas si dedup (le message existant a deja ses traductions).
+Avantages : 1 round-trip dans le cas normal (vs 2), atomicite garantie par la contrainte unique MongoDB.
+
+#### 6.2.1 Re-translate si dedup hit sans traductions
+
+Si la premiere insertion a reussi mais le PUSH ZMQ vers translator a echoue (translator down), le message en DB n'a pas de traductions. Un dedup hit sans re-push laisse ce message sans traductions indefiniment. Cout du fix : un `if` conditionnel (zero requete supplementaire — `translations` deja inclus via `include`) :
+
+```typescript
+const { message, isDuplicate } = await createMessageIdempotent(...);
+if (isDuplicate && message.translations.length === 0 && requiresTranslation(message)) {
+    // Re-push ZMQ asynchrone (pas attendu, fire-and-track)
+    void messageTranslationService.translate(message);
+}
+```
+
+`requiresTranslation(m)` retourne `true` pour messages texte avec `originalLanguage` set, ou messages avec attachment audio (transcription Whisper).
 
 #### Prisma schema
 `packages/shared/prisma/schema.prisma` :
@@ -589,23 +666,64 @@ db.messages.createIndex(
 );
 ```
 
-#### Reconciliation iOS — basee sur l'ACK, pas le broadcast
-Le broadcast `message:new` n'inclut pas `clientMessageId` par design (privacy). **La reconciliation se fait via l'ACK socket** :
+#### Reconciliation iOS — ACK socket + broadcast cible vers sender
+
+Le broadcast `message:new` est envoye en mode `io.to(conversationId).except(senderSocketId).emit(...)` aux **autres** membres (sans `clientMessageId`, comme aujourd'hui — privacy preservee). En parallele, le sender recoit son ACK avec le `clientMessageId`.
+
+**Probleme avec ACK seul** : si l'ACK est perdu (timeout reseau, crash applicatif au mauvais moment), l'optimistic reste pending eternellement. Solution recommandee par la review architecture :
+
+**Le sender recoit egalement un broadcast cible incluant `clientMessageId`** via `io.to(senderSocketId).emit('message:new', { ...message, clientMessageId })`. Comme le ciblage est par socket-id et que le payload du sender contient son propre `clientMessageId`, il n'y a pas de leak vers d'autres clients.
+
+```typescript
+// Cote gateway, apres createMessageIdempotent :
+const broadcastPayload = { ...message };  // sans clientMessageId
+const senderPayload = { ...message, clientMessageId };  // avec clientMessageId
+
+io.to(conversationId).except(senderSocketId).emit('message:new', broadcastPayload);
+io.to(senderSocketId).emit('message:new', senderPayload);
+
+callback({ success: true, data: { messageId: message.id, clientMessageId } });
+```
+
+Cote iOS, la reconciliation a deux entry points :
 
 ```swift
 socket.emitWithAck("message:send-with-attachments", payload) { ack in
-    if let serverMessage = ack["data"]?["message"], let cid = ack["data"]?["clientMessageId"] {
-        // Promote optimistic by clientMessageId
-        promoteOptimistic(clientMessageId: cid, serverId: serverMessage["id"])
+    if let cid = ack.data?.clientMessageId, let serverMessage = ack.data?.message {
+        promoteOptimistic(clientMessageId: cid, serverMessage: serverMessage)
     }
+}
+
+socket.on("message:new") { messageData in
+    if let cid = messageData.clientMessageId {
+        // Sender path : reconciliation par clientMessageId
+        promoteOptimistic(clientMessageId: cid, serverMessage: messageData)
+    } else {
+        // Receiver path : insertion classique
+        insertNewMessage(messageData)
+    }
+}
+
+private func promoteOptimistic(clientMessageId: String, serverMessage: APIMessage) {
+    guard let idx = messages.firstIndex(where: { $0.clientMessageId == clientMessageId }) else {
+        // Optimistic deja promote (l'ACK et le broadcast sont arrives en sequence)
+        // ou perdu — fallback : insertion normale
+        if !messages.contains(where: { $0.id == serverMessage.id }) {
+            insertNewMessage(serverMessage)
+        }
+        return
+    }
+    messages[idx] = MeeshyMessage(api: serverMessage, deliveryStatus: .sent)
 }
 ```
 
-Pour le cas REST (offline replay) : la reponse HTTP du POST contient le message complet ; le SDK match par `clientMessageId` du payload envoye.
+Cas du cas REST (offline replay) : la reponse HTTP du POST contient le message complet ; le SDK match par `clientMessageId` du payload envoye, meme code path `promoteOptimistic`.
 
-Pour le cas du broadcast `message:new` arrivant en doublon (l'expediteur recoit aussi le broadcast en plus de son ACK) : on detecte le doublon par comparaison `id` server avec les messages deja present dans `messages` apres promotion via ACK. Si `id` deja present, on ignore.
+**Timeout** : si ni ACK ni broadcast n'arrivent dans 5 secondes, l'optimistic bascule en `.failed` avec retry budget `MessageRetryQueue`. Apres 5 retries epuises, etat `.failed` definitif avec retry manuel UI.
 
 La map `pendingServerIds[tempId]` est supprimee. Le `tempId` (`offline_*`) disparait du SDK iOS — `clientMessageId` est l'unique cle de reconciliation.
+
+**UX debounce** : afficher l'icone horloge uniquement apres 200ms de delai (debounce). Sur connexion rapide (<200ms ACK), le message passe directement de "envoi en cours invisible" a "envoye" sans flash de horloge.
 
 #### Cote web (Next.js) — migration en meme PR que backend
 `apps/web/services/socketio/messaging.service.ts` :
@@ -617,7 +735,8 @@ La map `pendingServerIds[tempId]` est supprimee. Le `tempId` (`offline_*`) dispa
 
 ### 6.3 Extension de la queue
 
-#### Edit / delete offline
+#### Edit / delete offline — machine d'etat de coalescing explicite
+
 `apps/ios/Meeshy/Features/Main/Services/OutboxDispatcher.swift` : brancher les cases :
 
 ```swift
@@ -629,25 +748,154 @@ case .deleteMessage:
     try await MessageService.shared.delete(messageId: payload.messageId)
 ```
 
-**Coalescing** : si l'utilisateur edite/supprime un message **lui-meme offline** (pas de serverId encore), on coalesce dans la queue :
-- delete annule le `.sendMessage` pendant
-- edit fusionne dans le `.sendMessage` pendant
-Logique dans `OfflineQueue.enqueue` qui regarde si un precedent record concerne le meme `clientMessageId`.
+**Coalescing — machine d'etat** : la review architecture a flag que les sequences `edit-after-delete` n'etaient pas couvertes. On modelise explicitement les transitions dans `OfflineQueue.enqueue`, en regardant les records existants pour le meme `clientMessageId` (uniquement les records non encore envoyes — `status IN (.pending, .sending)`).
+
+Etat actuel de la queue pour `clientMessageId X` | Action enqueue | Resultat
+---|---|---
+aucun | `sendMessage` | INSERT sendMessage
+aucun | `editMessage(serverId)` | INSERT editMessage (cible un message deja sur serveur)
+aucun | `deleteMessage(serverId)` | INSERT deleteMessage (idem)
+`sendMessage(content=A)` | `editMessage(content=B)` | UPDATE sendMessage payload : `content=B`
+`sendMessage` | `deleteMessage` | DELETE sendMessage record (no-op, le message n'existe pas serveur)
+`sendMessage(content=A)` + `editMessage(B)` (deja coalesce en `sendMessage(B)`) | `deleteMessage` | DELETE sendMessage (idem)
+`sendMessage` | `editMessage(...)` puis `deleteMessage` puis `editMessage(...)` | DELETE sendMessage apres le 1er delete. Le 2eme edit n'a plus de cible → log warning, drop le record (cas pathologique : l'utilisateur edite un message deja delete)
+`editMessage(serverId, A)` | `editMessage(serverId, B)` | UPDATE editMessage payload : `content=B`
+`editMessage(serverId)` | `deleteMessage(serverId)` | DELETE editMessage record + INSERT deleteMessage (delete prevaut sur edit)
+
+Implementation pseudo-code dans `OfflineQueue.enqueue(_ item: OfflineQueueItem)` :
+
+```swift
+public func enqueue(_ item: OfflineQueueItem) async throws {
+    try await outboxPool.write { db in
+        let existing = try OutboxRecord
+            .filter(Column("clientMessageId") == item.clientMessageId)
+            .filter([OutboxStatus.pending.rawValue, OutboxStatus.sending.rawValue].contains(Column("status")))
+            .order(Column("createdAt").desc)
+            .fetchOne(db)
+
+        switch (existing?.kind, item.kind) {
+        case (.none, _):
+            try OutboxRecord(item).insert(db)
+
+        case (.sendMessage, .editMessage):
+            // Fusion : update payload
+            try mergeEditIntoSend(db: db, existing: existing!, edit: item)
+
+        case (.sendMessage, .deleteMessage), (.editMessage, .deleteMessage):
+            try OutboxRecord.deleteOne(db, key: existing!.id)
+
+        case (.editMessage, .editMessage):
+            try mergeEditIntoEdit(db: db, existing: existing!, edit: item)
+
+        case (.editMessage, _):
+            // Edit pre-existant + autre action → INSERT (cas rare)
+            try OutboxRecord(item).insert(db)
+
+        case (.deleteMessage, .editMessage):
+            // Edit-after-delete : drop avec warning
+            Logger.queue.warning("editMessage after deleteMessage on \(item.clientMessageId), dropping")
+
+        case (.deleteMessage, _):
+            // Tout autre apres delete : ignore
+            break
+
+        default:
+            try OutboxRecord(item).insert(db)
+        }
+    }
+}
+```
+
+Tous les cas sont dans la **meme transaction GRDB** que l'INSERT, donc atomique. Pas de race possible entre le SELECT existing et le INSERT/UPDATE/DELETE final.
 
 #### Reactions offline
 `ReactionQueue` est branchee sur `OutboxRecord` au lieu d'avoir son propre stockage en memoire. Nouveau `OutboxKind.reaction` avec payload `{ messageId, emoji, action: add|remove }`.
 
 **Coalescing** : add+remove sur meme emoji s'annulent en queue ; double add est dedupe.
 
-#### Audio offline
-- L'enregistrement produit d'abord un fichier temporaire `tmp/recording_<uuid>.m4a` (comportement actuel)
-- Au moment du `sendMessage`, le `clientMessageId = "cid_<uuid>"` est genere et le fichier est **deplace** en `Documents/pending-audio/<clientMessageId>.m4a` dans la meme transaction que l'INSERT `OutboxRecord` (atomique : soit le rename + INSERT passent, soit on rollback)
-- `OutboxRecord` (`kind: .sendMessage`) reference ce path local via un champ `localAudioPath: String?` dans le payload + placeholder `attachmentIds: nil`
-- Au flush, le dispatcher fait :
-  1. Verifier que `localAudioPath` existe sur disque (sinon `OutboxStatus.failed`, log)
-  2. TUS upload du fichier local → recoit `attachmentId` serveur (TUS supporte resume natif via `Upload-Offset` ; reprise transparente apres coupure)
-  3. POST `/messages` avec `attachmentIds: [<id>]` + `clientMessageId` + `originalLanguage` (pour le pipeline Whisper transcription)
-- Fichier local purge apres `OutboxStatus.sent`. Si `OutboxRecord.archive` est invoque (max retry budget atteint), le fichier reste sur disque jusqu'a un cleanup explicite par l'utilisateur (action "supprimer le brouillon")
+#### Audio offline — pattern write-ahead 2-step (vraie atomicite)
+
+**Important** : `FileManager.moveItem` et `db.write` (GRDB) **ne peuvent PAS etre dans une vraie transaction commune**. Le filesystem et SQLite sont deux systemes de persistance independants. La review architecture a flag ce point comme critical. Solution : pattern write-ahead a 2 etapes documente.
+
+**Etape 1 — Enregistrement** : produit `tmp/recording_<uuid>.m4a` (comportement actuel).
+
+**Etape 2 — Send (sequence atomique a deux phases)** :
+
+```swift
+@MainActor
+func sendAudioMessage(audioURL: URL, ...) async -> Bool {
+    let clientMessageId = "cid_\(UUID().uuidString.lowercased())"
+    let pendingPath = "Documents/pending-audio/\(clientMessageId).m4a"
+
+    // Phase A : INSERT OutboxRecord avec status .pending et localAudioPath = pendingPath
+    //          (le fichier n'existe pas encore — c'est intentionnel)
+    do {
+        try await pool.write { db in
+            try OutboxRecord(
+                id: "ofq_\(clientMessageId)",
+                kind: .sendMessage,
+                conversationId: conversationId,
+                clientMessageId: clientMessageId,
+                payload: encodeAudioPayload(localAudioPath: pendingPath, ...),
+                status: .pending,
+                ...
+            ).insert(db)
+
+            try Message(clientMessageId: clientMessageId, status: .sending, ...).insert(db)
+        }
+    } catch { /* rollback optimistic UI, return false */ }
+
+    // Phase B : COPY (pas move) le fichier vers pending-audio/
+    //           Si crash entre Phase A et Phase B : OutboxRecord existe mais fichier absent.
+    //           La recovery au boot detecte cela (file missing) et marque OutboxRecord comme .failed.
+    do {
+        try FileManager.default.copyItem(at: audioURL, to: URL(fileURLWithPath: pendingPath))
+    } catch {
+        // OutboxRecord existe mais fichier copy a echoue. Mark comme failed.
+        try? await pool.write { db in
+            try db.execute(sql: "UPDATE outbox_records SET status = ? WHERE id = ?",
+                           arguments: [OutboxStatus.failed.rawValue, "ofq_\(clientMessageId)"])
+        }
+        return false
+    }
+
+    // Phase C : cleanup tmp original (best-effort, non bloquant)
+    try? FileManager.default.removeItem(at: audioURL)
+
+    return true
+}
+```
+
+**Boot recovery** dans `OfflineQueue.bootRecovery()` :
+
+```swift
+// Pour chaque OutboxRecord audio en .pending au reboot :
+//   Si le fichier reference n'existe pas → mark .failed (perdu)
+//   Sinon → laisse en .pending pour le flush normal
+let pendingAudioRecords = try await pool.read { db in
+    try OutboxRecord.filter(Column("status") == OutboxStatus.pending.rawValue).fetchAll(db)
+}
+for record in pendingAudioRecords {
+    if let path = decodeAudioPath(record.payload),
+       !FileManager.default.fileExists(atPath: path) {
+        try? await pool.write { db in
+            try db.execute(sql: "UPDATE outbox_records SET status = ?, last_error = ? WHERE id = ?",
+                           arguments: [OutboxStatus.failed.rawValue, "Audio file missing after crash", record.id])
+        }
+        Logger.queue.warning("Audio file missing for OutboxRecord \(record.id), marked failed")
+    }
+}
+```
+
+**Au flush** : le dispatcher fait :
+1. Verifier que `localAudioPath` existe sur disque (sinon `OutboxStatus.failed`, log)
+2. TUS upload du fichier local → recoit `attachmentId` serveur (TUS supporte resume natif via `Upload-Offset` ; reprise transparente apres coupure)
+3. POST `/messages` avec `attachmentIds: [<id>]` + `clientMessageId` + `originalLanguage` (pour pipeline Whisper transcription)
+4. Apres `OutboxStatus.sent` : `try? FileManager.default.removeItem(atPath: localAudioPath)` (best-effort)
+
+Si `OutboxRecord` archive (max retry budget atteint), le fichier reste sur disque jusqu'a un cleanup explicite (action UI "supprimer le brouillon") ou un nettoyage de fond (`OfflineQueue.cleanupOrphanFiles()` qui scan `Documents/pending-audio/` et supprime les fichiers sans `OutboxRecord` correspondant — execute mensuellement).
+
+**Note performance** : copy 5MB sur meme volume = ~50-200ms (pas un rename atomique inode car on doit garder le tmp en cas de retry de l'utilisateur). Sur SSD iPhone moderne, latence acceptable pour l'UX d'envoi audio.
 
 #### Idempotence du dispatcher
 `OutboxRecord.status` cycle : `pending → sending → sent → archived`. Le passage a `sending` se fait via UPDATE atomique au debut de la tentative. Au retour :
