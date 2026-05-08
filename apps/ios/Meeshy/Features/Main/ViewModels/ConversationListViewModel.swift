@@ -464,16 +464,33 @@ class ConversationListViewModel: ObservableObject {
         await reloadFromCache()
     }
 
-    // MARK: - Load More (scroll infini — uniquement pour users avec >1000 conversations)
+    // MARK: - Load More (scroll infini — toujours actif)
 
     func loadMore() async {
-        guard hasMore, !isLoadingMore, !isLoading, conversations.count >= autoLoadCap else { return }
+        // The 1000-cap gate was removed earlier; remaining guards still
+        // short-circuit redundant calls.
+        guard hasMore, !isLoadingMore, !isLoading else { return }
+
+        // Sync `currentOffset` with the actual loaded count before each
+        // request. Two scenarios this fixes:
+        //   (a) `fullSync()` (or stale-while-revalidate) populated
+        //       `conversations` directly without touching `currentOffset`
+        //       — left at 0 — so the first `loadMore` would re-fetch
+        //       page 0 forever.
+        //   (b) Earlier `loadMore` calls advanced `currentOffset` by
+        //       `deduplicated.count` (not the page size), creating
+        //       gaps when many incoming items were already cached
+        //       (e.g. socket-fed conversations vs. paginated fetch).
+        // Using `max(currentOffset, conversations.count)` keeps both
+        // counters honest and skips already-loaded prefixes cheaply.
+        let offset = max(currentOffset, conversations.count)
+
         isLoadingMore = true
 
         do {
             let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
                 endpoint: "/conversations",
-                offset: currentOffset,
+                offset: offset,
                 limit: pageLimit
             )
 
@@ -483,10 +500,27 @@ class ConversationListViewModel: ObservableObject {
                 let newConversations = response.data.map { $0.toConversation(currentUserId: userId) }
                 let deduplicated = newConversations.filter { convIndex(for: $0.id) == nil }
                 conversations.append(contentsOf: deduplicated)
-                hasMore = response.pagination?.hasMore ?? false
-                currentOffset += deduplicated.count
+                // Fallback when the backend doesn't provide pagination
+                // metadata: a full page implies more might follow. Without
+                // this, a missing `pagination.hasMore` collapsed scroll to
+                // a single page and the user was stranded at the cap.
+                hasMore = response.pagination?.hasMore ?? (newConversations.count == pageLimit)
+                // Advance by the raw response count (not deduplicated)
+                // so the offset always tracks the backend's cursor — dedup
+                // is a defensive client-side check, not a paging signal.
+                currentOffset = offset + newConversations.count
+            } else {
+                // Server replied 200 but `success=false` — surface it so
+                // we don't silently freeze the list at the current cap.
+                print("[ConversationListViewModel.loadMore] non-success response at offset=\(offset)")
             }
-        } catch { }
+        } catch {
+            // Don't flip `hasMore=false` on transient errors (network
+            // blip, rate limit) — leave the door open for the next
+            // scroll attempt to retry. Previously this catch was empty,
+            // hiding sync failures from the user entirely.
+            print("[ConversationListViewModel.loadMore] error at offset=\(offset): \(error)")
+        }
 
         isLoadingMore = false
     }

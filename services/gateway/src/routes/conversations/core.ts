@@ -132,8 +132,12 @@ export function registerCoreRoutes(
 
       const userId = authRequest.authContext.userId;
 
-      // Paramètres de pagination (réduit à 15 par défaut pour améliorer la performance)
-      const limit = Math.min(parseInt(request.query.limit || '15', 10), 50); // Max 50
+      // Paramètres de pagination. Default 30 (compromise between perf and
+      // round-trips); max 100 to let large-account clients fetch their full
+      // list in fewer pages — previously capped at 50, which forced 88+
+      // conversation accounts through 2 pages and exposed pagination bugs
+      // (offset stagnation, hasMore mis-reads) for any partial sync.
+      const limit = Math.min(parseInt(request.query.limit || '30', 10), 100); // Max 100
       const offset = parseInt(request.query.offset || '0', 10);
       const includeCount = request.query.includeCount === 'true';
 
@@ -413,10 +417,22 @@ export function registerCoreRoutes(
       perfTimings.parallelQueries = performance.now() - t0;
       const userMap = new Map(memberUsers.map(u => [u.id, u]));
 
-      // Calculate hasMore
-      const hasMore = (includeCount || offset === 0)
-        ? offset + conversations.length < totalCount
-        : conversations.length === limit;
+      // Calculate hasMore. Two strategies:
+      //   1. When we have a real `totalCount` (includeCount=true OR
+      //      offset===0 — see L401-405), `hasMore = offset + N < total`.
+      //   2. When totalCount is a sentinel `0` (skipped to save a query),
+      //      fall back to "the page is full" → `length === limit`. This
+      //      is conservative: if the page is exactly full we assume there
+      //      MIGHT be another, and let the next request settle it.
+      // Previously, branch (1) fired even when `totalCount===0` (because
+      // includeCount=false and offset>0 still skipped the count query),
+      // making `hasMore` falsely false and freezing infinite scroll.
+      let hasMore: boolean;
+      if (totalCount > 0 && (includeCount || offset === 0)) {
+        hasMore = offset + conversations.length < totalCount;
+      } else {
+        hasMore = conversations.length === limit;
+      }
 
       // Mapper les conversations avec unreadCount et merge user data
       const conversationsWithUnreadCount = conversations.map((conversation) => {

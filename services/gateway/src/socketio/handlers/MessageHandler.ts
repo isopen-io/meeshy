@@ -450,6 +450,38 @@ export class MessageHandler {
         this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
       }
 
+      // Notify each participant's user room that the conversation has
+      // been updated (lastMessageAt advanced) so their conversation
+      // list can re-sort and surface this conversation at the top in
+      // real time. Without this, MESSAGE_NEW only reaches sockets
+      // already inside ROOMS.conversation(id), so a user with the
+      // conversation list open elsewhere never receives a signal —
+      // the row stays at its old position until a manual refresh,
+      // and brand-new DMs never appear in the list at all.
+      try {
+        const participants = await this.prisma.participant.findMany({
+          where: { conversationId: normalizedId, isActive: true },
+          select: { userId: true }
+        });
+        const updatePayload = {
+          conversationId: normalizedId,
+          lastMessageAt: message.createdAt,
+          lastMessageId: message.id,
+          lastMessagePreview: message.content,
+          senderId: message.senderId,
+          updatedAt: new Date().toISOString()
+        };
+        for (const p of participants) {
+          if (!p.userId) continue;
+          this.io.to(ROOMS.user(p.userId)).emit(
+            SERVER_EVENTS.CONVERSATION_UPDATED,
+            updatePayload
+          );
+        }
+      } catch (err) {
+        console.warn('[BROADCAST] CONVERSATION_UPDATED emit failed:', err);
+      }
+
       // Mettre à jour unread counts
       await this._updateUnreadCounts(message, normalizedId);
 

@@ -36,17 +36,53 @@ function updateInfiniteConversationCache(
       const allConversations = old.pages.flatMap(page => page.conversations);
       const updated = updater(allConversations);
       if (updated === allConversations) return old;
-      return {
-        pages: [{
-          conversations: updated,
+
+      // PRESERVE PAGE STRUCTURE. Previously this code collapsed every
+      // existing page into a single synthetic page with `pageParams: [0]`
+      // and `pagination.offset: 0` — meaning the next `fetchNextPage`
+      // call recomputed `getNextPageParam` against that single fused
+      // page and either re-fetched offset=0 (re-loading already-loaded
+      // conversations as duplicates) or stalled if the synthetic
+      // `hasMore` didn't propagate. By rebuilding the original page
+      // boundaries from the updated array, `pageParams` stay intact and
+      // infinite scroll keeps advancing past the last real page.
+      const rebuiltPages: typeof old.pages = [];
+      let cursor = 0;
+      for (let i = 0; i < old.pages.length; i++) {
+        const originalPage = old.pages[i];
+        const originalLength = originalPage.conversations.length;
+        const slice = updated.slice(cursor, cursor + originalLength);
+        rebuiltPages.push({
+          conversations: slice,
           pagination: {
-            total: updated.length,
-            offset: 0,
-            limit: updated.length,
-            hasMore: old.pages[old.pages.length - 1]?.pagination?.hasMore ?? false,
+            // Keep the original pagination metadata so `getNextPageParam`
+            // continues to see correct offsets/limits.
+            ...originalPage.pagination,
+            // `total` is the only field worth refreshing — the global
+            // count grows when a brand-new conversation is prepended.
+            total: i === old.pages.length - 1 ? updated.length : originalPage.pagination.total,
           },
-        }],
-        pageParams: old.pageParams.slice(0, 1),
+        });
+        cursor += originalLength;
+      }
+      // Tail: any items the updater added beyond the original total
+      // length (e.g. a brand-new conversation prepended via fetch
+      // fallback). Append them as an extra page so they're not lost.
+      if (cursor < updated.length) {
+        const last = old.pages[old.pages.length - 1];
+        rebuiltPages.push({
+          conversations: updated.slice(cursor),
+          pagination: {
+            ...last.pagination,
+            offset: cursor,
+            total: updated.length,
+          },
+        });
+      }
+
+      return {
+        pages: rebuiltPages,
+        pageParams: old.pageParams,
       };
     }
   );
@@ -174,6 +210,7 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
       );
 
       // Update infinite conversations query (paginated cache used by ConversationList)
+      let conversationFoundInCache = false;
       updateInfiniteConversationCache(queryClient, (convs) => {
         let updated: Conversation | null = null;
         const rest: Conversation[] = [];
@@ -184,8 +221,42 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
             rest.push(conv);
           }
         }
-        return updated ? [updated, ...rest] : convs;
+        if (updated) {
+          conversationFoundInCache = true;
+          return [updated, ...rest];
+        }
+        return convs;
       });
+
+      // First time this client sees the conversation (brand-new DM,
+      // group invite the user just got added to, or a record missed
+      // by the paginated initial query). Fetch the full row from the
+      // API and prepend it so the list surfaces the new chat in real
+      // time instead of waiting for the next manual refresh.
+      if (!conversationFoundInCache && /^[a-f\d]{24}$/i.test(targetConversationId)) {
+        if (typeof window === 'undefined' || window.location.pathname !== '/login') {
+          apiService.get<Conversation>(`/conversations/${targetConversationId}`)
+            .then((response) => {
+              const fetched = response?.data;
+              if (!fetched) return;
+              updateInfiniteConversationCache(queryClient, (convs) => {
+                // Defensive dedup: a concurrent fetch / socket event
+                // might have inserted while we were awaiting the API.
+                const filtered = convs.filter((c) => c.id !== targetConversationId);
+                const enriched: Conversation = {
+                  ...fetched,
+                  lastMessage: message,
+                  lastMessageAt: message.createdAt,
+                  updatedAt: message.createdAt,
+                };
+                return [enriched, ...filtered];
+              });
+            })
+            .catch((err: unknown) => {
+              console.warn('[SOCKET_SYNC] Failed to fetch missing conversation:', err);
+            });
+        }
+      }
 
       // DO NOT invalidate here - setQueryData already has the correct lastMessage
       // Invalidating would trigger a re-fetch that could return stale data from backend cache

@@ -64,7 +64,12 @@ export class ConversationsCrudService {
         limit,
         offset,
         total: conversations.length,
-        hasMore: false
+        // Conservative fallback when the backend omits pagination meta:
+        // a full page implies there might be more. Previously hard-coded
+        // to `false`, which froze infinite scroll after the very first
+        // request whenever the response shape unexpectedly omitted
+        // `pagination` (e.g. cursor-only mode, fielded responses).
+        hasMore: conversations.length >= limit
       },
       cursorPagination,
     };

@@ -95,6 +95,33 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// should now inspect the return value and surface an error UI when
     /// it's `false`.
     @discardableResult
+    /// Fetches a single conversations page, retrying transient errors up to
+    /// 2 times with exponential backoff (1s, 2s). Lifted out of `fullSync()`
+    /// so it can be called from inside `withTaskGroup` closures without
+    /// triggering Swift 6 isolation-boundary warnings on `@Sendable` local
+    /// functions. Previously a single network blip silently dropped an
+    /// entire page — `succeeded` flipped false and the user landed on a
+    /// partial list with no recovery path.
+    private static func fetchPageWithRetry(
+        via service: ConversationServiceProviding,
+        offset: Int,
+        limit: Int
+    ) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
+        var lastError: Error?
+        for attempt in 0..<3 {
+            do {
+                return try await service.list(offset: offset, limit: limit)
+            } catch {
+                lastError = error
+                if attempt < 2 {
+                    let backoff = UInt64(1_000_000_000 * (1 << attempt))
+                    try? await Task.sleep(nanoseconds: backoff)
+                }
+            }
+        }
+        throw lastError ?? URLError(.unknown)
+    }
+
     public func fullSync() async -> Bool {
         guard !isSyncing else { return true }
         isSyncing = true
@@ -102,6 +129,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
         let pageSize = 100
         let userId = await currentUserId()
+        let service = self.conversationService
 
         // Fetch the first page to show something on screen as fast as
         // possible, then fan out to the remaining pages in parallel. On
@@ -111,9 +139,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // background without blocking the UI.
         let firstPage: [MeeshyConversation]
         let totalCount: Int?
+        let firstPageReturnedCount: Int
         do {
-            let response = try await conversationService.list(offset: 0, limit: pageSize)
+            let response = try await Self.fetchPageWithRetry(via: service, offset: 0, limit: pageSize)
             firstPage = response.data.map { $0.toConversation(currentUserId: userId) }
+            firstPageReturnedCount = response.data.count
             totalCount = response.pagination?.total
             await cache.conversations.save(firstPage, for: "list")
             await SearchIndex.shared.indexConversations(firstPage)
@@ -124,18 +154,36 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
 
         // If the first page already returned everything, we're done.
-        let knownTotal: Int? = totalCount ?? (firstPage.count < pageSize ? firstPage.count : nil)
-        if let total = knownTotal, total <= firstPage.count {
+        // Heuristic: when the backend gave us a total, trust it; else
+        // assume "fewer than requested" means the tail (matches REST
+        // pagination convention).
+        if let total = totalCount, total <= firstPage.count {
             lastSyncTimestamp = Date()
             return true
+        }
+        if totalCount == nil && firstPageReturnedCount < pageSize {
+            // Fewer items returned than asked for AND no total advertised:
+            // the gateway either capped our `limit` (e.g. asked for 100,
+            // got 50) OR the user truly has only this many. Defer to the
+            // sequential tail loop below — it will probe one more page
+            // and stop on `hasMore=false`. This avoids the legacy bug
+            // where `firstPage.count >= pageSize` (50 >= 100 = false)
+            // forced an early return on accounts with 50–99 conversations.
         }
 
         // Upper bound on remaining pages. If the backend didn't return a
         // total count, we fall back to sequential paging from page 2 until
         // `hasMore` flips false.
         let remainingPages: [Int]
-        if let total = knownTotal {
-            let totalPages = (total + pageSize - 1) / pageSize
+        if let total = totalCount {
+            // Use the *actual* page size delivered by the server (which
+            // may be lower than the requested `pageSize` due to its own
+            // cap), so subsequent offsets align with real page boundaries
+            // rather than our optimistic stride.
+            let stride = max(firstPageReturnedCount, 1)
+            let totalPages = (total + stride - 1) / stride
+            // Each page index `i` maps to offset `i * stride`. We start
+            // from page 1 because page 0 is `firstPage`.
             remainingPages = Array(1..<totalPages)
         } else {
             remainingPages = []
@@ -148,7 +196,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             // Fan-out: fetch all remaining pages concurrently with a bounded
             // parallelism (4) so we don't hammer the backend on huge
             // accounts. Pages are sorted by offset before merging.
-            let service = self.conversationService
+            let stride = max(firstPageReturnedCount, 1)
             let pages: [(Int, [MeeshyConversation])] = await withTaskGroup(
                 of: (Int, [MeeshyConversation]?).self,
                 returning: [(Int, [MeeshyConversation])].self
@@ -161,7 +209,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     let pageIndex = remainingPages[launched]
                     group.addTask {
                         do {
-                            let response = try await service.list(offset: pageIndex * pageSize, limit: pageSize)
+                            let response = try await Self.fetchPageWithRetry(via: service, offset: pageIndex * stride, limit: pageSize)
                             let items = response.data.map { $0.toConversation(currentUserId: userId) }
                             return (pageIndex, items)
                         } catch {
@@ -179,7 +227,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                         let pageIndex = remainingPages[launched]
                         group.addTask {
                             do {
-                                let response = try await service.list(offset: pageIndex * pageSize, limit: pageSize)
+                                let response = try await Self.fetchPageWithRetry(via: service, offset: pageIndex * stride, limit: pageSize)
                                 let items = response.data.map { $0.toConversation(currentUserId: userId) }
                                 return (pageIndex, items)
                             } catch {
@@ -207,27 +255,48 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             await cache.conversations.save(merged, for: "list")
             await SearchIndex.shared.indexConversations(merged)
             _conversationsDidChange.send()
-        } else {
-            // No known total count: fall back to sequential paging from page 2.
-            var offset = firstPage.count
-            var hasMore = firstPage.count >= pageSize
-            while hasMore {
-                do {
-                    let response = try await conversationService.list(offset: offset, limit: pageSize)
-                    let page = response.data.map { $0.toConversation(currentUserId: userId) }
-                    let existingIds = Set(merged.map(\.id))
-                    let newItems = page.filter { !existingIds.contains($0.id) }
-                    merged.append(contentsOf: newItems)
+        }
+
+        // Sequential tail: keep fetching until the server says "no more"
+        // OR we get an empty page. Runs in TWO cases:
+        //   1. We had no `totalCount` — primary fallback path.
+        //   2. We had a `totalCount` but the parallel fan-out missed
+        //      some pages (race conditions, optimistic stride, server
+        //      added conversations mid-sync). This catches them so the
+        //      list is provably complete.
+        var offset = merged.count
+        var hasMore = totalCount == nil
+            ? firstPageReturnedCount > 0
+            : (offset < (totalCount ?? 0))
+        while hasMore {
+            do {
+                let response = try await Self.fetchPageWithRetry(via: service, offset: offset, limit: pageSize)
+                let page = response.data.map { $0.toConversation(currentUserId: userId) }
+                let existingIds = Set(merged.map(\.id))
+                let newItems = page.filter { !existingIds.contains($0.id) }
+                merged.append(contentsOf: newItems)
+                if !newItems.isEmpty {
                     await cache.conversations.save(merged, for: "list")
                     await SearchIndex.shared.indexConversations(newItems)
                     _conversationsDidChange.send()
-                    hasMore = response.pagination?.hasMore ?? false
-                    offset += page.count
-                } catch {
-                    Self.logger.error("[SyncEngine] fullSync tail error: \(error.localizedDescription)")
-                    succeeded = false
-                    break
                 }
+                // Trust the backend's `hasMore` if present; otherwise
+                // assume "full page = more might follow" so we keep
+                // probing instead of stopping at a backend-capped page.
+                let backendHasMore = response.pagination?.hasMore
+                if let backendHasMore {
+                    hasMore = backendHasMore
+                } else {
+                    hasMore = response.data.count >= pageSize || response.data.count == firstPageReturnedCount
+                }
+                offset += response.data.count
+                // Safety belt: if the server returned 0 items, abort —
+                // otherwise we'd loop forever on a misconfigured endpoint.
+                if response.data.isEmpty { hasMore = false }
+            } catch {
+                Self.logger.error("[SyncEngine] fullSync tail error: \(error.localizedDescription)")
+                succeeded = false
+                break
             }
         }
 
@@ -551,19 +620,50 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // back to `nil` would otherwise wipe the preview author for the whole
         // list row until the next full sync.
         let resolvedSenderName = msg.senderName ?? msg.senderUsername
-        await cache.conversations.update(for: "list") { conversations in
-            var updated = conversations
-            if let idx = updated.firstIndex(where: { $0.id == msg.conversationId }) {
-                updated[idx].lastMessagePreview = msg.content
-                updated[idx].lastMessageId = msg.id
-                if let resolvedSenderName, !resolvedSenderName.isEmpty {
-                    updated[idx].lastMessageSenderName = resolvedSenderName
+
+        // Snapshot the cached list to decide whether the conversation
+        // already exists. The `update` mutate closure is sync +
+        // nonisolated, so we can't fetch from inside it — branch here.
+        let cachedList = await cache.conversations.load(for: "list")
+        let conversationExists = cachedList.value?.contains(where: { $0.id == msg.conversationId }) ?? false
+
+        if conversationExists {
+            await cache.conversations.update(for: "list") { conversations in
+                var updated = conversations
+                if let idx = updated.firstIndex(where: { $0.id == msg.conversationId }) {
+                    updated[idx].lastMessagePreview = msg.content
+                    updated[idx].lastMessageId = msg.id
+                    if let resolvedSenderName, !resolvedSenderName.isEmpty {
+                        updated[idx].lastMessageSenderName = resolvedSenderName
+                    }
+                    updated[idx].lastMessageAt = msg.createdAt
+                    let conv = updated.remove(at: idx)
+                    updated.insert(conv, at: 0)
                 }
-                updated[idx].lastMessageAt = msg.createdAt
-                let conv = updated.remove(at: idx)
-                updated.insert(conv, at: 0)
+                return updated
             }
-            return updated
+        } else {
+            // First time this device sees the conversation (brand-new
+            // DM, group invite the user just got added to, or a record
+            // missed by `fullSync()`'s parallel page fetches). Pull the
+            // full conversation row from the API and prepend it so the
+            // list surfaces the new chat in real time instead of
+            // waiting for the next manual refresh.
+            do {
+                let apiConv = try await ConversationService.shared.getById(msg.conversationId)
+                let userId = await currentUserId() ?? ""
+                let domainConv = apiConv.toConversation(currentUserId: userId)
+                await cache.conversations.update(for: "list") { conversations in
+                    var updated = conversations
+                    // Defensive dedup: a concurrent handleNewMessage
+                    // for the same conversation could have raced ahead.
+                    updated.removeAll { $0.id == domainConv.id }
+                    updated.insert(domainConv, at: 0)
+                    return updated
+                }
+            } catch {
+                print("[SYNC] Failed to fetch missing conversation \(msg.conversationId): \(error)")
+            }
         }
         _conversationsDidChange.send()
 

@@ -463,9 +463,15 @@ struct ConversationListView: View {
 
     private func triggerLoadMoreIfNeeded(conversation: Conversation) {
         let all = conversationViewModel.conversations
-        // Scroll infini uniquement au-delà de 1000 conversations chargées
-        // (en dessous, loadAllRemainingBackground() a tout chargé)
-        guard all.count >= 1000 else { return }
+        // Always-on infinite scroll: trigger `loadMore` as soon as the
+        // user scrolls within 5 rows of the loaded tail. The 1000-
+        // conversation gate that lived here assumed `fullSync()`
+        // always succeeded for accounts below the cap, so `loadMore`
+        // was reserved for power users. In practice, partial sync
+        // failures stranded users at 50/88+ with no way to scroll
+        // beyond the loaded chunk. `loadMore()` itself short-circuits
+        // when `hasMore == false`, so calling it on every onAppear
+        // past the threshold is safe.
         guard let idx = all.firstIndex(where: { $0.id == conversation.id }) else { return }
         let threshold = max(0, all.count - 5)
         if idx >= threshold {
