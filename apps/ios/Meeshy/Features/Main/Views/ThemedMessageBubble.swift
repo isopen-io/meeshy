@@ -67,6 +67,9 @@ struct ThemedMessageBubble: View {
     var isLastInGroup: Bool = true
     /// Vrai uniquement pour le dernier message reçu (non envoyé par moi) — limite l'icône réaction
     var isLastReceivedMessage: Bool = false
+    /// Vrai uniquement pour le dernier message envoyé par moi — drives the
+    /// `shouldShowIdentityBar` decision symmetrically to received messages.
+    var isLastSentMessage: Bool = false
     var mentionDisplayNames: [String: String] = [:]
     var highlightSearchTerm: String? = nil
     /// `true` while the server edit round-trip is in flight. Drives the
@@ -175,6 +178,7 @@ struct ThemedMessageBubble: View {
             activeAudioLanguage: activeAudioLanguage,
             isLastInGroup: isLastInGroup,
             isLastReceivedMessage: isLastReceivedMessage,
+            isLastSentMessage: isLastSentMessage,
             mentionDisplayNames: mentionDisplayNames,
             highlightSearchTerm: highlightSearchTerm,
             activeVideoURL: activeVideoURL,
@@ -277,6 +281,7 @@ extension ThemedMessageBubble: @MainActor Equatable {
         lhs.translatedAudios.count == rhs.translatedAudios.count &&
         // Edit overlay
         lhs.isLastReceivedMessage == rhs.isLastReceivedMessage &&
+        lhs.isLastSentMessage == rhs.isLastSentMessage &&
         lhs.isEditSaving == rhs.isEditSaving &&
         lhs.hasEditHistory == rhs.hasEditHistory &&
         lhs.highlightSearchTerm == rhs.highlightSearchTerm &&

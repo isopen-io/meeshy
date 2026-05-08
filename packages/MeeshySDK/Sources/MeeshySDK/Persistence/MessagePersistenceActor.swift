@@ -84,9 +84,21 @@ public actor MessagePersistenceActor {
                 guard let self else { break }
                 switch op {
                 case .reconcileBatch(let messages):
+                    guard !messages.isEmpty else { continue }
                     try? await self.reconcileBatchSync(messages)
+                    // Post the refresh AFTER the write completes — buffer
+                    // callers used to post the notification immediately on
+                    // enqueue, but the worker that does the actual GRDB write
+                    // runs async on this stream, so MessageStore observers
+                    // fired against an empty database and silently dropped
+                    // the new row. New messages received via socket while
+                    // the user was on the conversation never appeared until
+                    // a manual reload.
+                    let convIds = Set(messages.map(\.conversationId))
+                    postMessageStoreRefresh(conversationIds: convIds)
                 case .batchDeliveryUpdate(let convId, let event):
                     try? await self.batchDeliverySync(conversationId: convId, event: event)
+                    postMessageStoreRefresh(conversationIds: [convId])
                 }
             }
         }
@@ -155,14 +167,16 @@ public actor MessagePersistenceActor {
     // MARK: - Buffered Writes
 
     public func bufferIncoming(_ messages: [IncomingMessageData]) {
+        // Notification is posted by the worker AFTER the GRDB write completes
+        // (see `start()`). Posting here would race the async write — observers
+        // would refresh against an empty database and never see the new row.
         writeContinuation.yield(.reconcileBatch(messages))
-        let convIds = Set(messages.map(\.conversationId))
-        postMessageStoreRefresh(conversationIds: convIds)
     }
 
     public func bufferBatchDelivery(conversationId: String, event: MessageEvent) {
+        // Notification is posted by the worker AFTER the GRDB write completes
+        // (see `start()`).
         writeContinuation.yield(.batchDeliveryUpdate(conversationId: conversationId, event: event))
-        postMessageStoreRefresh(conversationIds: [conversationId])
     }
 
     private func reconcileBatchSync(_ messages: [IncomingMessageData]) throws {
@@ -637,6 +651,12 @@ public actor MessagePersistenceActor {
     /// Called from load/refresh paths so the MessageStore observation surfaces
     /// the authoritative server data without a direct `messages = ...` write.
     public func upsertFromAPIMessages(_ apiMessages: [APIMessage]) async throws {
+        // Empty payloads are a routine outcome of pagination paths (e.g.
+        // `loadOlderMessages` reaching the start of the conversation) — no
+        // rows to write means no refresh to post. Returning early here keeps
+        // the empty-Set guard on `postMessageStoreRefresh` from tripping the
+        // assertion meant to catch genuine "forgot to scope the convId" bugs.
+        guard !apiMessages.isEmpty else { return }
         let encoder = JSONEncoder()
         let convIds = Set(apiMessages.map(\.conversationId))
         defer { postMessageStoreRefresh(conversationIds: convIds) }
@@ -748,9 +768,46 @@ public actor MessagePersistenceActor {
 
                 let timeString = MessageRecord.computeTimeString(for: api.createdAt)
 
-                if var existing = try MessageRecord.fetchOne(db, key: api.id) {
+                // Resolve the existing record using the same reconciliation
+                // order as reconcileBatchSync (above). Optimistic sends live
+                // in GRDB with `localId = "temp_xxxxx"` and `serverId = nil`
+                // until the first ack arrives. A naive `fetchOne(key: api.id)`
+                // (PK is `localId`) misses them, so the upsert falls into the
+                // insert branch and produces a SECOND row with
+                // `localId = api.id` — visible to the user as a duplicated
+                // bubble whose original optimistic row stays stuck in
+                // `.sending` forever (the clock indicator never clears).
+                //
+                // 1. PendingIdRecord — populated by applyEvent(.serverAck)
+                //    immediately after a successful REST send. Same lookup
+                //    used by reconcileBatchSync.
+                // 2. Direct PK lookup — covers messages persisted with
+                //    `localId = serverId` (incoming-from-others REST refresh
+                //    on a first install).
+                // 3. serverId column scan — final safety net for rows that
+                //    ran serverAck on a build that didn't yet insert
+                //    PendingIdRecord (legacy GRDB rows).
+                let pendingMatch = try PendingIdRecord
+                    .filter(Column("serverId") == api.id)
+                    .fetchOne(db)
+                let existingRecord: MessageRecord?
+                if let pendingMatch,
+                   let optimistic = try MessageRecord.fetchOne(db, key: pendingMatch.localId) {
+                    existingRecord = optimistic
+                } else if let direct = try MessageRecord.fetchOne(db, key: api.id) {
+                    existingRecord = direct
+                } else {
+                    existingRecord = try MessageRecord
+                        .filter(Column("serverId") == api.id)
+                        .fetchOne(db)
+                }
+                if var existing = existingRecord {
                     // Update mutable fields; preserve layout cache
                     existing.content = api.content
+                    // Backfill the server id so future reconciliations can find
+                    // the row via the serverId column or PendingIdRecord even
+                    // if applyEvent(.serverAck) didn't run for some reason.
+                    existing.serverId = api.id
                     existing.isEdited = api.isEdited ?? false
                     existing.editedAt = nil
                     existing.deletedAt = api.deletedAt

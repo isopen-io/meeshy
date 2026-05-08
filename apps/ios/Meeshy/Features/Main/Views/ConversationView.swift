@@ -766,6 +766,7 @@ struct ConversationView: View {
             // UIKit bridge powered by GRDB store (always available after eager init)
             MessageListView(
                 store: viewModel.messageStore,
+                conversationViewModel: viewModel,
                 currentUserId: viewModel.currentUserIdForView,
                 accentColor: accentColor,
                 isDirect: isDirect,
@@ -790,23 +791,91 @@ struct ConversationView: View {
                     // unreachable.
                     await viewModel.loadOlderMessages()
                 },
-                resolveBubbleData: { messageId in
-                    // Pulls live translation/transcription state from the
-                    // ConversationViewModel. The closure runs on main thread
-                    // inside the cell config, so direct property reads are
-                    // safe — the VM is @MainActor and the cell registration
-                    // is invoked by UIKit on the main runloop.
-                    MessageBubbleData(
-                        translations: viewModel.messageTranslations[messageId] ?? [],
-                        preferredTranslation: viewModel.preferredTranslation(for: messageId),
-                        transcription: viewModel.messageTranscriptions[messageId],
-                        translatedAudios: viewModel.messageTranslatedAudios[messageId] ?? [],
-                        userLanguages: (
-                            regional: AuthManager.shared.currentUser?.regionalLanguage,
-                            custom: AuthManager.shared.currentUser?.customDestinationLanguage
-                        ),
-                        mentionDisplayNames: viewModel.mentionDisplayNames
-                    )
+                onStoryReplyTap: { storyId in
+                    // Open the story viewer at the slide that originated the
+                    // quoted reply. Resolves the story id to a (group, slide)
+                    // pair via StoryViewModel — preserves the legacy behaviour
+                    // from ConversationView+MessageRow (now dead code).
+                    if let groupIdx = storyViewModel.groupIndex(forStoryId: storyId) {
+                        let group = storyViewModel.storyGroups[groupIdx]
+                        let slideIdx = group.stories.firstIndex { $0.id == storyId } ?? 0
+                        overlayState.storyViewerUserId = group.id
+                        overlayState.storyViewerGroupIndex = groupIdx
+                        overlayState.storyViewerSlideIndex = slideIdx
+                        overlayState.showStoryViewer = true
+                    }
+                },
+                onSwipeReply: { messageId in
+                    // Restore swipe-to-reply: BubbleSwipeContainer commits when
+                    // the bubble crosses the reply threshold. We resolve the
+                    // message and reuse triggerReply() so the composer mirrors
+                    // the legacy long-press / context menu reply path.
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    triggerReply(for: msg)
+                },
+                onSwipeForward: { messageId in
+                    // Restore swipe-to-forward: opens the forward picker via
+                    // composerState. HapticFeedback already fires inside the
+                    // swipe container — we only stage the message here.
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    composerState.forwardMessage = msg
+                },
+                onLongPress: { messageId in
+                    // Open the contextual options menu — same overlay used by
+                    // the legacy SwiftUI list path. Bypasses the gesture if
+                    // overlay-disabled (e.g. while a sheet is presented).
+                    guard overlayState.longPressEnabled else { return }
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.overlayMessage = msg
+                    overlayState.showOverlayMenu = true
+                },
+                onAddReaction: { messageId in
+                    // Spring-open the inline emoji bar next to the bubble.
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        overlayState.emojiOnlyMode = true
+                        overlayState.quickReactionMessageId = messageId
+                    }
+                    HapticFeedback.light()
+                },
+                onToggleReaction: { messageId, emoji in
+                    viewModel.toggleReaction(messageId: messageId, emoji: emoji)
+                },
+                onOpenReactPicker: { messageId in
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .react
+                },
+                onShowMessageInfo: { messageId in
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .views
+                },
+                onShowReactions: { messageId in
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .reactions
+                },
+                onShowTranslationDetail: { messageId in
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .language
+                },
+                onMediaTap: { attachment in
+                    // User tapped a media — opportunistically warm the cache,
+                    // then stage the attachment for the gallery presenter.
+                    if let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
+                        Task { _ = try? await CacheCoordinator.shared.images.data(for: resolved) }
+                    }
+                    scrollState.galleryStartAttachment = attachment
+                },
+                onConsumeViewOnce: { messageId, completion in
+                    Task {
+                        let success = await viewModel.consumeViewOnce(messageId: messageId)
+                        completion(success)
+                    }
+                },
+                onRequestTranslation: { messageId, targetLang in
+                    MessageSocketManager.shared.requestTranslation(messageId: messageId, targetLanguage: targetLang)
                 }
             )
 
