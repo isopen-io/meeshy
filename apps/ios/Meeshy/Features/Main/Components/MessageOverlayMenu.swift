@@ -40,15 +40,27 @@ struct MessageOverlayMenu: View {
     @State private var isEmojiPickerOpen = false
 
     private let previewCharLimit = 500
-    private let defaultEmojis = ["😂", "❤️", "👍", "😮", "😢", "🔥", "🎉", "💯", "🥰", "😎", "🙏", "💀", "🤣", "✨", "👏"]
+    // Expanded emoji set — far more than fits in the viewport, so the
+    // quick reaction strip becomes horizontally scrollable. The first 6
+    // are the iMessage-style "popular" defaults (still visible without
+    // any scroll); the tail extends with a curated selection so the
+    // user always has something to discover when they swipe.
+    private let defaultEmojis = [
+        "😂", "❤️", "👍", "😮", "😢", "🔥",
+        "🎉", "💯", "🥰", "😎", "🙏", "💀",
+        "🤣", "✨", "👏", "🤔", "🥺", "😍",
+        "🫶", "💪"
+    ]
 
     // Panel takes ~56% of screen, but grid shows 2.5 rows (scrollable)
-    // Bottom sheet height — sized to expose ~30% more action grid
-    // content than the previous compact target while still keeping the
-    // pressed bubble preview the visual focal point. Pull up via the
-    // drag handle to reach the full MessageDetailSheet (translations,
-    // full react picker, every action).
-    private let gridVisibleHeight: CGFloat = 143
+    // Bottom sheet height — bumped up so two full action rows are
+    // visible at rest (was 143 → 195). The pressed bubble preview is
+    // still the visual focal point because the previewer floats above
+    // the panel with shadow + scale, but the grid no longer feels
+    // hidden / "too low". Pull up via the drag handle to expand to the
+    // full MessageDetailSheet (translations, full react picker, every
+    // action).
+    private let gridVisibleHeight: CGFloat = 195
 
     var body: some View {
         GeometryReader { geometry in
@@ -138,10 +150,15 @@ struct MessageOverlayMenu: View {
     // MARK: - Emoji Quick Bar (EmojiReactionPicker — shared component)
 
     private var emojiQuickBar: some View {
-        let topEmojis = EmojiUsageTracker.topEmojis(count: 6, defaults: defaultEmojis)
+        // Pull a wider list (20) so the user can swipe horizontally to
+        // discover beyond the 6 visible defaults. Most-used emojis are
+        // always front-loaded — the recency tracker keeps the strip
+        // personal across sessions without losing the long tail.
+        let topEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
         return EmojiReactionPicker(
             quickEmojis: topEmojis,
             style: isDark ? .dark : .light,
+            scrollable: true,
             onReact: { emoji in
                 EmojiUsageTracker.recordUsage(emoji: emoji)
                 onReact?(emoji)
@@ -153,6 +170,11 @@ struct MessageOverlayMenu: View {
                 forceTab = isEmojiPickerOpen ? .react : .language
             }
         )
+        // Constrain the strip's visible width so it sits comfortably
+        // centred between the message preview and the bottom sheet —
+        // without the cap, the ScrollView would grow to fill the row
+        // and the capsule background would lose its "pill" silhouette.
+        .frame(maxWidth: UIScreen.main.bounds.width - 32)
     }
 
     // MARK: - Dismiss Background (light blur — silhouettes stay readable)
