@@ -147,27 +147,41 @@ struct GlobalSearchView: View {
         } label: {
             VStack(spacing: 6) {
                 HStack(spacing: 4) {
+                    // Icon carries the result-count badge in its
+                    // top-trailing corner (iOS app-badge convention).
+                    // Previously the count rendered as a Text after
+                    // the label inside the same HStack, which pushed
+                    // long labels like "Conversations" onto a second
+                    // line on narrow tabs. Floating the badge as an
+                    // overlay keeps the icon + label on a single line
+                    // regardless of count width.
                     Image(systemName: tab.icon)
                         .font(.system(size: 12, weight: .medium))
+                        .overlay(alignment: .topTrailing) {
+                            if count > 0 {
+                                Text(count > 99 ? "99+" : "\(count)")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 1)
+                                    .background(
+                                        Capsule()
+                                            .fill(
+                                                LinearGradient(
+                                                    colors: [MeeshyColors.error, MeeshyColors.indigo300],
+                                                    startPoint: .leading,
+                                                    endPoint: .trailing
+                                                )
+                                            )
+                                    )
+                                    .fixedSize()
+                                    .offset(x: 10, y: -8)
+                            }
+                        }
                     Text(tab.localizedName)
                         .font(.system(size: 13, weight: isSelected ? .bold : .medium))
-                    if count > 0 {
-                        Text("\(count)")
-                            .font(.system(size: 11, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(
-                                Capsule()
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [MeeshyColors.error, MeeshyColors.indigo300],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                            )
-                    }
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
                 .foregroundColor(isSelected ? theme.textPrimary : theme.textMuted)
 

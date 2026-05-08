@@ -62,6 +62,60 @@ struct MessageOverlayMenu: View {
     // action).
     private let gridVisibleHeight: CGFloat = 195
 
+    // MARK: - Bubble preview helpers (mirror BubbleStandardLayout)
+
+    /// Same blend recipe as `BubbleStandardLayout.otherBubbleColor` so
+    /// received-message bubbles keep their blended sender / brand tone
+    /// inside the overlay. Sent messages use the brand primary directly.
+    private var bubbleAccentHex: String {
+        if message.isMe {
+            return MeeshyColors.brandPrimaryHex
+        }
+        let senderHex = message.senderColor ?? contactColor
+        return DynamicColorGenerator.blendTwo(
+            senderHex,
+            weight1: 0.30,
+            MeeshyColors.brandPrimaryHex,
+            weight2: 0.70
+        )
+    }
+
+    /// Language flags for the inline meta row (original + each translated
+    /// target language, deduped). Capped at 3 to match the legacy bubble
+    /// strip. Returning an empty array suppresses the flag cluster.
+    private var previewFlags: [String] {
+        var seen: Set<String> = []
+        var ordered: [String] = []
+        let original = message.originalLanguage.lowercased()
+        if !original.isEmpty, seen.insert(original).inserted {
+            ordered.append(original)
+        }
+        for translation in textTranslations {
+            let code = translation.targetLanguage.lowercased()
+            if !code.isEmpty, seen.insert(code).inserted {
+                ordered.append(code)
+            }
+        }
+        return Array(ordered.prefix(3))
+    }
+
+    /// Aggregated reaction pills, computed from the message's raw
+    /// reactions exactly the way `BubbleContent.summarizeReactions`
+    /// does for the in-conversation bubble — same emoji order, same
+    /// "includesMe" flag — so the preview shows the identical sticker
+    /// row the user just long-pressed.
+    /// Note: `summarizeReactions` is declared as a static helper inside
+    /// the `extension BubbleContent` of `BubbleContentBuilder.swift`,
+    /// so the call site uses the value type name, not the file name.
+    private var previewReactionSummaries: [ReactionSummary] {
+        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+        return BubbleContent.summarizeReactions(
+            message.reactions,
+            currentUserId: currentUserId
+        )
+    }
+
+
     var body: some View {
         GeometryReader { geometry in
             let safeTop = geometry.safeAreaInsets.top
@@ -78,7 +132,15 @@ struct MessageOverlayMenu: View {
                 dismissBackground
 
                 VStack(spacing: 0) {
-                    // Tappable area above content — fills remaining space, dismisses on tap
+                    // Top tappable area — `maxHeight: .infinity` lets this
+                    // spacer absorb whatever room is left above the
+                    // message+emojiBar+panel cluster. The cluster therefore
+                    // sits anchored to the bottom of the screen at rest,
+                    // and ONLY moves up when the user drags the detail
+                    // panel up (panelHeight grows → cluster pushed
+                    // upward). This is the natural iMessage-style layout
+                    // the user expects: message just above the emoji
+                    // strip, emoji strip just above the menu sheet.
                     Color.clear
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
@@ -88,15 +150,15 @@ struct MessageOverlayMenu: View {
                     // from above + LIFT-OFF (scale 0.92 → 1.04 → 1.0 with
                     // an over-shoot spring) so it visually detaches from
                     // its row in the conversation, floats forward, then
-                    // settles into its centered position above the menu.
-                    // The HStack alignment keeps the bubble on its own
-                    // side (right for sent, left for received) so the
-                    // preview "matches" the source row's horizontal axis
-                    // even though it now sits vertically centered.
+                    // settles into its anchored position. The HStack uses
+                    // a generous Spacer(minLength: 50) on the opposite
+                    // side so the bubble truly hugs its native edge
+                    // (right for sent, left for received) — matching the
+                    // 0.70 max-width applied inside `messagePreview`.
                     HStack {
-                        if message.isMe { Spacer(minLength: 16) }
+                        if message.isMe { Spacer(minLength: 50) }
                         messagePreview
-                        if !message.isMe { Spacer(minLength: 16) }
+                        if !message.isMe { Spacer(minLength: 50) }
                     }
                     .fixedSize(horizontal: false, vertical: true)
                     .padding(.bottom, 4)
@@ -105,13 +167,11 @@ struct MessageOverlayMenu: View {
                     .scaleEffect(isVisible ? 1.0 : 0.92, anchor: message.isMe ? .topTrailing : .topLeading)
                     .shadow(color: Color.black.opacity(isVisible ? 0.18 : 0), radius: 18, y: 8)
 
-                    // Emoji quick bar — also descends to sit between the
-                    // preview and the sheet. The reduced offset (-40)
-                    // versus the preview's -80 staggers the convergence:
-                    // they all reach their resting position together but
-                    // start from slightly different distances, giving a
-                    // gathering / coalescing motion instead of a flat
-                    // simultaneous slide.
+                    // Emoji quick bar — same horizontal alignment as the
+                    // bubble (right for sent, left for received) so it
+                    // visually attaches to the message side instead of
+                    // floating centered. The reduced offset (-40) vs the
+                    // preview's -80 staggers the convergence.
                     HStack {
                         if message.isMe { Spacer() }
                         emojiQuickBar
@@ -150,15 +210,21 @@ struct MessageOverlayMenu: View {
     // MARK: - Emoji Quick Bar (EmojiReactionPicker — shared component)
 
     private var emojiQuickBar: some View {
-        // Pull a wider list (20) so the user can swipe horizontally to
-        // discover beyond the 6 visible defaults. Most-used emojis are
-        // always front-loaded — the recency tracker keeps the strip
-        // personal across sessions without losing the long tail.
+        // Same `QuickReactionBar` component the in-conversation
+        // long-press inline picker uses — keeps the two surfaces
+        // visually identical so a redesign of the strip propagates
+        // automatically. Pull a wider list (20) so the user can swipe
+        // horizontally to discover beyond the 6 visible defaults; the
+        // recency tracker front-loads most-used emojis without losing
+        // the long tail. The trailing "+" expand button toggles the
+        // bottom detail panel between the React tab (full emoji
+        // picker) and the Language tab (translation flags / settings)
+        // so the user can promote the inline strip to the full picker
+        // without dismissing the overlay.
         let topEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
-        return EmojiReactionPicker(
+        return QuickReactionBar(
+            isDark: isDark,
             quickEmojis: topEmojis,
-            style: isDark ? .dark : .light,
-            scrollable: true,
             onReact: { emoji in
                 EmojiUsageTracker.recordUsage(emoji: emoji)
                 onReact?(emoji)
@@ -170,11 +236,6 @@ struct MessageOverlayMenu: View {
                 forceTab = isEmojiPickerOpen ? .react : .language
             }
         )
-        // Constrain the strip's visible width so it sits comfortably
-        // centred between the message preview and the bottom sheet —
-        // without the cap, the ScrollView would grow to fill the row
-        // and the capsule background would lose its "pill" silhouette.
-        .frame(maxWidth: UIScreen.main.bounds.width - 32)
     }
 
     // MARK: - Dismiss Background (light blur — silhouettes stay readable)
@@ -205,7 +266,16 @@ struct MessageOverlayMenu: View {
 
             previewContent
         }
-        .frame(maxWidth: UIScreen.main.bounds.width * 0.85)
+        // Match the in-conversation bubble cap (BubbleStandardLayout
+        // uses 0.70 of the screen) so the preview reads as the SAME
+        // bubble the user just long-pressed — not a wider clone. The
+        // `alignment` parameter pins the (now-compact) content to the
+        // bubble's native edge inside the frame, working in tandem
+        // with the parent HStack's Spacer(minLength: 50).
+        .frame(
+            maxWidth: UIScreen.main.bounds.width * 0.70,
+            alignment: message.isMe ? .trailing : .leading
+        )
         .padding(.horizontal, 8)
         .shadow(color: .black.opacity(0.2), radius: 16, y: 6)
     }
@@ -292,41 +362,88 @@ struct MessageOverlayMenu: View {
                 }
             }
         }
+        // Reaction stickers float at the same corner as in the live
+        // conversation (BubbleStandardLayout L300-304): bottom-trailing
+        // for sent, bottom-leading for received, with an 8pt outward
+        // padding and a +8 y-offset so they bleed below the bubble
+        // edge. The "+" smiley add-button is intentionally suppressed
+        // (`isLastReceivedMessage: false`) per the user's "no add-
+        // reaction button on the preview" rule — the React-tab CTA
+        // lives in the emojiQuickBar's trailing "+" instead.
+        // `.allowsHitTesting(false)` keeps the dismiss handler
+        // underneath responsive: tapping anywhere on the preview
+        // still closes the overlay.
+        .overlay(alignment: message.isMe ? .bottomTrailing : .bottomLeading) {
+            if !previewReactionSummaries.isEmpty {
+                BubbleReactionsOverlay(
+                    messageId: message.id,
+                    summaries: previewReactionSummaries,
+                    isMe: message.isMe,
+                    isDark: isDark,
+                    isLastReceivedMessage: false,
+                    accentHex: bubbleAccentHex,
+                    onAddReaction: nil,
+                    onToggleReaction: nil,
+                    onOpenReactPicker: nil,
+                    onShowReactions: nil
+                )
+                .padding(message.isMe ? .trailing : .leading, 8)
+                .offset(y: 8)
+                .allowsHitTesting(false)
+            }
+        }
     }
 
     // MARK: - Preview Text Bubble (~500 chars)
 
+    /// Mirrors `BubbleStandardLayout.textBubbleContent`: a text payload
+    /// stacked above a non-interactive `UserIdentityBar.metaRow` carrying
+    /// the language flag cluster (and delivery status for sent messages),
+    /// painted with the same `BubbleBackground` recipe so the preview
+    /// reads as the SAME bubble the user just long-pressed.
+    /// Read-only by construction — `onFlagTap` / `onTranslateTap` are
+    /// nil and the row is wrapped in `.allowsHitTesting(false)` so the
+    /// metaRow does not steal taps from the dismiss handler.
     private var previewTextBubble: some View {
-        let accent = Color(hex: contactColor)
         let truncated = message.content.count > previewCharLimit
             ? String(message.content.prefix(previewCharLimit)) + "..."
             : message.content
+        let hasFlags = !previewFlags.isEmpty
+        let showDelivery = message.isMe
+        let shouldRenderMeta = hasFlags || showDelivery
 
-        return Text(truncated)
-            .font(.system(size: 15))
-            .foregroundColor(message.isMe ? .white : theme.textPrimary)
-            .fixedSize(horizontal: false, vertical: true)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(
-                        message.isMe ?
-                        LinearGradient(
-                            colors: [accent, accent.opacity(0.8)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ) :
-                        LinearGradient(
-                            colors: [
-                                accent.opacity(isDark ? 0.35 : 0.25),
-                                accent.opacity(isDark ? 0.2 : 0.15)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+        return VStack(alignment: message.isMe ? .trailing : .leading, spacing: 4) {
+            Text(truncated)
+                .font(.system(size: 15))
+                .foregroundColor(message.isMe ? .white : theme.textPrimary)
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.horizontal, 14)
+                .padding(.top, 10)
+                .padding(.bottom, shouldRenderMeta ? 4 : 10)
+
+            if shouldRenderMeta {
+                UserIdentityBar.metaRow(
+                    time: "",
+                    delivery: showDelivery ? message.deliveryStatus : nil,
+                    flags: previewFlags,
+                    activeFlag: nil,
+                    onFlagTap: nil,
+                    onTranslateTap: nil,
+                    isMe: message.isMe
+                )
+                .padding(.horizontal, 14)
+                .padding(.bottom, 8)
+                .allowsHitTesting(false)
+            }
+        }
+        .background(
+            BubbleBackground(
+                isMe: message.isMe,
+                accentHex: bubbleAccentHex,
+                isDark: isDark
             )
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
     // MARK: - Preview Image Grid

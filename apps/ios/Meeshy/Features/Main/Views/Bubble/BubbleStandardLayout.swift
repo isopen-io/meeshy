@@ -289,20 +289,18 @@ struct BubbleStandardLayout: View {
                             .onTapGesture { revealBlurredContent() }
                     }
                 }
-                // Reactions hover at the TOP corner of the bubble in the
-                // iMessage / WhatsApp style — top-trailing for sent,
-                // top-leading for received. A small negative y offset
-                // bleeds them ~8pt above the bubble's top edge so they
-                // read as floating "stickers" attached to the corner,
-                // which matches every modern chat platform's reaction
-                // affordance. Sticking to the BOTTOM of the bubble (the
-                // previous layout) competed with the identity bar that
-                // already lives there and visually merged with the next
-                // bubble below.
-                .overlay(alignment: isMe ? .topTrailing : .topLeading) {
+                // Reactions sit at the BOTTOM corner of the bubble —
+                // bottom-trailing for sent, bottom-leading for received —
+                // bleeding ~8pt below the bubble's bottom edge so they
+                // float as "stickers" attached to the corner, just above
+                // where the inline quick-reaction bar will rise from the
+                // composer. The pills + smiley add-button are anchored
+                // here so they keep their relationship with the source
+                // bubble even when the quick-reaction bar is visible.
+                .overlay(alignment: isMe ? .bottomTrailing : .bottomLeading) {
                     reactionsOverlay
                         .padding(isMe ? .trailing : .leading, 8)
-                        .offset(y: -8)
+                        .offset(y: 8)
                 }
 
             }
@@ -727,13 +725,23 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private var reactionsOverlay: some View {
+        // Use the SAME accent as the bubble background under the pill so
+        // (a) the add-reaction button reads as "attached" to the bubble it
+        // belongs to and (b) reactions the connected user has placed get a
+        // border that matches the host bubble's accent — own messages get
+        // the brand indigo (matches the bubble fill), received messages
+        // get the blended `otherBubbleColor`. Passing `contactColor` (the
+        // raw conversation color) made every bubble's pills look like
+        // they belonged to the same generic surface.
+        let bubbleAccent = content.isMe ? MeeshyColors.brandPrimaryHex : otherBubbleColor
+
         BubbleReactionsOverlay(
             messageId: content.messageId,
             summaries: reactionSummaries,
             isMe: content.isMe,
             isDark: isDark,
             isLastReceivedMessage: isLastReceivedMessage,
-            accentHex: contactColor,
+            accentHex: bubbleAccent,
             onAddReaction: onAddReaction,
             onToggleReaction: onToggleReaction,
             onOpenReactPicker: onOpenReactPicker,

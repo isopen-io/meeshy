@@ -642,74 +642,37 @@ extension ConversationView {
     }
 
     private func quickReactionEmojiStrip(messageId: String, emojis: [String]) -> some View {
-        let accent = Color(hex: accentColor)
-        return HStack(spacing: 0) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 4) {
-                    ForEach(emojis, id: \.self) { emoji in
-                        Button {
-                            viewModel.toggleReaction(messageId: messageId, emoji: emoji)
-                            EmojiUsageTracker.recordUsage(emoji: emoji)
-                            HapticFeedback.light()
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                overlayState.quickReactionMessageId = nil
-                            }
-                        } label: {
-                            Text(emoji)
-                                .font(.system(size: 18))
-                                .frame(width: 28, height: 28)
-                        }
-                        .accessibilityLabel("Reagir avec \(emoji)")
-                        .buttonStyle(EmojiScaleButtonStyle())
-                    }
+        // Shared `QuickReactionBar` component — the same strip is reused
+        // by the long-press `MessageOverlayMenu` so the two surfaces
+        // stay visually identical. The component caps width at 280pt
+        // and wraps the `EmojiReactionPicker` (MeeshyUI) with
+        // scrollable: true + the trailing "+" expand button. All the
+        // contextual behaviour (toggle reaction, close bar, promote to
+        // full detail sheet) lives here in the call site closures.
+        QuickReactionBar(
+            isDark: isDark,
+            quickEmojis: emojis,
+            onReact: { emoji in
+                viewModel.toggleReaction(messageId: messageId, emoji: emoji)
+                EmojiUsageTracker.recordUsage(emoji: emoji)
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    overlayState.quickReactionMessageId = nil
                 }
-                .padding(.leading, 8)
-                .padding(.trailing, 2)
+            },
+            onExpandFullPicker: {
+                // Same behaviour as the previous inline "+" button: close the
+                // quick bar, then promote to the full detail sheet on the
+                // react tab. The slight delay lets the transition complete
+                // before the sheet animates in.
+                let resolved = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? viewModel.messages.first
+                closeReactionBar()
+                guard let msg = resolved else { return }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                    overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .react
+                }
             }
-            .frame(maxWidth: 166) // ~5 emojis visible (5*28 + 4*4 + 10)
-
-            Capsule()
-                .fill(accent.opacity(0.2))
-                .frame(width: 1, height: 18)
-                .padding(.horizontal, 3)
-
-            quickReactionPlusButton(messageId: messageId, accent: accent)
-                .padding(.trailing, 8)
-        }
-        .padding(.vertical, 5)
-        .background(
-            Capsule()
-                .fill(.ultraThinMaterial)
-                .overlay(Capsule().stroke(accent.opacity(0.2), lineWidth: 0.5))
-                .shadow(color: accent.opacity(0.15), radius: 8, y: 3)
         )
-    }
-
-    private func quickReactionPlusButton(messageId: String, accent: Color) -> some View {
-        Button {
-            let resolved = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? viewModel.messages.first
-            closeReactionBar()
-            // The message list can be purged while the reaction bar is still
-            // presented (e.g. cache eviction after a background transition).
-            // Guard before opening the detail sheet to avoid a crash.
-            guard let msg = resolved else { return }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
-                overlayState.detailSheetMessage = msg
-                overlayState.detailSheetInitialTab = .react
-            }
-        } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 11, weight: .bold))
-                .foregroundColor(accent)
-                .frame(width: 26, height: 26)
-                .background(
-                    Circle()
-                        .fill(accent.opacity(0.15))
-                        .overlay(Circle().stroke(accent.opacity(0.3), lineWidth: 0.5))
-                )
-        }
-        .accessibilityLabel("Plus de reactions")
-        .accessibilityHint("Ouvre le selecteur d'emoji complet")
     }
 
     private func quickReactionActionsRow(messageId: String) -> some View {

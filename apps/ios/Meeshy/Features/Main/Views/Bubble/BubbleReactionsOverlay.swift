@@ -83,19 +83,30 @@ struct BubbleReactionsOverlay: View, Equatable {
     // MARK: - Add reaction button (was: addReactionButton)
 
     private func addButton(accent: Color) -> some View {
+        // Visible chip stays compact (24x24 — pill-friendly) but the
+        // contentShape is bumped to 40x40 so the touch target meets
+        // Apple's 44pt-minimum guidance without bloating the layout.
+        // Background opacity is doubled (0.18 dark / 0.14 light) so the
+        // accent color reads at a glance — the previous 0.1/0.06 made
+        // the pill almost invisible against the bubble's tail strip.
         Image(systemName: "face.smiling")
-            .font(.system(size: 10, weight: .medium))
-            .foregroundColor(isDark ? accent.opacity(0.6) : accent.opacity(0.5))
-            .frame(width: 22, height: 22)
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.75))
+            .frame(width: 24, height: 24)
             .background(
                 Circle()
-                    .fill(isDark ? accent.opacity(0.1) : accent.opacity(0.06))
+                    .fill(isDark ? accent.opacity(0.18) : accent.opacity(0.14))
                     .overlay(
                         Circle()
-                            .stroke(accent.opacity(isDark ? 0.2 : 0.12), lineWidth: 0.5)
+                            .stroke(accent.opacity(isDark ? 0.4 : 0.28), lineWidth: 0.7)
                     )
-                    .shadow(color: accent.opacity(0.1), radius: 3, y: 1)
+                    .shadow(color: accent.opacity(0.18), radius: 3, y: 1)
             )
+            // Extended hit area so the smiley is easy to tap even when
+            // it sits flush against the bubble's bottom edge. The Circle
+            // here is purely a hit-testing surface — only the chip above
+            // is rendered, so visually nothing changes.
+            .frame(width: 40, height: 40)
             .contentShape(Circle())
             .onTapGesture {
                 HapticFeedback.light()

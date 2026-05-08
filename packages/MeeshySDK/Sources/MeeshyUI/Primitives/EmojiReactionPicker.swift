@@ -95,7 +95,7 @@ public struct EmojiReactionPicker: View {
         }
     }
 
-    private var emojiButtons: some View {
+    private var emojiList: some View {
         HStack(spacing: 6 * scale) {
             ForEach(quickEmojis, id: \.self) { emoji in
                 Button {
@@ -107,38 +107,66 @@ public struct EmojiReactionPicker: View {
                         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: reactedEmoji)
                 }
             }
-            if let onExpandFullPicker {
-                Button {
-                    HapticFeedback.light()
-                    onExpandFullPicker()
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(style == .dark ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
-                            .frame(width: 32 * scale, height: 32 * scale)
-                        Image(systemName: "plus")
-                            .font(.system(size: 14 * scale, weight: .bold))
-                            .foregroundColor(style == .dark ? .white.opacity(0.8) : .gray)
-                    }
+        }
+    }
+
+    @ViewBuilder
+    private var expandButton: some View {
+        if let onExpandFullPicker {
+            Button {
+                HapticFeedback.light()
+                onExpandFullPicker()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(style == .dark ? Color.white.opacity(0.15) : Color.gray.opacity(0.15))
+                        .frame(width: 32 * scale, height: 32 * scale)
+                    Image(systemName: "plus")
+                        .font(.system(size: 14 * scale, weight: .bold))
+                        .foregroundColor(style == .dark ? .white.opacity(0.8) : .gray)
                 }
             }
         }
     }
 
     private var quickEmojiStrip: some View {
-        emojiButtons
-            .padding(.horizontal, 10 * scale)
-            .padding(.vertical, 6 * scale)
-            .background(stripBackground)
+        HStack(spacing: 6 * scale) {
+            emojiList
+            expandButton
+        }
+        .padding(.horizontal, 10 * scale)
+        .padding(.vertical, 6 * scale)
+        .background(stripBackground)
     }
 
     private var scrollableQuickEmojiStrip: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            emojiButtons
-                .padding(.horizontal, 10 * scale)
-                .padding(.vertical, 6 * scale)
+        // Layout : emojis dans un ScrollView horizontal qui occupe toute
+        // la place restante, bouton "+" fige a droite hors du ScrollView
+        // pour qu'il reste accessible meme apres avoir scrolle. Un fade
+        // mask sur le bord droit du ScrollView indique visuellement qu'il
+        // y a plus de contenu apres.
+        HStack(spacing: 6 * scale) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                emojiList
+                    .padding(.vertical, 6 * scale)
+                    .padding(.leading, 10 * scale)
+                    .padding(.trailing, 4 * scale)
+            }
+            .mask(
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: 0.92),
+                        .init(color: .black.opacity(0.0), location: 1.0)
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+
+            expandButton
+                .padding(.trailing, 10 * scale)
         }
-        .clipShape(Capsule())
         .background(stripBackground)
     }
 

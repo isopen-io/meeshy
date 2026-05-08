@@ -881,20 +881,37 @@ struct ConversationView: View {
 
             floatingHeaderSection
 
-            // Quick reaction bar — surfaced as a bottom-anchored overlay
+            // Quick reaction bar — surfaced as a BOTTOM-anchored overlay
             // sitting just above the composer when the user taps the
             // smiley "+" inside a bubble. The legacy `+MessageRow` SwiftUI
             // list rendered this inline next to each cell, but the new
             // UICollectionView host doesn't carry the row-side state, so
             // we hoist the bar to the conversation root where it floats
-            // over whichever message triggered it. Tap-outside dismiss is
-            // handled by the existing tap gesture in `+ScrollIndicators`.
+            // over whichever message triggered it.
+            //
+            // Layout :
+            //   - Color.clear backdrop (full-screen) → tap dismisses
+            //     the bar, with the same spring as the open animation.
+            //     `contentShape(Rectangle())` is REQUIRED for Color.clear
+            //     to register taps — without it SwiftUI treats it as
+            //     transparent for hit-testing.
+            //   - Bar pinned to bottom via `.frame(maxHeight: .infinity, alignment: .bottom)`.
+            //     Without that, the wrapper collapses to its intrinsic
+            //     size and the parent ZStack centers it on screen.
+            //   - `transition(.move(edge: .bottom).combined(with: .opacity))`
+            //     + the `withAnimation { quickReactionMessageId = ... }`
+            //     in `onAddReaction` produce the spring rise animation
+            //     on appear and the symmetric fall on dismiss.
             if let pickerMessageId = overlayState.quickReactionMessageId {
-                VStack {
-                    Spacer()
+                ZStack {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture { closeReactionBar() }
+
                     quickReactionBar(for: pickerMessageId)
                         .padding(.horizontal, 16)
                         .padding(.bottom, composerHeight + 12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                 }
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(99)
