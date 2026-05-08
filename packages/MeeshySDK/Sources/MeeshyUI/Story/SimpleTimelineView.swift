@@ -60,10 +60,10 @@ struct SimpleTimelineView: View {
 
     private var segmentFingerprint: Int {
         let e = viewModel.currentEffects
-        var h = (e.textObjects?.count ?? 0)
+        var h = e.textObjects.count
         h = h &* 31 &+ (e.mediaObjects?.count ?? 0)
         h = h &* 31 &+ (e.audioPlayerObjects?.count ?? 0)
-        for t in e.textObjects ?? [] { h = h &* 31 &+ t.id.hashValue }
+        for t in e.textObjects { h = h &* 31 &+ t.id.hashValue }
         for m in e.mediaObjects ?? [] { h = h &* 31 &+ m.id.hashValue }
         for a in e.audioPlayerObjects ?? [] { h = h &* 31 &+ a.id.hashValue }
         return h
@@ -369,12 +369,12 @@ struct SimpleTimelineView: View {
     private func adjustDuration(for id: String, delta: Float) {
         var effects = viewModel.currentEffects
 
-        if let idx = effects.textObjects?.firstIndex(where: { $0.id == id }) {
-            let current = effects.textObjects?[idx].displayDuration ?? viewModel.currentSlideDuration
-            let newDuration = max(0.5, current + delta)
-            effects.textObjects?[idx].displayDuration = newDuration
+        if let idx = effects.textObjects.firstIndex(where: { $0.id == id }) {
+            let current = effects.textObjects[idx].duration ?? Double(viewModel.currentSlideDuration)
+            let newDuration = max(0.5, current + Double(delta))
+            effects.textObjects[idx].duration = newDuration
             viewModel.currentEffects = effects
-            viewModel.autoExtendDuration(forElementEnd: (effects.textObjects?[idx].startTime ?? 0) + newDuration)
+            viewModel.autoExtendDuration(forElementEnd: Float((effects.textObjects[idx].startTime ?? 0) + newDuration))
         } else if let idx = effects.mediaObjects?.firstIndex(where: { $0.id == id }) {
             let current = effects.mediaObjects?[idx].duration ?? viewModel.currentSlideDuration
             let newDuration = max(0.5, current + delta)
@@ -399,14 +399,14 @@ struct SimpleTimelineView: View {
         let effects = viewModel.currentEffects
         let slideDur = viewModel.currentSlideDuration
 
-        for text in effects.textObjects ?? [] {
-            let truncated = String(text.content.prefix(20))
+        for text in effects.textObjects {
+            let truncated = String(text.text.prefix(20))
             result.append(SimpleSegment(
                 id: text.id,
                 name: truncated,
                 type: .text,
-                startTime: text.startTime ?? 0,
-                duration: text.displayDuration ?? slideDur,
+                startTime: Float(text.startTime ?? 0),
+                duration: Float(text.duration ?? Double(slideDur)),
                 sourceLanguage: text.sourceLanguage
             ))
         }

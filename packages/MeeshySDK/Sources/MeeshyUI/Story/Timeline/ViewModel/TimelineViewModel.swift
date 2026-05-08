@@ -234,7 +234,7 @@ public final class TimelineViewModel {
     func clipStartTime(id: String) -> Float? {
         if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.startTime ?? 0 }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.startTime ?? 0 }
-        if let t = project.textObjects.first(where: { $0.id == id }) { return t.startTime ?? 0 }
+        if let t = project.textObjects.first(where: { $0.id == id }) { return Float(t.startTime ?? 0) }
         return nil
     }
 
@@ -248,7 +248,7 @@ public final class TimelineViewModel {
             return
         }
         if let i = project.textObjects.firstIndex(where: { $0.id == clipId }) {
-            project.textObjects[i].startTime = newStartTime
+            project.textObjects[i].startTime = Double(newStartTime)
         }
     }
 
@@ -342,7 +342,7 @@ public final class TimelineViewModel {
     private func clipDuration(forId id: String) -> Float? {
         if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
-        if let t = project.textObjects.first(where: { $0.id == id }) { return t.displayDuration }
+        if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
         return nil
     }
 

@@ -142,85 +142,183 @@ public struct StoryTranslation: Codable, Sendable {
 
 public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var id: String
-    public var content: String
-    public var x: CGFloat              // normalisé 0–1
-    public var y: CGFloat
-    public var scale: CGFloat
-    public var rotation: CGFloat       // degrés
-    public var translations: [String: String]?  // { "en": "Hello", "es": "Hola", ... }
-    public var sourceLanguage: String?
+    public var text: String              // was: content (RENAMED; legacy "content" accepted by decoder)
+    public var x: Double                 // normalisé 0–1
+    public var y: Double
+    public var scale: Double
+    public var rotation: Double          // degrés
     /// Z-order persistent — controle l'ordre de superposition entre composer et reader.
-    /// Auparavant l'ordre etait conserve dans une map memoire-only `zIndexMap` du
-    /// ViewModel, ecrasee a chaque selectSlide. Resultat : l'ordre de superposition
-    /// disparaissait au switch de slide ET le reader rendait dans l'ordre du tableau,
-    /// sans tenir compte des promotions `bringToFront`.
-    public var zIndex: Int?
+    /// Non-optional: default 0 means "unset / insertion order".
+    public var zIndex: Int               // was: Int? (NON-OPTIONAL)
+    /// Pivot point for rotation/scale in normalised canvas coords (0..1).
+    /// Default: (0.5, 0.5) = centre of the element.
+    public var anchor: CGPoint           // NEW; uses CGPoint (x∈0..1, y∈0..1) — NOT UnitPoint (SwiftUI-only)
+
+    // Typography (replace textSize with design-pixel fontSize)
+    public var fontSize: Double          // NEW: design pixels (1080-référentiel), default 64
+    public var fontFamily: String        // NEW: default "system"
 
     // Style per-objet (tous optionnels pour backward compat JSON existant)
-    public var textStyle: String?      // "bold"|"neon"|"typewriter"|"handwriting"|"classic"
-    public var textColor: String?      // hex "FFFFFF"
-    public var textSize: CGFloat?      // 14...60, defaut 28
-    public var textAlign: String?      // "left"|"center"|"right"
-    public var textBg: String?         // hex ou nil (pas de fond)
+    public var textStyle: String?        // "bold"|"neon"|"typewriter"|"handwriting"|"classic"
+    public var textColor: String?        // hex "FFFFFF"
+    public var textAlign: String?        // "left"|"center"|"right"
+    public var textBg: String?           // hex ou nil (pas de fond)
 
-    // Timeline timing
-    public var startTime: Float?            // quand le texte apparaît (secondes, défaut 0)
-    public var displayDuration: Float?      // durée d'affichage (nil = permanent)
-    public var fadeIn: Float?               // animation d'entrée (secondes)
-    public var fadeOut: Float?              // animation de sortie (secondes)
+    // Translations (kept)
+    public var translations: [String: String]?
+    public var sourceLanguage: String?
+
+    // Timeline timing — Double (was Float)
+    public var startTime: Double?        // quand le texte apparaît (secondes, défaut 0)
+    public var duration: Double?         // was: displayDuration (RENAMED); durée d'affichage (nil = permanent)
+    public var fadeIn: Double?           // animation d'entrée (secondes)
+    public var fadeOut: Double?          // animation de sortie (secondes)
 
     /// Lock flag — Patch B.3 : true = composer skips drag/edit/delete (used for repost badge sticker).
-    /// nil/false = editable. Synthesized Codable handles `Bool?` via decodeIfPresent / encodeIfPresent.
     public var isLocked: Bool?
     // Timeline V2 — animation keyframes (position/scale/opacity)
     public var keyframes: [StoryKeyframe]?
 
     enum CodingKeys: String, CodingKey {
-        case id, content, x, y, scale, rotation, translations, sourceLanguage, zIndex
-        case textStyle, textColor, textSize, textAlign, textBg
-        case startTime, displayDuration, fadeIn, fadeOut
-        case isLocked
-        case keyframes
+        case id, text, x, y, scale, rotation, zIndex, anchor
+        case fontSize, fontFamily
+        case textStyle, textColor, textAlign, textBg
+        case translations, sourceLanguage
+        case startTime, duration, fadeIn, fadeOut
+        case isLocked, keyframes
+        // Legacy keys — decoder only
+        case content, textSize, displayDuration
     }
 
-    public init(id: String = UUID().uuidString, content: String,
-                x: CGFloat = 0.5, y: CGFloat = 0.5,
-                scale: CGFloat = 1.0, rotation: CGFloat = 0,
+    public init(id: String = UUID().uuidString,
+                text: String,
+                x: Double = 0.5, y: Double = 0.5,
+                scale: Double = 1.0, rotation: Double = 0.0,
+                zIndex: Int = 0,
+                anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
+                fontSize: Double = 64.0,
+                fontFamily: String = "system",
+                textStyle: String? = "bold",
+                textColor: String? = "FFFFFF",
+                textAlign: String? = "center",
+                textBg: String? = nil,
                 translations: [String: String]? = nil,
                 sourceLanguage: String? = nil,
-                textStyle: String? = "bold", textColor: String? = "FFFFFF",
-                textSize: CGFloat? = 28, textAlign: String? = "center",
-                textBg: String? = nil,
-                startTime: Float? = nil, displayDuration: Float? = nil,
-                fadeIn: Float? = nil, fadeOut: Float? = nil,
+                startTime: Double? = nil,
+                duration: Double? = nil,
+                fadeIn: Double? = nil,
+                fadeOut: Double? = nil,
                 isLocked: Bool? = nil,
                 keyframes: [StoryKeyframe]? = nil) {
-        self.id = id; self.content = content
+        self.id = id
+        self.text = text
         self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
+        self.zIndex = zIndex
+        self.anchor = anchor
+        self.fontSize = fontSize; self.fontFamily = fontFamily
+        self.textStyle = textStyle; self.textColor = textColor
+        self.textAlign = textAlign; self.textBg = textBg
         self.translations = translations
         self.sourceLanguage = sourceLanguage
-        self.textStyle = textStyle; self.textColor = textColor
-        self.textSize = textSize; self.textAlign = textAlign; self.textBg = textBg
-        self.startTime = startTime; self.displayDuration = displayDuration
+        self.startTime = startTime; self.duration = duration
         self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.isLocked = isLocked
         self.keyframes = keyframes
     }
 
-    // MARK: - Computed properties (non-SwiftUI)
+    // MARK: - Custom Codable (backward compat: content→text, textSize→fontSize, displayDuration→duration)
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        // text: prefer new key, fall back to legacy "content"
+        if let t = try c.decodeIfPresent(String.self, forKey: .text) {
+            text = t
+        } else {
+            text = try c.decode(String.self, forKey: .content)
+        }
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+        y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
+        scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.0
+        rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? 0.0
+        zIndex = try c.decodeIfPresent(Int.self, forKey: .zIndex) ?? 0
+        // anchor: nested {x,y} container; default (0.5, 0.5) if absent
+        if let nested = try? c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor) {
+            let ax = try nested.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+            let ay = try nested.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
+            anchor = CGPoint(x: ax, y: ay)
+        } else {
+            anchor = CGPoint(x: 0.5, y: 0.5)
+        }
+        // fontSize: prefer new key, fall back to legacy textSize
+        if let f = try c.decodeIfPresent(Double.self, forKey: .fontSize) {
+            fontSize = f
+        } else if let legacy = try c.decodeIfPresent(Double.self, forKey: .textSize) {
+            fontSize = legacy
+        } else {
+            fontSize = 64.0
+        }
+        fontFamily = try c.decodeIfPresent(String.self, forKey: .fontFamily) ?? "system"
+        textStyle = try c.decodeIfPresent(String.self, forKey: .textStyle)
+        textColor = try c.decodeIfPresent(String.self, forKey: .textColor)
+        textAlign = try c.decodeIfPresent(String.self, forKey: .textAlign)
+        textBg = try c.decodeIfPresent(String.self, forKey: .textBg)
+        translations = try c.decodeIfPresent([String: String].self, forKey: .translations)
+        sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
+        startTime = try c.decodeIfPresent(Double.self, forKey: .startTime)
+        // duration: prefer new key, fall back to legacy displayDuration
+        if let d = try c.decodeIfPresent(Double.self, forKey: .duration) {
+            duration = d
+        } else if let legacy = try c.decodeIfPresent(Double.self, forKey: .displayDuration) {
+            duration = legacy
+        } else {
+            duration = nil
+        }
+        fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn)
+        fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
+        isLocked = try c.decodeIfPresent(Bool.self, forKey: .isLocked)
+        keyframes = try c.decodeIfPresent([StoryKeyframe].self, forKey: .keyframes)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(text, forKey: .text)
+        try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
+        try c.encode(scale, forKey: .scale); try c.encode(rotation, forKey: .rotation)
+        try c.encode(zIndex, forKey: .zIndex)
+        var anchorC = c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor)
+        try anchorC.encode(Double(anchor.x), forKey: .x)
+        try anchorC.encode(Double(anchor.y), forKey: .y)
+        try c.encode(fontSize, forKey: .fontSize)
+        try c.encode(fontFamily, forKey: .fontFamily)
+        try c.encodeIfPresent(textStyle, forKey: .textStyle)
+        try c.encodeIfPresent(textColor, forKey: .textColor)
+        try c.encodeIfPresent(textAlign, forKey: .textAlign)
+        try c.encodeIfPresent(textBg, forKey: .textBg)
+        try c.encodeIfPresent(translations, forKey: .translations)
+        try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
+        try c.encodeIfPresent(startTime, forKey: .startTime)
+        try c.encodeIfPresent(duration, forKey: .duration)
+        try c.encodeIfPresent(fadeIn, forKey: .fadeIn)
+        try c.encodeIfPresent(fadeOut, forKey: .fadeOut)
+        try c.encodeIfPresent(isLocked, forKey: .isLocked)
+        try c.encodeIfPresent(keyframes, forKey: .keyframes)
+    }
+
+    private enum AnchorKeys: String, CodingKey { case x, y }
+
+    // MARK: - Computed properties (preserved, non-SwiftUI)
 
     public var parsedTextStyle: StoryTextStyle {
         guard let raw = textStyle else { return .bold }
         return StoryTextStyle(rawValue: raw) ?? .bold
     }
 
-    public var resolvedSize: CGFloat {
-        textSize ?? 28
-    }
+    /// Legacy helper — returns design-pixel fontSize.
+    public var resolvedSize: Double { fontSize }
 
-    public var hasBg: Bool {
-        textBg != nil
-    }
+    public var hasBg: Bool { textBg != nil }
 }
 
 // MARK: - Story Media Kind
@@ -533,7 +631,7 @@ public struct StoryEffects: Codable, Sendable {
     public var closing: StoryTransitionEffect?
 
     // Objets canvas composites
-    public var textObjects: [StoryTextObject]?
+    public var textObjects: [StoryTextObject]
     public var mediaObjects: [StoryMediaObject]?
     public var audioPlayerObjects: [StoryAudioPlayerObject]?
     public var backgroundAudioVariants: [StoryAudioVariant]?
@@ -566,7 +664,7 @@ public struct StoryEffects: Codable, Sendable {
                 backgroundAudioStart: TimeInterval? = nil, backgroundAudioEnd: TimeInterval? = nil,
                 voiceAttachmentId: String? = nil, voiceTranscriptions: [StoryVoiceTranscription]? = nil,
                 opening: StoryTransitionEffect? = nil, closing: StoryTransitionEffect? = nil,
-                textObjects: [StoryTextObject]? = nil,
+                textObjects: [StoryTextObject] = [],
                 mediaObjects: [StoryMediaObject]? = nil,
                 audioPlayerObjects: [StoryAudioPlayerObject]? = nil,
                 backgroundAudioVariants: [StoryAudioVariant]? = nil,
@@ -595,6 +693,94 @@ public struct StoryEffects: Codable, Sendable {
         self.clipTransitions = clipTransitions
     }
 
+    // MARK: - Custom Codable (textObjects non-optional: fallback to [] when absent)
+
+    private enum CodingKeys: String, CodingKey {
+        case background, textStyle, textColor, textPosition, filter, filterIntensity
+        case stickers, textAlign, textSize, textBg, textOffsetY
+        case stickerObjects, textPositionPoint, drawingData
+        case backgroundAudioId, backgroundAudioVolume, backgroundAudioStart, backgroundAudioEnd
+        case voiceAttachmentId, voiceTranscriptions
+        case opening, closing
+        case textObjects, mediaObjects, audioPlayerObjects, backgroundAudioVariants
+        case thumbHash, backgroundTransform, slideDuration, clipTransitions
+        case musicTrackId, musicStartTime, musicEndTime
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        background = try c.decodeIfPresent(String.self, forKey: .background)
+        textStyle = try c.decodeIfPresent(String.self, forKey: .textStyle)
+        textColor = try c.decodeIfPresent(String.self, forKey: .textColor)
+        textPosition = try c.decodeIfPresent(String.self, forKey: .textPosition)
+        filter = try c.decodeIfPresent(String.self, forKey: .filter)
+        filterIntensity = try c.decodeIfPresent(Double.self, forKey: .filterIntensity)
+        stickers = try c.decodeIfPresent([String].self, forKey: .stickers)
+        textAlign = try c.decodeIfPresent(String.self, forKey: .textAlign)
+        textSize = try c.decodeIfPresent(CGFloat.self, forKey: .textSize)
+        textBg = try c.decodeIfPresent(String.self, forKey: .textBg)
+        textOffsetY = try c.decodeIfPresent(CGFloat.self, forKey: .textOffsetY)
+        stickerObjects = try c.decodeIfPresent([StorySticker].self, forKey: .stickerObjects)
+        textPositionPoint = try c.decodeIfPresent(StoryTextPosition.self, forKey: .textPositionPoint)
+        drawingData = try c.decodeIfPresent(Data.self, forKey: .drawingData)
+        backgroundAudioId = try c.decodeIfPresent(String.self, forKey: .backgroundAudioId)
+        backgroundAudioVolume = try c.decodeIfPresent(Float.self, forKey: .backgroundAudioVolume)
+        backgroundAudioStart = try c.decodeIfPresent(TimeInterval.self, forKey: .backgroundAudioStart)
+        backgroundAudioEnd = try c.decodeIfPresent(TimeInterval.self, forKey: .backgroundAudioEnd)
+        voiceAttachmentId = try c.decodeIfPresent(String.self, forKey: .voiceAttachmentId)
+        voiceTranscriptions = try c.decodeIfPresent([StoryVoiceTranscription].self, forKey: .voiceTranscriptions)
+        opening = try c.decodeIfPresent(StoryTransitionEffect.self, forKey: .opening)
+        closing = try c.decodeIfPresent(StoryTransitionEffect.self, forKey: .closing)
+        textObjects = try c.decodeIfPresent([StoryTextObject].self, forKey: .textObjects) ?? []
+        mediaObjects = try c.decodeIfPresent([StoryMediaObject].self, forKey: .mediaObjects)
+        audioPlayerObjects = try c.decodeIfPresent([StoryAudioPlayerObject].self, forKey: .audioPlayerObjects)
+        backgroundAudioVariants = try c.decodeIfPresent([StoryAudioVariant].self, forKey: .backgroundAudioVariants)
+        thumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
+        backgroundTransform = try c.decodeIfPresent(StoryBackgroundTransform.self, forKey: .backgroundTransform)
+        slideDuration = try c.decodeIfPresent(Float.self, forKey: .slideDuration)
+        clipTransitions = try c.decodeIfPresent([StoryClipTransition].self, forKey: .clipTransitions)
+        musicTrackId = try c.decodeIfPresent(String.self, forKey: .musicTrackId)
+        musicStartTime = try c.decodeIfPresent(TimeInterval.self, forKey: .musicStartTime)
+        musicEndTime = try c.decodeIfPresent(TimeInterval.self, forKey: .musicEndTime)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encodeIfPresent(background, forKey: .background)
+        try c.encodeIfPresent(textStyle, forKey: .textStyle)
+        try c.encodeIfPresent(textColor, forKey: .textColor)
+        try c.encodeIfPresent(textPosition, forKey: .textPosition)
+        try c.encodeIfPresent(filter, forKey: .filter)
+        try c.encodeIfPresent(filterIntensity, forKey: .filterIntensity)
+        try c.encodeIfPresent(stickers, forKey: .stickers)
+        try c.encodeIfPresent(textAlign, forKey: .textAlign)
+        try c.encodeIfPresent(textSize, forKey: .textSize)
+        try c.encodeIfPresent(textBg, forKey: .textBg)
+        try c.encodeIfPresent(textOffsetY, forKey: .textOffsetY)
+        try c.encodeIfPresent(stickerObjects, forKey: .stickerObjects)
+        try c.encodeIfPresent(textPositionPoint, forKey: .textPositionPoint)
+        try c.encodeIfPresent(drawingData, forKey: .drawingData)
+        try c.encodeIfPresent(backgroundAudioId, forKey: .backgroundAudioId)
+        try c.encodeIfPresent(backgroundAudioVolume, forKey: .backgroundAudioVolume)
+        try c.encodeIfPresent(backgroundAudioStart, forKey: .backgroundAudioStart)
+        try c.encodeIfPresent(backgroundAudioEnd, forKey: .backgroundAudioEnd)
+        try c.encodeIfPresent(voiceAttachmentId, forKey: .voiceAttachmentId)
+        try c.encodeIfPresent(voiceTranscriptions, forKey: .voiceTranscriptions)
+        try c.encodeIfPresent(opening, forKey: .opening)
+        try c.encodeIfPresent(closing, forKey: .closing)
+        try c.encode(textObjects, forKey: .textObjects)
+        try c.encodeIfPresent(mediaObjects, forKey: .mediaObjects)
+        try c.encodeIfPresent(audioPlayerObjects, forKey: .audioPlayerObjects)
+        try c.encodeIfPresent(backgroundAudioVariants, forKey: .backgroundAudioVariants)
+        try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
+        try c.encodeIfPresent(backgroundTransform, forKey: .backgroundTransform)
+        try c.encodeIfPresent(slideDuration, forKey: .slideDuration)
+        try c.encodeIfPresent(clipTransitions, forKey: .clipTransitions)
+        try c.encodeIfPresent(musicTrackId, forKey: .musicTrackId)
+        try c.encodeIfPresent(musicStartTime, forKey: .musicStartTime)
+        try c.encodeIfPresent(musicEndTime, forKey: .musicEndTime)
+    }
+
     public var parsedTextStyle: StoryTextStyle? {
         guard let raw = textStyle else { return nil }
         return StoryTextStyle(rawValue: raw)
@@ -615,12 +801,13 @@ public struct StoryEffects: Codable, Sendable {
     }
 
     public mutating func migrateLegacyText(content: String) {
-        guard textObjects == nil || textObjects?.isEmpty == true else { return }
+        guard textObjects.isEmpty else { return }
         let pos = resolvedTextPosition
         textObjects = [StoryTextObject(
-            content: content, x: pos.x, y: pos.y,
+            text: content, x: pos.x, y: pos.y,
+            fontSize: Double(textSize ?? 28),
             textStyle: textStyle, textColor: textColor,
-            textSize: textSize ?? 28, textAlign: textAlign, textBg: textBg
+            textAlign: textAlign, textBg: textBg
         )]
     }
 
@@ -753,18 +940,19 @@ public struct StoryEffects: Codable, Sendable {
                  "isAutoGenerated": v.isAutoGenerated] as [String: Any]
             }
         }
-        if let texts = textObjects, !texts.isEmpty {
-            dict["textObjects"] = texts.map { t in
-                var d: [String: Any] = ["id": t.id, "content": t.content,
-                 "x": t.x, "y": t.y, "scale": t.scale, "rotation": t.rotation]
+        if !textObjects.isEmpty {
+            dict["textObjects"] = textObjects.map { t in
+                var d: [String: Any] = ["id": t.id, "text": t.text,
+                 "x": t.x, "y": t.y, "scale": t.scale, "rotation": t.rotation,
+                 "zIndex": t.zIndex, "fontSize": t.fontSize, "fontFamily": t.fontFamily,
+                 "anchor": ["x": Double(t.anchor.x), "y": Double(t.anchor.y)]]
                 if let tr = t.translations, !tr.isEmpty { d["translations"] = tr }
                 if let ts = t.textStyle { d["textStyle"] = ts }
                 if let tc = t.textColor { d["textColor"] = tc }
-                if let sz = t.textSize { d["textSize"] = sz }
                 if let ta = t.textAlign { d["textAlign"] = ta }
                 if let bg = t.textBg { d["textBg"] = bg }
                 if let st = t.startTime { d["startTime"] = st }
-                if let dd = t.displayDuration { d["displayDuration"] = dd }
+                if let dur = t.duration { d["duration"] = dur }
                 if let fi = t.fadeIn { d["fadeIn"] = fi }
                 if let fo = t.fadeOut { d["fadeOut"] = fo }
                 return d
@@ -1124,7 +1312,7 @@ public struct TimelineProject: Codable, Sendable {
         self.slideDuration = Float(slide.duration)
         self.mediaObjects = slide.effects.mediaObjects ?? []
         self.audioPlayerObjects = slide.effects.audioPlayerObjects ?? []
-        self.textObjects = slide.effects.textObjects ?? []
+        self.textObjects = slide.effects.textObjects
         self.clipTransitions = slide.effects.clipTransitions ?? []
     }
 
@@ -1136,7 +1324,7 @@ public struct TimelineProject: Codable, Sendable {
         slide.duration = TimeInterval(slideDuration)
         slide.effects.mediaObjects = mediaObjects.isEmpty ? nil : mediaObjects
         slide.effects.audioPlayerObjects = audioPlayerObjects.isEmpty ? nil : audioPlayerObjects
-        slide.effects.textObjects = textObjects.isEmpty ? nil : textObjects
+        slide.effects.textObjects = textObjects
         slide.effects.clipTransitions = clipTransitions.isEmpty ? nil : clipTransitions
     }
 }
@@ -1221,9 +1409,9 @@ public struct AddClipCommand: EditCommand {
             )
         case .text:
             project.textObjects.append(
-                StoryTextObject(id: clipId, content: content ?? "",
-                                startTime: startTime,
-                                displayDuration: duration)
+                StoryTextObject(id: clipId, text: content ?? "",
+                                startTime: Double(startTime),
+                                duration: Double(duration))
             )
         }
     }
@@ -1358,7 +1546,7 @@ public struct MoveClipCommand: EditCommand {
             guard let idx = project.textObjects.firstIndex(where: { $0.id == clipId }) else {
                 throw EditCommandError.clipNotFound(id: clipId)
             }
-            project.textObjects[idx].startTime = startTime
+            project.textObjects[idx].startTime = Double(startTime)
         }
     }
 }
@@ -1418,8 +1606,8 @@ public struct TrimClipCommand: EditCommand {
             guard let idx = project.textObjects.firstIndex(where: { $0.id == clipId }) else {
                 throw EditCommandError.clipNotFound(id: clipId)
             }
-            project.textObjects[idx].startTime = startTime
-            project.textObjects[idx].displayDuration = duration
+            project.textObjects[idx].startTime = Double(startTime)
+            project.textObjects[idx].duration = Double(duration)
         }
     }
 }
@@ -1486,15 +1674,15 @@ public struct SplitClipCommand: EditCommand {
                 throw EditCommandError.clipNotFound(id: clipId)
             }
             let original = project.textObjects[idx]
-            let originalStart = original.startTime ?? 0
-            let originalDuration = original.displayDuration ?? 0
+            let originalStart = Float(original.startTime ?? 0)
+            let originalDuration = Float(original.duration ?? 0)
             var left = original
             left.id = leftId
-            left.displayDuration = splitAtRelativeTime
+            left.duration = Double(splitAtRelativeTime)
             var right = original
             right.id = rightId
-            right.startTime = originalStart + splitAtRelativeTime
-            right.displayDuration = max(0, originalDuration - splitAtRelativeTime)
+            right.startTime = Double(originalStart + splitAtRelativeTime)
+            right.duration = Double(max(0, originalDuration - splitAtRelativeTime))
             project.textObjects.replaceSubrange(idx...idx, with: [left, right])
         }
     }
@@ -1536,7 +1724,7 @@ public struct SplitClipCommand: EditCommand {
             let right = project.textObjects[rightIdx]
             var restored = left
             restored.id = clipId
-            restored.displayDuration = (left.displayDuration ?? 0) + (right.displayDuration ?? 0)
+            restored.duration = (left.duration ?? 0) + (right.duration ?? 0)
             let lower = min(leftIdx, rightIdx)
             let upper = max(leftIdx, rightIdx)
             project.textObjects.replaceSubrange(lower...upper, with: [restored])
@@ -1951,9 +2139,11 @@ public struct SetClipPropertyCommand: EditCommand {
         case .isLocked(let old, let new):
             text.isLocked = useNew ? new : old
         case .fadeIn(let old, let new):
-            text.fadeIn = useNew ? new : old
+            let val: Float? = useNew ? new : old
+            text.fadeIn = val.map { Double($0) }
         case .fadeOut(let old, let new):
-            text.fadeOut = useNew ? new : old
+            let val: Float? = useNew ? new : old
+            text.fadeOut = val.map { Double($0) }
         case .volume, .loop, .isBackground:
             break
         }

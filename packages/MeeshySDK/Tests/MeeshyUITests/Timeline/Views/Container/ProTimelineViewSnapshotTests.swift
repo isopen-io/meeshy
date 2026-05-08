@@ -23,8 +23,8 @@ final class ProTimelineViewSnapshotTests: XCTestCase {
         video2.startTime = 4; video2.duration = 4
         var audio = StoryAudioPlayerObject(id: "a1", postMediaId: "a1")
         audio.startTime = 0; audio.duration = 8; audio.volume = 0.7
-        var text = StoryTextObject(id: "t1", content: "Story")
-        text.startTime = 1; text.displayDuration = 3
+        var text = StoryTextObject(id: "t1", text: "Story")
+        text.startTime = 1; text.duration = 3
         let crossfade = StoryClipTransition(
             fromClipId: "v1", toClipId: "v2", kind: .crossfade,
             duration: 0.5, easing: .linear

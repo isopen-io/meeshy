@@ -154,7 +154,7 @@ struct ContextualToolbar: View {
         }
     }
 
-    private var textCount: Int { viewModel.currentEffects.textObjects?.count ?? 0 }
+    private var textCount: Int { viewModel.currentEffects.textObjects.count }
     private var mediaCount: Int { viewModel.currentEffects.mediaObjects?.count ?? 0 }
     private var audioCount: Int { viewModel.currentEffects.audioPlayerObjects?.count ?? 0 }
     private var hasDrawing: Bool { viewModel.drawingData != nil }

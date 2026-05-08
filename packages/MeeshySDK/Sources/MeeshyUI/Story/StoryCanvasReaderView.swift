@@ -458,12 +458,12 @@ public struct StoryCanvasReaderView: View {
                     }
                     return KeyframeInterpolator.interpolate(keyframes: os, at: Float(time))
                 }
-                let renderX = (kfX ?? obj.x) * size.width
-                let renderY = (kfY ?? obj.y) * size.height
-                let renderScale = kfScale ?? obj.scale
+                let renderX = (kfX ?? CGFloat(obj.x)) * size.width
+                let renderY = (kfY ?? CGFloat(obj.y)) * size.height
+                let renderScale = kfScale ?? CGFloat(obj.scale)
                 let renderOpacity = Double(opacity) * Double(kfOpacity ?? 1.0)
                 Text(content)
-                    .font(storyFont(for: style, size: fontSize))
+                    .font(storyFont(for: style, size: CGFloat(fontSize)))
                     .foregroundColor(Color(hex: colorHex))
                     .multilineTextAlignment(alignment)
                     .padding(.horizontal, 12)
@@ -482,7 +482,7 @@ public struct StoryCanvasReaderView: View {
                     .opacity(renderOpacity)
                     .rotationEffect(.degrees(obj.rotation))
                     .position(x: renderX, y: renderY)
-                    .zIndex(Double(obj.zIndex ?? 0))
+                    .zIndex(Double(obj.zIndex))
                     .allowsHitTesting(false)
                     .animation(.easeInOut(duration: 0.15), value: renderOpacity)
             }
@@ -603,11 +603,11 @@ public struct StoryCanvasReaderView: View {
     /// est deja dans la langue de l'utilisateur OU qu'aucune traduction n'a ete
     /// generee. Voir CLAUDE.md "Prisme Linguistique".
     private func resolvedText(for obj: StoryTextObject) -> String {
-        guard let translations = obj.translations else { return obj.content }
+        guard let translations = obj.translations else { return obj.text }
         for lang in resolvedLanguageChain {
             if let translated = translations[lang] { return translated }
         }
-        return obj.content
+        return obj.text
     }
 
     /// Résout l'URL d'un media par son postMediaId depuis les médias legacy du StoryItem.
@@ -733,7 +733,7 @@ private final class ReaderState: ObservableObject {
         if objects.isEmpty, let content = story.content, !content.isEmpty {
             var effects = story.storyEffects ?? StoryEffects()
             effects.migrateLegacyText(content: content)
-            objects = effects.textObjects ?? []
+            objects = effects.textObjects
         }
         self.textObjects = objects
 
@@ -797,7 +797,7 @@ private final class ReaderState: ObservableObject {
         let fadeOutDur = TimeInterval(obj.fadeOut ?? 0)
 
         // No timing fields at all -> always visible (backward compatible)
-        guard obj.startTime != nil || obj.displayDuration != nil else { return 1.0 }
+        guard obj.startTime != nil || obj.duration != nil else { return 1.0 }
 
         // Before start time -> invisible
         if time < start { return 0.0 }
@@ -810,7 +810,7 @@ private final class ReaderState: ObservableObject {
         }
 
         // Check display duration
-        if let displayDur = obj.displayDuration {
+        if let displayDur = obj.duration {
             let endTime = start + TimeInterval(displayDur)
             // After end -> invisible
             if time >= endTime { return 0.0 }
@@ -1344,9 +1344,9 @@ private final class ReaderState: ObservableObject {
             let duration = Double(audio.duration ?? 0)
             maxEnd = max(maxEnd, start + duration)
         }
-        for text in effects.textObjects ?? [] {
-            let start = Double(text.startTime ?? 0)
-            let duration = Double(text.displayDuration ?? 0)
+        for text in effects.textObjects {
+            let start = text.startTime ?? 0
+            let duration = text.duration ?? 0
             maxEnd = max(maxEnd, start + duration)
         }
         return maxEnd

@@ -22,8 +22,8 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
         video.startTime = 0; video.duration = 5
         var audio = StoryAudioPlayerObject(id: "clip-a", postMediaId: "clip-a")
         audio.startTime = 1; audio.duration = 4; audio.volume = 0.8
-        var text = StoryTextObject(id: "clip-t", content: "Bienvenue")
-        text.startTime = 2; text.displayDuration = 3
+        var text = StoryTextObject(id: "clip-t", text: "Bienvenue")
+        text.startTime = 2; text.duration = 3
         return TimelineProject(
             slideId: "slide-1",
             slideDuration: 10,

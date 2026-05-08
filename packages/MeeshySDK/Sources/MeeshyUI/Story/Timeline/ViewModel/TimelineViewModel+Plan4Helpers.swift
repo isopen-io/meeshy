@@ -125,7 +125,7 @@ extension TimelineViewModel {
     func clipDuration(id: String) -> Float? {
         if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
-        if let t = project.textObjects.first(where: { $0.id == id }) { return t.displayDuration }
+        if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
         return nil
     }
 
@@ -156,7 +156,7 @@ extension TimelineViewModel {
         case .audio:
             oldFadeIn = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeIn
         case .text:
-            oldFadeIn = project.textObjects.first(where: { $0.id == id })?.fadeIn
+            oldFadeIn = project.textObjects.first(where: { $0.id == id })?.fadeIn.map { Float($0) }
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
                                          property: .fadeIn(old: oldFadeIn, new: fadeIn))
@@ -172,7 +172,7 @@ extension TimelineViewModel {
         case .audio:
             oldFadeOut = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeOut
         case .text:
-            oldFadeOut = project.textObjects.first(where: { $0.id == id })?.fadeOut
+            oldFadeOut = project.textObjects.first(where: { $0.id == id })?.fadeOut.map { Float($0) }
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
                                          property: .fadeOut(old: oldFadeOut, new: fadeOut))

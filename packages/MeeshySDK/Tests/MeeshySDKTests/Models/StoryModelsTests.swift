@@ -159,7 +159,7 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertNil(effects.backgroundAudioId)
         XCTAssertNil(effects.opening)
         XCTAssertNil(effects.closing)
-        XCTAssertNil(effects.textObjects)
+        XCTAssertTrue(effects.textObjects.isEmpty)
         XCTAssertNil(effects.slideDuration)
     }
 
@@ -220,7 +220,7 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertNil(slide.mediaURL)
         XCTAssertNil(slide.mediaData)
         XCTAssertNil(slide.content)
-        XCTAssertEqual(slide.duration, 5)
+        XCTAssertEqual(slide.duration, 12)
         XCTAssertEqual(slide.order, 0)
     }
 
@@ -248,55 +248,55 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(slide.id, "s2")
         XCTAssertNil(slide.mediaURL)
         XCTAssertNil(slide.content)
-        XCTAssertEqual(slide.duration, 5)
+        XCTAssertEqual(slide.duration, 12)
         XCTAssertEqual(slide.order, 0)
     }
 
     // MARK: - StoryTextObject
 
     func testStoryTextObjectInit() {
-        let text = StoryTextObject(id: "t1", content: "Hello World")
+        let text = StoryTextObject(id: "t1", text: "Hello World")
         XCTAssertEqual(text.id, "t1")
-        XCTAssertEqual(text.content, "Hello World")
+        XCTAssertEqual(text.text, "Hello World")
         XCTAssertEqual(text.x, 0.5)
         XCTAssertEqual(text.y, 0.5)
         XCTAssertEqual(text.scale, 1.0)
         XCTAssertEqual(text.rotation, 0)
         XCTAssertEqual(text.textStyle, "bold")
         XCTAssertEqual(text.textColor, "FFFFFF")
-        XCTAssertEqual(text.textSize, 28)
+        XCTAssertEqual(text.fontSize, 64.0)
         XCTAssertEqual(text.textAlign, "center")
         XCTAssertNil(text.textBg)
     }
 
     func testStoryTextObjectHasBg() {
-        let withBg = StoryTextObject(content: "X", textBg: "000000")
+        let withBg = StoryTextObject(text: "X", textBg: "000000")
         XCTAssertTrue(withBg.hasBg)
 
-        let withoutBg = StoryTextObject(content: "Y", textBg: nil)
+        let withoutBg = StoryTextObject(text: "Y", textBg: nil)
         XCTAssertFalse(withoutBg.hasBg)
     }
 
     func testStoryTextObjectParsedTextStyle() {
-        let bold = StoryTextObject(content: "A", textStyle: "bold")
+        let bold = StoryTextObject(text: "A", textStyle: "bold")
         XCTAssertEqual(bold.parsedTextStyle, .bold)
 
-        let neon = StoryTextObject(content: "B", textStyle: "neon")
+        let neon = StoryTextObject(text: "B", textStyle: "neon")
         XCTAssertEqual(neon.parsedTextStyle, .neon)
 
-        let unknown = StoryTextObject(content: "C", textStyle: "nonexistent")
+        let unknown = StoryTextObject(text: "C", textStyle: "nonexistent")
         XCTAssertEqual(unknown.parsedTextStyle, .bold)
 
-        let nilStyle = StoryTextObject(content: "D", textStyle: nil)
+        let nilStyle = StoryTextObject(text: "D", textStyle: nil)
         XCTAssertEqual(nilStyle.parsedTextStyle, .bold)
     }
 
     func testStoryTextObjectResolvedSize() {
-        let withSize = StoryTextObject(content: "A", textSize: 42)
+        let withSize = StoryTextObject(text: "A", fontSize: 42)
         XCTAssertEqual(withSize.resolvedSize, 42)
 
-        let withoutSize = StoryTextObject(content: "B", textSize: nil)
-        XCTAssertEqual(withoutSize.resolvedSize, 28)
+        let withoutSize = StoryTextObject(text: "B")
+        XCTAssertEqual(withoutSize.resolvedSize, 64.0)
     }
 
     // MARK: - StoryTextObject isLocked (Patch B.3)
@@ -322,7 +322,7 @@ final class StoryModelsTests: XCTestCase {
     }
 
     func test_StoryTextObject_encodes_isLocked() throws {
-        var obj = StoryTextObject(content: "x")
+        var obj = StoryTextObject(text: "x")
         obj.isLocked = true
         let data = try JSONEncoder().encode(obj)
         let dict = try JSONSerialization.jsonObject(with: data) as! [String: Any]

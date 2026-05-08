@@ -471,7 +471,7 @@ public final class StoryComposerViewModel {
 
     // MARK: - Limits
 
-    var textCount: Int { currentEffects.textObjects?.count ?? 0 }
+    var textCount: Int { currentEffects.textObjects.count }
     var mediaCount: Int {
         (currentEffects.mediaObjects?.count ?? 0) +
         (currentEffects.audioPlayerObjects?.count ?? 0)
@@ -554,8 +554,8 @@ public final class StoryComposerViewModel {
         var map: [String: Int] = [:]
         var maxZ = 0
         let effects = currentEffects
-        for obj in (effects.textObjects ?? []) {
-            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+        for obj in effects.textObjects {
+            map[obj.id] = obj.zIndex; maxZ = max(maxZ, obj.zIndex)
         }
         for obj in (effects.mediaObjects ?? []) {
             if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
@@ -593,19 +593,19 @@ public final class StoryComposerViewModel {
         guard canAddText else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
         let obj = StoryTextObject(
-            content: "",
+            text: "",
             x: center.x,
             y: center.y,
             scale: 1.0,
             rotation: 0,
-            sourceLanguage: detectedKeyboardLanguage,
+            fontSize: 24,
             textStyle: "classic",
             textColor: "FFFFFF",
-            textSize: 24,
-            textAlign: "center"
+            textAlign: "center",
+            sourceLanguage: detectedKeyboardLanguage
         )
         var effects = currentEffects
-        var texts = effects.textObjects ?? []
+        var texts = effects.textObjects
         texts.append(obj)
         effects.textObjects = texts
         currentEffects = effects
@@ -712,11 +712,11 @@ public final class StoryComposerViewModel {
         // any path — context menu, timeline panel, contextual toolbar, etc.
         // The UI already hides these affordances on locked elements, but a
         // central refusal here closes any future call site we might miss.
-        if currentEffects.textObjects?.first(where: { $0.id == id })?.isLocked == true {
+        if currentEffects.textObjects.first(where: { $0.id == id })?.isLocked == true {
             return
         }
         var effects = currentEffects
-        effects.textObjects?.removeAll { $0.id == id }
+        effects.textObjects.removeAll { $0.id == id }
         effects.mediaObjects?.removeAll { $0.id == id }
         effects.audioPlayerObjects?.removeAll { $0.id == id }
         effects.stickerObjects?.removeAll { $0.id == id }
@@ -732,10 +732,8 @@ public final class StoryComposerViewModel {
     func updateElementLanguage(elementId: String, language: String) {
         var effects = currentEffects
 
-        if var texts = effects.textObjects,
-           let idx = texts.firstIndex(where: { $0.id == elementId }) {
-            texts[idx].sourceLanguage = language
-            effects.textObjects = texts
+        if let idx = effects.textObjects.firstIndex(where: { $0.id == elementId }) {
+            effects.textObjects[idx].sourceLanguage = language
         }
 
         if var medias = effects.mediaObjects,
@@ -755,7 +753,7 @@ public final class StoryComposerViewModel {
 
     func duplicateElement(id: String) {
         var effects = currentEffects
-        if var text = effects.textObjects?.first(where: { $0.id == id }) {
+        if var text = effects.textObjects.first(where: { $0.id == id }) {
             // Locked text objects (repost-attribution badge) are not duplicable —
             // duplicating would create a second editable copy that strips intent.
             if text.isLocked == true { return }
@@ -763,7 +761,7 @@ public final class StoryComposerViewModel {
             text.id = UUID().uuidString
             text.x = min(1.0, text.x + 0.05)
             text.y = min(1.0, text.y + 0.05)
-            effects.textObjects?.append(text)
+            effects.textObjects.append(text)
             selectedElementId = text.id
         } else if var media = effects.mediaObjects?.first(where: { $0.id == id }) {
             guard canAddMedia else { return }
@@ -871,8 +869,8 @@ public final class StoryComposerViewModel {
 
     private func persistZIndex(_ z: Int, for id: String) {
         var effects = currentEffects
-        if var texts = effects.textObjects, let i = texts.firstIndex(where: { $0.id == id }) {
-            texts[i].zIndex = z; effects.textObjects = texts
+        if let i = effects.textObjects.firstIndex(where: { $0.id == id }) {
+            effects.textObjects[i].zIndex = z
         } else if var medias = effects.mediaObjects, let i = medias.firstIndex(where: { $0.id == id }) {
             medias[i].zIndex = z; effects.mediaObjects = medias
         } else if var audios = effects.audioPlayerObjects, let i = audios.firstIndex(where: { $0.id == id }) {
@@ -1072,18 +1070,18 @@ public final class StoryComposerViewModel {
         let badgeText = "Reposté de @\(authorHandle)"
         let badge = StoryTextObject(
             id: UUID().uuidString,
-            content: badgeText,
+            text: badgeText,
             x: 0.5, y: 0.92,
             scale: 1.0, rotation: 0,
+            fontSize: 14,
             textStyle: "bold",
             textColor: "FFFFFF",
-            textSize: 14,
             textAlign: "center",
             textBg: "6366F1",
             isLocked: true
         )
         var effects = cloned.effects
-        var texts = effects.textObjects ?? []
+        var texts = effects.textObjects
         texts.append(badge)
         effects.textObjects = texts
         cloned.effects = effects

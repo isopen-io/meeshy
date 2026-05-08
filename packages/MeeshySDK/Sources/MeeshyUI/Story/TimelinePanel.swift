@@ -27,12 +27,12 @@ struct TimelinePanel: View {
 
     private var trackFingerprint: Int {
         let e = viewModel.currentEffects
-        var h = (e.textObjects?.count ?? 0)
+        var h = e.textObjects.count
         h = h &* 31 &+ (e.mediaObjects?.count ?? 0)
         h = h &* 31 &+ (e.audioPlayerObjects?.count ?? 0)
         h = h &* 31 &+ (viewModel.hasBackgroundImage ? 1 : 0)
         h = h &* 31 &+ (viewModel.drawingData != nil ? 1 : 0)
-        for t in e.textObjects ?? [] { h = h &* 31 &+ t.id.hashValue &+ t.content.hashValue }
+        for t in e.textObjects { h = h &* 31 &+ t.id.hashValue &+ t.text.hashValue }
         for m in e.mediaObjects ?? [] { h = h &* 31 &+ m.id.hashValue }
         for a in e.audioPlayerObjects ?? [] { h = h &* 31 &+ a.id.hashValue }
         return h
@@ -734,13 +734,13 @@ struct TimelinePanel: View {
             ))
         }
 
-        for text in effects.textObjects ?? [] {
-            let label = String(text.content.prefix(10)) + (text.content.count > 10 ? "..." : "")
+        for text in effects.textObjects {
+            let label = String(text.text.prefix(10)) + (text.text.count > 10 ? "..." : "")
             result.append(TimelineTrack(
                 id: text.id, name: label.isEmpty ? String(localized: "story.timeline.text", defaultValue: "Texte", bundle: .module) : label, type: .text,
-                startTime: text.startTime ?? 0, duration: text.displayDuration,
+                startTime: Float(text.startTime ?? 0), duration: text.duration.map { Float($0) },
                 volume: nil, loop: false,
-                fadeIn: text.fadeIn, fadeOut: text.fadeOut
+                fadeIn: text.fadeIn.map { Float($0) }, fadeOut: text.fadeOut.map { Float($0) }
             ))
         }
 
@@ -763,11 +763,11 @@ struct TimelinePanel: View {
             return
         }
 
-        if let idx = effects.textObjects?.firstIndex(where: { $0.id == track.id }) {
-            effects.textObjects?[idx].startTime = track.startTime
-            effects.textObjects?[idx].displayDuration = track.duration
-            effects.textObjects?[idx].fadeIn = track.fadeIn
-            effects.textObjects?[idx].fadeOut = track.fadeOut
+        if let idx = effects.textObjects.firstIndex(where: { $0.id == track.id }) {
+            effects.textObjects[idx].startTime = Double(track.startTime)
+            effects.textObjects[idx].duration = track.duration.map { Double($0) }
+            effects.textObjects[idx].fadeIn = track.fadeIn.map { Double($0) }
+            effects.textObjects[idx].fadeOut = track.fadeOut.map { Double($0) }
             viewModel.currentEffects = effects
             return
         }

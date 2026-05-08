@@ -19,13 +19,13 @@ final class StoryComposerViewModelRepostTests: XCTestCase {
         let story = makeStoryItem()
         let vm = StoryComposerViewModel(reposting: story, authorHandle: "alice")
 
-        let texts = vm.currentEffects.textObjects ?? []
+        let texts = vm.currentEffects.textObjects
         let lockedBadges = texts.filter { $0.isLocked == true }
         XCTAssertEqual(lockedBadges.count, 1)
         let badge = lockedBadges[0]
         XCTAssertEqual(badge.y, 0.92, accuracy: 0.001)
         XCTAssertEqual(badge.x, 0.5, accuracy: 0.001)
-        XCTAssertTrue(badge.content.contains("@alice"))
+        XCTAssertTrue(badge.text.contains("@alice"))
     }
 
     func test_init_reposting_propagatesIds_rootCase() {

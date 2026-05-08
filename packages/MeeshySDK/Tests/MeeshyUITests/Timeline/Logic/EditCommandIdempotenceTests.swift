@@ -40,8 +40,8 @@ final class EditCommandIdempotenceTests: XCTestCase {
                                    startTime: 0, duration: 5)
         ]
         p.textObjects = [
-            StoryTextObject(id: "t1", content: "hi",
-                            startTime: 1, displayDuration: 3)
+            StoryTextObject(id: "t1", text: "hi",
+                            startTime: 1, duration: 3)
         ]
         return p
     }

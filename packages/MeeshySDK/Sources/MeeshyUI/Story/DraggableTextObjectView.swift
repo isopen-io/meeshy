@@ -47,10 +47,10 @@ public struct DraggableTextObjectView: View {
         self.onDragEnd = onDragEnd
     }
 
-    private var currentX: CGFloat { baseX ?? textObject.x }
-    private var currentY: CGFloat { baseY ?? textObject.y }
-    private var currentScale: CGFloat { baseScale ?? textObject.scale }
-    private var currentRotation: CGFloat { baseRotation ?? textObject.rotation }
+    private var currentX: CGFloat { baseX ?? CGFloat(textObject.x) }
+    private var currentY: CGFloat { baseY ?? CGFloat(textObject.y) }
+    private var currentScale: CGFloat { baseScale ?? CGFloat(textObject.scale) }
+    private var currentRotation: CGFloat { baseRotation ?? CGFloat(textObject.rotation) }
 
     public var body: some View {
         GeometryReader { geo in
@@ -67,10 +67,10 @@ public struct DraggableTextObjectView: View {
     // MARK: - Sync
 
     private func syncBaseFromBinding() {
-        baseX = textObject.x
-        baseY = textObject.y
-        baseScale = textObject.scale
-        baseRotation = textObject.rotation
+        baseX = CGFloat(textObject.x)
+        baseY = CGFloat(textObject.y)
+        baseScale = CGFloat(textObject.scale)
+        baseRotation = CGFloat(textObject.rotation)
     }
 
     // MARK: - Content with gestures
@@ -148,12 +148,12 @@ public struct DraggableTextObjectView: View {
 
     private var styledTextContent: some View {
         let style = textObject.parsedTextStyle
-        let size = textObject.resolvedSize
+        let size = CGFloat(textObject.resolvedSize)
         let colorHex = textObject.textColor ?? "FFFFFF"
         let alignment = textObjectAlignment
         let hasBg = textObject.hasBg
 
-        return Text(textObject.content)
+        return Text(textObject.text)
             .font(storyFont(for: style, size: size))
             .foregroundColor(Color(hex: colorHex))
             .multilineTextAlignment(alignment)
@@ -203,8 +203,8 @@ public struct DraggableTextObjectView: View {
                 let snapped = StoryAlignmentSnap.apply(to: CGPoint(x: rawX, y: rawY))
                 baseX = snapped.x
                 baseY = snapped.y
-                textObject.x = snapped.x
-                textObject.y = snapped.y
+                textObject.x = Double(snapped.x)
+                textObject.y = Double(snapped.y)
                 dragInitialized = false
                 onDragCommitted?()
                 onDragEnd()
@@ -219,7 +219,7 @@ public struct DraggableTextObjectView: View {
             .onEnded { value in
                 let newScale = min(4.0, max(0.3, currentScale * value))
                 baseScale = newScale
-                textObject.scale = newScale
+                textObject.scale = Double(newScale)
                 onDragEnd()
             }
     }
@@ -232,7 +232,7 @@ public struct DraggableTextObjectView: View {
             .onEnded { value in
                 let newRotation = currentRotation + value.degrees
                 baseRotation = newRotation
-                textObject.rotation = newRotation
+                textObject.rotation = Double(newRotation)
                 onDragEnd()
             }
     }

@@ -1067,7 +1067,7 @@ public struct StoryComposerView: View {
 
     @ViewBuilder
     private func textElementList() -> some View {
-        let items = viewModel.currentEffects.textObjects ?? []
+        let items = viewModel.currentEffects.textObjects
         if !items.isEmpty {
             VStack(spacing: 4) {
                 ForEach(items, id: \.id) { obj in
@@ -1081,9 +1081,9 @@ public struct StoryComposerView: View {
 
     private func textElementRow(obj: StoryTextObject) -> some View {
         let isSelected = viewModel.selectedElementId == obj.id
-        let preview = obj.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let preview = obj.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? String(localized: "story.composer.emptyText", defaultValue: "Texte vide", bundle: .module)
-            : obj.content
+            : obj.text
         return HStack(spacing: 8) {
             Image(systemName: "textformat")
                 .font(.system(size: 12, weight: .medium))
@@ -1306,16 +1306,16 @@ public struct StoryComposerView: View {
     }
 
     private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
-        guard viewModel.currentEffects.textObjects?.contains(where: { $0.id == id }) == true else { return nil }
+        guard viewModel.currentEffects.textObjects.contains(where: { $0.id == id }) else { return nil }
         return Binding(
             get: {
-                viewModel.currentEffects.textObjects?.first(where: { $0.id == id })
-                    ?? StoryTextObject(content: "")
+                viewModel.currentEffects.textObjects.first(where: { $0.id == id })
+                    ?? StoryTextObject(text: "")
             },
             set: { newObj in
                 var effects = viewModel.currentEffects
-                if let i = effects.textObjects?.firstIndex(where: { $0.id == id }) {
-                    effects.textObjects?[i] = newObj
+                if let i = effects.textObjects.firstIndex(where: { $0.id == id }) {
+                    effects.textObjects[i] = newObj
                     viewModel.currentEffects = effects
                 }
             }
@@ -1586,7 +1586,7 @@ public struct StoryComposerView: View {
             slide.content != nil
                 || viewModel.slideImages[slide.id] != nil
                 || slide.effects.background != nil
-                || !(slide.effects.textObjects ?? []).isEmpty
+                || !slide.effects.textObjects.isEmpty
                 || !(slide.effects.mediaObjects ?? []).isEmpty
         } || !stickerObjects.isEmpty || viewModel.drawingData != nil
 

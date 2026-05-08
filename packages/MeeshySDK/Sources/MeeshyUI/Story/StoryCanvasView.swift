@@ -68,7 +68,7 @@ struct StoryCanvasView: View {
     // MARK: - Convenience accessors
 
     private var textObjects: [StoryTextObject] {
-        viewModel.currentEffects.textObjects ?? []
+        viewModel.currentEffects.textObjects
     }
 
     private var mediaObjects: [StoryMediaObject] {
@@ -413,7 +413,7 @@ struct StoryCanvasView: View {
     @ViewBuilder
     private func textObjectsLayer(interactive: Bool) -> some View {
         ForEach(textObjects, id: \.id) { obj in
-            if !obj.content.isEmpty, isElementVisible(startTime: obj.startTime, duration: obj.displayDuration) {
+            if !obj.text.isEmpty, isElementVisible(startTime: obj.startTime.map { Float($0) }, duration: obj.duration.map { Float($0) }) {
                 // Locked text objects (e.g. the repost-attribution badge from
                 // `StoryComposerViewModel.init(reposting:authorHandle:)`) skip
                 // selection glow + context menu in addition to the gestures
@@ -444,7 +444,7 @@ struct StoryCanvasView: View {
                     },
                     onDragEnd: {}
                 )
-                .opacity(elementOpacity(startTime: obj.startTime, duration: obj.displayDuration, fadeIn: obj.fadeIn, fadeOut: obj.fadeOut))
+                .opacity(elementOpacity(startTime: obj.startTime.map { Float($0) }, duration: obj.duration.map { Float($0) }, fadeIn: obj.fadeIn.map { Float($0) }, fadeOut: obj.fadeOut.map { Float($0) }))
 
                 if isLocked {
                     baseView.zIndex(Double(viewModel.zIndex(for: obj.id)))
@@ -602,15 +602,13 @@ struct StoryCanvasView: View {
     private func textObjectBinding(for id: String) -> Binding<StoryTextObject> {
         Binding(
             get: {
-                viewModel.currentEffects.textObjects?.first(where: { $0.id == id })
-                    ?? StoryTextObject(content: "")
+                viewModel.currentEffects.textObjects.first(where: { $0.id == id })
+                    ?? StoryTextObject(text: "")
             },
             set: { newValue in
                 var effects = viewModel.currentEffects
-                guard var texts = effects.textObjects,
-                      let idx = texts.firstIndex(where: { $0.id == id }) else { return }
-                texts[idx] = newValue
-                effects.textObjects = texts
+                guard let idx = effects.textObjects.firstIndex(where: { $0.id == id }) else { return }
+                effects.textObjects[idx] = newValue
                 viewModel.currentEffects = effects
             }
         )
