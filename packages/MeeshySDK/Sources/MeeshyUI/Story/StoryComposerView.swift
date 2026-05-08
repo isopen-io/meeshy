@@ -89,7 +89,6 @@ public struct StoryComposerView: View {
 
     // MARK: - Photo / media pickers
 
-    @State private var bgPhotoItem: PhotosPickerItem?
     @State private var fgMediaItem: PhotosPickerItem?
 
     // MARK: - Media editor (triggered by edit button on canvas elements)
@@ -349,7 +348,6 @@ public struct StoryComposerView: View {
             // Do NOT cleanup temp files here — background upload may still need them.
             // Cleanup happens after upload completes in StoryViewModel.launchUploadTask.
         }
-        .onChange(of: bgPhotoItem) { _, item in loadBackgroundPhoto(from: item) }
         .onChange(of: fgMediaItem) { _, item in handleForegroundMediaSelection(from: item) }
         .fileImporter(isPresented: $showAudioDocumentPicker, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first {
@@ -393,10 +391,30 @@ public struct StoryComposerView: View {
             }
             .presentationDetents([.medium])
         }
-        .sheet(isPresented: $viewModel.isTimelineVisible) {
+        .sheet(isPresented: $viewModel.isTimelineVisible,
+               onDismiss: { viewModel.commitTimelineToCurrentSlide() }) {
             timelineSection
-                .presentationDetents([.medium, .large])
+                // `.fraction(0.45)` ≈ enough to surface the toolbar + transport
+                // + ruler + 2 tracks without obscuring the canvas; users can
+                // drag up to .large for full Pro layout. Removing `.medium`
+                // (which is OS-defined, ~50%) and replacing with a hand-tuned
+                // fraction gives a tighter "tools strip" feel.
+                .presentationDetents([.fraction(0.45), .large])
                 .presentationDragIndicator(.visible)
+                // Glass background — the canvas behind shows through, giving
+                // the editor a "floating tools" feel rather than a flat sheet
+                // that hides the slide. Keeps the user's mental model: "I'm
+                // editing this slide" instead of "I'm in a separate screen."
+                .presentationBackground(.ultraThinMaterial)
+                .presentationContentInteraction(.scrolls)
+                .presentationCornerRadius(28)
+        }
+        .onChange(of: viewModel.isTimelineVisible) { _, isVisible in
+            // Refresh the timeline whenever the sheet opens so any media
+            // added between mount and sheet-open (e.g. a background image
+            // dropped via the composer toolbar) is reflected immediately
+            // instead of only on next slide change.
+            if isVisible { viewModel.loadCurrentSlideIntoTimeline() }
         }
         .sheet(isPresented: $showFilterSheet) {
             NavigationStack {
@@ -837,82 +855,43 @@ public struct StoryComposerView: View {
         }
     }
 
-    // MARK: - Unified Media Panel (images, videos, audio — background & foreground)
+    // MARK: - Unified Media Panel (images, videos, audio — flat list)
+    // Background vs foreground is decided automatically by `addMediaObject`
+    // (first media → isBackground=true, rest → foreground). The element list
+    // below shows a "Fond" badge on whichever object currently holds the
+    // background flag, so users still see the distinction without needing
+    // a separate UI section for it.
 
     private var mediaPanel: some View {
         VStack(spacing: 10) {
-            // Background section (max 1)
-            VStack(spacing: 6) {
-                HStack {
-                    Label(String(localized: "story.composer.bgMedia", defaultValue: "Arriere-plan", bundle: .module),
-                          systemImage: "rectangle.inset.filled")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.6))
-                    Spacer()
-                    if viewModel.currentEffects.resolvedBackgroundMedia != nil {
-                        Text("1/1")
-                            .font(.system(size: 10, weight: .medium, design: .monospaced))
-                            .foregroundColor(.white.opacity(0.4))
-                    }
-                }
-                .padding(.horizontal, 16)
-
-                HStack(spacing: 8) {
-                    if viewModel.currentEffects.resolvedBackgroundMedia == nil {
-                        PhotosPicker(selection: $bgPhotoItem, matching: .any(of: [.images, .videos])) {
-                            mediaPillLabel(icon: "photo.fill", text: String(localized: "story.composer.setBackground", defaultValue: "Definir le fond", bundle: .module))
-                        }
-                    } else {
-                        PhotosPicker(selection: $bgPhotoItem, matching: .any(of: [.images, .videos])) {
-                            mediaPillLabel(icon: "arrow.triangle.2.circlepath", text: String(localized: "story.composer.changeBackground", defaultValue: "Changer", bundle: .module))
-                        }
-                        Button {
-                            if let bgMedia = viewModel.currentEffects.resolvedBackgroundMedia {
-                                viewModel.deleteElement(id: bgMedia.id)
-                            }
-                            selectedImage = nil
-                            viewModel.hasBackgroundImage = false
-                            HapticFeedback.light()
-                        } label: {
-                            mediaPillLabel(icon: "trash", text: String(localized: "story.composer.removeBackground", defaultValue: "Retirer", bundle: .module), destructive: true)
-                        }
-                    }
-                }
-                .padding(.horizontal, 16)
+            HStack {
+                Label(String(localized: "story.composer.fgMedia", defaultValue: "Medias", bundle: .module),
+                      systemImage: "square.stack.3d.up")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.6))
+                Spacer()
             }
+            .padding(.horizontal, 16)
 
-            Divider().opacity(0.2).padding(.horizontal, 16)
-
-            // Foreground section (multiple)
-            VStack(spacing: 6) {
-                HStack {
-                    Label(String(localized: "story.composer.fgMedia", defaultValue: "Medias", bundle: .module),
-                          systemImage: "square.stack.3d.up")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white.opacity(0.6))
-                    Spacer()
-                }
-                .padding(.horizontal, 16)
-
-                HStack(spacing: 8) {
-                    if viewModel.canAddMedia {
-                        PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
-                            mediaPillLabel(icon: "photo.on.rectangle.angled", text: String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module))
-                        }
-                    }
-                    if viewModel.canAddAudio {
-                        Button { showAudioDocumentPicker = true } label: {
-                            mediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module))
-                        }
-                        Button { showVoiceRecorderSheet = true } label: {
-                            mediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module))
-                        }
+            HStack(spacing: 8) {
+                if viewModel.canAddMedia {
+                    PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
+                        mediaPillLabel(icon: "photo.on.rectangle.angled", text: String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module))
                     }
                 }
-                .padding(.horizontal, 16)
+                if viewModel.canAddAudio {
+                    Button { showAudioDocumentPicker = true } label: {
+                        mediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module))
+                    }
+                    Button { showVoiceRecorderSheet = true } label: {
+                        mediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module))
+                    }
+                }
             }
+            .padding(.horizontal, 16)
 
-            // Element list (all media + audio objects)
+            // Element list (all media + audio objects, with "Fond" badge on
+            // whichever entry currently holds the background flag).
             mediaElementList()
             audioElementList()
         }
@@ -1421,77 +1400,6 @@ public struct StoryComposerView: View {
 
     // MARK: - Media Loading
 
-    private func loadBackgroundPhoto(from item: PhotosPickerItem?) {
-        guard let item else { return }
-        let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
-
-        isLoadingMedia = true
-        mediaLoadProgress = 0
-        mediaLoadLabel = isVideo
-            ? String(localized: "story.composer.loadingVideo", defaultValue: "Chargement de la video...", bundle: .module)
-            : String(localized: "story.composer.loadingBackground", defaultValue: "Chargement de l'image...", bundle: .module)
-
-        Task {
-            defer {
-                isLoadingMedia = false
-                mediaLoadProgress = 0
-                mediaLoadLabel = ""
-            }
-
-            if isVideo {
-                // Background VIDEO — write to temp, extract thumbnail, add as background media object
-                guard let data = try? await item.loadTransferable(type: Data.self) else { return }
-                mediaLoadProgress = 0.3
-
-                let objectId = UUID().uuidString
-                let ext = item.supportedContentTypes
-                    .first { $0.conforms(to: .audiovisualContent) }?
-                    .preferredFilenameExtension ?? "mp4"
-                let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent("bg_\(objectId).\(ext)")
-                do {
-                    try data.write(to: tempURL)
-                } catch { return }
-                mediaLoadProgress = 0.6
-
-                let thumbnail = await StoryMediaLoader.shared.videoThumbnail(url: tempURL, maxDimension: 1080)
-                mediaLoadProgress = 0.8
-
-                // Use thumbnail as preview image
-                if let thumbnail { selectedImage = thumbnail }
-                viewModel.hasBackgroundImage = true
-                viewModel.loadedVideoURLs[objectId] = tempURL
-                if let thumbnail { viewModel.loadedImages[objectId] = thumbnail }
-
-                // Add as background media object in effects
-                if let obj = viewModel.addMediaObject(kind: .video) {
-                    viewModel.loadedVideoURLs[obj.id] = tempURL
-                    if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
-                    if obj.id != objectId {
-                        viewModel.loadedVideoURLs.removeValue(forKey: objectId)
-                        viewModel.loadedImages.removeValue(forKey: objectId)
-                    }
-                    // Auto-extend slide duration to video length
-                    let asset = AVURLAsset(url: tempURL)
-                    if let cmDur = try? await asset.load(.duration) {
-                        let secs = CMTimeGetSeconds(cmDur)
-                        if secs > 0, secs.isFinite {
-                            viewModel.autoExtendDuration(forElementEnd: Float(secs))
-                        }
-                    }
-                }
-                mediaLoadProgress = 1.0
-            } else {
-                // Background IMAGE — downsample via ImageIO
-                mediaLoadProgress = 0.3
-                guard let image = await StoryMediaLoader.shared.loadImage(from: item, maxDimension: 1080) else { return }
-                mediaLoadProgress = 1.0
-                selectedImage = image
-                viewModel.hasBackgroundImage = true
-                viewModel.setImage(image, for: viewModel.currentSlide.id)
-            }
-        }
-    }
-
     private func handleForegroundMediaSelection(from item: PhotosPickerItem?) {
         guard let item else { return }
         let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) || $0.conforms(to: .video) }
@@ -1549,6 +1457,14 @@ public struct StoryComposerView: View {
                                 viewModel.loadedImages.removeValue(forKey: objectId)
                             }
                             if let dur = mediaDuration {
+                                // Pin the natural asset duration on the media object so
+                                // the reader's visibility window matches the actual
+                                // playback length. Without this, `obj.duration` stayed
+                                // nil and got overwritten later by timeline-editor
+                                // defaults that could be as short as 1s — surfacing as
+                                // "video appears 1 second then disappears" while the
+                                // audio kept playing.
+                                viewModel.setMediaDuration(id: obj.id, duration: dur, slideId: targetSlideId)
                                 viewModel.autoExtendDuration(forElementEnd: dur, slideId: targetSlideId)
                             }
                         }

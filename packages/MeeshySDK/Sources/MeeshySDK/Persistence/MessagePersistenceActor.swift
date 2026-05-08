@@ -119,9 +119,19 @@ public actor MessagePersistenceActor {
         // filter notifications by conversationId — a notification without
         // one is silently dropped, leaving the bubble stuck in `.sending`.
         var affectedConversationId: String?
+        var priorState: MessageState?
         let result = try dbWriter.write { db -> MessageState? in
-            guard var record = try MessageRecord.fetchOne(db, key: localId) else { return nil }
+            guard var record = try MessageRecord.fetchOne(db, key: localId) else {
+                // Record missing — most common cause of the ⏱→✓ flow
+                // breaking. The optimistic insert either failed silently
+                // (PK collision) or was reconciled away by the socket
+                // path before this applyEvent ran. Caller's `try?` would
+                // hide the nil return otherwise.
+                print("[StateMachine] applyEvent localId=\(localId) event=\(event) → record NOT FOUND in GRDB")
+                return nil
+            }
             affectedConversationId = record.conversationId
+            priorState = record.state
 
             var machine = MessageStateMachine(
                 state: record.state,
@@ -132,7 +142,13 @@ public actor MessagePersistenceActor {
                 readAt: record.readAt
             )
 
-            guard let newState = machine.apply(event) else { return nil }
+            guard let newState = machine.apply(event) else {
+                // Transition rejected by the state machine — e.g. a stale
+                // .serverAck arriving on an already-sent record (no-op in
+                // theory but worth logging while we debug the ⏱→✓ flow).
+                print("[StateMachine] applyEvent localId=\(localId) event=\(event) → transition REJECTED from priorState=\(record.state)")
+                return nil
+            }
 
             record.state = newState
             record.retryCount = machine.retryCount
@@ -158,7 +174,8 @@ public actor MessagePersistenceActor {
         // Post a refresh scoped to the record's conversation so MessageStore
         // observers actually re-read. Skip when the row was missing or the
         // transition was rejected (no DB write happened).
-        if result != nil, let convId = affectedConversationId {
+        if let result, let convId = affectedConversationId, let prior = priorState {
+            print("[StateMachine] applyEvent localId=\(localId) event=\(event) → \(prior) → \(result) (conv=\(convId))")
             postMessageStoreRefresh(conversationIds: [convId])
         }
         return result

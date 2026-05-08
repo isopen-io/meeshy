@@ -226,6 +226,16 @@ final class MessageListViewController: UIViewController {
             let messageId = message.id
             let isMine = message.isMe
 
+            // No UIContextMenuInteraction here — the user wants a custom
+            // overlay (light blur backdrop, re-rendered bubble centered,
+            // compact action menu sliding from the bottom). The native
+            // UIMenu can't be styled to match. The long press gesture is
+            // owned by the SwiftUI BubbleSwipeContainer and surfaces via
+            // `onLongPress` to set ConversationView's overlay state.
+            cell.interactions
+                .filter { $0 is UIContextMenuInteraction }
+                .forEach { cell.removeInteraction($0) }
+
             cell.contentConfiguration = UIHostingConfiguration {
                 BubbleSwipeContainer(
                     isMine: isMine,
@@ -287,6 +297,16 @@ final class MessageListViewController: UIViewController {
         snapshot.appendSections([.main])
         let items = store.messages.reversed().map { MessageListItem.message(localId: $0.localId) }
         snapshot.appendItems(items, toSection: .main)
+        // The diffable datasource only re-runs the cell registration closure
+        // when an item's IDENTIFIER changes — we key items by `localId` which
+        // stays stable across `.sending → .sent → .delivered`, so without
+        // explicitly reconfiguring the rows the bubble would render with its
+        // first state forever and only flip after the user leaves and re-opens
+        // the conversation (which throws the cells away). `reconfigureItems`
+        // forces the registration to re-run for every visible row, picking up
+        // GRDB-driven state / content / delivery / reaction changes in place
+        // without triggering the costly insert/move/delete diff animation.
+        snapshot.reconfigureItems(items)
         dataSource.apply(snapshot, animatingDifferences: animated)
     }
 
@@ -299,6 +319,30 @@ final class MessageListViewController: UIViewController {
                 self?.applySnapshot()
             }
             .store(in: &cancellables)
+
+        // GRDB-driven changes (insert / state transition / delivery / read)
+        // already trigger `messagesDidChange` and re-snapshot. But translation
+        // / transcription / audio-translation events arrive via Socket.IO
+        // and only update `@Published` dictionaries on the ViewModel — they
+        // never touch GRDB so the diffable datasource never sees them. Force
+        // a snapshot reconfigure when those publishers fire so the cell
+        // registration re-runs and `resolveBubbleData` picks the new payload
+        // up. Coalesce by 80ms to absorb multilingual bursts (the SDK
+        // already collects translation events on that interval, so two
+        // collapsed re-snapshots is the worst case).
+        guard let vm = conversationViewModel else { return }
+        Publishers.MergeMany(
+            vm.$messageTranslations.map { _ in () }.eraseToAnyPublisher(),
+            vm.$messageTranscriptions.map { _ in () }.eraseToAnyPublisher(),
+            vm.$messageTranslatedAudios.map { _ in () }.eraseToAnyPublisher(),
+            vm.$activeTranslationOverrides.map { _ in () }.eraseToAnyPublisher()
+        )
+        .dropFirst() // skip the @Published initial emission
+        .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)
+        .sink { [weak self] in
+            self?.applySnapshot(animated: false)
+        }
+        .store(in: &cancellables)
     }
 
     // MARK: - Scroll to Bottom

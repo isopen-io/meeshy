@@ -2,7 +2,11 @@ import SwiftUI
 import PencilKit
 import AVKit
 import Combine
+import QuartzCore
+import os
 import MeeshySDK
+
+private let storyPlaybackLogger = Logger(subsystem: "me.meeshy.app", category: "story.playback")
 
 /// Notification envoyée par le viewer pour déclencher le fade-out audio (2s avant la fin du slide).
 public extension Notification.Name {
@@ -190,6 +194,12 @@ public struct StoryCanvasReaderView: View {
             StoryMediaCoordinator.shared.activate { [weak state] in
                 state?.stopAllMedia()
             }
+            // Pre-warm the background video FIRST so its preroll task starts
+            // before the SwiftUI body even evaluates `backgroundMediaLayer`.
+            // Without this, the player isn't created until the first render
+            // pass, and the user sees the colored placeholder while AVPlayer
+            // chews through `.readyToPlay`.
+            state.startBackgroundVideoPreroll(story: story)
             state.startPlaybackTimer()
             state.startMuteObservers()
             state.startBackgroundAudio(
@@ -225,6 +235,19 @@ public struct StoryCanvasReaderView: View {
                 Color(hex: bg)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+        } else if let thumbImg = state.thumbHashImage {
+            // ThumbHash bitmap (< 1ms decode) covers the entire surface so the
+            // user never sees a blank frame while real media is loading. The
+            // foreground media (video, image, audio waveform) renders ABOVE
+            // this layer and replaces it the instant its asset is ready —
+            // which means even at 20% network load the slide still looks
+            // intentional rather than empty.
+            Image(uiImage: thumbImg)
+                .resizable()
+                .interpolation(.low)
+                .scaledToFill()
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
         } else if let avgColor = state.thumbHashAverageColor {
             Color(avgColor)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -245,8 +268,13 @@ public struct StoryCanvasReaderView: View {
     private var bgTransformRotation: Double { story.storyEffects?.backgroundTransform?.rotation ?? 0 }
 
     /// Resolves the best available thumbHash for this story's background media.
+    /// Falls through ANY media item that carries one — `media.first` may lack a
+    /// thumbHash even when later items have it (the upload pipeline doesn't
+    /// guarantee ordering of the thumbHash field across media slots).
     private var resolvedThumbHash: String? {
-        story.storyEffects?.thumbHash ?? story.media.first?.thumbHash
+        if let direct = story.storyEffects?.thumbHash { return direct }
+        if let fromMedia = story.media.compactMap(\.thumbHash).first { return fromMedia }
+        return nil
     }
 
     @ViewBuilder
@@ -557,7 +585,8 @@ public struct StoryCanvasReaderView: View {
                     audioObject: .constant(audio),
                     url: resolvedAudioURL(for: audio),
                     isEditing: false,
-                    externalPlayer: state.foregroundAudioPlayers[audio.id]
+                    externalPlayer: state.foregroundAudioPlayers[audio.id],
+                    parentManagesPlayback: true
                 )
                 .opacity(state.audioObjectOpacity(for: audio, at: time))
                 .zIndex(Double(audio.zIndex ?? 0))
@@ -646,7 +675,22 @@ private final class ReaderState: ObservableObject {
     private var readyObservers: [String: NSKeyValueObservation] = [:]
     private var cancellables = Set<AnyCancellable>()
     private var fadeTimer: Timer?
-    private var playbackTimer: Timer?
+    /// Drives per-frame playback timing. Replaces the legacy 50ms `Timer` —
+    /// CADisplayLink is synchronized with the display refresh rate (60 Hz on
+    /// most iPhones, 120 Hz on ProMotion) so the gap between a clip's
+    /// `startTime` and the moment we kick its player off is at most one frame
+    /// (~16ms / ~8ms), versus 0-50ms with the old timer.
+    private var displayLink: CADisplayLink?
+    /// Clips already pre-rolled in advance of their `startTime`. Tracked so the
+    /// per-frame check doesn't re-trigger preroll every refresh once we've
+    /// initiated it for a given clip — preroll is async and idempotent on its
+    /// own, but we'd rather not pile work onto the player cache for nothing.
+    private var preRolledVideoIds: Set<String> = []
+    private var preRolledAudioIds: Set<String> = []
+    /// 100 ms — the lead time at which we begin warming an upcoming clip's
+    /// player. Aligns with the user-visible slide-transition window so the
+    /// transition itself masks any residual `play()` startup latency.
+    private static let preRollLeadTime: TimeInterval = 0.1
     /// Volume cible défini par l'utilisateur pour l'audio de fond.
     private var targetBackgroundVolume: Float = 0.5
     /// Tracks which foreground videos have already been started (to avoid re-triggering).
@@ -693,8 +737,13 @@ private final class ReaderState: ObservableObject {
         }
         self.textObjects = objects
 
-        // Pre-decode thumbHash for instant placeholder display
-        let hash = story.storyEffects?.thumbHash ?? story.media.first?.thumbHash
+        // Pre-decode thumbHash for instant placeholder display.
+        // Search story.media exhaustively for the first item that carries a
+        // thumbHash — earlier code only looked at `media.first`, so if the
+        // first media slot was an audio (which typically has no thumbHash)
+        // the foreground video's thumbHash was missed and the user saw a
+        // blank slide while the asset downloaded.
+        let hash = story.storyEffects?.thumbHash ?? story.media.compactMap(\.thumbHash).first
         self.thumbHashImage = hash.flatMap { UIImage.fromThumbHash($0) }
         self.thumbHashAverageColor = hash.flatMap { UIImage.thumbHashAverageColor($0) }
 
@@ -710,23 +759,34 @@ private final class ReaderState: ObservableObject {
     func startPlaybackTimer() {
         currentTime = 0
         playbackStartDate = Date()
-        playbackTimer?.invalidate()
-        // Use wall-clock elapsed time instead of accumulating +0.05 per tick.
-        // Timer.scheduledTimer is not guaranteed to fire at exact intervals —
-        // accumulating 0.05 causes 0.5-1.5s drift over a 30s story.
-        playbackTimer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
-                guard let self, let start = self.playbackStartDate else { return }
-                self.currentTime = Date().timeIntervalSince(start)
-                self.checkPendingVideoStarts()
-                self.checkPendingAudioStarts()
-            }
+        preRolledVideoIds.removeAll()
+        preRolledAudioIds.removeAll()
+
+        displayLink?.invalidate()
+        let link = CADisplayLink(target: self, selector: #selector(displayLinkTick(_:)))
+        // Request the device's max refresh rate (120 Hz on ProMotion, 60 Hz
+        // elsewhere). A high preferred rate means we re-evaluate clip starts
+        // every ~8ms instead of the legacy 50ms — the difference between a
+        // perceptible "click off" delay and a frame-tight cut.
+        if #available(iOS 15.0, *) {
+            link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
         }
+        link.add(to: .main, forMode: .common)
+        displayLink = link
     }
 
     func stopPlaybackTimer() {
-        playbackTimer?.invalidate()
-        playbackTimer = nil
+        displayLink?.invalidate()
+        displayLink = nil
+    }
+
+    /// CADisplayLink callback (main thread). Mirrors the legacy timer body
+    /// but fires per display refresh instead of every 50ms.
+    @objc private func displayLinkTick(_ link: CADisplayLink) {
+        guard let start = playbackStartDate else { return }
+        currentTime = Date().timeIntervalSince(start)
+        checkPendingVideoStarts()
+        checkPendingAudioStarts()
     }
 
     // MARK: Text object timing
@@ -774,9 +834,12 @@ private final class ReaderState: ObservableObject {
     func mediaObjectVisible(_ media: StoryMediaObject, at time: TimeInterval) -> Bool {
         let start = TimeInterval(media.startTime ?? 0)
         guard time >= start else { return false }
+        // Foreground media plays exactly once — only `isBackground == true`
+        // clips are allowed to loop (per spec). Background media is rendered
+        // by `backgroundMediaLayer`, not this layer, so any media reaching
+        // this method is foreground and we ignore `media.loop` entirely.
         if let dur = media.duration {
-            let shouldLoop = media.loop ?? false
-            if !shouldLoop, time >= start + TimeInterval(dur) { return false }
+            if time >= start + TimeInterval(dur) { return false }
         }
         return true
     }
@@ -814,9 +877,11 @@ private final class ReaderState: ObservableObject {
     func audioObjectVisible(_ audio: StoryAudioPlayerObject, at time: TimeInterval) -> Bool {
         let start = TimeInterval(audio.startTime ?? 0)
         guard time >= start else { return false }
+        // Foreground audio plays once — `audio.loop` is ignored. Background
+        // audio uses the dedicated background-audio path which honours its
+        // own loop flag.
         if let dur = audio.duration {
-            let shouldLoop = audio.loop ?? false
-            if !shouldLoop, time >= start + TimeInterval(dur) { return false }
+            if time >= start + TimeInterval(dur) { return false }
         }
         return true
     }
@@ -857,13 +922,13 @@ private final class ReaderState: ObservableObject {
         var needsNetworkLoad: [(id: String, resolved: String)] = []
         for media in foregroundImages {
             if let img = preloadedImages[media.id] {
-                loadedImages[media.id] = img
+                loadedImages[media.id] = await ReaderState.preDecoded(img)
                 continue
             }
             guard let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url,
                   let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString else { continue }
             if let cached = DiskCacheStore.cachedImage(for: resolved) {
-                loadedImages[media.id] = cached
+                loadedImages[media.id] = await ReaderState.preDecoded(cached)
             } else {
                 needsNetworkLoad.append((id: media.id, resolved: resolved))
             }
@@ -875,13 +940,37 @@ private final class ReaderState: ObservableObject {
             for item in needsNetworkLoad {
                 group.addTask {
                     let img = await CacheCoordinator.shared.images.image(for: item.resolved)
-                    return (item.id, img)
+                    // Pre-decode off the main thread so the first SwiftUI
+                    // render of the image doesn't pay the CGImage decode
+                    // cost — that 2-50ms hitch hits at the worst possible
+                    // time (the moment the slide transition completes).
+                    guard let img else { return (item.id, nil) }
+                    return (item.id, await ReaderState.preDecoded(img))
                 }
             }
             for await (id, img) in group {
                 if let img { loadedImages[id] = img }
             }
         }
+    }
+
+    /// Forces the underlying `CGImage` to be decoded NOW so the first SwiftUI
+    /// `Image(uiImage:)` render hits a ready-to-paint bitmap. Uses Apple's
+    /// `preparingForDisplay()` (iOS 15+) which decodes off the main thread
+    /// and returns a new `UIImage` whose backing store is already in CPU
+    /// memory at display gamma.
+    ///
+    /// Cost: 2-50ms per image (depending on size + format) on background
+    /// queue. Saves the same cost on the main thread when rendering, which
+    /// is the difference between a smooth transition and a janky frame at
+    /// the exact moment the user expects the image to appear.
+    nonisolated static func preDecoded(_ image: UIImage) async -> UIImage {
+        if #available(iOS 15.0, *) {
+            return await Task.detached(priority: .userInitiated) {
+                image.preparingForDisplay() ?? image
+            }.value
+        }
+        return image
     }
 
     // MARK: Background audio
@@ -918,12 +1007,19 @@ private final class ReaderState: ObservableObject {
 
         // Cache-first: use prerolled player or local disk file before network stream
         let player: AVPlayer
+        let playerWasCached: Bool
         if let cached = StoryMediaLoader.shared.cachedPlayer(for: url) {
             player = cached
+            playerWasCached = true
         } else if let localURL = CacheCoordinator.audioLocalFileURL(for: url.absoluteString) {
             player = AVPlayer(url: localURL)
+            playerWasCached = false
         } else {
             player = AVPlayer(url: url)
+            playerWasCached = false
+        }
+        if playerWasCached {
+            player.automaticallyWaitsToMinimizeStalling = false
         }
         player.volume = userVolume * 0.2  // Demarrer a 20% du volume cible
         backgroundPlayer = player
@@ -1128,9 +1224,20 @@ private final class ReaderState: ObservableObject {
         // Démarre les videos foreground (exclut le media background résolu).
         let videoObjects = (story.storyEffects?.resolvedForegroundMediaObjects ?? [])
             .filter { $0.kind == .video }
+
+        // Aggressive pre-warm: start filling StoryMediaLoader's player cache
+        // for *every* video URL in this slide as soon as the reader appears.
+        // The cache caps at 6 prerolled players, so this is bounded; entries
+        // that arrive before their `startTime` are picked up via
+        // `cachedPlayer(for:)` inside `createAndStartVideoPlayer`. Round-2
+        // assumption: by the time the slide transition is 100ms from over,
+        // every clip in the *current* slide already has a prerolled player
+        // sitting in the cache.
+        var preWarmURLs: [URL] = []
         for media in videoObjects {
             if let preloaded = preloadedVideoURLs[media.id] {
                 registerPendingVideoStart(media: media, url: preloaded)
+                preWarmURLs.append(preloaded)
             } else if let urlString = story.media.first(where: { $0.id == media.postMediaId })?.url,
                       let resolved = MeeshyConfig.resolveMediaURL(urlString) {
                 // Use prerolled cached player if available (prefetched by StoryViewerView)
@@ -1140,7 +1247,11 @@ private final class ReaderState: ObservableObject {
                     // Stream directly — AVPlayer handles HTTP streaming natively with buffering
                     registerPendingVideoStart(media: media, url: resolved)
                 }
+                preWarmURLs.append(resolved)
             }
+        }
+        for url in preWarmURLs {
+            Task { await StoryMediaLoader.shared.preloadAndCachePlayer(url: url) }
         }
         // Apply mute flag on any players already created synchronously by the
         // registration path (the rest will be created by the timing scheduler;
@@ -1183,19 +1294,13 @@ private final class ReaderState: ObservableObject {
         player.volume = hasFadeIn ? 0.0 : targetVolume
         foregroundVideoPlayers[media.id] = player
 
-        let shouldLoop = (media.loop ?? false)
-        // Use AVPlayerLooper for seamless looping (Apple recommended, no gap)
-        if shouldLoop, let queuePlayer = player as? AVQueuePlayer, let item = queuePlayer.currentItem {
-            foregroundLoopers[media.id] = AVPlayerLooper(player: queuePlayer, templateItem: item)
-        }
+        // Foreground media plays exactly once. No AVPlayerLooper here.
         let obs = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
         ) { [weak self] _ in
-            if !shouldLoop {
-                self?.foregroundSoundDidStop()
-            }
+            self?.foregroundSoundDidStop()
         }
         foregroundLoopObservers[media.id] = obs
 
@@ -1207,7 +1312,7 @@ private final class ReaderState: ObservableObject {
             fadeVolume(player: player, from: 0.0, to: targetVolume, duration: fadeInDuration)
         }
 
-        if let dur = media.duration, !shouldLoop {
+        if let dur = media.duration {
             let stopDelay = TimeInterval(dur)
             let fadeOutDur = TimeInterval(media.fadeOut ?? 0)
             let fadeOutStart = max(0, stopDelay - fadeOutDur)
@@ -1221,30 +1326,48 @@ private final class ReaderState: ObservableObject {
         }
     }
 
-    /// Returns the latest effective end time among all foreground audio elements.
-    /// Used to determine if a video should loop because audio outlasts it.
-    private func maxForegroundAudioEndTime() -> Double {
-        guard let audioObjects = currentStoryRef?.storyEffects?.resolvedForegroundAudioPlayers else { return 0 }
+    /// Returns the latest effective end time among all foreground media — used
+    /// by `effectiveStoryDuration` so the playback timer keeps ticking until
+    /// the longest media has played all the way through. Foreground media is
+    /// non-looping (per spec), so once the longest one ends the slide is
+    /// effectively done.
+    func maxForegroundMediaEndTime() -> Double {
+        guard let effects = currentStoryRef?.storyEffects else { return 0 }
         var maxEnd: Double = 0
-        for audio in audioObjects {
+        for media in effects.resolvedForegroundMediaObjects {
+            let start = Double(media.startTime ?? 0)
+            let duration = Double(media.duration ?? 0)
+            maxEnd = max(maxEnd, start + duration)
+        }
+        for audio in effects.resolvedForegroundAudioPlayers {
             let start = Double(audio.startTime ?? 0)
             let duration = Double(audio.duration ?? 0)
+            maxEnd = max(maxEnd, start + duration)
+        }
+        for text in effects.textObjects ?? [] {
+            let start = Double(text.startTime ?? 0)
+            let duration = Double(text.displayDuration ?? 0)
             maxEnd = max(maxEnd, start + duration)
         }
         return maxEnd
     }
 
-    /// Determines whether a video element should loop because foreground audio extends beyond its end time.
-    private func shouldLoopVideoForAudio(media: StoryMediaObject) -> Bool {
-        guard let videoDuration = media.duration else { return false }
-        let videoEnd = Double(media.startTime ?? 0) + Double(videoDuration)
-        let audioEnd = maxForegroundAudioEndTime()
-        return audioEnd > videoEnd
-    }
-
     private func checkPendingVideoStarts() {
         for (id, pending) in pendingVideoStarts {
             let startOffset = TimeInterval(pending.media.startTime ?? 0)
+            // Lead-time preroll: kick StoryMediaLoader off the moment we're
+            // within 100ms of startTime so the player is ready to render the
+            // first frame the instant `play()` is called below. The cache the
+            // loader fills is consumed by `createAndStartVideoPlayer` — same
+            // path as the slide-load pre-warm, so this is a safety net for
+            // late-arriving clips (URL resolved after slide onAppear).
+            if currentTime + Self.preRollLeadTime >= startOffset,
+               !preRolledVideoIds.contains(id),
+               currentTime < startOffset {
+                preRolledVideoIds.insert(id)
+                let url = pending.url
+                Task { await StoryMediaLoader.shared.preloadAndCachePlayer(url: url) }
+            }
             if currentTime >= startOffset {
                 pendingVideoStarts.removeValue(forKey: id)
                 createAndStartVideoPlayer(for: pending.media, url: pending.url)
@@ -1259,12 +1382,28 @@ private final class ReaderState: ObservableObject {
         // Use cached prerolled player if available, otherwise create fresh
         let cached = StoryMediaLoader.shared.cachedPlayer(for: url)
         let player: AVPlayer
+        let playerWasCached: Bool
         if let cached {
             player = cached
+            playerWasCached = true
         } else {
             let item = AVPlayerItem(url: url)
+            // 2s buffer when we DON'T own a prerolled player — gives
+            // AVFoundation breathing room on a slow network. Cached players
+            // were created via StoryMediaLoader.preloadVideoPlayer() which
+            // already prerolled them, so they tolerate the lower buffer.
             item.preferredForwardBufferDuration = 2.0
             player = AVQueuePlayer(playerItem: item)
+            playerWasCached = false
+        }
+        // Skip-stall optimization is ONLY safe for cached prerolled players.
+        // For freshly-created players streaming over HTTP, leaving auto-wait
+        // off causes silent failures: the player drains its (empty) buffer
+        // and stops without retrying. The cache path was already configured
+        // with `automaticallyWaitsToMinimizeStalling = false` inside
+        // `preloadVideoPlayer`, so we don't reapply it here.
+        if playerWasCached {
+            player.automaticallyWaitsToMinimizeStalling = false
         }
         player.isMuted = mute
         let targetVolume = media.volume
@@ -1273,26 +1412,32 @@ private final class ReaderState: ObservableObject {
         player.volume = hasFadeIn ? 0.0 : targetVolume
         foregroundVideoPlayers[media.id] = player
 
-        let shouldLoop = (media.loop ?? false)
-        // Use AVPlayerLooper for seamless looping (Apple recommended, no gap)
-        if shouldLoop, let queuePlayer = player as? AVQueuePlayer, let item = queuePlayer.currentItem {
-            foregroundLoopers[media.id] = AVPlayerLooper(player: queuePlayer, templateItem: item)
-        }
+        // Foreground media plays exactly once per spec — no AVPlayerLooper.
+        // Looping is reserved for the background video path which uses
+        // `backgroundVideoLooper` in `ensureBackgroundVideoPlayer`.
         let obs = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
         ) { [weak self] _ in
-            if !shouldLoop { self?.foregroundSoundDidStop() }
+            self?.foregroundSoundDidStop()
         }
         foregroundLoopObservers[media.id] = obs
 
         // Wait for readyToPlay before playing to avoid blank frame
         let mediaId = media.id
+        let scheduledStart = TimeInterval(media.startTime ?? 0)
+        // Calibration logging — surface the gap between when the timeline
+        // wanted the clip to start (currentTime, scheduledStart) and the
+        // moment we actually fire play(). Filter via:
+        //   xcrun simctl spawn booted log stream --predicate 'subsystem == "me.meeshy.app" && category == "story.playback"'
+        let invokedAt = self.currentTime
         if player.currentItem?.status == .readyToPlay {
             player.play()
             foregroundSoundDidStart()
+            storyPlaybackLogger.info("video play READY mediaId=\(mediaId, privacy: .public) wasCached=\(playerWasCached, privacy: .public) scheduledStart=\(scheduledStart, format: .fixed(precision: 3)) currentTime=\(invokedAt, format: .fixed(precision: 3)) latency=\((invokedAt - scheduledStart) * 1000, format: .fixed(precision: 1))ms")
         } else {
+            storyPlaybackLogger.info("video play DEFERRED mediaId=\(mediaId, privacy: .public) wasCached=\(playerWasCached, privacy: .public) status=\(player.currentItem?.status.rawValue ?? -1) scheduledStart=\(scheduledStart, format: .fixed(precision: 3)) currentTime=\(invokedAt, format: .fixed(precision: 3))")
             readyObservers[mediaId]?.invalidate()
             readyObservers[mediaId] = player.currentItem?.observe(\.status, options: [.new]) { [weak self, weak player] item, _ in
                 guard item.status == .readyToPlay || item.status == .failed else { return }
@@ -1301,6 +1446,11 @@ private final class ReaderState: ObservableObject {
                     if item.status == .readyToPlay {
                         player?.play()
                         self?.foregroundSoundDidStart()
+                        if let nowTime = self?.currentTime {
+                            storyPlaybackLogger.info("video play KVO-FIRED mediaId=\(mediaId, privacy: .public) currentTime=\(nowTime, format: .fixed(precision: 3)) latency=\((nowTime - scheduledStart) * 1000, format: .fixed(precision: 1))ms")
+                        }
+                    } else {
+                        storyPlaybackLogger.error("video FAILED mediaId=\(mediaId, privacy: .public) status=\(item.status.rawValue)")
                     }
                 }
             }
@@ -1312,8 +1462,8 @@ private final class ReaderState: ObservableObject {
             fadeVolume(player: player, from: 0.0, to: targetVolume, duration: fadeInDuration)
         }
 
-        // Schedule stop + fade-out if duration is set and not looping
-        if let dur = media.duration, !shouldLoop {
+        // Schedule stop + fade-out — foreground always plays once.
+        if let dur = media.duration {
             let stopDelay = TimeInterval(dur)
             let fadeOutDur = TimeInterval(media.fadeOut ?? 0)
             let fadeOutStart = max(0, stopDelay - fadeOutDur)
@@ -1335,13 +1485,19 @@ private final class ReaderState: ObservableObject {
         // Seuls les audios foreground sont démarrés ici — l'audio background (si présent)
         // est géré séparément par `startBackgroundAudio`.
         let foregroundAudios = story.storyEffects?.resolvedForegroundAudioPlayers ?? []
+        var preWarmURLs: [URL] = []
         for audio in foregroundAudios {
             if let preloaded = preloadedAudioURLs[audio.id] {
                 registerPendingAudioStart(audio: audio, url: preloaded)
+                preWarmURLs.append(preloaded)
             } else if let urlStr = story.media.first(where: { $0.id == audio.postMediaId })?.url,
                       let resolved = MeeshyConfig.resolveMediaURL(urlStr) {
                 registerPendingAudioStart(audio: audio, url: resolved)
+                preWarmURLs.append(resolved)
             }
+        }
+        for url in preWarmURLs {
+            Task { await StoryMediaLoader.shared.preloadAndCachePlayer(url: url) }
         }
     }
 
@@ -1357,6 +1513,13 @@ private final class ReaderState: ObservableObject {
     private func checkPendingAudioStarts() {
         for (id, pending) in pendingAudioStarts {
             let startOffset = TimeInterval(pending.audio.startTime ?? 0)
+            if currentTime + Self.preRollLeadTime >= startOffset,
+               !preRolledAudioIds.contains(id),
+               currentTime < startOffset {
+                preRolledAudioIds.insert(id)
+                let url = pending.url
+                Task { await StoryMediaLoader.shared.preloadAndCachePlayer(url: url) }
+            }
             if currentTime >= startOffset {
                 pendingAudioStarts.removeValue(forKey: id)
                 createAndStartAudioPlayer(for: pending.audio, url: pending.url)
@@ -1371,12 +1534,19 @@ private final class ReaderState: ObservableObject {
         // Use cached prerolled player if available, otherwise create fresh
         let cached = StoryMediaLoader.shared.cachedPlayer(for: url)
         let player: AVPlayer
+        let playerWasCached: Bool
         if let cached {
             player = cached
+            playerWasCached = true
         } else {
             let item = AVPlayerItem(url: url)
             item.preferredForwardBufferDuration = 2.0
             player = AVQueuePlayer(playerItem: item)
+            playerWasCached = false
+        }
+        // See createAndStartVideoPlayer: only safe on prerolled cached players.
+        if playerWasCached {
+            player.automaticallyWaitsToMinimizeStalling = false
         }
         let targetVolume = audio.volume
         let hasFadeIn = (audio.fadeIn ?? 0) > 0
@@ -1384,17 +1554,13 @@ private final class ReaderState: ObservableObject {
         player.volume = hasFadeIn ? 0.0 : targetVolume
         foregroundAudioPlayers[audio.id] = player
 
-        let shouldLoop = audio.loop ?? false
-        // Use AVPlayerLooper for seamless looping (Apple recommended)
-        if shouldLoop, let queuePlayer = player as? AVQueuePlayer, let item = queuePlayer.currentItem {
-            foregroundLoopers[audio.id] = AVPlayerLooper(player: queuePlayer, templateItem: item)
-        }
+        // Foreground audio plays exactly once. No AVPlayerLooper.
         let obs = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: player.currentItem,
             queue: .main
         ) { [weak self] _ in
-            if !shouldLoop { self?.foregroundSoundDidStop() }
+            self?.foregroundSoundDidStop()
         }
         foregroundAudioObservers[audio.id] = obs
 
@@ -1426,8 +1592,8 @@ private final class ReaderState: ObservableObject {
             fadeVolume(player: player, from: 0.0, to: targetVolume, duration: fadeInDuration)
         }
 
-        // Schedule fade-out + stop if duration is set and not looping
-        if let dur = audio.duration, !shouldLoop {
+        // Schedule fade-out + stop — foreground audio always plays once.
+        if let dur = audio.duration {
             let stopDelay = TimeInterval(dur)
             let fadeOutDur = TimeInterval(audio.fadeOut ?? 0)
             let fadeOutStart = max(0, stopDelay - fadeOutDur)
@@ -1444,21 +1610,71 @@ private final class ReaderState: ObservableObject {
 
     // MARK: Background video (stored to avoid re-creation on every render)
 
+    /// Background videos must loop seamlessly to fill the slide duration —
+    /// a 2s clip on a 4s (or longer) slide should play repeatedly, not stop
+    /// after one playthrough. We try the prerolled cache first
+    /// (StoryMediaLoader.preloadVideoPlayer always returns `AVQueuePlayer`,
+    /// despite the function's `AVPlayer` return type), then fall back to a
+    /// fresh `AVQueuePlayer`. Without this lookup the user sees the colored
+    /// background placeholder for 1-6 seconds while a freshly-created
+    /// AVPlayerItem fights for `.readyToPlay` — the bug surfaced as
+    /// "fond coloré qui flashe pendant plusieurs secondes" on the J. Charles
+    /// slide.
     func ensureBackgroundVideoPlayer(url: URL, muted: Bool = false) -> AVPlayer {
         if let existing = backgroundVideoPlayer {
             return existing
         }
-        // Try prerolled cached player first for instant playback
-        let player: AVPlayer
-        if let cached = StoryMediaLoader.shared.cachedPlayer(for: url) {
-            player = cached
+        let queuePlayer: AVQueuePlayer
+        let wasCached: Bool
+        if let cached = StoryMediaLoader.shared.cachedPlayer(for: url) as? AVQueuePlayer {
+            queuePlayer = cached
+            wasCached = true
         } else {
-            player = AVPlayer(url: url)
+            let item = AVPlayerItem(url: url)
+            item.preferredForwardBufferDuration = 2.0
+            queuePlayer = AVQueuePlayer(playerItem: item)
+            wasCached = false
         }
-        player.isMuted = muted
-        player.play()
-        backgroundVideoPlayer = player
-        return player
+        queuePlayer.isMuted = muted
+        if let currentItem = queuePlayer.currentItem {
+            backgroundVideoLooper = AVPlayerLooper(player: queuePlayer, templateItem: currentItem)
+        }
+        queuePlayer.play()
+        backgroundVideoPlayer = queuePlayer
+        storyPlaybackLogger.info("background video START url=\(url.absoluteString, privacy: .public) cached=\(wasCached, privacy: .public)")
+        return queuePlayer
+    }
+
+    /// Triggers preroll for a background-video URL the moment the slide
+    /// appears — without waiting for the SwiftUI body to evaluate
+    /// `backgroundMediaLayer`. The cached prerolled player is consumed by
+    /// `ensureBackgroundVideoPlayer` on the first render. This gives the
+    /// background up to ~300 ms of head start vs the legacy lazy path.
+    func startBackgroundVideoPreroll(story: StoryItem) {
+        guard backgroundVideoPlayer == nil else { return }
+        let candidateURLs = backgroundVideoCandidateURLs(for: story)
+        for url in candidateURLs {
+            Task { await StoryMediaLoader.shared.preloadAndCachePlayer(url: url) }
+        }
+    }
+
+    private func backgroundVideoCandidateURLs(for story: StoryItem) -> [URL] {
+        var urls: [URL] = []
+        if let bgMedia = story.storyEffects?.resolvedBackgroundMedia, bgMedia.kind == .video,
+           let urlStr = story.media.first(where: { $0.id == bgMedia.postMediaId })?.url,
+           let resolved = MeeshyConfig.resolveMediaURL(urlStr) {
+            urls.append(resolved)
+        }
+        // Legacy path: first media item itself is a video and the slide has
+        // no explicit storyEffects.mediaObjects.
+        if let legacy = story.media.first,
+           legacy.type == .video,
+           (story.storyEffects?.mediaObjects ?? []).isEmpty,
+           let urlStr = legacy.url,
+           let resolved = MeeshyConfig.resolveMediaURL(urlStr) {
+            urls.append(resolved)
+        }
+        return urls
     }
 
     // MARK: Socket — post:story-translation-updated

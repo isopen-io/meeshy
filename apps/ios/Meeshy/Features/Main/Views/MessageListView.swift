@@ -61,14 +61,15 @@ struct BubbleSwipeContainer<Content: View>: View {
             content()
                 .offset(x: offset)
                 .simultaneousGesture(dragGesture)
-                // `.onLongPressGesture` consumes downstream taps — including
-                // the smiley "+" add-reaction button rendered in the bubble's
-                // overlay. Wrapping the LongPressGesture in
-                // `.simultaneousGesture` lets SwiftUI deliver the tap to the
-                // child view first, only firing the long press when no inner
-                // tappable element handles the touch.
+                // Long press surfaces via `simultaneousGesture` so it
+                // cooperates with the inner reaction "+" tap. The parent
+                // (ConversationView) renders a custom overlay with a
+                // light-blur backdrop, the bubble re-rendered at the
+                // center with a spring scale, and a compact action menu
+                // sliding up from the bottom — that's what `onLongPress`
+                // is wired to.
                 .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.5)
+                    LongPressGesture(minimumDuration: 0.45)
                         .onEnded { _ in
                             HapticFeedback.medium()
                             onLongPress()
@@ -158,6 +159,143 @@ struct BubbleSwipeContainer<Content: View>: View {
                     offset = 0
                 }
             }
+    }
+}
+
+/// Long-press contextual overlay — iMessage-style spring entry + WhatsApp-
+/// flavored bottom menu. Renders:
+///
+/// - A LIGHT backdrop (Color.black.opacity(0.28)) so the rest of the
+///   conversation stays distinguishable behind, instead of the dense system
+///   blur UIContextMenuInteraction would impose.
+/// - The pressed message re-rendered at its current accent color, scaled
+///   from 0.92 → 1.0 via spring on appear (and reverse on dismiss).
+/// - A compact horizontal action row (icon + tiny label) hugging the
+///   bottom safe area — small enough that the bubble stays the focal
+///   point, but rich enough to expose Reply / Forward / React / Translate
+///   / Copy / Delete in a single tap.
+struct MessagePressedOverlay: View {
+    let message: Message
+    let contactColor: String
+    let isDirect: Bool
+    let isDark: Bool
+    let isMine: Bool
+    let userLanguages: (regional: String?, custom: String?)
+    let mentionDisplayNames: [String: String]
+    let currentUserId: String
+    let translations: [MessageTranslation]
+    let preferredTranslation: MessageTranslation?
+    let transcription: MessageTranscription?
+    let translatedAudios: [MessageTranslatedAudio]
+
+    let onReply: () -> Void
+    let onForward: () -> Void
+    let onReact: () -> Void
+    let onShowTranslations: () -> Void
+    let onCopy: () -> Void
+    let onDelete: () -> Void
+    let onDismiss: () -> Void
+
+    @State private var didAppear = false
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(didAppear ? 0.28 : 0)
+                .ignoresSafeArea()
+                .contentShape(Rectangle())
+                .onTapGesture { dismiss() }
+
+            VStack(spacing: 16) {
+                Spacer()
+
+                ThemedMessageBubble(
+                    message: message,
+                    contactColor: contactColor,
+                    isDirect: isDirect,
+                    isDark: isDark,
+                    transcription: transcription,
+                    translatedAudios: translatedAudios,
+                    textTranslations: translations,
+                    preferredTranslation: preferredTranslation,
+                    showAvatar: !isDirect,
+                    isLastInGroup: true,
+                    isLastReceivedMessage: true,
+                    isLastSentMessage: true,
+                    mentionDisplayNames: mentionDisplayNames,
+                    currentUserId: currentUserId,
+                    userLanguages: userLanguages
+                )
+                .padding(.horizontal, 24)
+                .scaleEffect(didAppear ? 1.0 : 0.92)
+                .opacity(didAppear ? 1.0 : 0)
+
+                Spacer()
+
+                actionMenu
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 12)
+                    .opacity(didAppear ? 1.0 : 0)
+                    .offset(y: didAppear ? 0 : 32)
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.78)) {
+                didAppear = true
+            }
+        }
+    }
+
+    private func dismiss() {
+        withAnimation(.spring(response: 0.28, dampingFraction: 0.85)) {
+            didAppear = false
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+            onDismiss()
+        }
+    }
+
+    private var actionMenu: some View {
+        HStack(spacing: 0) {
+            actionButton(label: "Répondre", icon: "arrowshape.turn.up.left.fill") { fire(onReply) }
+            actionButton(label: "Transférer", icon: "arrowshape.turn.up.right.fill") { fire(onForward) }
+            actionButton(label: "Réagir", icon: "face.smiling.fill") { fire(onReact) }
+            actionButton(label: "Traduire", icon: "globe") { fire(onShowTranslations) }
+            actionButton(label: "Copier", icon: "doc.on.doc.fill") { fire(onCopy) }
+            if isMine {
+                actionButton(label: "Supprimer", icon: "trash.fill", destructive: true) { fire(onDelete) }
+            }
+        }
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color(hex: contactColor).opacity(0.18), lineWidth: 0.5)
+        )
+        .shadow(color: Color.black.opacity(0.18), radius: 12, y: 4)
+    }
+
+    private func actionButton(label: String, icon: String, destructive: Bool = false, handler: @escaping () -> Void) -> some View {
+        Button(action: handler) {
+            VStack(spacing: 4) {
+                Image(systemName: icon)
+                    .font(.system(size: 18, weight: .medium))
+                    .foregroundStyle(destructive ? .red : .primary)
+                Text(label)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(destructive ? .red : .secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
+            }
+            .frame(maxWidth: .infinity)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+    }
+
+    private func fire(_ action: () -> Void) {
+        HapticFeedback.light()
+        action()
     }
 }
 

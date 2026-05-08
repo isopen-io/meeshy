@@ -1495,7 +1495,12 @@ class ConversationViewModel: ObservableObject {
                 layoutVersion: 0, layoutMaxWidth: nil,
                 changeVersion: 0
             )
-            try? await persistence.insertOptimistic(optimisticRecord)
+            do {
+                try await persistence.insertOptimistic(optimisticRecord)
+                print("[SendFlow] insertOptimistic OK tempId=\(tempId) state=.sending convId=\(conversationId)")
+            } catch {
+                print("[SendFlow] insertOptimistic FAILED tempId=\(tempId) error=\(error.localizedDescription)")
+            }
         }
 
         do {
@@ -1535,9 +1540,11 @@ class ConversationViewModel: ObservableObject {
                 isEncrypted: isEncrypted ? true : nil,
                 encryptionMode: encryptionMode
             )
+            print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
             let responseData = try await messageService.send(
                 conversationId: conversationId, request: body
             )
+            print("[SendFlow] POST OK tempId=\(tempId) serverId=\(responseData.id) createdAt=\(responseData.createdAt)")
 
             // Register tempId → serverId mapping so the socket handler can reconcile
             // the `message:new` broadcast without creating a duplicate row.
@@ -1546,10 +1553,14 @@ class ConversationViewModel: ObservableObject {
 
             // GRDB server ack — state machine transitions to .sent; store observation
             // surfaces the change to the view without a direct messages[idx] write.
-            _ = try? await messagePersistence.applyEvent(
+            // Logging the result so we can see whether the ⏱→✓ transition actually
+            // took effect (the `try?` swallows both errors AND a nil return when
+            // the state machine rejects the event or the record is missing).
+            let ackResult = try? await messagePersistence.applyEvent(
                 localId: tempId,
                 event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
             )
+            print("[SendFlow] applyEvent serverAck tempId=\(tempId) → resultState=\(ackResult.map { String(describing: $0) } ?? "nil")")
 
             // Move conversation to top of list immediately (optimistic)
             let convId = conversationId

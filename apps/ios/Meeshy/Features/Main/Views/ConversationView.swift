@@ -881,6 +881,25 @@ struct ConversationView: View {
 
             floatingHeaderSection
 
+            // Quick reaction bar — surfaced as a bottom-anchored overlay
+            // sitting just above the composer when the user taps the
+            // smiley "+" inside a bubble. The legacy `+MessageRow` SwiftUI
+            // list rendered this inline next to each cell, but the new
+            // UICollectionView host doesn't carry the row-side state, so
+            // we hoist the bar to the conversation root where it floats
+            // over whichever message triggered it. Tap-outside dismiss is
+            // handled by the existing tap gesture in `+ScrollIndicators`.
+            if let pickerMessageId = overlayState.quickReactionMessageId {
+                VStack {
+                    Spacer()
+                    quickReactionBar(for: pickerMessageId)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, composerHeight + 12)
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .zIndex(99)
+            }
+
             // Connection status banner
             VStack {
                 Color.clear.frame(height: composerState.showOptions ? 72 : 56)
@@ -1097,94 +1116,134 @@ struct ConversationView: View {
         .padding(.top, 12)
     }
 
+    /// Type-erased to break the deep opaque-type chain that crashes the
+    /// SwiftUI runtime metadata resolver on first render. The chain
+    /// `body → bodyWithSheets → bodyWithCovers → bodyWithLifecycle →
+    /// bodyContent → floatingHeaderSection → expandedHeaderBand` produced a
+    /// mangled name long enough that `swift_getTypeByMangledName` recursed
+    /// past the demangler's depth limit (60+ frames of `decodeMangledType`)
+    /// and crashed in `swift::SubstGenericParametersFromMetadata::buildDescriptorPath`.
+    /// AnyView is a known escape hatch for this class of bug — its mangled
+    /// name is a single fixed token, capping the chain depth.
+    private var expandedHeaderBand: AnyView {
+        AnyView(expandedHeaderBandBody)
+    }
+
     @ViewBuilder
-    private var expandedHeaderBand: some View {
+    private var expandedHeaderBandBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
                 ThemedBackButton(color: accentColor, compactMode: composerState.showOptions) { HapticFeedback.light(); router.pop() }
-
-                if composerState.showOptions {
-                    // Title row: name + tags scroll + call buttons + search icon
-                    VStack(alignment: .leading, spacing: 3) {
-                        HStack(alignment: .top, spacing: 4) {
-                            Button { composerState.showConversationInfo = true } label: {
-                                HStack(spacing: 6) {
-                                    Text(conversation?.name ?? "Conversation")
-                                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                                        .foregroundColor(.white)
-                                        .lineLimit(2)
-                                        .fixedSize(horizontal: false, vertical: true)
-                                        .multilineTextAlignment(.leading)
-                                    // Subtle "revalidating" sparkle: shown while we
-                                    // serve stale cache and silently refresh from
-                                    // the server. Disappears as soon as the REST
-                                    // response lands — no blocking spinner.
-                                    if viewModel.isRevalidating {
-                                        Image(systemName: "sparkles")
-                                            .font(.system(size: 10, weight: .semibold))
-                                            .foregroundStyle(.white.opacity(0.85))
-                                            .symbolEffect(.pulse, options: .repeating)
-                                            .accessibilityLabel("Actualisation en arriere-plan")
-                                    }
-                                }
-                            }
-                            .accessibilityLabel(conversation?.name ?? "Conversation")
-                            .accessibilityHint("Ouvre les informations de la conversation")
-
-                            Spacer(minLength: 4)
-                            headerCallButtons.layoutPriority(1)
-                            Button {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { headerState.showSearch = true }
-                                isSearchFocused = true
-                            } label: {
-                                Image(systemName: "magnifyingglass")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                                    .frame(width: 28, height: 28)
-                                    .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
-                            }
-                            .accessibilityLabel("Rechercher dans la conversation")
-                        }
-
-                        // Tags row: aligned with title, scrolls under the search icon
-                        headerTagsRow
-                            .mask(
-                                HStack(spacing: 0) {
-                                    Color.black
-                                    LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
-                                        .frame(width: 24)
-                                }
-                            )
-                            .transition(.move(edge: .top).combined(with: .opacity))
-                    }
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                } else {
-                    Spacer()
-                }
-
+                expandedHeaderMidContent
                 headerAvatarView
             }
         }
         .padding(.horizontal, composerState.showOptions ? 10 : 0)
         .padding(.vertical, composerState.showOptions ? 6 : 0)
-        .background(
-            Group {
-                if composerState.showOptions {
-                    RoundedRectangle(cornerRadius: 22)
-                        .fill(.ultraThinMaterial)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 22)
-                                .stroke(
-                                    LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)], startPoint: .leading, endPoint: .trailing),
-                                    lineWidth: 1
-                                )
-                        )
-                        .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
-                        .transition(.scale(scale: 0.1, anchor: .trailing).combined(with: .opacity))
+        .background(expandedHeaderBackground)
+        .padding(.horizontal, composerState.showOptions ? 8 : 16)
+        .padding(.top, 8)
+    }
+
+    /// Middle slot of the header band (between back button and avatar).
+    /// Extracted as a separate `@ViewBuilder` property because inlining the
+    /// `if composerState.showOptions { … } else { Spacer() }` branches
+    /// alongside the rest of the band produced an opaque return type that
+    /// Swift's runtime metadata resolver couldn't materialize — `body` would
+    /// crash at first render with a deep `swift_getTypeByMangledName` stack.
+    @ViewBuilder
+    private var expandedHeaderMidContent: some View {
+        if composerState.showOptions {
+            expandedHeaderTitleAndTags
+        } else {
+            Spacer()
+        }
+    }
+
+    /// Title + tags column shown when the composer-options drawer is open.
+    @ViewBuilder
+    private var expandedHeaderTitleAndTags: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(alignment: .top, spacing: 4) {
+                Button { composerState.showConversationInfo = true } label: {
+                    expandedHeaderTitleLabel
                 }
+                .accessibilityLabel(conversation?.name ?? "Conversation")
+                .accessibilityHint("Ouvre les informations de la conversation")
+
+                Spacer(minLength: 4)
+                headerCallButtons.layoutPriority(1)
+                expandedHeaderSearchButton
             }
-        )
-        .padding(.horizontal, composerState.showOptions ? 8 : 16).padding(.top, 8)
+
+            // Tags row: aligned with title, scrolls under the search icon
+            headerTagsRow
+                .mask(
+                    HStack(spacing: 0) {
+                        Color.black
+                        LinearGradient(colors: [.black, .clear], startPoint: .leading, endPoint: .trailing)
+                            .frame(width: 24)
+                    }
+                )
+                .transition(.move(edge: .top).combined(with: .opacity))
+        }
+        .transition(.move(edge: .trailing).combined(with: .opacity))
+    }
+
+    /// Title text + optional revalidation sparkle. Splitting this off keeps
+    /// the conditional `Image` inside its own opaque type and prevents
+    /// SwiftUI from baking it into the parent's already-complex type tree.
+    @ViewBuilder
+    private var expandedHeaderTitleLabel: some View {
+        HStack(spacing: 6) {
+            Text(conversation?.name ?? "Conversation")
+                .font(.system(size: 13, weight: .bold, design: .rounded))
+                .foregroundColor(.white)
+                .lineLimit(2)
+                .fixedSize(horizontal: false, vertical: true)
+                .multilineTextAlignment(.leading)
+            // Subtle "revalidating" sparkle: shown while we serve stale cache
+            // and silently refresh from the server. Disappears as soon as the
+            // REST response lands — no blocking spinner.
+            if viewModel.isRevalidating {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white.opacity(0.85))
+                    .symbolEffect(.pulse, options: .repeating)
+                    .accessibilityLabel("Actualisation en arriere-plan")
+            }
+        }
+    }
+
+    private var expandedHeaderSearchButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { headerState.showSearch = true }
+            isSearchFocused = true
+        } label: {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(LinearGradient(colors: [Color(hex: accentColor), Color(hex: secondaryColor)], startPoint: .topLeading, endPoint: .bottomTrailing))
+                .frame(width: 28, height: 28)
+                .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
+        }
+        .accessibilityLabel("Rechercher dans la conversation")
+    }
+
+    @ViewBuilder
+    private var expandedHeaderBackground: some View {
+        if composerState.showOptions {
+            RoundedRectangle(cornerRadius: 22)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 22)
+                        .stroke(
+                            LinearGradient(colors: [Color(hex: accentColor).opacity(0.4), Color(hex: secondaryColor).opacity(0.15)], startPoint: .leading, endPoint: .trailing),
+                            lineWidth: 1
+                        )
+                )
+                .shadow(color: Color(hex: accentColor).opacity(0.2), radius: 8, y: 2)
+                .transition(.scale(scale: 0.1, anchor: .trailing).combined(with: .opacity))
+        }
     }
 
     // MARK: - Reply Thread Overlay

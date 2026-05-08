@@ -660,6 +660,25 @@ public final class StoryComposerViewModel {
         return obj
     }
 
+    /// Pin the natural asset duration on a media object so the reader's
+    /// visibility window matches the actual playback length. Idempotent: a
+    /// later trim from the timeline editor overwrites this baseline.
+    func setMediaDuration(id: String, duration: Float, slideId: String? = nil) {
+        let targetIndex: Int = {
+            if let slideId, let idx = slides.firstIndex(where: { $0.id == slideId }) {
+                return idx
+            }
+            return currentSlideIndex
+        }()
+        guard slides.indices.contains(targetIndex) else { return }
+        var effects = slides[targetIndex].effects
+        guard var medias = effects.mediaObjects,
+              let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
+        medias[mediaIdx].duration = duration
+        effects.mediaObjects = medias
+        slides[targetIndex].effects = effects
+    }
+
     @discardableResult
     func addAudioObject() -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
