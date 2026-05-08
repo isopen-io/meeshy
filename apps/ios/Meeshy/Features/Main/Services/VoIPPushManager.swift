@@ -139,19 +139,19 @@ extension VoIPPushManager: PKPushRegistryDelegate {
     private func registerTokenWithBackend(_ token: String) async {
         guard APIClient.shared.authToken != nil else { return }
 
-        struct RegisterTokenRequest: Encodable {
-            let token: String
-            let platform: String
-            let type: String
-        }
+        let body = RegisterDeviceTokenRequest(
+            token: token,
+            platform: "ios",
+            type: "voip",
+            apnsEnvironment: PushNotificationManager.apnsEnvironment
+        )
 
         do {
-            let body = RegisterTokenRequest(token: token, platform: "ios", type: "voip")
             let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
                 endpoint: "/users/register-device-token",
                 body: body
             )
-            logger.info("VoIP token registered with backend")
+            logger.info("VoIP token registered with backend (env=\(PushNotificationManager.apnsEnvironment))")
         } catch {
             logger.error("Failed to register VoIP token: \(error.localizedDescription)")
         }
