@@ -6,9 +6,20 @@ public struct RegisterDeviceTokenRequest: Encodable {
     public let token: String
     public let platform: String
     public let type: String
+    /// "development" for sandbox APNs (debug builds), "production" for App Store/TestFlight.
+    /// Optional — gateway defaults to "production" when omitted.
+    public let apnsEnvironment: String?
 
-    public init(token: String, platform: String = "ios", type: String = "apns") {
-        self.token = token; self.platform = platform; self.type = type
+    public init(
+        token: String,
+        platform: String = "ios",
+        type: String = "apns",
+        apnsEnvironment: String? = nil
+    ) {
+        self.token = token
+        self.platform = platform
+        self.type = type
+        self.apnsEnvironment = apnsEnvironment
     }
 }
 
