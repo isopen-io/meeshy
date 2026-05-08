@@ -9,28 +9,24 @@ public struct TransportBar: View {
     public let currentTime: Float
     public let duration: Float
     public let zoomScale: CGFloat
-    public let mode: TimelineMode
     public let isMuted: Bool
     public let onPlayToggle: () -> Void
     public let onMuteToggle: () -> Void
     public let onZoomIn: () -> Void
     public let onZoomOut: () -> Void
     public let onZoomReset: () -> Void
-    public let onModeSwitch: () -> Void
 
     public init(isPlaying: Bool, currentTime: Float, duration: Float,
-                zoomScale: CGFloat, mode: TimelineMode, isMuted: Bool,
+                zoomScale: CGFloat, isMuted: Bool,
                 onPlayToggle: @escaping () -> Void,
                 onMuteToggle: @escaping () -> Void,
                 onZoomIn: @escaping () -> Void,
                 onZoomOut: @escaping () -> Void,
-                onZoomReset: @escaping () -> Void,
-                onModeSwitch: @escaping () -> Void) {
+                onZoomReset: @escaping () -> Void) {
         self.isPlaying = isPlaying; self.currentTime = currentTime; self.duration = duration
-        self.zoomScale = zoomScale; self.mode = mode; self.isMuted = isMuted
+        self.zoomScale = zoomScale; self.isMuted = isMuted
         self.onPlayToggle = onPlayToggle; self.onMuteToggle = onMuteToggle
         self.onZoomIn = onZoomIn; self.onZoomOut = onZoomOut; self.onZoomReset = onZoomReset
-        self.onModeSwitch = onModeSwitch
     }
 
     public static func formatTime(seconds: Float) -> String {
@@ -38,6 +34,22 @@ public struct TransportBar: View {
         let minutes = Int(total) / 60
         let remainder = total - Float(minutes * 60)
         return String(format: "%d:%06.3f", minutes, remainder)
+    }
+
+    /// Compact display format for the transport readout. Trades sub-second
+    /// precision for screen real-estate so the `current / total` pair fits in
+    /// portrait without truncation. Use `formatTime(seconds:)` when you need
+    /// the full ms-precision string (debug overlays, accessibility).
+    /// - < 60s : `"0:00.0"` (1 decimal)
+    /// - >=60s : `"1:05"`   (no decimal)
+    public static func formatTimeCompact(seconds: Float) -> String {
+        let total = max(0, seconds)
+        let minutes = Int(total) / 60
+        if minutes >= 1 {
+            let secs = Int(total.rounded()) - minutes * 60
+            return String(format: "%d:%02d", minutes, secs)
+        }
+        return String(format: "0:%04.1f", total)
     }
 
     public static func zoomLabel(scale: CGFloat) -> String {
@@ -52,13 +64,15 @@ public struct TransportBar: View {
     }
 
     public var body: some View {
-        HStack(spacing: 12) {
+        // Mode switching is handled by the dedicated TimelineModeSwitcher
+        // shown above the sheet — keeping it out of the transport row frees
+        // horizontal space and avoids duplicate affordances.
+        HStack(spacing: 10) {
             playButton
             timeReadout
-            Spacer(minLength: 6)
+            Spacer(minLength: 4)
             zoomCluster
             muteButton
-            modeButton
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -96,13 +110,20 @@ public struct TransportBar: View {
 
     private var playButton: some View {
         Button(action: onPlayToggle) {
-            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                .font(.title3.weight(.semibold))
-                .frame(width: 36, height: 36)
-                .contentShape(Rectangle().inset(by: -4))
+            ZStack {
+                Circle()
+                    .fill(MeeshyColors.brandGradient)
+                    .shadow(color: MeeshyColors.indigo500.opacity(0.35),
+                            radius: 6, x: 0, y: 2)
+                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    .font(.system(size: 13, weight: .heavy))
+                    .foregroundStyle(.white)
+                    .offset(x: isPlaying ? 0 : 1)   // optical centring of play triangle
+            }
+            .frame(width: 32, height: 32)
+            .contentShape(Rectangle().inset(by: -6))
         }
         .buttonStyle(.plain)
-        .foregroundStyle(MeeshyColors.indigo500)
         .accessibilityLabel(String(localized: isPlaying
             ? "story.timeline.transport.pause"
             : "story.timeline.transport.play",
@@ -110,13 +131,27 @@ public struct TransportBar: View {
     }
 
     private var timeReadout: some View {
-        let now = Self.formatTime(seconds: currentTime)
-        let total = Self.formatTime(seconds: duration)
-        return Text("\(now) / \(total)")
-            .font(.system(.caption, design: .monospaced).weight(.semibold))
-            .lineLimit(1)
-            .accessibilityLabel(String(format: String(localized: "story.timeline.transport.timeReadout",
-                                                     bundle: .module), now, total))
+        let nowCompact = Self.formatTimeCompact(seconds: currentTime)
+        let totalCompact = Self.formatTimeCompact(seconds: duration)
+        // Full-precision strings reserved for accessibility — matches what the
+        // Pro inspector and tests expect from `formatTime(seconds:)`.
+        let nowPrecise = Self.formatTime(seconds: currentTime)
+        let totalPrecise = Self.formatTime(seconds: duration)
+        return HStack(spacing: 4) {
+            Text(nowCompact)
+                .foregroundStyle(MeeshyColors.indigo700)
+            Text("/")
+                .foregroundStyle(.secondary)
+            Text(totalCompact)
+                .foregroundStyle(.secondary)
+        }
+        .font(.system(.caption, design: .monospaced).weight(.semibold))
+        .monospacedDigit()
+        .lineLimit(1)
+        .fixedSize(horizontal: true, vertical: false)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(String(format: String(localized: "story.timeline.transport.timeReadout",
+                                                 bundle: .module), nowPrecise, totalPrecise))
     }
 
     private var zoomCluster: some View {
@@ -163,21 +198,4 @@ public struct TransportBar: View {
             bundle: .module))
     }
 
-    private var modeButton: some View {
-        Button(action: onModeSwitch) {
-            Text(Self.modeSwitchLabel(currentMode: mode))
-                .font(.caption2.weight(.bold))
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(
-                    Capsule().fill(MeeshyColors.indigo500.opacity(0.18))
-                )
-                .foregroundStyle(MeeshyColors.indigo700)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(String(localized: mode == .quick
-            ? "story.timeline.mode.switchToPro"
-            : "story.timeline.mode.switchToQuick",
-            bundle: .module))
-    }
 }

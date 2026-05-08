@@ -70,9 +70,9 @@ final class VoiceOverLabelTests: XCTestCase {
     func test_transportBar_body_doesNotCrash() {
         let bar = TransportBar(
             isPlaying: false, currentTime: 1.0, duration: 10.0,
-            zoomScale: 1.0, mode: .quick, isMuted: false,
+            zoomScale: 1.0, isMuted: false,
             onPlayToggle: {}, onMuteToggle: {},
-            onZoomIn: {}, onZoomOut: {}, onZoomReset: {}, onModeSwitch: {}
+            onZoomIn: {}, onZoomOut: {}, onZoomReset: {}
         )
         _ = bar.body
     }

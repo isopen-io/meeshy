@@ -63,6 +63,21 @@ public final class TimelineViewModel {
     internal var pendingMediaURLs: [String: URL] = [:]
     private var pendingImages: [String: UIImage] = [:]
 
+    /// Exposes the still-image bitmap registered for `clipId` (image media
+    /// objects). Track views read this to render an inline thumbnail strip
+    /// on image clips — the underlying playback engine doesn't surface
+    /// individual image bitmaps because it only needs them at draw time.
+    public func loadedImage(for clipId: String) -> UIImage? {
+        pendingImages[clipId]
+    }
+
+    /// URL registered for a video / audio clip. Used by track views that
+    /// want to display an inline preview strip — they hand the URL to a
+    /// frame extractor and cache the resulting frames per zoom level.
+    public func loadedURL(for clipId: String) -> URL? {
+        pendingMediaURLs[clipId]
+    }
+
     // MARK: - Async bootstrap tracking
 
     private var bootstrapTask: Task<Void, Never>?

@@ -39,6 +39,11 @@ public struct VideoClipBar: View, Equatable {
     public let onTrimStartDelta: (CGFloat) -> Void
     public let onTrimEndDelta: (CGFloat) -> Void
     public let onMoveDelta: (CGFloat) -> Void
+    /// Fired when the move drag ends so the caller can commit the move as
+    /// an undoable command and clear the in-flight drag state. Without this
+    /// the drift snowballs across frames because each `onChanged` re-reads
+    /// the (already-mutated) clip start.
+    public let onMoveEnded: () -> Void
 
     private var width: CGFloat { geometry.width(for: duration) }
     private var xOrigin: CGFloat { geometry.x(for: startTime) }
@@ -68,7 +73,8 @@ public struct VideoClipBar: View, Equatable {
         onLongPress: @escaping () -> Void,
         onTrimStartDelta: @escaping (CGFloat) -> Void,
         onTrimEndDelta: @escaping (CGFloat) -> Void,
-        onMoveDelta: @escaping (CGFloat) -> Void
+        onMoveDelta: @escaping (CGFloat) -> Void,
+        onMoveEnded: @escaping () -> Void = {}
     ) {
         self.clipId = clipId
         self.title = title
@@ -88,6 +94,7 @@ public struct VideoClipBar: View, Equatable {
         self.onTrimStartDelta = onTrimStartDelta
         self.onTrimEndDelta = onTrimEndDelta
         self.onMoveDelta = onMoveDelta
+        self.onMoveEnded = onMoveEnded
     }
 
     public var body: some View {
@@ -95,11 +102,13 @@ public struct VideoClipBar: View, Equatable {
             background
             framesStrip
             fadeGradients
+            titleLabel
+            if isLocked { lockBadge }
             if isSelected { selectionHalo }
             if !isLocked { trimHandles }
         }
         .frame(width: width, height: laneHeight - 4)
-        .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         .offset(x: xOrigin)
         .contentShape(Rectangle())
         .onTapGesture(count: 2) { onDoubleTap() }
@@ -108,6 +117,7 @@ public struct VideoClipBar: View, Equatable {
         .gesture(
             DragGesture(minimumDistance: 4)
                 .onChanged { v in if !isLocked { onMoveDelta(v.translation.width) } }
+                .onEnded { _ in if !isLocked { onMoveEnded() } }
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
@@ -122,7 +132,59 @@ public struct VideoClipBar: View, Equatable {
 
     private var background: some View {
         Rectangle()
-            .fill(MeeshyColors.success.opacity(isDark ? 0.32 : 0.22))
+            .fill(backgroundFill)
+    }
+
+    /// Locked clips (synthetic background image lane) read as muted indigo so
+    /// the user differentiates them at a glance from real video clips, which
+    /// stay green to signal "live media you can edit."
+    private var backgroundFill: Color {
+        if isLocked {
+            return isDark
+                ? MeeshyColors.indigo700.opacity(0.45)
+                : MeeshyColors.indigo300.opacity(0.55)
+        }
+        return MeeshyColors.success.opacity(isDark ? 0.32 : 0.22)
+    }
+
+    /// Tiny title chip so the user can read "Image de fond" / file name right
+    /// on the clip without opening the inspector. Hidden when the clip is
+    /// thinner than ~44pt to avoid overflow.
+    @ViewBuilder
+    private var titleLabel: some View {
+        if width >= 44 && !title.isEmpty {
+            HStack(spacing: 4) {
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+                    .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .allowsHitTesting(false)
+        }
+    }
+
+    private var lockBadge: some View {
+        VStack {
+            HStack {
+                Spacer()
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundStyle(.white)
+                    .padding(4)
+                    .background(
+                        Circle().fill(MeeshyColors.indigo700.opacity(0.85))
+                    )
+                    .padding(4)
+            }
+            Spacer()
+        }
+        .allowsHitTesting(false)
+        .accessibilityHidden(true)
     }
 
     private var framesStrip: some View {

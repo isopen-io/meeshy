@@ -20,10 +20,10 @@ final class TransportBarKeyboardTests: XCTestCase {
         var toggled = false
         let bar = TransportBar(
             isPlaying: false, currentTime: 0, duration: 10,
-            zoomScale: 1.0, mode: .quick, isMuted: false,
+            zoomScale: 1.0, isMuted: false,
             onPlayToggle: { toggled = true },
             onMuteToggle: {},
-            onZoomIn: {}, onZoomOut: {}, onZoomReset: {}, onModeSwitch: {}
+            onZoomIn: {}, onZoomOut: {}, onZoomReset: {}
         )
         _ = bar.body  // Body renders without crash
         bar.onPlayToggle()
@@ -44,13 +44,12 @@ final class TransportBarKeyboardTests: XCTestCase {
 
         let bar = TransportBar(
             isPlaying: false, currentTime: 0, duration: 10,
-            zoomScale: 1.0, mode: .quick, isMuted: false,
+            zoomScale: 1.0, isMuted: false,
             onPlayToggle: {},
             onMuteToggle: {},
             onZoomIn: { zoomInCalled = true },
             onZoomOut: { zoomOutCalled = true },
-            onZoomReset: { resetCalled = true },
-            onModeSwitch: {}
+            onZoomReset: { resetCalled = true }
         )
         bar.onZoomIn()
         bar.onZoomOut()

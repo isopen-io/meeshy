@@ -9,6 +9,7 @@ public struct TimelineContainerSwitcher: View {
     @Bindable private var viewModel: TimelineViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.colorScheme) private var colorScheme
 
     private let previewSlot: (() -> AnyView)?
 
@@ -34,27 +35,57 @@ public struct TimelineContainerSwitcher: View {
     }
 
     public var body: some View {
-        Group {
-            switch viewModel.mode {
-            case .quick:
-                if let previewSlot {
-                    QuickTimelineView(viewModel: viewModel, previewSlot: previewSlot)
-                } else {
-                    QuickTimelineView(viewModel: viewModel)
-                }
-            case .pro:
-                if let previewSlot {
-                    ProTimelineView(viewModel: viewModel, previewSlot: previewSlot)
-                } else {
-                    ProTimelineView(viewModel: viewModel)
-                }
-            }
+        VStack(spacing: 0) {
+            modeSwitcherHeader
+            container
         }
+        // Glass material lives on the sheet itself
+        // (`.presentationBackground(.ultraThinMaterial)`); doubling it here
+        // would flatten the canvas blur. We leave this container transparent.
         .animation(reduceMotion ? .none : .spring(response: 0.5, dampingFraction: 0.8), value: viewModel.mode)
         .onChange(of: horizontalSizeClass) { _, newValue in
             let resolved = Self.resolveAutoMode(horizontalSizeClass: newValue, currentMode: viewModel.mode)
             guard resolved != viewModel.mode else { return }
             viewModel.setMode(resolved)
         }
+    }
+
+    @ViewBuilder
+    private var container: some View {
+        switch viewModel.mode {
+        case .quick:
+            if let previewSlot {
+                QuickTimelineView(viewModel: viewModel, previewSlot: previewSlot)
+            } else {
+                QuickTimelineView(viewModel: viewModel)
+            }
+        case .pro:
+            if let previewSlot {
+                ProTimelineView(viewModel: viewModel, previewSlot: previewSlot)
+            } else {
+                ProTimelineView(viewModel: viewModel)
+            }
+        }
+    }
+
+    private var modeSwitcherHeader: some View {
+        HStack {
+            Spacer(minLength: 0)
+            TimelineModeSwitcher(
+                mode: viewModel.mode,
+                isDark: colorScheme == .dark,
+                onSelect: { target in
+                    guard target != viewModel.mode else { return }
+                    viewModel.setMode(target)
+                }
+            )
+            .equatable()
+            Spacer(minLength: 0)
+        }
+        // Top padding clears the system-rendered drag indicator (~14pt above
+        // the sheet content) without crowding the segmented control.
+        .padding(.top, 16)
+        .padding(.bottom, 10)
+        .padding(.horizontal, 12)
     }
 }

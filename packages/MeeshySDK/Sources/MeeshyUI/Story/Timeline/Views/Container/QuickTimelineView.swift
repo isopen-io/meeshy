@@ -33,7 +33,10 @@ public struct QuickTimelineView: View {
         public let title: String
         public let kind: Kind
         public let clipIds: [String]
-        public enum Kind: Equatable { case video, audio, text, bgVideo, bgAudio }
+        public enum Kind: Equatable {
+            case video, audio, text, image
+            case bgVideo, bgAudio, bgImage
+        }
         public var isEmpty: Bool { clipIds.isEmpty }
         public func containsClipId(_ id: String) -> Bool { clipIds.contains(id) }
     }
@@ -42,13 +45,25 @@ public struct QuickTimelineView: View {
                                             selectedClipId: String?,
                                             maxCount: Int) -> [CompactTrack] {
         var allTracks: [CompactTrack] = []
-        let videoClips = project.mediaObjects.filter { !($0.mediaType == "audio") }
+        // Split media by underlying kind so the compact strip labels images
+        // as "Image" and videos as "Vidéo" — collapsing both under a single
+        // "Vidéo" track was the bug surfaced when a slide had only photos.
+        let videoClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.video.rawValue }
+        let imageClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.image.rawValue }
         if !videoClips.isEmpty {
             allTracks.append(CompactTrack(
                 id: "video-1",
                 title: String(format: String(localized: "story.timeline.track.section.video", bundle: .module), 1),
                 kind: .bgVideo,
                 clipIds: videoClips.map { $0.id }
+            ))
+        }
+        if !imageClips.isEmpty {
+            allTracks.append(CompactTrack(
+                id: "image-1",
+                title: String(format: String(localized: "story.timeline.track.section.image", bundle: .module), 1),
+                kind: .bgImage,
+                clipIds: imageClips.map { $0.id }
             ))
         }
         let audioClips = project.audioPlayerObjects
@@ -84,13 +99,26 @@ public struct QuickTimelineView: View {
 
     public static func resolveAllTracks(project: TimelineProject) -> [CompactTrack] {
         var tracks: [CompactTrack] = []
-        let videoClips = project.mediaObjects.filter { !($0.mediaType == "audio") }
-        for (index, _) in videoClips.enumerated() {
+        // Group by media kind first so per-kind numbering ("Image 1", "Image 2",
+        // "Vidéo 1") matches what the user dropped onto the slide. Pre-fix this
+        // method lumped every non-audio media into the "Vidéo" bucket, so adding
+        // two photos surfaced as "Vidéo 1, Vidéo 2".
+        let videoClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.video.rawValue }
+        let imageClips = project.mediaObjects.filter { $0.mediaType == StoryMediaKind.image.rawValue }
+        for (index, clip) in videoClips.enumerated() {
             tracks.append(CompactTrack(
                 id: "video-\(index + 1)",
                 title: String(format: String(localized: "story.timeline.track.section.video", bundle: .module), index + 1),
                 kind: index == 0 ? .bgVideo : .video,
-                clipIds: [videoClips[index].id]
+                clipIds: [clip.id]
+            ))
+        }
+        for (index, clip) in imageClips.enumerated() {
+            tracks.append(CompactTrack(
+                id: "image-\(index + 1)",
+                title: String(format: String(localized: "story.timeline.track.section.image", bundle: .module), index + 1),
+                kind: index == 0 ? .bgImage : .image,
+                clipIds: [clip.id]
             ))
         }
         for (index, audio) in project.audioPlayerObjects.enumerated() {
@@ -110,6 +138,27 @@ public struct QuickTimelineView: View {
             ))
         }
         return tracks.filter { !$0.isEmpty }
+    }
+
+    /// Friendly clip-bar title. Synthetic background clips keep their
+    /// "Image de fond" copy; real clips fall back to a localized type tag
+    /// ("Image", "Vidéo") since `postMediaId` is a UUID and would surface
+    /// in the bar as raw hex — unhelpful and noisy.
+    public static func clipTitle(for media: StoryMediaObject, isSynthetic: Bool) -> String {
+        if isSynthetic {
+            return String(localized: "story.timeline.clip.backgroundImage",
+                          defaultValue: "Image de fond", bundle: .module)
+        }
+        switch media.kind {
+        case .image:
+            return String(localized: "story.timeline.clip.image",
+                          defaultValue: "Image", bundle: .module)
+        case .video:
+            return String(localized: "story.timeline.clip.video",
+                          defaultValue: "Vidéo", bundle: .module)
+        case .none:
+            return media.postMediaId
+        }
     }
 
     public static func footerLabelKey(isExpanded: Bool) -> String {
@@ -152,7 +201,15 @@ public struct QuickTimelineView: View {
             tracksRegion
             footerTrigger
         }
-        .background(colorScheme == .dark ? MeeshyColors.indigo950.opacity(0.4) : MeeshyColors.indigo50.opacity(0.4))
+        // Parent TimelineContainerSwitcher already paints the sheet with
+        // .ultraThinMaterial. We only add a faint indigo tint here so the
+        // editor still feels branded in light mode where the material is
+        // close to white.
+        .background(
+            colorScheme == .dark
+                ? MeeshyColors.indigo950.opacity(0.18)
+                : MeeshyColors.indigo50.opacity(0.32)
+        )
         .gesture(swipeUpExpand)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "story.timeline.mode.quick", bundle: .module))
@@ -166,14 +223,12 @@ public struct QuickTimelineView: View {
             currentTime: viewModel.currentTime,
             duration: viewModel.project.slideDuration,
             zoomScale: viewModel.zoomScale,
-            mode: viewModel.mode,
             isMuted: false,
             onPlayToggle: { viewModel.togglePlayback() },
             onMuteToggle: { viewModel.toggleMute() },
             onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },
             onZoomOut: { viewModel.zoomScale = max(0.25, viewModel.zoomScale / 1.25) },
-            onZoomReset: { viewModel.zoomScale = 1.0 },
-            onModeSwitch: { viewModel.setMode(.pro) }
+            onZoomReset: { viewModel.zoomScale = 1.0 }
         )
     }
 
@@ -183,65 +238,77 @@ public struct QuickTimelineView: View {
             totalDuration: viewModel.project.slideDuration,
             geometry: geometry,
             isDark: colorScheme == .dark,
-            height: 18,
+            height: 22,                     // unified with ProTimelineView
             onTapTime: { _ in }
         )
         .equatable() // HIGH 3: short-circuit body re-evaluation during playhead scrubbing
     }
 
+    @ViewBuilder
     private var tracksRegion: some View {
         let tracks: [CompactTrack] = isExpanded ? hoistedAllTracks : hoistedCompactTracks
-        let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
-        let laneWidth = max(geometry.width(for: viewModel.project.slideDuration), 200)
-        return ScrollView([.horizontal, isExpanded ? .vertical : []], showsIndicators: isExpanded) {
-            VStack(spacing: 4) {
-                ForEach(tracks, id: \.id) { track in
-                    TrackBarView(
-                        title: track.title,
-                        isLocked: false,
-                        isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
-                        tintHex: tint(for: track.kind),
-                        isDark: colorScheme == .dark,
-                        laneWidth: laneWidth,
-                        laneHeight: 36
-                    ) {
-                        ZStack(alignment: .leading) {
-                            ForEach(track.clipIds, id: \.self) { clipId in
-                                clipBar(for: clipId, geometry: geometry, laneHeight: 36)
+        if tracks.isEmpty {
+            ProTimelineEmptyState(isDark: colorScheme == .dark)
+                .padding(.vertical, 28)
+                .padding(.horizontal, 16)
+        } else {
+            let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
+            let laneWidth = max(geometry.width(for: viewModel.project.slideDuration), 200)
+            ScrollView([.horizontal, isExpanded ? .vertical : []], showsIndicators: isExpanded) {
+                VStack(spacing: 4) {
+                    ForEach(tracks, id: \.id) { track in
+                        TrackBarView(
+                            title: track.title,
+                            isLocked: false,
+                            isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
+                            tintHex: tint(for: track.kind),
+                            isDark: colorScheme == .dark,
+                            laneWidth: laneWidth,
+                            laneHeight: 36
+                        ) {
+                            ZStack(alignment: .leading) {
+                                ForEach(track.clipIds, id: \.self) { clipId in
+                                    clipBar(for: clipId, geometry: geometry, laneHeight: 36)
+                                }
                             }
                         }
                     }
                 }
+                .padding(.horizontal, 12)
             }
+            .frame(maxHeight: isExpanded ? .infinity : CGFloat(tracks.count) * 40 + 8)
+            .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
         }
-        .frame(maxHeight: isExpanded ? .infinity : CGFloat(tracks.count) * 40 + 8)
-        .animation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
     }
 
     @ViewBuilder
     private var footerTrigger: some View {
         let hidden = max(0, allTrackCount - Self.compactMaxTracks)
-        HStack {
-            Button {
-                withAnimation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8)) {
-                    isExpanded.toggle()
+        // Hide the deploy button when there are no extra tracks to reveal —
+        // showing "+ 0 track(s)" is noise that distracts from the empty state.
+        if hidden > 0 || isExpanded {
+            HStack {
+                Button {
+                    withAnimation(reduceMotion ? .none : .spring(response: 0.4, dampingFraction: 0.8)) {
+                        isExpanded.toggle()
+                    }
+                } label: {
+                    let key = Self.footerLabelKey(isExpanded: isExpanded)
+                    let raw = String(localized: String.LocalizationValue(key), bundle: .module)
+                    Text(isExpanded ? raw : String(format: raw, hidden))
+                        .font(.caption2.weight(.semibold))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.18)))
+                        .foregroundStyle(MeeshyColors.indigo700)
                 }
-            } label: {
-                let key = Self.footerLabelKey(isExpanded: isExpanded)
-                let raw = String(localized: String.LocalizationValue(key), bundle: .module)
-                Text(isExpanded ? raw : String(format: raw, hidden))
-                    .font(.caption2.weight(.semibold))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(MeeshyColors.indigo500.opacity(0.18)))
-                    .foregroundStyle(MeeshyColors.indigo700)
+                .buttonStyle(.plain)
+                Spacer(minLength: 0)
             }
-            .buttonStyle(.plain)
-            Spacer(minLength: 0)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .opacity(collapsedFooterOpacity)
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .opacity(collapsedFooterOpacity)
     }
 
     private var collapsedFooterOpacity: Double { isExpanded ? 0.4 : 1.0 }
@@ -259,6 +326,7 @@ public struct QuickTimelineView: View {
     private func tint(for kind: CompactTrack.Kind) -> String {
         switch kind {
         case .bgVideo, .video: return "6366F1"
+        case .bgImage, .image: return "8B5CF6"
         case .bgAudio, .audio: return "818CF8"
         case .text:            return "A5B4FC"
         }
@@ -267,19 +335,26 @@ public struct QuickTimelineView: View {
     @ViewBuilder
     private func clipBar(for clipId: String, geometry: TimelineGeometry, laneHeight: CGFloat) -> some View {
         if let media = viewModel.project.mediaObjects.first(where: { $0.id == clipId }) {
+            let isSynthetic = StoryComposerViewModel.isSyntheticTimelineClipId(media.id)
+            let mediaFrames: [UIImage] = {
+                if media.kind == .image, let img = viewModel.loadedImage(for: media.id) {
+                    return [img]
+                }
+                return []
+            }()
             VideoClipBar(
                 clipId: media.id,
-                title: media.postMediaId,
+                title: Self.clipTitle(for: media, isSynthetic: isSynthetic),
                 startTime: media.startTime ?? 0,
                 duration: media.duration ?? 0,
                 fadeIn: media.fadeIn ?? 0,
                 fadeOut: media.fadeOut ?? 0,
                 isSelected: viewModel.selection.selectedClipId == media.id,
-                isLocked: false,
+                isLocked: isSynthetic,
                 isDark: colorScheme == .dark,
                 geometry: geometry,
                 laneHeight: laneHeight,
-                frames: [],
+                frames: mediaFrames,
                 onTap: { viewModel.selectClip(id: media.id) },
                 onDoubleTap: {
                     viewModel.selectClip(id: media.id)
@@ -295,13 +370,22 @@ public struct QuickTimelineView: View {
                                           deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
                 },
                 onMoveDelta: { delta in
+                    // Cumulative translation from drag start — origin must be
+                    // captured once in selection.activeDrag.originalStartTime
+                    // (rereading media.startTime here drifts because
+                    // applyClipPosition has already mutated it).
                     let mediaId = media.id
-                    let originalStart = media.startTime ?? 0
-                    viewModel.beginClipDrag(clipId: mediaId)
+                    if viewModel.selection.activeDrag?.clipId != mediaId {
+                        viewModel.beginClipDrag(clipId: mediaId)
+                    }
+                    guard let drag = viewModel.selection.activeDrag else { return }
                     viewModel.dragClipMoved(
-                        rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
+                        rawTime: drag.originalStartTime + Float(delta) / Float(geometry.pixelsPerSecond),
                         snapCandidates: []
                     )
+                },
+                onMoveEnded: {
+                    viewModel.endClipDrag()
                 }
             )
             .equatable()

@@ -138,7 +138,8 @@ public struct TimelineToolbar: View {
 
     private var rulerLabel: some View {
         Text(Self.formatRulerResolution(seconds: rulerResolutionSeconds))
-            .font(.system(size: 9, weight: .semibold, design: .monospaced))
+            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+            .tracking(0.2)
             .foregroundStyle(.secondary)
             .accessibilityHidden(true)
     }

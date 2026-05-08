@@ -42,6 +42,10 @@ public struct RulerView: View, Equatable {
     }
 
     public static func formatTick(_ seconds: Double) -> String {
+        // The 0 mark always reads as "0s" to stay coherent with the
+        // surrounding "2s / 4s / 6s" labels (mixing "0ms" with whole-second
+        // siblings looked broken at low zooms).
+        if seconds == 0 { return "0s" }
         if seconds < 1.0 {
             return "\(Int((seconds * 1000).rounded()))ms"
         } else if seconds < 60.0 {
@@ -57,6 +61,12 @@ public struct RulerView: View, Equatable {
         }
     }
 
+    /// Approximate half-width of the widest tick label ("500ms" / "10s").
+    /// The leftmost label is shifted right by this margin so it doesn't clip
+    /// at the ruler's leading edge, while the tick line itself stays anchored
+    /// to the correct time position so it remains aligned with clips below.
+    public static let labelHalfWidth: CGFloat = 14
+
     public var body: some View {
         let interval = Self.tickInterval(for: geometry.zoomScale)
         let count = max(1, Int((Double(totalDuration) / interval).rounded(.up)) + 1)
@@ -66,10 +76,10 @@ public struct RulerView: View, Equatable {
                 .fill(isDark ? Color.black.opacity(0.4) : Color.white.opacity(0.7))
             ForEach(0..<count, id: \.self) { i in
                 let t = Double(i) * interval
-                tick(at: CGFloat(t) * geometry.pixelsPerSecond, label: Self.formatTick(t))
+                let x = CGFloat(t) * geometry.pixelsPerSecond
+                tick(lineX: x, labelX: max(x, Self.labelHalfWidth), label: Self.formatTick(t))
             }
         }
-        .drawingGroup()   // SOTA P7: bake ticks to Metal layer, skip re-stroke when props unchanged
         .frame(height: height)
         .contentShape(Rectangle())
         .gesture(
@@ -80,17 +90,20 @@ public struct RulerView: View, Equatable {
         .accessibilityLabel("Ruler")
     }
 
-    private func tick(at x: CGFloat, label: String) -> some View {
-        VStack(spacing: 2) {
+    /// `lineX` is the actual time anchor (kept aligned with clips below).
+    /// `labelX` is shifted right when the time anchor would clip the caption.
+    private func tick(lineX: CGFloat, labelX: CGFloat, label: String) -> some View {
+        ZStack(alignment: .topLeading) {
             Rectangle()
                 .fill(isDark ? MeeshyColors.indigo300.opacity(0.7) : MeeshyColors.indigo700.opacity(0.6))
                 .frame(width: 1, height: 6)
+                .position(x: lineX, y: 3)
             Text(label)
                 .font(.system(size: 9, weight: .medium))
                 .foregroundStyle(isDark ? MeeshyColors.indigo200 : MeeshyColors.indigo800)
                 .lineLimit(1)
                 .fixedSize()
+                .position(x: labelX, y: height - 6)
         }
-        .position(x: x, y: height / 2)
     }
 }

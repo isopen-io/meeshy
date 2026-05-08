@@ -18,6 +18,7 @@ public struct ProTimelineView: View {
     @Bindable private var viewModel: TimelineViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let previewSlot: (() -> AnyView)?
 
@@ -38,7 +39,7 @@ public struct ProTimelineView: View {
         let all = QuickTimelineView.resolveAllTracks(project: project)
         let contenu = all.filter {
             switch $0.kind {
-            case .bgVideo, .video: return true
+            case .bgVideo, .video, .bgImage, .image: return true
             default: return false
             }
         }
@@ -62,7 +63,14 @@ public struct ProTimelineView: View {
     }
 
     public static func shouldShowClipInspector(viewModel: TimelineViewModel) -> Bool {
-        viewModel.selection.selectedClipId != nil
+        guard let id = viewModel.selection.selectedClipId else { return false }
+        // Synthetic clips (e.g., the static background image lane) carry no
+        // editable metadata — surfacing the inspector would expose Delete,
+        // Add keyframe and Loop controls that have no effect, and risk the
+        // user thinking they removed their background. The clip is still
+        // tappable so the selection ring shows, but the inspector stays
+        // hidden until they pick a real clip.
+        return !StoryComposerViewModel.isSyntheticTimelineClipId(id)
     }
 
     // MARK: - Hoisted computed properties (MEDIUM 7)
@@ -74,89 +82,163 @@ public struct ProTimelineView: View {
 
     // MARK: - Body
 
+    /// True when the host environment is a portrait phone (or any compact
+    /// horizontal class). The 30/70 HStack split is reserved for landscape /
+    /// iPad — in compact contexts we collapse to a fully vertical layout so
+    /// the transport row and tracks both get the full sheet width.
+    private var isCompactLayout: Bool { horizontalSizeClass == .compact }
+
     public var body: some View {
-        GeometryReader { proxy in
-            HStack(spacing: 0) {
-                previewColumn
-                    .frame(width: proxy.size.width * Self.previewWidthFraction)
-                timelineColumn
-                    .frame(width: proxy.size.width * (1 - Self.previewWidthFraction))
+        Group {
+            if isCompactLayout {
+                compactLayout
+            } else {
+                regularLayout
             }
-            .overlay(alignment: .bottomLeading) { inspectorOverlay }
         }
-        .background(colorScheme == .dark ? MeeshyColors.indigo950.opacity(0.45) : MeeshyColors.indigo50.opacity(0.45))
+        // Parent TimelineContainerSwitcher already paints the sheet with
+        // .ultraThinMaterial. The tint here just nudges the surface back
+        // toward the indigo brand in both schemes.
+        .background(
+            colorScheme == .dark
+                ? MeeshyColors.indigo950.opacity(0.18)
+                : MeeshyColors.indigo50.opacity(0.32)
+        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "story.timeline.mode.pro", bundle: .module))
     }
 
-    // MARK: - Sub-views
+    // MARK: - Layout variants
 
-    private var previewColumn: some View {
+    /// Portrait phone — vertical stack, no preview column (canvas of the parent
+    /// composer is visible behind the sheet). Toolbar + transport on top so
+    /// they're always reachable above the keyboard, tracks scroll below.
+    private var compactLayout: some View {
         VStack(spacing: 0) {
-            if let previewSlot { previewSlot() } else { Color.black }
-            TransportBar(
-                isPlaying: viewModel.isPlaying,
-                currentTime: viewModel.currentTime,
-                duration: viewModel.project.slideDuration,
-                zoomScale: viewModel.zoomScale,
-                mode: viewModel.mode,
-                isMuted: false,
-                onPlayToggle: { viewModel.togglePlayback() },
-                onMuteToggle: { viewModel.toggleMute() },
-                onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },
-                onZoomOut: { viewModel.zoomScale = max(0.25, viewModel.zoomScale / 1.25) },
-                onZoomReset: { viewModel.zoomScale = 1.0 },
-                onModeSwitch: { viewModel.setMode(.quick) }
-            )
+            proToolbarRow
+            transportRow
+            rulerRow
+            tracksScroll
+        }
+        .overlay(alignment: .bottomTrailing) { inspectorOverlay }
+    }
+
+    /// Landscape / iPad — preview left (~30%), timeline right (~70%) with the
+    /// transport tucked under the preview column. Inspector floats bottom-leading
+    /// so it doesn't overlap the timeline tracks.
+    private var regularLayout: some View {
+        GeometryReader { proxy in
+            HStack(spacing: 0) {
+                previewColumn
+                    .frame(width: proxy.size.width * Self.previewWidthFraction)
+                regularTimelineColumn
+                    .frame(width: proxy.size.width * (1 - Self.previewWidthFraction))
+            }
+            .overlay(alignment: .bottomLeading) { inspectorOverlay }
         }
     }
 
-    private var timelineColumn: some View {
+    // MARK: - Shared rows
+
+    private var transportRow: some View {
+        TransportBar(
+            isPlaying: viewModel.isPlaying,
+            currentTime: viewModel.currentTime,
+            duration: viewModel.project.slideDuration,
+            zoomScale: viewModel.zoomScale,
+            isMuted: false,
+            onPlayToggle: { viewModel.togglePlayback() },
+            onMuteToggle: { viewModel.toggleMute() },
+            onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },
+            onZoomOut: { viewModel.zoomScale = max(0.25, viewModel.zoomScale / 1.25) },
+            onZoomReset: { viewModel.zoomScale = 1.0 }
+        )
+    }
+
+    private var proToolbarRow: some View {
+        TimelineToolbar(
+            canUndo: viewModel.canUndo,
+            canRedo: viewModel.canRedo,
+            isSnapEnabled: viewModel.isSnapEnabled,
+            rulerResolutionSeconds: rulerResolution(for: viewModel.zoomScale),
+            onUndo: { viewModel.undo() },
+            onRedo: { viewModel.redo() },
+            onSnapToggle: { viewModel.toggleSnap() }
+        )
+    }
+
+    private var rulerRow: some View {
+        let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
+        return RulerView(
+            totalDuration: viewModel.project.slideDuration,
+            geometry: geometry,
+            isDark: colorScheme == .dark,
+            height: 22,
+            onTapTime: { _ in }
+        )
+        .equatable() // HIGH 3: short-circuit body re-evaluation during playhead scrubbing
+    }
+
+    @ViewBuilder
+    private var tracksScroll: some View {
         let geometry = TimelineGeometry(zoomScale: viewModel.zoomScale)
         let laneWidth = max(geometry.width(for: viewModel.project.slideDuration), 320)
-        return VStack(spacing: 0) {
-            TimelineToolbar(
-                canUndo: viewModel.canUndo,
-                canRedo: viewModel.canRedo,
-                isSnapEnabled: viewModel.isSnapEnabled,
-                rulerResolutionSeconds: rulerResolution(for: viewModel.zoomScale),
-                onUndo: { viewModel.undo() },
-                onRedo: { viewModel.redo() },
-                onSnapToggle: { viewModel.toggleSnap() }
-            )
-            RulerView(
-                totalDuration: viewModel.project.slideDuration,
-                geometry: geometry,
-                isDark: colorScheme == .dark,
-                height: 22,
-                onTapTime: { _ in }
-            )
-            .equatable() // HIGH 3: short-circuit body re-evaluation during playhead scrubbing
+        if hoistedTrackGroups.allSatisfy({ $0.tracks.isEmpty }) {
+            ProTimelineEmptyState(isDark: colorScheme == .dark)
+                .padding(.vertical, 24)
+        } else {
             ScrollView([.horizontal, .vertical]) {
-                VStack(alignment: .leading, spacing: 8) {
+                VStack(alignment: .leading, spacing: 10) {
                     ForEach(hoistedTrackGroups, id: \.section) { group in
-                        groupHeader(key: group.titleKey)
-                        ForEach(group.tracks, id: \.id) { track in
-                            TrackBarView(
-                                title: track.title,
-                                isLocked: false,
-                                isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
-                                tintHex: tint(for: track.kind),
-                                isDark: colorScheme == .dark,
-                                laneWidth: laneWidth,
-                                laneHeight: 40
-                            ) {
-                                ZStack(alignment: .leading) {
-                                    ForEach(track.clipIds, id: \.self) { clipId in
-                                        clipBar(for: clipId, geometry: geometry, laneHeight: 40)
+                        if !group.tracks.isEmpty {
+                            groupHeader(key: group.titleKey)
+                            ForEach(group.tracks, id: \.id) { track in
+                                TrackBarView(
+                                    title: track.title,
+                                    isLocked: false,
+                                    isSelected: track.containsClipId(viewModel.selection.selectedClipId ?? ""),
+                                    tintHex: tint(for: track.kind),
+                                    isDark: colorScheme == .dark,
+                                    laneWidth: laneWidth,
+                                    laneHeight: 40
+                                ) {
+                                    ZStack(alignment: .leading) {
+                                        ForEach(track.clipIds, id: \.self) { clipId in
+                                            clipBar(for: clipId, geometry: geometry, laneHeight: 40)
+                                        }
                                     }
                                 }
                             }
                         }
                     }
                 }
-                .padding(.vertical, 4)
+                .padding(.vertical, 8)
+                .padding(.horizontal, 12)
             }
+        }
+    }
+
+    // MARK: - Regular-only sub-views
+
+    /// Preview column for the regular (landscape / iPad) layout. When no
+    /// preview slot is provided we leave the column transparent so the parent
+    /// composer's canvas shows through instead of rendering a black void.
+    private var previewColumn: some View {
+        VStack(spacing: 0) {
+            if let previewSlot {
+                previewSlot()
+            } else {
+                Color.clear
+            }
+            transportRow
+        }
+    }
+
+    private var regularTimelineColumn: some View {
+        VStack(spacing: 0) {
+            proToolbarRow
+            rulerRow
+            tracksScroll
         }
     }
 
@@ -194,19 +276,25 @@ public struct ProTimelineView: View {
     }
 
     private func groupHeader(key: String) -> some View {
-        HStack(spacing: 6) {
-            Rectangle().fill(MeeshyColors.indigo400.opacity(0.7)).frame(width: 4, height: 14)
+        HStack(spacing: 8) {
+            Rectangle()
+                .fill(MeeshyColors.indigo400.opacity(0.7))
+                .frame(width: 3, height: 12)
+                .clipShape(Capsule())
             Text(String(localized: String.LocalizationValue(key), bundle: .module))
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 11, weight: .semibold))
+                .textCase(.uppercase)
+                .tracking(0.4)
                 .foregroundStyle(.secondary)
             Spacer()
         }
-        .padding(.leading, 6)
+        .padding(.top, 4)
     }
 
     private func tint(for kind: QuickTimelineView.CompactTrack.Kind) -> String {
         switch kind {
         case .bgVideo, .video: return "6366F1"
+        case .bgImage, .image: return "8B5CF6"
         case .bgAudio, .audio: return "818CF8"
         case .text:            return "A5B4FC"
         }
@@ -223,19 +311,31 @@ public struct ProTimelineView: View {
     @ViewBuilder
     private func clipBar(for clipId: String, geometry: TimelineGeometry, laneHeight: CGFloat) -> some View {
         if let media = viewModel.project.mediaObjects.first(where: { $0.id == clipId }) {
+            let isSynthetic = StoryComposerViewModel.isSyntheticTimelineClipId(media.id)
+            // Image clips get a single bitmap stretched across the strip;
+            // VideoClipBar's framesStrip divides `width / frames.count` so
+            // a one-element array fills the bar. Video clips still receive
+            // an empty array — extracting per-zoom video frames is the next
+            // wave (would call `VideoFrameExtractor` keyed on URL + duration).
+            let mediaFrames: [UIImage] = {
+                if media.kind == .image, let img = viewModel.loadedImage(for: media.id) {
+                    return [img]
+                }
+                return []
+            }()
             VideoClipBar(
                 clipId: media.id,
-                title: media.postMediaId,
+                title: QuickTimelineView.clipTitle(for: media, isSynthetic: isSynthetic),
                 startTime: media.startTime ?? 0,
                 duration: media.duration ?? 0,
                 fadeIn: media.fadeIn ?? 0,
                 fadeOut: media.fadeOut ?? 0,
                 isSelected: viewModel.selection.selectedClipId == media.id,
-                isLocked: false,
+                isLocked: isSynthetic,
                 isDark: colorScheme == .dark,
                 geometry: geometry,
                 laneHeight: laneHeight,
-                frames: [],
+                frames: mediaFrames,
                 onTap: { viewModel.selectClip(id: media.id) },
                 onDoubleTap: {
                     viewModel.selectClip(id: media.id)
@@ -251,17 +351,24 @@ public struct ProTimelineView: View {
                                           deltaTimeSeconds: Float(delta) / Float(geometry.pixelsPerSecond))
                 },
                 onMoveDelta: { delta in
-                    // DragGesture.onChanged fires with cumulative translation from gesture start.
-                    // beginClipDrag captures originalStartTime from the project state at the
-                    // moment the drag first began. Subsequent frames re-begin but the guard
-                    // in dragClipMoved keeps state consistent.
+                    // SwiftUI's DragGesture.onChanged passes a CUMULATIVE
+                    // translation from gesture start, not a frame delta. The
+                    // origin we add it to therefore must be captured ONCE
+                    // (in selection.activeDrag.originalStartTime) and reused
+                    // every frame — reading `media.startTime` here drifts
+                    // because applyClipPosition has already mutated it.
                     let mediaId = media.id
-                    let originalStart = media.startTime ?? 0
-                    viewModel.beginClipDrag(clipId: mediaId)
+                    if viewModel.selection.activeDrag?.clipId != mediaId {
+                        viewModel.beginClipDrag(clipId: mediaId)
+                    }
+                    guard let drag = viewModel.selection.activeDrag else { return }
                     viewModel.dragClipMoved(
-                        rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
+                        rawTime: drag.originalStartTime + Float(delta) / Float(geometry.pixelsPerSecond),
                         snapCandidates: []
                     )
+                },
+                onMoveEnded: {
+                    viewModel.endClipDrag()
                 }
             )
             .equatable()
