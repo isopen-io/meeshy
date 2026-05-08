@@ -2,7 +2,18 @@
 
 **Date:** 2026-05-08
 **Scope:** apps/ios + packages/MeeshySDK + services/gateway + packages/shared (Prisma) + apps/web (Phase 4 uniquement, pour la migration coordonnee de `clientMessageId`)
-**Objectif:** corriger trois bugs critiques (tri stale, drop multi-send offline, perte d'erreurs silencieuse), ajouter la pagination infinite scroll des conversations, etendre le pattern cache-first stale-while-revalidate aux 5 ViewModels qui y derogent, durcir l'envoi offline (idempotence end-to-end via clientMessageId, edit/delete/reactions/audio offline robustes).
+**Objectif:** corriger trois bugs critiques (tri stale, drop multi-send offline, perte d'erreurs silencieuse), ajouter la pagination infinite scroll cursor-based des conversations, etendre le pattern cache-first stale-while-revalidate aux 5 ViewModels qui y derogent, durcir l'envoi offline (idempotence end-to-end via `clientMessageId`, edit/delete/reactions/audio offline robustes).
+
+**Spec amendee 2026-05-08 (post audit code)** : corrections appliquees apres verification ligne-par-ligne du code source.
+- Cursor pagination = conversation **ID** (pas timestamp ISO8601). Le SDK iOS stocke `nextCursor: String?`
+- ACK socket `_sendResponse()` (`MessageHandler.ts:861-878`) NE retourne pas `clientMessageId` — a ajouter (le test gateway decrit un contrat non implemente)
+- `OutboxStatus` reels = `pending/inflight/failed/exhausted` (pas `sending/sent/archived`)
+- `OutboxKind.sendReaction` existe deja, mais `ReactionQueue` stocke en JSON file separe — refonte sur OutboxRecord
+- `OfflineQueue.enqueue` actuellement async non-throws (OfflineQueue.swift:115) — passe en `async throws`
+- `MessageTranslation` est un Json field embedded dans `Message.translations`, pas une relation Prisma — pas de `include: { translations: true }`
+- Pas de route REST `POST /messages` ; tout passe par WebSocket
+- Pas de `LoadState` enum existant — a creer ex nihilo
+- Cache GRDB actuel = table `cache_entries(key, itemId, encodedData)` generique ; le store conversations evolue vers row-per-conversation via migration v5
 
 ---
 
@@ -25,26 +36,42 @@
 
 ### 1.1 Bug 1 — Liste des conversations dans le mauvais ordre en cache stale
 
-`ConversationListViewModel.reloadFromCache()` (`apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift:227-235`) et `loadMore()` (lignes 469-492) assignent les donnees du cache directement a `@Published var conversations` **sans appliquer de tri**. Le tri n'existe que dans le computed `groupedConversations` (lignes 159-210). Toute lecture directe de `conversations` herite de l'ordre de restitution SQLite.
+`ConversationListViewModel.reloadFromCache()` (`apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift:227-235`) et `loadMore()` (lignes 469-505) assignent les donnees du cache directement a `@Published var conversations` **sans appliquer de tri**.
 
-Cause adjacente : `ConversationSyncEngine.syncSinceLastCheckpoint` (lignes 268-281) reconstruit la liste cachee sans tri final avant `cache.conversations.save(merged, for: "list")`.
+Le tri intra-section EST applique en aval, mais asynchroniquement, dans la **methode static** `groupConversations()` (lignes 159-210), declenchee via le pipeline Combine `CombineLatest4($conversations, $searchText, $selectedFilter, $userCategories)` (lignes 111-127). Cela signifie :
+1. `conversations` lui-meme n'est jamais trie a la source — tout consommateur direct (binding UI prematuree, screenshot, autres VMs) voit l'ordre brut SQLite
+2. Le pipeline produit un etat transitoire ou `groupedConversations` peut etre vide/decale pendant ~1 frame entre l'assignation `conversations = data` et le re-emit de CombineLatest
+3. Sites d'ecriture directe a `conversations` sans tri : L231, L401, L405, L415, L448, L502 (`append(contentsOf:)` du loadMore)
+
+Cause adjacente : `ConversationSyncEngine.syncSinceLastCheckpoint` (ligne 350 — `cache.conversations.save(merged, for: "list")`) reconstruit la liste cachee sans tri final ; `merged` preserve l'ordre d'insertion (append apres dedup par `firstIndex`), pas un tri par `lastMessageAt`.
 
 ### 1.2 Bug 2 — Messages multiples en envoi offline silencieusement perdus
 
-`ConversationViewModel.sendMessage()` (`apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift:1305-1400`) presente trois defauts cumules :
+`ConversationViewModel.sendMessage()` (`apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift:1305+`) presente trois defauts cumules :
 
-- `guard !isSending else { return false }` (ligne 1305) protege uniquement le path online (`isSending = true` ligne 1417). En offline, on `return true` ligne 1400 sans jamais positionner le flag. Plusieurs `Task` partent en parallele.
+- `guard !isSending else { return false }` (ligne 1305) protege uniquement le path online (`isSending = true` ligne 1415 environ). En offline, on `return true` ligne 1399 sans jamais positionner le flag. Plusieurs `Task` partent en parallele.
 - Persistance fire-and-forget non awaited :
-  - `Task { await OfflineQueue.shared.enqueue(queueItem) }` (ligne 1317)
+  - `Task { await OfflineQueue.shared.enqueue(queueItem) }` (ligne 1317) — `OfflineQueue.enqueue` est actuellement `public func enqueue(_ item: OfflineQueueItem) async` non-throws (cf. `packages/MeeshySDK/Sources/MeeshySDK/Persistence/OfflineQueue.swift:115`). La signature doit passer en `async throws` (cf. §6.1)
   - `Task.detached(priority: .utility) { try? await persistence.insertOptimistic(...) }` (ligne 1370)
   - `Task.detached(priority: .utility) { await CacheCoordinator.shared.messages.mergeUpdate(...) }` (ligne 1375)
 - Erreurs avalees par `try?` partout (`OfflineQueue.writeToOutbox` ligne 230 ; `insertOptimistic` ligne 1370). Toute erreur GRDB sur lock SQLite -> message evapore sans trace.
+
+**Generation de tempId inconsistante** : la base existante utilise 3 prefixes selon le path :
+- `temp_<uuid>` (online optimistic, ConversationViewModel:1449)
+- `offline_<uuid>` (OfflineQueue, OfflineQueue.swift:34)
+- `retry_<uuid>` (MessageRetryQueue, MessageRetryQueue.swift:35)
+
+La map `pendingServerIds: [String: String]` (ConversationViewModel:221, set ligne 1552 environ) traduit `tempId → serverId` apres ACK. Phase 4 unifie tout sur `clientMessageId` au format `cid_<uuid lowercase>` et supprime les 3 prefixes locaux.
 
 Symptome utilisateur : le 1er message apparait avec icone horloge, les suivants disparaissent (ni dans l'UI, ni dans le cache, ni dans la queue).
 
 ### 1.3 Bug 3 — Pas de pagination cote iOS
 
-`ConversationListViewModel.loadMore()` existe mais utilise un `offset` (vulnerable aux decalages quand de nouvelles conversations arrivent pendant le scroll), avec un cap dur `autoLoadCap = 1000` (ligne 50). Le cache n'est pas mis a jour pour les pages 2+. La route gateway `GET /conversations` supporte deja `before` cursor + `limit` (`services/gateway/src/routes/conversations/core.ts:99-519`), mais le SDK et le ViewModel ne l'exploitent pas.
+`ConversationListViewModel.loadMore()` (lignes 469-505) existe mais utilise `offset` (vulnerable aux decalages quand de nouvelles conversations arrivent pendant le scroll), avec un cap dur `autoLoadCap = 1000` (ligne 50). Le cache n'est pas mis a jour pour les pages 2+. La route gateway `GET /conversations` supporte deja `before` + `limit` (`services/gateway/src/routes/conversations/core.ts:99-519`), mais le SDK (`ConversationService.list(offset:limit:)`) ne l'exploite pas.
+
+**Format reel du cursor** (verifie `core.ts:147,194-200`) : `before` est un **conversation ID** (24-char ObjectId), pas un timestamp ISO8601. Le gateway fait `findFirst({ id: before })` puis applique `whereClause.lastMessageAt = { lt: cursor.lastMessageAt }`. Le `nextCursor` retourne dans `cursorPagination` est l'ID de la derniere conversation de la page (`resultCount > 0 ? lastItemId : null`), pas un timestamp.
+
+Cela impose au SDK iOS de stocker le cursor comme `String?` (ID opaque), pas `Date?`.
 
 ### 1.4 Audit cache-first — 5 ViewModels en breche
 
@@ -58,18 +85,33 @@ Symptome utilisateur : le 1er message apparait avec icone horloge, les suivants 
 
 ### 1.5 Audit offline queue — operations manquantes ou fragiles
 
-- **Reactions offline** : `ReactionQueue` separee, non branchee sur l'infrastructure `OutboxRecord` (pas de persistance disque)
-- **Edit message offline** : `OutboxKind.editMessage` existe mais `OutboxDispatcher.dispatch` est no-op pour ce cas
+- **OutboxKind reel** : `sendMessage`, `sendReaction`, `editMessage`, `deleteMessage` (`packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxRecord.swift:4-8`) — donc `sendReaction` existe **deja** comme kind, contrairement a ce qu'une lecture rapide suggere
+- **OutboxStatus reel** : `pending`, `inflight`, `failed`, `exhausted` (OutboxRecord.swift:11-15) — pas `pending → sending → sent → archived`. Le boot recovery (cf. §6.1.1) doit donc reset `inflight → pending`, pas `sending → pending`
+- **Reactions offline** : `ReactionQueue` (`packages/MeeshySDK/Sources/MeeshySDK/Persistence/ReactionQueue.swift`) est un `actor` (ligne 68) avec stockage **separe** (in-memory + JSON file), **pas** branche sur `OutboxRecord`/GRDB. Bien que `OutboxKind.sendReaction` existe, `OutboxDispatcher.dispatch` ne le traite pas et `ReactionQueue.enqueue` n'ecrit pas de OutboxRecord. Phase 4 : refonte du flow reaction pour passer par OutboxRecord (suppression du stockage JSON file)
+- **Edit message offline** : `OutboxKind.editMessage` existe mais `OutboxDispatcher.swift:22-28` est no-op pour ce cas (et `deleteMessage` aussi)
 - **Delete message offline** : idem, no-op
 - **Audio offline** : upload TUS synchrone bloquant ; `attachmentId` peut etre invalide si reseau coupe pendant l'upload
-- **Idempotence cross-device** : `clientMessageId` existe **partiellement** cote backend mais n'est ni persiste ni dedupe :
-  - Cote contrat WebSocket : `services/gateway/src/validation/socket-event-schemas.ts:14` valide `clientMessageId: z.string().optional()` (optionnel)
-  - Cote ACK : le serveur retourne le `clientMessageId` dans le ack quand fourni (`services/gateway/src/socketio/__tests__/message-ack.test.ts:45-50`)
-  - Cote broadcast : `clientMessageId` est **volontairement omis** du broadcast `message:new` (`message-ack.test.ts:61-75`) pour ne pas leak l'identifiant d'un client a un autre
-  - Cote web (Next.js) : `apps/web/services/socketio/messaging.service.ts` envoie deja `clientMessageId` (optionnel)
-  - Cote iOS : RIEN — le `tempId` (`offline_<uuid>`) est purement local SDK iOS, jamais transmis au backend
-  - Cote DB : pas de champ `clientMessageId` en Prisma, pas d'index unique
+- **Idempotence cross-device** : `clientMessageId` est partiellement cote contrat mais **pas implemente cote serveur ni iOS** :
+  - Cote contrat WebSocket : `services/gateway/src/validation/socket-event-schemas.ts:14,26` valide `clientMessageId: z.string().optional()` (optionnel) sur `SocketMessageSendSchema` ET `SocketMessageSendWithAttachmentsSchema`
+  - **Cote ACK actuel** : `MessageHandler._sendResponse()` (`services/gateway/src/socketio/handlers/MessageHandler.ts:861-878`) retourne **uniquement** `{ success: true, data: { messageId: response.data.id } }`. Le `clientMessageId` n'est **PAS** retourne, contrairement a ce que decrit `services/gateway/src/socketio/__tests__/message-ack.test.ts:45-50`. **Le test decrit un contrat NON IMPLEMENTE**. Phase 4 doit modifier `_sendResponse()` pour propager `clientMessageId` dans l'ACK
+  - Cote broadcast : `broadcastNewMessage()` (MessageHandler.ts:388-451) ne transmet jamais `clientMessageId` — comportement correct (privacy-preserving), a conserver
+  - Cote web (Next.js) : `clientMessageId` est genere via `crypto.randomUUID()` au niveau du composant (`ConversationLayout.tsx:618`), propage via `useSocketIOMessaging` → `meeshySocketIOService` → `SocketIOOrchestrator` → `MessagingService.sendMessage()` (lignes 221-325). **Format actuel : UUID v4 nu, sans prefixe `cid_`.** Inclusion conditionnelle ligne 254 : `...(clientMessageId && { clientMessageId })`. Migration Phase 4 : standardisation au format `cid_<uuid>`
+  - Cote web fallback REST : `MessagingService.sendMessageViaRest()` (messaging.service.ts:379-406) NE propage PAS `clientMessageId` — gap a fixer
+  - Cote web anonymous : `apps/web/services/anonymous-chat.service.ts:117` est REST-only et ne propage pas non plus
+  - Cote iOS : RIEN — le `tempId` (3 variantes) est purement local SDK iOS, jamais transmis au backend
+  - Cote DB : pas de champ `clientMessageId` en Prisma (`packages/shared/prisma/schema.prisma:515-644` confirme l'absence), pas d'index unique
   - Cote dedup : aucune. Si un message est rejoue, le serveur cree un doublon
+  - **Important** : pas de route REST `POST /messages` — les tests gateway confirment uniquement GET/PUT/DELETE sur les routes messages. Phase 4 doit decider : (a) tout envoi passe par WS, fallback REST web devient obsolete, OU (b) creer la route POST /messages pour aligner les surfaces
+
+### 1.6 Audit shared types
+
+- `SendMessageRequest` (`packages/shared/types/index.ts:653`) : interface TypeScript **sans** `clientMessageId`, **sans** schema Zod associe
+- `SocketIOMessage` broadcast (`packages/shared/types/socketio-events.ts:957-971`) : pas de `clientMessageId` (correct, a conserver)
+- `MessageSendWithAttachmentsData` (socketio-events.ts:883) : pas de `clientMessageId` dans le contrat shared (mais le gateway l'accepte via Zod optional)
+- `MessageTranslation` : **n'est pas un model Prisma separe** — c'est un champ `Json` embedded dans `Message.translations` (schema.prisma:515-644). Format : `{ "en": { text, translationModel, ... }, "es": {...} }`. **Implication directe** : le code spec `prisma.message.create({ data: ..., include: { translations: true } })` est **invalide Prisma** car `translations` est un scalar Json, pas une relation. Il faut juste lire `message.translations` (toujours present)
+- `MessageAttachment` (schema.prisma:649-848) : model distinct, lie a Message via `messageId` FK nullable. Pour audio : champs `transcription: Json?`, `translations: Json?`, `duration`, `codec`, `sampleRate`, `channels`
+- `resolveUserLanguage` (`packages/shared/utils/conversation-helpers.ts:10-19`) : existe et fonctionne — utilise pour le Prisme Linguistique
+- `client-message-id.ts` : **n'existe pas**, a creer (Phase 4)
 
 ---
 
@@ -82,7 +124,7 @@ Quatre phases independantes, mergeable separement :
 | 1 | Fix tri stale conversations | Non | Faible | XS (~80 LoC + 3 tests) |
 | 2 | Pagination infinite scroll cursor-based | Non (route prete) | Moyen | M (~250 LoC + 6 tests) |
 | 3 | Cache-first sur 5 ViewModels en breche | Non | Moyen | M (~400 LoC + 20 tests) |
-| 4 | Offline queue durcie + clientMessageId end-to-end (iOS + gateway + Prisma + web) | Oui (Prisma + routes + web migration) | Eleve | L (~900 LoC iOS + ~200 LoC gateway + ~150 LoC web + 25 tests) |
+| 4 | Offline queue durcie + clientMessageId end-to-end (iOS + gateway WS + Prisma + web) | Oui (Prisma + WS handler + web migration ; pas de POST /messages REST) | Eleve | L (~900 LoC iOS + ~250 LoC gateway + ~250 LoC web + 30 tests) |
 
 **Ordre logique** : 1 → 2 → 3 → 4. Les phases sont **independantes** et peuvent partir en parallele sur 4 worktrees `feat/ios-conv-listing-{phase}` si plusieurs sessions sont disponibles.
 
@@ -98,49 +140,88 @@ Quatre phases independantes, mergeable separement :
 
 ## 3. Phase 1 — Fix tri stale conversations
 
+### 3.0 Etat existant a preserver
+
+`ConversationListViewModel` actuel :
+- `groupedConversations: [ConversationSection]` est deja un `@Published var` (ligne 27)
+- Pipeline existant `CombineLatest4($conversations, $searchText, $selectedFilter, $userCategories)` (lignes 111-127) → declenche `groupConversations()` (methode static lignes 159-210) → reassigne `groupedConversations`
+- `groupConversations()` static applique le tri intra-section : L166-169, L186, L192-195, L206 (`sorted { a, b in a.lastMessageAt > b.lastMessageAt }`)
+- Flags concurrence existants : `isLoadingMore` (L14), `hasMore: Bool` non-published (L21), `currentOffset` (L51)
+- Pas de socket `message:new` listener — les nouveaux messages externes arrivent uniquement via `conversationUpdated` event qui ne touche que titre/avatar (L270-282)
+
+**On garde le pipeline `CombineLatest4` + `groupConversations()` static** (cela couvre les filters + categories). On ajoute un tri **a la source** sur `conversations` pour resoudre le bug.
+
 ### 3.1 Modifications iOS
 
 `apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift` :
 
 ```swift
-private var conversationsRaw: [MeeshyConversation] = []
 @Published private(set) var conversations: [MeeshyConversation] = []
-@Published private(set) var groupedConversations: [ConversationSection] = []
+// groupedConversations existant inchange — alimente par CombineLatest4 + groupConversations()
 
 private func setConversations(_ items: [MeeshyConversation]) {
-    conversationsRaw = items
-    let sorted = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
-    conversations = sorted
-    groupedConversations = computeSections(from: sorted)  // memoize
+    conversations = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
 }
 
 private func appendConversations(_ items: [MeeshyConversation]) {
-    let merged = (conversationsRaw + items).deduplicatedById()
+    let merged = (conversations + items).deduplicatedById()
     setConversations(merged)
 }
 
 /// Move single conversation to top — O(n) instead of O(n log n) full re-sort.
 /// Used when a socket message:new arrives for an existing conversation.
+/// Requires `MeeshyConversation.lastMessageAt` to be `var` (mutable) — to confirm
+/// in `packages/MeeshySDK/Sources/MeeshySDK/Models/`. If the type is immutable,
+/// use `MeeshyConversation(other: existing, lastMessageAt: newDate)` copy-init helper.
 private func bumpToTop(conversationId: String, newLastMessageAt: Date) {
-    guard let idx = conversationsRaw.firstIndex(where: { $0.id == conversationId }) else { return }
-    var updated = conversationsRaw[idx]
-    updated.lastMessageAt = newLastMessageAt
-    conversationsRaw.remove(at: idx)
-    conversationsRaw.insert(updated, at: 0)
-    conversations = conversationsRaw  // already sorted by invariant
-    groupedConversations = computeSections(from: conversationsRaw)
+    guard let idx = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+    var updated = conversations[idx]
+    updated.lastMessageAt = newLastMessageAt  // requires var, see note above
+    conversations.remove(at: idx)
+    conversations.insert(updated, at: 0)
+    // groupedConversations sera recomputed automatiquement via CombineLatest4
 }
 ```
 
-Tous les sites d'ecriture (`reloadFromCache`, `loadConversations`, `loadMore`, optimistic insert sur creation conv, sync engine merge) passent par ces helpers. **Plus aucun assignement direct a `conversations`.** Les arrivees socket `message:new` sur conversation existante passent par `bumpToTop` (insertion-sort incremental), pas un re-sort complet.
+**Sites d'ecriture a refactor** (recensement audit) :
+- L231 (`reloadFromCache`) → `setConversations(data)`
+- L401, L405 (`loadConversations`) → `setConversations(data)`
+- L415 (`forceRefresh`) → `setConversations(data)`
+- L448 → `setConversations(data)`
+- L502 (`loadMore` `append(contentsOf: deduplicated)`) → `appendConversations(deduplicated)`
+- L265, L275-280, L288, L296, L304 (mutations propriete d'une conversation) → restent inchanges (ne perturbent pas l'ordre car `lastMessageAt` n'est pas modifie)
+- L616, L634 (`isActive`) → idem
+- L650 (`remove(at:)`) → idem (reduce, pas insertion)
 
-`groupedConversations` est **memoized comme `@Published private(set)`**, plus computed property. Cela evite la recomputation a chaque body re-eval pendant le scroll. Le timer minuit (qui peut faire glisser une conversation entre "Today" et "Yesterday") est gere via `Timer.publish(every: 60)` qui appelle `groupedConversations = computeSections(from: conversationsRaw)` quand le wall-clock change de jour.
+**Plus aucun assignement direct a `conversations`** (replace_all les `conversations = data`). Le tri etant centralise, le pipeline `CombineLatest4` recoit deja une liste triee → `groupConversations()` applique son tri intra-section sur deja-trie (no-op net) sans regression.
 
-**Note performance** : a 1000 conversations, `sorted()` ~0.3-0.8ms, computeSections ~5ms — acceptable. A 10k+, le full re-sort devient sensible (5-10ms par event), d'ou l'importance de `bumpToTop` pour le hot path socket.
+### 3.1.1 Socket listener `message:new` pour bumpToTop
+
+Pas de listener socket actuellement dans `ConversationListViewModel` (audit confirme). On en ajoute un :
+
+```swift
+private var socketSubscriptions = Set<AnyCancellable>()
+
+private func subscribeToSocketEvents() {
+    MessageSocketManager.shared.newMessageReceived
+        .receive(on: DispatchQueue.main)
+        .sink { [weak self] payload in
+            self?.bumpToTop(conversationId: payload.conversationId,
+                            newLastMessageAt: payload.createdAt)
+        }
+        .store(in: &socketSubscriptions)
+}
+```
+
+L'inscription se fait dans `init` (apres `super.init` si applicable) ou `onAppear` selon le cycle de vie. Le `PassthroughSubject<NewMessagePayload, Never>` `newMessageReceived` doit exister sur `MessageSocketManager` — verifier ; sinon Phase 1 introduit aussi cette publication. (Note SDK : le socket manager publie deja les events via Combine, il s'agit d'ajouter un selecteur dedie aux conversations list).
+
+**Note performance** : a 1000 conversations, `sorted()` ~0.3-0.8ms — acceptable. A 10k+, le full re-sort devient sensible (5-10ms par event), d'ou l'importance de `bumpToTop` (O(n) lookup + 2 mutations array) pour le hot path socket. Le pipeline `CombineLatest4` se redeclenche automatiquement, ce qui implique une recomputation `groupConversations()` (~5ms a 1000 convs) — acceptable hors scroll, et debounced de fait par le re-emit Combine sur le main run loop.
 
 ### 3.2 Modifications SDK
 
-`packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift:268-281` : ajouter `.sorted { $0.lastMessageAt > $1.lastMessageAt }` a la sortie du merge avant `cache.conversations.save(merged, for: "list")`. Le cache lui-meme est stocke trie ; tout futur lecteur voit l'ordre canonique.
+`packages/MeeshySDK/Sources/MeeshySDK/Sync/ConversationSyncEngine.swift:350` (avant `cache.conversations.save(merged, for: "list")`) : ajouter `.sorted { $0.lastMessageAt > $1.lastMessageAt }` a la sortie du merge. Le cache lui-meme est stocke trie ; tout futur lecteur voit l'ordre canonique.
+
+Idem ligne 279 et 336 (autres sites `cache.conversations.save(merged, for: "list")` dans le sync engine) — auditer toutes les occurrences. Une factorisation `private func saveSorted(_ items: [MeeshyConversation])` dans le sync engine reduit le risque d'oubli.
 
 ### 3.3 Tests
 
@@ -154,80 +235,97 @@ Tous les sites d'ecriture (`reloadFromCache`, `loadConversations`, `loadMore`, o
 
 1. Au demarrage froid, `conversations` est trie `lastMessageAt DESC` des la lecture cache stale (avant le fetch reseau)
 2. Apres `loadMore`, l'ordre est conserve (pas de "queue" de conversations plus anciennes au milieu de recentes)
-3. Quand un nouveau message arrive sur une conversation X, X remonte en position 1 instantanement (via `bumpToTop`, sans full re-sort)
-4. `groupedConversations` ne se recompute qu'a (a) chaque setter `setConversations`/`bumpToTop`, (b) tick minuit (changement de jour), (c) jamais pendant le scroll
+3. Quand un nouveau message arrive sur une conversation X, X remonte en position 1 instantanement (via `bumpToTop`)
+4. Le pipeline `CombineLatest4 → groupConversations()` continue de fonctionner et reagit aux changements `searchText`, `selectedFilter`, `userCategories` ; aucune regression sur les filtres
+5. La recomputation `groupConversations()` est tolerable lors du scroll (debounced naturellement par le re-emit Combine MainActor — pas de jank perceptible a 1000 convs)
 
 ---
 
 ## 4. Phase 2 — Pagination infinite scroll cursor-based
 
-### 4.1 Choix design : cursor `before`
+### 4.1 Choix design : cursor `before` (conversation ID)
 
-Le backend supporte les deux modes (offset+limit et cursor `before` par `lastMessageAt`). Le cursor est immune aux decalages quand de nouvelles conversations arrivent en haut de la liste pendant le scroll.
+Le backend (`services/gateway/src/routes/conversations/core.ts:99-519`) supporte deux modes : offset+limit ET cursor `before`. Le cursor `before` est une **conversation ID** opaque (24-char ObjectId) — le gateway fait `findFirst({ id: before })` puis applique `whereClause.lastMessageAt = { lt: cursor.lastMessageAt }`. Le `nextCursor` retourne dans la reponse est l'ID de la derniere conversation de la page (`cursorPagination.nextCursor: string | null`).
+
+Le cursor est immune aux decalages quand de nouvelles conversations arrivent en haut de la liste pendant le scroll : le filtre par `lastMessageAt` cible la conversation precise referencee par `before`, pas une position indexielle.
 
 ### 4.2 Modifications SDK
 
 `packages/MeeshySDK/Sources/MeeshySDK/Services/ConversationService.swift` :
 
 ```swift
-public func listPage(before cursor: Date? = nil, limit: Int = 30) async throws -> ConversationPage {
+public func listPage(before cursor: String? = nil, limit: Int = 30) async throws -> ConversationPage {
     var query = "limit=\(limit)"
-    if let cursor { query += "&before=\(ISO8601DateFormatter().string(from: cursor))" }
-    let response: CursorPaginatedAPIResponse<[APIConversation]> = try await APIClient.shared.get("/conversations?\(query)")
+    if let cursor, !cursor.isEmpty {
+        query += "&before=\(cursor)"
+    }
+    // PaginatedAPIResponse existe deja (Networking/APIClient.swift:48-60)
+    // mais conversations utilise actuellement OffsetPaginatedAPIResponse — on bascule
+    let response: PaginatedAPIResponse<[APIConversation]> = try await APIClient.shared.get("/conversations?\(query)")
     return ConversationPage(
         items: response.data.map { $0.toMeeshyConversation() },
-        nextCursor: response.cursorPagination?.nextCursor,
-        hasMore: response.cursorPagination?.hasMore ?? false
+        nextCursor: response.pagination?.nextCursor,  // String? (conversation ID)
+        hasMore: response.pagination?.hasMore ?? false
     )
 }
 
-public struct ConversationPage {
+public struct ConversationPage: Sendable {
     public let items: [MeeshyConversation]
-    public let nextCursor: Date?
+    public let nextCursor: String?  // conversation ID, opaque
     public let hasMore: Bool
 }
 ```
 
-L'ancienne signature `list(offset:limit:)` reste pour compatibilite interne (sync engine peut continuer a l'utiliser pour la premiere page sans cursor).
+**Important** : la reponse gateway expose **les deux** champs `pagination` (offset-based, retro-compat) ET `cursorPagination` (cursor-based). Cf. audit gateway. Le SDK utilise `cursorPagination` ; l'ancienne signature `list(offset:limit:)` reste pour le ConversationSyncEngine actuel jusqu'a sa migration future.
 
-### 4.3 Cache : table dediee row-per-conversation
+### 4.3 Cache : evolution du schema GRDB
 
-**Changement de schema GRDB** : aujourd'hui le store `conversations` stocke un blob JSON unique sous cle `"list"`. A 5k+ conversations, l'encode/decode de ce blob bloque le MainActor 200-500ms au cold start. **On migre vers une table dediee row-per-conversation** :
+**Etat actuel** (`AppDatabase.swift` migrations v3_unified_cache, v4_drop_legacy_tables) : table generique `cache_entries(key TEXT, itemId TEXT, encodedData BLOB, updatedAt DATETIME)` avec PK composite `(key, itemId)` et index sur `key`. Le store `conversations` ecrit aujourd'hui une seule entree avec `key="conv:list"` et `itemId="list"` contenant un blob JSON unique de la liste entiere — **pas vraiment row-per-conversation**, malgre la table multi-row.
+
+**Changement de format dans la meme table** (pas de nouvelle migration de schema) : le store `conversations` evolue pour ecrire **un row par conversation** dans `cache_entries` :
+- `key = "conv:item"` (constant, partage par toutes les conversations cachees)
+- `itemId = <conversationId>` (cle PK partielle)
+- `encodedData = JSON encoded MeeshyConversation` (un seul element, pas un array)
+- `updatedAt = lastMessageAt` (au lieu de "fetched at" pour exploiter l'index naturel)
+
+Pour optimiser le scan trie, on ajoute une **migration v5_cache_entries_sort_index** :
 
 ```sql
-CREATE TABLE cached_conversations (
-    id TEXT PRIMARY KEY,
-    last_message_at INTEGER NOT NULL,  -- epoch ms, indexed
-    payload BLOB NOT NULL,             -- JSON encoded MeeshyConversation
-    fetched_at INTEGER NOT NULL,
-    INDEX idx_last_message_at (last_message_at DESC)
-);
+-- v5_cache_entries_sort_index
+CREATE INDEX idx_cache_entries_key_updatedat
+    ON cache_entries(key, updatedAt DESC);
 ```
 
+Cet index permet `SELECT * FROM cache_entries WHERE key = 'conv:item' ORDER BY updatedAt DESC LIMIT 30 OFFSET <n>` en O(log n + page_size).
+
+**Strategie de migration de l'ancien blob `conv:list`** : au boot, si un row `(key='conv:list', itemId='list')` existe, decoder le blob, pour chaque element ecrire un row `(key='conv:item', itemId=<id>, encodedData=<single>, updatedAt=<lastMessageAt>)`, puis supprimer le blob. Operation single-shot dans `AppDatabase.applyMigrations` apres v5. Si la deserialisation echoue (corruption), le blob est efface et on repart d'un cache froid.
+
 Avantages :
-- Reads partiels possibles (page d'affichage par exemple LIMIT 30 ORDER BY last_message_at DESC)
-- Decode incremental (seules les rows visibles sont decodees)
-- `mergeUpdate` devient un INSERT ON CONFLICT REPLACE par row
-- LRU efficace via `DELETE WHERE id NOT IN (SELECT id ORDER BY last_message_at DESC LIMIT N)`
+- Reads partiels (page d'affichage LIMIT 30 OFFSET n)
+- Decode incremental (seules les rows visibles)
+- `mergeUpdate` devient INSERT OR REPLACE par row (deja le pattern naturel de la table)
+- LRU efficace via `DELETE FROM cache_entries WHERE key='conv:item' AND itemId NOT IN (...)`
 
-**Plafond LRU pragmatique : 2000 conversations cachees.** Au-dela, purge des plus anciennes par `lastMessageAt` ascendant. 99% des utilisateurs n'atteindront jamais 500 ; 2000 couvre les power users sans risque de bloat. Si l'utilisateur scrolle au-dela des 2000 cachees, les anciennes pages sont re-fetched depuis le backend.
+**Plafond LRU pragmatique : 2000 conversations cachees.** Au-dela, purge des plus anciennes par `updatedAt` ascendant. 99% des utilisateurs n'atteindront jamais 500. Si l'utilisateur scrolle au-dela des 2000 cachees, les anciennes pages sont re-fetched depuis le backend.
 
-**WAL mode obligatoire** : verifier que GRDB utilise `DatabasePool` (pas `DatabaseQueue`) avec `prepareDatabase { try $0.execute(sql: "PRAGMA journal_mode = WAL") }`. Sans WAL, les writes bloquent les reads → jank UI lors d'un fetch reseau pendant scroll.
+**WAL mode** : verifier le mode actuel d'AppDatabase. Si `DatabaseQueue` actuel, migrer en `DatabasePool` avec `prepareDatabase { try $0.execute(sql: "PRAGMA journal_mode = WAL") }`. Sans WAL, les writes bloquent les reads → jank UI lors d'un fetch reseau pendant scroll. (Audit a faire en debut Phase 2 ; si deja en pool/WAL, no-op).
 
 Procedure de fetch :
 
-1. Lire la page courante via `SELECT * FROM cached_conversations ORDER BY last_message_at DESC LIMIT 30 OFFSET <n>`
+1. Lire la page courante via `SELECT encodedData FROM cache_entries WHERE key = 'conv:item' ORDER BY updatedAt DESC LIMIT 30 OFFSET <n>`
 2. Merge les nouveaux items via `INSERT OR REPLACE` (un par row)
-3. Pas besoin de re-trier en memoire — l'index BTREE garantit l'ordre
-4. Trigger LRU si count > 2000 : `DELETE FROM cached_conversations WHERE id IN (SELECT id ... LIMIT count - 2000)`
+3. Pas besoin de re-trier en memoire — l'index garantit l'ordre
+4. Trigger LRU si count > 2000 : `DELETE FROM cache_entries WHERE key='conv:item' AND itemId IN (SELECT itemId ... ORDER BY updatedAt ASC LIMIT count - 2000)`
+
+**Impact sur CacheStore generic** : le store actuel manipule `key+itemId` mais expose une API `load(for: String)` orientee blob. Phase 2 introduit dans le store conversations une API specifique `loadPage(offset:limit:)` qui contourne la couche generique pour exploiter l'index. La compatibilite descendante est preservee : `load(for: "list")` continue a fonctionner via une vue (assemble une page entiere triee), uniquement utilise par le sync engine pendant son refresh complet.
 
 ### 4.4 ViewModel
 
 ```swift
 @Published private(set) var loadState: LoadState = .idle
 @Published private(set) var paginationState: PaginationState = .idle
-private var oldestLoadedDate: Date?
-private var hasMore = true
+private var nextCursor: String?  // conversation ID, opaque (cf. §4.1)
+@Published private(set) var hasMore: Bool = true  // promote to @Published pour binding UI
 
 enum PaginationState: Equatable {
     case idle
@@ -240,21 +338,31 @@ func loadMore() async {
     guard hasMore && paginationState != .loadingMore else { return }
     paginationState = .loadingMore
     do {
-        let page = try await service.listPage(before: oldestLoadedDate, limit: 30)
+        let page = try await service.listPage(before: nextCursor, limit: 30)
         appendConversations(page.items)
-        oldestLoadedDate = page.items.last?.lastMessageAt
+        nextCursor = page.nextCursor
         hasMore = page.hasMore
-        await CacheCoordinator.shared.conversations.mergeUpdate(page.items, for: "list")
+        // Mise a jour cache row-per-conversation (cf. §4.3)
+        await CacheCoordinator.shared.conversations.upsertRows(page.items)
         paginationState = page.hasMore ? .idle : .exhausted
     } catch {
         paginationState = .error(error.localizedDescription)
     }
 }
+
+func pullToRefresh() async {
+    nextCursor = nil
+    hasMore = true
+    paginationState = .idle
+    await loadConversations()  // refetch page 1 cursor-less
+}
 ```
 
-`loadState` reste pour le chargement initial. `paginationState` distinct evite le shimmer global pendant un load more.
+`loadState` (defini en Phase 3) reste pour le chargement initial. `paginationState` distinct evite le shimmer global pendant un load more. `hasMore` devient `@Published` pour permettre a la vue de masquer le footer quand exhausted.
 
-Suppression du cap dur `autoLoadCap = 1000` (`ConversationListViewModel.swift:50`).
+Suppression du cap dur `autoLoadCap = 1000` (`ConversationListViewModel.swift:50`) et de `currentOffset` (L51) qui devient obsolete.
+
+**Note `upsertRows`** : nouvelle methode du store conversations exploitant la migration row-per-conversation (§4.3). Signature : `func upsertRows(_ items: [MeeshyConversation]) async`. Implementation : INSERT OR REPLACE par row dans `cache_entries` avec `key='conv:item'`.
 
 ### 4.5 UI infinite scroll
 
@@ -286,8 +394,9 @@ Detection 2 lignes avant la fin pour eviter que l'utilisateur ne voit le Progres
 ### 4.6 Cas edge
 
 - **Cache stale n=15, hasMore=true** : 15 affiches immediatement, page 1 reseau en background, pas de loadMore tant qu'user n'a pas scrolle
-- **Race nouveau message socket pendant load more** : sync engine insere via `mergeUpdate` independamment ; le tri central de Phase 1 garantit la position correcte
-- **Pull-to-refresh** : reset `oldestLoadedDate = nil`, `hasMore = true`, refetch page 1 cursor-less
+- **Race nouveau message socket pendant load more** : `bumpToTop` (Phase 1) insere via setter independamment ; le tri central garantit la position correcte
+- **Pull-to-refresh** : reset `nextCursor = nil`, `hasMore = true`, refetch page 1 cursor-less (cf. `pullToRefresh()`)
+- **Cursor obsolete** : si la conversation referencee par `nextCursor` est supprimee entre deux pages, le gateway retourne 404 sur le `findFirst`. A clarifier cote backend (audit) — soit fallback gracieux (continue avec offset implicite), soit error explicite. Decision attendue : iOS reset `nextCursor` au sentinel et refetch sans cursor (= pull-to-refresh implicite, accepte une duplication transitoire avec dedup par id)
 
 ### 4.7 Tests
 
@@ -312,10 +421,12 @@ Detection 2 lignes avant la fin pour eviter que l'utilisateur ne voit le Progres
 
 ### 5.1 LoadState unifie
 
-`packages/MeeshySDK/Sources/MeeshySDK/Cache/LoadState.swift` (consolider si deja partiellement defini) :
+**A creer ex nihilo** (audit confirme : aucun `LoadState` enum n'existe actuellement dans le SDK ; les ViewModels gerent un `@Published var isLoading: Bool` ou switch directement sur `CacheResult`). On centralise dans :
+
+`packages/MeeshySDK/Sources/MeeshySDK/Cache/LoadState.swift` (NOUVEAU) :
 
 ```swift
-public enum LoadState: Equatable {
+public enum LoadState: Equatable, Sendable {
     case idle
     case cachedStale       // affichage cache + refresh bg
     case cachedFresh       // affichage cache, pas de refresh
@@ -325,6 +436,21 @@ public enum LoadState: Equatable {
     case error(String)
 }
 ```
+
+**Compatibilite descendante** : on garde temporairement `@Published var isLoading: Bool` calcule a partir de `loadState` via `var isLoading: Bool { loadState == .loading }` pour ne pas casser les vues actuelles qui bindent dessus. Migration progressive vue par vue.
+
+**TTLs par store** (verifies dans `CacheCoordinator.swift:10-25` + `CachePolicy.swift:50-64`) :
+
+| Store | TTL total | staleTTL | Capacite max |
+|---|---|---|---|
+| conversations | 24h | 5min | illimitee |
+| messages | 6 mois | 2min | 600 items |
+| participants | 24h | 5min | illimitee |
+| profiles | 1h | 5min | 100 |
+| friends | (nouveau) — proposer 24h / 5min stale | — |
+| feed, comments, stories | cf. CachePolicy.swift | — |
+
+Pour les nouveaux usages Phase 3 (RequestsViewModel, BlockedViewModel) on utilise le store `friends` deja existant ou on cree un policy si manquant. Les TTLs annonces "5min discover" et "2min search" sont donc des **staleTTL** (au-dela => fetch background), tandis que le TTL total est aligne sur le defaut du store host. Tableau TTL final a verifier en debut Phase 3.
 
 ### 5.2 Helper reutilisable
 
@@ -395,13 +521,14 @@ Tout ViewModel utilisant `loadWithCacheFirst` declare :
 @MainActor
 final class ExampleViewModel: ObservableObject, CacheFirstLoading {
     @Published private(set) var loadState: LoadState = .idle
-    private var activeTasks: Set<Task<Void, Never>> = []
+    // Note: Task<Void, Never> n'est pas Hashable — on utilise un Array
+    private var activeTasks: [Task<Void, Never>] = []
 
     func load() async {
         let revalidate = await CacheFirstLoader(store: ..., key: ...)
             .load(fetch: { ... }, setLoadState: { [weak self] in self?.loadState = $0 },
                   apply: { [weak self] in self?.items = $0 })
-        if let revalidate { activeTasks.insert(revalidate) }
+        if let revalidate { activeTasks.append(revalidate) }
     }
 
     deinit {
@@ -412,7 +539,10 @@ final class ExampleViewModel: ObservableObject, CacheFirstLoading {
 
 Sans cette discipline, un user qui change rapidement d'ecran pendant un revalidate peut accumuler des Tasks zombies qui consomment CPU/network plusieurs secondes.
 
-**Note** : `deinit` n'est pas `@MainActor`-isole. `activeTasks.forEach { $0.cancel() }` est safe car `Task.cancel()` est `Sendable` et thread-safe.
+**Note technique** :
+- `Task<Void, Never>` n'est pas `Hashable` par defaut, donc `Set<Task>` ne compile pas — on utilise `[Task<Void, Never>]`. Le coup en O(n) du cancel-all au deinit est negligeable (taille pratique ≤ 3-5 tasks).
+- `deinit` n'est pas `@MainActor`-isole. `Task.cancel()` est `Sendable` et thread-safe, donc l'appel cross-isolation est OK.
+- En Swift 6 strict, l'acces a `activeTasks` (proprietee `@MainActor`) depuis un `deinit` non-isole emet un warning. Workaround : marquer `nonisolated` la propriete de cancel-list OU utiliser un wrapper `actor TaskBag` partage. Premiere approche prefereable (less ceremony).
 
 ### 5.3 ViewModels a corriger
 
@@ -472,7 +602,7 @@ func sendMessage(_ content: String, attachments: [Attachment] = []) async -> Boo
 
     // UUID Swift produit des MAJUSCULES par defaut. La regex Zod serveur
     // accepte uniquement [a-f0-9]. .lowercased() est OBLIGATOIRE.
-    let clientMessageId = "cid_\(UUID().uuidString.lowercased())"
+    let clientMessageId = ClientMessageId.generate()  // helper centralise §6.2
     let optimistic = makeOptimisticMessage(content: content, clientMessageId: clientMessageId, ...)
 
     // 1. Optimistic UI — synchrone
@@ -506,22 +636,25 @@ func sendMessage(_ content: String, attachments: [Attachment] = []) async -> Boo
 ```
 
 **Changements clefs** :
-- `isInputLocked` guard immediat partage online/offline
-- `persistOptimisticAtomically` : un seul `db.write` qui INSERT a la fois `Message` (status `.sending`) et `OutboxRecord` (status `.pending`) en meme transaction
+- `isInputLocked` guard immediat partage online/offline (renomme depuis `isSending` pour expliciter qu'il s'agit du verrouillage de l'input UI, pas du status reseau)
+- `persistOptimisticAtomically` : un seul `db.write` qui INSERT a la fois la trace optimistic (cache GRDB messages) et `OutboxRecord` (status `.pending`) en meme transaction. **Le model `Message` n'est PAS persiste cote iOS** — pas de table dediee, le cache messages est un blob via CacheStore. La persistance "atomique" combine donc OutboxRecord (table cache_entries pour les hooks GRDB) + cache messages (blob mergeUpdate).
 - Tous les `try?` remplaces par `try` propages
-- `OfflineQueue.enqueue` devient `throws async`
+- **`OfflineQueue.enqueue` doit etre modifiee** : signature actuelle `public func enqueue(_ item: OfflineQueueItem) async` (OfflineQueue.swift:115) a passer en `public func enqueue(_ item: OfflineQueueItem) async throws`. La methode interne `writeToOutbox` (ligne 230) qui utilise `try?` doit etre refactor en `try` propage.
 - `Logger.error` sur chaque chemin d'erreur
-- `clientMessageId` **toujours en lowercase** (`UUID().uuidString.lowercased()`) — Swift produit des majuscules par defaut, mais le contrat serveur exige `[a-f0-9]`
+- `clientMessageId` **toujours en lowercase** via `ClientMessageId.generate()` — wrapper qui force `.lowercased()` (Swift produit des majuscules par defaut, mais le contrat serveur exige `[a-f0-9]`)
+- **Suppression de `tempId`** dans tous les paths (online `temp_*`, offline `offline_*`, retry `retry_*`) — `clientMessageId` est l'unique cle locale + serveur. La map `pendingServerIds: [tempId: serverId]` (ligne 221) devient `pendingServerIds: [clientMessageId: serverId]` (meme structure, cle renommee).
 
-### 6.1.1 Boot recovery des OutboxRecord en `.sending`
+### 6.1.1 Boot recovery des OutboxRecord en `.inflight`
 
-Si l'app crash pendant qu'un message est en cours d'envoi, son `OutboxRecord` reste en statut `.sending` avec `attempts > 0`. Sans recovery, le record est ignore par le `OutboxFlusher` (qui ne traite que `.pending`) → message coince eternellement.
+**Statuts reels** (audit OutboxRecord.swift:11-15) : `pending`, `inflight`, `failed`, `exhausted`. Pas de `.sending` ni `.archived` — le spec utilise les noms reels.
 
-**Boot sequence** dans `MeeshyApp.swift` :
+Si l'app crash pendant qu'un message est en cours d'envoi, son `OutboxRecord` reste en statut `.inflight` (transition appliquee au debut du dispatch). Sans recovery, le record est ignore par le `OutboxFlusher` (qui ne traite que `.pending`) → message coince eternellement.
+
+**Boot sequence** dans `MeeshyApp.swift` (ou hook equivalent au demarrage) :
 
 ```swift
 Task.detached {
-    // Etape 1 : recovery — reset .sending → .pending
+    // Etape 1 : recovery — reset .inflight → .pending
     try? await pool.write { db in
         try db.execute(sql: """
             UPDATE outbox_records
@@ -530,7 +663,7 @@ Task.detached {
         """, arguments: [
             OutboxStatus.pending.rawValue,
             "Reset on boot after presumed crash",
-            OutboxStatus.sending.rawValue
+            OutboxStatus.inflight.rawValue
         ])
     }
 
@@ -541,6 +674,8 @@ Task.detached {
 ```
 
 Le `clientMessageId` etant idempotent end-to-end (cf. 6.2), un message qui a effectivement ete recu par le serveur avant le crash sera dedupe au replay — pas de doublon.
+
+**Note `Sendable`** : `pool` (`DatabasePool` GRDB) est `Sendable` (les types GRDB modernes le sont). Le `Task.detached` capture est valide en Swift 6 strict. A verifier sur la version GRDB utilisee — sinon refactor en `Task { await MainActor.run { ... } }` ou injection via parametre.
 
 ### 6.1.2 OfflineQueue declaree comme actor
 
@@ -559,15 +694,17 @@ public actor OfflineQueue {
 
 ### 6.2 clientMessageId end-to-end
 
-#### Etat existant a fixer
-- WebSocket : champ deja accepte mais `optional()` (`services/gateway/src/validation/socket-event-schemas.ts:14`) — a passer en obligatoire
-- ACK socket : retourne deja le champ (existant, garder)
-- Broadcast `message:new` : **volontairement sans clientMessageId** (privacy-preserving, garder ce design)
-- Persistance DB : absente — a ajouter
-- Dedup : absente — a ajouter
-- Cote web : envoi optionnel deja en place (`apps/web/services/socketio/messaging.service.ts`) — a rendre obligatoire
-- Cote iOS : envoi absent — a ajouter
-- Route REST `POST /messages` : champ absent — a ajouter
+#### Etat existant a fixer (audit code en main)
+- WebSocket : champ deja accepte mais `optional()` (`services/gateway/src/validation/socket-event-schemas.ts:14,26` — sur `SocketMessageSendSchema` ET `SocketMessageSendWithAttachmentsSchema`) — a passer en `regex(...)`
+- **ACK socket : claim invalide.** `MessageHandler._sendResponse()` (`services/gateway/src/socketio/handlers/MessageHandler.ts:861-878`) retourne actuellement **uniquement** `callback({ success: true, data: { messageId: response.data.id } })`. Le test `services/gateway/src/socketio/__tests__/message-ack.test.ts:45-50` decrit un contrat **NON IMPLEMENTE**. Phase 4 doit AJOUTER `clientMessageId` au callback ACK.
+- Broadcast `message:new` : volontairement sans clientMessageId (privacy-preserving, garder ce design — `broadcastNewMessage()` MessageHandler.ts:388-451 ne le transmet pas)
+- Persistance DB : absente — a ajouter (model Prisma + migration MongoDB)
+- Dedup : absente — a ajouter (catch P2002 pattern, cf. infra)
+- Cote web (Socket.IO) : envoi optionnel deja en place via `MessagingService.sendMessage()` (lignes 221-325, inclusion conditionnelle ligne 254 `...(clientMessageId && { clientMessageId })`). Format actuel : **UUID v4 nu** sans prefixe `cid_`. Migration : standardiser au format `cid_<uuid>` ET rendre l'envoi inconditionnel.
+- Cote web (REST fallback) : `MessagingService.sendMessageViaRest()` (`apps/web/services/socketio/messaging.service.ts:379-406`) **NE propage PAS** `clientMessageId` — gap a fixer.
+- Cote web (anonymous) : `apps/web/services/anonymous-chat.service.ts:117` est REST-only sans `clientMessageId` — a ajouter.
+- Cote iOS : envoi absent (audit confirme) — a ajouter.
+- **Route REST `POST /messages`** : **n'existe pas** dans `services/gateway/src/routes/`. Audit confirme uniquement GET/PUT/DELETE sur les routes messages. Decision Phase 4 : (a) tout envoi passe par WS, fallback REST web devient obsolete et la route POST n'est pas creee, OU (b) creer la route POST `/messages` pour aligner les surfaces et rendre le fallback REST web fonctionnel. **Recommandation : option (a)** — moins de surface, le fallback REST web est rare et peut basculer sur reconnexion WS forcee.
 
 #### Format `cid_<UUID v4 lowercase>` — helper centralise
 
@@ -604,33 +741,40 @@ Test cross-platform (gateway integration) :
 - `"cid_" + crypto.randomUUID()` → doit valider (Node/Web)
 
 #### Contrat shared
-`packages/shared/types/messages.ts` :
+
+**Etat actuel** (audit) : `SendMessageRequest` est defini dans `packages/shared/types/index.ts:653` comme **interface TypeScript pure**, sans schema Zod associe (audit confirme : pas de `SendMessageRequestSchema` dans le repo). On AJOUTE le schema Zod et on touche aussi `socketio-events.ts` qui ne contient pas non plus `clientMessageId` dans `MessageSendWithAttachmentsData` (ligne 883 environ).
+
+`packages/shared/types/messages.ts` (NOUVEAU fichier dedie, ou extension de `index.ts`) :
 
 ```typescript
-import { CLIENT_MESSAGE_ID_REGEX } from '../utils/client-message-id.js';
-
-export type SendMessageRequest = {
-    content: string;
-    clientMessageId: string;  // OBLIGATOIRE
-    originalLanguage?: string;
-    replyToId?: string;
-    attachmentIds?: string[];
-    // ...
-};
+import { z } from 'zod';
+import { CLIENT_MESSAGE_ID_REGEX } from '../utils/client-message-id';
 
 export const SendMessageRequestSchema = z.object({
     content: z.string().min(1).max(50_000),
     clientMessageId: z.string().regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format'),
-    // ...
+    originalLanguage: z.string().optional(),
+    replyToId: z.string().optional(),
+    forwardedFromId: z.string().optional(),
+    forwardedFromConversationId: z.string().optional(),
+    attachmentIds: z.array(z.string()).optional(),
+    messageType: z.string().optional(),
 });
+
+export type SendMessageRequest = z.infer<typeof SendMessageRequestSchema>;
 ```
 
-Validation Zod gateway (REST + WS unifies) reuse `SendMessageRequestSchema`.
+L'interface `SendMessageRequest` existante dans `index.ts:653` est remplacee par l'inference Zod (`z.infer`) pour garder la single source of truth.
 
-Migration : `services/gateway/src/validation/socket-event-schemas.ts:14` passe de `clientMessageId: z.string().optional()` a `clientMessageId: z.string().regex(CLIENT_MESSAGE_ID_REGEX)`.
+`packages/shared/types/socketio-events.ts:883` (`MessageSendWithAttachmentsData`) ajoute `clientMessageId: string` (obligatoire) — meme regex via Zod.
+
+Validation Zod gateway (WS — REST POST /messages non cree, cf. decision §6.2 option (a)) : reuse `SendMessageRequestSchema`. Le schema socket actuel `SocketMessageSendSchema` (socket-event-schemas.ts:14) et `SocketMessageSendWithAttachmentsSchema` (socket-event-schemas.ts:26) fusionnent leurs champs avec `SendMessageRequestSchema` via `z.intersection` ou par re-import du regex.
+
+Migration concrete : `services/gateway/src/validation/socket-event-schemas.ts:14,26` passe de `clientMessageId: z.string().optional()` a `clientMessageId: z.string().regex(CLIENT_MESSAGE_ID_REGEX)`.
 
 #### Gateway — pattern catch-on-conflict (atomique)
-`services/gateway/src/routes/messages.ts` (POST) + `services/gateway/src/socketio/message-handler.ts` (event `message:send-with-attachments`) :
+
+**Important** : la route REST `POST /messages` **n'existe pas** (cf. §6.2). Le pattern s'applique uniquement au handler Socket.IO `message:send-with-attachments` (`services/gateway/src/socketio/handlers/MessageHandler.ts`).
 
 **Le pattern `findUnique → INSERT` n'est PAS atomique** : deux requetes concurrentes avec le meme `clientMessageId` (retry reseau rapide, deux onglets web) passent toutes deux le `findUnique` avec `null`, puis l'une echoue sur la contrainte unique MongoDB → `PrismaClientKnownRequestError P2002`. Solution : INSERT direct + catch P2002.
 
@@ -642,15 +786,15 @@ async function createMessageIdempotent(
 ): Promise<{ message: Message; isDuplicate: boolean }> {
     try {
         const message = await prisma.message.create({
-            data: { ...payload, conversationId, clientMessageId },
-            include: { translations: true }  // necessaire pour 6.2.1
+            data: { ...payload, conversationId, clientMessageId }
+            // Note: pas de `include: { translations: true }` — translations est un Json field
+            // embedded dans Message (cf. 1.6), automatiquement retourne avec le record
         });
         return { message, isDuplicate: false };
     } catch (e) {
         if (isPrismaUniqueViolation(e)) {  // e.code === 'P2002'
             const existing = await prisma.message.findUnique({
-                where: { conversationId_clientMessageId: { conversationId, clientMessageId } },
-                include: { translations: true }
+                where: { conversationId_clientMessageId: { conversationId, clientMessageId } }
             });
             if (!existing) throw new Error('Race condition: P2002 but no existing record');
             return { message: existing, isDuplicate: true };
@@ -664,17 +808,26 @@ Avantages : 1 round-trip dans le cas normal (vs 2), atomicite garantie par la co
 
 #### 6.2.1 Re-translate si dedup hit sans traductions
 
-Si la premiere insertion a reussi mais le PUSH ZMQ vers translator a echoue (translator down), le message en DB n'a pas de traductions. Un dedup hit sans re-push laisse ce message sans traductions indefiniment. Cout du fix : un `if` conditionnel (zero requete supplementaire — `translations` deja inclus via `include`) :
+Si la premiere insertion a reussi mais le PUSH ZMQ vers translator a echoue (translator down), le message en DB n'a pas de traductions. Un dedup hit sans re-push laisse ce message sans traductions indefiniment.
+
+`MessageTranslation` est un **Json field embedded** dans `Message.translations` (audit prisma/schema.prisma:515-644 confirme — pas de model relation, format `{ "en": { text, ... }, "es": {...} }`). Le check est donc sur la taille du Json, pas un `.length` array Prisma :
 
 ```typescript
 const { message, isDuplicate } = await createMessageIdempotent(...);
-if (isDuplicate && message.translations.length === 0 && requiresTranslation(message)) {
-    // Re-push ZMQ asynchrone (pas attendu, fire-and-track)
-    void messageTranslationService.translate(message);
+if (isDuplicate && isTranslationsEmpty(message.translations) && requiresTranslation(message)) {
+    // Re-push ZMQ asynchrone (pas attendu, fire-and-track) avec capture d'erreur
+    void messageTranslationService.translate(message)
+        .catch(err => Logger.translation.error(`Re-translate dedup hit failed: ${err}`));
+}
+
+function isTranslationsEmpty(translations: unknown): boolean {
+    if (!translations) return true;
+    if (typeof translations !== 'object') return true;
+    return Object.keys(translations as Record<string, unknown>).length === 0;
 }
 ```
 
-`requiresTranslation(m)` retourne `true` pour messages texte avec `originalLanguage` set, ou messages avec attachment audio (transcription Whisper).
+`requiresTranslation(m)` retourne `true` pour messages texte avec `originalLanguage` set, ou messages avec attachment audio (transcription Whisper). Le `.catch` explicite remplace le `void` qui swallow silencieusement les erreurs.
 
 #### Prisma schema
 `packages/shared/prisma/schema.prisma` :
@@ -704,22 +857,28 @@ db.messages.createIndex(
 
 #### Reconciliation iOS — ACK socket + broadcast cible vers sender
 
-Le broadcast `message:new` est envoye en mode `io.to(conversationId).except(senderSocketId).emit(...)` aux **autres** membres (sans `clientMessageId`, comme aujourd'hui — privacy preservee). En parallele, le sender recoit son ACK avec le `clientMessageId`.
+**Etat actuel** (audit MessageHandler.ts:861-878) : `_sendResponse()` retourne uniquement `{ messageId: response.data.id }` — pas de `clientMessageId`. **C'est ce qui doit etre fixe en premier.**
 
-**Probleme avec ACK seul** : si l'ACK est perdu (timeout reseau, crash applicatif au mauvais moment), l'optimistic reste pending eternellement. Solution recommandee par la review architecture :
+**Strategie ciblage sender** : le serveur identifie les sockets du sender via la **room utilisateur** `ROOMS.user(userId)` (existante, audit gateway). Cela couvre le cas multi-device : si un user est connecte sur iOS + web simultanement, les **deux** sockets recoivent le broadcast cible avec `clientMessageId`. Chaque client matche par `clientMessageId` dans sa propre map locale ; un device qui n'a jamais envoye ce `clientMessageId` ne le trouvera pas dans sa map et fera une insertion classique (path receiver).
 
-**Le sender recoit egalement un broadcast cible incluant `clientMessageId`** via `io.to(senderSocketId).emit('message:new', { ...message, clientMessageId })`. Comme le ciblage est par socket-id et que le payload du sender contient son propre `clientMessageId`, il n'y a pas de leak vers d'autres clients.
+Le broadcast `message:new` est envoye en deux temps :
 
 ```typescript
-// Cote gateway, apres createMessageIdempotent :
+// Cote gateway MessageHandler, apres createMessageIdempotent :
 const broadcastPayload = { ...message };  // sans clientMessageId
 const senderPayload = { ...message, clientMessageId };  // avec clientMessageId
 
-io.to(conversationId).except(senderSocketId).emit('message:new', broadcastPayload);
-io.to(senderSocketId).emit('message:new', senderPayload);
+// 1. Broadcast generique aux autres participants (hors sender)
+io.to(ROOMS.conversation(conversationId)).except(ROOMS.user(senderId)).emit('message:new', broadcastPayload);
 
+// 2. Broadcast cible au sender (toutes ses sockets, pour cohérence multi-device)
+io.to(ROOMS.user(senderId)).emit('message:new', senderPayload);
+
+// 3. ACK au socket initial (FIX: inclure clientMessageId, manquant dans _sendResponse actuel)
 callback({ success: true, data: { messageId: message.id, clientMessageId } });
 ```
+
+**Cas multi-device** : un user envoyant depuis iOS recoit le `senderPayload` avec `clientMessageId` sur **ses deux** sessions (iOS + web simultanees). Le device iOS matche dans sa map → promotion optimistic. Le device web n'a pas ce `clientMessageId` dans sa map (il n'a pas envoye) → fait une insertion classique. Pas de doublon, comportement coherent attendu.
 
 Cote iOS, la reconciliation a deux entry points :
 
@@ -755,28 +914,40 @@ private func promoteOptimistic(clientMessageId: String, serverMessage: APIMessag
 
 Cas du cas REST (offline replay) : la reponse HTTP du POST contient le message complet ; le SDK match par `clientMessageId` du payload envoye, meme code path `promoteOptimistic`.
 
-**Timeout** : si ni ACK ni broadcast n'arrivent dans 5 secondes, l'optimistic bascule en `.failed` avec retry budget `MessageRetryQueue`. Apres 5 retries epuises, etat `.failed` definitif avec retry manuel UI.
+**Timeouts a deux paliers** (review : 5s seul est trop court sur 3G/EDGE) :
+- **Palier "envoi lent"** : a 5s sans ACK ni broadcast, afficher l'etat UI `.slow` (icone horloge + spinner discret, pas d'erreur). N'interrompt pas le wait.
+- **Palier `.failed`** : a 30s sans signal, basculer en `.failed` et delegue au retry budget `MessageRetryQueue`. Apres 5 retries epuises, etat `.failed` definitif avec retry manuel UI.
 
-La map `pendingServerIds[tempId]` est supprimee. Le `tempId` (`offline_*`) disparait du SDK iOS — `clientMessageId` est l'unique cle de reconciliation.
+La map `pendingServerIds[tempId]` (ConversationViewModel:221) devient `pendingServerIds[clientMessageId: serverId]` — meme structure, cle renommee. Les 3 prefixes locaux (`offline_*`, `temp_*`, `retry_*`) disparaissent du SDK iOS.
 
-**UX debounce** : afficher l'icone horloge uniquement apres 200ms de delai (debounce). Sur connexion rapide (<200ms ACK), le message passe directement de "envoi en cours invisible" a "envoye" sans flash de horloge.
+**UX debounce icone horloge** : afficher l'icone horloge uniquement apres 200ms de delai (debounce). Sur connexion rapide (<200ms ACK), le message passe directement de "envoi en cours invisible" a "envoye" sans flash de horloge. Etat UI cycle complet : `.invisible → (200ms) → .clock → (5s) → .slow → (30s) → .failed`.
 
 #### Cote web (Next.js) — migration en meme PR que backend
 
-**Risque identifie** : la review backend a confirme que le web genere actuellement `clientMessageId` uniquement quand le composant appelant le passe — pas systematiquement a la couche orchestrator. C'est le **vrai breaking change** de cette migration (plus risque que iOS).
+**Etat actuel** (audit) :
+- `clientMessageId` est genere par **`crypto.randomUUID()`** (UUID v4 nu, **sans prefixe `cid_`**) au niveau du composant React `ConversationLayout.tsx:618` (proprete `optimistic._tempId`)
+- Propage via `useSocketIOMessaging` → `meeshySocketIOService.sendMessage` → `SocketIOOrchestrator.sendMessage` (lignes 311-394, queue + send) → `MessagingService.sendMessage` (lignes 221-325)
+- Inclusion conditionnelle ligne 254 : `...(clientMessageId && { clientMessageId })` — **omis si non fourni**, ce qui arrive si un appelant amont oublie le param
+- `MessagingService.sendMessageViaRest()` (lignes 379-406) — **NE propage PAS** `clientMessageId` au backend (gap critique)
+- `apps/web/services/anonymous-chat.service.ts:117` — REST-only sans `clientMessageId`
+- Path Socket.IO standard : OK sur le contrat technique, manque uniquement le format `cid_` et la garantie d'inconditionnalite
 
-**Audit obligatoire** des sites d'appel :
-- `apps/web/services/socketio/messaging.service.ts` (ligne 240) — actuellement spread conditionnel
-- `apps/web/services/socketio/orchestrator.service.ts` (lignes 319, 391) — parametre optionnel
-- `apps/web/services/conversations/messages.service.ts` — fallback REST eventuel
-- `apps/web/services/messages.service.ts` — point d'entree principal
-- `apps/web/services/anonymous-chat.service.ts` — chat anonyme (peut avoir un autre code path)
+**Audit obligatoire** des sites d'appel a re-verifier ligne par ligne :
+- `apps/web/services/socketio/messaging.service.ts` (lignes 254, 379-406) — spread conditionnel a remplacer + REST a propager
+- `apps/web/services/socketio/orchestrator.service.ts` (lignes 311-394) — parametre `clientMessageId?` a passer obligatoire
+- `apps/web/services/socketio/types.ts` — `MessageSendOptions.clientMessageId?: string` → `: string` (obligatoire)
+- `apps/web/services/conversations/messages.service.ts` — fallback REST a brancher
+- `apps/web/services/messages.service.ts` — point d'entree haut niveau, generer si manquant
+- `apps/web/services/anonymous-chat.service.ts:117` — generer + propager
+- `apps/web/components/.../ConversationLayout.tsx:618` — utiliser `generateClientMessageId()` au lieu de `crypto.randomUUID()` brut
+- `apps/web/hooks/use-chat-v2.ts`, `use-messaging.ts` — relayage explicite
 
 **Strategie de migration** :
-1. Ajouter `import { generateClientMessageId } from '@meeshy/shared/utils/client-message-id';` dans le service le plus haut (orchestrator) **systematiquement**
-2. Tous les appels descendants utilisent ce `clientMessageId` propage en parametre **obligatoire**
-3. Standardiser sur prefixe `cid_<uuid>` (le format libre `client-temp-abc` des tests devient `cid_<uuid>`)
-4. Tests d'integration web : `messaging.service.test.ts` doit verifier que tout `sendMessage()` produit un payload contenant `clientMessageId` matchant `CLIENT_MESSAGE_ID_REGEX`
+1. Ajouter `import { generateClientMessageId } from '@meeshy/shared/utils/client-message-id';` au point d'entree composant (`ConversationLayout.tsx`, `BubbleStreamPage.tsx`)
+2. Tous les appels descendants recoivent ce `clientMessageId` propage en parametre **obligatoire** (typage `MessageSendOptions.clientMessageId: string`)
+3. Standardiser sur prefixe `cid_<uuid lowercase>` — format actuel UUID v4 nu deviendra `cid_<UUID>`
+4. Brancher `sendMessageViaRest()` ligne 379-406 pour propager le champ
+5. Tests d'integration web : `messaging.service.test.ts` doit verifier que tout `sendMessage()` produit un payload contenant `clientMessageId` matchant `CLIENT_MESSAGE_ID_REGEX`
 
 **Tests E2E Playwright** (deja en place dans `tests/`) doivent etre etendus :
 - Envoyer 5 messages d'affilee, verifier que le payload reseau de chacun a un `clientMessageId` unique au format `cid_*`
@@ -797,7 +968,13 @@ case .deleteMessage:
     try await MessageService.shared.delete(messageId: payload.messageId)
 ```
 
-**Coalescing — machine d'etat** : la review architecture a flag que les sequences `edit-after-delete` n'etaient pas couvertes. On modelise explicitement les transitions dans `OfflineQueue.enqueue`, en regardant les records existants pour le meme `clientMessageId` (uniquement les records non encore envoyes — `status IN (.pending, .sending)`).
+**Coalescing — machine d'etat** : la review architecture a flag que les sequences `edit-after-delete` n'etaient pas couvertes. On modelise explicitement les transitions dans `OfflineQueue.enqueue`, en regardant les records existants pour le meme `clientMessageId`.
+
+**Statut `.inflight` — gestion explicite** : le coalescing s'applique uniquement aux records `status = .pending` (non encore parti vers le serveur). Si un record est en `.inflight` (envoye, ACK pas encore recu), on ne peut pas modifier son payload — le serveur peut deja avoir le message. Comportement attendu :
+- `editMessage` arrive pendant que `sendMessage(A)` est `.inflight` → INSERT un nouveau `editMessage` record pending. Au dispatch, `editMessage` attendra que `sendMessage` soit `.sent` (passage par le `clientMessageId → serverId` map). Si `sendMessage` echoue (`.failed`), `editMessage` echoue aussi (cible inexistante) → log + skip.
+- `deleteMessage` arrive pendant que `sendMessage(A)` est `.inflight` → meme pattern, INSERT un `deleteMessage` pending. Sequence finale serveur : INSERT puis DELETE atomique.
+
+Le filtrage est donc plus strict : `existing` = records `status = .pending` uniquement (pas `.inflight`).
 
 Etat actuel de la queue pour `clientMessageId X` | Action enqueue | Resultat
 ---|---|---
@@ -816,9 +993,10 @@ Implementation pseudo-code dans `OfflineQueue.enqueue(_ item: OfflineQueueItem)`
 ```swift
 public func enqueue(_ item: OfflineQueueItem) async throws {
     try await outboxPool.write { db in
+        // Coalescing : uniquement sur records `.pending` (cf. note .inflight ci-dessus)
         let existing = try OutboxRecord
             .filter(Column("clientMessageId") == item.clientMessageId)
-            .filter([OutboxStatus.pending.rawValue, OutboxStatus.sending.rawValue].contains(Column("status")))
+            .filter(Column("status") == OutboxStatus.pending.rawValue)
             .order(Column("createdAt").desc)
             .fetchOne(db)
 
@@ -858,9 +1036,12 @@ public func enqueue(_ item: OfflineQueueItem) async throws {
 Tous les cas sont dans la **meme transaction GRDB** que l'INSERT, donc atomique. Pas de race possible entre le SELECT existing et le INSERT/UPDATE/DELETE final.
 
 #### Reactions offline
-`ReactionQueue` est branchee sur `OutboxRecord` au lieu d'avoir son propre stockage en memoire. Nouveau `OutboxKind.reaction` avec payload `{ messageId, emoji, action: add|remove }`.
 
-**Coalescing** : add+remove sur meme emoji s'annulent en queue ; double add est dedupe.
+**Etat actuel** (audit) : `OutboxKind.sendReaction` **existe deja** (`packages/MeeshySDK/Sources/MeeshySDK/Persistence/OutboxRecord.swift:4-8`), mais `ReactionQueue` (`packages/MeeshySDK/Sources/MeeshySDK/Persistence/ReactionQueue.swift:68`) est un actor avec stockage **separe** in-memory + JSON file, qui **ne cree pas** de `OutboxRecord`. `OutboxDispatcher.swift` ne dispatche pas `sendReaction` non plus.
+
+Phase 4 : refonte de `ReactionQueue` pour persister via OutboxRecord (suppression du JSON file) et branchement `OutboxDispatcher.dispatch(.sendReaction)` pour appeler `MessageService.shared.toggleReaction(messageId:emoji:action:)`. Payload `OutboxRecord.payload` : encodage JSON de `{ messageId: String, emoji: String, action: "add" | "remove" }`.
+
+**Coalescing reactions** : add+remove sur meme `(messageId, emoji)` s'annulent en queue (DELETE des deux records `.pending`) ; double add est dedupe (DELETE du second). La machine d'etat infra (cf. table coalescing message ci-dessous) est etendue avec une cle de coalescing `(clientMessageId | messageId+emoji)` selon le `OutboxKind`.
 
 #### Audio offline — pattern write-ahead 2-step (vraie atomicite)
 
@@ -947,11 +1128,16 @@ Si `OutboxRecord` archive (max retry budget atteint), le fichier reste sur disqu
 **Note performance** : copy 5MB sur meme volume = ~50-200ms (pas un rename atomique inode car on doit garder le tmp en cas de retry de l'utilisateur). Sur SSD iPhone moderne, latence acceptable pour l'UX d'envoi audio.
 
 #### Idempotence du dispatcher
-`OutboxRecord.status` cycle : `pending → sending → sent → archived`. Le passage a `sending` se fait via UPDATE atomique au debut de la tentative. Au retour :
-- succes → `sent`
-- echec → retour a `pending` avec `lastError` + `nextAttemptAt = now + backoff`
 
-Plus de risque de double-dispatch grace a la transaction GRDB.
+`OutboxRecord.status` cycle reel (audit OutboxRecord.swift:11-15) : `pending → inflight → failed | exhausted`. Pas de status `.sent` ni `.archived` — un record dispatche avec succes est **supprime** (ou move vers une table d'historique si besoin de logs futurs). Le passage a `.inflight` se fait via UPDATE atomique au debut de la tentative.
+
+Au retour :
+- **Succes** → DELETE du record
+- **Echec recoverable** → retour a `.pending` avec `lastError` + `nextAttemptAt = now + backoff`
+- **Echec apres N retries** → `.exhausted` (visible dans UI debug, retry manuel possible)
+- **Echec critique non-retryable** (4xx serveur, payload corrompu) → `.failed` immediatement
+
+Plus de risque de double-dispatch grace a la transaction GRDB sur le passage `.pending → .inflight`.
 
 ### 6.4 Tests
 
@@ -1140,51 +1326,61 @@ Cette sequence garantit zero requete rejete pendant la transition.
 ## Annexe A — Inventaire des fichiers touches
 
 ### apps/ios/
-- `Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift` (Phases 1, 2)
-- `Meeshy/Features/Main/ViewModels/ConversationViewModel.swift` (Phases 1, 4)
-- `Meeshy/Features/Main/Services/OutboxDispatcher.swift` (Phase 4)
+- `Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift` (Phases 1, 2 — refactor setters via setConversations/appendConversations/bumpToTop, socket listener message:new, paginationState/nextCursor String)
+- `Meeshy/Features/Main/ViewModels/ConversationViewModel.swift` (Phases 1, 4 — sendMessage refactor, ClientMessageId helper, isInputLocked unifie, suppression `temp_*`)
+- `Meeshy/Features/Main/Services/OutboxDispatcher.swift` (Phase 4 — brancher .editMessage/.deleteMessage/.sendReaction qui sont actuellement no-op aux lignes 22-28)
 - `Meeshy/Features/Contacts/RequestsViewModel.swift` (Phase 3)
 - `Meeshy/Features/Contacts/DiscoverViewModel.swift` (Phase 3)
 - `Meeshy/Features/Contacts/BlockedViewModel.swift` (Phase 3)
 - `Meeshy/Features/Main/ViewModels/GlobalSearchViewModel.swift` (Phase 3)
-- `Meeshy/Features/Main/Views/ConversationListView.swift` (ou equivalent — Phase 2)
+- `Meeshy/Features/Main/Views/ConversationListView.swift` (ou equivalent — Phase 2 footer load more)
+- `MeeshyApp.swift` (Phase 4 — boot recovery `.inflight → .pending`)
 - `MeeshyTests/Unit/ViewModels/*Tests.swift` (toutes phases)
 
 ### packages/MeeshySDK/
-- `Sources/MeeshySDK/Services/ConversationService.swift` (Phase 2 — listPage cursor-based)
-- `Sources/MeeshySDK/Sync/ConversationSyncEngine.swift` (Phase 1 — tri merge)
-- `Sources/MeeshySDK/Persistence/OfflineQueue.swift` (Phase 4 — actor, coalescing state machine)
-- `Sources/MeeshySDK/Persistence/OutboxRecord.swift` (Phase 4 — clientMessageId, Sendable)
-- `Sources/MeeshySDK/Persistence/ReactionQueue.swift` (Phase 4 — branche sur OutboxRecord)
-- `Sources/MeeshySDK/Models/MessageModels.swift` (Phase 4 — clientMessageId obligatoire)
-- `Sources/MeeshySDK/Cache/LoadState.swift` (Phase 3 — consolidation)
+- `Sources/MeeshySDK/Services/ConversationService.swift` (Phase 2 — listPage(before: String?, limit:) cursor-based, ConversationPage struct Sendable)
+- `Sources/MeeshySDK/Sync/ConversationSyncEngine.swift` (Phase 1 — tri merge avant `cache.conversations.save(...)` lignes 279, 336, 350 — factoriser en helper saveSorted)
+- `Sources/MeeshySDK/Persistence/OfflineQueue.swift` (Phase 4 — `enqueue` async throws, coalescing state machine, suppression try? ligne 230)
+- `Sources/MeeshySDK/Persistence/OutboxRecord.swift` (Phase 4 — ajouter `clientMessageId: String` field ; statuts deja `pending/inflight/failed/exhausted`, pas de changement)
+- `Sources/MeeshySDK/Persistence/MessageRetryQueue.swift` (Phase 4 — adopter clientMessageId, supprimer prefixe `retry_*`)
+- `Sources/MeeshySDK/Persistence/ReactionQueue.swift` (Phase 4 — refonte sur OutboxRecord, suppression du JSON file storage)
+- `Sources/MeeshySDK/Models/MessageModels.swift` (Phase 4 — `clientMessageId: String` obligatoire dans MeeshyMessage, deliveryStatus avec `.invisible/.clock/.slow/.failed`)
+- `Sources/MeeshySDK/Models/MeeshyConversation.swift` (Phase 1 — verifier `lastMessageAt: Date` est `var` mutable ; sinon copy-init helper)
+- `Sources/MeeshySDK/Cache/LoadState.swift` (Phase 3 — NOUVEAU, n'existe pas actuellement)
 - `Sources/MeeshySDK/Cache/CacheFirstLoader.swift` (Phase 3 — NOUVEAU, dans core target pas UI)
-- `Sources/MeeshySDK/Cache/GRDBCacheStore.swift` (Phase 2 — schema row-per-conversation, WAL mode)
-- `Sources/MeeshySDK/Utils/ClientMessageId.swift` (Phase 4 — NOUVEAU helper)
+- `Sources/MeeshySDK/Cache/CachePolicy.swift` (Phase 3 — verifier/eventuellement etendre policies friends/participants)
+- `Sources/MeeshySDK/Cache/AppDatabase.swift` (Phase 2 — migration v5_cache_entries_sort_index, runtime migration de `conv:list` → row-per-conversation)
+- `Sources/MeeshySDK/Cache/GRDBCacheStore.swift` ou stores specialises (Phase 2 — API loadPage(offset:limit:) sur conversations, upsertRows)
+- `Sources/MeeshySDK/Utils/ClientMessageId.swift` (Phase 4 — NOUVEAU helper Swift, `cid_<UUID lowercase>` + regex)
 - `Tests/MeeshySDKTests/*Tests.swift`
 
 ### services/gateway/
-- `src/routes/messages.ts` (Phase 4 — dedup REST)
-- `src/socketio/message-handler.ts` (Phase 4 — dedup WS)
-- `src/services/MessageSocketManager.ts` (Phase 4 — flow envoi)
-- `src/services/MessageTranslationService.ts` (Phase 4 — skip retranslate sur dedup)
-- `src/validation/socket-event-schemas.ts` (Phase 4 — clientMessageId obligatoire)
-- `src/socketio/__tests__/message-ack.test.ts` (Phase 4 — etendre tests dedup)
-- Tests integration nouveaux : `src/routes/__tests__/messages-dedup.test.ts`, `src/socketio/__tests__/message-dedup.test.ts`
+- `src/socketio/handlers/MessageHandler.ts` (Phase 4 — `_sendResponse()` lignes 861-878 AJOUTER clientMessageId au callback ; `broadcastNewMessage()` lignes 388-451 broadcast cible sender via ROOMS.user(senderId) ; pattern catch P2002 sur create)
+- `src/services/MessageTranslationService.ts` (Phase 4 — skip retranslate sur dedup, helper isTranslationsEmpty pour Json field)
+- `src/validation/socket-event-schemas.ts` (Phase 4 — lignes 14, 26 — clientMessageId regex obligatoire sur les deux schemas)
+- `src/socketio/__tests__/message-ack.test.ts` (Phase 4 — convertir le contrat decrit lignes 45-50 en test passant)
+- Tests integration nouveaux : `src/socketio/__tests__/message-dedup.test.ts`, `src/socketio/__tests__/message-ack-clientid.test.ts`
+- **Pas de** route REST `POST /messages` a creer (cf. decision §6.2 option (a))
 
 ### packages/shared/
-- `types/messages.ts` (Phase 4 — clientMessageId obligatoire dans SendMessageRequest)
-- `types/socketio-events.ts` (Phase 4 — payload `message:send-with-attachments`)
+- `types/index.ts:653` (Phase 4 — remplacer interface `SendMessageRequest` par `z.infer<typeof SendMessageRequestSchema>`)
+- `types/messages.ts` (Phase 4 — NOUVEAU fichier OU extension, contient `SendMessageRequestSchema` Zod)
+- `types/socketio-events.ts:883` (Phase 4 — `MessageSendWithAttachmentsData` ajouter clientMessageId obligatoire)
 - `utils/client-message-id.ts` (Phase 4 — generateClientMessageId + CLIENT_MESSAGE_ID_REGEX, NOUVEAU)
-- `prisma/schema.prisma` (Phase 4 — champ + index unique partiel)
-- `prisma/migrations/<timestamp>-add-clientMessageId/migration.sql` ou script MongoDB (Phase 4)
+- `prisma/schema.prisma:515-644` (Phase 4 — model Message ajouter `clientMessageId String?` + `@@unique([conversationId, clientMessageId])`)
+- Migration MongoDB (Phase 4 — script `db.messages.createIndex` partial unique, executer hors Prisma migration)
 
 ### apps/web/ (Phase 4 — migration coordonnee)
-- `services/socketio/messaging.service.ts` (clientMessageId optionnel → obligatoire)
-- `services/socketio/orchestrator.service.ts` (idem)
-- `services/socketio/types.ts` (typage)
-- `services/conversations/messages.service.ts` (REST POST avec clientMessageId)
-- `services/messages.service.ts` (idem si point d'entree principal)
+- `services/socketio/messaging.service.ts` (lignes 254 spread conditionnel + lignes 379-406 `sendMessageViaRest` qui ne propage actuellement PAS clientMessageId)
+- `services/socketio/orchestrator.service.ts` (lignes 311-394 — parametre clientMessageId obligatoire, queue `PendingMessage`)
+- `services/socketio/types.ts` (`MessageSendOptions.clientMessageId?: string` → `: string`)
+- `services/socketio/meeshySocketIOService` wrapper (idem)
+- `services/conversations/messages.service.ts` (REST avec clientMessageId)
+- `services/messages.service.ts` (point d'entree haut niveau — generer si manquant)
+- `services/anonymous-chat.service.ts:117` (REST-only — ajouter clientMessageId, gap audit confirme)
+- `components/.../ConversationLayout.tsx:618` (`crypto.randomUUID()` brut → `generateClientMessageId()` pour format `cid_<uuid>`)
+- `hooks/use-chat-v2.ts`, `use-messaging.ts`, `useSocketIOMessaging.ts` (relayage explicite)
+- `components/.../BubbleStreamPage.tsx` (utilise `useStreamSocket` clone — meme refactor)
 - Audit complet de tous les sites d'envoi pour aligner sur `cid_<uuid>` standardise
 
 ---
