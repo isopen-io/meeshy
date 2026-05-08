@@ -569,29 +569,65 @@ public actor OfflineQueue {
 - Cote iOS : envoi absent — a ajouter
 - Route REST `POST /messages` : champ absent — a ajouter
 
-#### Format
-`cid_<UUID v4>` — prefixe pour distinguer des MongoDB ObjectIds (24 hex) et anciens tempIds locaux. Le format actuel cote web est libre (`client-temp-abc` dans les tests) — **on standardise tous les clients sur le prefixe `cid_`** au moment du shipping.
+#### Format `cid_<UUID v4 lowercase>` — helper centralise
+
+`cid_<UUID v4>` lowercase. Prefixe pour distinguer des MongoDB ObjectIds (24 hex) et anciens tempIds locaux. Le format actuel cote web est libre (`client-temp-abc` dans les tests) — **on standardise tous les clients sur le prefixe `cid_`** au moment du shipping.
+
+**Helper centralise** dans `packages/shared/utils/client-message-id.ts` (importe par web ET regenere manuellement en Swift identique pour iOS) :
+
+```typescript
+// packages/shared/utils/client-message-id.ts
+export function generateClientMessageId(): string {
+    return `cid_${crypto.randomUUID()}`;  // randomUUID retourne du lowercase
+}
+
+export const CLIENT_MESSAGE_ID_REGEX =
+    /^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+```
+
+```swift
+// packages/MeeshySDK/Sources/MeeshySDK/Utils/ClientMessageId.swift
+public enum ClientMessageId {
+    public static func generate() -> String {
+        // Swift UUID() est case-insensitive en hex mais .uuidString produit du UPPERCASE.
+        // .lowercased() OBLIGATOIRE pour correspondre a la regex serveur.
+        return "cid_\(UUID().uuidString.lowercased())"
+    }
+
+    public static let regex = #"^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"#
+}
+```
+
+Test cross-platform (gateway integration) :
+- `"cid_" + UUID().uuidString.lowercased()` → doit valider (Swift)
+- `"cid_" + UUID().uuidString` (uppercase par defaut Swift) → doit invalider
+- `"cid_" + crypto.randomUUID()` → doit valider (Node/Web)
 
 #### Contrat shared
 `packages/shared/types/messages.ts` :
 
 ```typescript
+import { CLIENT_MESSAGE_ID_REGEX } from '../utils/client-message-id.js';
+
 export type SendMessageRequest = {
     content: string;
-    clientMessageId: string;  // OBLIGATOIRE — minLength 5, maxLength 64
+    clientMessageId: string;  // OBLIGATOIRE
     originalLanguage?: string;
     replyToId?: string;
     attachmentIds?: string[];
     // ...
 };
+
+export const SendMessageRequestSchema = z.object({
+    content: z.string().min(1).max(50_000),
+    clientMessageId: z.string().regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format'),
+    // ...
+});
 ```
 
-Validation Zod gateway (REST + WS unifies) :
-```typescript
-clientMessageId: z.string().regex(/^cid_[a-f0-9-]{36}$/)  // strict
-```
+Validation Zod gateway (REST + WS unifies) reuse `SendMessageRequestSchema`.
 
-Migration : `services/gateway/src/validation/socket-event-schemas.ts:14` passe de `optional()` a `regex(...)`.
+Migration : `services/gateway/src/validation/socket-event-schemas.ts:14` passe de `clientMessageId: z.string().optional()` a `clientMessageId: z.string().regex(CLIENT_MESSAGE_ID_REGEX)`.
 
 #### Gateway — pattern catch-on-conflict (atomique)
 `services/gateway/src/routes/messages.ts` (POST) + `services/gateway/src/socketio/message-handler.ts` (event `message:send-with-attachments`) :
@@ -726,12 +762,25 @@ La map `pendingServerIds[tempId]` est supprimee. Le `tempId` (`offline_*`) dispa
 **UX debounce** : afficher l'icone horloge uniquement apres 200ms de delai (debounce). Sur connexion rapide (<200ms ACK), le message passe directement de "envoi en cours invisible" a "envoye" sans flash de horloge.
 
 #### Cote web (Next.js) — migration en meme PR que backend
-`apps/web/services/socketio/messaging.service.ts` :
-- `clientMessageId` actuellement optionnel → rendre **obligatoire** pour tous les sites d'appel
-- Standardiser le format en `cid_<UUID v4>` (au lieu du format libre actuel)
-- Ajouter le meme champ aux appels REST `POST /messages` (si le web a un fallback REST)
 
-`apps/web/services/socketio/orchestrator.service.ts:319` et `apps/web/services/messages.service.ts` : audit complet des sites d'envoi pour s'assurer que tous passent un `clientMessageId` genere localement.
+**Risque identifie** : la review backend a confirme que le web genere actuellement `clientMessageId` uniquement quand le composant appelant le passe — pas systematiquement a la couche orchestrator. C'est le **vrai breaking change** de cette migration (plus risque que iOS).
+
+**Audit obligatoire** des sites d'appel :
+- `apps/web/services/socketio/messaging.service.ts` (ligne 240) — actuellement spread conditionnel
+- `apps/web/services/socketio/orchestrator.service.ts` (lignes 319, 391) — parametre optionnel
+- `apps/web/services/conversations/messages.service.ts` — fallback REST eventuel
+- `apps/web/services/messages.service.ts` — point d'entree principal
+- `apps/web/services/anonymous-chat.service.ts` — chat anonyme (peut avoir un autre code path)
+
+**Strategie de migration** :
+1. Ajouter `import { generateClientMessageId } from '@meeshy/shared/utils/client-message-id';` dans le service le plus haut (orchestrator) **systematiquement**
+2. Tous les appels descendants utilisent ce `clientMessageId` propage en parametre **obligatoire**
+3. Standardiser sur prefixe `cid_<uuid>` (le format libre `client-temp-abc` des tests devient `cid_<uuid>`)
+4. Tests d'integration web : `messaging.service.test.ts` doit verifier que tout `sendMessage()` produit un payload contenant `clientMessageId` matchant `CLIENT_MESSAGE_ID_REGEX`
+
+**Tests E2E Playwright** (deja en place dans `tests/`) doivent etre etendus :
+- Envoyer 5 messages d'affilee, verifier que le payload reseau de chacun a un `clientMessageId` unique au format `cid_*`
+- Couper le reseau via `context.setOffline(true)`, taper 3 messages, restaurer le reseau, verifier que les 3 sont envoyes avec leurs `clientMessageId` originaux (pas regeneres)
 
 ### 6.3 Extension de la queue
 
@@ -906,21 +955,47 @@ Plus de risque de double-dispatch grace a la transaction GRDB.
 
 ### 6.4 Tests
 
-**iOS** :
+**iOS unit** :
 - `test_offlineSend_10concurrentMessages_allPersistedAndDisplayed`
 - `test_offlineSend_persistenceFails_optimisticRolledBack`
-- `test_socketBroadcast_matchesByClientMessageId_promotesOptimistic`
+- `test_offlineQueue_isActor_serializesEnqueueCalls` (Swift 6 isolation)
+- `test_clientMessageId_generatedWithLowercaseUUID` (regex CLIENT_MESSAGE_ID_REGEX)
+- `test_socketAck_matchesByClientMessageId_promotesOptimistic`
+- `test_socketBroadcastToSender_includesClientMessageId_promotesOptimistic`
+- `test_socketBroadcastToOther_omitsClientMessageId_insertsAsNew`
+- `test_ackTimeout_5seconds_marksMessageFailed`
+- `test_clockIcon_debounce200ms_notShownIfAckArrivesEarlier`
+- `test_audioOffline_writeAheadPattern_outboxBeforeFileCopy`
+- `test_audioOffline_crashAfterOutboxBeforeCopy_bootRecoveryMarksFailed`
 - `test_audioOffline_tusInterrupted_resumesOnReconnect`
-- `test_editAfterOfflineSend_coalesceInQueue`
-- `test_deleteAfterOfflineSend_cancelsQueueItem`
-- `test_outboxStatus_failedAttempt_reentersPendingWithBackoff`
+- `test_bootRecovery_resetsSendingToPending`
+- `test_bootRecovery_orphanAudioFile_deleted`
+
+**iOS coalescing (machine d'etat)** :
+- `test_coalesce_sendThenEdit_mergesPayload`
+- `test_coalesce_sendThenDelete_dropsRecord`
+- `test_coalesce_sendEditDelete_dropsRecord`
+- `test_coalesce_editAfterDelete_dropsWithWarning`
+- `test_coalesce_editEdit_keepsLatestPayload`
+- `test_coalesce_editThenDelete_dropsEditInsertsDelete`
 - `test_reactionAddThenRemove_coalescedToNoop`
 
 **Gateway** :
 - `test_postMessage_sameClientMessageId_returnsSameMessageNoDuplicate`
 - `test_postMessage_invalidClientMessageIdFormat_400`
+- `test_postMessage_uppercaseClientMessageId_400` (verifie le strict lowercase)
+- `test_postMessage_clientMessageIdMissingPrefix_400`
+- `test_postMessage_clientMessageIdNot36CharsUUID_400`
 - `test_socketSend_sameClientMessageId_returnsSameMessage`
-- `test_existingMessage_dedupHit_doesNotRetranslate`
+- `test_existingMessage_dedupHitWithTranslations_doesNotRetranslate`
+- `test_existingMessage_dedupHitWithoutTranslations_repushesZmq`
+- `test_socketBroadcast_excludesSenderFromGenericBroadcast` (verifies io.except)
+- `test_socketBroadcast_includesClientMessageIdToSenderOnly`
+- `test_concurrentInsert_sameClientMessageId_p2002CaughtAndDedup` (race condition test)
+
+**E2E Playwright (web)** :
+- `test_e2e_offlineSendMultipleMessages_allDeliveredOnReconnect`
+- `test_e2e_clientMessageIdConsistent_acrossOfflineRetries`
 
 ### 6.5 Acceptance criteria
 
@@ -930,6 +1005,14 @@ Plus de risque de double-dispatch grace a la transaction GRDB.
 4. Edit puis delete offline du meme message pending → flush ne fait rien (annulation locale)
 5. App killed pendant qu'un message est en queue → au reboot, l'optimistic est encore visible et flush demarre
 6. Aucun message n'est perdu silencieusement : toute erreur de persistance produit un log et un etat UI `.failed` avec retry manuel
+
+---
+
+### 6.5 Note performance — index unique partiel a 100k msgs/s
+
+La review performance a confirme que l'index unique partiel `(conversationId, clientMessageId)` ajoute **~5% de latence d'ecriture** MongoDB 8 avec replica set. Sur le cible projet de 100k msgs/s (`CLAUDE.md`), ce n'est pas le goulot ; le veritable plafond est la connection pool Prisma. Documentation a ajouter dans `services/gateway/decisions.md` post-implementation.
+
+Pour le scaling futur, l'index est compatible avec le pattern de sharding `{ conversationId: "hashed" }` (cle de shard alignee, pas de scatter-gather sur le dedup). **Hors scope de ce spec** — note pour le futur.
 
 ---
 
@@ -949,12 +1032,16 @@ Plus de risque de double-dispatch grace a la transaction GRDB.
 
 Au terme des 4 phases :
 
-1. **Tri stale** : la liste des conversations affiche **toujours** l'ordre `lastMessageAt DESC`, en cache et en reseau, des le premier render
-2. **Infinite scroll** : pagination cursor-based stable, jusqu'a 500 conversations cachees, immune aux nouvelles conversations en haut
-3. **Cache-first universel** : 5 ViewModels supplementaires conformes au pattern stale-while-revalidate ; helper `loadWithCacheFirst` reutilisable pour tous les futurs ViewModels
-4. **Offline send fiable** : N messages dans M conversations en mode avion → 100% persistes, FIFO au retour reseau, idempotence garantie meme apres crash applicatif
-5. **Idempotence cross-device** : `clientMessageId` end-to-end, dedup native MongoDB par index unique partiel
-6. **Operations offline etendues** : reactions, edit, delete, audio supportes hors connexion avec coalescing intelligent
+1. **Tri stale** : la liste des conversations affiche **toujours** l'ordre `lastMessageAt DESC`, en cache et en reseau, des le premier render. `bumpToTop` evite le full re-sort sur arrivee socket.
+2. **Infinite scroll** : pagination cursor-based stable, jusqu'a 2000 conversations cachees (LRU au-dela), immune aux nouvelles conversations en haut. Cache GRDB row-per-conversation, WAL mode.
+3. **Cache-first universel** : 5 ViewModels supplementaires conformes au pattern stale-while-revalidate ; helper `CacheFirstLoader` actor reutilisable depuis tout target SDK ou app. Discipline Task obligatoire (cancel au deinit).
+4. **Offline send fiable** : N messages dans M conversations en mode avion → 100% persistes, FIFO au retour reseau, idempotence garantie meme apres crash applicatif (bootRecovery .sending → .pending).
+5. **Idempotence cross-device** : `clientMessageId` end-to-end, format `cid_<uuid lowercase>`, dedup native MongoDB par index unique partiel + pattern catch-P2002. Helper centralise `packages/shared/utils/client-message-id.ts`.
+6. **Operations offline etendues** : reactions, edit, delete, audio supportes hors connexion avec machine d'etat de coalescing explicite (incluant edit-after-delete).
+7. **Audio offline atomique** : pattern write-ahead 2-step (INSERT OutboxRecord → copy file), bootRecovery des fichiers orphelins.
+8. **Reconciliation iOS double entry-point** : ACK socket pour le path nominal + broadcast cible vers sender pour le path crash recovery. Debounce 200ms sur l'icone horloge.
+9. **Performance** : pas de jank UI sur 2000 conversations, 60 FPS scroll garanti via memoization `groupedConversations` et leaf-equatable rows.
+10. **Migration sans downtime** : sequence DB → gateway warning-only → clients → gateway strict.
 
 ---
 
@@ -1028,7 +1115,25 @@ Au terme des 4 phases :
 
 **Risque** : `enqueue(.editMessage)` puis `enqueue(.deleteMessage)` sur un message pending → si le coalescing n'est pas atomique, on peut envoyer un edit puis delete au serveur (deux roundtrips inutiles).
 
-**Mitigation** : `OfflineQueue.enqueue` execute le merge dans la meme transaction GRDB que l'INSERT. Toute lecture/modification de la queue est seriealisee (le pool est single-writer).
+**Mitigation** : `OfflineQueue.enqueue` execute la machine d'etat de coalescing (cf. Section 6.3) dans la meme transaction GRDB que le SELECT existing + INSERT/UPDATE/DELETE final. Toute lecture/modification de la queue est seriealisee (l'`actor` OfflineQueue garantit l'isolation au niveau Swift, et la transaction GRDB garantit l'atomicite au niveau persistance).
+
+### 10.6 Order de deploiement Phase 4 — pas de downtime
+
+**Risque** : breaking change cross-surface (DB + gateway + web + iOS) deploye dans l'ordre incorrect → rejet de requetes legitimes.
+
+**Mitigation — sequence imposee** :
+1. **DB d'abord** : creer l'index unique partiel (background index creation, non-bloquant sur replica set MongoDB 8). Documents existants sans `clientMessageId` non affectes
+2. **Gateway en mode "warning-only"** : deployer le gateway qui accepte `clientMessageId` optionnel, persiste, dedupe — mais ne rejette pas les requetes sans le champ. Fenetre de securite ~24h
+3. **Web + iOS simultanement** : deployer le frontend web (clientMessageId obligatoire genere systematiquement) et la version iOS avec le champ. En pre-launch, pas de clients legacy en production
+4. **Gateway passe en strict** : activer la validation `regex(...)` obligatoire apres confirmation que tous les clients deployent envoient le champ
+
+Cette sequence garantit zero requete rejete pendant la transition.
+
+### 10.7 Race condition INSERT MongoDB
+
+**Risque** : deux requetes concurrentes avec le meme `clientMessageId` (retry reseau rapide, deux onglets web, ou meme mobile + web) passent toutes deux le SELECT pre-INSERT → l'une echoue sur la contrainte unique.
+
+**Mitigation** : pattern `INSERT direct + catch P2002` documentee Section 6.2. Le INSERT atomique via la contrainte unique est le seul point de synchronisation correct ; le `findUnique` pre-INSERT est une optimisation qui doit etre supprimee.
 
 ---
 
@@ -1046,14 +1151,16 @@ Au terme des 4 phases :
 - `MeeshyTests/Unit/ViewModels/*Tests.swift` (toutes phases)
 
 ### packages/MeeshySDK/
-- `Sources/MeeshySDK/Services/ConversationService.swift` (Phase 2)
-- `Sources/MeeshySDK/Sync/ConversationSyncEngine.swift` (Phase 1)
-- `Sources/MeeshySDK/Persistence/OfflineQueue.swift` (Phase 4)
-- `Sources/MeeshySDK/Persistence/OutboxRecord.swift` (Phase 4)
-- `Sources/MeeshySDK/Persistence/ReactionQueue.swift` (Phase 4)
-- `Sources/MeeshySDK/Models/MessageModels.swift` (Phase 4 — ajout clientMessageId)
+- `Sources/MeeshySDK/Services/ConversationService.swift` (Phase 2 — listPage cursor-based)
+- `Sources/MeeshySDK/Sync/ConversationSyncEngine.swift` (Phase 1 — tri merge)
+- `Sources/MeeshySDK/Persistence/OfflineQueue.swift` (Phase 4 — actor, coalescing state machine)
+- `Sources/MeeshySDK/Persistence/OutboxRecord.swift` (Phase 4 — clientMessageId, Sendable)
+- `Sources/MeeshySDK/Persistence/ReactionQueue.swift` (Phase 4 — branche sur OutboxRecord)
+- `Sources/MeeshySDK/Models/MessageModels.swift` (Phase 4 — clientMessageId obligatoire)
 - `Sources/MeeshySDK/Cache/LoadState.swift` (Phase 3 — consolidation)
-- `Sources/MeeshyUI/Cache/CacheFirstLoader.swift` (Phase 3 — nouveau)
+- `Sources/MeeshySDK/Cache/CacheFirstLoader.swift` (Phase 3 — NOUVEAU, dans core target pas UI)
+- `Sources/MeeshySDK/Cache/GRDBCacheStore.swift` (Phase 2 — schema row-per-conversation, WAL mode)
+- `Sources/MeeshySDK/Utils/ClientMessageId.swift` (Phase 4 — NOUVEAU helper)
 - `Tests/MeeshySDKTests/*Tests.swift`
 
 ### services/gateway/
@@ -1066,8 +1173,9 @@ Au terme des 4 phases :
 - Tests integration nouveaux : `src/routes/__tests__/messages-dedup.test.ts`, `src/socketio/__tests__/message-dedup.test.ts`
 
 ### packages/shared/
-- `types/messages.ts` (Phase 4 — clientMessageId obligatoire)
+- `types/messages.ts` (Phase 4 — clientMessageId obligatoire dans SendMessageRequest)
 - `types/socketio-events.ts` (Phase 4 — payload `message:send-with-attachments`)
+- `utils/client-message-id.ts` (Phase 4 — generateClientMessageId + CLIENT_MESSAGE_ID_REGEX, NOUVEAU)
 - `prisma/schema.prisma` (Phase 4 — champ + index unique partiel)
 - `prisma/migrations/<timestamp>-add-clientMessageId/migration.sql` ou script MongoDB (Phase 4)
 
