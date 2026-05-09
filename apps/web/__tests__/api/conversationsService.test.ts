@@ -192,6 +192,7 @@ describe('ConversationsService', () => {
       const messageData = {
         content: 'Hello world',
         originalLanguage: 'en',
+        clientMessageId: 'cid_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
       };
 
       const mockMessage = {

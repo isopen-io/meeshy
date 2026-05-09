@@ -27,13 +27,20 @@ import { PresenceService } from './presence.service';
 import { TranslationService } from './translation.service';
 import { PreferencesSyncService } from './preferences-sync.service';
 import { e2eeCrypto } from '@/lib/encryption/e2ee-crypto';
+import { generateClientMessageId } from '@/utils/client-message-id';
 
 /**
- * Pending message in the queue
+ * Pending message in the queue.
+ *
+ * `clientMessageId` is **mandatory** here — the orchestrator generates one
+ * via `generateClientMessageId()` before queueing so the gateway dedup
+ * contract holds even when the same logical send is retried after a flaky
+ * reconnect.
  */
 interface PendingMessage {
   conversationId: string;
   content: string;
+  clientMessageId: string;
   originalLanguage?: string;
   replyToId?: string;
   forwardedFromId?: string;
@@ -42,7 +49,6 @@ interface PendingMessage {
   attachmentIds?: string[];
   attachmentMimeTypes?: string[];
   timestamp: number;
-  clientMessageId?: string;
   resolve: (result: MessageAckResponse) => void;
 }
 
@@ -188,6 +194,7 @@ export class SocketIOOrchestrator {
         const options: MessageSendOptions = {
           conversationId: pending.conversationId,
           content: pending.content,
+          clientMessageId: pending.clientMessageId,
           originalLanguage: pending.originalLanguage,
           replyToId: pending.replyToId,
           forwardedFromId: pending.forwardedFromId,
@@ -195,7 +202,6 @@ export class SocketIOOrchestrator {
           mentionedUserIds: pending.mentionedUserIds,
           attachmentIds: pending.attachmentIds,
           attachmentMimeTypes: pending.attachmentMimeTypes,
-          clientMessageId: pending.clientMessageId,
         };
 
         const result = await this.messagingService.sendMessage(socket, options);
@@ -331,6 +337,12 @@ export class SocketIOOrchestrator {
       conversationId = getConversationApiId(conversationOrId);
     }
 
+    // Generate a clientMessageId before queueing/sending so the same id is
+    // used whether we hit the WS fast path or the offline queue, and so the
+    // gateway dedup contract (`(conversationId, clientMessageId)`) survives
+    // a reconnect-driven retry.
+    const resolvedClientMessageId = clientMessageId ?? generateClientMessageId();
+
     const socket = this.connectionService.getSocket();
 
     // If socket not ready, queue the message for later
@@ -351,6 +363,7 @@ export class SocketIOOrchestrator {
         const pending: PendingMessage = {
           conversationId,
           content,
+          clientMessageId: resolvedClientMessageId,
           originalLanguage,
           replyToId,
           forwardedFromId,
@@ -358,7 +371,6 @@ export class SocketIOOrchestrator {
           mentionedUserIds,
           attachmentIds,
           attachmentMimeTypes,
-          clientMessageId,
           timestamp: Date.now(),
           resolve
         };
@@ -381,6 +393,7 @@ export class SocketIOOrchestrator {
     const options: MessageSendOptions = {
       conversationId,
       content,
+      clientMessageId: resolvedClientMessageId,
       originalLanguage,
       replyToId,
       forwardedFromId,
@@ -388,7 +401,6 @@ export class SocketIOOrchestrator {
       mentionedUserIds,
       attachmentIds,
       attachmentMimeTypes,
-      clientMessageId,
     };
 
     return this.messagingService.sendMessage(socket, options);

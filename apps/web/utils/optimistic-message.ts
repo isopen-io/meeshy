@@ -1,5 +1,6 @@
 import type { Message, Participant, Attachment } from '@meeshy/shared/types';
 import type { MessageType } from '@meeshy/shared/types/socketio-events';
+import { generateClientMessageId } from './client-message-id';
 
 type SendPayload = {
   attachmentIds?: string[];
@@ -51,16 +52,10 @@ export function createOptimisticMessage(
     ? { content: contentOrOpts, senderId: senderId!, conversationId: conversationId!, language: language!, replyToId, sender, sendPayload }
     : contentOrOpts;
 
-  const tempId = typeof crypto.randomUUID === 'function'
-    ? crypto.randomUUID()
-    : Array.from(crypto.getRandomValues(new Uint8Array(16)))
-        .map((b, i) => {
-          if (i === 6) b = (b & 0x0f) | 0x40;
-          if (i === 8) b = (b & 0x3f) | 0x80;
-          return b.toString(16).padStart(2, '0');
-        })
-        .join('')
-        .replace(/^(.{8})(.{4})(.{4})(.{4})(.{12})$/, '$1-$2-$3-$4-$5');
+  // `_tempId` doubles as the `clientMessageId` propagated to the gateway, so
+  // it MUST follow the `cid_<uuid v4>` format that backs the offline-queue
+  // dedup contract. See `apps/web/utils/client-message-id.ts`.
+  const tempId = generateClientMessageId();
   const now = new Date();
   return {
     id: tempId,

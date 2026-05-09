@@ -4,6 +4,7 @@ import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { useAuthStore } from '@/stores/auth-store';
 import { createOptimisticMessage } from '@/utils/optimistic-message';
+import { generateClientMessageId } from '@/utils/client-message-id';
 import type { Conversation, SendMessageRequest } from '@meeshy/shared/types';
 
 interface SendMessageParams {
@@ -27,8 +28,17 @@ export function useSendMessageMutation() {
   const currentUser = useAuthStore((state) => state.user);
 
   return useMutation({
-    mutationFn: ({ conversationId, data }: SendMessageParams) =>
-      conversationsService.sendMessage(conversationId, data),
+    mutationFn: ({ conversationId, data }: SendMessageParams) => {
+      // The shared `SendMessageRequest` type marks `clientMessageId` as
+      // required. Defensively backfill it for callers that haven't yet been
+      // migrated — the gateway rejects the payload otherwise. Tests and
+      // legacy hooks that build the request as `{ content: '...' }` will
+      // still work because we mint a valid `cid_<uuid>` here.
+      const payload: SendMessageRequest = data.clientMessageId
+        ? data
+        : { ...data, clientMessageId: generateClientMessageId() };
+      return conversationsService.sendMessage(conversationId, payload);
+    },
 
     onMutate: async ({ conversationId, data }) => {
       // Cancel any outgoing refetches

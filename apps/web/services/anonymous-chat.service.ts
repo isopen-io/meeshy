@@ -6,6 +6,7 @@
 import { buildApiUrl } from '@/lib/config';
 import { toast } from 'sonner';
 import { authManager } from './auth-manager.service';
+import { generateClientMessageId } from '@/utils/client-message-id';
 import type { Participant } from '@meeshy/shared/types/participant';
 import type { Message } from '@meeshy/shared/types';
 
@@ -130,6 +131,7 @@ export class AnonymousChatService {
           content,
           originalLanguage,
           messageType: 'text',
+          clientMessageId: generateClientMessageId(),
           ...(replyToId && { replyToId })
         })
       });

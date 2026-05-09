@@ -246,12 +246,12 @@ export class MessagingService {
       const messageData: Record<string, unknown> = {
         conversationId,
         content,
+        clientMessageId,
         ...(originalLanguage && { originalLanguage }),
         ...(replyToId && { replyToId }),
         ...(forwardedFromId && { forwardedFromId }),
         ...(forwardedFromConversationId && { forwardedFromConversationId }),
         ...(mentionedUserIds && mentionedUserIds.length > 0 && { mentionedUserIds }),
-        ...(clientMessageId && { clientMessageId }),
       };
 
       // E2EE: Encrypt content if conversation is encrypted
@@ -381,6 +381,7 @@ export class MessagingService {
       const { conversationsService } = await import('../conversations');
 
       const response = await conversationsService.sendMessage(options.conversationId, {
+        clientMessageId: options.clientMessageId,
         content: options.content,
         originalLanguage: options.originalLanguage,
         messageType: options.attachmentIds?.length

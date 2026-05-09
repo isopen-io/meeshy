@@ -128,11 +128,18 @@ export interface ServiceEventEmitter {
 }
 
 /**
- * Message send options
+ * Message send options.
+ *
+ * `clientMessageId` is **mandatory** — it backs the gateway's
+ * `(conversationId, clientMessageId)` dedup key for the offline queue. The
+ * orchestrator generates one via `generateClientMessageId()` if the caller
+ * does not supply it, so by the time we reach the messaging service the
+ * field is always populated.
  */
 export interface MessageSendOptions {
   conversationId: string;
   content: string;
+  clientMessageId: string;
   originalLanguage?: string;
   replyToId?: string;
   forwardedFromId?: string;
@@ -140,7 +147,6 @@ export interface MessageSendOptions {
   mentionedUserIds?: string[];
   attachmentIds?: string[];
   attachmentMimeTypes?: string[];
-  clientMessageId?: string;
 }
 
 export interface MessageAckResponse {

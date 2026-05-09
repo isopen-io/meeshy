@@ -14,6 +14,7 @@
 
 import { io, Socket } from 'socket.io-client';
 import { toast } from 'sonner';
+import { generateClientMessageId } from '@/utils/client-message-id';
 import type {
   Message,
   User,
@@ -270,30 +271,43 @@ class WebSocketService {
 
   /**
    * ÉTAPE 6: Envoyer un message
+   *
+   * `clientMessageId` is generated here when the caller does not supply one
+   * so the gateway dedup contract (`(conversationId, clientMessageId)`) holds
+   * even for the legacy `useWebSocket` hook that does not yet thread the id.
    */
-  public async sendMessage(conversationId: string, content: string, language: string, replyToId?: string): Promise<boolean> {
+  public async sendMessage(
+    conversationId: string,
+    content: string,
+    language: string,
+    replyToId?: string,
+    clientMessageId?: string,
+  ): Promise<boolean> {
     if (!this.socket?.connected) {
       console.error('❌ [WS] Socket non connecté');
       toast.error('Connexion perdue, reconnexion...');
       this.reconnect();
       return false;
     }
-    
+
+    const cid = clientMessageId ?? generateClientMessageId();
+
     return new Promise((resolve) => {
-      
+
       const timeout = setTimeout(() => {
         console.error('❌ [WS] Timeout envoi message');
         resolve(false);
       }, 10000);
-      
+
       this.socket!.emit(CLIENT_EVENTS.MESSAGE_SEND, {
         conversationId,
         content,
+        clientMessageId: cid,
         originalLanguage: language,
-        replyToId
+        replyToId,
       }, (response: any) => {
         clearTimeout(timeout);
-        
+
         if (response?.success) {
           resolve(true);
         } else {
@@ -309,11 +323,12 @@ class WebSocketService {
    * Envoyer un message avec attachments
    */
   public async sendMessageWithAttachments(
-    conversationId: string, 
-    content: string, 
+    conversationId: string,
+    content: string,
     attachmentIds: string[],
-    language: string, 
-    replyToId?: string
+    language: string,
+    replyToId?: string,
+    clientMessageId?: string,
   ): Promise<boolean> {
     if (!this.socket?.connected) {
       console.error('❌ [WS] Socket non connecté');
@@ -321,15 +336,18 @@ class WebSocketService {
       this.reconnect();
       return false;
     }
-    
+
+    const cid = clientMessageId ?? generateClientMessageId();
+
     return new Promise((resolve) => {
-      
+
       this.socket!.emit(CLIENT_EVENTS.MESSAGE_SEND_WITH_ATTACHMENTS, {
         conversationId,
         content,
         attachmentIds,
+        clientMessageId: cid,
         originalLanguage: language,
-        replyToId
+        replyToId,
       }, (response: any) => {
         if (response?.success) {
           resolve(true);

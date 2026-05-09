@@ -1,5 +1,6 @@
 import { apiService } from './api.service';
 import type { ApiResponse, PaginationMeta, MessagesListResponse } from '@meeshy/shared/types';
+import { generateClientMessageId } from '@/utils/client-message-id';
 
 export interface Message {
   id: string;
@@ -43,11 +44,18 @@ export type MessagesResponse = MessagesListResponse<Message>;
  */
 export const messagesService = {
   /**
-   * Crée un nouveau message
+   * Crée un nouveau message.
+   *
+   * Generates a `clientMessageId` if one wasn't supplied so the gateway can
+   * dedup retries from the offline queue. See `apps/web/utils/client-message-id.ts`.
    */
   async createMessage(messageData: CreateMessageDto): Promise<ApiResponse<Message>> {
     try {
-      const response = await apiService.post<Message>('/messages', messageData);
+      const payload = {
+        ...messageData,
+        clientMessageId: generateClientMessageId(),
+      };
+      const response = await apiService.post<Message>('/messages', payload);
       return response;
     } catch (error) {
       console.error('Erreur lors de la création du message:', error);
@@ -108,13 +116,17 @@ export const messagesService = {
   },
 
   /**
-   * Envoie un message dans une conversation
+   * Envoie un message dans une conversation.
+   *
+   * Generates a `clientMessageId` so the gateway can dedup retries from the
+   * offline queue. See `apps/web/utils/client-message-id.ts`.
    */
   async sendMessageToConversation(conversationId: string, content: string): Promise<ApiResponse<Message>> {
     try {
       const response = await apiService.post<Message>(`/conversations/${conversationId}/messages`, {
         content,
         conversationId,
+        clientMessageId: generateClientMessageId(),
       });
       return response;
     } catch (error) {
