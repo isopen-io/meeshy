@@ -81,6 +81,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallJoin(callId: String) {}
     func emitCallLeave(callId: String) {}
     func emitCallSignal(callId: String, type: String, payload: [String: String]) {}
+    func emitCallSignalWithAck(callId: String, type: String, payload: [String: String]) async -> Bool { true }
     func emitCallToggleAudio(callId: String, enabled: Bool) {}
     func emitCallToggleVideo(callId: String, enabled: Bool) {}
     func emitCallEnd(callId: String) {}
