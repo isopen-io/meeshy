@@ -311,6 +311,62 @@ final class GlobalSearchViewModelTests: XCTestCase {
         XCTAssertEqual(stored, [])
     }
 
+    // MARK: - Message Query Cache (in-memory LRU)
+
+    /// Re-issuing the SAME query within the staleTTL window must short-circuit
+    /// the message-search network leg of `performSearch`. `performSearch`
+    /// hits `/conversations/search` TWICE per call (once for conversations,
+    /// once via `fetchRemoteMessageResults` to discover candidate conversations
+    /// for the message search). Only the message-search half is cached, so we
+    /// expect the second call to consume one fewer round-trip than the first.
+    func test_searchMessages_repeatQueryUsesInMemoryCache() async throws {
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        let convResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[]}
+        """)
+        mockAPI.stub("/conversations/search", result: convResponse)
+        mockUserService.searchUsersResult = .success([])
+
+        let sut = try makeSUT()
+
+        await sut.performSearch(query: "swift")
+        let firstCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+        XCTAssertGreaterThanOrEqual(firstCallCount, 1)
+
+        await sut.performSearch(query: "swift")
+        let secondCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+        let delta = secondCallCount - firstCallCount
+
+        XCTAssertLessThan(
+            delta, firstCallCount,
+            "Second identical query must save at least one round-trip via the in-memory message-search cache (first=\(firstCallCount), delta=\(delta))"
+        )
+    }
+
+    /// A different query must NOT hit the cache — the second call's delta
+    /// equals the first call's count (no savings from the cache).
+    func test_searchMessages_differentQuerySkipsCache() async throws {
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        let convResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[]}
+        """)
+        mockAPI.stub("/conversations/search", result: convResponse)
+        mockUserService.searchUsersResult = .success([])
+
+        let sut = try makeSUT()
+
+        await sut.performSearch(query: "swift")
+        let firstCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+
+        await sut.performSearch(query: "kotlin")
+        let secondCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+
+        XCTAssertEqual(
+            secondCallCount - firstCallCount, firstCallCount,
+            "Different query must replay the same number of calls — cache is keyed by query"
+        )
+    }
+
     // MARK: - Helpers
 
     private func stubEmptyConversationSearch() {

@@ -96,6 +96,19 @@ class GlobalSearchViewModel: ObservableObject {
     private let recentSearchesKey = "globalSearch.recentSearches"
     private let maxRecentSearches = 10
 
+    /// In-memory LRU cache for the last 5 unique non-empty queries' remote
+    /// message results. Used to short-circuit a re-fetch when the user
+    /// re-types a query that just ran (typical: tab switching, navigating
+    /// back to results). The 5-entry bound keeps the surface tight; the
+    /// persistent on-disk LRU described in the spec is deferred — the
+    /// in-memory cache is the minimum viable cache-first promise.
+    private var messageQueryCache: [(query: String, results: [GlobalSearchMessageResult], cachedAt: Date)] = []
+    private static let messageQueryCacheCapacity = 5
+    /// Mirrors the spec's `messages` policy `staleTTL` (2min). Beyond this
+    /// the cached entry is evicted on access — we still re-fetch from the
+    /// network rather than serving stale results indefinitely.
+    private static let messageQueryCacheStaleTTL: TimeInterval = 120
+
     // MARK: - Init
 
     init(
@@ -302,11 +315,43 @@ class GlobalSearchViewModel: ObservableObject {
     private func searchMessages(query: String) async -> [GlobalSearchMessageResult] {
         // FTS5 local results — instant, available offline
         let localResults = await searchLocalMessages(query: query)
+
+        // Cache-first for the network leg: if the same query was fetched
+        // within the staleTTL window we surface the cached merge immediately
+        // and skip the round-trip. The FTS5 results are recomputed each
+        // call (cheap, local) so they never go stale.
+        if let cached = cachedRemoteResults(for: query) {
+            return mergeUniqueMessageResults(local: localResults, remote: cached)
+        }
+
         messageResults = localResults
 
-        // Network in parallel — merge fresh server-side hits
+        // Network — merge fresh server-side hits
         let remoteResults = await fetchRemoteMessageResults(query: query)
+        cacheRemoteResults(remoteResults, for: query)
         return mergeUniqueMessageResults(local: localResults, remote: remoteResults)
+    }
+
+    // MARK: - Message Query Cache (in-memory LRU, 5 entries)
+
+    private func cachedRemoteResults(for query: String) -> [GlobalSearchMessageResult]? {
+        let key = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let entry = messageQueryCache.first(where: { $0.query == key }) else { return nil }
+        guard Date().timeIntervalSince(entry.cachedAt) < Self.messageQueryCacheStaleTTL else {
+            messageQueryCache.removeAll { $0.query == key }
+            return nil
+        }
+        return entry.results
+    }
+
+    private func cacheRemoteResults(_ results: [GlobalSearchMessageResult], for query: String) {
+        let key = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        messageQueryCache.removeAll { $0.query == key }
+        messageQueryCache.append((query: key, results: results, cachedAt: Date()))
+        while messageQueryCache.count > Self.messageQueryCacheCapacity {
+            messageQueryCache.removeFirst()
+        }
     }
 
     private func searchLocalMessages(query: String) async -> [GlobalSearchMessageResult] {
