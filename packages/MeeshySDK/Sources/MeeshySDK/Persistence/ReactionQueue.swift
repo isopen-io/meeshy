@@ -570,7 +570,12 @@ public actor ReactionQueue {
             do {
                 try await pool.write { db in
                     for id in drainedIds {
-                        _ = try OutboxRecord.deleteOne(db, key: id)
+                        // Records are inserted with the `rxq_` prefix at
+                        // line 308 (`let outboxId = "rxq_\(item.id)"`); the
+                        // delete must use the same key form, otherwise the
+                        // GRDB row stays around and the reaction replays
+                        // forever on every reconnect.
+                        _ = try OutboxRecord.deleteOne(db, key: "rxq_\(id)")
                     }
                 }
             } catch {

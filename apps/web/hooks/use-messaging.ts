@@ -258,7 +258,11 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
       const errorMessage = handleMessageError(error, content);
       setSendError(errorMessage);
       
-      // NOUVEAU: Sauvegarder automatiquement le message en échec
+      // NOUVEAU: Sauvegarder automatiquement le message en échec.
+      // Phase 4 §6.2 — persister `clientMessageId` quand le caller l'a
+      // fourni, sinon le retry génère un cid frais et bypass le dedup
+      // gateway. Pour les call sites qui n'en passent pas (legacy), on
+      // omet le champ — le backfill orchestrateur prendra le relais.
       if (conversationId) {
         const failedMsgId = addFailedMessage({
           conversationId,
@@ -266,6 +270,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
           originalLanguage: originalLanguage || systemLanguage,
           attachmentIds: attachmentIds || [],
           replyToId,
+          ...(clientMessageId ? { clientMessageId } : {}),
           error: errorMessage,
         });
         

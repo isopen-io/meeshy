@@ -129,7 +129,13 @@ extension ConversationView {
         }
 
         let allLocalAttachments: [MeeshyMessageAttachment] = previewAttachments + (localAudioPreview.map { [$0] } ?? [])
-        let tempId = "temp_\(UUID().uuidString)"
+        // Phase 4 §6.2 — must use the canonical `cid_<uuid v4 lowercase>`
+        // format so the gateway accepts the value as `clientMessageId`. The
+        // legacy `temp_<UUID>` prefix would fail the strict regex on the
+        // wire and silently break every image / video / file attachment
+        // send (the audio path goes through `sendWithAttachmentsAsync`
+        // which generates its own cid).
+        let tempId = ClientMessageId.generate()
 
         if !allLocalAttachments.isEmpty {
             let msgType: Message.MessageType = audioURL != nil ? .audio

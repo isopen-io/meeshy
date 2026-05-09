@@ -348,6 +348,14 @@ export class MessageHandler {
         resolvedParticipantId
       );
 
+      // Phase 4 — ack the client BEFORE running the broadcast / agent
+      // notification side effects. The previous order delayed the ACK
+      // behind `broadcastNewMessage`, so a throw inside the broadcast
+      // (Prisma read failure, connection drop) would silently skip the
+      // callback and leave iOS / web waiting indefinitely → spurious
+      // retry. Mirror the order used by `handleMessageSend` above.
+      this._sendResponse(callback, response);
+
       if (response.success && response.data) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
         await this.broadcastNewMessage(message, message.conversationId, socket);
@@ -385,7 +393,6 @@ export class MessageHandler {
         ).catch(err => console.error('[MessageHandler] Stats update error:', err));
       }
 
-      this._sendResponse(callback, response);
       this.stats.messages_processed++;
     } catch (error: unknown) {
       console.error('[MESSAGE_SEND_ATTACHMENTS] Erreur:', error);
@@ -457,7 +464,7 @@ export class MessageHandler {
       //   - `broadcastPayload` (others) : strip `clientMessageId` so the
       //     value never leaks to non-sender participants (privacy: a peer
       //     cannot deduce the sender's offline-queue id space).
-      //   - `senderPayload` (sender's sockets across devices) : keep
+      //   - `senderPayload` (sender's sockets across all devices) : keep
       //     `clientMessageId` so the iOS / web reconciliation by-cid path
       //     can promote the optimistic row to `.sent` even after a crash
       //     that lost the ACK.
@@ -465,18 +472,36 @@ export class MessageHandler {
       const broadcastPayload: Record<string, unknown> = { ...senderPayload };
       delete broadcastPayload.clientMessageId;
 
-      if (senderSocket) {
-        // Single-session sender : send the cid-aware payload only to the
-        // socket that emitted, broadcast the cid-stripped payload to
-        // everyone else in the room.
+      // Resolve the sender's USER id (not the participant id) so we can
+      // address every device session via `ROOMS.user(userId)`. The sender
+      // field on the message is a `Participant` whose `.userId` points at
+      // the underlying user (null for anonymous). For anonymous sends we
+      // fall back to the previous senderSocket-only path since there is
+      // no user-level room to broadcast into.
+      const senderParticipant = (message as unknown as { sender?: { userId?: string | null } }).sender;
+      const senderUserId = senderParticipant?.userId ?? null;
+
+      if (senderUserId) {
+        // Multi-device : send the cid-aware payload to the sender's
+        // user room (catches every iOS / web session of this user)
+        // and the cid-stripped payload to the conversation room
+        // EXCEPT the sender's user room so peers do not receive a
+        // duplicate.
+        this.io
+          .to(room)
+          .except(ROOMS.user(senderUserId))
+          .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
+      } else if (senderSocket) {
+        // Anonymous sender with an active socket : same single-session
+        // split as before. Multi-device anonymous is undefined.
         senderSocket.broadcast.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
         senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
       } else {
-        // No senderSocket context (REST path or background flush) : we
-        // cannot distinguish sender sockets in-room without resolving the
-        // sender's userId, so fall back to the cid-stripped payload for
-        // the room. The sender's other sessions will still reconcile via
-        // the REST/socket ACK path which carries the cid (cf. _sendResponse).
+        // No senderSocket context (REST path or background flush) and
+        // no resolvable user id : fall back to the cid-stripped payload
+        // for the whole room. The sender's other sessions still
+        // reconcile via the REST / socket ACK path which carries the cid.
         this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
       }
 
@@ -757,6 +782,13 @@ export class MessageHandler {
       content: message.content,
       originalLanguage: message.originalLanguage || 'fr',
       messageType: message.messageType || 'text',
+      // Phase 4 §6.2 — `clientMessageId` doit voyager dans le payload
+      // `message:new` cible vers le sender pour que la réconciliation
+      // by-cid (iOS / web) promote l'optimistic même quand l'ACK socket
+      // a été perdu (crash app après le send, multi-device). Le caller
+      // `broadcastNewMessage` strip ce champ pour les autres
+      // participants (`delete broadcastPayload.clientMessageId`).
+      clientMessageId: (message as never)['clientMessageId'] || undefined,
       isBlurred: Boolean((message as never)['isBlurred']),
       isViewOnce: Boolean((message as never)['isViewOnce']),
       effectFlags: (message as never)['effectFlags'] ?? 0,
