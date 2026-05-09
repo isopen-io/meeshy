@@ -108,6 +108,19 @@ class GlobalSearchViewModel: ObservableObject {
     /// back to results). The 5-entry bound keeps the surface tight; the
     /// persistent on-disk LRU described in the spec is deferred — the
     /// in-memory cache is the minimum viable cache-first promise.
+    ///
+    /// DEVIATION FROM SPEC §5.3 D:
+    /// The spec calls for a persistent GRDB cache keyed by
+    /// `sha256(query)[:16]` with a 5-entry LRU and a 2min `staleTTL`,
+    /// routed through the `messages` cache store. This implementation uses
+    /// an in-memory LRU only because `GlobalSearchMessageResult` references
+    /// non-Codable domain types (cf. `ServiceModels.swift`) that would
+    /// require a model refactor outside the Phase 3 scope. The TTL and
+    /// 5-entry bound match the spec exactly so behaviour is equivalent
+    /// within a single session; only cold-start persistence is missing.
+    /// Tracked as a follow-up: make `GlobalSearchMessageResult` Codable,
+    /// then route through the `messages` store with `search:msg:<sha256>`
+    /// keys + LRU metadata.
     private var messageQueryCache: [(query: String, results: [GlobalSearchMessageResult], cachedAt: Date)] = []
     private static let messageQueryCacheCapacity = 5
     /// Mirrors the spec's `messages` policy `staleTTL` (2min). Beyond this
