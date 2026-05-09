@@ -944,8 +944,24 @@ final class CallManager: ObservableObject {
         let session = RTCAudioSession.sharedInstance()
         session.lockForConfiguration()
         defer { session.unlockForConfiguration() }
+
+        // CRITIQUE simulator : `.none` (= défaut earpiece/Receiver) ne route
+        // PAS vers les haut-parleurs macOS sur iOS Simulator. L'audio est
+        // décodé par WebRTC mais joué sur un port virtuel qui n'existe pas
+        // côté Mac → silence total même si l'ADM tourne. On force `.speaker`
+        // sur simulator pour mapper vers la sortie audio macOS.
+        // Sur device réel, on garde le routing par défaut (`.none` = earpiece
+        // pour `.voiceChat` mode) — l'utilisateur tient l'iPhone à l'oreille
+        // ou tap le bouton speaker pour basculer.
+        #if targetEnvironment(simulator)
+        let port: AVAudioSession.PortOverride = .speaker
+        #else
+        let port: AVAudioSession.PortOverride = speaker ? .speaker : .none
+        #endif
+
         do {
-            try session.overrideOutputAudioPort(speaker ? .speaker : .none)
+            try session.overrideOutputAudioPort(port)
+            Logger.calls.info("Audio route override applied: \(port.rawValue) (isSpeaker=\(speaker))")
         } catch {
             Logger.calls.error("Audio route change failed: \(error.localizedDescription)")
         }

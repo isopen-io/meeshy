@@ -344,7 +344,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             pc.statistics { report in
                 var rtt: Double = 0
                 var packetsLost: Int = 0
-                var bandwidth: Int = 0
+                var bytesSent: Int = 0
+                var bytesReceived: Int = 0
+                var packetsSent: Int = 0
+                var packetsReceived: Int = 0
                 var codec: String?
 
                 for (_, stats) in report.statistics {
@@ -359,22 +362,35 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                         if let lost = values["packetsLost"] as? NSNumber {
                             packetsLost = lost.intValue
                         }
+                        if let received = values["bytesReceived"] as? NSNumber {
+                            bytesReceived += received.intValue
+                        }
+                        if let pkts = values["packetsReceived"] as? NSNumber {
+                            packetsReceived += pkts.intValue
+                        }
                         if let codecId = values["codecId"] as? String {
                             codec = codecId
                         }
                     }
                     if stats.type == "outbound-rtp" {
                         let values = stats.values
-                        if let bytesSent = values["bytesSent"] as? NSNumber {
-                            bandwidth = bytesSent.intValue
+                        if let sent = values["bytesSent"] as? NSNumber {
+                            bytesSent += sent.intValue
+                        }
+                        if let pkts = values["packetsSent"] as? NSNumber {
+                            packetsSent += pkts.intValue
                         }
                     }
                 }
 
+                // DIAGNOSTIC : log explicite des bytes/packets pour confirmer
+                // si l'audio circule réellement (vs juste ICE keepalives).
+                Logger.webrtc.info("[STATS] sent=\(bytesSent)B/\(packetsSent)pkt recv=\(bytesReceived)B/\(packetsReceived)pkt rtt=\(rtt)ms loss=\(packetsLost)")
+
                 continuation.resume(returning: CallStats(
                     roundTripTimeMs: rtt,
                     packetsLost: packetsLost,
-                    bandwidth: bandwidth,
+                    bandwidth: bytesSent,
                     codec: codec
                 ))
             }
