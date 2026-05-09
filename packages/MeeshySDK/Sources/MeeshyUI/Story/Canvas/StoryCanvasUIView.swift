@@ -37,6 +37,15 @@ public final class StoryCanvasUIView: UIView {
     private let itemsContainer = CALayer()
     private let editOverlayLayer = CALayer()
 
+    // MARK: - Gestures
+
+    private var panRecognizer: UIPanGestureRecognizer!
+
+    /// Item currently being dragged/scaled/rotated. Reset on .ended/.cancelled.
+    private var manipulatedItemId: String?
+    private var dragStartSlideX: Double = 0
+    private var dragStartSlideY: Double = 0
+
     // MARK: - Display link
 
     /// Drives `currentTime` advance during `.play` mode (preferred 60 Hz, range 60–120).
@@ -59,6 +68,7 @@ public final class StoryCanvasUIView: UIView {
         rootLayer.addSublayer(editOverlayLayer)
         editOverlayLayer.zPosition = 10_000  // always on top
         backgroundColor = .black
+        setupGesturesAll()
     }
 
     @available(*, unavailable)
@@ -178,5 +188,99 @@ public final class StoryCanvasUIView: UIView {
     @objc private func editTick(_ link: CADisplayLink) {
         // Gesture handlers (Tasks 2.7-2.8) drive their own rebuilds; this tick
         // exists to keep the 120 Hz clock alive on ProMotion while editing.
+    }
+
+    // MARK: - Gesture wiring
+
+    private func setupGesturesAll() {
+        panRecognizer = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        addGestureRecognizer(panRecognizer)
+    }
+
+    @objc private func handlePan(_ recognizer: UIPanGestureRecognizer) {
+        guard mode == .edit else { return }
+        let location = recognizer.location(in: self)
+        switch recognizer.state {
+        case .began:
+            guard let id = hitTestItem(at: location),
+                  let (sx, sy) = currentItemNormalizedPosition(forId: id) else { return }
+            manipulatedItemId = id
+            dragStartSlideX = sx
+            dragStartSlideY = sy
+        case .changed:
+            guard let id = manipulatedItemId, bounds.size != .zero else { return }
+            let translation = recognizer.translation(in: self)
+            let dxNorm = Double(translation.x / bounds.width)
+            let dyNorm = Double(translation.y / bounds.height)
+            let newX = clamp(dragStartSlideX + dxNorm)
+            let newY = clamp(dragStartSlideY + dyNorm)
+            slide = updatePosition(slideId: id, x: newX, y: newY)
+            onItemModified?(slide)
+        case .ended, .cancelled, .failed:
+            manipulatedItemId = nil
+        default:
+            break
+        }
+    }
+
+    // MARK: - Hit testing
+
+    private func hitTestItem(at point: CGPoint) -> String? {
+        guard let hit = itemsContainer.hitTest(point) else { return nil }
+        var current: CALayer? = hit
+        while let c = current {
+            if let id = c.name,
+               !id.isEmpty,
+               c.superlayer === itemsContainer || c === itemsContainer {
+                return id
+            }
+            current = c.superlayer
+        }
+        return nil
+    }
+
+    // MARK: - Slide mutation helpers
+
+    private func currentItemNormalizedPosition(forId id: String) -> (Double, Double)? {
+        if let t = slide.effects.textObjects.first(where: { $0.id == id }) {
+            return (t.x, t.y)
+        }
+        if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
+            return (m.x, m.y)
+        }
+        if let s = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
+            return (s.x, s.y)
+        }
+        return nil
+    }
+
+    private func updatePosition(slideId: String, x: Double, y: Double) -> StorySlide {
+        var newSlide = slide
+        for i in newSlide.effects.textObjects.indices where newSlide.effects.textObjects[i].id == slideId {
+            newSlide.effects.textObjects[i].x = x
+            newSlide.effects.textObjects[i].y = y
+            return newSlide
+        }
+        if var media = newSlide.effects.mediaObjects {
+            for i in media.indices where media[i].id == slideId {
+                media[i].x = x
+                media[i].y = y
+                newSlide.effects.mediaObjects = media
+                return newSlide
+            }
+        }
+        if var stickers = newSlide.effects.stickerObjects {
+            for i in stickers.indices where stickers[i].id == slideId {
+                stickers[i].x = x
+                stickers[i].y = y
+                newSlide.effects.stickerObjects = stickers
+                return newSlide
+            }
+        }
+        return newSlide
+    }
+
+    private nonisolated func clamp(_ value: Double) -> Double {
+        max(0, min(1, value))
     }
 }
