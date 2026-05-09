@@ -1102,6 +1102,185 @@ describe('MessagingService', () => {
       expect(response.error).toBe('Permissions insuffisantes pour envoyer des messages');
     });
   });
+
+  describe('handleMessage - With Attachments', () => {
+    // Regression guard for the read-after-write removal in commit 05c754c3:
+    // `MessageProcessor.saveMessage` calls `prisma.message.create` with
+    // `include: { attachments: true }`, but the linking via
+    // `associateAttachmentsToMessage` happens AFTER the create. The in-memory
+    // `message.attachments` array therefore stays empty unless we refresh it.
+    // Without that refresh, every message:new broadcast and every REST
+    // response carries `attachments: []`, which on iOS causes the persistence
+    // layer to overwrite optimistic attachment data with NULL — making the
+    // user's audio/image disappear.
+    const attachmentIds = [
+      '507f1f77bcf86cd799439021',
+      '507f1f77bcf86cd799439022'
+    ];
+
+    const mockLinkedAttachments = [
+      {
+        id: attachmentIds[0],
+        messageId: testMessageId,
+        fileName: 'photo-1.jpg',
+        originalName: 'photo.jpg',
+        mimeType: 'image/jpeg',
+        fileSize: 12345,
+        fileUrl: '/uploads/photo-1.jpg',
+        filePath: '/uploads/photo-1.jpg',
+        thumbnailUrl: null,
+        width: 800,
+        height: 600,
+        duration: null,
+        bitrate: null,
+        sampleRate: null,
+        codec: null,
+        channels: null,
+        fps: null,
+        videoCodec: null,
+        pageCount: null,
+        lineCount: null,
+        metadata: null,
+        uploadedBy: testUserId,
+        isAnonymous: false,
+        createdAt: new Date()
+      },
+      {
+        id: attachmentIds[1],
+        messageId: testMessageId,
+        fileName: 'voice-note.m4a',
+        originalName: 'voice-note.m4a',
+        mimeType: 'audio/mp4',
+        fileSize: 67890,
+        fileUrl: '/uploads/voice-note.m4a',
+        filePath: '/uploads/voice-note.m4a',
+        thumbnailUrl: null,
+        width: null,
+        height: null,
+        duration: 5000,
+        bitrate: 128000,
+        sampleRate: 44100,
+        codec: 'aac',
+        channels: 1,
+        fps: null,
+        videoCodec: null,
+        pageCount: null,
+        lineCount: null,
+        metadata: null,
+        uploadedBy: testUserId,
+        isAnonymous: false,
+        createdAt: new Date()
+      }
+    ];
+
+    beforeEach(() => {
+      mockPrisma.conversation.findFirst.mockResolvedValue({
+        id: testConversationId,
+        identifier: 'test-conv',
+        type: 'private'
+      });
+      mockPrisma.conversation.findUnique.mockResolvedValue({
+        id: testConversationId,
+        type: 'private'
+      });
+      mockPrisma.participant.findUnique.mockResolvedValue({
+        id: testParticipantId,
+        conversationId: testConversationId,
+        isActive: true,
+        type: 'user',
+        userId: testUserId
+      });
+      // prisma.message.create returns the freshly-inserted row with the
+      // include snapshot — at this moment attachments are NOT yet linked
+      // (linking happens via updateMany right after). Mirror that real
+      // behaviour by returning attachments: [] from the create.
+      mockPrisma.message.create.mockResolvedValue({
+        ...createMockMessage(),
+        sender: {
+          id: testParticipantId,
+          displayName: 'Test User',
+          avatar: null,
+          role: 'member',
+          isOnline: true,
+          type: 'user',
+          userId: testUserId,
+          language: 'en'
+        },
+        attachments: [],
+        replyTo: null
+      });
+      mockPrisma.conversation.update.mockResolvedValue({
+        id: testConversationId,
+        lastMessageAt: new Date()
+      });
+      // associateAttachmentsToMessage mutates the DB rows
+      mockPrisma.messageAttachment.updateMany = jest.fn().mockResolvedValue({
+        count: attachmentIds.length
+      });
+      // After linking, a fresh findMany scoped to messageId MUST return the
+      // linked rows. This is what saveMessage needs to merge into the
+      // returned message.
+      mockPrisma.messageAttachment.findMany = jest.fn().mockImplementation((args: any) => {
+        const where = args?.where ?? {};
+        if (where.messageId === testMessageId) {
+          return Promise.resolve(mockLinkedAttachments);
+        }
+        if (where.id?.in) {
+          // processAudioAttachments path — return only the audio row,
+          // matched by id, with the select-shape fields it needs.
+          return Promise.resolve(
+            mockLinkedAttachments
+              .filter((att) => where.id.in.includes(att.id))
+              .map((att) => ({
+                id: att.id,
+                mimeType: att.mimeType,
+                fileUrl: att.fileUrl,
+                filePath: att.filePath,
+                duration: att.duration,
+                metadata: att.metadata
+              }))
+          );
+        }
+        return Promise.resolve([]);
+      });
+    });
+
+    it('should return the linked attachments on the saved message', async () => {
+      const response = await service.handleMessage(
+        {
+          conversationId: testConversationId,
+          content: '',
+          attachmentIds
+        } as MessageRequest,
+        testParticipantId
+      );
+
+      expect(response.success).toBe(true);
+      expect(response.data).toBeDefined();
+      const savedMessage = response.data as unknown as { attachments: Array<{ id: string }> };
+      expect(Array.isArray(savedMessage.attachments)).toBe(true);
+      expect(savedMessage.attachments).toHaveLength(attachmentIds.length);
+      expect(savedMessage.attachments.map((a) => a.id).sort()).toEqual(
+        [...attachmentIds].sort()
+      );
+    });
+
+    it('should call messageAttachment.updateMany to link attachments', async () => {
+      await service.handleMessage(
+        {
+          conversationId: testConversationId,
+          content: '',
+          attachmentIds
+        } as MessageRequest,
+        testParticipantId
+      );
+
+      expect(mockPrisma.messageAttachment.updateMany).toHaveBeenCalledWith({
+        where: { id: { in: attachmentIds } },
+        data: { messageId: testMessageId }
+      });
+    });
+  });
 });
 
 describe('MessagingService - Tracking Links Processing', () => {

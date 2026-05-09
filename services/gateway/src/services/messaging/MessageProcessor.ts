@@ -412,6 +412,23 @@ export class MessageProcessor {
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
     await this.handleAttachments(data, message);
 
+    // ÉTAPE 4 bis: Rafraîchir les attachments en mémoire. `prisma.message.create`
+    // a capturé `attachments: []` AVANT que `handleAttachments` ne fasse le
+    // lien (`updateMany`/`create`), donc l'objet renvoyé ici porte un
+    // tableau vide. Sans ce refresh, le broadcast `message:new` et la
+    // réponse REST diffusent un message sans attachments — ce qui fait
+    // disparaître les médias côté client (iOS écrase les attachments
+    // optimistes avec `null`).
+    const hasAttachmentLinks =
+      (data.attachmentIds && data.attachmentIds.length > 0) ||
+      Boolean(data.forwardedFromId);
+    if (hasAttachmentLinks) {
+      const refreshedAttachments = await this.prisma.messageAttachment.findMany({
+        where: { messageId: message.id }
+      });
+      (message as Message & { attachments: unknown[] }).attachments = refreshedAttachments;
+    }
+
     // ÉTAPE 5: Mettre à jour les liens de tracking avec le messageId
     await this.updateTrackingLinksWithMessageId(processedContent, data, message.id);
 
