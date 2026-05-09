@@ -80,6 +80,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var liveLocationStopConversationIds: [String] = []
     var sendWithAttachmentsCallCount = 0
     var callInitiateCallCount = 0
+    var callInitiateResult: Result<MessageSocketManager.CallInitiateAck, Error> = .success(
+        MessageSocketManager.CallInitiateAck(callId: "mock-call-id", mode: "audio", iceServers: [])
+    )
     var callJoinCallCount = 0
     var callLeaveCallCount = 0
     var callSignalCallCount = 0
@@ -149,8 +152,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         sendWithAttachmentsCallCount += 1
     }
 
-    func emitCallInitiate(conversationId: String, isVideo: Bool) {
+    func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck {
         callInitiateCallCount += 1
+        return try callInitiateResult.get()
     }
 
     func emitCallJoin(callId: String) {

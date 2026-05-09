@@ -15,15 +15,15 @@ final class CallFlowTests: XCTestCase {
 
     // MARK: - Initiate Call
 
-    func test_initiateCall_sendsViaSocket() {
+    func test_initiateCall_sendsViaSocket() async throws {
         let socket = makeSocket()
-        socket.emitCallInitiate(conversationId: "conv001", isVideo: false)
+        _ = try await socket.emitCallInitiate(conversationId: "conv001", isVideo: false)
         XCTAssertEqual(socket.callInitiateCallCount, 1)
     }
 
-    func test_initiateVideoCall_sendsViaSocket() {
+    func test_initiateVideoCall_sendsViaSocket() async throws {
         let socket = makeSocket()
-        socket.emitCallInitiate(conversationId: "conv001", isVideo: true)
+        _ = try await socket.emitCallInitiate(conversationId: "conv001", isVideo: true)
         XCTAssertEqual(socket.callInitiateCallCount, 1)
     }
 
@@ -111,10 +111,10 @@ final class CallFlowTests: XCTestCase {
 
     // MARK: - Full Call Flow
 
-    func test_fullCallFlow_initiate_join_toggleMedia_end() {
+    func test_fullCallFlow_initiate_join_toggleMedia_end() async throws {
         let socket = makeSocket()
 
-        socket.emitCallInitiate(conversationId: "conv001", isVideo: false)
+        _ = try await socket.emitCallInitiate(conversationId: "conv001", isVideo: false)
         XCTAssertEqual(socket.callInitiateCallCount, 1)
 
         socket.emitCallJoin(callId: "call001")

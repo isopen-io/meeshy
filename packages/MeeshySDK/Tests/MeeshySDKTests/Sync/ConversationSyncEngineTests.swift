@@ -76,7 +76,9 @@ final class ConversationSyncEngineTests: XCTestCase {
 
         await engine.fullSync()
 
-        XCTAssertEqual(mockConvService.listCallCount, 1)
+        // fetchPageWithRetry retries up to 3 times (attempt 0, 1, 2) on
+        // transient errors, so the service is called 3 times before giving up.
+        XCTAssertEqual(mockConvService.listCallCount, 3)
     }
 
     func test_fullSync_onSuccess_returnsTrue() async {

@@ -220,7 +220,7 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertNil(slide.mediaURL)
         XCTAssertNil(slide.mediaData)
         XCTAssertNil(slide.content)
-        XCTAssertEqual(slide.duration, 5)
+        XCTAssertEqual(slide.duration, 12)
         XCTAssertEqual(slide.order, 0)
     }
 
@@ -248,7 +248,7 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertEqual(slide.id, "s2")
         XCTAssertNil(slide.mediaURL)
         XCTAssertNil(slide.content)
-        XCTAssertEqual(slide.duration, 5)
+        XCTAssertEqual(slide.duration, 12)
         XCTAssertEqual(slide.order, 0)
     }
 
