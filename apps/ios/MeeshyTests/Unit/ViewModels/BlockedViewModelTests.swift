@@ -5,6 +5,21 @@ import MeeshySDK
 @MainActor
 final class BlockedViewModelTests: XCTestCase {
 
+    // MARK: - Lifecycle
+
+    override func setUp() async throws {
+        try await super.setUp()
+        // The ViewModel uses `CacheCoordinator.shared.blockedUsers` for the
+        // cache-first pipeline. Tests must start from a clean slate so the
+        // cache from a previous run doesn't pre-empt the mock fetch.
+        await CacheCoordinator.shared.blockedUsers.invalidate(for: "blocked:list")
+    }
+
+    override func tearDown() async throws {
+        await CacheCoordinator.shared.blockedUsers.invalidate(for: "blocked:list")
+        try await super.tearDown()
+    }
+
     // MARK: - Factory
 
     private func makeSUT(
@@ -103,5 +118,41 @@ final class BlockedViewModelTests: XCTestCase {
         XCTAssertEqual(sut.loadState, .idle)
         await sut.loadBlocked()
         XCTAssertEqual(sut.loadState, .loaded)
+    }
+
+    // MARK: - Cache-First Behavior
+
+    /// When the cache holds fresh data, the ViewModel surfaces it immediately
+    /// and skips the network call. This is the core "no spinner when cache
+    /// has data" promise from the architecture bible.
+    func test_loadBlocked_withCachedFreshData_skipsNetworkAndAppliesCache() async {
+        let cached = [Self.makeBlockedUser(id: "cached-1", username: "cached")]
+        await CacheCoordinator.shared.blockedUsers.save(cached, for: "blocked:list")
+
+        let (sut, mock) = makeSUT()
+        mock.listBlockedUsersResult = .success([Self.makeBlockedUser(id: "fresh-1", username: "fresh")])
+
+        await sut.loadBlocked()
+
+        XCTAssertEqual(sut.blockedUsers.map(\.id), ["cached-1"])
+        XCTAssertEqual(mock.listBlockedUsersCallCount, 0, "Fresh cache must short-circuit the network call")
+        XCTAssertEqual(sut.loadState, .loaded)
+    }
+
+    /// Cold start with empty cache: spinner shown, network fetch happens,
+    /// results saved to cache for the next visit.
+    func test_loadBlocked_withEmptyCache_callsNetworkAndPersistsToCache() async {
+        let fresh = [Self.makeBlockedUser(id: "n1", username: "alice")]
+
+        let (sut, mock) = makeSUT()
+        mock.listBlockedUsersResult = .success(fresh)
+
+        await sut.loadBlocked()
+
+        XCTAssertEqual(sut.blockedUsers.map(\.id), ["n1"])
+        XCTAssertEqual(mock.listBlockedUsersCallCount, 1)
+
+        let cacheValue = await CacheCoordinator.shared.blockedUsers.load(for: "blocked:list").value
+        XCTAssertEqual(cacheValue?.map(\.id), ["n1"], "Network result must be persisted")
     }
 }
