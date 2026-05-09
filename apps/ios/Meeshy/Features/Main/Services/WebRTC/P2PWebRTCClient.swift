@@ -633,38 +633,51 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 }
 
 // MARK: - RTCPeerConnectionDelegate
+//
+// Toutes ces méthodes sont invoquées par WebRTC depuis son `signaling_thread`
+// (et `network_thread` pour ICE). Sous Swift 6 + default isolation = MainActor
+// du target Meeshy, l'@objc thunk généré par le compilateur vérifie l'executor
+// au runtime et trap (`_swift_task_checkIsolatedSwift` →
+// `dispatch_assert_queue_fail`) dès que WebRTC livre un callback hors du Main
+// — typiquement quand `peerConnection.add(audioTrack, …)` déclenche
+// `peerConnectionShouldNegotiate(_:)` synchrone depuis le signaling thread,
+// ce qui ferme l'app au lancement de l'appel.
+//
+// Fix : marquer chaque méthode `nonisolated` pour autoriser l'appel depuis
+// n'importe quel thread. Toute mutation de state qui touche le ViewModel
+// reste dispatchée vers Main via `DispatchQueue.main.async` (already in
+// place pour le delegate forwarding).
 
 extension P2PWebRTCClient: RTCPeerConnectionDelegate {
-    func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange stateChanged: RTCSignalingState) {
         Logger.webrtc.info("Signaling state: \(stateChanged.rawValue)")
     }
 
-    func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
-        if let videoTrack = stream.videoTracks.first {
-            remoteVideoTrack_ = videoTrack
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didAdd stream: RTCMediaStream) {
+        let videoTrack = stream.videoTracks.first
+        let audioTrack = stream.audioTracks.first
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            if let videoTrack {
+                self.remoteVideoTrack_ = videoTrack
                 self.delegate?.webRTCClient(self, didReceiveRemoteVideoTrack: videoTrack)
             }
-        }
-        if let audioTrack = stream.audioTracks.first {
-            remoteAudioTrack_ = audioTrack
-            DispatchQueue.main.async { [weak self] in
-                guard let self else { return }
+            if let audioTrack {
+                self.remoteAudioTrack_ = audioTrack
                 self.delegate?.webRTCClient(self, didReceiveRemoteAudioTrack: audioTrack)
             }
         }
     }
 
-    func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove stream: RTCMediaStream) {
         Logger.webrtc.info("Remote stream removed")
     }
 
-    func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {
+    nonisolated func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {
         Logger.webrtc.info("Negotiation needed")
     }
 
-    func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceConnectionState) {
         let state: PeerConnectionState = switch newState {
         case .new: .new
         case .checking: .connecting
@@ -683,11 +696,11 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
         }
     }
 
-    func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didChange newState: RTCIceGatheringState) {
         Logger.webrtc.info("ICE gathering state: \(newState.rawValue)")
     }
 
-    func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didGenerate candidate: RTCIceCandidate) {
         let iceCandidate = IceCandidate(
             sdpMid: candidate.sdpMid,
             sdpMLineIndex: candidate.sdpMLineIndex,
@@ -699,28 +712,36 @@ extension P2PWebRTCClient: RTCPeerConnectionDelegate {
         }
     }
 
-    func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didRemove candidates: [RTCIceCandidate]) {
         Logger.webrtc.debug("Removed \(candidates.count) ICE candidates")
     }
 
-    func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
+    nonisolated func peerConnection(_ peerConnection: RTCPeerConnection, didOpen dataChannel: RTCDataChannel) {
         Logger.webrtc.info("Data channel opened: \(dataChannel.label)")
-        if dataChannel.label == "transcription" {
-            dataChannel.delegate = self
-            transcriptionDataChannel = dataChannel
+        guard dataChannel.label == "transcription" else { return }
+        dataChannel.delegate = self
+        DispatchQueue.main.async { [weak self] in
+            self?.transcriptionDataChannel = dataChannel
         }
     }
 }
 
 // MARK: - RTCDataChannelDelegate
+//
+// Idem RTCPeerConnectionDelegate — les data channel callbacks arrivent du
+// signaling thread WebRTC, donc `nonisolated`.
 
 extension P2PWebRTCClient: RTCDataChannelDelegate {
-    func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+    nonisolated func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
         Logger.webrtc.info("DataChannel '\(dataChannel.label)' state: \(dataChannel.readyState.rawValue)")
     }
 
-    func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
-        delegate?.webRTCClient(self, didReceiveDataChannelMessage: buffer.data)
+    nonisolated func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
+        let data = buffer.data
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.delegate?.webRTCClient(self, didReceiveDataChannelMessage: data)
+        }
     }
 }
 
