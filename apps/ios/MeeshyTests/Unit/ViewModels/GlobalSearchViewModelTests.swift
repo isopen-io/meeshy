@@ -6,28 +6,19 @@ import MeeshySDK
 @MainActor
 final class GlobalSearchViewModelTests: XCTestCase {
 
-    // MARK: - Properties
-
-    private var mockAPI: MockAPIClientForApp!
-    private var mockUserService: MockUserService!
-    private var mockAuthManager: MockAuthManager!
     private let defaultsKey = "globalSearch.recentSearches"
 
     // MARK: - Lifecycle
 
     override func setUp() {
         super.setUp()
-        mockAPI = MockAPIClientForApp()
-        mockUserService = MockUserService()
-        mockAuthManager = MockAuthManager()
+        // Recent searches persist via UserDefaults — clear so a previous run
+        // doesn't bleed into `test_init_*` and `test_addToRecentSearches_*`.
         UserDefaults.standard.removeObject(forKey: defaultsKey)
     }
 
     override func tearDown() {
         UserDefaults.standard.removeObject(forKey: defaultsKey)
-        mockAPI = nil
-        mockUserService = nil
-        mockAuthManager = nil
         super.tearDown()
     }
 
@@ -39,14 +30,25 @@ final class GlobalSearchViewModelTests: XCTestCase {
         return pool
     }
 
-    private func makeSUT(searchService: MessageSearchService? = nil) throws -> GlobalSearchViewModel {
+    private func makeSUT(
+        searchService: MessageSearchService? = nil
+    ) throws -> (
+        sut: GlobalSearchViewModel,
+        mockAPI: MockAPIClientForApp,
+        mockUserService: MockUserService,
+        mockAuthManager: MockAuthManager
+    ) {
+        let mockAPI = MockAPIClientForApp()
+        let mockUserService = MockUserService()
+        let mockAuthManager = MockAuthManager()
         let service = try searchService ?? MessageSearchService(reader: makeEmptyPool())
-        return GlobalSearchViewModel(
+        let sut = GlobalSearchViewModel(
             api: mockAPI,
             userService: mockUserService,
             authManager: mockAuthManager,
             searchService: service
         )
+        return (sut, mockAPI, mockUserService, mockAuthManager)
     }
 
     private func makeCurrentUser() -> MeeshyUser {
@@ -58,19 +60,19 @@ final class GlobalSearchViewModelTests: XCTestCase {
     func test_init_loadsRecentSearchesFromUserDefaults() throws {
         UserDefaults.standard.set(["swift", "ios"], forKey: defaultsKey)
 
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
 
         XCTAssertEqual(sut.recentSearches, ["swift", "ios"])
     }
 
     func test_init_setsEmptyRecentSearchesWhenNoDefaultsExist() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
 
         XCTAssertTrue(sut.recentSearches.isEmpty)
     }
 
     func test_init_defaultStateIsCorrect() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
 
         XCTAssertEqual(sut.searchText, "")
         XCTAssertEqual(sut.selectedTab, .messages)
@@ -84,9 +86,9 @@ final class GlobalSearchViewModelTests: XCTestCase {
     // MARK: - performSearch Tests
 
     func test_performSearch_withValidQuery_setsIsSearchingAndHasSearched() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        stubEmptySearchResults()
-        let sut = try makeSUT()
+        stubEmptySearchResults(on: mockAPI, userService: mockUserService)
 
         await sut.performSearch(query: "hello")
 
@@ -95,13 +97,13 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     func test_performSearch_withValidQuery_populatesUserResults() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        stubEmptyConversationSearch()
+        stubEmptyConversationSearch(on: mockAPI)
         mockUserService.searchUsersResult = .success([
             UserSearchResult.stub(id: "u1", username: "alice", displayName: "Alice", isOnline: true),
             UserSearchResult.stub(id: "u2", username: "bob", displayName: "Bob", isOnline: false),
         ])
-        let sut = try makeSUT()
 
         await sut.performSearch(query: "test")
 
@@ -113,10 +115,10 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     func test_performSearch_whenAPIFails_returnsEmptyResults() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
         mockAPI.errorToThrow = NSError(domain: "test", code: 500)
         mockUserService.searchUsersResult = .failure(NSError(domain: "test", code: 500))
-        let sut = try makeSUT()
 
         await sut.performSearch(query: "fail")
 
@@ -141,12 +143,11 @@ final class GlobalSearchViewModelTests: XCTestCase {
         }
         let searchService = MessageSearchService(reader: pool)
 
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT(searchService: searchService)
         // API configured to throw on every call (simulates offline / network failure)
         mockAPI.errorToThrow = URLError(.notConnectedToInternet)
         mockUserService.searchUsersResult = .failure(URLError(.notConnectedToInternet))
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-
-        let sut = try makeSUT(searchService: searchService)
 
         // Act
         await sut.performSearch(query: "hello")
@@ -174,6 +175,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
         }
         let searchService = MessageSearchService(reader: pool)
 
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT(searchService: searchService)
         // Network returns the same message id (server-side hit)
         let networkConvResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
         {"success":true,"data":[]}
@@ -181,8 +183,6 @@ final class GlobalSearchViewModelTests: XCTestCase {
         mockAPI.stub("/conversations/search", result: networkConvResponse)
         mockUserService.searchUsersResult = .success([])
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-
-        let sut = try makeSUT(searchService: searchService)
 
         // Act
         await sut.performSearch(query: "matching")
@@ -195,14 +195,14 @@ final class GlobalSearchViewModelTests: XCTestCase {
     // MARK: - Tab Counts Tests
 
     func test_tabCounts_reflectResultArraySizes() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        stubEmptyConversationSearch()
+        stubEmptyConversationSearch(on: mockAPI)
         mockUserService.searchUsersResult = .success([
             UserSearchResult.stub(id: "u1", username: "alice"),
             UserSearchResult.stub(id: "u2", username: "bob"),
             UserSearchResult.stub(id: "u3", username: "carol"),
         ])
-        let sut = try makeSUT()
 
         await sut.performSearch(query: "test")
 
@@ -215,7 +215,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
     // MARK: - Recent Searches Tests
 
     func test_addToRecentSearches_addsNewEntry() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
 
         sut.addToRecentSearches("swift")
 
@@ -223,7 +223,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     func test_addToRecentSearches_deduplicatesCaseInsensitive() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
 
         sut.addToRecentSearches("Swift")
         sut.addToRecentSearches("swift")
@@ -233,7 +233,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     func test_addToRecentSearches_movesExistingToTop() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
 
         sut.addToRecentSearches("first")
         sut.addToRecentSearches("second")
@@ -243,7 +243,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     func test_addToRecentSearches_limitsToTenEntries() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
 
         for i in 0..<12 {
             sut.addToRecentSearches("search_\(i)")
@@ -254,7 +254,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     func test_addToRecentSearches_ignoresEmptyOrWhitespace() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
 
         sut.addToRecentSearches("")
         sut.addToRecentSearches("   ")
@@ -263,7 +263,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     func test_addToRecentSearches_persistsToUserDefaults() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
 
         sut.addToRecentSearches("persisted")
 
@@ -272,7 +272,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     func test_removeRecentSearch_removesSpecificEntry() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
         sut.addToRecentSearches("keep")
         sut.addToRecentSearches("remove")
 
@@ -282,7 +282,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     func test_removeRecentSearch_persistsRemoval() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
         sut.addToRecentSearches("toRemove")
 
         sut.removeRecentSearch("toRemove")
@@ -292,7 +292,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     func test_clearRecentSearches_removesAllEntries() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
         sut.addToRecentSearches("one")
         sut.addToRecentSearches("two")
 
@@ -302,7 +302,7 @@ final class GlobalSearchViewModelTests: XCTestCase {
     }
 
     func test_clearRecentSearches_persistsClear() throws {
-        let sut = try makeSUT()
+        let (sut, _, _, _) = try makeSUT()
         sut.addToRecentSearches("one")
 
         sut.clearRecentSearches()
@@ -311,18 +311,75 @@ final class GlobalSearchViewModelTests: XCTestCase {
         XCTAssertEqual(stored, [])
     }
 
+    // MARK: - Message Query Cache (in-memory LRU)
+
+    /// Re-issuing the SAME query within the staleTTL window must short-circuit
+    /// the message-search network leg of `performSearch`. `performSearch`
+    /// hits `/conversations/search` TWICE per call (once for conversations,
+    /// once via `fetchRemoteMessageResults` to discover candidate conversations
+    /// for the message search). Only the message-search half is cached, so we
+    /// expect the second call to consume one fewer round-trip than the first.
+    func test_searchMessages_repeatQueryUsesInMemoryCache() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        let convResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[]}
+        """)
+        mockAPI.stub("/conversations/search", result: convResponse)
+        mockUserService.searchUsersResult = .success([])
+
+        await sut.performSearch(query: "swift")
+        let firstCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+        XCTAssertGreaterThanOrEqual(firstCallCount, 1)
+
+        await sut.performSearch(query: "swift")
+        let secondCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+        let delta = secondCallCount - firstCallCount
+
+        XCTAssertLessThan(
+            delta, firstCallCount,
+            "Second identical query must save at least one round-trip via the in-memory message-search cache (first=\(firstCallCount), delta=\(delta))"
+        )
+    }
+
+    /// A different query must NOT hit the cache — the second call's delta
+    /// equals the first call's count (no savings from the cache).
+    func test_searchMessages_differentQuerySkipsCache() async throws {
+        let (sut, mockAPI, mockUserService, mockAuthManager) = try makeSUT()
+        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
+        let convResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
+        {"success":true,"data":[]}
+        """)
+        mockAPI.stub("/conversations/search", result: convResponse)
+        mockUserService.searchUsersResult = .success([])
+
+        await sut.performSearch(query: "swift")
+        let firstCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+
+        await sut.performSearch(query: "kotlin")
+        let secondCallCount = mockAPI.requestEndpoints.filter { $0 == "/conversations/search" }.count
+
+        XCTAssertEqual(
+            secondCallCount - firstCallCount, firstCallCount,
+            "Different query must replay the same number of calls — cache is keyed by query"
+        )
+    }
+
     // MARK: - Helpers
 
-    private func stubEmptyConversationSearch() {
+    private func stubEmptyConversationSearch(on mockAPI: MockAPIClientForApp) {
         let emptyResponse: APIResponse<[APIConversation]> = JSONStub.decode("""
         {"success":true,"data":[]}
         """)
         mockAPI.stub("/conversations/search", result: emptyResponse)
     }
 
-    private func stubEmptySearchResults() {
-        stubEmptyConversationSearch()
-        mockUserService.searchUsersResult = .success([])
+    private func stubEmptySearchResults(
+        on mockAPI: MockAPIClientForApp,
+        userService: MockUserService
+    ) {
+        stubEmptyConversationSearch(on: mockAPI)
+        userService.searchUsersResult = .success([])
     }
 }
 

@@ -201,12 +201,26 @@ public struct TranslateResponse: Decodable {
 
 // MARK: - User Search
 
-public struct UserSearchResult: Decodable {
+public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendable, Equatable {
     public let id: String
     public let username: String
     public let displayName: String?
     public let avatar: String?
     public let isOnline: Bool?
+
+    public init(
+        id: String,
+        username: String,
+        displayName: String? = nil,
+        avatar: String? = nil,
+        isOnline: Bool? = nil
+    ) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+        self.isOnline = isOnline
+    }
 }
 
 // MARK: - Attachment Status

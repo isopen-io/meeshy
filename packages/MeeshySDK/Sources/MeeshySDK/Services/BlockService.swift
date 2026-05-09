@@ -1,12 +1,26 @@
 import Foundation
 import Combine
 
-public struct BlockedUser: Decodable, Identifiable, Sendable {
+public struct BlockedUser: Codable, CacheIdentifiable, Identifiable, Sendable, Equatable {
     public let id: String
     public let username: String
     public let displayName: String?
     public let avatar: String?
     public let blockedAt: Date?
+
+    public init(
+        id: String,
+        username: String,
+        displayName: String? = nil,
+        avatar: String? = nil,
+        blockedAt: Date? = nil
+    ) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+        self.blockedAt = blockedAt
+    }
 
     public var name: String {
         displayName ?? username

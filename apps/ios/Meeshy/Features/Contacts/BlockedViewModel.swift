@@ -9,19 +9,48 @@ final class BlockedViewModel: ObservableObject {
     @Published var loadState: LoadState = .idle
 
     private let blockService: BlockServiceProviding
+    private var revalidationTask: Task<Void, Never>?
+    private let cacheKey = "blocked:list"
 
     init(blockService: BlockServiceProviding = BlockService.shared) {
         self.blockService = blockService
     }
 
+    deinit {
+        revalidationTask?.cancel()
+    }
+
     func loadBlocked() async {
-        loadState = .loading
-        do {
-            blockedUsers = try await blockService.listBlockedUsers()
-            loadState = .loaded
-        } catch {
-            loadState = .error("Erreur lors du chargement")
-        }
+        let blockService = self.blockService
+        let store = await CacheCoordinator.shared.blockedUsers
+        let loader = CacheFirstLoader(store: store, key: cacheKey)
+        revalidationTask?.cancel()
+        revalidationTask = await loader.load(
+            fetch: { try await blockService.listBlockedUsers() },
+            setLoadState: { [weak self] state in
+                guard let self else { return }
+                // Map the loader's transient states into the reduced surface the
+                // Blocked screen renders ("loading" vs "loaded" vs "error"). The
+                // bible's no-spinner-when-cached rule is honoured: cachedFresh /
+                // cachedStale come through as `.loaded`, only a cold start hits
+                // `.loading`.
+                switch state {
+                case .cachedFresh, .cachedStale, .loaded:
+                    self.loadState = .loaded
+                case .loading:
+                    self.loadState = .loading
+                case .offline:
+                    self.loadState = .offline
+                case .error:
+                    self.loadState = .error("Erreur lors du chargement")
+                case .idle:
+                    self.loadState = .idle
+                }
+            },
+            apply: { [weak self] users in
+                self?.blockedUsers = users
+            }
+        )
     }
 
     func unblock(userId: String) async {

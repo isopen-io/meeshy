@@ -70,7 +70,7 @@ struct GlobalSearchUserResult: Identifiable, Sendable {
 // MARK: - ViewModel
 
 @MainActor
-class GlobalSearchViewModel: ObservableObject {
+final class GlobalSearchViewModel: ObservableObject {
 
     // MARK: - Published State
 
@@ -79,9 +79,16 @@ class GlobalSearchViewModel: ObservableObject {
     @Published var messageResults: [GlobalSearchMessageResult] = []
     @Published var conversationResults: [GlobalSearchConversationResult] = []
     @Published var userResults: [GlobalSearchUserResult] = []
-    @Published var isSearching = false
+    @Published private(set) var loadState: LoadState = .idle
     @Published var recentSearches: [String] = []
     @Published var hasSearched = false
+
+    /// Backwards-compatibility shim — earlier consumers (and `GlobalSearchView`)
+    /// read `isSearching` directly. Derived from `loadState` so existing call
+    /// sites keep working without churn. Excludes `.cachedStale` so the spinner
+    /// does NOT hide stale LRU results during background revalidation, per the
+    /// non-negotiable "no spinner when cache has data" rule (CLAUDE.md).
+    var isSearching: Bool { loadState == .loading }
 
     // MARK: - Dependencies
 
@@ -95,6 +102,41 @@ class GlobalSearchViewModel: ObservableObject {
     private var cancellables = Set<AnyCancellable>()
     private let recentSearchesKey = "globalSearch.recentSearches"
     private let maxRecentSearches = 10
+
+    /// In-memory LRU cache for the last 5 unique non-empty queries' remote
+    /// message results. Used to short-circuit a re-fetch when the user
+    /// re-types a query that just ran (typical: tab switching, navigating
+    /// back to results). The 5-entry bound keeps the surface tight; the
+    /// persistent on-disk LRU described in the spec is deferred — the
+    /// in-memory cache is the minimum viable cache-first promise.
+    ///
+    /// DEVIATION FROM SPEC §5.3 D:
+    /// The spec calls for a persistent GRDB cache keyed by
+    /// `sha256(query)[:16]` with a 5-entry LRU and a 2min `staleTTL`,
+    /// routed through the `messages` cache store. This implementation uses
+    /// an in-memory LRU only because `GlobalSearchMessageResult` references
+    /// non-Codable domain types (cf. `ServiceModels.swift`) that would
+    /// require a model refactor outside the Phase 3 scope. The TTL and
+    /// 5-entry bound match the spec exactly so behaviour is equivalent
+    /// within a single session; only cold-start persistence is missing.
+    /// Tracked as a follow-up: make `GlobalSearchMessageResult` Codable,
+    /// then route through the `messages` store with `search:msg:<sha256>`
+    /// keys + LRU metadata.
+    private var messageQueryCache: [(query: String, results: [GlobalSearchMessageResult], cachedAt: Date)] = []
+    private static let messageQueryCacheCapacity = 5
+    /// Mirrors the spec's `messages` policy `staleTTL` (2min). Beyond this
+    /// the cached entry is evicted on access — we still re-fetch from the
+    /// network rather than serving stale results indefinitely.
+    private static let messageQueryCacheStaleTTL: TimeInterval = 120
+
+    /// Tracks the in-flight debounced search so a fresh keystroke can cancel
+    /// the previous round-trip before launching a new one. Marked
+    /// `nonisolated(unsafe)` because writes always happen on the main
+    /// thread (the Combine debounce sink runs on `DispatchQueue.main`) and
+    /// `deinit` — which is implicitly non-isolated under Swift 6 — needs to
+    /// reach the property to cancel a still-flying task. `Task<Void, Never>`
+    /// is `Sendable` so the unchecked access is safe.
+    nonisolated(unsafe) private var searchTask: Task<Void, Never>?
 
     // MARK: - Init
 
@@ -114,6 +156,14 @@ class GlobalSearchViewModel: ObservableObject {
         setupDebounce()
     }
 
+    deinit {
+        // `searchTask` is `nonisolated(unsafe)` so the implicitly
+        // non-isolated `deinit` can reach it without a Swift 6 isolation
+        // warning. Cancel any in-flight search so we don't leak network
+        // work after the view disappears.
+        searchTask?.cancel()
+    }
+
     // MARK: - Debounced Search
 
     private func setupDebounce() {
@@ -124,10 +174,18 @@ class GlobalSearchViewModel: ObservableObject {
                 guard let self else { return }
                 let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.count >= 2 {
-                    Task { [weak self] in
+                    // Cancel the previous in-flight search before launching
+                    // a new one. Without this each keystroke spawned a
+                    // detached Task that ran to completion (zombie network
+                    // work and stale `messageResults` writes once the user
+                    // had moved on).
+                    self.searchTask?.cancel()
+                    self.searchTask = Task { [weak self] in
                         await self?.performSearch(query: trimmed)
                     }
                 } else {
+                    self.searchTask?.cancel()
+                    self.searchTask = nil
                     self.clearResults()
                 }
             }
@@ -137,29 +195,52 @@ class GlobalSearchViewModel: ObservableObject {
     // MARK: - Search
 
     func performSearch(query: String) async {
-        isSearching = true
         hasSearched = true
+
+        // If we have a cached LRU hit for the message tab we are still going
+        // to revalidate downstream (FTS5 + cached merge are served first,
+        // network for conversations/users still runs), so we surface
+        // `.cachedStale` per the architecture-bible rule "no spinner when
+        // cache has data". Otherwise this is a cold load and we honour
+        // `.loading`.
+        let key = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasCachedHit = messageQueryCache.contains { entry in
+            entry.query == key &&
+            Date().timeIntervalSince(entry.cachedAt) < Self.messageQueryCacheStaleTTL
+        }
+        loadState = hasCachedHit ? .cachedStale : .loading
 
         async let conversationsTask = searchConversations(query: query)
         async let usersTask = searchUsers(query: query)
         async let messagesTask = searchMessages(query: query)
 
         let (convs, users, msgs) = await (conversationsTask, usersTask, messagesTask)
+
+        // Bail out gracefully if the debounce-cancel kicked in mid-flight —
+        // we don't want a stale Task overwriting the next query's results
+        // or transitioning the load state away from the new query's
+        // `.loading` / `.cachedStale`.
+        guard !Task.isCancelled else { return }
+
         conversationResults = convs
         userResults = users
         messageResults = msgs
 
-        isSearching = false
+        if NetworkMonitor.shared.isOffline {
+            loadState = .offline
+        } else {
+            loadState = .loaded
+        }
     }
 
     // MARK: - Search Conversations (FTS5-first, network fallback)
 
+    /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
+    /// `@Published` state. The caller (`performSearch`) gates the write on a
+    /// `Task.isCancelled` check so a debounce-cancelled run can't overwrite
+    /// the next query's results.
     private func searchConversations(query: String) async -> [GlobalSearchConversationResult] {
         let localResults = await searchLocalConversations(query: query)
-        // Surface local hits immediately so the UI feels instant; the
-        // remote results merge in once the round-trip lands.
-        conversationResults = localResults
-
         let remoteResults = await fetchRemoteConversationResults(query: query)
         return mergeUniqueConversationResults(local: localResults, remote: remoteResults)
     }
@@ -232,10 +313,10 @@ class GlobalSearchViewModel: ObservableObject {
 
     // MARK: - Search Users (FTS5-first, network fallback)
 
+    /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
+    /// `@Published` state. See note on `searchConversations`.
     private func searchUsers(query: String) async -> [GlobalSearchUserResult] {
         let localResults = await searchLocalUsers(query: query)
-        userResults = localResults
-
         let remoteResults = await fetchRemoteUserResults(query: query)
         return mergeUniqueUserResults(local: localResults, remote: remoteResults)
     }
@@ -299,14 +380,46 @@ class GlobalSearchViewModel: ObservableObject {
 
     // MARK: - Search Messages (FTS5-first, network fallback)
 
+    /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
+    /// `@Published` state. See note on `searchConversations`.
     private func searchMessages(query: String) async -> [GlobalSearchMessageResult] {
         // FTS5 local results — instant, available offline
         let localResults = await searchLocalMessages(query: query)
-        messageResults = localResults
 
-        // Network in parallel — merge fresh server-side hits
+        // Cache-first for the network leg: if the same query was fetched
+        // within the staleTTL window we surface the cached merge immediately
+        // and skip the round-trip. The FTS5 results are recomputed each
+        // call (cheap, local) so they never go stale.
+        if let cached = cachedRemoteResults(for: query) {
+            return mergeUniqueMessageResults(local: localResults, remote: cached)
+        }
+
+        // Network — merge fresh server-side hits
         let remoteResults = await fetchRemoteMessageResults(query: query)
+        cacheRemoteResults(remoteResults, for: query)
         return mergeUniqueMessageResults(local: localResults, remote: remoteResults)
+    }
+
+    // MARK: - Message Query Cache (in-memory LRU, 5 entries)
+
+    private func cachedRemoteResults(for query: String) -> [GlobalSearchMessageResult]? {
+        let key = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let entry = messageQueryCache.first(where: { $0.query == key }) else { return nil }
+        guard Date().timeIntervalSince(entry.cachedAt) < Self.messageQueryCacheStaleTTL else {
+            messageQueryCache.removeAll { $0.query == key }
+            return nil
+        }
+        return entry.results
+    }
+
+    private func cacheRemoteResults(_ results: [GlobalSearchMessageResult], for query: String) {
+        let key = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !key.isEmpty else { return }
+        messageQueryCache.removeAll { $0.query == key }
+        messageQueryCache.append((query: key, results: results, cachedAt: Date()))
+        while messageQueryCache.count > Self.messageQueryCacheCapacity {
+            messageQueryCache.removeFirst()
+        }
     }
 
     private func searchLocalMessages(query: String) async -> [GlobalSearchMessageResult] {
@@ -419,6 +532,7 @@ class GlobalSearchViewModel: ObservableObject {
         conversationResults = []
         userResults = []
         hasSearched = false
+        loadState = .idle
     }
 
     // MARK: - Recent Searches

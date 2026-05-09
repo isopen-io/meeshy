@@ -5,6 +5,20 @@ import MeeshySDK
 @MainActor
 final class DiscoverViewModelTests: XCTestCase {
 
+    // MARK: - Lifecycle
+
+    override func setUp() async throws {
+        try await super.setUp()
+        // Suggestions list goes through `CacheCoordinator.shared.userSearch`.
+        // Reset between tests so state from a previous run never bleeds in.
+        await CacheCoordinator.shared.userSearch.invalidate(for: "discover:suggestions")
+    }
+
+    override func tearDown() async throws {
+        await CacheCoordinator.shared.userSearch.invalidate(for: "discover:suggestions")
+        try await super.tearDown()
+    }
+
     // MARK: - Factory
 
     private func makeSUT(
@@ -134,5 +148,65 @@ final class DiscoverViewModelTests: XCTestCase {
     func test_smsMessage_containsDownloadLink() {
         let (sut, _, _) = makeSUT()
         XCTAssertTrue(sut.smsMessage.contains("meeshy.me/download"))
+    }
+
+    // MARK: - Cache-First Suggestions
+
+    /// Empty-query suggestions: when the cache has fresh data, surface it
+    /// immediately and skip the network call.
+    func test_loadSuggestions_withCachedFreshData_skipsNetworkAndAppliesCache() async {
+        let cached = [
+            UserSearchResult(id: "cached-1", username: "alice", displayName: "Alice", avatar: nil, isOnline: true)
+        ]
+        await CacheCoordinator.shared.userSearch.save(cached, for: "discover:suggestions")
+
+        let (sut, _, userService) = makeSUT()
+        userService.searchUsersResult = .success([
+            UserSearchResult(id: "fresh-1", username: "bob", displayName: "Bob", avatar: nil, isOnline: false)
+        ])
+
+        await sut.loadSuggestions()
+
+        XCTAssertEqual(sut.searchResults.map(\.id), ["cached-1"])
+        XCTAssertEqual(userService.searchUsersCallCount, 0, "Fresh cache must skip network")
+        XCTAssertEqual(sut.loadState, .cachedFresh)
+    }
+
+    /// Cold start with empty cache: spinner shown, suggestions fetched,
+    /// cache populated for the next visit.
+    func test_loadSuggestions_withEmptyCache_callsNetworkAndPersistsToCache() async {
+        let fresh = [
+            UserSearchResult(id: "n1", username: "alice", displayName: "Alice", avatar: nil, isOnline: true)
+        ]
+
+        let (sut, _, userService) = makeSUT()
+        userService.searchUsersResult = .success(fresh)
+
+        await sut.loadSuggestions()
+
+        XCTAssertEqual(sut.searchResults.map(\.id), ["n1"])
+        XCTAssertEqual(userService.searchUsersCallCount, 1)
+
+        let cacheValue = await CacheCoordinator.shared.userSearch.load(for: "discover:suggestions").value
+        XCTAssertEqual(cacheValue?.map(\.id), ["n1"])
+    }
+
+    /// `performSearch` for non-empty queries deliberately bypasses the
+    /// cache (the query space is unbounded). This test pins that contract:
+    /// adding suggestions to the cache must not affect a typed search.
+    func test_performSearch_doesNotUseSuggestionsCache() async {
+        let cached = [UserSearchResult(id: "cached-1", username: "alice")]
+        await CacheCoordinator.shared.userSearch.save(cached, for: "discover:suggestions")
+
+        let (sut, _, userService) = makeSUT()
+        userService.searchUsersResult = .success([
+            UserSearchResult(id: "search-result", username: "bob", displayName: "Bob")
+        ])
+        sut.searchQuery = "bob"
+
+        await sut.performSearch()
+
+        XCTAssertEqual(sut.searchResults.map(\.id), ["search-result"])
+        XCTAssertEqual(userService.searchUsersCallCount, 1)
     }
 }
