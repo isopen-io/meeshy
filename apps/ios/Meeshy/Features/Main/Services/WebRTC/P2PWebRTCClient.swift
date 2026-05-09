@@ -450,16 +450,39 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     }
 
     private func selectFormat(for device: AVCaptureDevice) -> AVCaptureDevice.Format? {
-        RTCCameraVideoCapturer.supportedFormats(for: device)
-            .sorted { f1, f2 in
-                let d1 = CMVideoFormatDescriptionGetDimensions(f1.formatDescription)
-                let d2 = CMVideoFormatDescriptionGetDimensions(f2.formatDescription)
-                return d1.width * d1.height < d2.width * d2.height
-            }
-            .last(where: { f in
-                let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
-                return d.width <= 1280 && d.height <= 720
-            }) ?? RTCCameraVideoCapturer.supportedFormats(for: device).last
+        // Préférer un format <=720p qui supporte 30fps. Sans le filtre fps,
+        // l'iPhone Pro peut sélectionner un format slow-motion 720p@120/240fps
+        // (où minFrameRate=maxFrameRate=120) — `RTCCameraVideoCapturer.startCapture`
+        // est alors appelé en fps=120, ce qui produit `FigCaptureSourceRemote
+        // err=-17281` (kCMIOHardwareDeviceUnsupportedFormatError) sur certains
+        // devices et gaspille batterie/CPU sur tous.
+        let target: Float64 = 30
+        let supports30fps: (AVCaptureDevice.Format) -> Bool = { f in
+            f.videoSupportedFrameRateRanges.contains { $0.minFrameRate <= target && target <= $0.maxFrameRate }
+        }
+
+        let supported = RTCCameraVideoCapturer.supportedFormats(for: device)
+        let sorted = supported.sorted { f1, f2 in
+            let d1 = CMVideoFormatDescriptionGetDimensions(f1.formatDescription)
+            let d2 = CMVideoFormatDescriptionGetDimensions(f2.formatDescription)
+            return d1.width * d1.height < d2.width * d2.height
+        }
+
+        if let format = sorted.last(where: { f in
+            let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
+            return d.width <= 1280 && d.height <= 720 && supports30fps(f)
+        }) {
+            return format
+        }
+
+        if let format = sorted.last(where: { f in
+            let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
+            return d.width <= 1280 && d.height <= 720
+        }) {
+            return format
+        }
+
+        return sorted.first(where: supports30fps) ?? supported.last
     }
 
     static func mungeOpusSDP(_ sdp: String) -> String {
@@ -626,8 +649,21 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     }
 
     private func targetFrameRate(for format: AVCaptureDevice.Format) -> Int {
-        let rates: [Float64] = format.videoSupportedFrameRateRanges.map { $0.maxFrameRate }
-        let closest: Float64 = rates.min(by: { abs($0 - 30) < abs($1 - 30) }) ?? 30
+        // Visons 30fps pour les appels vidéo (assez lisse, ~2x moins de CPU/batterie
+        // que 60fps). Si le format ne contient pas 30 dans une de ses ranges
+        // (ex: format slow-mo pure 120fps-only), fallback sur la valeur la plus
+        // proche de 30 atteignable — JAMAIS le maxFrameRate brut, qui pour un
+        // format 120fps-only ferait crasher `startCapture` avec
+        // `FigCaptureSourceRemote err=-17281`.
+        let target: Float64 = 30
+        let ranges = format.videoSupportedFrameRateRanges
+        if ranges.contains(where: { $0.minFrameRate <= target && target <= $0.maxFrameRate }) {
+            return Int(target)
+        }
+        let candidates = ranges.flatMap { range in
+            [max(range.minFrameRate, min(range.maxFrameRate, target)), range.minFrameRate, range.maxFrameRate]
+        }
+        let closest = candidates.min(by: { abs($0 - target) < abs($1 - target) }) ?? target
         return Int(closest)
     }
 }

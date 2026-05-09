@@ -2,7 +2,12 @@ import CoreVideo
 import Accelerate
 import os
 
-final class DarkFrameDetector {
+// `nonisolated` : appelé depuis `VideoFilterCapturerDelegate.capturer(_:didCapture:)`
+// qui s'exécute sur la queue WebRTC `org.webrtc.cameravideocapturer.video`.
+// Sous default isolation = MainActor du target Meeshy, sans cette annotation
+// les méthodes sont implicitement @MainActor et trap depuis le video thread
+// (`_swift_task_checkIsolatedSwift` → `dispatch_assert_queue_fail`).
+nonisolated final class DarkFrameDetector: @unchecked Sendable {
     private var consecutiveDarkFrames = 0
     private let darkThreshold: Float = 15.0
     private let consecutiveThreshold = 30

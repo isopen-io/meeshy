@@ -31,7 +31,7 @@ struct VideoFilterConfig: Equatable, Sendable {
         backgroundBlurEnabled || skinSmoothingEnabled
     }
 
-    static let `default` = VideoFilterConfig()
+    nonisolated static let `default` = VideoFilterConfig()
 }
 
 // MARK: - Filter Presets
@@ -74,17 +74,22 @@ enum VideoFilterPreset: String, CaseIterable, Sendable {
 // MARK: - Protocol
 
 protocol VideoFilterPipelineProviding {
-    var config: VideoFilterConfig { get set }
-    var lastFrameProcessingTime: TimeInterval? { get }
-    var isAutoDegraded: Bool { get }
-    func process(_ pixelBuffer: CVPixelBuffer) -> CVPixelBuffer
-    func process(_ pixelBuffer: CVPixelBuffer, averageBrightness: Float?) -> CVPixelBuffer
-    func reset()
+    nonisolated var config: VideoFilterConfig { get set }
+    nonisolated var lastFrameProcessingTime: TimeInterval? { get }
+    nonisolated var isAutoDegraded: Bool { get }
+    nonisolated func process(_ pixelBuffer: CVPixelBuffer) -> CVPixelBuffer
+    nonisolated func process(_ pixelBuffer: CVPixelBuffer, averageBrightness: Float?) -> CVPixelBuffer
+    nonisolated func reset()
 }
 
 // MARK: - Video Filter Pipeline
+//
+// `nonisolated` : `process(_:averageBrightness:)` est invoquée depuis la queue
+// WebRTC `org.webrtc.cameravideocapturer.video` (cf. `VideoFilterCapturerDelegate`).
+// Sous default isolation = MainActor du target Meeshy, sans annotation explicite
+// chaque méthode/property serait @MainActor et trap au premier frame livré.
 
-final class VideoFilterPipeline: VideoFilterPipelineProviding {
+nonisolated final class VideoFilterPipeline: VideoFilterPipelineProviding, @unchecked Sendable {
     var config = VideoFilterConfig.default
 
     private(set) var lastFrameProcessingTime: TimeInterval?
@@ -117,7 +122,12 @@ final class VideoFilterPipeline: VideoFilterPipelineProviding {
     private var outputPoolHeight: Int = 0
     private var outputPoolPixelFormat: OSType = 0
 
-    private lazy var segmentationRequest: VNGeneratePersonSegmentationRequest = {
+    // `let` (eager init) plutôt que `lazy var` — Swift 6 n'autorise pas
+    // `nonisolated` sur les lazy properties, et la classe étant nonisolated,
+    // une lazy implicitement-isolated trap quand on lit la property depuis
+    // le video thread. L'init est cheap (~µs) donc l'eager init n'a pas de
+    // coût mesurable.
+    private let segmentationRequest: VNGeneratePersonSegmentationRequest = {
         let request = VNGeneratePersonSegmentationRequest()
         request.qualityLevel = .balanced
         request.outputPixelFormat = kCVPixelFormatType_OneComponent8
@@ -394,9 +404,17 @@ private extension Logger {
 }
 
 // MARK: - WebRTC Video Filter Capturer Delegate
+//
+// CRITIQUE — `nonisolated` obligatoire : `RTCCameraVideoCapturer` invoque
+// `capturer(_:didCapture:)` depuis sa queue série `org.webrtc.cameravideocapturer.video`
+// (cf. stack trace `AVCaptureVideoDataOutput._processSampleBuffer →
+// VideoFilterCapturerDelegate.capturer`). Sous SWIFT_DEFAULT_ACTOR_ISOLATION=MainActor,
+// l'`@objc` thunk insère `_swift_task_checkIsolatedSwift` qui trap en
+// `dispatch_assert_queue_fail` dès la première frame livrée → SIGABRT immédiat
+// au démarrage de tout appel vidéo.
 
 #if canImport(WebRTC)
-final class VideoFilterCapturerDelegate: NSObject, RTCVideoCapturerDelegate {
+nonisolated final class VideoFilterCapturerDelegate: NSObject, RTCVideoCapturerDelegate, @unchecked Sendable {
     private let target: RTCVideoCapturerDelegate
     private let pipeline: VideoFilterPipeline
     let darkFrameDetector = DarkFrameDetector()
