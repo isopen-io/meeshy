@@ -80,6 +80,75 @@ public final class StoryCanvasUIView: UIView {
         fatalError("StoryCanvasUIView does not support NSCoder")
     }
 
+    public override var isAccessibilityElement: Bool {
+        get { false }
+        set {}
+    }
+
+    public override var accessibilityElements: [Any]? {
+        get { synthesizedAccessibilityElements() }
+        set {}
+    }
+
+    private func synthesizedAccessibilityElements() -> [Any]? {
+        guard mode == .edit else { return nil }
+        var elements: [UIAccessibilityElement] = []
+        for txt in slide.effects.textObjects {
+            elements.append(makeAccessibilityElement(
+                label: "Texte : \(txt.text)",
+                traits: .staticText,
+                id: txt.id
+            ))
+        }
+        for media in slide.effects.mediaObjects ?? [] {
+            elements.append(makeAccessibilityElement(
+                label: media.kind == .video ? "Vidéo" : "Image",
+                traits: .image,
+                id: media.id
+            ))
+        }
+        for sticker in slide.effects.stickerObjects ?? [] {
+            elements.append(makeAccessibilityElement(
+                label: "Sticker \(sticker.emoji)",
+                traits: .image,
+                id: sticker.id
+            ))
+        }
+        return elements
+    }
+
+    private func makeAccessibilityElement(label: String,
+                                          traits: UIAccessibilityTraits,
+                                          id: String) -> UIAccessibilityElement {
+        let el = UIAccessibilityElement(accessibilityContainer: self)
+        el.accessibilityLabel = label
+        el.accessibilityTraits = traits
+        el.accessibilityFrameInContainerSpace = layerFrame(forId: id)
+        el.accessibilityCustomActions = makeCustomActions(forId: id)
+        return el
+    }
+
+    private func layerFrame(forId id: String) -> CGRect {
+        (itemsContainer.sublayers?.first(where: { $0.name == id })?.frame) ?? .zero
+    }
+
+    private func makeCustomActions(forId id: String) -> [UIAccessibilityCustomAction] {
+        [
+            UIAccessibilityCustomAction(name: "Supprimer") { [weak self] _ in
+                self?.deleteItem(id: id)
+                return true
+            },
+            UIAccessibilityCustomAction(name: "Dupliquer") { [weak self] _ in
+                self?.duplicateItem(id: id)
+                return true
+            },
+            UIAccessibilityCustomAction(name: "Mettre à l'arrière") { [weak self] _ in
+                self?.sendToBack(id: id)
+                return true
+            },
+        ]
+    }
+
     // MARK: - Layout
 
     public override func layoutSubviews() {
