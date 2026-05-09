@@ -136,6 +136,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // MARK: - Local Media
 
     func startLocalMedia(type: CallMediaType) async throws {
+        Logger.webrtc.info("[WEBRTC] startLocalMedia begin type=\(String(describing: type))")
         guard peerConnection != nil else { throw WebRTCError.noPeerConnection }
 
         let audioConstraints = RTCMediaConstraints(
@@ -146,10 +147,13 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             ],
             optionalConstraints: nil
         )
+        Logger.webrtc.info("[WEBRTC] audioSource begin")
         let audioSource = factory.audioSource(with: audioConstraints)
+        Logger.webrtc.info("[WEBRTC] audioTrack begin")
         let audioTrack = factory.audioTrack(with: audioSource, trackId: "audio0")
         audioTrack.isEnabled = true
         localAudioTrack = audioTrack
+        Logger.webrtc.info("[WEBRTC] add audio track to PC")
         peerConnection?.add(audioTrack, streamIds: ["meeshy-stream-0"])
 
         guard type == .audioVideo else {
@@ -157,27 +161,42 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
 
+        Logger.webrtc.info("[WEBRTC] videoSource begin")
         let videoSource = factory.videoSource()
+        Logger.webrtc.info("[WEBRTC] videoTrack begin")
         let videoTrack = factory.videoTrack(with: videoSource, trackId: "video0")
         videoTrack.isEnabled = true
         localVideoTrack_ = videoTrack
+        Logger.webrtc.info("[WEBRTC] add video track to PC")
         peerConnection?.add(videoTrack, streamIds: ["meeshy-stream-0"])
 
         let filterDelegate = VideoFilterCapturerDelegate(target: videoSource, pipeline: videoFilterPipeline)
         videoFilterDelegate = filterDelegate
+        Logger.webrtc.info("[WEBRTC] RTCCameraVideoCapturer init")
         let capturer = RTCCameraVideoCapturer(delegate: filterDelegate)
         videoCapturer = capturer
 
-        guard let frontCamera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.position == .front }) else {
+        Logger.webrtc.info("[WEBRTC] captureDevices probe")
+        let cams = RTCCameraVideoCapturer.captureDevices()
+        Logger.webrtc.info("[WEBRTC] captureDevices count=\(cams.count)")
+        guard let frontCamera = cams.first(where: { $0.position == .front }) else {
+            // Sur simulator iOS il n'y a aucune caméra, donc on tombe ici si
+            // type == .audioVideo. Renvoyer l'erreur typée fait remonter
+            // l'échec proprement au lieu de laisser RTCCameraVideoCapturer
+            // throw plus tard une NSException sur un device list vide.
+            Logger.webrtc.error("[WEBRTC] no front camera (simulator?) — throwing noCameraAvailable")
             throw WebRTCError.noCameraAvailable
         }
 
+        Logger.webrtc.info("[WEBRTC] selectFormat begin")
         let selectedFormat = selectFormat(for: frontCamera)
         guard let format = selectedFormat else {
+            Logger.webrtc.error("[WEBRTC] no usable camera format — throwing noCameraFormatAvailable")
             throw WebRTCError.noCameraFormatAvailable
         }
 
         let fps = targetFrameRate(for: format)
+        Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
         try await capturer.startCapture(with: frontCamera, format: format, fps: fps)
         Logger.webrtc.info("Local audio + video tracks started (front camera, \(fps)fps)")
     }

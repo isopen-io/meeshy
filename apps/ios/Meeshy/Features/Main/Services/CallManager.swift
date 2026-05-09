@@ -173,9 +173,13 @@ final class CallManager: ObservableObject {
                     IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
                 }
                 self.currentCallId = ack.callId
+                Logger.calls.info("[CALL_SETUP] outgoing 1/4 webRTC.configure begin (isVideo=\(isVideo))")
                 self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers)
+                Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
                 self.configureAudioSession()
+                Logger.calls.info("[CALL_SETUP] outgoing 3/4 startLocalMedia begin (isVideo=\(isVideo))")
                 await self.webRTCService.startLocalMedia(isVideo: isVideo)
+                Logger.calls.info("[CALL_SETUP] outgoing 4/4 startLocalMedia done")
                 if isVideo { self.hasLocalVideoTrack = true }
                 self.listenForParticipantJoined(callId: ack.callId, toUserId: userId, isVideo: isVideo)
                 Logger.calls.info("Outgoing call initiated: \(ack.callId) to \(displayName), waiting for participant joined (\(dynamicServers.count) ICE servers)")
@@ -234,11 +238,15 @@ final class CallManager: ObservableObject {
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing.
         // The VoIP push payload carries the per-user ICE servers (TURN credentials)
         // so RTCPeerConnection is built with TURN BEFORE the offer is set.
+        Logger.calls.info("[CALL_SETUP] incoming 1/4 webRTC.configure begin (isVideo=\(isVideo))")
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
+        Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
         configureAudioSession()
         Task { [weak self] in
             guard let self else { return }
+            Logger.calls.info("[CALL_SETUP] incoming 3/4 startLocalMedia begin (isVideo=\(isVideo))")
             await self.webRTCService.startLocalMedia(isVideo: isVideo)
+            Logger.calls.info("[CALL_SETUP] incoming 4/4 startLocalMedia done")
             if isVideo { self.hasLocalVideoTrack = true }
             MessageSocketManager.shared.emitCallJoin(callId: callId)
             Logger.calls.info("VoIP push — auto-joined room, awaiting SDP offer: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
@@ -858,6 +866,7 @@ final class CallManager: ObservableObject {
     // didActivate/didDeactivate.
 
     private func configureAudioSession() {
+        Logger.calls.info("[AUDIO_SESS] configure begin")
         let isVideo = isVideoEnabled
         let configuration = RTCAudioSessionConfiguration.webRTC()
         configuration.category = AVAudioSession.Category.playAndRecord.rawValue
@@ -869,9 +878,14 @@ final class CallManager: ObservableObject {
         configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
 
         let session = RTCAudioSession.sharedInstance()
+        Logger.calls.info("[AUDIO_SESS] lockForConfiguration")
         session.lockForConfiguration()
-        defer { session.unlockForConfiguration() }
+        defer {
+            Logger.calls.info("[AUDIO_SESS] unlockForConfiguration")
+            session.unlockForConfiguration()
+        }
         do {
+            Logger.calls.info("[AUDIO_SESS] setConfiguration call")
             try session.setConfiguration(configuration, active: false)
             Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo) (CallKit will activate)")
         } catch {
