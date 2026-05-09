@@ -453,7 +453,6 @@ class ConversationListViewModel: ObservableObject {
     func loadConversations() async {
         guard !isLoading else { return }
 
-        print("[DIAG] ConversationListViewModel.loadConversations CALLED")
         async let categoriesTask: () = loadCategories()
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
@@ -572,14 +571,14 @@ class ConversationListViewModel: ObservableObject {
             } else {
                 // Server replied 200 but `success=false` — surface it so
                 // we don't silently freeze the list at the current cap.
-                print("[ConversationListViewModel.loadMore] non-success response at offset=\(offset)")
+                Logger.messages.warning("[ConversationListVM] loadMore non-success response at offset=\(offset)")
             }
         } catch {
             // Don't flip `hasMore=false` on transient errors (network
             // blip, rate limit) — leave the door open for the next
             // scroll attempt to retry. Previously this catch was empty,
             // hiding sync failures from the user entirely.
-            print("[ConversationListViewModel.loadMore] error at offset=\(offset): \(error)")
+            Logger.messages.error("[ConversationListVM] loadMore error at offset=\(offset): \(error.localizedDescription)")
         }
 
         isLoadingMore = false
