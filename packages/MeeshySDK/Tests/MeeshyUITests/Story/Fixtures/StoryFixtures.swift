@@ -88,7 +88,8 @@ enum StoryFixtures {
             emoji: "🔥",
             x: 0.8, y: 0.2,
             scale: 1.5,
-            rotation: 15.0
+            rotation: 15.0,
+            zIndex: 1
         )
 
         var effects = StoryEffects()

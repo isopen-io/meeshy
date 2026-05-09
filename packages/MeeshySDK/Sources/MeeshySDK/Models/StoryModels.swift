@@ -604,18 +604,98 @@ public struct StoryAudioVariant: Codable, Sendable {
 public struct StorySticker: Codable, Identifiable, Sendable {
     public var id: String
     public var emoji: String
-    public var x: CGFloat
-    public var y: CGFloat
-    public var scale: CGFloat
-    public var rotation: CGFloat
-    /// Z-order persistent (cf. `StoryTextObject.zIndex`).
-    public var zIndex: Int?
+    public var x: Double
+    public var y: Double
+    public var scale: Double
+    public var rotation: Double
+    /// Z-order persistent (non-optional; defaults to 0).
+    public var zIndex: Int
 
-    public init(id: String = UUID().uuidString, emoji: String, x: CGFloat = 0.5, y: CGFloat = 0.5,
-                scale: CGFloat = 1.0, rotation: CGFloat = 0, zIndex: Int? = nil) {
-        self.id = id; self.emoji = emoji; self.x = x; self.y = y
-        self.scale = scale; self.rotation = rotation; self.zIndex = zIndex
+    /// Design-space size in pixels (1080-référentiel). Rendered size = baseSize × scale × scaleFactor.
+    public var baseSize: Double
+    /// Pivot point for rotation/scale (normalized 0–1). Default center (0.5, 0.5).
+    public var anchor: CGPoint
+
+    // Timeline timing
+    public var startTime: Double?
+    public var duration: Double?
+    public var fadeIn: Double?
+    public var fadeOut: Double?
+
+    enum CodingKeys: String, CodingKey {
+        case id, emoji, x, y, scale, rotation, zIndex
+        case baseSize, anchor
+        case startTime, duration, fadeIn, fadeOut
     }
+
+    public init(id: String = UUID().uuidString,
+                emoji: String,
+                x: Double = 0.5, y: Double = 0.5,
+                scale: Double = 1.0,
+                rotation: Double = 0,
+                zIndex: Int = 0,
+                baseSize: Double = 140.0,
+                anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
+                startTime: Double? = nil,
+                duration: Double? = nil,
+                fadeIn: Double? = nil,
+                fadeOut: Double? = nil) {
+        self.id = id; self.emoji = emoji
+        self.x = x; self.y = y; self.scale = scale; self.rotation = rotation
+        self.zIndex = zIndex
+        self.baseSize = baseSize
+        self.anchor = anchor
+        self.startTime = startTime; self.duration = duration
+        self.fadeIn = fadeIn; self.fadeOut = fadeOut
+    }
+
+    // Custom Codable for legacy backward compat:
+    //   - x/y/scale/rotation: CGFloat on wire decodes fine as Double
+    //   - zIndex: was Int? — fallback to 0
+    //   - baseSize: absent in legacy payloads — fallback to 140
+    //   - anchor: absent in legacy payloads — fallback to center (0.5, 0.5)
+    //   - timing fields: absent in legacy payloads — fallback to nil
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        emoji = try c.decode(String.self, forKey: .emoji)
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+        y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
+        scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.0
+        rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? 0
+        zIndex = try c.decodeIfPresent(Int.self, forKey: .zIndex) ?? 0
+        baseSize = try c.decodeIfPresent(Double.self, forKey: .baseSize) ?? 140.0
+        if let anchorContainer = try? c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor) {
+            let ax = try anchorContainer.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+            let ay = try anchorContainer.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
+            anchor = CGPoint(x: ax, y: ay)
+        } else {
+            anchor = CGPoint(x: 0.5, y: 0.5)
+        }
+        startTime = try c.decodeIfPresent(Double.self, forKey: .startTime)
+        duration = try c.decodeIfPresent(Double.self, forKey: .duration)
+        fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn)
+        fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(emoji, forKey: .emoji)
+        try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
+        try c.encode(scale, forKey: .scale); try c.encode(rotation, forKey: .rotation)
+        try c.encode(zIndex, forKey: .zIndex)
+        try c.encode(baseSize, forKey: .baseSize)
+        var anchorContainer = c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor)
+        try anchorContainer.encode(Double(anchor.x), forKey: .x)
+        try anchorContainer.encode(Double(anchor.y), forKey: .y)
+        try c.encodeIfPresent(startTime, forKey: .startTime)
+        try c.encodeIfPresent(duration, forKey: .duration)
+        try c.encodeIfPresent(fadeIn, forKey: .fadeIn)
+        try c.encodeIfPresent(fadeOut, forKey: .fadeOut)
+    }
+
+    private enum AnchorKeys: String, CodingKey { case x, y }
 }
 
 // MARK: - Story Slide

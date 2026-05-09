@@ -565,7 +565,7 @@ public final class StoryComposerViewModel {
             if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
         }
         for obj in (effects.stickerObjects ?? []) {
-            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+            map[obj.id] = obj.zIndex; maxZ = max(maxZ, obj.zIndex)
         }
         zIndexMap = map
         nextZIndex = maxZ + 1
