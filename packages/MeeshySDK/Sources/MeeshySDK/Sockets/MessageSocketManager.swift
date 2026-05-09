@@ -274,8 +274,45 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     public let isAnnouncementChannel: Bool?
     public let slowModeSeconds: Int?
     public let autoTranslateEnabled: Bool?
-    public let updatedBy: SocketEventUser
+    /// New as of the conversation-list bump-to-top work: the gateway emits
+    /// this on every message broadcast (handlers/MessageHandler.ts) so the
+    /// client can re-sort the conversation list in real time without a
+    /// delta sync round-trip. Optional for retro-compatibility with
+    /// pre-existing CONVERSATION_UPDATED payloads (rename, avatar change,
+    /// etc.) that don't advance lastMessageAt.
+    public let lastMessageAt: Date?
+    /// Optional because the gateway's message-driven CONVERSATION_UPDATED
+    /// payload (handlers/MessageHandler.ts on every new message) only
+    /// carries `{ conversationId, lastMessageAt, lastMessageId,
+    /// lastMessagePreview, senderId, updatedAt }` — no `updatedBy`. Decoding
+    /// it as required would silently fail with `keyNotFound` on every
+    /// inbound message, which is the entire signal that drives bumpToTop.
+    /// Metadata-driven updates (rename, avatar change, etc.) keep emitting
+    /// `updatedBy` and continue to populate this field.
+    public let updatedBy: SocketEventUser?
     public let updatedAt: String
+
+    private enum CodingKeys: String, CodingKey {
+        case conversationId, title, description, avatar, banner
+        case defaultWriteRole, isAnnouncementChannel, slowModeSeconds, autoTranslateEnabled
+        case lastMessageAt, updatedBy, updatedAt
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        conversationId = try container.decode(String.self, forKey: .conversationId)
+        title = try container.decodeIfPresent(String.self, forKey: .title)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        avatar = try container.decodeIfPresent(String.self, forKey: .avatar)
+        banner = try container.decodeIfPresent(String.self, forKey: .banner)
+        defaultWriteRole = try container.decodeIfPresent(String.self, forKey: .defaultWriteRole)
+        isAnnouncementChannel = try container.decodeIfPresent(Bool.self, forKey: .isAnnouncementChannel)
+        slowModeSeconds = try container.decodeIfPresent(Int.self, forKey: .slowModeSeconds)
+        autoTranslateEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoTranslateEnabled)
+        lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
+        updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
+        updatedAt = try container.decode(String.self, forKey: .updatedAt)
+    }
 }
 
 public struct ParticipantLeftEvent: Decodable, Sendable {

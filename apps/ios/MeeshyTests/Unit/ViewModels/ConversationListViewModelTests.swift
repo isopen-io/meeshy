@@ -1125,4 +1125,163 @@ final class ConversationListViewModelTests: XCTestCase {
         // After viewModel deinit, the task should have been cancelled
         XCTAssertTrue(taskRef?.isCancelled ?? true)
     }
+
+    // MARK: - setConversations (Phase 1: list write surface)
+    //
+    // Every write into `conversations` must funnel through `setConversations`
+    // so the list invariant (sorted by lastMessageAt DESC) holds without
+    // depending on the grouping pipeline. The grouping pipeline still re-
+    // sorts for display, but consumers reading `conversations` directly
+    // (badges, NotificationCoordinator, prefetch) must see a sorted array.
+
+    func test_setConversations_unsortedData_returnsListSortedByLastMessageAtDesc() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let oldest = Date(timeIntervalSince1970: 1_000)
+        let middle = Date(timeIntervalSince1970: 2_000)
+        let newest = Date(timeIntervalSince1970: 3_000)
+        sut.setConversations([
+            makeConversation(id: "older", lastMessageAt: oldest),
+            makeConversation(id: "newest", lastMessageAt: newest),
+            makeConversation(id: "middle", lastMessageAt: middle)
+        ])
+
+        XCTAssertEqual(sut.conversations.map(\.id), ["newest", "middle", "older"])
+    }
+
+    func test_appendConversations_appendsAndKeepsSortOrder() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let oldest = Date(timeIntervalSince1970: 1_000)
+        let middle = Date(timeIntervalSince1970: 2_000)
+        let newest = Date(timeIntervalSince1970: 3_000)
+        sut.setConversations([
+            makeConversation(id: "newest", lastMessageAt: newest),
+            makeConversation(id: "older", lastMessageAt: oldest)
+        ])
+
+        sut.appendConversations([
+            makeConversation(id: "middle", lastMessageAt: middle),
+            makeConversation(id: "older", lastMessageAt: oldest) // duplicate must be deduped
+        ])
+
+        XCTAssertEqual(sut.conversations.map(\.id), ["newest", "middle", "older"])
+    }
+
+    // MARK: - bumpToTop (Phase 1: socket-driven re-sort)
+
+    func test_bumpToTop_existingConversation_movesToFirstPosition() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let baseDate = Date(timeIntervalSince1970: 2_000)
+        sut.setConversations([
+            makeConversation(id: "first", lastMessageAt: Date(timeIntervalSince1970: 5_000)),
+            makeConversation(id: "second", lastMessageAt: Date(timeIntervalSince1970: 4_000)),
+            makeConversation(id: "third", lastMessageAt: baseDate)
+        ])
+
+        let newer = Date(timeIntervalSince1970: 9_000)
+        sut.bumpToTop(conversationId: "third", newLastMessageAt: newer)
+
+        XCTAssertEqual(sut.conversations.first?.id, "third")
+        XCTAssertEqual(sut.conversations.first?.lastMessageAt.timeIntervalSinceReferenceDate ?? 0,
+                       newer.timeIntervalSinceReferenceDate, accuracy: 0.01)
+        XCTAssertEqual(sut.conversations.map(\.id), ["third", "first", "second"])
+    }
+
+    func test_bumpToTop_unknownConversationId_isNoOp() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let originalIds = ["a", "b", "c"]
+        sut.setConversations(originalIds.enumerated().map { (i, id) in
+            makeConversation(id: id, lastMessageAt: Date(timeIntervalSince1970: TimeInterval(3_000 - i * 100)))
+        })
+        let originalSnapshot = sut.conversations.map(\.id)
+
+        sut.bumpToTop(conversationId: "ghost", newLastMessageAt: Date())
+
+        XCTAssertEqual(sut.conversations.map(\.id), originalSnapshot,
+                       "bumpToTop on unknown id must leave the list untouched")
+    }
+
+    // MARK: - conversation:updated socket event with lastMessageAt
+
+    func test_conversationUpdatedEvent_withLastMessageAt_triggersBumpToTop() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "a", lastMessageAt: Date(timeIntervalSince1970: 5_000)),
+            makeConversation(id: "b", lastMessageAt: Date(timeIntervalSince1970: 4_000)),
+            makeConversation(id: "c", lastMessageAt: Date(timeIntervalSince1970: 3_000))
+        ])
+
+        let newer = Date(timeIntervalSince1970: 9_000)
+        let event = makeConversationUpdatedEvent(conversationId: "c", lastMessageAt: newer)
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.id, "c",
+                       "Event with lastMessageAt must promote the conversation to the top")
+    }
+
+    /// Pins the production payload shape: handlers/MessageHandler.ts emits
+    /// CONVERSATION_UPDATED on every new message WITHOUT `updatedBy`. If
+    /// the SDK ever requires that field again the decode silently fails,
+    /// the publisher never fires, and bumpToTop dies — exactly the bug
+    /// the spec review caught. This test fails loudly if that regression
+    /// returns.
+    func test_conversationUpdatedEvent_messageDriven_withoutUpdatedBy_triggersBumpToTop() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "a", lastMessageAt: Date(timeIntervalSince1970: 5_000)),
+            makeConversation(id: "b", lastMessageAt: Date(timeIntervalSince1970: 4_000)),
+            makeConversation(id: "c", lastMessageAt: Date(timeIntervalSince1970: 3_000))
+        ])
+
+        let newer = Date(timeIntervalSince1970: 9_000)
+        let event = makeConversationUpdatedEvent(
+            conversationId: "c",
+            lastMessageAt: newer,
+            includeUpdatedBy: false
+        )
+        XCTAssertNil(event.updatedBy, "Factory must produce a payload mirroring the gateway's message-driven shape")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.id, "c",
+                       "Message-driven payload (no updatedBy) must still promote the conversation to the top")
+    }
+}
+
+// MARK: - ConversationUpdatedEvent factory
+
+private func makeConversationUpdatedEvent(
+    conversationId: String,
+    lastMessageAt: Date?,
+    title: String? = nil,
+    avatar: String? = nil,
+    includeUpdatedBy: Bool = true
+) -> ConversationUpdatedEvent {
+    let isoFormatter = ISO8601DateFormatter()
+    isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    var json: [String: Any] = [
+        "conversationId": conversationId,
+        "updatedAt": isoFormatter.string(from: Date())
+    ]
+    if includeUpdatedBy {
+        json["updatedBy"] = ["id": "test-user"]
+    }
+    if let title { json["title"] = title }
+    if let avatar { json["avatar"] = avatar }
+    if let lastMessageAt {
+        json["lastMessageAt"] = isoFormatter.string(from: lastMessageAt)
+    }
+    let data = try! JSONSerialization.data(withJSONObject: json)
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .custom { decoder in
+        let container = try decoder.singleValueContainer()
+        let str = try container.decode(String.self)
+        if let date = isoFormatter.date(from: str) { return date }
+        throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date")
+    }
+    return try! decoder.decode(ConversationUpdatedEvent.self, from: data)
 }
