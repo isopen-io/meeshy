@@ -1250,6 +1250,92 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.conversations.first?.id, "c",
                        "Message-driven payload (no updatedBy) must still promote the conversation to the top")
     }
+
+    /// Régression-guard pour le bug "DM nouvellement créés invisibles".
+    /// Quand quelqu'un crée un DM avec self ET envoie un message, le gateway
+    /// émet CONVERSATION_UPDATED dans ROOMS.user(self). Mais self n'a JAMAIS
+    /// reçu MESSAGE_NEW (il n'a pas joint ROOMS.conversation(id)) — donc
+    /// l'event arrive sur un id que la VM ne connaît pas. Avant fix, le
+    /// guard `convIndex == nil { return }` rendait la conversation
+    /// invisible jusqu'au prochain pull-to-refresh. Maintenant la VM doit
+    /// fetch via getById et prepend.
+    func test_conversationUpdatedEvent_unknownId_fetchesAndPrepends() async throws {
+        let messageSocket = MockMessageSocket()
+        let conversationService = MockConversationService()
+        let newConvJSON = """
+        {"id":"69fe1c6626e040042fd28140","type":"direct","title":null,
+         "lastMessageAt":"2026-05-09T12:42:24.289Z",
+         "createdAt":"2026-05-08T17:24:54.327Z"}
+        """
+        conversationService.getByIdResult = .success(JSONStub.decode(newConvJSON))
+        let (sut, _, _, _, _, _, _) = makeSUT(
+            conversationService: conversationService,
+            messageSocket: messageSocket
+        )
+        sut.setConversations([
+            makeConversation(id: "a", lastMessageAt: Date(timeIntervalSince1970: 5_000)),
+            makeConversation(id: "b", lastMessageAt: Date(timeIntervalSince1970: 4_000))
+        ])
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "69fe1c6626e040042fd28140",
+            lastMessageAt: Date(timeIntervalSince1970: 9_000),
+            includeUpdatedBy: false
+        )
+        messageSocket.conversationUpdated.send(event)
+
+        // Wait for the async fetch + main-actor hop.
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if sut.conversations.first?.id == "69fe1c6626e040042fd28140" { break }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+
+        XCTAssertEqual(conversationService.getByIdCallCount, 1,
+                       "Unknown conversationId must trigger a getById fetch")
+        XCTAssertEqual(conversationService.lastGetByIdConversationId, "69fe1c6626e040042fd28140")
+        XCTAssertEqual(sut.conversations.first?.id, "69fe1c6626e040042fd28140",
+                       "Fetched conversation must be prepended at index 0")
+        XCTAssertEqual(sut.conversations.count, 3,
+                       "Pre-existing rows must be preserved (a, b) + the new one")
+    }
+
+    /// Burst dedup: rapid successive CONVERSATION_UPDATED for the same
+    /// brand-new id must coalesce into a single getById call so we don't
+    /// hammer the API on a noisy socket.
+    func test_conversationUpdatedEvent_unknownId_burstDedupsFetches() async throws {
+        let messageSocket = MockMessageSocket()
+        let conversationService = MockConversationService()
+        let newConvJSON = """
+        {"id":"69fe0bb526e040042fd28121","type":"direct","title":null,
+         "createdAt":"2026-05-08T16:13:41.121Z"}
+        """
+        conversationService.getByIdResult = .success(JSONStub.decode(newConvJSON))
+        let (sut, _, _, _, _, _, _) = makeSUT(
+            conversationService: conversationService,
+            messageSocket: messageSocket
+        )
+
+        let event = makeConversationUpdatedEvent(
+            conversationId: "69fe0bb526e040042fd28121",
+            lastMessageAt: Date(timeIntervalSince1970: 9_000),
+            includeUpdatedBy: false
+        )
+        // Three near-simultaneous events for the same id.
+        messageSocket.conversationUpdated.send(event)
+        messageSocket.conversationUpdated.send(event)
+        messageSocket.conversationUpdated.send(event)
+
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if sut.conversations.first?.id == "69fe0bb526e040042fd28121" { break }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+
+        XCTAssertEqual(conversationService.getByIdCallCount, 1,
+                       "Burst of events for the same unknown id must dedup to a single fetch")
+        XCTAssertEqual(sut.conversations.first?.id, "69fe0bb526e040042fd28121")
+    }
 }
 
 // MARK: - ConversationUpdatedEvent factory

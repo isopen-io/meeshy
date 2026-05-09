@@ -169,6 +169,12 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callSignalCallCount += 1
     }
 
+    var callSignalWithAckResult: Bool = true
+    func emitCallSignalWithAck(callId: String, type: String, payload: [String: String]) async -> Bool {
+        callSignalCallCount += 1
+        return callSignalWithAckResult
+    }
+
     func emitCallToggleAudio(callId: String, enabled: Bool) {
         callToggleAudioCallCount += 1
     }

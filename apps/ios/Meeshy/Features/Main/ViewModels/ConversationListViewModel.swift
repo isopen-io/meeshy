@@ -108,6 +108,44 @@ class ConversationListViewModel: ObservableObject {
         conversations.insert(updated, at: 0)
     }
 
+    /// Track in-flight `getById` fetches launched by `conversationUpdated` so
+    /// a burst of events for the same brand-new DM doesn't issue N parallel
+    /// HTTP requests. Cleared synchronously on the MainActor inside
+    /// `fetchAndPrependMissingConversation`.
+    private var pendingMissingFetches: Set<String> = []
+
+    /// Fetch a conversation that the gateway just told us about via
+    /// `CONVERSATION_UPDATED` but that we don't have locally — typically a
+    /// brand-new direct message where the user hasn't joined
+    /// `ROOMS.conversation(id)` yet (so they never received `MESSAGE_NEW`).
+    /// Mirrors the SyncEngine pattern for missing-conversation prepends so
+    /// the row appears in real time without forcing a pull-to-refresh.
+    func fetchAndPrependMissingConversation(id: String) {
+        guard !pendingMissingFetches.contains(id) else { return }
+        pendingMissingFetches.insert(id)
+        let userId = currentUserId
+        let service = conversationService
+        Task { [weak self] in
+            defer { Task { @MainActor [weak self] in self?.pendingMissingFetches.remove(id) } }
+            do {
+                let apiConv = try await service.getById(id)
+                let domain = apiConv.toConversation(currentUserId: userId)
+                await MainActor.run { [weak self] in
+                    guard let self else { return }
+                    // Defensive dedup: a concurrent fullSync / socket event
+                    // may have surfaced the conversation between the fetch
+                    // start and this point.
+                    if let existing = self.conversations.firstIndex(where: { $0.id == domain.id }) {
+                        self.conversations.remove(at: existing)
+                    }
+                    self.conversations.insert(domain, at: 0)
+                }
+            } catch {
+                Logger.messages.error("[ConversationListVM] Failed to fetch missing conversation \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            }
+        }
+    }
+
     private var lastFetchedAt: Date? = nil
     private let cacheTTL: TimeInterval = 30
 
@@ -315,7 +353,19 @@ class ConversationListViewModel: ObservableObject {
         messageSocket.conversationUpdated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                guard let self, let index = self.convIndex(for: event.conversationId) else { return }
+                guard let self else { return }
+                guard let index = self.convIndex(for: event.conversationId) else {
+                    // Conversation pas encore connue côté client : c'est le cas
+                    // d'un DM tout neuf (ou d'un groupe qu'on vient d'ajouter
+                    // à l'utilisateur) où le gateway a déjà émis
+                    // CONVERSATION_UPDATED dans ROOMS.user(self) MAIS
+                    // self n'a jamais reçu MESSAGE_NEW (il n'avait pas joint
+                    // ROOMS.conversation(id) avant ce moment). Sans fetch
+                    // d'appoint la conversation reste invisible jusqu'à un
+                    // pull-to-refresh manuel.
+                    self.fetchAndPrependMissingConversation(id: event.conversationId)
+                    return
+                }
                 // Apply the in-place metadata updates first; the gateway
                 // can piggy-back rename/avatar changes on the same event
                 // that carries lastMessageAt, so we want the row data fresh
