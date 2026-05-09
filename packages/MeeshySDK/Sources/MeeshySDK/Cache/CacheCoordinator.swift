@@ -22,6 +22,9 @@ public actor CacheCoordinator {
     public let communityLinks: GRDBCacheStore<String, CommunityLink>
     public let statuses: GRDBCacheStore<String, StatusEntry>
     public let friends: GRDBCacheStore<String, FriendRequestUser>
+    public let friendRequests: GRDBCacheStore<String, FriendRequest>
+    public let blockedUsers: GRDBCacheStore<String, BlockedUser>
+    public let userSearch: GRDBCacheStore<String, UserSearchResult>
     public let timeline: GRDBCacheStore<String, TimelinePoint>
 
     public let images: DiskCacheStore
@@ -149,6 +152,9 @@ public actor CacheCoordinator {
         self.communityLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "clinks")
         self.statuses = GRDBCacheStore(policy: .statuses, db: db, namespace: "statuses")
         self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
+        self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
+        self.blockedUsers = GRDBCacheStore(policy: .participants, db: db, namespace: "blocked", encrypted: true)
+        self.userSearch = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "usearch")
         self.timeline = GRDBCacheStore(policy: .userStats, db: db, namespace: "timeline")
 
         self.images = DiskCacheStore(policy: .mediaImages)
@@ -215,6 +221,9 @@ public actor CacheCoordinator {
         await communityLinks.invalidateAll()
         await statuses.invalidateAll()
         await friends.invalidateAll()
+        await friendRequests.invalidateAll()
+        await blockedUsers.invalidateAll()
+        await userSearch.invalidateAll()
         await timeline.invalidateAll()
         await images.invalidateAll()
         await audio.invalidateAll()
@@ -522,6 +531,9 @@ public actor CacheCoordinator {
         await profiles.invalidateAll()
         await feed.invalidateAll()
         await stories.invalidateAll()
+        await friendRequests.invalidateAll()
+        await blockedUsers.invalidateAll()
+        await userSearch.invalidateAll()
         await images.invalidateAll()
         await audio.invalidateAll()
         await video.invalidateAll()

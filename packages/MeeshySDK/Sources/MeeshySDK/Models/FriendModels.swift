@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Friend Request
 
-public struct FriendRequest: Decodable, Identifiable, Sendable {
+public struct FriendRequest: Codable, CacheIdentifiable, Identifiable, Sendable, Equatable {
     public let id: String
     public let senderId: String
     public let receiverId: String
@@ -13,6 +13,43 @@ public struct FriendRequest: Decodable, Identifiable, Sendable {
     public let respondedAt: Date?
     public let createdAt: Date
     public let updatedAt: Date?
+
+    public init(
+        id: String,
+        senderId: String,
+        receiverId: String,
+        message: String? = nil,
+        status: String,
+        sender: FriendRequestUser? = nil,
+        receiver: FriendRequestUser? = nil,
+        respondedAt: Date? = nil,
+        createdAt: Date,
+        updatedAt: Date? = nil
+    ) {
+        self.id = id
+        self.senderId = senderId
+        self.receiverId = receiverId
+        self.message = message
+        self.status = status
+        self.sender = sender
+        self.receiver = receiver
+        self.respondedAt = respondedAt
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+    }
+}
+
+extension FriendRequestUser: Equatable {
+    public static func == (lhs: FriendRequestUser, rhs: FriendRequestUser) -> Bool {
+        lhs.id == rhs.id
+            && lhs.username == rhs.username
+            && lhs.firstName == rhs.firstName
+            && lhs.lastName == rhs.lastName
+            && lhs.displayName == rhs.displayName
+            && lhs.avatar == rhs.avatar
+            && lhs.isOnline == rhs.isOnline
+            && lhs.lastActiveAt == rhs.lastActiveAt
+    }
 }
 
 public struct FriendRequestUser: Codable, CacheIdentifiable, Sendable {
