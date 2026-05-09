@@ -107,7 +107,11 @@ final class RequestsViewModel: ObservableObject {
             let pending = response.data.filter { $0.status == "pending" }
             sentRequests.append(contentsOf: pending)
             sentHasMore = response.pagination?.hasMore ?? false
-            sentOffset += response.data.count
+            // `sentOffset` tracks the FILTERED count (pending only) — `loadSent`
+            // initialises it to `requests.count` (post-filter). Incrementing by
+            // the unfiltered `response.data.count` would skip pending items the
+            // server returned on the previous page, dropping rows from the UI.
+            sentOffset += pending.count
         } catch {}
     }
 
