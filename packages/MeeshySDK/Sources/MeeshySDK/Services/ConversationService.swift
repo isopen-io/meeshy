@@ -1,9 +1,58 @@
 import Foundation
 
+// MARK: - Page Result
+
+/// Cursor-paginated page of conversations exposed at the SDK boundary.
+/// The opaque `nextCursor` is the gateway-provided id of the last
+/// conversation in this page (it filters the next request by
+/// `lastMessageAt < cursor.lastMessageAt`). Callers must treat it as
+/// opaque — the cursor value is not stable across sessions or
+/// re-orderings.
+///
+/// `rawItems` carries the unconverted gateway payload alongside the
+/// already-enriched `items`. ConversationListViewModel uses it to seed
+/// presence (which needs the per-participant `isOnline`/`lastActiveAt`
+/// fields the domain model strips), and the rest of the app only ever
+/// touches `items`.
+public struct ConversationPage: Sendable {
+    public let items: [MeeshyConversation]
+    public let rawItems: [APIConversation]
+    public let nextCursor: String?
+    public let hasMore: Bool
+
+    public init(
+        items: [MeeshyConversation],
+        rawItems: [APIConversation] = [],
+        nextCursor: String?,
+        hasMore: Bool
+    ) {
+        self.items = items
+        self.rawItems = rawItems
+        self.nextCursor = nextCursor
+        self.hasMore = hasMore
+    }
+}
+
+// MARK: - Internal Response Decoding
+
+/// Top-level shape returned by `GET /conversations`. The gateway returns
+/// `pagination` (offset-based) AND `cursorPagination` (cursor-based) at
+/// the root of the body, which the generic `PaginatedAPIResponse` cannot
+/// represent (it would only decode the offset block). We pull both here
+/// and let `listPage` prefer the cursor metadata.
+struct ConversationListResponseBody: Decodable {
+    let success: Bool
+    let data: [APIConversation]
+    let pagination: OffsetPagination?
+    let cursorPagination: CursorPagination?
+    let error: String?
+}
+
 // MARK: - Protocol
 
 public protocol ConversationServiceProviding: Sendable {
     func list(offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[APIConversation]>
+    func listPage(before cursor: String?, limit: Int, currentUserId: String) async throws -> ConversationPage
     func getById(_ conversationId: String) async throws -> APIConversation
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse
     func delete(conversationId: String) async throws
@@ -42,6 +91,50 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
 
     public func list(offset: Int = 0, limit: Int = 30) async throws -> OffsetPaginatedAPIResponse<[APIConversation]> {
         try await api.offsetPaginatedRequest(endpoint: "/conversations", offset: offset, limit: limit)
+    }
+
+    /// Cursor-based pagination over the user's conversations. Pass
+    /// `cursor=nil` to fetch the first page; subsequent pages forward
+    /// the previous response's `nextCursor`. The gateway resolves the
+    /// cursor to the conversation's `lastMessageAt` and filters
+    /// `lastMessageAt < cursor.lastMessageAt`, so pages never overlap
+    /// even when new messages bump rows during scroll.
+    ///
+    /// Returns a `ConversationPage` with already-enriched
+    /// `MeeshyConversation` items. The `currentUserId` is required to
+    /// resolve the "other participant" of direct conversations and the
+    /// caller-relative metadata (unread, isPinned, role) embedded in the
+    /// row. Pass an empty string only when the caller will discard the
+    /// derived display name (e.g. signed-out flows that should not call
+    /// this in the first place).
+    public func listPage(
+        before cursor: String? = nil,
+        limit: Int = 30,
+        currentUserId: String = ""
+    ) async throws -> ConversationPage {
+        var queryItems: [URLQueryItem] = [URLQueryItem(name: "limit", value: "\(limit)")]
+        if let cursor, !cursor.isEmpty {
+            queryItems.append(URLQueryItem(name: "before", value: cursor))
+        }
+        let body: ConversationListResponseBody = try await api.request(
+            endpoint: "/conversations",
+            queryItems: queryItems
+        )
+        let items = body.data.map { $0.toConversation(currentUserId: currentUserId) }
+        // Prefer cursorPagination meta when present (modern gateway
+        // responses always include it). Fall back to the offset
+        // pagination's hasMore as a last-ditch guard so a malformed
+        // payload doesn't pin the list at "no more pages" forever.
+        let nextCursor = body.cursorPagination?.nextCursor
+        let hasMore = body.cursorPagination?.hasMore
+            ?? body.pagination?.hasMore
+            ?? (items.count == limit)
+        return ConversationPage(
+            items: items,
+            rawItems: body.data,
+            nextCursor: nextCursor,
+            hasMore: hasMore
+        )
     }
 
     public func getById(_ conversationId: String) async throws -> APIConversation {

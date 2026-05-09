@@ -1336,6 +1336,214 @@ final class ConversationListViewModelTests: XCTestCase {
                        "Burst of events for the same unknown id must dedup to a single fetch")
         XCTAssertEqual(sut.conversations.first?.id, "69fe0bb526e040042fd28121")
     }
+
+    // MARK: - loadMore: cursor-based pagination
+
+    func test_loadMore_initialFetch_setsCursorAndStateFromResponse() async {
+        let conversationService = MockConversationService()
+        conversationService.listPageResult = .success(
+            ConversationPage(
+                items: [makeConversation(id: "a"), makeConversation(id: "b")],
+                nextCursor: "b",
+                hasMore: true
+            )
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+
+        await sut.loadMore()
+
+        XCTAssertEqual(conversationService.listPageCallCount, 1)
+        XCTAssertNil(conversationService.lastListPageCursor, "First call must pass nil cursor")
+        XCTAssertEqual(sut.conversations.map(\.id).sorted(), ["a", "b"])
+        XCTAssertEqual(sut.paginationState, .idle)
+        XCTAssertTrue(sut.hasMore)
+    }
+
+    func test_loadMore_secondCall_passesPreviousNextCursor() async {
+        let conversationService = MockConversationService()
+        conversationService.listPageHandler = { cursor in
+            if cursor == nil {
+                return .success(ConversationPage(items: [], nextCursor: "tail-1", hasMore: true))
+            } else {
+                return .success(ConversationPage(items: [], nextCursor: "tail-2", hasMore: true))
+            }
+        }
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+
+        await sut.loadMore()
+        await sut.loadMore()
+
+        XCTAssertEqual(conversationService.listPageCallCount, 2)
+        XCTAssertEqual(conversationService.lastListPageCursor, "tail-1",
+                       "Second loadMore must forward the cursor returned by the first page")
+    }
+
+    func test_loadMore_appendsToExistingList_preservesSortOrder() async {
+        let conversationService = MockConversationService()
+        let now = Date()
+        let older = makeConversation(id: "older", lastMessageAt: now.addingTimeInterval(-3600))
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [older], nextCursor: "older", hasMore: false)
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+        let newer = makeConversation(id: "newer", lastMessageAt: now)
+        sut.conversations = [newer]
+
+        await sut.loadMore()
+
+        XCTAssertEqual(sut.conversations.map(\.id), ["newer", "older"],
+                       "loadMore must append rows and keep the lastMessageAt DESC sort")
+    }
+
+    func test_loadMore_whenHasMoreFalse_doesNotFetch() async {
+        let conversationService = MockConversationService()
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [], nextCursor: nil, hasMore: false)
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+
+        // First call sets hasMore=false and paginationState=.exhausted
+        await sut.loadMore()
+        XCTAssertEqual(sut.paginationState, .exhausted)
+        XCTAssertFalse(sut.hasMore)
+
+        // Second call must short-circuit without hitting the network
+        await sut.loadMore()
+        XCTAssertEqual(conversationService.listPageCallCount, 1,
+                       "loadMore must short-circuit when hasMore=false")
+    }
+
+    func test_loadMore_whenAlreadyLoading_doesNotFetchTwice() async {
+        let conversationService = MockConversationService()
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [], nextCursor: nil, hasMore: true)
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+
+        // Fire two concurrent loadMore calls; the guard inside the
+        // ViewModel must coalesce them into a single network request.
+        async let first: Void = sut.loadMore()
+        async let second: Void = sut.loadMore()
+        _ = await (first, second)
+
+        XCTAssertEqual(conversationService.listPageCallCount, 1,
+                       "Concurrent loadMore calls must be coalesced via the .loadingMore guard")
+    }
+
+    func test_loadMore_failure_setsErrorPaginationState() async {
+        let conversationService = MockConversationService()
+        struct TestError: Error {}
+        conversationService.listPageResult = .failure(TestError())
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+
+        await sut.loadMore()
+
+        if case .error = sut.paginationState {
+            // expected
+        } else {
+            XCTFail("Expected paginationState=.error, got \(sut.paginationState)")
+        }
+        XCTAssertTrue(sut.hasMore, "Transient errors must keep hasMore=true so the user can retry")
+    }
+
+    func test_loadMore_persistsSnapshotToCache() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let conversationService = MockConversationService()
+        let conv = makeConversation(id: "persisted")
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [conv], nextCursor: "persisted", hasMore: false)
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+
+        await sut.loadMore()
+        // Wait for the fire-and-forget cache save Task
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list")
+        let cachedItems = cached.value ?? []
+        XCTAssertTrue(cachedItems.contains(where: { $0.id == "persisted" }),
+                      "loadMore must persist the merged list to the cache")
+    }
+
+    // MARK: - pullToRefresh
+
+    func test_pullToRefresh_resetsCursorAndRefetches() async {
+        let conversationService = MockConversationService()
+        let syncEngine = MockConversationSyncEngine()
+        // Seed an "advanced" cursor by running loadMore once
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [], nextCursor: "deep-cursor", hasMore: true)
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(
+            conversationService: conversationService,
+            syncEngine: syncEngine
+        )
+        await sut.loadMore()
+        XCTAssertEqual(conversationService.lastListPageCursor, nil)
+        XCTAssertEqual(conversationService.listPageCallCount, 1)
+
+        // Now mock a second loadMore that, before pullToRefresh, would
+        // pass "deep-cursor" — after pullToRefresh it must pass nil.
+        await sut.pullToRefresh()
+        XCTAssertEqual(syncEngine.fullSyncCallCount, 1,
+                       "pullToRefresh must trigger a fullSync via forceRefresh")
+
+        await sut.loadMore()
+        XCTAssertEqual(conversationService.lastListPageCursor, nil,
+                       "After pullToRefresh the cursor must reset so the next loadMore starts from the top")
+    }
+
+    func test_initialState_paginationStateIsIdleAndHasMoreIsTrue() {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+
+        XCTAssertEqual(sut.paginationState, .idle)
+        XCTAssertTrue(sut.hasMore)
+        XCTAssertEqual(sut.loadState, .idle)
+    }
+
+    // MARK: - Cursor persistence across restarts (spec AC §4.8.3)
+
+    func test_loadMore_persistsCursorToCache() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let conversationService = MockConversationService()
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [makeConversation(id: "tail")], nextCursor: "tail", hasMore: true)
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+
+        await sut.loadMore()
+        // Wait for the fire-and-forget cache save Task
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let persisted = await CacheCoordinator.shared.conversations.loadCursor(for: "list")
+        XCTAssertEqual(persisted?.nextCursor, "tail",
+                       "loadMore must persist nextCursor so a cold start can resume")
+        XCTAssertEqual(persisted?.hasMore, true)
+    }
+
+    func test_loadMore_afterCachedCursor_resumesFromTail() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let conversationService = MockConversationService()
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [makeConversation(id: "next")], nextCursor: "next", hasMore: true)
+        )
+        // Simulate a previous session that paged down to "deep-tail"
+        // and persisted that cursor.
+        await CacheCoordinator.shared.conversations.saveCursor(
+            nextCursor: "deep-tail",
+            hasMore: true,
+            for: "list"
+        )
+
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+        // Hydrate the in-memory cursor from cache as the cold-start
+        // load path would.
+        await sut.loadConversations()
+        await sut.loadMore()
+
+        XCTAssertEqual(conversationService.lastListPageCursor, "deep-tail",
+                       "Cold start must resume from the persisted cursor instead of refetching page 1")
+    }
 }
 
 // MARK: - ConversationUpdatedEvent factory

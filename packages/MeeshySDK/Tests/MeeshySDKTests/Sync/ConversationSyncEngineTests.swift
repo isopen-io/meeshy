@@ -254,6 +254,10 @@ private final class MockConversationService: ConversationServiceProviding, @unch
         return try listResult.get()
     }
 
+    func listPage(before cursor: String?, limit: Int, currentUserId: String) async throws -> ConversationPage {
+        ConversationPage(items: [], nextCursor: nil, hasMore: false)
+    }
+
     func getById(_ conversationId: String) async throws -> APIConversation { fatalError("Not used in tests") }
     func create(type: String, title: String?, participantIds: [String]) async throws -> CreateConversationResponse { fatalError("Not used in tests") }
     func delete(conversationId: String) async throws {}

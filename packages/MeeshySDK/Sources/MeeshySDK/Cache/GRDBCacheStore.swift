@@ -203,6 +203,28 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         Array(memoryCache.keys)
     }
 
+    // MARK: - Pagination cursor persistence
+    //
+    // Cursor pagination metadata (`nextCursor` + `hasMore`) is persisted
+    // alongside the cached items so a cold-start can resume scrolling
+    // from where the user last reached, instead of refetching page 1
+    // on the next `loadMore()`. The data lives in the existing
+    // `cache_metadata` table — same row as the items' `lastFetchedAt`
+    // — so we read/merge to avoid clobbering the timestamp.
+
+    /// Persist the cursor + hasMore for a given key. Merges with any
+    /// existing metadata so we don't reset `lastFetchedAt` (which is
+    /// owned by `save()` / `flushKeyToL2`).
+    public func saveCursor(nextCursor: String?, hasMore: Bool, for key: Key) async {
+        writeCursorToL2(nextCursor: nextCursor, hasMore: hasMore, for: namespacedKey(key.description))
+    }
+
+    /// Load the persisted cursor + hasMore for a given key. Returns nil
+    /// when no metadata row exists (cold cache or never persisted).
+    public func loadCursor(for key: Key) async -> PaginationCursor? {
+        readCursorFromL2(for: namespacedKey(key.description))
+    }
+
     // MARK: - Private actor-isolated
 
     private func touchKey(_ key: Key) {
@@ -258,7 +280,17 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                     try entry.save(db)
                 }
 
-                let meta = DBCacheMetadata(key: keyStr, nextCursor: nil, hasMore: false, totalCount: items.count, lastFetchedAt: now)
+                // Preserve any cursor state that callers persisted via
+                // `saveCursor` — `save()` only owns lastFetchedAt and
+                // totalCount, not the pagination metadata.
+                let existingCursor = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db)
+                let meta = DBCacheMetadata(
+                    key: keyStr,
+                    nextCursor: existingCursor?.nextCursor,
+                    hasMore: existingCursor?.hasMore ?? false,
+                    totalCount: items.count,
+                    lastFetchedAt: now
+                )
                 try meta.save(db)
             }
         } catch {
@@ -314,6 +346,49 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         }
     }
 
+    private nonisolated func writeCursorToL2(nextCursor: String?, hasMore: Bool, for keyStr: String) {
+        do {
+            try db.write { db in
+                if var meta = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db) {
+                    // Merge: keep existing lastFetchedAt/totalCount, only
+                    // update the cursor fields. This preserves the
+                    // freshness signal owned by `save()`.
+                    meta.nextCursor = nextCursor
+                    meta.hasMore = hasMore
+                    try meta.save(db)
+                } else {
+                    // No prior metadata row — synthesise one with a
+                    // current timestamp so reads know when the cursor
+                    // was first observed.
+                    let meta = DBCacheMetadata(
+                        key: keyStr,
+                        nextCursor: nextCursor,
+                        hasMore: hasMore,
+                        totalCount: nil,
+                        lastFetchedAt: Date()
+                    )
+                    try meta.save(db)
+                }
+            }
+        } catch {
+            logger.error("Failed to persist cursor for key \(keyStr): \(error)")
+        }
+    }
+
+    private nonisolated func readCursorFromL2(for keyStr: String) -> PaginationCursor? {
+        do {
+            return try db.read { db in
+                guard let meta = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db) else {
+                    return nil
+                }
+                return PaginationCursor(nextCursor: meta.nextCursor, hasMore: meta.hasMore)
+            }
+        } catch {
+            logger.error("Failed to load cursor from L2 for key \(keyStr): \(error)")
+            return nil
+        }
+    }
+
     private nonisolated func flushKeyToL2(keyStr: String, items: [Value]) -> Bool {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -336,7 +411,15 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                     try entry.save(db)
                 }
 
-                let meta = DBCacheMetadata(key: keyStr, nextCursor: nil, hasMore: false, totalCount: items.count, lastFetchedAt: now)
+                // Preserve cursor state across flushes — see writeToL2.
+                let existingCursor = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db)
+                let meta = DBCacheMetadata(
+                    key: keyStr,
+                    nextCursor: existingCursor?.nextCursor,
+                    hasMore: existingCursor?.hasMore ?? false,
+                    totalCount: items.count,
+                    lastFetchedAt: now
+                )
                 try meta.save(db)
             }
             return true

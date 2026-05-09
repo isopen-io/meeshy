@@ -329,6 +329,92 @@ final class GRDBCacheStoreTests: XCTestCase {
         }
     }
 
+    // MARK: - Cursor persistence
+
+    func test_saveCursor_andLoadCursor_roundTrips() async throws {
+        let store = try makeStore()
+
+        await store.saveCursor(nextCursor: "tail-30", hasMore: true, for: "list")
+        let loaded = await store.loadCursor(for: "list")
+
+        XCTAssertEqual(loaded?.nextCursor, "tail-30")
+        XCTAssertEqual(loaded?.hasMore, true)
+    }
+
+    func test_loadCursor_unknownKey_returnsNil() async throws {
+        let store = try makeStore()
+        let loaded = await store.loadCursor(for: "no-such-key")
+        XCTAssertNil(loaded)
+    }
+
+    func test_saveCursor_doesNotClobberItems() async throws {
+        let store = try makeStore()
+        let items = [CacheTestItem(id: "1", name: "Alice"), CacheTestItem(id: "2", name: "Bob")]
+        await store.save(items, for: "list")
+
+        await store.saveCursor(nextCursor: "tail-2", hasMore: true, for: "list")
+
+        let result = await store.load(for: "list")
+        XCTAssertEqual(result.value?.count, 2, "saveCursor must not erase the cached items")
+    }
+
+    func test_save_preservesPriorCursor() async throws {
+        let store = try makeStore()
+        await store.saveCursor(nextCursor: "tail-1", hasMore: true, for: "list")
+
+        // A subsequent items-save (e.g. another loadMore wrote a fresh
+        // snapshot) must NOT reset the cursor — the cursor is owned by
+        // the caller's saveCursor calls.
+        await store.save([CacheTestItem(id: "1", name: "A")], for: "list")
+
+        let cursor = await store.loadCursor(for: "list")
+        XCTAssertEqual(cursor?.nextCursor, "tail-1",
+                       "save() must preserve the cursor written by saveCursor()")
+        XCTAssertEqual(cursor?.hasMore, true)
+    }
+
+    /// Spec §4.7 — `test_cache_persistsMultiplePages_acrossRestart`.
+    /// Mirrors the cold-start UX: page 1 saved + cursor advanced, page 2
+    /// appended + cursor advanced, then a fresh `GRDBCacheStore` instance
+    /// (= "app restart" wiping in-memory L1) reading the same database
+    /// must observe both the merged items AND the deepest cursor without
+    /// any further network call. We share the GRDB writer across the two
+    /// instances because that's the persistence layer the OS keeps alive
+    /// across app launches; per-instance L1 memory naturally goes away
+    /// on restart, which is what we want to model here.
+    func test_cache_persistsMultiplePages_acrossRestart() async throws {
+        let db = try makeDB()
+
+        // First "session": save page 1 + advance cursor to tail of page 1.
+        let session1 = try makeStore(db: db)
+        let page1 = (1...30).map { CacheTestItem(id: "item-\($0)", name: "C\($0)") }
+        await session1.save(page1, for: "list")
+        await session1.saveCursor(nextCursor: "item-30", hasMore: true, for: "list")
+
+        // Save page 2 (merged with page 1) + advance cursor to tail of page 2.
+        let merged = page1 + (31...60).map { CacheTestItem(id: "item-\($0)", name: "C\($0)") }
+        await session1.save(merged, for: "list")
+        await session1.saveCursor(nextCursor: "item-60", hasMore: true, for: "list")
+
+        // Flush any dirty L1 to L2 before "killing" the session.
+        await session1.flushDirtyKeys()
+
+        // Second "session": fresh store backed by the same DB. L1 starts
+        // empty (cold cache), L2 must hydrate both items and cursor.
+        let session2 = try makeStore(db: db)
+
+        let cursor = await session2.loadCursor(for: "list")
+        XCTAssertEqual(cursor?.nextCursor, "item-60",
+                       "Cursor from the deepest page must survive a restart")
+        XCTAssertEqual(cursor?.hasMore, true)
+
+        let result = await session2.load(for: "list")
+        let items = result.value ?? []
+        XCTAssertEqual(items.count, 60, "Both pages must be rehydrated from L2 on restart")
+        XCTAssertEqual(items.first?.id, "item-1")
+        XCTAssertEqual(items.last?.id, "item-60")
+    }
+
     // MARK: - Concurrent access
 
     func test_concurrentSaveAndLoad_doesNotCrash() async throws {
