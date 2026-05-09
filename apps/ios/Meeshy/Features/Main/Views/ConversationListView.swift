@@ -216,8 +216,11 @@ struct ConversationListView: View {
             ForEach(conversations, id: \.id) { conversation in
                 conversationRow(for: conversation, rowWidth: rowWidth)
                     .onAppear {
-                        // Scroll infini uniquement pour les users avec >1000 conversations
-                        // (loadMore() est no-op sinon)
+                        // Cursor-based infinite scroll: trigger `loadMore`
+                        // 5 rows before the loaded tail. The ViewModel
+                        // short-circuits when `hasMore == false`, so it
+                        // is safe to call this on every onAppear past
+                        // the threshold.
                         triggerLoadMoreIfNeeded(conversation: conversation)
                     }
             }
@@ -461,6 +464,65 @@ struct ConversationListView: View {
         return actions
     }
 
+    @ViewBuilder
+    private var paginationFooter: some View {
+        switch conversationViewModel.paginationState {
+        case .loadingMore:
+            HStack {
+                Spacer()
+                ProgressView()
+                    .tint(MeeshyColors.indigo400)
+                Spacer()
+            }
+            .padding(.vertical, 16)
+        case .exhausted:
+            // Show the "all loaded" hint only on lists that actually
+            // had to paginate -- avoids cluttering empty/small lists.
+            if conversationViewModel.conversations.count > 30 {
+                Text(String(
+                    localized: "conversations.pagination.allLoaded",
+                    defaultValue: "Toutes les conversations chargees"
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+            }
+        case .error:
+            VStack(spacing: 6) {
+                Text(String(
+                    localized: "conversations.pagination.errorTitle",
+                    defaultValue: "Erreur de chargement"
+                ))
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                Button {
+                    Task { await conversationViewModel.loadMore() }
+                } label: {
+                    Text(String(
+                        localized: "conversations.pagination.retry",
+                        defaultValue: "Reessayer"
+                    ))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(MeeshyColors.indigo400)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        case .idle:
+            // Invisible sentinel: when the user scrolls deep enough to
+            // reveal this row, fire `loadMore`. The ViewModel guards
+            // against re-entry and short-circuits when hasMore=false.
+            if conversationViewModel.hasMore {
+                Color.clear
+                    .frame(height: 1)
+                    .onAppear {
+                        Task { await conversationViewModel.loadMore() }
+                    }
+            }
+        }
+    }
+
     private func triggerLoadMoreIfNeeded(conversation: Conversation) {
         let all = conversationViewModel.conversations
         // Always-on infinite scroll: trigger `loadMore` as soon as the
@@ -695,16 +757,18 @@ struct ConversationListView: View {
                             .transition(.opacity)
                     }
 
-                    // Loading more indicator
-                    if conversationViewModel.isLoadingMore {
-                        HStack {
-                            Spacer()
-                            ProgressView()
-                                .tint(MeeshyColors.indigo400)
-                            Spacer()
-                        }
-                        .padding(.vertical, 16)
-                    }
+                    // Pagination footer driven by `paginationState`.
+                    // - .loadingMore: spinner while a page is in flight
+                    // - .exhausted:   discreet "all loaded" hint once
+                    //                 the gateway signalled hasMore=false
+                    //                 (only shown for non-trivial lists)
+                    // - .error:       inline retry button (transient
+                    //                 errors keep hasMore=true)
+                    // - .idle:        invisible spacer that triggers
+                    //                 loadMore via onAppear once the
+                    //                 user reaches the tail (back-up to
+                    //                 the per-row threshold trigger)
+                    paginationFooter
 
                     Color.clear.frame(height: 280)
                         .onChange(of: draggingConversation) { oldValue, newValue in
@@ -734,7 +798,11 @@ struct ConversationListView: View {
             .scrollDismissesKeyboard(.interactively)
             .refreshable {
                 HapticFeedback.medium()
-                async let convRefresh: Void = conversationViewModel.forceRefresh()
+                // pullToRefresh resets the pagination cursor + hasMore
+                // before delegating to forceRefresh, so the next
+                // `loadMore` re-paginates from the top instead of
+                // continuing past the old tail.
+                async let convRefresh: Void = conversationViewModel.pullToRefresh()
                 async let storyRefresh: Void = storyViewModel.loadStories()
                 async let statusRefresh: Void = statusViewModel.refresh()
                 _ = await (convRefresh, storyRefresh, statusRefresh)
