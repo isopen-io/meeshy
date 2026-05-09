@@ -1414,6 +1414,50 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertTrue(sut.hasMore)
         XCTAssertEqual(sut.loadState, .idle)
     }
+
+    // MARK: - Cursor persistence across restarts (spec AC §4.8.3)
+
+    func test_loadMore_persistsCursorToCache() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let conversationService = MockConversationService()
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [makeConversation(id: "tail")], nextCursor: "tail", hasMore: true)
+        )
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+
+        await sut.loadMore()
+        // Wait for the fire-and-forget cache save Task
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let persisted = await CacheCoordinator.shared.conversations.loadCursor(for: "list")
+        XCTAssertEqual(persisted?.nextCursor, "tail",
+                       "loadMore must persist nextCursor so a cold start can resume")
+        XCTAssertEqual(persisted?.hasMore, true)
+    }
+
+    func test_loadMore_afterCachedCursor_resumesFromTail() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        let conversationService = MockConversationService()
+        conversationService.listPageResult = .success(
+            ConversationPage(items: [makeConversation(id: "next")], nextCursor: "next", hasMore: true)
+        )
+        // Simulate a previous session that paged down to "deep-tail"
+        // and persisted that cursor.
+        await CacheCoordinator.shared.conversations.saveCursor(
+            nextCursor: "deep-tail",
+            hasMore: true,
+            for: "list"
+        )
+
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+        // Hydrate the in-memory cursor from cache as the cold-start
+        // load path would.
+        await sut.loadConversations()
+        await sut.loadMore()
+
+        XCTAssertEqual(conversationService.lastListPageCursor, "deep-tail",
+                       "Cold start must resume from the persisted cursor instead of refetching page 1")
+    }
 }
 
 // MARK: - ConversationUpdatedEvent factory

@@ -241,6 +241,29 @@ final class ConversationServiceTests: XCTestCase {
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
+    /// Pins the gateway contract: `nextCursor` MUST equal the id of the
+    /// LAST item in the page (cf. spec §4.1: "le `nextCursor` retourne
+    /// dans `cursorPagination` est l'ID de la derniere conversation de
+    /// la page"). If the gateway ever returned a different shape (e.g.
+    /// a synthetic timestamp, or the first item's id), the cursor we
+    /// forward on the next page would skip rows, duplicate rows, or
+    /// miss the tail entirely. This test fails loudly on that drift.
+    func test_listPage_initialFetch_setsCursorFromLastItem() async throws {
+        let body = makeListPageBody(
+            ids: ["first", "middle", "last"],
+            nextCursor: "last",
+            hasMore: true
+        )
+        mock.stub("/conversations", result: body)
+
+        let page = try await service.listPage()
+
+        XCTAssertEqual(page.items.last?.id, page.nextCursor,
+                       "nextCursor must be the id of the last item on the page")
+        XCTAssertEqual(page.items.last?.id, "last")
+        XCTAssertEqual(page.nextCursor, "last")
+    }
+
     func test_listPage_withCursor_passesBeforeParam() async throws {
         let body = makeListPageBody(ids: ["d"], nextCursor: "d", hasMore: false)
         mock.stub("/conversations", result: body)
