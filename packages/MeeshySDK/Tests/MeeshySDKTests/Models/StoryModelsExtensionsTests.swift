@@ -395,8 +395,12 @@ final class StoryModelsExtensionsTests: XCTestCase {
         var slide = makeSlideForProject()
         let project = TimelineProject(from: slide)
         project.apply(to: &slide)
-        let json1 = try JSONEncoder().encode(slide.effects.mediaObjects)
-        let json2 = try JSONEncoder().encode(project.mediaObjects)
+        // Use .sortedKeys: JSONEncoder in iOS 26 SDK does NOT preserve
+        // insertion order across calls, so byte-equality requires sorted keys.
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let json1 = try encoder.encode(slide.effects.mediaObjects)
+        let json2 = try encoder.encode(project.mediaObjects)
         XCTAssertEqual(json1, json2)
         XCTAssertEqual(slide.effects.clipTransitions?.count, 1)
     }
