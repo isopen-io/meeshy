@@ -1,7 +1,23 @@
-# WebRTC P2P Calling — Phase 1 Specification
+> ## ⚠️ SUPERSEDED — Reference doc only
+>
+> Ce document a été remplacé par `docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md` (Calls SOTA Redesign — Design v2, 2026-05-10).
+>
+> Le nouveau doc :
+> - Intègre l'audit production (bugs ICE/audio silencieux, "Call ended by remote", races CallKit/AVAudioSession, FigCaptureSourceRemote simulator, SDP munging fragile)
+> - Adopte l'API `setCodecPreferences` (libwebrtc 141) au lieu de SDP munging
+> - Ajoute machine d'état autoritative serveur avec optimistic locking (`version` field)
+> - Ajoute architecture extensible `MediaPipelineHook` pour transcription/traduction temps-réel, E2EE Insertable Streams, SharePlay, Continuity Camera, Vision Pro spatial calls, Apple Intelligence summary, migration SFU
+> - Corrige 28 erreurs fonctionnelles + performance identifiées au review (E1-E15, P1-P10, S1-S5)
+> - Définit le plan de migration phasé (Phase 0 → 9) avec feature flags
+>
+> Les sections de ce document restent une référence détaillée pour les flows de signaling déjà spec'és (§3 Signaling Protocol, §6 CallKit Integration) qui sont préservés à l'identique dans la v2.
+
+---
+
+# WebRTC P2P Calling — Phase 1 Specification (Archive 2026-03-29)
 
 **Date**: 2026-03-29
-**Status**: Draft (Reviewed 2026-03-29)
+**Status**: Superseded by `2026-05-10-calls-sota-redesign-design.md`
 **Scope**: P2P 1:1 Audio + Video calls, end-to-end, iOS + Web + Gateway
 **Goal**: Production-grade calling competitive with FaceTime and Teams — zero latency perception, zero dropped calls, zero ghost states.
 
