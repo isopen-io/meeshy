@@ -389,4 +389,53 @@ final class PreferenceServiceTests: XCTestCase {
 
         XCTAssertEqual(mock.requestCount, 1)
     }
+
+    // MARK: - createCategory
+
+    func testCreateCategoryPostsCorrectEndpointAndDecodesResponse() async throws {
+        let returned = makeCategory(id: "newCat", name: "Family")
+        let response = APIResponse(success: true, data: returned, error: nil)
+        mock.stub("/me/preferences/categories", result: response)
+
+        let result = try await service.createCategory(name: "Family", color: nil, icon: nil)
+
+        XCTAssertEqual(result.id, "newCat")
+        XCTAssertEqual(result.name, "Family")
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/me/preferences/categories")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+    }
+
+    func testCreateCategoryThrowsOnError() async {
+        mock.errorToThrow = MeeshyError.server(statusCode: 400, message: "invalid name")
+
+        do {
+            _ = try await service.createCategory(name: "", color: nil, icon: nil)
+            XCTFail("Expected error to be thrown")
+        } catch {
+            // expected
+        }
+    }
+
+    // MARK: - getMyConversationTags
+
+    func testGetMyConversationTagsReturnsTags() async throws {
+        let response = APIResponse(success: true, data: ConversationTagsPayload(tags: ["family", "urgent"]), error: nil)
+        mock.stub("/me/preferences/conversation-tags", result: response)
+
+        let result = try await service.getMyConversationTags()
+
+        XCTAssertEqual(result, ["family", "urgent"])
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/me/preferences/conversation-tags")
+        XCTAssertEqual(mock.lastRequest?.method, "GET")
+    }
+
+    func testGetMyConversationTagsReturnsEmpty() async throws {
+        let response = APIResponse(success: true, data: ConversationTagsPayload(tags: []), error: nil)
+        mock.stub("/me/preferences/conversation-tags", result: response)
+
+        let result = try await service.getMyConversationTags()
+
+        XCTAssertEqual(result, [])
+    }
 }
