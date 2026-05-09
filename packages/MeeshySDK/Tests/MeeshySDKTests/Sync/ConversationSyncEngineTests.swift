@@ -199,6 +199,39 @@ final class ConversationSyncEngineTests: XCTestCase {
 
         try? await Task.sleep(nanoseconds: 100_000_000)
     }
+
+    // MARK: - Sort persistence
+
+    /// The sync engine MUST persist the cached list sorted by `lastMessageAt`
+    /// DESC so cold-start cache reads land on the correct order without
+    /// requiring the ViewModel to re-sort. Backend pagination order is not
+    /// guaranteed to be timestamp-sorted (e.g. when delta sync interleaves
+    /// pages), so the engine is the right place to enforce the invariant.
+    func test_fullSync_savesConversationsSortedByLastMessageAtDesc() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+
+        let oldest = Date(timeIntervalSince1970: 1_000)
+        let middle = Date(timeIntervalSince1970: 2_000)
+        let newest = Date(timeIntervalSince1970: 3_000)
+
+        // Backend returns rows in arbitrary order — sync engine must sort
+        // them on persistence.
+        let data: [APIConversation] = [
+            TestFactories.makeAPIConversation(id: "older", lastMessageAt: oldest),
+            TestFactories.makeAPIConversation(id: "newest", lastMessageAt: newest),
+            TestFactories.makeAPIConversation(id: "middle", lastMessageAt: middle)
+        ]
+        let pagination = OffsetPagination(total: data.count, hasMore: false, limit: 100, offset: 0)
+        let response = OffsetPaginatedAPIResponse<[APIConversation]>(
+            success: true, data: data, pagination: pagination, error: nil
+        )
+        mockConvService.listResult = .success(response)
+
+        await engine.fullSync()
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").value ?? []
+        XCTAssertEqual(cached.map(\.id), ["newest", "middle", "older"], "Cache must be persisted sorted by lastMessageAt DESC")
+    }
 }
 
 // MARK: - Mock ConversationService
@@ -276,8 +309,11 @@ private final class MockMessageService: MessageServiceProviding, @unchecked Send
 // MARK: - TestFactories extension
 
 private extension TestFactories {
-    static func makeAPIConversation(id: String = "conv-1") -> APIConversation {
-        let json: [String: Any] = [
+    static func makeAPIConversation(
+        id: String = "conv-1",
+        lastMessageAt: Date? = nil
+    ) -> APIConversation {
+        var json: [String: Any] = [
             "id": id,
             "identifier": "test-\(id)",
             "type": "DIRECT",
@@ -286,6 +322,9 @@ private extension TestFactories {
             "isActive": true,
             "unreadCount": 0
         ]
+        if let lastMessageAt {
+            json["lastMessageAt"] = ISO8601DateFormatter().string(from: lastMessageAt)
+        }
         let data = try! JSONSerialization.data(withJSONObject: json)
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601

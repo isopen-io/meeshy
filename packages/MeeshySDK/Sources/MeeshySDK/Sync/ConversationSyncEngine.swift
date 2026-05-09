@@ -145,7 +145,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             firstPage = response.data.map { $0.toConversation(currentUserId: userId) }
             firstPageReturnedCount = response.data.count
             totalCount = response.pagination?.total
-            await cache.conversations.save(firstPage, for: "list")
+            await saveSorted(firstPage, to: "list")
             await SearchIndex.shared.indexConversations(firstPage)
             _conversationsDidChange.send()
         } catch {
@@ -252,7 +252,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 }
             }
 
-            await cache.conversations.save(merged, for: "list")
+            await saveSorted(merged, to: "list")
             await SearchIndex.shared.indexConversations(merged)
             _conversationsDidChange.send()
         }
@@ -276,7 +276,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 let newItems = page.filter { !existingIds.contains($0.id) }
                 merged.append(contentsOf: newItems)
                 if !newItems.isEmpty {
-                    await cache.conversations.save(merged, for: "list")
+                    await saveSorted(merged, to: "list")
                     await SearchIndex.shared.indexConversations(newItems)
                     _conversationsDidChange.send()
                 }
@@ -347,7 +347,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 }
             }
 
-            await cache.conversations.save(merged, for: "list")
+            await saveSorted(merged, to: "list")
             await SearchIndex.shared.indexConversations(deltaConversations.filter { $0.isActive })
             _conversationsDidChange.send()
 
@@ -840,5 +840,17 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     private func currentUsername() async -> String? {
         await MainActor.run { AuthManager.shared.currentUser?.username }
+    }
+
+    /// Persist a conversation list pre-sorted by `lastMessageAt` DESC. Centralising
+    /// the sort here keeps the cache invariant consistent across every save site
+    /// (full sync, delta sync, parallel pages, sequential tail) so any cold-start
+    /// cache hit can be rendered without a second pass through the ViewModel's
+    /// grouping pipeline. Backend pagination is not guaranteed to be timestamp-
+    /// sorted (interleaved deltas, parallel page merges, server-side tweaks),
+    /// so the engine must enforce the order rather than trust the network.
+    private func saveSorted(_ items: [MeeshyConversation], to cacheKey: String) async {
+        let sorted = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
+        await cache.conversations.save(sorted, for: cacheKey)
     }
 }
