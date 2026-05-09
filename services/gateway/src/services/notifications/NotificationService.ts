@@ -11,6 +11,7 @@
 import { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type {
+  NotificationActor,
   NotificationContext,
   NotificationMetadata,
   NotificationPriority,
@@ -21,14 +22,6 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
-
-// Type temporaire jusqu'à recompilation de @meeshy/shared
-type NotificationActor = {
-  id: string;
-  username: string;
-  displayName?: string | null;
-  avatar?: string | null;
-};
 import { notificationLogger, securityLogger } from '../../utils/logger-enhanced';
 import { SecuritySanitizer } from '../../utils/sanitize';
 import type { Server as SocketIOServer } from 'socket.io';
