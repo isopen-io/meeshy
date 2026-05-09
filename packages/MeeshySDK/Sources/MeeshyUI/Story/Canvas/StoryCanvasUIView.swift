@@ -2,6 +2,7 @@ import UIKit
 import QuartzCore
 import CoreMedia
 import AVFoundation
+import PencilKit
 import MeeshySDK
 
 /// The UIKit canvas surface that renders a `StorySlide` and switches between
@@ -43,6 +44,19 @@ public final class StoryCanvasUIView: UIView {
     private var panRecognizer: UIPanGestureRecognizer!
     private var pinchRecognizer: UIPinchGestureRecognizer!
     private var rotationRecognizer: UIRotationGestureRecognizer!
+
+    // MARK: - Drawing mode (Phase 3 Task 3.4)
+
+    /// PencilKit drawing surface. Non-nil iff `isDrawingMode == true`.
+    private var drawingCanvas: PKCanvasView?
+
+    public private(set) var isDrawingMode: Bool = false
+
+    /// Latest drawing data captured from `drawingCanvas`. The composer VC reads
+    /// this on toggle-off and persists it into `slide.effects.drawingData`.
+    public var currentDrawingData: Data? {
+        drawingCanvas?.drawing.dataRepresentation()
+    }
 
     /// Item currently being dragged/scaled/rotated. Reset on .ended/.cancelled.
     private var manipulatedItemId: String?
@@ -173,6 +187,47 @@ public final class StoryCanvasUIView: UIView {
     }
 
     // MARK: - Mode switching
+
+    /// Enables or disables PencilKit drawing on top of the canvas. While drawing
+    /// is enabled, item gestures (pan/pinch/rotation) are suspended so PKCanvasView
+    /// can capture every touch. The composer VC is responsible for reading
+    /// `currentDrawingData` on toggle-off and writing it into the slide model.
+    /// Re-enabling the mode restores the previous strokes from
+    /// `slide.effects.drawingData`.
+    public func setDrawingMode(_ enabled: Bool, tool: PKTool? = nil) {
+        guard isDrawingMode != enabled else { return }
+        isDrawingMode = enabled
+
+        panRecognizer.isEnabled = !enabled
+        pinchRecognizer.isEnabled = !enabled
+        rotationRecognizer.isEnabled = !enabled
+
+        if enabled {
+            let canvas = PKCanvasView(frame: bounds)
+            canvas.drawingPolicy = .anyInput
+            canvas.tool = tool ?? PKInkingTool(.pen, color: .systemPink, width: 4)
+            canvas.backgroundColor = .clear
+            canvas.isOpaque = false
+            canvas.translatesAutoresizingMaskIntoConstraints = false
+            // Restore prior strokes if any so re-entering drawing mode picks
+            // up where the user left off.
+            if let data = slide.effects.drawingData,
+               let drawing = try? PKDrawing(data: data) {
+                canvas.drawing = drawing
+            }
+            addSubview(canvas)
+            NSLayoutConstraint.activate([
+                canvas.topAnchor.constraint(equalTo: topAnchor),
+                canvas.leadingAnchor.constraint(equalTo: leadingAnchor),
+                canvas.trailingAnchor.constraint(equalTo: trailingAnchor),
+                canvas.bottomAnchor.constraint(equalTo: bottomAnchor),
+            ])
+            drawingCanvas = canvas
+        } else {
+            drawingCanvas?.removeFromSuperview()
+            drawingCanvas = nil
+        }
+    }
 
     public func setMode(_ newMode: RenderMode, time: CMTime = .zero) {
         let didChange = mode != newMode

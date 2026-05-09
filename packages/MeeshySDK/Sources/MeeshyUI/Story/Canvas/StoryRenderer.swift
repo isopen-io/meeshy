@@ -1,6 +1,7 @@
 import Foundation
 import QuartzCore
 import CoreMedia
+import PencilKit
 import UIKit
 import MeeshySDK
 
@@ -79,6 +80,25 @@ public enum StoryRenderer {
             let layer = renderItem(item, into: geometry, at: time, mode: mode)
             root.addSublayer(layer)
         }
+
+        // Phase 3 Task 3.4 — render persisted PKDrawing as a single overlay
+        // layer above the items (zPosition 9999). The drawing is authored on
+        // the design canvas (1080×1920) and projected to the render size by
+        // PKDrawing.image(from:scale:).
+        if let drawingData = slide.effects.drawingData,
+           let drawing = try? PKDrawing(data: drawingData) {
+            let drawingLayer = CALayer()
+            drawingLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
+            let img = drawing.image(
+                from: CGRect(origin: .zero, size: CanvasGeometry.designSize),
+                scale: UIScreen.main.scale
+            )
+            drawingLayer.contents = img.cgImage
+            drawingLayer.contentsScale = UIScreen.main.scale
+            drawingLayer.zPosition = 9999
+            root.addSublayer(drawingLayer)
+        }
+
         return root
     }
 
