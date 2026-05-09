@@ -204,6 +204,7 @@ public final class StoryCanvasUIView: UIView {
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
         }
+        addInteraction(UIPointerInteraction(delegate: self))
     }
 
     @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
@@ -427,6 +428,24 @@ public final class StoryCanvasUIView: UIView {
 
     private nonisolated func clamp(_ value: Double) -> Double {
         max(0, min(1, value))
+    }
+}
+
+// MARK: - UIPointerInteractionDelegate (iPad / Mac Catalyst)
+
+extension StoryCanvasUIView: UIPointerInteractionDelegate {
+    public func pointerInteraction(_ interaction: UIPointerInteraction,
+                                   regionFor request: UIPointerRegionRequest,
+                                   defaultRegion: UIPointerRegion) -> UIPointerRegion? {
+        guard mode == .edit, hitTestItem(at: request.location) != nil else { return nil }
+        return defaultRegion
+    }
+
+    public func pointerInteraction(_ interaction: UIPointerInteraction,
+                                   styleFor region: UIPointerRegion) -> UIPointerStyle? {
+        guard mode == .edit, let view = interaction.view else { return nil }
+        let preview = UITargetedPreview(view: view)
+        return UIPointerStyle(effect: .lift(preview))
     }
 }
 
