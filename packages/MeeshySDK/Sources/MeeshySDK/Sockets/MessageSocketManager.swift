@@ -661,8 +661,8 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
-    func emitCallSignal(callId: String, type: String, payload: [String: String])
-    func emitCallSignalWithAck(callId: String, type: String, payload: [String: String]) async -> Bool
+    func emitCallSignal(callId: String, type: String, payload: [String: Any])
+    func emitCallSignalWithAck(callId: String, type: String, payload: [String: Any]) async -> Bool
     func emitCallToggleAudio(callId: String, enabled: Bool)
     func emitCallToggleVideo(callId: String, enabled: Bool)
     func emitCallEnd(callId: String)
@@ -1127,7 +1127,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("call:leave", ["callId": callId])
     }
 
-    public func emitCallSignal(callId: String, type: String, payload: [String: String]) {
+    public func emitCallSignal(callId: String, type: String, payload: [String: Any]) {
         var signal: [String: Any] = ["type": type]
         for (key, value) in payload { signal[key] = value }
         socket?.emit("call:signal", ["callId": callId, "signal": signal])
@@ -1140,7 +1140,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// runs after the answer is on the wire — without this, CallKit would
     /// race the WebRTC signaling and the audio engine could start before
     /// the peer has received the answer.
-    public func emitCallSignalWithAck(callId: String, type: String, payload: [String: String]) async -> Bool {
+    public func emitCallSignalWithAck(callId: String, type: String, payload: [String: Any]) async -> Bool {
         guard let socket else { return false }
         var signal: [String: Any] = ["type": type]
         for (key, value) in payload { signal[key] = value }

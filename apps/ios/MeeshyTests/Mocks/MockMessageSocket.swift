@@ -165,12 +165,12 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callLeaveCallCount += 1
     }
 
-    func emitCallSignal(callId: String, type: String, payload: [String: String]) {
+    func emitCallSignal(callId: String, type: String, payload: [String: Any]) {
         callSignalCallCount += 1
     }
 
     var callSignalWithAckResult: Bool = true
-    func emitCallSignalWithAck(callId: String, type: String, payload: [String: String]) async -> Bool {
+    func emitCallSignalWithAck(callId: String, type: String, payload: [String: Any]) async -> Bool {
         callSignalCallCount += 1
         return callSignalWithAckResult
     }

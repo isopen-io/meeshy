@@ -1138,9 +1138,14 @@ extension CallManager: WebRTCServiceDelegate {
         Task { @MainActor [weak self] in
             guard let self, let callId = self.currentCallId, let userId = self.remoteUserId else { return }
             let fromUserId = AuthManager.shared.currentUser?.id ?? ""
-            var payload: [String: String] = [
+            // CRITIQUE — `sdpMLineIndex` DOIT être un Int (pas une String) :
+            // le gateway valide via Zod `z.number().optional()` et rejette
+            // tout signal ICE avec un sdpMLineIndex string. Sans cela, AUCUN
+            // candidate ICE n'est relayé au peer → ICE checking ne démarre
+            // jamais et le call reste bloqué en `new` jusqu'au timeout.
+            var payload: [String: Any] = [
                 "candidate": candidate.candidate,
-                "sdpMLineIndex": String(candidate.sdpMLineIndex),
+                "sdpMLineIndex": Int(candidate.sdpMLineIndex),
                 "to": userId,
                 "from": fromUserId
             ]
