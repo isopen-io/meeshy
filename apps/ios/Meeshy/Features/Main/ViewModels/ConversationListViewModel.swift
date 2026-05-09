@@ -176,6 +176,13 @@ class ConversationListViewModel: ObservableObject {
     }
 
     private var groupingTask: Task<Void, Never>?
+    /// Fire-and-forget persistence of the merged list + cursor after a
+    /// successful `loadMore`. Stored so `pullToRefresh()` (and `loadMore`
+    /// itself) can cancel any in-flight save before invalidating the
+    /// cache — otherwise an orphaned task could re-save the pre-refresh
+    /// blob *after* `invalidateAll()` wiped L2, leaving stale data on
+    /// disk for the next cold start.
+    private var persistTask: Task<Void, Never>?
 
     // MARK: - Background Processing
     private func setupBackgroundProcessing() {
@@ -492,6 +499,11 @@ class ConversationListViewModel: ObservableObject {
     func loadConversations() async {
         guard !isLoading else { return }
 
+        // Defensive: a re-entrant load (e.g. post-logout/login) should
+        // not race a still-running persist from a previous session's
+        // loadMore. Cancellation is cheap when there's nothing to cancel.
+        persistTask?.cancel()
+
         async let categoriesTask: () = loadCategories()
 
         // Restore the persisted cursor BEFORE the cache load so that a
@@ -643,7 +655,11 @@ class ConversationListViewModel: ObservableObject {
             let snapshot = conversations
             let persistedCursor = nextCursor
             let persistedHasMore = hasMore
-            Task {
+            // Cancel any prior persist still in flight so we never race
+            // a stale blob over a fresher one — the latest snapshot is
+            // always the one that should win.
+            persistTask?.cancel()
+            persistTask = Task {
                 await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
                 await CacheCoordinator.shared.conversations.saveCursor(
                     nextCursor: persistedCursor,
@@ -669,6 +685,12 @@ class ConversationListViewModel: ObservableObject {
     /// `loadMore` would page from the old tail) and triggers the
     /// usual cache-first reload.
     func pullToRefresh() async {
+        // Cancel any in-flight persist BEFORE we reset the cursor or
+        // invalidate the cache. Otherwise a `loadMore` save scheduled
+        // moments before the pull could re-write the old blob on disk
+        // *after* `invalidateAll()` wiped L2, leaving the next cold
+        // start with the very rows the user just refreshed away.
+        persistTask?.cancel()
         nextCursor = nil
         hasMore = true
         paginationState = .idle
