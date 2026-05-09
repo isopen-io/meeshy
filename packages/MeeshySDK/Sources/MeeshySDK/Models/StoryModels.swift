@@ -321,6 +321,18 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var hasBg: Bool { textBg != nil }
 }
 
+extension StoryTextObject {
+    /// Resolves the displayable text via the Prisme Linguistique chain.
+    /// Falls back to original `text` when no translation matches.
+    public func resolvedText(preferredLanguages: [String]) -> String {
+        guard let translations, !preferredLanguages.isEmpty else { return text }
+        for lang in preferredLanguages {
+            if let t = translations[lang] { return t }
+        }
+        return text
+    }
+}
+
 // MARK: - Story Media Kind
 
 /// Type-safe wrapper around `StoryMediaObject.mediaType`. The underlying field stays
