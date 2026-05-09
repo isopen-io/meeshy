@@ -179,6 +179,13 @@ export class MessageHandler {
       const messageRequest: MessageRequest = {
         conversationId: validated.conversationId,
         content: validated.content,
+        // Phase 4 §6.2 — `clientMessageId` est obligatoire dans le schema
+        // Zod du socket (validé à l'entrée), mais le destructure historique
+        // l'oubliait — sans cette ligne le pattern catch-P2002 du
+        // MessagingService ne se déclenche jamais sur le path Socket.IO
+        // (qui est pourtant la surface d'envoi principale), rendant tout
+        // le contrat de dedup inopérant en pratique.
+        clientMessageId: validated.clientMessageId,
         originalLanguage: validated.originalLanguage,
         messageType: validated.messageType || 'text',
         replyToId: validated.replyToId,
@@ -315,6 +322,11 @@ export class MessageHandler {
       const messageRequest: MessageRequest = {
         conversationId: validated.conversationId,
         content: validated.content,
+        // Phase 4 §6.2 — propagation obligatoire (cf. fix dans le sibling
+        // handler `handleMessageSend` plus haut). Sans ce champ, le path
+        // attachments — qui inclut tout l'audio (Whisper transcription) —
+        // contournerait également le dedup serveur.
+        clientMessageId: validated.clientMessageId,
         originalLanguage: validated.originalLanguage,
         messageType: 'text',
         replyToId: validated.replyToId,

@@ -540,9 +540,20 @@ model Message {
   // ============================================
   // CLIENT-GENERATED IDEMPOTENCY KEY (Phase 4 §6.2)
   // ============================================
-  /// Client-generated UUID v4 for offline-queue dedup.
+  /// Client-generated UUID v4 for offline-queue dedup, format
+  /// `cid_<uuid v4 lowercase>`.
+  ///
   /// Nullable: pre-Phase-4 historical messages do not have this field.
-  /// Uniqueness enforced via partial index (see migration 2026-05-09).
+  ///
+  /// Uniqueness on `(conversationId, clientMessageId)` is enforced by a
+  /// **partial** unique index defined manually in
+  /// `prisma/migrations/2026-05-09-message-client-id.mongodb.js`. We do
+  /// **not** declare `@@unique([conversationId, clientMessageId])` on
+  /// this model because Prisma's MongoDB connector emits a regular
+  /// (non-partial) unique index, which would treat all `null` values as
+  /// equal and break sends for historical rows. The Prisma client still
+  /// supports `findUnique({ where: { conversationId_clientMessageId } })`
+  /// thanks to the named `@@index` declared at the bottom of this model.
   clientMessageId String? @db.String
 
   // ============================================
@@ -645,7 +656,15 @@ model Message {
   // Per-user deletions ("delete for me" feature)
   userDeletions UserMessageDeletion[]
 
-  @@unique([conversationId, clientMessageId], name: "conversationId_clientMessageId")
+  // Phase 4 §6.2 — compound index on (conversationId, clientMessageId)
+  // for the dedup `findFirst` query path. The unique-ness constraint
+  // itself lives in the partial unique MongoDB index created by
+  // `prisma/migrations/2026-05-09-message-client-id.mongodb.js`. We do
+  // NOT use `@@unique` here because Prisma's MongoDB connector would
+  // emit a regular (non-partial) unique index that treats all `null`
+  // values as equal and breaks sends for historical rows lacking the
+  // field.
+  @@index([conversationId, clientMessageId])
   @@index([conversationId])
   @@index([conversationId, deletedAt, createdAt]) // Optimisation: requête lastMessage avec tri
   @@index([senderId])

@@ -437,12 +437,16 @@ export class MessageProcessor {
       if (!isP2002 || !data.clientMessageId) {
         throw e;
       }
-      const existing = await this.prisma.message.findUnique({
+      // Use `findFirst` instead of `findUnique` because the unique
+      // constraint on `(conversationId, clientMessageId)` lives in a
+      // partial MongoDB index (managed by the manual migration), not
+      // a Prisma `@@unique` directive — so the `findUnique` compound
+      // type is not generated. The compound `@@index` declared in the
+      // schema still backs this query for performance.
+      const existing = await this.prisma.message.findFirst({
         where: {
-          conversationId_clientMessageId: {
-            conversationId: data.conversationId,
-            clientMessageId: data.clientMessageId
-          }
+          conversationId: data.conversationId,
+          clientMessageId: data.clientMessageId
         },
         include: {
           sender: {
