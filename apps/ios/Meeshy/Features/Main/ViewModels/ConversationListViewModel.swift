@@ -901,41 +901,6 @@ class ConversationListViewModel: ObservableObject {
         } catch { }
     }
 
-    private func prefetchMessages(for apiConversations: [APIConversation], userId: String) {
-        let toFetch = Array(apiConversations.prefix(20))
-        let messageService = self.messageService
-        let username = AuthManager.shared.currentUser?.username
-
-        Task.detached(priority: .utility) {
-            await withTaskGroup(of: Void.self) { group in
-                for apiConversation in toFetch {
-                    let conversationId = apiConversation.id
-                    let cached = await CacheCoordinator.shared.messages.load(for: conversationId).value ?? []
-                    if !cached.isEmpty { continue }
-
-                    group.addTask {
-                        do {
-                            let response = try await messageService.list(
-                                conversationId: conversationId,
-                                offset: 0,
-                                limit: 20,
-                                includeReplies: true
-                            )
-                            if response.success {
-                                let messages = response.data.reversed().map {
-                                    $0.toMessage(currentUserId: userId, currentUsername: username)
-                                }
-                                await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
-                            }
-                        } catch { }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Message Prefetch
-
     /// Précharge les messages des top 20 conversations qui n'ont pas encore de cache.
     private func prefetchTopConversationMessages() {
         let topConversations = Array(conversations.prefix(20))
