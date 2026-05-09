@@ -24,7 +24,7 @@ public final class E2EAPI: @unchecked Sendable {
     
     /// Génère et publie le Bundle cryptographique public de l'utilisateur sur le Key Server
     public func uploadBundle(bundle: BackendPreKeyBundle) async throws {
-        // endpoint backend: POST /api/signal/keys
+        // endpoint backend: POST /api/v1/signal/keys
         let _: APIResponse<String> = try await APIClient.shared.post(
             endpoint: "/signal/keys",
             body: bundle
@@ -33,7 +33,7 @@ public final class E2EAPI: @unchecked Sendable {
     
     /// Récupère le Bundle cryptographique public d'un contact cible
     public func fetchBundle(for userId: String) async throws -> BackendPreKeyBundle {
-        // endpoint backend: GET /api/signal/keys/:userId
+        // endpoint backend: GET /api/v1/signal/keys/:userId
         let response: APIResponse<BackendPreKeyBundle> = try await APIClient.shared.request(
             endpoint: "/signal/keys/\(userId)",
             method: "GET"

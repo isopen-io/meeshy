@@ -74,7 +74,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
    * Rate limit: 5 requests/minute (key generation is rare)
    */
   fastify.post(
-    '/api/signal/keys',
+    '/signal/keys',
     {
       preValidation: [authMiddleware],
       config: {
@@ -169,7 +169,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
   fastify.get<{
     Params: z.infer<typeof UserIdParamsSchema>;
   }>(
-    '/api/signal/keys/:userId',
+    '/signal/keys/:userId',
     {
       preValidation: [authMiddleware],
       config: {
@@ -352,7 +352,7 @@ export default async function signalProtocolRoutes(fastify: FastifyInstance) {
   fastify.post<{
     Body: z.infer<typeof EstablishSessionBodySchema>;
   }>(
-    '/api/signal/session/establish',
+    '/signal/session/establish',
     {
       preValidation: [authMiddleware],
       config: {

@@ -25,7 +25,13 @@ actor PendingStatusQueue {
 
     func flush() async {
         let now = Date()
-        let actions = load().filter { now.timeIntervalSince($0.timestamp) < Self.maxAge }
+        // Drop actions persisted with an empty conversationId (legacy bug —
+        // the resulting endpoint /conversations//mark-as-received was
+        // normalized to /conversations/mark-as-received and 404'd forever,
+        // burning retries on every flush). Also drop expired actions.
+        let actions = load().filter {
+            !$0.conversationId.isEmpty && now.timeIntervalSince($0.timestamp) < Self.maxAge
+        }
         guard !actions.isEmpty else {
             save([])
             return

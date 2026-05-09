@@ -637,6 +637,11 @@ final class CallManager: ObservableObject {
 
     func handleRemoteEnd(callId: String) {
         guard currentCallId == callId else { return }
+        // Dedup : le serveur peut émettre `call:ended` plusieurs fois
+        // (e.g. CXEndCallAction côté peer + cleanup serveur), et le user
+        // local peut aussi avoir déjà raccroché en local. Si l'état est
+        // déjà `.ended`, on ignore les doublons.
+        if case .ended = callState { return }
         if let uuid = activeCallUUID {
             callProvider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
         }
@@ -920,6 +925,14 @@ final class CallManager: ObservableObject {
             Logger.calls.info("[AUDIO_SESS] setConfiguration call")
             try session.setConfiguration(configuration, active: false)
             Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo) (CallKit will activate)")
+        } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
+            // "Session deactivation failed" — le call précédent a laissé
+            // AVAudioSession dans un état non-deactivable depuis ce process
+            // (CallKit gère la deactivation via provider:didDeactivate:).
+            // Bénin : RTCAudioSession.useManualAudio est déjà setté, et
+            // CallKit pilote l'activation via didActivate. Downgrade en
+            // warning pour ne pas polluer les crash dashboards.
+            Logger.calls.warning("RTCAudioSession setConfiguration deactivation skipped — CallKit owns the session lifecycle (\(error.localizedDescription))")
         } catch {
             Logger.calls.error("RTCAudioSession configuration failed: \(error.localizedDescription)")
         }
