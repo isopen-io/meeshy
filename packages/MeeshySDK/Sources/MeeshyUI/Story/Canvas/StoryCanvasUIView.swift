@@ -40,11 +40,15 @@ public final class StoryCanvasUIView: UIView {
     // MARK: - Gestures
 
     private var panRecognizer: UIPanGestureRecognizer!
+    private var pinchRecognizer: UIPinchGestureRecognizer!
+    private var rotationRecognizer: UIRotationGestureRecognizer!
 
     /// Item currently being dragged/scaled/rotated. Reset on .ended/.cancelled.
     private var manipulatedItemId: String?
     private var dragStartSlideX: Double = 0
     private var dragStartSlideY: Double = 0
+    private var baseScale: Double = 1.0
+    private var baseRotation: Double = 0.0
 
     // MARK: - Display link
 
@@ -194,7 +198,50 @@ public final class StoryCanvasUIView: UIView {
 
     private func setupGesturesAll() {
         panRecognizer = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
-        addGestureRecognizer(panRecognizer)
+        pinchRecognizer = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
+        rotationRecognizer = UIRotationGestureRecognizer(target: self, action: #selector(handleRotation(_:)))
+        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer] {
+            recognizer.delegate = self
+            addGestureRecognizer(recognizer)
+        }
+    }
+
+    @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
+        guard mode == .edit else { return }
+        switch recognizer.state {
+        case .began:
+            guard let id = hitTestItem(at: recognizer.location(in: self)) else { return }
+            manipulatedItemId = id
+            baseScale = currentScale(forId: id) ?? 1.0
+        case .changed:
+            guard let id = manipulatedItemId else { return }
+            let newScale = max(0.3, min(4.0, baseScale * Double(recognizer.scale)))
+            slide = updateScale(slideId: id, scale: newScale)
+            onItemModified?(slide)
+        case .ended, .cancelled, .failed:
+            manipulatedItemId = nil
+        default:
+            break
+        }
+    }
+
+    @objc private func handleRotation(_ recognizer: UIRotationGestureRecognizer) {
+        guard mode == .edit else { return }
+        switch recognizer.state {
+        case .began:
+            guard let id = hitTestItem(at: recognizer.location(in: self)) else { return }
+            manipulatedItemId = id
+            baseRotation = currentRotation(forId: id) ?? 0
+        case .changed:
+            guard let id = manipulatedItemId else { return }
+            let degrees = Double(recognizer.rotation) * 180 / .pi
+            slide = updateRotation(slideId: id, rotation: baseRotation + degrees)
+            onItemModified?(slide)
+        case .ended, .cancelled, .failed:
+            manipulatedItemId = nil
+        default:
+            break
+        }
     }
 
     @objc private func handlePan(_ recognizer: UIPanGestureRecognizer) {
@@ -254,26 +301,61 @@ public final class StoryCanvasUIView: UIView {
         return nil
     }
 
+    private func currentScale(forId id: String) -> Double? {
+        if let t = slide.effects.textObjects.first(where: { $0.id == id }) { return t.scale }
+        if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) { return m.scale }
+        if let s = slide.effects.stickerObjects?.first(where: { $0.id == id }) { return s.scale }
+        return nil
+    }
+
+    private func currentRotation(forId id: String) -> Double? {
+        if let t = slide.effects.textObjects.first(where: { $0.id == id }) { return t.rotation }
+        if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) { return m.rotation }
+        if let s = slide.effects.stickerObjects?.first(where: { $0.id == id }) { return s.rotation }
+        return nil
+    }
+
     private func updatePosition(slideId: String, x: Double, y: Double) -> StorySlide {
+        mutateItem(slideId: slideId,
+                   text:    { $0.x = x; $0.y = y },
+                   media:   { $0.x = x; $0.y = y },
+                   sticker: { $0.x = x; $0.y = y })
+    }
+
+    private func updateScale(slideId: String, scale: Double) -> StorySlide {
+        mutateItem(slideId: slideId,
+                   text:    { $0.scale = scale },
+                   media:   { $0.scale = scale },
+                   sticker: { $0.scale = scale })
+    }
+
+    private func updateRotation(slideId: String, rotation: Double) -> StorySlide {
+        mutateItem(slideId: slideId,
+                   text:    { $0.rotation = rotation },
+                   media:   { $0.rotation = rotation },
+                   sticker: { $0.rotation = rotation })
+    }
+
+    private func mutateItem(slideId: String,
+                            text:    (inout StoryTextObject)  -> Void,
+                            media:   (inout StoryMediaObject) -> Void,
+                            sticker: (inout StorySticker)     -> Void) -> StorySlide {
         var newSlide = slide
         for i in newSlide.effects.textObjects.indices where newSlide.effects.textObjects[i].id == slideId {
-            newSlide.effects.textObjects[i].x = x
-            newSlide.effects.textObjects[i].y = y
+            text(&newSlide.effects.textObjects[i])
             return newSlide
         }
-        if var media = newSlide.effects.mediaObjects {
-            for i in media.indices where media[i].id == slideId {
-                media[i].x = x
-                media[i].y = y
-                newSlide.effects.mediaObjects = media
+        if var arr = newSlide.effects.mediaObjects {
+            for i in arr.indices where arr[i].id == slideId {
+                media(&arr[i])
+                newSlide.effects.mediaObjects = arr
                 return newSlide
             }
         }
-        if var stickers = newSlide.effects.stickerObjects {
-            for i in stickers.indices where stickers[i].id == slideId {
-                stickers[i].x = x
-                stickers[i].y = y
-                newSlide.effects.stickerObjects = stickers
+        if var arr = newSlide.effects.stickerObjects {
+            for i in arr.indices where arr[i].id == slideId {
+                sticker(&arr[i])
+                newSlide.effects.stickerObjects = arr
                 return newSlide
             }
         }
@@ -282,5 +364,19 @@ public final class StoryCanvasUIView: UIView {
 
     private nonisolated func clamp(_ value: Double) -> Double {
         max(0, min(1, value))
+    }
+}
+
+// MARK: - UIGestureRecognizerDelegate
+
+extension StoryCanvasUIView: UIGestureRecognizerDelegate {
+    /// Pinch + rotation are allowed simultaneously (natural two-finger transform).
+    /// Pan is exclusive — running it alongside pinch/rotation would corrupt the
+    /// snapshot-based deltas (drag uses translation, others use scale/rotation).
+    public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+                                   shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
+        let isPanA = gestureRecognizer === panRecognizer
+        let isPanB = other === panRecognizer
+        return !(isPanA || isPanB)
     }
 }
