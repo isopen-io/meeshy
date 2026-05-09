@@ -143,6 +143,25 @@ final class ConversationOptionsViewModelTests: XCTestCase {
         XCTAssertEqual(s.vm.prefs.tags, ["work"])
     }
 
+    func test_setTags_dedupesAndTrimsAndPersistsInOneCall() async {
+        let s = makeSUT()
+        await s.vm.setTags(["urgent", " family ", "Urgent", "family", ""])
+        XCTAssertEqual(s.vm.prefs.tags, ["urgent", "family", "Urgent"])
+        // setTags fires a single PUT regardless of how many entries
+        XCTAssertEqual(s.prefs.updateConversationPreferencesCallCount, 1)
+        XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.tags,
+                       ["urgent", "family", "Urgent"])
+    }
+
+    func test_setTags_rollsBackOnFailure() async {
+        let s = makeSUT()
+        s.vm.prefs.tags = ["work"]
+        s.prefs.updateConversationPreferencesResult = .failure(NSError(domain: "x", code: 0))
+        await s.vm.setTags(["work", "urgent"])
+        XCTAssertEqual(s.vm.prefs.tags, ["work"])
+        XCTAssertNotNil(s.vm.errorMessage)
+    }
+
     // MARK: - Category creation
 
     func test_createCategoryAndSelect_addsAndAssigns() async {

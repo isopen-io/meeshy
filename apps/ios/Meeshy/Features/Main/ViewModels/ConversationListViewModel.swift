@@ -404,7 +404,7 @@ class ConversationListViewModel: ObservableObject {
     func loadConversations() async {
         guard !isLoading else { return }
 
-        print("[DIAG] ConversationListViewModel.loadConversations CALLED")
+        Logger.messages.debug("[ConversationListVM] loadConversations called")
         async let categoriesTask: () = loadCategories()
 
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
@@ -589,9 +589,9 @@ class ConversationListViewModel: ObservableObject {
 
     func archiveConversation(conversationId: String) async {
         guard let index = convIndex(for: conversationId) else { return }
-        let wasActive = conversations[index].isActive
+        let wasArchived = conversations[index].isArchivedByUser
 
-        conversations[index].isActive = false
+        conversations[index].isArchivedByUser = true
 
         do {
             try await preferenceService.updateConversationPreferences(
@@ -599,7 +599,7 @@ class ConversationListViewModel: ObservableObject {
                 request: .init(isArchived: true)
             )
         } catch {
-            conversations[index].isActive = wasActive
+            conversations[index].isArchivedByUser = wasArchived
         }
     }
 
@@ -607,9 +607,9 @@ class ConversationListViewModel: ObservableObject {
 
     func unarchiveConversation(conversationId: String) async {
         guard let index = convIndex(for: conversationId) else { return }
-        let wasActive = conversations[index].isActive
+        let wasArchived = conversations[index].isArchivedByUser
 
-        conversations[index].isActive = true
+        conversations[index].isArchivedByUser = false
 
         do {
             try await preferenceService.updateConversationPreferences(
@@ -617,7 +617,7 @@ class ConversationListViewModel: ObservableObject {
                 request: .init(isArchived: false)
             )
         } catch {
-            conversations[index].isActive = wasActive
+            conversations[index].isArchivedByUser = wasArchived
         }
     }
 

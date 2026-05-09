@@ -298,11 +298,7 @@ struct ConversationPreferencesTab: View {
                     selectedTags: Binding(
                         get: { viewModel.prefs.tags ?? [] },
                         set: { newTags in
-                            let current = viewModel.prefs.tags ?? []
-                            let added = newTags.filter { !current.contains($0) }
-                            let removed = current.filter { !newTags.contains($0) }
-                            for t in added { Task { await viewModel.addTag(t) } }
-                            for t in removed { Task { await viewModel.removeTag(t) } }
+                            Task { await viewModel.setTags(newTags) }
                         }
                     ),
                     knownTags: viewModel.allTags,

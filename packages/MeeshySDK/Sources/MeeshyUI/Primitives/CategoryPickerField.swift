@@ -55,8 +55,12 @@ public struct CategoryPickerField: View {
                 suggestionList
             }
         }
-        .onChange(of: focused) { _, _ in
-            editing = selectedCategory?.name ?? ""
+        .onChange(of: focused) { _, isFocused in
+            // Restore the canonical name only on blur. Never overwrite the user's
+            // in-progress text on focus-gained.
+            if !isFocused {
+                editing = selectedCategory?.name ?? ""
+            }
         }
         .onAppear {
             editing = selectedCategory?.name ?? ""

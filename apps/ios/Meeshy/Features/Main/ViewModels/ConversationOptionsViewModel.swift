@@ -128,6 +128,28 @@ final class ConversationOptionsViewModel: ObservableObject {
         }
     }
 
+    /// Replace the entire tag set in one server call. Use this when the binding
+    /// emits a fully-resolved next state (e.g. TagInputField setter) to avoid the
+    /// last-write-wins race that fan-out add/remove tasks would create.
+    func setTags(_ next: [String]) async {
+        let normalized = next
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        // Dedupe preserving order
+        var seen = Set<String>()
+        let deduped = normalized.filter { seen.insert($0).inserted }
+
+        let previous = prefs.tags
+        prefs.tags = deduped
+        for tag in deduped where !allTags.contains(tag) {
+            allTags.append(tag)
+        }
+        allTags.sort()
+        await persist(UpdateConversationPreferencesRequest(tags: deduped)) { [weak self] in
+            await MainActor.run { self?.prefs.tags = previous }
+        }
+    }
+
     func toggleArchive() async {
         let next = !(prefs.isArchived ?? false)
         let previous = prefs.isArchived
