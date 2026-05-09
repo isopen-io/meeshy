@@ -418,24 +418,40 @@ final class PreferenceServiceTests: XCTestCase {
     }
 
     // MARK: - getMyConversationTags
+    //
+    // The SDK aggregates tags client-side from /user-preferences/conversations
+    // (the same endpoint the webapp uses), there is no dedicated server route.
 
-    func testGetMyConversationTagsReturnsTags() async throws {
-        let response = APIResponse(success: true, data: ConversationTagsPayload(tags: ["family", "urgent"]), error: nil)
-        mock.stub("/me/preferences/conversation-tags", result: response)
+    func testGetMyConversationTagsReturnsDistinctSortedTags() async throws {
+        let prefs1 = APIConversationPreferences(tags: ["urgent", "family"])
+        let prefs2 = APIConversationPreferences(tags: ["family", "Work"])
+        let prefs3 = APIConversationPreferences(tags: nil)
+        let response = APIResponse(success: true, data: [prefs1, prefs2, prefs3], error: nil)
+        mock.stub("/user-preferences/conversations", result: response)
 
         let result = try await service.getMyConversationTags()
 
-        XCTAssertEqual(result, ["family", "urgent"])
-        XCTAssertEqual(mock.lastRequest?.endpoint, "/me/preferences/conversation-tags")
+        XCTAssertEqual(result, ["family", "urgent", "Work"])
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/user-preferences/conversations")
         XCTAssertEqual(mock.lastRequest?.method, "GET")
     }
 
-    func testGetMyConversationTagsReturnsEmpty() async throws {
-        let response = APIResponse(success: true, data: ConversationTagsPayload(tags: []), error: nil)
-        mock.stub("/me/preferences/conversation-tags", result: response)
+    func testGetMyConversationTagsReturnsEmptyWhenNoPrefs() async throws {
+        let response = APIResponse(success: true, data: [APIConversationPreferences](), error: nil)
+        mock.stub("/user-preferences/conversations", result: response)
 
         let result = try await service.getMyConversationTags()
 
         XCTAssertEqual(result, [])
+    }
+
+    func testGetMyConversationTagsTrimsAndIgnoresBlanks() async throws {
+        let prefs = APIConversationPreferences(tags: ["  urgent  ", "", "  ", "family"])
+        let response = APIResponse(success: true, data: [prefs], error: nil)
+        mock.stub("/user-preferences/conversations", result: response)
+
+        let result = try await service.getMyConversationTags()
+
+        XCTAssertEqual(result, ["family", "urgent"])
     }
 }

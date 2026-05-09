@@ -346,11 +346,13 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.filteredConversations[0].id, "grp")
     }
 
-    func test_filterPipeline_archivedFilterShowsInactiveOnly() async throws {
+    func test_filterPipeline_archivedFilterShowsUserArchivedOnly() async throws {
         let (sut, _, _, _, _, _, _) = makeSUT()
+        var archivedConv = makeConversation(id: "archived", isActive: true)
+        archivedConv.isArchivedByUser = true
         sut.conversations = [
             makeConversation(id: "active", isActive: true),
-            makeConversation(id: "archived", isActive: false)
+            archivedConv
         ]
         sut.selectedFilter = .archived
 
@@ -509,13 +511,14 @@ final class ConversationListViewModelTests: XCTestCase {
 
     // MARK: - archiveConversation
 
-    func test_archiveConversation_setsIsActiveToFalse() async {
+    func test_archiveConversation_setsIsArchivedByUserToTrue() async {
         let (sut, _, _, preferenceService, _, _, _) = makeSUT()
         sut.conversations = [makeConversation(id: "conv1", isActive: true)]
 
         await sut.archiveConversation(conversationId: "conv1")
 
-        XCTAssertFalse(sut.conversations[0].isActive)
+        XCTAssertTrue(sut.conversations[0].isArchivedByUser)
+        XCTAssertTrue(sut.conversations[0].isActive, "isActive (server-level) should NOT change when user archives")
         XCTAssertEqual(preferenceService.updateConversationPreferencesCallCount, 1)
     }
 
@@ -527,18 +530,20 @@ final class ConversationListViewModelTests: XCTestCase {
 
         await sut.archiveConversation(conversationId: "conv1")
 
-        XCTAssertTrue(sut.conversations[0].isActive, "Should rollback on failure")
+        XCTAssertFalse(sut.conversations[0].isArchivedByUser, "Should rollback on failure")
     }
 
     // MARK: - unarchiveConversation
 
-    func test_unarchiveConversation_setsIsActiveToTrue() async {
+    func test_unarchiveConversation_setsIsArchivedByUserToFalse() async {
         let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "conv1", isActive: false)]
+        var conv = makeConversation(id: "conv1", isActive: true)
+        conv.isArchivedByUser = true
+        sut.conversations = [conv]
 
         await sut.unarchiveConversation(conversationId: "conv1")
 
-        XCTAssertTrue(sut.conversations[0].isActive)
+        XCTAssertFalse(sut.conversations[0].isArchivedByUser)
     }
 
     // MARK: - setFavoriteReaction
@@ -990,11 +995,13 @@ final class ConversationListViewModelTests: XCTestCase {
         let preferenceService = MockPreferenceService()
         preferenceService.updateConversationPreferencesResult = .failure(NSError(domain: "test", code: 500))
         let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
-        sut.conversations = [makeConversation(id: "conv1", isActive: false)]
+        var archived = makeConversation(id: "conv1", isActive: true)
+        archived.isArchivedByUser = true
+        sut.conversations = [archived]
 
         await sut.unarchiveConversation(conversationId: "conv1")
 
-        XCTAssertFalse(sut.conversations[0].isActive, "Should rollback to inactive on failure")
+        XCTAssertTrue(sut.conversations[0].isArchivedByUser, "Should rollback to archived on failure")
     }
 
     // MARK: - loadConversations: concurrent guard

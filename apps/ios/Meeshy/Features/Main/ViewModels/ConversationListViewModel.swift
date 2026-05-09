@@ -343,6 +343,50 @@ class ConversationListViewModel: ObservableObject {
                 }
             }
             .store(in: &cancellables)
+
+        // Listen to in-app preference updates from the conversation options
+        // sheet so a toggle (pin / mute / mention / archive) or a value change
+        // (customName / reaction / categoryId / tags) is reflected on the row
+        // immediately, without waiting for a refetch.
+        ConversationPreferencesBroadcaster.shared.updates
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.applyPreferencesUpdate(event)
+            }
+            .store(in: &cancellables)
+    }
+
+    private func applyPreferencesUpdate(_ event: ConversationPreferencesBroadcaster.Event) {
+        guard let idx = conversations.firstIndex(where: { $0.id == event.conversationId }) else { return }
+        var conv = conversations[idx]
+        let prefs = event.prefs
+
+        if let isPinned = prefs.isPinned { conv.isPinned = isPinned }
+        if let isMuted = prefs.isMuted { conv.isMuted = isMuted }
+        if let isArchived = prefs.isArchived { conv.isArchivedByUser = isArchived }
+        if let mentionsOnly = prefs.mentionsOnly { conv.mentionsOnly = mentionsOnly }
+        // categoryId/customName/reaction are nullable on purpose — a nil here
+        // legitimately means "uncategorize / clear".
+        conv.sectionId = prefs.categoryId
+        conv.customName = prefs.customName
+        conv.reaction = prefs.reaction
+        if let tagNames = prefs.tags {
+            conv.tags = tagNames.enumerated().map { index, name in
+                MeeshyConversationTag(
+                    name: name,
+                    color: MeeshyConversationTag.colors[index % MeeshyConversationTag.colors.count]
+                )
+            }
+        }
+
+        conversations[idx] = conv
+
+        // Persist the in-memory mutation to the list snapshot so a fresh
+        // launch (cold cache load) reflects the up-to-date prefs.
+        let snapshot = conversations
+        Task.detached {
+            await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
+        }
     }
 
     private func reloadFromCache() async {

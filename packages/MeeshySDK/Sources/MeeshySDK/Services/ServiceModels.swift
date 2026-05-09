@@ -180,14 +180,6 @@ public struct ConversationCategory: Decodable, Identifiable {
     }
 }
 
-public struct ConversationTagsPayload: Decodable, Sendable {
-    public let tags: [String]
-
-    public init(tags: [String]) {
-        self.tags = tags
-    }
-}
-
 // MARK: - Translation
 
 public struct TranslateRequest: Encodable {

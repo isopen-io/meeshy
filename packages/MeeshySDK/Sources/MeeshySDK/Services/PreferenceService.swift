@@ -82,11 +82,26 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
     }
 
     // MARK: - User Conversation Tags
-
+    //
+    // No dedicated server endpoint exists for tag aggregation (see webapp's
+    // ConversationPreferencesStore which does the same client-side). We pull
+    // the user's first page of conversation preferences (limit=200, generous
+    // for UX-driven autocomplete) and extract the distinct, sorted tags.
     public func getMyConversationTags() async throws -> [String] {
-        let response: APIResponse<ConversationTagsPayload> = try await api.request(
-            endpoint: "/me/preferences/conversation-tags"
+        let response: APIResponse<[APIConversationPreferences]> = try await api.request(
+            endpoint: "/user-preferences/conversations",
+            queryItems: [
+                URLQueryItem(name: "offset", value: "0"),
+                URLQueryItem(name: "limit", value: "200")
+            ]
         )
-        return response.data.tags
+        var set = Set<String>()
+        for prefs in response.data {
+            for tag in prefs.tags ?? [] {
+                let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !trimmed.isEmpty { set.insert(trimmed) }
+            }
+        }
+        return set.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
     }
 }

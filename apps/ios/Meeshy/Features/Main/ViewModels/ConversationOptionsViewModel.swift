@@ -243,6 +243,16 @@ final class ConversationOptionsViewModel: ObservableObject {
                     request: request
                 )
                 self?.errorMessage = nil
+                // Propagate the new prefs snapshot so the conversation list,
+                // section headers, and any other observer reflect the change
+                // immediately (instead of waiting for a refetch / socket
+                // event that may never arrive).
+                if let prefs = self?.prefs {
+                    ConversationPreferencesBroadcaster.shared.broadcast(
+                        conversationId: convId,
+                        prefs: prefs
+                    )
+                }
             } catch {
                 Self.logger.error("persist failed: \(error.localizedDescription)")
                 rollback?()

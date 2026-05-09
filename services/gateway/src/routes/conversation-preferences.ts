@@ -439,21 +439,6 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const { conversationId } = request.params;
         const data = request.body;
 
-        // If categoryId is provided AND non-null, verify it belongs to the user
-        if (data.categoryId !== undefined && data.categoryId !== null) {
-          const category = await fastify.prisma.userConversationCategory.findUnique({
-            where: { id: data.categoryId },
-            select: { id: true, userId: true }
-          });
-          if (!category || category.userId !== userId) {
-            return reply.status(400).send({
-              success: false,
-              error: 'INVALID_CATEGORY_ID',
-              message: 'Category does not exist or does not belong to the authenticated user'
-            });
-          }
-        }
-
         // Prepare update data (filter undefined values)
         const updateData: any = {};
         if (data.isPinned !== undefined) updateData.isPinned = data.isPinned;
