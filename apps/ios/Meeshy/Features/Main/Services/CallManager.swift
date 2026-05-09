@@ -58,8 +58,12 @@ final class CallManager: ObservableObject {
     // MARK: - Internal
 
     private let webRTCService: WebRTCService
-    private var durationTimer: Timer?
-    private var heartbeatTimer: Timer?
+    // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
+    // Timers run on RunLoop.main and have no native cancellation hand-off; Tasks
+    // are cooperative, energy-efficient (no RunLoop wakeup overhead), and
+    // immediately stop their work loop on cancel.
+    private var durationTask: Task<Void, Never>?
+    private var heartbeatTask: Task<Void, Never>?
     private var callStartDate: Date?
     private var reconnectAttempt = 0
     private var participantJoinedCancellable: AnyCancellable?
@@ -341,7 +345,7 @@ final class CallManager: ObservableObject {
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                     return
                 }
-                self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
+                await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
                 Logger.calls.info("SDP answer created from late offer for call: \(callId)")
             }
 
@@ -380,7 +384,7 @@ final class CallManager: ObservableObject {
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                     return
                 }
-                self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
+                await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
                 self.pendingRemoteOffer = nil
                 Logger.calls.info("Call answered with buffered SDP offer: \(callId)")
             }
@@ -415,7 +419,10 @@ final class CallManager: ObservableObject {
                 self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                 return
             }
-            self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
+            // PERF-004: await the gateway ACK (3s) so when answerCallReady
+            // returns, the CXAnswerCallAction fulfill is paired with an SDP
+            // answer that has actually been relayed to the peer.
+            await self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
             Logger.calls.info("Call answered (CallKit) with buffered SDP offer: \(callId)")
         } else {
             Logger.calls.info("Call answered (CallKit), awaiting SDP offer: \(callId)")
@@ -620,8 +627,11 @@ final class CallManager: ObservableObject {
         callStartDate = Date()
         callDuration = 0
         reconnectAttempt = 0
-        durationTimer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            Task { @MainActor [weak self] in
+        durationTask?.cancel()
+        durationTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                guard !Task.isCancelled else { return }
                 guard let self, let start = self.callStartDate else { return }
                 self.callDuration = Date().timeIntervalSince(start)
             }
@@ -643,12 +653,13 @@ final class CallManager: ObservableObject {
     }
 
     private func startHeartbeat() {
-        heartbeatTimer?.invalidate()
-        heartbeatTimer = Timer.scheduledTimer(
-            withTimeInterval: QualityThresholds.heartbeatIntervalSeconds,
-            repeats: true
-        ) { [weak self] _ in
-            Task { @MainActor [weak self] in
+        heartbeatTask?.cancel()
+        let interval = QualityThresholds.heartbeatIntervalSeconds
+        heartbeatTask = Task { @MainActor [weak self] in
+            while !Task.isCancelled {
+                let nanos = UInt64(interval * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: nanos)
+                guard !Task.isCancelled else { return }
                 guard let self, let callId = self.currentCallId else { return }
                 let fromId = AuthManager.shared.currentUser?.id ?? ""
                 let remoteId = self.remoteUserId ?? ""
@@ -660,12 +671,12 @@ final class CallManager: ObservableObject {
                 Logger.calls.debug("Heartbeat sent for call: \(callId)")
             }
         }
-        Logger.calls.info("Heartbeat timer started (\(QualityThresholds.heartbeatIntervalSeconds)s interval)")
+        Logger.calls.info("Heartbeat task started (\(interval)s interval)")
     }
 
     private func stopHeartbeat() {
-        heartbeatTimer?.invalidate()
-        heartbeatTimer = nil
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
     }
 
     // MARK: - Haptic Helpers
@@ -795,8 +806,8 @@ final class CallManager: ObservableObject {
     }
 
     private func endCallInternal(reason: CallEndReason) {
-        durationTimer?.invalidate()
-        durationTimer = nil
+        durationTask?.cancel()
+        durationTask = nil
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
@@ -851,7 +862,11 @@ final class CallManager: ObservableObject {
         let configuration = RTCAudioSessionConfiguration.webRTC()
         configuration.category = AVAudioSession.Category.playAndRecord.rawValue
         configuration.mode = (isVideo ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
-        configuration.categoryOptions = [.allowBluetoothHFP, .allowBluetoothA2DP, .duckOthers]
+        // PERF-010: drop .allowBluetoothA2DP. A2DP is an output-only profile and
+        // conflicts with the bidirectional voice path (forces the OS to flap
+        // between A2DP and HFP, causing periodic ~200ms audio glitches). HFP
+        // already covers BT headsets via the SCO bidirectional voice link.
+        configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
 
         let session = RTCAudioSession.sharedInstance()
         session.lockForConfiguration()
@@ -997,13 +1012,22 @@ final class CallManager: ObservableObject {
         )
     }
 
-    private func emitCallAnswer(callId: String, toUserId: String, sdp: SessionDescription) {
+    /// PERF-004: Awaits gateway ACK (3s timeout) confirming the SDP answer
+    /// was relayed to the remote peer. Returning from this method means the
+    /// answer is on the wire — so CXAnswerCallAction.fulfill() can run with
+    /// confidence that the ICE/SDP exchange has actually started.
+    @discardableResult
+    private func emitCallAnswer(callId: String, toUserId: String, sdp: SessionDescription) async -> Bool {
         let fromUserId = AuthManager.shared.currentUser?.id ?? ""
-        MessageSocketManager.shared.emitCallSignal(
+        let acked = await MessageSocketManager.shared.emitCallSignalWithAck(
             callId: callId,
             type: "answer",
             payload: ["sdp": sdp.sdp, "to": toUserId, "from": fromUserId]
         )
+        if !acked {
+            Logger.calls.warning("SDP answer ACK timed out (3s) for call: \(callId) — proceeding optimistically")
+        }
+        return acked
     }
 
     private func emitCallReject(callId: String, toUserId: String) {

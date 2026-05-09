@@ -625,6 +625,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
     func emitCallSignal(callId: String, type: String, payload: [String: String])
+    func emitCallSignalWithAck(callId: String, type: String, payload: [String: String]) async -> Bool
     func emitCallToggleAudio(callId: String, enabled: Bool)
     func emitCallToggleVideo(callId: String, enabled: Bool)
     func emitCallEnd(callId: String)
@@ -1093,6 +1094,34 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         var signal: [String: Any] = ["type": type]
         for (key, value) in payload { signal[key] = value }
         socket?.emit("call:signal", ["callId": callId, "signal": signal])
+    }
+
+    /// PERF-004: Emit a `call:signal` and await the gateway ACK with a 3s
+    /// timeout. Returns `true` once the gateway confirms the signal was
+    /// relayed to the peer, `false` on timeout / no socket / server error.
+    /// Used for the SDP answer path so CXAnswerCallAction.fulfill() only
+    /// runs after the answer is on the wire — without this, CallKit would
+    /// race the WebRTC signaling and the audio engine could start before
+    /// the peer has received the answer.
+    public func emitCallSignalWithAck(callId: String, type: String, payload: [String: String]) async -> Bool {
+        guard let socket else { return false }
+        var signal: [String: Any] = ["type": type]
+        for (key, value) in payload { signal[key] = value }
+        return await withCheckedContinuation { continuation in
+            var resumed = false
+            socket.emitWithAck("call:signal", ["callId": callId, "signal": signal]).timingOut(after: 3) { items in
+                guard !resumed else { return }
+                resumed = true
+                if let response = items.first as? [String: Any],
+                   let success = response["success"] as? Bool {
+                    continuation.resume(returning: success)
+                } else if items.isEmpty {
+                    continuation.resume(returning: false)
+                } else {
+                    continuation.resume(returning: false)
+                }
+            }
+        }
     }
 
     public func emitCallToggleAudio(callId: String, enabled: Bool) {

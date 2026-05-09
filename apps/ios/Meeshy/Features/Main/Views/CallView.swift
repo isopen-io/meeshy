@@ -346,6 +346,14 @@ struct CallView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
         .opacity(showTranscript ? 1 : 0)
         .animation(.easeInOut(duration: 0.2), value: showTranscript)
+        // PERF-005: tell the transcription service when the panel is visible
+        // so it can skip per-frame partial-result work while hidden.
+        .onChange(of: showTranscript) { _, newValue in
+            transcriptionService.isShowingOverlay = newValue
+        }
+        .onAppear {
+            transcriptionService.isShowingOverlay = showTranscript
+        }
     }
 
     // MARK: - Ended
