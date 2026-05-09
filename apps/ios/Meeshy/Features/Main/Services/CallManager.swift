@@ -121,7 +121,27 @@ final class CallManager: ObservableObject {
 
     // MARK: - Outgoing Call
 
+    /// Force reset à `.idle` quand l'état est encore `.ended` au moment où
+    /// un nouveau call (entrant ou sortant) arrive. Sans ça la fenêtre de
+    /// 1.5s laisse passer une seconde tentative qui se voit refusée avec
+    /// "already in state ended(...)" — le signal disparaît côté user.
+    @MainActor
+    private func resetEndedStateForNewCall() {
+        if case .ended = callState {
+            callState = .idle
+            currentCallId = nil
+            remoteUserId = nil
+            remoteUsername = nil
+            callDuration = 0
+            isVideoEnabled = false
+            isMuted = false
+            isSpeaker = false
+            Logger.calls.info("Force-reset .ended → .idle to accept new call")
+        }
+    }
+
     func startCall(conversationId: String, userId: String, displayName: String, isVideo: Bool) {
+        resetEndedStateForNewCall()
         guard callState == .idle else {
             Logger.calls.warning("Cannot start call: already in state \(String(describing: self.callState))")
             return
@@ -195,6 +215,7 @@ final class CallManager: ObservableObject {
     // MARK: - VoIP Push Incoming Call
 
     func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil) {
+        resetEndedStateForNewCall()
         let uuid = UUID()
         let update = CXCallUpdate()
         // Use the callerUserId as the CXHandle.value so Recents stays stable
@@ -283,6 +304,7 @@ final class CallManager: ObservableObject {
     @Published var showCallWaitingBanner = false
 
     func handleIncomingCallNotification(callId: String, fromUserId: String, fromUsername: String, isVideo: Bool, iceServers: [IceServer]? = nil) {
+        resetEndedStateForNewCall()
         guard callState == .idle else {
             Logger.calls.info("Incoming call while busy — showing call waiting banner")
             pendingIncomingCall = (callId: callId, fromUserId: fromUserId, fromUsername: fromUsername, isVideo: isVideo)
@@ -839,8 +861,18 @@ final class CallManager: ObservableObject {
         connectionQuality = .new
         activeCallUUID = nil
 
+        // L'UI se base sur `callState == .ended` pour afficher le panneau de
+        // fin d'appel ; on garde l'état visible 1.5s avant de reset à `.idle`
+        // pour laisser le user voir le motif. Si une nouvelle tentative
+        // d'appel arrive PENDANT ce délai, on accepte et on force-reset
+        // (cf. `forceResetIfEndedThenStart`/branches `case .ended` dans
+        // startCall et handleIncomingCallNotification). Le délai legacy de
+        // 3s + double-call entrant via VoIP push faisait que tout appel
+        // entrant ou sortant suivant un ended remote était rejeté avec
+        // "already in state ended(...)" pendant 3s — le user voyait le
+        // signal d'appel disparaître. 1.5s suffit pour le feedback UI.
         Task { @MainActor [weak self] in
-            try? await Task.sleep(for: .seconds(3))
+            try? await Task.sleep(for: .milliseconds(1500))
             guard let self else { return }
             if case .ended = self.callState {
                 self.callState = .idle
