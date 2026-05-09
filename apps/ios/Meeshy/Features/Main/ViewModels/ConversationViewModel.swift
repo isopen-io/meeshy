@@ -1297,24 +1297,37 @@ class ConversationViewModel: ObservableObject {
         // concurrent `sendMessage` runs, both inserting their own optimistic
         // record with a fresh `tempId`, both POSTing the request — the user
         // saw the same content twice in the bubble list. The `isSending`
-        // flag flips to `true` for the duration of the send (cleared in
-        // both the success and failure paths), so the second tap exits
+        // flag flips to `true` for the duration of the online send (cleared
+        // in both the success and failure paths), so the second tap exits
         // early instead of duplicating. Retries from the offline / retry
         // queues bypass this entry point — they call lower-level paths
-        // directly with the same `tempId` already used by the original send.
-        guard !isSending else { return false }
+        // directly with the same `clientMessageId` already used by the
+        // original send.
+        //
+        // Phase 4 §6.1 — the offline path runs BEFORE the debounce guard so
+        // a user typing quickly while disconnected (subway, airplane) can
+        // queue back-to-back messages without the second one being silently
+        // dropped. The offline branch is itself debounced inside `OfflineQueue`
+        // by the `clientMessageId` coalescing rules.
 
-        // Offline: enqueue for later delivery + show optimistic message
-        if NetworkMonitor.shared.isOffline {
+        // Offline: enqueue for later delivery + show optimistic message.
+        // Phase 4 §6.1 — also branch offline when the socket is not currently
+        // connected (transient disconnect with NetworkMonitor still reporting
+        // online), since otherwise the POST would race against an unhealthy
+        // socket and the optimistic row would never reconcile.
+        if NetworkMonitor.shared.isOffline || !MessageSocketManager.shared.isConnected {
+            let offlineClientMessageId = existingTempId ?? ClientMessageId.generate()
             let queueItem = OfflineQueueItem(
                 conversationId: conversationId,
                 content: text,
+                clientMessageId: offlineClientMessageId,
+                originalLanguage: originalLanguage,
                 replyToId: replyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds
             )
-            Task { await OfflineQueue.shared.enqueue(queueItem) }
+            Task { try? await OfflineQueue.shared.enqueue(queueItem) }
 
             let offlineTempId = queueItem.tempId
             let offlineMessage = Message(
@@ -1414,6 +1427,12 @@ class ConversationViewModel: ObservableObject {
         // Resolve blur: use explicit param or ViewModel state
         let resolvedBlur = isBlurred ?? (isBlurEnabled ? true : nil)
 
+        // Phase 4 §6.1 — debounce only the ONLINE send path. The offline
+        // branch above already returned, so a fast double-tap while offline
+        // queues both messages (deduped server-side via `clientMessageId`).
+        // For online sends, two concurrent runs would each post an HTTP
+        // request — `isSending` blocks the second tap.
+        guard !isSending else { return false }
         isSending = true
 
         // Build ReplyReference from quoted message or story
@@ -1445,8 +1464,15 @@ class ConversationViewModel: ObservableObject {
             )
         }
 
-        // Optimistic insert
-        let tempId = existingTempId ?? "temp_\(UUID().uuidString)"
+        // Optimistic insert.
+        // Phase 4 §6.1 — local id is the canonical `cid_<uuid v4 lowercase>`
+        // sent end-to-end so the gateway can dedup via the unique
+        // `(conversationId, clientMessageId)` index and the iOS reconciliation
+        // by-cid path can match the server-assigned record without ambiguity.
+        // The legacy `temp_/offline_/retry_*` prefix scheme is gone — every
+        // local id (online send, offline queue, retry queue) now flows through
+        // `ClientMessageId.generate()`.
+        let tempId = existingTempId ?? ClientMessageId.generate()
         let resolvedAttachments = localAttachments ?? []
         let optimisticMessageType: Message.MessageType = {
             guard let first = resolvedAttachments.first else { return .text }
@@ -1538,7 +1564,8 @@ class ConversationViewModel: ObservableObject {
                 isBlurred: resolvedBlur,
                 effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : nil,
                 isEncrypted: isEncrypted ? true : nil,
-                encryptionMode: encryptionMode
+                encryptionMode: encryptionMode,
+                clientMessageId: tempId
             )
             print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
             let responseData = try await messageService.send(
@@ -1615,9 +1642,9 @@ class ConversationViewModel: ObservableObject {
                 originalLanguage: originalLanguage ?? "fr",
                 replyToId: replyToId,
                 attachmentIds: attachmentIds,
-                tempId: tempId
+                clientMessageId: tempId
             )
-            Task { await MessageRetryQueue.shared.enqueue(retryItem) }
+            Task { try? await MessageRetryQueue.shared.enqueue(retryItem) }
 
             isSending = false
             return false
@@ -1632,12 +1659,23 @@ class ConversationViewModel: ObservableObject {
         guard failedMsg.deliveryStatus == .failed else { return }
 
         // Delete the failed row from GRDB; store observation removes it from
-        // `messages` automatically. Then re-send, which inserts a fresh optimistic row.
+        // `messages` automatically. Then re-send, which inserts a fresh
+        // optimistic row.
+        //
+        // Phase 4 §6.2 — reuse the failed message's `clientMessageId` so
+        // the gateway dedup contract `(conversationId, clientMessageId)`
+        // catches a previous attempt that DID reach the server (e.g. ACK
+        // was lost mid-flight). A fresh `cid_*` here would bypass the
+        // dedup index and produce a duplicate server-side record.
+        // The local id of a Phase 4 optimistic message IS its
+        // `clientMessageId` (legacy `temp_/offline_/retry_*` prefixes are
+        // gone), so passing `messageId` straight through is correct.
         let content = failedMsg.content
         let replyToId = failedMsg.replyToId
+        let priorClientMessageId = messageId
         try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
 
-        await sendMessage(content: content, replyToId: replyToId)
+        await sendMessage(content: content, replyToId: replyToId, existingTempId: priorClientMessageId)
     }
 
     func removeFailedMessage(messageId: String) {
@@ -1820,7 +1858,7 @@ class ConversationViewModel: ObservableObject {
                 messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
             )
             Task {
-                await ReactionQueue.shared.enqueue(item)
+                try? await ReactionQueue.shared.enqueue(item)
                 await ReactionQueue.shared.retryAll()
             }
         } else {
@@ -1835,7 +1873,7 @@ class ConversationViewModel: ObservableObject {
                 messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
             )
             Task {
-                await ReactionQueue.shared.enqueue(item)
+                try? await ReactionQueue.shared.enqueue(item)
                 await ReactionQueue.shared.retryAll()
             }
         }

@@ -2308,9 +2308,14 @@ struct MessageDetailSheet: View {
     // MARK: - Helpers
 
     private var deliveryStatusLevel: Int {
+        // Phase 4 spec §6.2 — `.invisible`, `.clock`, `.slow` are all visual
+        // refinements of the "still sending" phase (between optimistic apply
+        // and server ACK). They share level 0 with `.sending` so the badge
+        // collapses them to the single "Envoi..." label, matching the existing
+        // 4-bucket design (failed / sending / sent / delivered / read).
         switch message.deliveryStatus {
         case .failed: return -1
-        case .sending: return 0
+        case .sending, .invisible, .clock, .slow: return 0
         case .sent: return 1
         case .delivered: return 2
         case .read: return 3

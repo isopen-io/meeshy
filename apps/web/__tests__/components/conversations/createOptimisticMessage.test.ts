@@ -29,14 +29,15 @@ describe('createOptimisticMessage', () => {
     );
 
     expect(result._tempId).toBeDefined();
+    // _tempId now doubles as clientMessageId (cid_<uuid v4 lowercase>)
     expect(result._tempId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+      /^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     );
     expect(result._localStatus).toBe('sending');
     expect(result.id).toBe(result._tempId);
   });
 
-  it('should generate unique IDs using crypto.randomUUID format', () => {
+  it('should generate unique IDs using clientMessageId format', () => {
     const result = createOptimisticMessage({
       content: 'Test',
       senderId: 'user-123',
@@ -45,9 +46,9 @@ describe('createOptimisticMessage', () => {
       sender: baseSender,
     });
 
-    // UUID v4 format: 8-4-4-4-12 hex chars
+    // cid_<uuid v4> format — see CLIENT_MESSAGE_ID_REGEX
     expect(result._tempId).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+      /^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
     );
   });
 

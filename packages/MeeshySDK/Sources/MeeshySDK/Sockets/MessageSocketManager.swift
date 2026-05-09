@@ -679,7 +679,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitLiveLocationStart(payload: LiveLocationStartPayload)
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
     func emitLiveLocationStop(conversationId: String)
-    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool)
+    func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?)
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
@@ -689,6 +689,37 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallToggleVideo(callId: String, enabled: Bool)
     func emitCallEnd(callId: String)
     func emitCallHeartbeat(callId: String)
+}
+
+// MARK: - Protocol Default-Arg Convenience
+
+/// Default-arg shims for source-compatibility with pre-Phase-4 call sites
+/// that do not yet pass `clientMessageId`. Protocol requirements cannot have
+/// default parameter values directly, so the convenience overload lives in
+/// an extension. Phase 4 call sites SHOULD pass an explicit `clientMessageId`
+/// so the optimistic row, the ACK echo, and the `message:new` broadcast can
+/// be reconciled by the same end-to-end identifier.
+public extension MessageSocketProviding {
+    func sendWithAttachments(
+        conversationId: String,
+        content: String?,
+        attachmentIds: [String],
+        replyToId: String?,
+        storyReplyToId: String? = nil,
+        originalLanguage: String? = nil,
+        isEncrypted: Bool = false
+    ) {
+        sendWithAttachments(
+            conversationId: conversationId,
+            content: content,
+            attachmentIds: attachmentIds,
+            replyToId: replyToId,
+            storyReplyToId: storyReplyToId,
+            originalLanguage: originalLanguage,
+            isEncrypted: isEncrypted,
+            clientMessageId: nil
+        )
+    }
 }
 
 // MARK: - Message Socket Manager
@@ -1016,15 +1047,33 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Send With Attachments
 
+    /// ACK returned by the gateway after `message:send-with-attachments`.
+    /// Phase 4 (spec §6.2) requires `_sendResponse()` to echo back the same
+    /// `clientMessageId` the client supplied in the request so the local
+    /// outbox/optimistic layer can match the row without scraping the
+    /// `message:new` broadcast. `clientMessageId` is optional on the wire
+    /// during the rollout window — older gateway builds drop the field.
+    public struct SendMessageAck: Sendable {
+        public let messageId: String
+        public let clientMessageId: String?
+
+        public init(messageId: String, clientMessageId: String?) {
+            self.messageId = messageId
+            self.clientMessageId = clientMessageId
+        }
+    }
+
     private func buildAttachmentPayload(
         conversationId: String, content: String?, attachmentIds: [String],
-        replyToId: String?, storyReplyToId: String? = nil, originalLanguage: String?, isEncrypted: Bool
+        replyToId: String?, storyReplyToId: String? = nil, originalLanguage: String?, isEncrypted: Bool,
+        clientMessageId: String
     ) -> [String: Any] {
         var payload: [String: Any] = [
             "conversationId": conversationId,
             "content": content ?? "",
             "attachmentIds": attachmentIds,
-            "isEncrypted": isEncrypted
+            "isEncrypted": isEncrypted,
+            "clientMessageId": clientMessageId
         ]
         if let replyToId { payload["replyToId"] = replyToId }
         if let storyReplyToId { payload["storyReplyToId"] = storyReplyToId }
@@ -1039,15 +1088,24 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         replyToId: String?,
         storyReplyToId: String? = nil,
         originalLanguage: String? = nil,
-        isEncrypted: Bool = false
+        isEncrypted: Bool = false,
+        clientMessageId: String? = nil
     ) {
+        let cid = clientMessageId ?? ClientMessageId.generate()
         let payload = buildAttachmentPayload(
             conversationId: conversationId, content: content, attachmentIds: attachmentIds,
-            replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted
+            replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted,
+            clientMessageId: cid
         )
         socket?.emit("message:send-with-attachments", payload)
     }
 
+    /// Emits `message:send-with-attachments` and awaits the gateway ACK.
+    /// Returns the full `SendMessageAck` (server `messageId` + the echoed
+    /// `clientMessageId` from the request) so callers can reconcile the
+    /// optimistic row by `clientMessageId` rather than waiting for the
+    /// targeted `message:new` broadcast. Returns `nil` on timeout / no socket
+    /// / server error.
     public func sendWithAttachmentsAsync(
         conversationId: String,
         content: String?,
@@ -1055,12 +1113,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         replyToId: String?,
         storyReplyToId: String? = nil,
         originalLanguage: String? = nil,
-        isEncrypted: Bool = false
-    ) async -> String? {
+        isEncrypted: Bool = false,
+        clientMessageId: String? = nil
+    ) async -> SendMessageAck? {
         guard let socket else { return nil }
+        let cid = clientMessageId ?? ClientMessageId.generate()
         let payload = buildAttachmentPayload(
             conversationId: conversationId, content: content, attachmentIds: attachmentIds,
-            replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted
+            replyToId: replyToId, storyReplyToId: storyReplyToId, originalLanguage: originalLanguage, isEncrypted: isEncrypted,
+            clientMessageId: cid
         )
         return await withCheckedContinuation { continuation in
             socket.emitWithAck("message:send-with-attachments", payload).timingOut(after: 30) { items in
@@ -1068,7 +1129,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                    let success = response["success"] as? Bool, success,
                    let data = response["data"] as? [String: Any],
                    let messageId = data["messageId"] as? String {
-                    continuation.resume(returning: messageId)
+                    let ackCid = data["clientMessageId"] as? String ?? cid
+                    continuation.resume(returning: SendMessageAck(messageId: messageId, clientMessageId: ackCid))
                 } else {
                     continuation.resume(returning: nil)
                 }

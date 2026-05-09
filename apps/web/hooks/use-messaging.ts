@@ -45,8 +45,18 @@ interface UseMessagingReturn {
   isSending: boolean;
   sendError: string | null;
 
-  // Actions de messagerie
-  sendMessage: (content: string, originalLanguage?: string, replyToId?: string, mentionedUserIds?: string[], attachmentIds?: string[], attachmentMimeTypes?: string[]) => Promise<boolean>;
+  // Actions de messagerie. `clientMessageId` is optional — when omitted, the
+  // socket orchestrator generates one (`cid_<uuid v4>`) so the gateway dedup
+  // contract still holds for retries from the offline queue.
+  sendMessage: (
+    content: string,
+    originalLanguage?: string,
+    replyToId?: string,
+    mentionedUserIds?: string[],
+    attachmentIds?: string[],
+    attachmentMimeTypes?: string[],
+    clientMessageId?: string,
+  ) => Promise<boolean>;
   editMessage: (messageId: string, newContent: string) => Promise<boolean>;
   deleteMessage: (messageId: string) => Promise<boolean>;
 
@@ -188,7 +198,8 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
     replyToId?: string,
     mentionedUserIds?: string[],
     attachmentIds?: string[],
-    attachmentMimeTypes?: string[]
+    attachmentMimeTypes?: string[],
+    clientMessageId?: string,
   ): Promise<boolean> => {
     if (!conversationId || !currentUserId) {
       console.error('[MESSAGING] Cannot send message: missing conversationId or currentUserId');
@@ -216,14 +227,15 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
       logMessageSend(content, sourceLanguage, conversationId);
 
       // Envoyer via Socket.IO avec la langue correcte
-      // socketMessaging.sendMessage prend (content, language, replyToId, mentionedUserIds, attachmentIds, attachmentMimeTypes)
+      // socketMessaging.sendMessage prend (content, language, replyToId, mentionedUserIds, attachmentIds, attachmentMimeTypes, clientMessageId)
       const result = await socketMessaging.sendMessage(
         content,
         sourceLanguage,
         replyToId,
         mentionedUserIds,
         attachmentIds,
-        attachmentMimeTypes
+        attachmentMimeTypes,
+        clientMessageId,
       );
 
       if (result?.success) {
@@ -246,7 +258,11 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
       const errorMessage = handleMessageError(error, content);
       setSendError(errorMessage);
       
-      // NOUVEAU: Sauvegarder automatiquement le message en échec
+      // NOUVEAU: Sauvegarder automatiquement le message en échec.
+      // Phase 4 §6.2 — persister `clientMessageId` quand le caller l'a
+      // fourni, sinon le retry génère un cid frais et bypass le dedup
+      // gateway. Pour les call sites qui n'en passent pas (legacy), on
+      // omet le champ — le backfill orchestrateur prendra le relais.
       if (conversationId) {
         const failedMsgId = addFailedMessage({
           conversationId,
@@ -254,6 +270,7 @@ export function useMessaging(options: UseMessagingOptions = {}): UseMessagingRet
           originalLanguage: originalLanguage || systemLanguage,
           attachmentIds: attachmentIds || [],
           replyToId,
+          ...(clientMessageId ? { clientMessageId } : {}),
           error: errorMessage,
         });
         

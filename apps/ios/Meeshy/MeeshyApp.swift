@@ -132,20 +132,46 @@ struct MeeshyApp: App {
                     let bootPool = dependencies.dbPool
                     await OfflineQueue.shared.configure(pool: bootPool)
                     await MessageRetryQueue.shared.configure(pool: bootPool)
+                    await ReactionQueue.shared.configure(pool: bootPool)
+
+                    // Phase 4 §6.1.1 — boot crash recovery. Any record left
+                    // `.inflight` from a previous process (the app was killed
+                    // mid-dispatch) is reset to `.pending` so the flusher
+                    // picks it back up. The gateway dedup contract on
+                    // `(conversationId, clientMessageId)` ensures a message
+                    // that actually reached the server before the crash is
+                    // not duplicated at replay time.
+                    Task.detached(priority: .background) {
+                        do {
+                            _ = try await OfflineQueue.shared.bootRecovery()
+                            _ = try await MessageRetryQueue.shared.bootRecovery()
+                            _ = try await ReactionQueue.shared.bootRecovery()
+                        } catch {
+                            Logger.messages.error("Boot recovery failed: \(error.localizedDescription, privacy: .public)")
+                        }
+                    }
+
                     // Wire the in-memory retry handlers so the reconnection
                     // path (socket reconnect → retryAll/retryPending) can
                     // send queued items without going through the outbox
                     // flusher. The outbox flusher handles items that survive
                     // a crash or cold start; these handlers handle the hot
                     // reconnection path for items that were in-memory.
+                    //
+                    // Phase 4 — `clientMessageId` is propagated through the
+                    // SendMessageRequest so the server applies the same
+                    // catch-P2002 idempotent dedup (cf. spec §6.2) regardless
+                    // of which path (cold flush or hot retry) sent the item.
                     await OfflineQueue.shared.setRetrySend { @Sendable item in
                         do {
                             let request = SendMessageRequest(
                                 content: item.content,
+                                originalLanguage: item.originalLanguage,
                                 replyToId: item.replyToId,
                                 forwardedFromId: item.forwardedFromId,
                                 forwardedFromConversationId: item.forwardedFromConversationId,
-                                attachmentIds: item.attachmentIds
+                                attachmentIds: item.attachmentIds,
+                                clientMessageId: item.clientMessageId
                             )
                             let response = try await MessageService.shared.send(
                                 conversationId: item.conversationId, request: request
@@ -161,7 +187,8 @@ struct MeeshyApp: App {
                                 content: item.content,
                                 originalLanguage: item.originalLanguage,
                                 replyToId: item.replyToId,
-                                attachmentIds: item.attachmentIds
+                                attachmentIds: item.attachmentIds,
+                                clientMessageId: item.clientMessageId
                             )
                             let response = try await MessageService.shared.send(
                                 conversationId: item.conversationId, request: request

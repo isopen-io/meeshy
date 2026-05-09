@@ -1,8 +1,13 @@
 import { z } from 'zod';
+import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 
 const mongoId = z
   .string()
   .regex(/^[0-9a-fA-F]{24}$/, 'Invalid MongoDB ObjectId format');
+
+const clientMessageIdSchema = z
+  .string()
+  .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)');
 
 export const SocketMessageSendSchema = z.object({
   conversationId: z.string(),
@@ -11,7 +16,7 @@ export const SocketMessageSendSchema = z.object({
   messageType: z.string().optional(),
   replyToId: mongoId.optional(),
   storyReplyToId: mongoId.optional(),
-  clientMessageId: z.string().optional(),
+  clientMessageId: clientMessageIdSchema,
 });
 
 export type SocketMessageSendData = z.infer<typeof SocketMessageSendSchema>;
@@ -23,7 +28,7 @@ export const SocketMessageSendWithAttachmentsSchema = z.object({
   attachmentIds: z.array(mongoId).min(1),
   replyToId: mongoId.optional(),
   storyReplyToId: mongoId.optional(),
-  clientMessageId: z.string().optional(),
+  clientMessageId: clientMessageIdSchema,
 });
 
 export type SocketMessageSendWithAttachmentsData = z.infer<typeof SocketMessageSendWithAttachmentsSchema>;

@@ -100,7 +100,7 @@ final class MessageServiceTests: XCTestCase {
 
     func testSendReturnsResponseData() async throws {
         let sendData = SendMessageResponseData(
-            id: "newMsg1", conversationId: convId, senderId: "user1",
+            id: "newMsg1", clientMessageId: nil, conversationId: convId, senderId: "user1",
             content: "Hi there", messageType: "text", createdAt: Date()
         )
         let response = APIResponse(success: true, data: sendData, error: nil)

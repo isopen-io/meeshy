@@ -202,14 +202,18 @@ describe('useSendMessageMutation', () => {
       wrapper,
     });
 
+    const cid = 'cid_11111111-2222-4333-8444-555555555555';
     await act(async () => {
       await result.current.mutateAsync({
         conversationId: 'conv-1',
-        data: { content: 'New message' },
+        data: { content: 'New message', clientMessageId: cid } as never,
       });
     });
 
-    expect(mockSendMessage).toHaveBeenCalledWith('conv-1', { content: 'New message' });
+    expect(mockSendMessage).toHaveBeenCalledWith('conv-1', {
+      content: 'New message',
+      clientMessageId: cid,
+    });
   });
 
   it('should create optimistic message during mutation', async () => {
@@ -233,7 +237,7 @@ describe('useSendMessageMutation', () => {
     act(() => {
       result.current.mutate({
         conversationId: 'conv-1',
-        data: { content: 'Optimistic message' },
+        data: { content: 'Optimistic message' } as never,
       });
     });
 
@@ -244,14 +248,17 @@ describe('useSendMessageMutation', () => {
 
     // Check that optimistic message was added
     const cachedData = queryClient.getQueryData(['messages', 'list', 'conv-1', 'infinite']) as {
-      pages: { messages: { id: string; content: string; status?: string }[] }[];
+      pages: { messages: { id: string; content: string; _localStatus?: string }[] }[];
     };
 
     if (cachedData?.pages?.[0]?.messages) {
       const firstMessage = cachedData.pages[0].messages[0];
       expect(firstMessage.content).toBe('Optimistic message');
-      expect(firstMessage.status).toBe('sending');
-      expect(firstMessage.id).toMatch(/^temp-/);
+      expect(firstMessage._localStatus).toBe('sending');
+      // Optimistic id now doubles as clientMessageId — `cid_<uuid v4>`
+      expect(firstMessage.id).toMatch(
+        /^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+      );
     }
 
     // Resolve the promise
@@ -283,7 +290,7 @@ describe('useSendMessageMutation', () => {
       act(async () => {
         await result.current.mutateAsync({
           conversationId: 'conv-1',
-          data: { content: 'Will fail' },
+          data: { content: 'Will fail' } as never,
         });
       })
     ).rejects.toThrow('Send failed');
@@ -312,7 +319,7 @@ describe('useSendMessageMutation', () => {
     await act(async () => {
       await result.current.mutateAsync({
         conversationId: 'conv-1',
-        data: { content: 'New message' },
+        data: { content: 'New message' } as never,
       });
     });
 
@@ -332,11 +339,33 @@ describe('useSendMessageMutation', () => {
     await act(async () => {
       await result.current.mutateAsync({
         conversationId: 'conv-1',
-        data: { content: 'New message' },
+        data: { content: 'New message' } as never,
       });
     });
 
     expect(mockSendMessage).toHaveBeenCalled();
+  });
+
+  it('should backfill clientMessageId when omitted (offline-queue dedup contract)', async () => {
+    mockSendMessage.mockResolvedValue(createMockMessage('msg-new', 'No cid'));
+
+    const { result } = renderHook(() => useSendMessageMutation(), {
+      wrapper: createWrapper(),
+    });
+
+    await act(async () => {
+      await result.current.mutateAsync({
+        conversationId: 'conv-1',
+        data: { content: 'No cid' } as never,
+      });
+    });
+
+    expect(mockSendMessage).toHaveBeenCalledTimes(1);
+    const [, sentPayload] = mockSendMessage.mock.calls[0];
+    expect(typeof sentPayload.clientMessageId).toBe('string');
+    expect(sentPayload.clientMessageId).toMatch(
+      /^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
   });
 });
 

@@ -92,7 +92,11 @@ export class MessagingService {
         ? request.originalLanguage
         : detectedLanguage;
 
-      // 5. Sauvegarde du message en base
+      // 5. Sauvegarde du message en base. Phase 4 §6.2 — `clientMessageId`
+      //    est propagé pour permettre le pattern catch-P2002 atomique au
+      //    niveau Prisma (cf MessageProcessor.saveMessage). Si l'INSERT
+      //    déclenche un duplicate-key, MessageProcessor relit l'existant
+      //    et flague `(message as any).isDuplicate = true`.
       const message = await this.processor.saveMessage({
         ...request,
         originalLanguage,
@@ -103,8 +107,35 @@ export class MessagingService {
         encryptionMetadata: request.encryptedPayload ? {
           mode: 'e2ee',
           ...request.encryptedPayload
-        } as unknown as import('@meeshy/shared/prisma/client').Prisma.InputJsonValue : undefined
+        } as unknown as import('@meeshy/shared/prisma/client').Prisma.InputJsonValue : undefined,
+        clientMessageId: request.clientMessageId
       });
+
+      const isDuplicate =
+        Boolean((message as { isDuplicate?: boolean }).isDuplicate);
+
+      if (isDuplicate) {
+        // Dedup hit: skip the post-create side effects (mark as read was
+        // already done on the first attempt, conversation was already
+        // bumped, stats were already incremented). Re-translate ONLY when
+        // the existing record has no translations attached — the
+        // translator was likely down on the first attempt and the message
+        // would otherwise stay unilingual forever.
+        const translations = (message as { translations?: unknown }).translations;
+        const needsRetranslate = this.isTranslationsEmpty(translations);
+        const translationStatus = await this.queueTranslation(
+          message,
+          originalLanguage,
+          { skip: !needsRetranslate }
+        );
+        return await this.createSuccessResponse(
+          message,
+          requestId,
+          startTime,
+          /* stats: pas de double-comptage sur dedup hit */ undefined,
+          translationStatus
+        );
+      }
 
       // 6. Mise à jour de la conversation
       await this.updateConversation(conversationId);
@@ -153,9 +184,37 @@ export class MessagingService {
   }
 
   /**
-   * Queue le message pour traduction asynchrone
+   * Phase 4 §6.2.1 — `MessageTranslation` est un Json field embedded dans
+   * `Message.translations` (cf prisma/schema.prisma). Le check de
+   * "traductions absentes" est donc sur la taille du Json, pas sur un
+   * `.length` de relation Prisma. Une dedup hit avec ce Json vide signifie
+   * que le translator était down lors du premier insert : on re-pousse.
    */
-  private async queueTranslation(message: Message, originalLanguage: string): Promise<any> {
+  private isTranslationsEmpty(translations: unknown): boolean {
+    if (!translations) return true;
+    if (typeof translations !== 'object') return true;
+    return Object.keys(translations as Record<string, unknown>).length === 0;
+  }
+
+  /**
+   * Queue le message pour traduction asynchrone.
+   * Phase 4 — `options.skip` permet aux dedup hits avec traductions déjà
+   * présentes d'éviter le re-push ZMQ (les traductions existantes restent
+   * la source de vérité).
+   */
+  private async queueTranslation(
+    message: Message,
+    originalLanguage: string,
+    options: { skip?: boolean } = {}
+  ): Promise<any> {
+    if (options.skip) {
+      return {
+        status: 'skipped',
+        languagesRequested: [],
+        languagesCompleted: [],
+        languagesFailed: []
+      };
+    }
     try {
       await this.translationService.handleNewMessage({
         id: message.id,

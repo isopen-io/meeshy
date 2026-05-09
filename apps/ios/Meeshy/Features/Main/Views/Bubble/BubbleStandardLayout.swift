@@ -187,6 +187,9 @@ struct BubbleStandardLayout: View {
     private var deliveryStatusAccessibilityLabel: String {
         switch message.deliveryStatus {
         case .sending: return "en cours d'envoi"
+        case .invisible: return "en cours d'envoi"
+        case .clock: return "en cours d'envoi"
+        case .slow: return "envoi lent"
         case .sent: return "envoye"
         case .delivered: return "distribue"
         case .read: return "lu"

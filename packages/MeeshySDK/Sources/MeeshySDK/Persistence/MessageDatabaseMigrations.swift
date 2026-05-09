@@ -171,6 +171,30 @@ public enum MessageDatabaseMigrations {
                 """)
         }
 
+        migrator.registerMigration("outbox_v2_client_message_id") { db in
+            // Add the column nullable (SQLite cannot ALTER TABLE ADD a NOT NULL
+            // column without a default), then backfill from `messageLocalId`
+            // (the legacy local id that carried the same role pre-Phase-4) or
+            // from `id` as a last-resort fallback so every existing row has a
+            // non-empty value. The Swift `OutboxRecord.clientMessageId` is
+            // declared non-optional; rows decoded after this migration are
+            // guaranteed to satisfy it.
+            try db.execute(sql: """
+                ALTER TABLE outbox ADD COLUMN clientMessageId TEXT
+                """)
+            try db.execute(sql: """
+                UPDATE outbox SET clientMessageId = COALESCE(messageLocalId, id)
+                WHERE clientMessageId IS NULL OR clientMessageId = ''
+                """)
+            // Composite index that backs the in-queue coalescing query
+            // `WHERE conversationId = ? AND clientMessageId = ? AND status = 'pending'`
+            // executed on every enqueue.
+            try db.execute(sql: """
+                CREATE INDEX idx_outbox_conv_client_status
+                ON outbox(conversationId, clientMessageId, status)
+                """)
+        }
+
         migrator.registerMigration("messages_cached_time_string") { db in
             try db.alter(table: "messages") { t in
                 t.add(column: "cachedTimeString", .text)

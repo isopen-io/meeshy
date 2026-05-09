@@ -30,8 +30,14 @@ import { CommonSchemas } from '@meeshy/shared/utils/validation';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesService';
 
+import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+
 const SendMessageBodySchema = z.object({
   content: CommonSchemas.messageContent,
+  // Phase 4 §6.2 — mandatory `cid_<uuid v4 lowercase>` idempotency key.
+  clientMessageId: z
+    .string()
+    .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)'),
   originalLanguage: CommonSchemas.language.optional(),
   messageType: CommonSchemas.messageType.optional(),
   replyToId: z.string().optional(),
@@ -1205,8 +1211,14 @@ export function registerMessagesRoutes(
       },
       body: {
         type: 'object',
+        required: ['clientMessageId'],
         properties: {
           content: { type: 'string', description: 'Message content' },
+          clientMessageId: {
+            type: 'string',
+            description: 'Phase 4 idempotency key, format cid_<uuid v4 lowercase>',
+            pattern: '^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+          },
           originalLanguage: { type: 'string', description: 'Language code (e.g., fr, en)', default: 'fr' },
           messageType: { type: 'string', enum: ['text', 'image', 'file', 'audio', 'video'], default: 'text' },
           replyToId: { type: 'string', description: 'ID of message being replied to' },
@@ -1259,6 +1271,7 @@ export function registerMessagesRoutes(
       const { id } = request.params;
       const {
         content,
+        clientMessageId,
         originalLanguage,
         messageType = 'text',
         replyToId,
@@ -1311,6 +1324,7 @@ export function registerMessagesRoutes(
       const messageRequest = {
         conversationId: id,
         content: content || '',
+        clientMessageId,
         originalLanguage,
         messageType,
         replyToId,

@@ -102,6 +102,17 @@ export interface MessageRequest {
   readonly conversationId: string;
   readonly content: string;
 
+  /**
+   * Phase 4 §6.2 — client-generated idempotency key, format
+   * `cid_<uuid v4 lowercase>`. Optional on the type for backward
+   * compatibility during the transition; the gateway routes / socket
+   * schemas validate it as mandatory at the wire boundary, and the
+   * `MessageProcessor.saveMessage` catch-P2002 path uses it to dedup
+   * concurrent retries against the
+   * `(conversationId, clientMessageId)` unique index on `Message`.
+   */
+  readonly clientMessageId?: string;
+
   // Champs optionnels avec defaults intelligents
   readonly originalLanguage?: string;        // Default: détection auto ou langue utilisateur
   readonly messageType?: string;             // Default: "text"

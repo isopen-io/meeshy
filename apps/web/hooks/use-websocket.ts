@@ -126,16 +126,17 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
 
   // ÉTAPE 4: Actions
   const sendMessage = useCallback(async (
-    content: string, 
+    content: string,
     language: string,
-    replyToId?: string
+    replyToId?: string,
+    clientMessageId?: string,
   ): Promise<boolean> => {
     if (!conversationId) {
       console.error('❌ [HOOK] Pas de conversationId');
       return false;
     }
-    
-    return await webSocketService.sendMessage(conversationId, content, language, replyToId);
+
+    return await webSocketService.sendMessage(conversationId, content, language, replyToId, clientMessageId);
   }, [conversationId]);
 
   const startTyping = useCallback(() => {
@@ -154,14 +155,15 @@ export function useWebSocket(options: UseWebSocketOptions = {}) {
     content: string,
     attachmentIds: string[],
     language: string,
-    replyToId?: string
+    replyToId?: string,
+    clientMessageId?: string,
   ): Promise<boolean> => {
     if (!conversationId) {
       console.error('❌ [HOOK] Pas de conversationId');
       return false;
     }
-    
-    return await webSocketService.sendMessageWithAttachments(conversationId, content, attachmentIds, language, replyToId);
+
+    return await webSocketService.sendMessageWithAttachments(conversationId, content, attachmentIds, language, replyToId, clientMessageId);
   }, [conversationId]);
 
   const editMessage = useCallback(async (messageId: string, content: string): Promise<boolean> => {

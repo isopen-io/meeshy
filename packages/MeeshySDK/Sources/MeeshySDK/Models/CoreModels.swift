@@ -304,6 +304,11 @@ public struct MeeshyCommunity: Identifiable, Hashable, Sendable {
 
 public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public let id: String
+    /// Stable end-to-end identifier (`cid_<uuid v4 lowercase>`) used for
+    /// idempotent dedup with the gateway and for reconciliation between the
+    /// optimistic local row and the authoritative server message arriving via
+    /// socket ACK or `message:new` broadcast.
+    public let clientMessageId: String?
     public let conversationId: String
     public var senderId: String
     public var content: String
@@ -358,19 +363,30 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public var cachedTimeString: String?
 
     public enum DeliveryStatus: String, Codable, Sendable {
-        case sending   // optimistic, not confirmed
-        case sent      // server confirmed (single check)
-        case delivered // recipient received (double gray check)
-        case read      // recipient read (double blue check)
-        case failed    // send failed, retry available
+        case sending    // optimistic, not yet sent
+        case invisible  // < 200ms, status hidden in UI (debounce — spec §6.2)
+        case clock      // 200ms-5s, "clock" icon (small spinner) shown
+        case slow       // 5s-30s, slow connection state (spec §6.2 timeouts)
+        case sent       // server confirmed (single check)
+        case delivered  // recipient received (double gray check)
+        case read       // recipient read (double blue check)
+        case failed     // send failed, retry available
 
         public func isBetterThan(_ other: DeliveryStatus) -> Bool {
             switch (self, other) {
-            case (.read, .sent), (.read, .delivered), (.read, .sending):
+            case (.read, .sent), (.read, .delivered), (.read, .sending),
+                 (.read, .invisible), (.read, .clock), (.read, .slow):
                 return true
-            case (.delivered, .sent), (.delivered, .sending):
+            case (.delivered, .sent), (.delivered, .sending),
+                 (.delivered, .invisible), (.delivered, .clock), (.delivered, .slow):
                 return true
-            case (.sent, .sending):
+            case (.sent, .sending), (.sent, .invisible), (.sent, .clock), (.sent, .slow):
+                return true
+            case (.slow, .sending), (.slow, .invisible), (.slow, .clock):
+                return true
+            case (.clock, .sending), (.clock, .invisible):
+                return true
+            case (.invisible, .sending):
                 return true
             default:
                 return false
@@ -386,7 +402,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
         case user, system, ads, app, agent, authority
     }
 
-    public init(id: String = UUID().uuidString, conversationId: String, senderId: String = "",
+    public init(id: String = UUID().uuidString, clientMessageId: String? = nil,
+                conversationId: String, senderId: String = "",
                 content: String, originalLanguage: String = "fr",
                 messageType: MessageType = .text, messageSource: MessageSource = .user,
                 isEdited: Bool = false, editedAt: Date? = nil, deletedAt: Date? = nil,
@@ -402,7 +419,8 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
                 deliveredToAllAt: Date? = nil, readByAllAt: Date? = nil,
                 deliveredCount: Int = 0, readCount: Int = 0,
                 cachedTimeString: String? = nil) {
-        self.id = id; self.conversationId = conversationId; self.senderId = senderId
+        self.id = id; self.clientMessageId = clientMessageId
+        self.conversationId = conversationId; self.senderId = senderId
         self.content = content
         self.originalLanguage = originalLanguage; self.messageType = messageType; self.messageSource = messageSource
         self.isEdited = isEdited; self.editedAt = editedAt; self.deletedAt = deletedAt
@@ -423,7 +441,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, conversationId, senderId, content, originalLanguage
+        case id, clientMessageId, conversationId, senderId, content, originalLanguage
         case messageType, messageSource, isEdited, editedAt, deletedAt
         case replyToId, storyReplyToId, forwardedFromId, forwardedFromConversationId
         case expiresAt, effects, maxViewOnceCount, viewOnceCount
@@ -441,6 +459,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = try c.decode(String.self, forKey: .id)
+        clientMessageId = try c.decodeIfPresent(String.self, forKey: .clientMessageId)
         conversationId = try c.decode(String.self, forKey: .conversationId)
         senderId = try c.decodeIfPresent(String.self, forKey: .senderId) ?? ""
         content = try c.decodeIfPresent(String.self, forKey: .content) ?? ""
@@ -492,6 +511,7 @@ public struct MeeshyMessage: Identifiable, Codable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         try c.encode(id, forKey: .id)
+        try c.encodeIfPresent(clientMessageId, forKey: .clientMessageId)
         try c.encode(conversationId, forKey: .conversationId)
         try c.encode(senderId, forKey: .senderId)
         try c.encode(content, forKey: .content)

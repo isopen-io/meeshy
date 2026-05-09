@@ -781,13 +781,21 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
       }
 
       try {
+        // Phase 4 §6.2 — réutiliser le `clientMessageId` du message en
+        // échec si disponible. Sans cela, l'orchestrateur génère un
+        // cid frais et le gateway ne reconnaît plus le doublon
+        // potentiel (cas où le premier send a réussi côté serveur
+        // mais l'ACK est arrivé après que le client a marqué le
+        // message comme failed). Les entries persistées pré-Phase-4
+        // n'ont pas le champ — on tombe sur le backfill orchestrateur.
         const result = await sendMessageViaSocket(
           failedMsg.content,
           failedMsg.originalLanguage,
           failedMsg.replyToId,
           undefined,
           failedMsg.attachmentIds.length > 0 ? failedMsg.attachmentIds : undefined,
-          undefined
+          undefined,
+          failedMsg.clientMessageId
         );
         return result?.success ?? false;
       } catch (error) {

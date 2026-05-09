@@ -781,6 +781,11 @@ export interface ServerToClientEvents {
 
 /**
  * Données pour l'envoi de message
+ *
+ * `clientMessageId` est OBLIGATOIRE — format `cid_<UUID v4 lowercase>`.
+ * Validé contre `CLIENT_MESSAGE_ID_REGEX` exporté depuis
+ * `@meeshy/shared/utils/client-message-id`. Sert d'identifiant
+ * d'idempotence cross-device pour le dedup gateway/MongoDB.
  */
 export interface MessageSendData {
   readonly conversationId: string;
@@ -788,6 +793,7 @@ export interface MessageSendData {
   readonly originalLanguage?: string;
   readonly messageType?: string;
   readonly replyToId?: string;
+  readonly clientMessageId: string;
 }
 
 /**
@@ -799,6 +805,11 @@ export interface MessageSendResponseData {
 
 /**
  * Données pour l'envoi de message avec attachements
+ *
+ * `clientMessageId` est OBLIGATOIRE — format `cid_<UUID v4 lowercase>`.
+ * Validé contre `CLIENT_MESSAGE_ID_REGEX` exporté depuis
+ * `@meeshy/shared/utils/client-message-id`. Sert d'identifiant
+ * d'idempotence cross-device pour le dedup gateway/MongoDB.
  */
 export interface MessageSendWithAttachmentsData {
   readonly conversationId: string;
@@ -806,6 +817,7 @@ export interface MessageSendWithAttachmentsData {
   readonly originalLanguage?: string;
   readonly attachmentIds: readonly string[];
   readonly replyToId?: string;
+  readonly clientMessageId: string;
 }
 
 /**

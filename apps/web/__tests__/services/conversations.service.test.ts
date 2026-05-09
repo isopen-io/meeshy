@@ -362,6 +362,7 @@ describe('ConversationsService', () => {
       const messageData = {
         content: 'Hello world',
         originalLanguage: 'en',
+        clientMessageId: 'cid_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
       };
 
       const mockMessage = {
@@ -394,7 +395,11 @@ describe('ConversationsService', () => {
       });
 
       await expect(
-        conversationsService.sendMessage('conv-123', { content: 'test', originalLanguage: 'en' })
+        conversationsService.sendMessage('conv-123', {
+          content: 'test',
+          originalLanguage: 'en',
+          clientMessageId: 'cid_aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee',
+        })
       ).rejects.toThrow("Erreur lors de l'envoi du message");
     });
   });

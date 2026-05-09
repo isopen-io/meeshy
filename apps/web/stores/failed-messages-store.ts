@@ -15,6 +15,16 @@ export interface FailedMessage {
   originalLanguage: string;
   attachmentIds: string[];
   replyToId?: string;
+  /**
+   * Phase 4 §6.2 — `clientMessageId` du message qui a échoué. Optional
+   * pour la compatibilité avec les entries persistées avant Phase 4
+   * (qui n'ont pas le champ). Pour les nouveaux failed messages, le
+   * caller DOIT le fournir : sans cela `handleRetryFailedMessage`
+   * regénère un nouveau cid et bypass le dedup gateway, ce qui peut
+   * créer un doublon serveur si le premier envoi a en fait réussi
+   * mais l'ACK a été perdu.
+   */
+  clientMessageId?: string;
   timestamp: number;
   error: string;
   retryCount: number;

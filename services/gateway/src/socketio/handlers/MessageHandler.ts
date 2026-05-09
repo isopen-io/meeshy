@@ -179,6 +179,13 @@ export class MessageHandler {
       const messageRequest: MessageRequest = {
         conversationId: validated.conversationId,
         content: validated.content,
+        // Phase 4 §6.2 — `clientMessageId` est obligatoire dans le schema
+        // Zod du socket (validé à l'entrée), mais le destructure historique
+        // l'oubliait — sans cette ligne le pattern catch-P2002 du
+        // MessagingService ne se déclenche jamais sur le path Socket.IO
+        // (qui est pourtant la surface d'envoi principale), rendant tout
+        // le contrat de dedup inopérant en pratique.
+        clientMessageId: validated.clientMessageId,
         originalLanguage: validated.originalLanguage,
         messageType: validated.messageType || 'text',
         replyToId: validated.replyToId,
@@ -315,6 +322,11 @@ export class MessageHandler {
       const messageRequest: MessageRequest = {
         conversationId: validated.conversationId,
         content: validated.content,
+        // Phase 4 §6.2 — propagation obligatoire (cf. fix dans le sibling
+        // handler `handleMessageSend` plus haut). Sans ce champ, le path
+        // attachments — qui inclut tout l'audio (Whisper transcription) —
+        // contournerait également le dedup serveur.
+        clientMessageId: validated.clientMessageId,
         originalLanguage: validated.originalLanguage,
         messageType: 'text',
         replyToId: validated.replyToId,
@@ -335,6 +347,14 @@ export class MessageHandler {
         messageRequest,
         resolvedParticipantId
       );
+
+      // Phase 4 — ack the client BEFORE running the broadcast / agent
+      // notification side effects. The previous order delayed the ACK
+      // behind `broadcastNewMessage`, so a throw inside the broadcast
+      // (Prisma read failure, connection drop) would silently skip the
+      // callback and leave iOS / web waiting indefinitely → spurious
+      // retry. Mirror the order used by `handleMessageSend` above.
+      this._sendResponse(callback, response);
 
       if (response.success && response.data) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
@@ -373,7 +393,6 @@ export class MessageHandler {
         ).catch(err => console.error('[MessageHandler] Stats update error:', err));
       }
 
-      this._sendResponse(callback, response);
       this.stats.messages_processed++;
     } catch (error: unknown) {
       console.error('[MESSAGE_SEND_ATTACHMENTS] Erreur:', error);
@@ -440,14 +459,50 @@ export class MessageHandler {
       }
 
       const room = ROOMS.conversation(normalizedId);
-      if (senderSocket) {
-        // Exclure le sender du broadcast room, puis lui envoyer directement.
-        // Avant ce fix, io.to(room) incluait le sender ET senderSocket.emit()
-        // l'envoyait une 2e fois → le client recevait message:new en double.
-        senderSocket.broadcast.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
-        senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
+
+      // Phase 4 §6.2 — split broadcast into two payloads :
+      //   - `broadcastPayload` (others) : strip `clientMessageId` so the
+      //     value never leaks to non-sender participants (privacy: a peer
+      //     cannot deduce the sender's offline-queue id space).
+      //   - `senderPayload` (sender's sockets across all devices) : keep
+      //     `clientMessageId` so the iOS / web reconciliation by-cid path
+      //     can promote the optimistic row to `.sent` even after a crash
+      //     that lost the ACK.
+      const senderPayload = messagePayload as Record<string, unknown>;
+      const broadcastPayload: Record<string, unknown> = { ...senderPayload };
+      delete broadcastPayload.clientMessageId;
+
+      // Resolve the sender's USER id (not the participant id) so we can
+      // address every device session via `ROOMS.user(userId)`. The sender
+      // field on the message is a `Participant` whose `.userId` points at
+      // the underlying user (null for anonymous). For anonymous sends we
+      // fall back to the previous senderSocket-only path since there is
+      // no user-level room to broadcast into.
+      const senderParticipant = (message as unknown as { sender?: { userId?: string | null } }).sender;
+      const senderUserId = senderParticipant?.userId ?? null;
+
+      if (senderUserId) {
+        // Multi-device : send the cid-aware payload to the sender's
+        // user room (catches every iOS / web session of this user)
+        // and the cid-stripped payload to the conversation room
+        // EXCEPT the sender's user room so peers do not receive a
+        // duplicate.
+        this.io
+          .to(room)
+          .except(ROOMS.user(senderUserId))
+          .emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        this.io.to(ROOMS.user(senderUserId)).emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
+      } else if (senderSocket) {
+        // Anonymous sender with an active socket : same single-session
+        // split as before. Multi-device anonymous is undefined.
+        senderSocket.broadcast.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
       } else {
-        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
+        // No senderSocket context (REST path or background flush) and
+        // no resolvable user id : fall back to the cid-stripped payload
+        // for the whole room. The sender's other sessions still
+        // reconcile via the REST / socket ACK path which carries the cid.
+        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
       }
 
       // Notify each participant's user room that the conversation has
@@ -727,6 +782,13 @@ export class MessageHandler {
       content: message.content,
       originalLanguage: message.originalLanguage || 'fr',
       messageType: message.messageType || 'text',
+      // Phase 4 §6.2 — `clientMessageId` doit voyager dans le payload
+      // `message:new` cible vers le sender pour que la réconciliation
+      // by-cid (iOS / web) promote l'optimistic même quand l'ACK socket
+      // a été perdu (crash app après le send, multi-device). Le caller
+      // `broadcastNewMessage` strip ce champ pour les autres
+      // participants (`delete broadcastPayload.clientMessageId`).
+      clientMessageId: (message as never)['clientMessageId'] || undefined,
       isBlurred: Boolean((message as never)['isBlurred']),
       isViewOnce: Boolean((message as never)['isViewOnce']),
       effectFlags: (message as never)['effectFlags'] ?? 0,
@@ -859,15 +921,23 @@ export class MessageHandler {
    * Envoie une réponse de succès
    */
   private _sendResponse(
-    callback: ((response: SocketIOResponse<{ messageId: string }>) => void) | undefined,
+    callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string }>) => void) | undefined,
     response: MessageResponse
   ): void {
     if (!callback) return;
 
     if (response.success && response.data) {
+      // Phase 4 §6.2 — echo `clientMessageId` back so iOS / web can match the
+      // ACK against their pending optimistic row by cid (the `messageId`
+      // alone is insufficient: the optimistic row has a `cid_*` local id
+      // and only learns the server `messageId` from this very ACK).
+      const data = response.data as { id: string; clientMessageId?: string };
       callback({
         success: true,
-        data: { messageId: response.data.id }
+        data: {
+          messageId: data.id,
+          ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {})
+        }
       });
     } else {
       callback({

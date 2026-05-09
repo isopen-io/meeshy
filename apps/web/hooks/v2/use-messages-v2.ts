@@ -13,6 +13,7 @@ import { useConversationMessagesRQ } from '@/hooks/queries/use-conversation-mess
 import { useWebSocket } from '@/hooks/use-websocket';
 import { conversationsService } from '@/services/conversations.service';
 import { queryKeys } from '@/lib/react-query/query-keys';
+import { generateClientMessageId } from '@/utils/client-message-id';
 import type { Message, User, TypingEvent } from '@meeshy/shared/types';
 import { getSenderUserId } from '@meeshy/shared/utils/sender-identity';
 
@@ -200,8 +201,11 @@ export function useMessagesV2(
 
       setIsSending(true);
 
-      // Create optimistic message
-      const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      // Create optimistic message. The optimistic id doubles as the
+      // `clientMessageId` propagated to the gateway so the dedup contract
+      // (`(conversationId, clientMessageId)`) survives a reconnect-driven
+      // retry. Format: `cid_<uuid v4 lowercase>`.
+      const tempId = generateClientMessageId();
       const optimisticMessage: Message = {
         id: tempId,
         conversationId,
@@ -233,9 +237,9 @@ export function useMessagesV2(
         let success: boolean;
 
         if (attachmentIds && attachmentIds.length > 0) {
-          success = await sendMessageWithAttachments(content, attachmentIds, language, replyToId);
+          success = await sendMessageWithAttachments(content, attachmentIds, language, replyToId, tempId);
         } else {
-          success = await wsSendMessage(content, language, replyToId);
+          success = await wsSendMessage(content, language, replyToId, tempId);
         }
 
         if (!success) {
