@@ -230,7 +230,42 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertNil(event.isAnnouncementChannel)
         XCTAssertNil(event.slowModeSeconds)
         XCTAssertNil(event.autoTranslateEnabled)
+        XCTAssertNil(event.lastMessageAt, "Old payloads without lastMessageAt must still decode and expose nil")
     }
+
+    /// The gateway broadcasts CONVERSATION_UPDATED on every new message
+    /// (handlers/MessageHandler.ts) carrying the new lastMessageAt so iOS
+    /// can re-sort the conversation list without waiting for a delta sync.
+    /// The SDK MUST expose this field so the ViewModel can bumpToTop.
+    func test_conversationUpdatedEvent_decodesLastMessageAt() throws {
+        let json = """
+        {
+            "conversationId": "conv-bump",
+            "lastMessageAt": "2026-04-09T12:34:56.789Z",
+            "updatedBy": {"id": "u3"},
+            "updatedAt": "2026-04-09T12:34:56.789Z"
+        }
+        """.data(using: .utf8)!
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let dateDecoder = JSONDecoder()
+        dateDecoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let str = try container.decode(String.self)
+            if let date = isoFormatter.date(from: str) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(str)")
+        }
+
+        let event = try dateDecoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.conversationId, "conv-bump")
+        XCTAssertNotNil(event.lastMessageAt)
+        if let lastAt = event.lastMessageAt {
+            let expected = isoFormatter.date(from: "2026-04-09T12:34:56.789Z")!
+            XCTAssertEqual(lastAt.timeIntervalSinceReferenceDate, expected.timeIntervalSinceReferenceDate, accuracy: 0.01)
+        }
+    }
+
 
     // MARK: - UserPreferencesUpdatedEvent
 
