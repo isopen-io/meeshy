@@ -39,7 +39,14 @@ public final class StoryCanvasUIView: UIView {
 
     // MARK: - Display link
 
+    /// Drives `currentTime` advance during `.play` mode (preferred 60 Hz, range 60–120).
     private var displayLink: CADisplayLink?
+
+    /// Always-on while in `.edit` and the view is in a window — preferred 120 Hz on
+    /// ProMotion devices for buttery gesture transforms (active rendering happens
+    /// inside the gesture handlers; this link's tick is a no-op for now and exists
+    /// so the display server keeps the high-rate clock running while editing).
+    private var editDisplayLink: CADisplayLink?
 
     // MARK: - Init
 
@@ -85,8 +92,12 @@ public final class StoryCanvasUIView: UIView {
         rebuildLayers()
         if didChange {
             switch newMode {
-            case .play: startPlayback()
-            case .edit: stopPlayback()
+            case .play:
+                stopEditDisplayLink()
+                startPlayback()
+            case .edit:
+                stopPlayback()
+                startEditDisplayLinkIfNeeded()
             }
         }
     }
@@ -108,6 +119,17 @@ public final class StoryCanvasUIView: UIView {
                                             mode: mode)
         for sub in rendered.sublayers ?? [] {
             itemsContainer.addSublayer(sub)
+        }
+    }
+
+    // MARK: - Window lifecycle
+
+    public override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil {
+            startEditDisplayLinkIfNeeded()
+        } else {
+            stopEditDisplayLink()
         }
     }
 
@@ -136,5 +158,25 @@ public final class StoryCanvasUIView: UIView {
         if clamped >= effectiveDuration {
             stopPlayback()
         }
+    }
+
+    // MARK: - ProMotion edit-mode link
+
+    private func startEditDisplayLinkIfNeeded() {
+        guard mode == .edit, editDisplayLink == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(editTick))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+        link.add(to: .main, forMode: .common)
+        editDisplayLink = link
+    }
+
+    private func stopEditDisplayLink() {
+        editDisplayLink?.invalidate()
+        editDisplayLink = nil
+    }
+
+    @objc private func editTick(_ link: CADisplayLink) {
+        // Gesture handlers (Tasks 2.7-2.8) drive their own rebuilds; this tick
+        // exists to keep the 120 Hz clock alive on ProMotion while editing.
     }
 }
