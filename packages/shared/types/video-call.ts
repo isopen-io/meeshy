@@ -605,10 +605,15 @@ export interface CallQualityAlertEvent {
 
 /**
  * ACK pour call:initiate
+ *
+ * `iceServers` est inclus pour que l'initiateur configure son RTCPeerConnection
+ * avec les TURN credentials AVANT de créer le SDP offer. Sans ça, l'offer
+ * ne contient que des candidats STUN et la connexion échoue derrière NAT
+ * symétrique.
  */
 export interface CallInitiateAck {
   readonly success: boolean;
-  readonly data?: { callId: string; mode: CallMode };
+  readonly data?: { callId: string; mode: CallMode; iceServers: RTCIceServer[] };
   readonly error?: { code: string; message: string };
 }
 
