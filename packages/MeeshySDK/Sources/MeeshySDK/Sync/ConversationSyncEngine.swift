@@ -662,7 +662,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     return updated
                 }
             } catch {
-                print("[SYNC] Failed to fetch missing conversation \(msg.conversationId): \(error)")
+                Self.logger.error("[SyncEngine] Failed to fetch missing conversation \(msg.conversationId): \(error.localizedDescription)")
             }
         }
         _conversationsDidChange.send()
