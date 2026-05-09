@@ -63,6 +63,51 @@ class ConversationListViewModel: ObservableObject {
         return _convIdIndex![id]
     }
 
+    // MARK: - List Mutators (centralised write surface)
+    //
+    // Every code path that wants to replace, extend or re-order
+    // `conversations` must funnel through these helpers so the
+    // invariant "sorted by lastMessageAt DESC" holds at every step.
+    // Direct writes to `conversations = …` are reserved for the
+    // narrow case of mutating a SINGLE row's property (unread count,
+    // pin, mute, etc.) where the order doesn't change.
+
+    /// Replace the entire list with `items` re-sorted by lastMessageAt DESC.
+    /// Use this when you've fetched a fresh snapshot (cache reload, REST
+    /// page, full sync result). Internal so unit tests can drive it without
+    /// reflection while keeping the surface invisible to view layers.
+    func setConversations(_ items: [Conversation]) {
+        conversations = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
+    }
+
+    /// Append paginated rows to the existing list, deduplicating by id and
+    /// re-sorting. The dedup is defensive (paginated fetches and socket
+    /// updates can race so the same conversation can appear in both),
+    /// the sort guarantees newer rows from a backend page that interleaves
+    /// recent activity end up at the right spot rather than at the tail.
+    func appendConversations(_ items: [Conversation]) {
+        var seen = Set<String>(conversations.map(\.id))
+        var merged = conversations
+        for item in items where seen.insert(item.id).inserted {
+            merged.append(item)
+        }
+        setConversations(merged)
+    }
+
+    /// Bump a conversation to position 0 with a refreshed lastMessageAt.
+    /// Used by the socket relay when CONVERSATION_UPDATED carries a newer
+    /// lastMessageAt — the row's other fields stay intact, only the
+    /// timestamp + position move. No-op when the id isn't currently
+    /// loaded so the engine's full-row prepend in handleNewMessage
+    /// stays the source of truth for unknown conversations.
+    func bumpToTop(conversationId: String, newLastMessageAt: Date) {
+        guard let idx = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        var updated = conversations[idx]
+        updated.lastMessageAt = newLastMessageAt
+        conversations.remove(at: idx)
+        conversations.insert(updated, at: 0)
+    }
+
     private var lastFetchedAt: Date? = nil
     private let cacheTTL: TimeInterval = 30
 
@@ -228,7 +273,7 @@ class ConversationListViewModel: ObservableObject {
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
         switch cached {
         case .fresh(let data, _), .stale(let data, _):
-            conversations = data
+            setConversations(data)
         case .expired, .empty:
             break
         }
@@ -271,12 +316,28 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
+                // Apply the in-place metadata updates first; the gateway
+                // can piggy-back rename/avatar changes on the same event
+                // that carries lastMessageAt, so we want the row data fresh
+                // BEFORE we bump it to position 0 (otherwise the bumped
+                // row would render stale title for one frame).
                 if let title = event.title { self.conversations[index].title = title }
                 if let description = event.description { self.conversations[index].description = description }
                 if let avatar = event.avatar { self.conversations[index].avatar = avatar }
                 if let banner = event.banner { self.conversations[index].banner = banner }
                 if let isAnnouncement = event.isAnnouncementChannel {
                     self.conversations[index].isAnnouncementChannel = isAnnouncement
+                }
+
+                // Bump the row to the top when the gateway tells us a new
+                // message advanced lastMessageAt. We compare strictly
+                // greater-than so a re-broadcast of the same timestamp
+                // (e.g. metadata-only update echoed back to the user
+                // room) doesn't pointlessly reshuffle the list and
+                // trigger a re-render of every cell behind it.
+                if let newLastAt = event.lastMessageAt,
+                   newLastAt > self.conversations[index].lastMessageAt {
+                    self.bumpToTop(conversationId: event.conversationId, newLastMessageAt: newLastAt)
                 }
             }
             .store(in: &cancellables)
@@ -398,11 +459,11 @@ class ConversationListViewModel: ObservableObject {
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
         switch cached {
         case .fresh(let data, _):
-            conversations = data
+            setConversations(data)
             loadFailed = false
             lastFetchedAt = Date()
         case .stale(let data, _):
-            conversations = data
+            setConversations(data)
             loadFailed = false
             lastFetchedAt = Date()
             Task { [weak self] in await self?.syncEngine.syncSinceLastCheckpoint() }
@@ -412,7 +473,7 @@ class ConversationListViewModel: ObservableObject {
             let succeeded = await syncEngine.fullSync()
             let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
             if let data = reloaded.value {
-                conversations = data
+                setConversations(data)
                 // Full sync just completed: snapshot is authoritative, so reconcile
                 // overrides anything the coordinator tracked from earlier socket events.
                 NotificationCoordinator.shared.reconcileConversationUnreads(data)
@@ -445,7 +506,7 @@ class ConversationListViewModel: ObservableObject {
         let succeeded = await syncEngine.fullSync()
         let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
         if let data = reloaded.value {
-            conversations = data
+            setConversations(data)
             // User-triggered full sync: snapshot is authoritative, reconcile counts.
             NotificationCoordinator.shared.reconcileConversationUnreads(data)
             loadFailed = false
@@ -498,8 +559,7 @@ class ConversationListViewModel: ObservableObject {
                 let userId = currentUserId
                 PresenceManager.shared.seed(from: response.data, currentUserId: userId)
                 let newConversations = response.data.map { $0.toConversation(currentUserId: userId) }
-                let deduplicated = newConversations.filter { convIndex(for: $0.id) == nil }
-                conversations.append(contentsOf: deduplicated)
+                appendConversations(newConversations)
                 // Fallback when the backend doesn't provide pagination
                 // metadata: a full page implies more might follow. Without
                 // this, a missing `pagination.hasMore` collapsed scroll to
