@@ -70,7 +70,7 @@ struct GlobalSearchUserResult: Identifiable, Sendable {
 // MARK: - ViewModel
 
 @MainActor
-class GlobalSearchViewModel: ObservableObject {
+final class GlobalSearchViewModel: ObservableObject {
 
     // MARK: - Published State
 
@@ -235,12 +235,12 @@ class GlobalSearchViewModel: ObservableObject {
 
     // MARK: - Search Conversations (FTS5-first, network fallback)
 
+    /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
+    /// `@Published` state. The caller (`performSearch`) gates the write on a
+    /// `Task.isCancelled` check so a debounce-cancelled run can't overwrite
+    /// the next query's results.
     private func searchConversations(query: String) async -> [GlobalSearchConversationResult] {
         let localResults = await searchLocalConversations(query: query)
-        // Surface local hits immediately so the UI feels instant; the
-        // remote results merge in once the round-trip lands.
-        conversationResults = localResults
-
         let remoteResults = await fetchRemoteConversationResults(query: query)
         return mergeUniqueConversationResults(local: localResults, remote: remoteResults)
     }
@@ -313,10 +313,10 @@ class GlobalSearchViewModel: ObservableObject {
 
     // MARK: - Search Users (FTS5-first, network fallback)
 
+    /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
+    /// `@Published` state. See note on `searchConversations`.
     private func searchUsers(query: String) async -> [GlobalSearchUserResult] {
         let localResults = await searchLocalUsers(query: query)
-        userResults = localResults
-
         let remoteResults = await fetchRemoteUserResults(query: query)
         return mergeUniqueUserResults(local: localResults, remote: remoteResults)
     }
@@ -380,6 +380,8 @@ class GlobalSearchViewModel: ObservableObject {
 
     // MARK: - Search Messages (FTS5-first, network fallback)
 
+    /// Returns the merged FTS5 + remote results. Pure — does NOT mutate
+    /// `@Published` state. See note on `searchConversations`.
     private func searchMessages(query: String) async -> [GlobalSearchMessageResult] {
         // FTS5 local results — instant, available offline
         let localResults = await searchLocalMessages(query: query)
@@ -391,8 +393,6 @@ class GlobalSearchViewModel: ObservableObject {
         if let cached = cachedRemoteResults(for: query) {
             return mergeUniqueMessageResults(local: localResults, remote: cached)
         }
-
-        messageResults = localResults
 
         // Network — merge fresh server-side hits
         let remoteResults = await fetchRemoteMessageResults(query: query)
