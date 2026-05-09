@@ -11,14 +11,42 @@ class ConversationListViewModel: ObservableObject {
     }
     @Published var userCategories: [ConversationSection] = []
     @Published var isLoading = false
-    @Published private(set) var isLoadingMore = false
+    /// Convenience accessor mirroring `paginationState == .loadingMore`.
+    /// Kept for compatibility with views that still bind to the boolean
+    /// (e.g. the spinner footer in ConversationListView). Updates flow
+    /// through `paginationState`'s @Published wrapper, so SwiftUI
+    /// re-evaluates dependents when this transitions.
+    var isLoadingMore: Bool { paginationState == .loadingMore }
     /// `true` when the last cold-start sync failed and the cache is still
     /// empty. The view reads this to swap the empty-state placeholder for
     /// a retryable error panel. We don't reuse `isLoading` because the
     /// user should see a distinct "failed — tap to retry" affordance, not
     /// a confusing empty list.
     @Published private(set) var loadFailed = false
-    private var hasMore = true
+    /// High-level state for the list surface (cache status / cold load
+    /// / error). Computed alongside `isLoading` so consumers that want
+    /// the cache-first nuances (`cachedStale` keeps showing data while
+    /// silent revalidate runs) can react without inspecting multiple
+    /// booleans. `isLoading` remains for binary "show big spinner?"
+    /// consumers; new code should prefer `loadState`.
+    @Published private(set) var loadState: LoadState = .idle
+    /// State of the cursor-paginated infinite scroll. `.idle` when ready
+    /// to fetch, `.loadingMore` while a `loadMore()` call is in flight,
+    /// `.exhausted` once the gateway signalled `hasMore=false` (so the
+    /// view can hide the spinner permanently), `.error` for transient
+    /// failures the user can retry by scrolling back.
+    @Published private(set) var paginationState: PaginationState = .idle
+    /// Mirror of `paginationState`'s "more pages exist" signal. Kept as
+    /// a separate @Published so views that already bound to a Bool
+    /// (footer visibility, "load more" affordance) don't have to migrate
+    /// to switching on the enum. Stays in sync via `paginationState`'s
+    /// transitions.
+    @Published private(set) var hasMore: Bool = true
+    /// Opaque cursor returned by the last `listPage` call. `nil` until
+    /// the first page is fetched, then carries the gateway-issued id of
+    /// the page tail. `loadMore()` forwards it as the `before` query
+    /// parameter so the next page filters `lastMessageAt < cursor`.
+    private var nextCursor: String?
 
     // MARK: - Reactive Filters & Prepared Data
     @Published var searchText: String = ""
@@ -45,10 +73,11 @@ class ConversationListViewModel: ObservableObject {
     private let authManager: AuthManaging
     private let storyService: StoryServiceProviding
     private let syncEngine: ConversationSyncEngineProviding
-    private let pageLimit = 100
-    /// Au-delà de ce seuil le scroll infini (loadMore) reprend la main
-    private let autoLoadCap = 1000
-    private var currentOffset = 0
+    /// Number of conversations fetched per `loadMore` page. Tuned at
+    /// 30 to match the spec's 30-row windows: large enough to fill a
+    /// screen on most devices without scrolling, small enough that the
+    /// cursor request stays under ~50KB even with rich metadata.
+    private let pageLimit = 30
     private var cancellables = Set<AnyCancellable>()
     var storyPrefetchTask: Task<Void, Never>?
 
@@ -460,15 +489,23 @@ class ConversationListViewModel: ObservableObject {
         case .fresh(let data, _):
             setConversations(data)
             loadFailed = false
+            loadState = .cachedFresh
             lastFetchedAt = Date()
         case .stale(let data, _):
             setConversations(data)
             loadFailed = false
+            loadState = .cachedStale
             lastFetchedAt = Date()
-            Task { [weak self] in await self?.syncEngine.syncSinceLastCheckpoint() }
+            Task { [weak self] in
+                await self?.syncEngine.syncSinceLastCheckpoint()
+                await MainActor.run { [weak self] in
+                    self?.loadState = .loaded
+                }
+            }
         case .expired, .empty:
             isLoading = true
             loadFailed = false
+            loadState = .loading
             let succeeded = await syncEngine.fullSync()
             let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
             if let data = reloaded.value {
@@ -477,12 +514,14 @@ class ConversationListViewModel: ObservableObject {
                 // overrides anything the coordinator tracked from earlier socket events.
                 NotificationCoordinator.shared.reconcileConversationUnreads(data)
                 loadFailed = false
+                loadState = .loaded
             } else if !succeeded {
                 // Cache is still empty AND the sync failed. Surface the
                 // failure so the view can offer a retry instead of the
                 // confusing "no conversations" empty state that historically
                 // appeared after a cold start with network issues.
                 loadFailed = true
+                loadState = .error("Sync failed")
             }
             lastFetchedAt = Date()
             isLoading = false
@@ -502,6 +541,7 @@ class ConversationListViewModel: ObservableObject {
         invalidateCache()
         isLoading = true
         loadFailed = false
+        loadState = .loading
         let succeeded = await syncEngine.fullSync()
         let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
         if let data = reloaded.value {
@@ -509,8 +549,10 @@ class ConversationListViewModel: ObservableObject {
             // User-triggered full sync: snapshot is authoritative, reconcile counts.
             NotificationCoordinator.shared.reconcileConversationUnreads(data)
             loadFailed = false
+            loadState = .loaded
         } else if !succeeded {
             loadFailed = true
+            loadState = .error("Refresh failed")
         }
         lastFetchedAt = Date()
         isLoading = false
@@ -524,64 +566,71 @@ class ConversationListViewModel: ObservableObject {
         await reloadFromCache()
     }
 
-    // MARK: - Load More (scroll infini — toujours actif)
+    // MARK: - Load More (cursor-based infinite scroll)
 
+    /// Fetch the next page of conversations using the gateway's
+    /// cursor-paginated endpoint. Cursor-based pagination removes two
+    /// classes of bugs from the previous offset-based code path:
+    ///   (a) duplicate or skipped rows when a new message arrived
+    ///       between two pages (offset shifts in the underlying sort);
+    ///   (b) the artificial `autoLoadCap = 1000` ceiling that stranded
+    ///       users on accounts above the cap.
+    /// Caller is responsible for triggering this on scroll-near-end;
+    /// concurrent calls are coalesced via the `.loadingMore` guard.
     func loadMore() async {
-        // The 1000-cap gate was removed earlier; remaining guards still
-        // short-circuit redundant calls.
-        guard hasMore, !isLoadingMore, !isLoading else { return }
+        // Refuse re-entry while a request is in flight, and refuse to
+        // ask the gateway when we already know there's nothing more.
+        // The `isLoading` check keeps cold-start full-syncs from
+        // racing the first paginated fetch.
+        guard hasMore, paginationState != .loadingMore, !isLoading else { return }
 
-        // Sync `currentOffset` with the actual loaded count before each
-        // request. Two scenarios this fixes:
-        //   (a) `fullSync()` (or stale-while-revalidate) populated
-        //       `conversations` directly without touching `currentOffset`
-        //       — left at 0 — so the first `loadMore` would re-fetch
-        //       page 0 forever.
-        //   (b) Earlier `loadMore` calls advanced `currentOffset` by
-        //       `deduplicated.count` (not the page size), creating
-        //       gaps when many incoming items were already cached
-        //       (e.g. socket-fed conversations vs. paginated fetch).
-        // Using `max(currentOffset, conversations.count)` keeps both
-        // counters honest and skips already-loaded prefixes cheaply.
-        let offset = max(currentOffset, conversations.count)
-
-        isLoadingMore = true
+        paginationState = .loadingMore
 
         do {
-            let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await api.offsetPaginatedRequest(
-                endpoint: "/conversations",
-                offset: offset,
-                limit: pageLimit
+            let userId = currentUserId
+            let page = try await conversationService.listPage(
+                before: nextCursor,
+                limit: pageLimit,
+                currentUserId: userId
             )
+            // Hydrate presence so the next render shows accurate online
+            // dots without waiting for the socket to backfill. We pass
+            // the raw API payload (which still has the per-participant
+            // isOnline flags) because the domain model strips them.
+            PresenceManager.shared.seed(from: page.rawItems, currentUserId: userId)
+            appendConversations(page.items)
+            nextCursor = page.nextCursor
+            hasMore = page.hasMore
+            paginationState = page.hasMore ? .idle : .exhausted
 
-            if response.success {
-                let userId = currentUserId
-                PresenceManager.shared.seed(from: response.data, currentUserId: userId)
-                let newConversations = response.data.map { $0.toConversation(currentUserId: userId) }
-                appendConversations(newConversations)
-                // Fallback when the backend doesn't provide pagination
-                // metadata: a full page implies more might follow. Without
-                // this, a missing `pagination.hasMore` collapsed scroll to
-                // a single page and the user was stranded at the cap.
-                hasMore = response.pagination?.hasMore ?? (newConversations.count == pageLimit)
-                // Advance by the raw response count (not deduplicated)
-                // so the offset always tracks the backend's cursor — dedup
-                // is a defensive client-side check, not a paging signal.
-                currentOffset = offset + newConversations.count
-            } else {
-                // Server replied 200 but `success=false` — surface it so
-                // we don't silently freeze the list at the current cap.
-                Logger.messages.warning("[ConversationListVM] loadMore non-success response at offset=\(offset)")
-            }
+            // Persist the merged list so the next cold start serves
+            // the user the deepest scroll position they reached.
+            // `setConversations` already re-sorted the array, so we
+            // save what's actually displayed.
+            let snapshot = conversations
+            Task { await CacheCoordinator.shared.conversations.save(snapshot, for: "list") }
         } catch {
-            // Don't flip `hasMore=false` on transient errors (network
-            // blip, rate limit) — leave the door open for the next
-            // scroll attempt to retry. Previously this catch was empty,
-            // hiding sync failures from the user entirely.
-            Logger.messages.error("[ConversationListVM] loadMore error at offset=\(offset): \(error.localizedDescription)")
+            // Transient errors (network blip, rate limit) keep
+            // `hasMore = true` so the next scroll attempt can retry.
+            // We surface the error in the published state so the view
+            // can show a discreet retry prompt at the tail.
+            Logger.messages.error("[ConversationListVM] loadMore error cursor=\(self.nextCursor ?? "nil"): \(error.localizedDescription)")
+            paginationState = .error(error.localizedDescription)
         }
+    }
 
-        isLoadingMore = false
+    // MARK: - Pull to Refresh
+
+    /// Reset cursor + hasMore and refetch from the top. The view should
+    /// route the SwiftUI `.refreshable` action here so that pulling
+    /// down both clears the pagination cursor (otherwise the next
+    /// `loadMore` would page from the old tail) and triggers the
+    /// usual cache-first reload.
+    func pullToRefresh() async {
+        nextCursor = nil
+        hasMore = true
+        paginationState = .idle
+        await forceRefresh()
     }
 
     // MARK: - Persist Category Expansion
