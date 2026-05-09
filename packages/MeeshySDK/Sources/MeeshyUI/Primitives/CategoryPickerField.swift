@@ -1,6 +1,10 @@
 import SwiftUI
 import MeeshySDK
 
+/// Inline picker that shows the currently-selected category as a removable
+/// chip above a search/create input, and lists all known categories on focus
+/// (filtered by the typed text). Mirrors `TagInputField`'s chip-then-input
+/// layout for visual consistency.
 @MainActor
 public struct CategoryPickerField: View {
     public let categories: [ConversationCategory]
@@ -32,58 +36,67 @@ public struct CategoryPickerField: View {
         return categories.first(where: { $0.id == id })
     }
 
+    private var trimmedQuery: String {
+        editing.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private var displayedCategories: [ConversationCategory] {
-        let trimmed = editing.trimmingCharacters(in: .whitespacesAndNewlines)
-        // Show ALL categories when:
-        //   - the field is empty, OR
-        //   - the typed text matches the currently selected category exactly
-        //     (the default state on focus-gained — user hasn't started searching)
-        let showAll = trimmed.isEmpty
-            || (selectedCategory?.name.lowercased() == trimmed.lowercased())
-        if showAll {
-            return categories.sorted { ($0.order ?? 0) < ($1.order ?? 0) }
+        // Always exclude the currently-selected category from suggestions —
+        // it's already visible as a chip above. At focus with empty input we
+        // still want to show every other available category.
+        let pool = categories.filter { $0.id != selectedId }
+        if trimmedQuery.isEmpty {
+            return pool.sorted { ($0.order ?? 0) < ($1.order ?? 0) }
         }
-        return categories
-            .filter { $0.name.localizedCaseInsensitiveContains(trimmed) }
+        return pool
+            .filter { $0.name.localizedCaseInsensitiveContains(trimmedQuery) }
             .sorted { ($0.order ?? 0) < ($1.order ?? 0) }
     }
 
     private var canCreate: Bool {
-        let trimmed = editing.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return false }
-        // Hide "Create X" when X is exactly the already-selected category name
-        if selectedCategory?.name.lowercased() == trimmed.lowercased() { return false }
-        return !categories.contains(where: { $0.name.lowercased() == trimmed.lowercased() })
+        guard !trimmedQuery.isEmpty else { return false }
+        if selectedCategory?.name.lowercased() == trimmedQuery.lowercased() { return false }
+        return !categories.contains(where: { $0.name.lowercased() == trimmedQuery.lowercased() })
     }
 
     public var body: some View {
         VStack(alignment: .leading, spacing: 8) {
+            if let selected = selectedCategory {
+                selectedChip(selected)
+            }
             inputField
             if focused {
                 suggestionList
             }
         }
-        .onChange(of: focused) { _, isFocused in
-            // Restore the canonical name only on blur. Never overwrite the user's
-            // in-progress text on focus-gained.
-            if !isFocused {
-                editing = selectedCategory?.name ?? ""
+    }
+
+    private func selectedChip(_ category: ConversationCategory) -> some View {
+        let chipColor = Color(hex: category.color ?? "6366F1")
+        return HStack(spacing: 6) {
+            Circle().fill(chipColor).frame(width: 8, height: 8)
+            Text(category.name)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(chipColor)
+            Button {
+                selectedId = nil
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.system(size: 9, weight: .bold))
+                    .foregroundColor(chipColor.opacity(0.7))
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("Retirer la catégorie \(category.name)"))
         }
-        .onAppear {
-            editing = selectedCategory?.name ?? ""
-        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 5)
+        .background(Capsule().fill(chipColor.opacity(isDark ? 0.18 : 0.12)))
     }
 
     @ViewBuilder
     private var inputField: some View {
-        HStack(spacing: 8) {
-            if let cat = selectedCategory, !focused {
-                Circle()
-                    .fill(Color(hex: cat.color ?? "6366F1"))
-                    .frame(width: 8, height: 8)
-            }
-            TextField("Choisir ou créer une catégorie...", text: $editing)
+        HStack(spacing: 6) {
+            TextField(placeholder, text: $editing)
                 .focused($focused)
                 .textFieldStyle(.plain)
                 .font(.system(size: 15, weight: .medium))
@@ -93,13 +106,11 @@ public struct CategoryPickerField: View {
             if !editing.isEmpty {
                 Button {
                     editing = ""
-                    selectedId = nil
                 } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.secondary)
+                    Image(systemName: "xmark.circle.fill").foregroundColor(.secondary)
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel("Effacer la catégorie")
+                .accessibilityLabel("Effacer la saisie")
             }
         }
         .padding(12)
@@ -113,22 +124,25 @@ public struct CategoryPickerField: View {
         )
     }
 
+    private var placeholder: String {
+        selectedCategory == nil
+            ? "Choisir ou créer une catégorie..."
+            : "Changer de catégorie..."
+    }
+
     @ViewBuilder
     private var suggestionList: some View {
         VStack(spacing: 0) {
             ForEach(displayedCategories) { cat in
                 Button {
                     selectedId = cat.id
-                    editing = cat.name
+                    editing = ""
                     focused = false
                 } label: {
-                    HStack {
+                    HStack(spacing: 8) {
                         Circle().fill(Color(hex: cat.color ?? "6366F1")).frame(width: 8, height: 8)
                         Text(cat.name).font(.system(size: 14, weight: .medium))
                         Spacer()
-                        if cat.id == selectedId {
-                            Image(systemName: "checkmark").foregroundColor(accentColor)
-                        }
                     }
                     .padding(.horizontal, 12).padding(.vertical, 8)
                 }
@@ -137,7 +151,7 @@ public struct CategoryPickerField: View {
             }
 
             if canCreate {
-                Divider().opacity(0.3)
+                if !displayedCategories.isEmpty { Divider().opacity(0.3) }
                 Button {
                     Task { await create() }
                 } label: {
@@ -147,7 +161,7 @@ public struct CategoryPickerField: View {
                         } else {
                             Image(systemName: "plus.circle.fill").foregroundColor(accentColor)
                         }
-                        Text("Créer \"\(editing.trimmingCharacters(in: .whitespacesAndNewlines))\"")
+                        Text("Créer \"\(trimmedQuery)\"")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(accentColor)
                         Spacer()
@@ -156,7 +170,7 @@ public struct CategoryPickerField: View {
                 }
                 .buttonStyle(.plain)
                 .disabled(isCreating)
-                .accessibilityLabel(Text("Créer la catégorie \(editing)"))
+                .accessibilityLabel(Text("Créer la catégorie \(trimmedQuery)"))
             }
         }
         .background(RoundedRectangle(cornerRadius: 8).fill(isDark ? Color.white.opacity(0.06) : Color.white))
@@ -164,27 +178,26 @@ public struct CategoryPickerField: View {
     }
 
     private func submit() {
-        let trimmed = editing.trimmingCharacters(in: .whitespacesAndNewlines)
-        if let exact = categories.first(where: { $0.name.lowercased() == trimmed.lowercased() }) {
+        if let exact = categories.first(where: { $0.name.lowercased() == trimmedQuery.lowercased() }) {
             selectedId = exact.id
-            editing = exact.name
+            editing = ""
             focused = false
             return
         }
-        if !trimmed.isEmpty {
+        if !trimmedQuery.isEmpty {
             Task { await create() }
         }
     }
 
     private func create() async {
         guard !isCreating else { return }
-        let name = editing.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = trimmedQuery
         guard !name.isEmpty else { return }
         isCreating = true
         defer { isCreating = false }
         if let created = await onCreateCategory(name) {
             selectedId = created.id
-            editing = created.name
+            editing = ""
             focused = false
         }
     }
