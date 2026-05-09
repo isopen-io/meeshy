@@ -51,8 +51,16 @@ export const updateLinkSchema = z.object({
   allowedIpRanges: z.array(z.string()).optional()
 });
 
+import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
+
 export const sendMessageSchema = z.object({
   content: z.string().max(1000, 'Message is too long').optional(),
+  // Phase 4 §6.2 — mandatory `cid_<uuid v4 lowercase>` even for anonymous
+  // share-link sends, so the gateway dedup contract holds across the REST
+  // and Socket.IO surfaces without forking schemas per surface.
+  clientMessageId: z
+    .string()
+    .regex(CLIENT_MESSAGE_ID_REGEX, 'Invalid clientMessageId format (expected cid_<uuid v4 lowercase>)'),
   originalLanguage: z.string().default('fr'),
   messageType: z.string().default('text'),
   attachments: z.array(z.string()).optional()

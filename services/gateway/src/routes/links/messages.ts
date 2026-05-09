@@ -202,7 +202,11 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         createdBy: undefined
       });
 
-      // Créer le message avec le contenu transformé
+      // Créer le message avec le contenu transformé.
+      // Phase 4 §6.2 — `clientMessageId` propagé pour le dedup contract.
+      // Pas de catch-P2002 ici (chemin anonyme simple) — un retry serveur
+      // produit le même cid donc Prisma renvoie une 409 que la couche
+      // Fastify mappe en réponse 409 Conflict côté client.
       const message = await fastify.prisma.message.create({
         data: {
           conversationId: participantShareLink.conversationId,
@@ -210,6 +214,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           content: processedContent,
           originalLanguage: body.originalLanguage,
           messageType: body.messageType,
+          clientMessageId: body.clientMessageId,
           deletedAt: null
         },
         include: {
@@ -473,7 +478,8 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
         createdBy: userId
       });
 
-      // Créer le message avec le contenu transformé
+      // Créer le message avec le contenu transformé.
+      // Phase 4 §6.2 — `clientMessageId` propagé pour le dedup contract.
       const message = await fastify.prisma.message.create({
         data: {
           conversationId: shareLink.conversationId,
@@ -481,6 +487,7 @@ export async function registerMessageRoutes(fastify: FastifyInstance) {
           content: processedContent,
           originalLanguage: body.originalLanguage,
           messageType: body.messageType,
+          clientMessageId: body.clientMessageId,
           deletedAt: null
         },
         include: {

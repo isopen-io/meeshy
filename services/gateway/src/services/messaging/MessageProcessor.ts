@@ -285,7 +285,15 @@ export class MessageProcessor {
 
   /**
    * Sauvegarde du message en base avec toutes les relations
-   * Handles encryption based on conversation settings
+   * Handles encryption based on conversation settings.
+   *
+   * Phase 4 §6.2 — when `clientMessageId` is supplied, the create is wrapped
+   * in a `catch P2002` clause so concurrent retries with the same id resolve
+   * to the same server record (idempotent dedup). The returned tuple
+   * includes `isDuplicate: true` for hits — the caller skips broadcast and
+   * post-processing for hits while still re-pushing translation if the
+   * existing record's `translations` blob is empty (translator was down on
+   * the first attempt).
    */
   async saveMessage(data: {
     conversationId: string;
@@ -305,6 +313,7 @@ export class MessageProcessor {
     isBlurred?: boolean;
     effectFlags?: number;
     expiresAt?: Date;
+    clientMessageId?: string;
   }): Promise<Message> {
     // ÉTAPE 1: Traiter les liens AVANT de sauvegarder le message
     const processedContent = await this.processLinksInContent(
@@ -338,28 +347,41 @@ export class MessageProcessor {
     if (data.isBlurred && !(effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED)) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
     if (data.expiresAt && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
 
-    // ÉTAPE 3: Créer le message avec le contenu traité et encryption
-    const message = await this.prisma.message.create({
-      data: {
-        conversationId: data.conversationId,
-        senderId: data.senderId,
-        content: encryptionContext.isEncrypted ? '' : processedContent.trim(),
-        originalLanguage: data.originalLanguage,
-        messageType: data.messageType || 'text',
-        messageSource: data.messageSource || 'user',
-        replyToId: data.replyToId,
-        storyReplyToId: data.storyReplyToId || null,
-        forwardedFromId: data.forwardedFromId,
-        forwardedFromConversationId: data.forwardedFromConversationId,
-        isEncrypted: encryptionContext.isEncrypted,
-        encryptionMode: encryptionContext.mode,
-        encryptedContent: encryptionContext.encryptedContent,
-        encryptionMetadata: encryptionContext.encryptionMetadata,
-        isBlurred: data.isBlurred || false,
-        expiresAt: data.expiresAt || null,
-        effectFlags,
-        deletedAt: null
-      },
+    // ÉTAPE 3: Créer le message avec le contenu traité et encryption.
+    //
+    // Phase 4 §6.2 — INSERT direct + catch P2002 atomique. Le findUnique
+    // pré-INSERT n'est PAS atomique (deux requêtes concurrentes avec le
+    // même clientMessageId passent toutes les deux le findUnique avant que
+    // l'une INSERT et que l'autre échoue) — on s'appuie sur la contrainte
+    // unique partielle MongoDB pour détecter le doublon en une seule
+    // round-trip. Sur P2002 on relit l'existant et on flague isDuplicate.
+    const messageData = {
+      conversationId: data.conversationId,
+      senderId: data.senderId,
+      content: encryptionContext.isEncrypted ? '' : processedContent.trim(),
+      originalLanguage: data.originalLanguage,
+      messageType: data.messageType || 'text',
+      messageSource: data.messageSource || 'user',
+      replyToId: data.replyToId,
+      storyReplyToId: data.storyReplyToId || null,
+      forwardedFromId: data.forwardedFromId,
+      forwardedFromConversationId: data.forwardedFromConversationId,
+      isEncrypted: encryptionContext.isEncrypted,
+      encryptionMode: encryptionContext.mode,
+      encryptedContent: encryptionContext.encryptedContent,
+      encryptionMetadata: encryptionContext.encryptionMetadata,
+      isBlurred: data.isBlurred || false,
+      expiresAt: data.expiresAt || null,
+      effectFlags,
+      deletedAt: null,
+      ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {})
+    } as const;
+
+    let message: Message;
+    let isDuplicate = false;
+    try {
+      message = await this.prisma.message.create({
+        data: messageData,
       include: {
         sender: {
           select: {
@@ -408,6 +430,84 @@ export class MessageProcessor {
         }
       }
     });
+    } catch (e) {
+      const isP2002 =
+        typeof e === 'object' && e !== null
+          && 'code' in e && (e as { code?: unknown }).code === 'P2002';
+      if (!isP2002 || !data.clientMessageId) {
+        throw e;
+      }
+      const existing = await this.prisma.message.findUnique({
+        where: {
+          conversationId_clientMessageId: {
+            conversationId: data.conversationId,
+            clientMessageId: data.clientMessageId
+          }
+        },
+        include: {
+          sender: {
+            select: {
+              id: true, displayName: true, avatar: true, type: true,
+              nickname: true, userId: true,
+              user: {
+                select: {
+                  id: true, username: true, displayName: true,
+                  firstName: true, lastName: true, avatar: true
+                }
+              }
+            }
+          },
+          attachments: true,
+          replyTo: {
+            include: {
+              sender: {
+                select: {
+                  id: true, displayName: true, avatar: true, type: true,
+                  nickname: true, userId: true,
+                  user: {
+                    select: {
+                      id: true, username: true, displayName: true,
+                      firstName: true, lastName: true, avatar: true
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      });
+      if (!existing) {
+        // Race condition we cannot reconcile — bubble up the original error.
+        logger.error('P2002 raised but no existing record found for clientMessageId', {
+          conversationId: data.conversationId,
+          clientMessageId: data.clientMessageId
+        });
+        throw e;
+      }
+      message = existing;
+      isDuplicate = true;
+      logger.info('Idempotent dedup hit on clientMessageId', {
+        conversationId: data.conversationId,
+        clientMessageId: data.clientMessageId,
+        messageId: existing.id
+      });
+    }
+
+    // Stash the dedup flag on the message object so the caller can branch
+    // on it (broadcast / translate decisions). The field is non-persistent
+    // and only travels in-process.
+    (message as Message & { isDuplicate?: boolean }).isDuplicate = isDuplicate;
+
+    if (isDuplicate) {
+      // Skip side-effects on dedup hits: attachments are already linked,
+      // tracking links and mentions/notifications were processed on the
+      // first attempt. The translation re-push (if needed) is decided at
+      // the caller level (`MessagingService.handleMessage`).
+      return {
+        ...message,
+        timestamp: message.createdAt
+      } as Message;
+    }
 
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
     await this.handleAttachments(data, message);

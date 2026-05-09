@@ -440,14 +440,32 @@ export class MessageHandler {
       }
 
       const room = ROOMS.conversation(normalizedId);
+
+      // Phase 4 §6.2 — split broadcast into two payloads :
+      //   - `broadcastPayload` (others) : strip `clientMessageId` so the
+      //     value never leaks to non-sender participants (privacy: a peer
+      //     cannot deduce the sender's offline-queue id space).
+      //   - `senderPayload` (sender's sockets across devices) : keep
+      //     `clientMessageId` so the iOS / web reconciliation by-cid path
+      //     can promote the optimistic row to `.sent` even after a crash
+      //     that lost the ACK.
+      const senderPayload = messagePayload as Record<string, unknown>;
+      const broadcastPayload: Record<string, unknown> = { ...senderPayload };
+      delete broadcastPayload.clientMessageId;
+
       if (senderSocket) {
-        // Exclure le sender du broadcast room, puis lui envoyer directement.
-        // Avant ce fix, io.to(room) incluait le sender ET senderSocket.emit()
-        // l'envoyait une 2e fois → le client recevait message:new en double.
-        senderSocket.broadcast.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
-        senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
+        // Single-session sender : send the cid-aware payload only to the
+        // socket that emitted, broadcast the cid-stripped payload to
+        // everyone else in the room.
+        senderSocket.broadcast.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
+        senderSocket.emit(SERVER_EVENTS.MESSAGE_NEW, senderPayload);
       } else {
-        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, messagePayload);
+        // No senderSocket context (REST path or background flush) : we
+        // cannot distinguish sender sockets in-room without resolving the
+        // sender's userId, so fall back to the cid-stripped payload for
+        // the room. The sender's other sessions will still reconcile via
+        // the REST/socket ACK path which carries the cid (cf. _sendResponse).
+        this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
       }
 
       // Notify each participant's user room that the conversation has
@@ -859,15 +877,23 @@ export class MessageHandler {
    * Envoie une réponse de succès
    */
   private _sendResponse(
-    callback: ((response: SocketIOResponse<{ messageId: string }>) => void) | undefined,
+    callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string }>) => void) | undefined,
     response: MessageResponse
   ): void {
     if (!callback) return;
 
     if (response.success && response.data) {
+      // Phase 4 §6.2 — echo `clientMessageId` back so iOS / web can match the
+      // ACK against their pending optimistic row by cid (the `messageId`
+      // alone is insufficient: the optimistic row has a `cid_*` local id
+      // and only learns the server `messageId` from this very ACK).
+      const data = response.data as { id: string; clientMessageId?: string };
       callback({
         success: true,
-        data: { messageId: response.data.id }
+        data: {
+          messageId: data.id,
+          ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {})
+        }
       });
     } else {
       callback({

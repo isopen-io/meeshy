@@ -648,9 +648,20 @@ export interface CreateConversationRequest {
 }
 
 /**
- * Requête d'envoi de message
+ * Requête d'envoi de message.
+ *
+ * Compile-time shape for the "send a message" payload used by web, iOS, and
+ * the gateway. The runtime source of truth is `SendMessageRequestSchema` in
+ * `./messages.ts` — the Zod schema validates incoming requests on the wire
+ * and enforces the `clientMessageId` regex contract shared with the iOS
+ * `ClientMessageId` helper.
+ *
+ * `clientMessageId` is **mandatory**: the gateway uses
+ * `(conversationId, clientMessageId)` as a unique key to dedup retried sends
+ * from the offline queue (Phase 4 of the offline-queue spec).
  */
 export interface SendMessageRequest {
+  readonly clientMessageId: string;
   readonly content: string;
   readonly originalLanguage?: string;
   readonly messageType?: string;
@@ -659,6 +670,17 @@ export interface SendMessageRequest {
   readonly forwardedFromConversationId?: string;
   readonly attachmentIds?: readonly string[];
 }
+
+// Re-export the Zod schema + inferred runtime type from messages.ts so callers
+// can validate payloads with `SendMessageRequestSchema.parse()` without needing
+// a deeper subpath import. We deliberately rename the inferred type to
+// `ValidatedSendMessageRequest` to avoid colliding with the interface above —
+// the interface stays the canonical TS type for clients, the schema is the
+// canonical runtime validator for the gateway.
+export {
+  SendMessageRequestSchema,
+  type SendMessageRequest as ValidatedSendMessageRequest,
+} from './messages.js';
 
 // ===== RE-EXPORTS POUR RÉTROCOMPATIBILITÉ =====
 export type {

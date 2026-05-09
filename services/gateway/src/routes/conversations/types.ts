@@ -22,6 +22,14 @@ export interface CreateConversationBody {
 
 export interface SendMessageBody {
   content: string;
+  /**
+   * Phase 4 §6.2 — mandatory client-generated idempotency key, format
+   * `cid_<uuid v4 lowercase>`. The gateway uses
+   * `(conversationId, clientMessageId)` as a unique partial index in MongoDB
+   * so concurrent retries (offline queue + flaky network) resolve to the
+   * same server message instead of producing duplicates.
+   */
+  clientMessageId: string;
   originalLanguage?: string;
   messageType?: 'text' | 'image' | 'file' | 'system';
   replyToId?: string;
