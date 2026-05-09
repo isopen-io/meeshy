@@ -1183,8 +1183,16 @@ git tag story-canvas-p1-complete
 
 ## Task 2.1 : Define `StoryRenderer` skeleton
 
+> **Phase 2 amendments (2026-05-09)** :
+> 1. `RenderableItem.anchor` is `CGPoint` (not `UnitPoint`). Phase 1 stored anchor as `CGPoint` in MeeshySDK (no SwiftUI dep, dual-target rule). Empty conformances must match the stored property type.
+> 2. Conformance extensions (`extension StoryTextObject: RenderableItem {}` …) live in `MeeshyUI/Story/Canvas/StoryRenderer.swift` (alongside the protocol), NOT in `MeeshySDK/Models/StoryModels.swift` — the MeeshySDK target cannot see types defined in MeeshyUI. Retroactive cross-target conformance is supported.
+> 3. Build commands : replace `cd packages/MeeshySDK && swift build` (fails on macOS host because MeeshyUI imports UIKit/UIScreen) by `xcodebuild build -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -quiet` (or `./apps/ios/meeshy.sh build` for full app integration). This applies to ALL Phase 2 build steps.
+> 4. The Phase 1 stub file `StoryCanvasStubs.swift` will be progressively dismantled : Task 2.1 removes the `RenderMode` and `StoryRenderer` stubs, Task 2.5 removes the `StoryCanvasUIView` stub. The `StorySlide.effectiveSlideDuration()` extension is migrated to `StoryModels.swift` in Task 2.1 (it belongs to the model, not the canvas).
+
 **Files:**
 - Create: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift`
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasStubs.swift` (drop RenderMode + StoryRenderer + effectiveSlideDuration)
+- Modify: `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` (re-home `effectiveSlideDuration()`)
 
 - [ ] **Step 1: Define skeleton**
 
@@ -1192,11 +1200,33 @@ git tag story-canvas-p1-complete
 import Foundation
 import QuartzCore
 import CoreMedia
+import UIKit
+import MeeshySDK
 
 public enum RenderMode: Sendable {
     case edit  // tout visible, gestures actifs
     case play  // timing appliqué, animations actives
 }
+
+public protocol RenderableItem {
+    var id: String { get }
+    var x: Double { get }
+    var y: Double { get }
+    var scale: Double { get }
+    var rotation: Double { get }
+    var zIndex: Int { get }
+    /// Anchor in normalized [0,1] coordinates. Type CGPoint (Phase 1 dual-target rule —
+    /// SwiftUI's UnitPoint cannot live in MeeshySDK target).
+    var anchor: CGPoint { get }
+    var startTime: Double? { get }
+    var duration: Double? { get }
+    var fadeIn: Double? { get }
+    var fadeOut: Double? { get }
+}
+
+extension StoryTextObject: RenderableItem {}
+extension StoryMediaObject: RenderableItem {}
+extension StorySticker: RenderableItem {}
 
 public enum StoryRenderer {
 
@@ -1205,6 +1235,7 @@ public enum StoryRenderer {
     /// - StoryCanvasUIView (live render)
     /// - StoryAVCompositor (per-frame export)
     /// - Snapshot tests
+    @MainActor
     public static func render(slide: StorySlide,
                               into geometry: CanvasGeometry,
                               at time: CMTime,
@@ -1227,8 +1258,11 @@ public enum StoryRenderer {
     // MARK: - Private
 
     private static func collectItems(from slide: StorySlide) -> [any RenderableItem] {
-        // Will be implemented per-type in subsequent tasks
-        []
+        var items: [any RenderableItem] = []
+        items.append(contentsOf: slide.effects.textObjects)
+        items.append(contentsOf: slide.effects.mediaObjects ?? [])
+        // stickers (StoryEffects.stickerObjects) — wired in Task 2.4
+        return items
     }
 
     private static func shouldRender(item: any RenderableItem, at time: CMTime, mode: RenderMode) -> Bool {
@@ -1239,6 +1273,7 @@ public enum StoryRenderer {
         return t >= start && t < end
     }
 
+    @MainActor
     private static func renderItem(_ item: any RenderableItem,
                                     into geometry: CanvasGeometry,
                                     at time: CMTime,
@@ -1246,47 +1281,47 @@ public enum StoryRenderer {
         // Will be specialized per type in subsequent tasks
         let layer = CALayer()
         layer.zPosition = CGFloat(item.zIndex)
+        layer.name = item.id
         return layer
     }
 }
+```
 
-public protocol RenderableItem {
-    var id: String { get }
-    var x: Double { get }
-    var y: Double { get }
-    var scale: Double { get }
-    var rotation: Double { get }
-    var zIndex: Int { get }
-    var anchor: UnitPoint { get }
-    var startTime: Double? { get }
-    var duration: Double? { get }
-    var fadeIn: Double? { get }
-    var fadeOut: Double? { get }
+- [ ] **Step 2: Move `effectiveSlideDuration()` to StoryModels.swift, drop stubs**
+
+The Phase 1 stub file `StoryCanvasStubs.swift` contains `RenderMode`, `StoryRenderer`, `StoryCanvasUIView` and a `StorySlide.effectiveSlideDuration()` extension. Remove `RenderMode` and `StoryRenderer` (now real types) and move the extension into `StoryModels.swift` (top-level extension on `StorySlide`).
+
+```swift
+// In StoryModels.swift, append:
+extension StorySlide {
+    public func effectiveSlideDuration() -> TimeInterval {
+        let base = duration
+        guard let loopMedia = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop }),
+              let videoDuration = loopMedia.duration, videoDuration > 0 else {
+            return base
+        }
+        let repetitions = ceil(base / videoDuration)
+        return repetitions * videoDuration
+    }
 }
 ```
 
-- [ ] **Step 2: Conform StoryTextObject, StoryMediaObject, StorySticker to RenderableItem**
-
-In `StoryModels.swift`, after each struct, add :
-
-```swift
-extension StoryTextObject: RenderableItem {}
-extension StoryMediaObject: RenderableItem {}
-extension StorySticker: RenderableItem {}
-```
+`StoryCanvasUIView` stub stays until Task 2.5.
 
 - [ ] **Step 3: Build check**
 
 ```bash
-cd packages/MeeshySDK && swift build
+xcodebuild build -scheme MeeshySDK-Package \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -quiet
 ```
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift \
+        packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasStubs.swift \
         packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift
-git commit -m "feat(story-canvas): StoryRenderer skeleton + RenderableItem protocol"
+git commit -m "feat(story-canvas): StoryRenderer skeleton + RenderableItem protocol (CGPoint anchor)"
 ```
 
 ---
