@@ -229,7 +229,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
 
         var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
-        mungedSDP = Self.addAudioRedundancy(mungedSDP)
+        // DIAGNOSTIC: RED désactivé temporairement. Suspect du flux audio
+        // nul après ICE connected — `a=fmtp:63 PT/PT` (RFC 2198) peut être
+        // mal négocié par certains chemins du SDK iOS WebRTC, entraînant
+        // un drop silencieux des paquets audio à la décode. À ré-activer
+        // une fois la cause confirmée.
+        // mungedSDP = Self.addAudioRedundancy(mungedSDP)
         mungedSDP = Self.addTransportCC(mungedSDP)
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
         let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
@@ -267,7 +272,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
 
         var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
-        mungedSDP = Self.addAudioRedundancy(mungedSDP)
+        // DIAGNOSTIC: RED désactivé temporairement. Suspect du flux audio
+        // nul après ICE connected — `a=fmtp:63 PT/PT` (RFC 2198) peut être
+        // mal négocié par certains chemins du SDK iOS WebRTC, entraînant
+        // un drop silencieux des paquets audio à la décode. À ré-activer
+        // une fois la cause confirmée.
+        // mungedSDP = Self.addAudioRedundancy(mungedSDP)
         mungedSDP = Self.addTransportCC(mungedSDP)
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
         let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
@@ -486,11 +496,16 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     }
 
     static func mungeOpusSDP(_ sdp: String) -> String {
+        // DIAGNOSTIC: `usedtx=1` était suspect du flux audio nul après ICE
+        // connected — DTX ne transmet aucun paquet quand le mic capture du
+        // silence (ex: simulator macOS sans permission micro). On le repasse
+        // à 0 pour forcer un flux RTP continu et confirmer/infirmer la
+        // cause. À ré-activer plus tard si le diagnostic remonte ailleurs.
         let opusParams = [
             "maxaveragebitrate=128000",
             "stereo=1",
             "useinbandfec=1",
-            "usedtx=1",
+            "usedtx=0",
             "maxplaybackrate=48000"
         ]
         let paramString = opusParams.joined(separator: ";")
