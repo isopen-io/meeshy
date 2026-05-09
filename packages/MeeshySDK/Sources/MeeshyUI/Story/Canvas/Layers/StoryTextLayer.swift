@@ -81,20 +81,28 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
     }
 
     private nonisolated func parseAlignment(_ raw: String?) -> NSTextAlignment {
+        // RTL behavior: when the user explicitly picks "left" or "right", that
+        // wins. Otherwise default to .natural so Arabic/Hebrew text is naturally
+        // right-aligned and Latin/Cyrillic stays left/centered.
         switch raw?.lowercased() {
         case "left":   return .left
         case "right":  return .right
-        case "center", nil: return .center
-        default:       return .center
+        case "center": return .center
+        case "natural", nil: return .natural
+        default:       return .natural
         }
     }
 
     private nonisolated func caTextAlignment(from alignment: NSTextAlignment) -> CATextLayerAlignmentMode {
+        // CATextLayer has no .natural — pick a sensible projection. Real BiDi
+        // resolution lives in NSAttributedString's baseWritingDirection, so
+        // CATextLayer alignment is mostly cosmetic for our wrapped lines.
         switch alignment {
-        case .left:   return .left
-        case .right:  return .right
+        case .left:    return .left
+        case .right:   return .right
         case .justified: return .justified
-        default:      return .center
+        case .natural, .center: return .center
+        @unknown default: return .center
         }
     }
 
