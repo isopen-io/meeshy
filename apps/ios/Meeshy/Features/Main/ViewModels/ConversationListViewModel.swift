@@ -494,6 +494,31 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // A new conversation (DM or group) appears in the user's list as soon
+        // as the gateway emits NOTIFICATION_NEW for it — without this hook,
+        // the list stays stale until the FIRST message lands (which is what
+        // currently triggers CONVERSATION_UPDATED → fetchAndPrepend) or until
+        // the user pulls to refresh. The gateway already creates these
+        // notifications in NotificationService.createConversationInviteNotification
+        // and pushes them via SERVER_EVENTS.NOTIFICATION_NEW, so we just have
+        // to forward them to the same prepend path.
+        messageSocket.notificationReceived
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                switch event.type {
+                case "new_conversation_direct",
+                     "new_conversation_group",
+                     "added_to_conversation":
+                    guard let convId = event.context?.conversationId,
+                          self.convIndex(for: convId) == nil else { return }
+                    self.fetchAndPrependMissingConversation(id: convId)
+                default:
+                    break
+                }
+            }
+            .store(in: &cancellables)
+
         messageSocket.participantSelfLeft
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in

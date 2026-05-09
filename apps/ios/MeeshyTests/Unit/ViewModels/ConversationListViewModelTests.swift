@@ -1344,6 +1344,172 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.conversations.first?.id, "69fe0bb526e040042fd28121")
     }
 
+    // MARK: - notificationReceived: realtime new conversation
+
+    /// Quand le gateway pousse une notification `new_conversation_direct` pour
+    /// une conversation que le client ne connait pas encore, la liste doit
+    /// fetcher la conversation via `getById` et la prepend, sans attendre le
+    /// premier message (qui declencherait sinon `CONVERSATION_UPDATED`).
+    func test_notificationReceived_newConversationDirect_unknownId_fetchesAndPrepends() async throws {
+        let messageSocket = MockMessageSocket()
+        let conversationService = MockConversationService()
+        let newConvId = "69fe2a7726e040042fd28200"
+        let newConvJSON = """
+        {"id":"\(newConvId)","type":"direct","title":null,
+         "lastMessageAt":"2026-05-09T18:30:00.000Z",
+         "createdAt":"2026-05-09T18:30:00.000Z"}
+        """
+        conversationService.getByIdResult = .success(JSONStub.decode(newConvJSON))
+        let (sut, _, _, _, _, _, _) = makeSUT(
+            conversationService: conversationService,
+            messageSocket: messageSocket
+        )
+        sut.setConversations([
+            makeConversation(id: "a", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        ])
+
+        let notifJSON = """
+        {"id":"notif1","userId":"u1","type":"new_conversation_direct",
+         "content":"Nouvelle conversation",
+         "context":{"conversationId":"\(newConvId)","conversationType":"direct"}}
+        """
+        let event: SocketNotificationEvent = JSONStub.decode(notifJSON)
+        messageSocket.notificationReceived.send(event)
+
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if sut.conversations.first?.id == newConvId { break }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+
+        XCTAssertEqual(conversationService.getByIdCallCount, 1,
+                       "new_conversation_direct must trigger a getById fetch")
+        XCTAssertEqual(conversationService.lastGetByIdConversationId, newConvId)
+        XCTAssertEqual(sut.conversations.first?.id, newConvId,
+                       "Fetched conversation must be prepended at index 0")
+        XCTAssertEqual(sut.conversations.count, 2)
+    }
+
+    /// Idem pour `new_conversation_group` (creation d'un groupe ou l'utilisateur
+    /// est invite des le depart).
+    func test_notificationReceived_newConversationGroup_unknownId_fetchesAndPrepends() async throws {
+        let messageSocket = MockMessageSocket()
+        let conversationService = MockConversationService()
+        let newConvId = "69fe2a7726e040042fd28201"
+        let newConvJSON = """
+        {"id":"\(newConvId)","type":"group","title":"Equipe Design",
+         "createdAt":"2026-05-09T18:30:00.000Z"}
+        """
+        conversationService.getByIdResult = .success(JSONStub.decode(newConvJSON))
+        let (sut, _, _, _, _, _, _) = makeSUT(
+            conversationService: conversationService,
+            messageSocket: messageSocket
+        )
+
+        let notifJSON = """
+        {"id":"notif2","userId":"u1","type":"new_conversation_group",
+         "content":"Invitation au groupe Equipe Design",
+         "context":{"conversationId":"\(newConvId)","conversationType":"group"}}
+        """
+        let event: SocketNotificationEvent = JSONStub.decode(notifJSON)
+        messageSocket.notificationReceived.send(event)
+
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if sut.conversations.first?.id == newConvId { break }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+
+        XCTAssertEqual(conversationService.getByIdCallCount, 1)
+        XCTAssertEqual(sut.conversations.first?.id, newConvId)
+    }
+
+    /// `added_to_conversation` (quelqu'un m'ajoute a un groupe existant) suit
+    /// le meme chemin : on fetch la conversation et on l'insere en tete.
+    func test_notificationReceived_addedToConversation_unknownId_fetchesAndPrepends() async throws {
+        let messageSocket = MockMessageSocket()
+        let conversationService = MockConversationService()
+        let newConvId = "69fe2a7726e040042fd28202"
+        let newConvJSON = """
+        {"id":"\(newConvId)","type":"group","title":"Backend",
+         "createdAt":"2026-05-09T18:30:00.000Z"}
+        """
+        conversationService.getByIdResult = .success(JSONStub.decode(newConvJSON))
+        let (sut, _, _, _, _, _, _) = makeSUT(
+            conversationService: conversationService,
+            messageSocket: messageSocket
+        )
+
+        let notifJSON = """
+        {"id":"notif3","userId":"u1","type":"added_to_conversation",
+         "content":"Ajoute au groupe Backend",
+         "context":{"conversationId":"\(newConvId)","conversationType":"group"}}
+        """
+        let event: SocketNotificationEvent = JSONStub.decode(notifJSON)
+        messageSocket.notificationReceived.send(event)
+
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if sut.conversations.first?.id == newConvId { break }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+
+        XCTAssertEqual(conversationService.getByIdCallCount, 1)
+        XCTAssertEqual(sut.conversations.first?.id, newConvId)
+    }
+
+    /// Si la conversation est deja dans la liste (ex: le createur recoit une
+    /// notification echo), pas de re-fetch.
+    func test_notificationReceived_newConversation_knownId_doesNotFetch() async throws {
+        let messageSocket = MockMessageSocket()
+        let conversationService = MockConversationService()
+        let knownId = "69fe2a7726e040042fd28203"
+        let (sut, _, _, _, _, _, _) = makeSUT(
+            conversationService: conversationService,
+            messageSocket: messageSocket
+        )
+        sut.setConversations([makeConversation(id: knownId)])
+
+        let notifJSON = """
+        {"id":"notif4","userId":"u1","type":"new_conversation_direct",
+         "content":"echo",
+         "context":{"conversationId":"\(knownId)","conversationType":"direct"}}
+        """
+        let event: SocketNotificationEvent = JSONStub.decode(notifJSON)
+        messageSocket.notificationReceived.send(event)
+
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(conversationService.getByIdCallCount, 0,
+                       "Already-known conversation must NOT trigger a refetch")
+        XCTAssertEqual(sut.conversations.count, 1)
+    }
+
+    /// Les autres types de notifications (ex: message recu, reaction) ne doivent
+    /// pas declencher de fetch de conversation.
+    func test_notificationReceived_unrelatedType_doesNotFetch() async throws {
+        let messageSocket = MockMessageSocket()
+        let conversationService = MockConversationService()
+        let (sut, _, _, _, _, _, _) = makeSUT(
+            conversationService: conversationService,
+            messageSocket: messageSocket
+        )
+
+        let notifJSON = """
+        {"id":"notif5","userId":"u1","type":"new_message",
+         "content":"Nouveau message",
+         "context":{"conversationId":"69fe2a7726e040042fd28204","conversationType":"direct"}}
+        """
+        let event: SocketNotificationEvent = JSONStub.decode(notifJSON)
+        messageSocket.notificationReceived.send(event)
+
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(conversationService.getByIdCallCount, 0,
+                       "Non-conversation-creation notifications must not fetch")
+        XCTAssertTrue(sut.conversations.isEmpty)
+    }
+
     // MARK: - loadMore: cursor-based pagination
 
     func test_loadMore_initialFetch_setsCursorAndStateFromResponse() async {
