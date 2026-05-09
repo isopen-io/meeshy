@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 import MeeshyUI
 
 // MARK: - Tab Definitions
@@ -35,16 +36,11 @@ enum RequestFilter: String, CaseIterable {
 }
 
 // MARK: - Load State
-
-enum LoadState: Equatable {
-    case idle
-    case cachedStale
-    case cachedFresh
-    case loading
-    case loaded
-    case offline
-    case error(String)
-}
+//
+// `LoadState` lives in MeeshySDK (`Cache/LoadState.swift`) and is the
+// single source of truth across the app — Contacts, Conversations, Feed
+// all share the same set of cases. The local re-declaration that used
+// to live here is gone; consumers `import MeeshySDK` to get it.
 
 // MARK: - Date Extension
 

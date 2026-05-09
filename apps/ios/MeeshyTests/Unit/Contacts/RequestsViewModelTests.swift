@@ -5,6 +5,23 @@ import MeeshySDK
 @MainActor
 final class RequestsViewModelTests: XCTestCase {
 
+    // MARK: - Lifecycle
+
+    override func setUp() async throws {
+        try await super.setUp()
+        // RequestsViewModel hits `CacheCoordinator.shared.friendRequests`.
+        // Reset the keys so a previous run's cached data doesn't short-circuit
+        // the mock fetch path the assertions exercise.
+        await CacheCoordinator.shared.friendRequests.invalidate(for: "requests:received")
+        await CacheCoordinator.shared.friendRequests.invalidate(for: "requests:sent")
+    }
+
+    override func tearDown() async throws {
+        await CacheCoordinator.shared.friendRequests.invalidate(for: "requests:received")
+        await CacheCoordinator.shared.friendRequests.invalidate(for: "requests:sent")
+        try await super.tearDown()
+    }
+
     private func makeSUT() -> (sut: RequestsViewModel, mock: MockFriendService) {
         let mock = MockFriendService()
         let sut = RequestsViewModel(friendService: mock)
@@ -133,5 +150,60 @@ final class RequestsViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.receivedRequests.count, 2)
         XCTAssertEqual(mock.lastReceivedOffset, 1)
+    }
+
+    // MARK: - Cache-First Behavior
+
+    /// Fresh cache for the received list short-circuits the network call.
+    /// "No spinner when cache has data" from the architecture bible.
+    func test_loadReceived_withCachedFreshData_skipsNetworkAndAppliesCache() async {
+        let cached = [FriendRequestFixture.make(id: "cached-1", status: "pending")]
+        await CacheCoordinator.shared.friendRequests.save(cached, for: "requests:received")
+
+        let (sut, mock) = makeSUT()
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [
+            FriendRequestFixture.make(id: "fresh-1", status: "pending")
+        ]))
+
+        await sut.loadReceived()
+
+        XCTAssertEqual(sut.receivedRequests.map(\.id), ["cached-1"])
+        XCTAssertEqual(mock.receivedRequestsCallCount, 0, "Fresh cache must skip network")
+        XCTAssertEqual(sut.loadState, .cachedFresh)
+    }
+
+    /// Cold start: empty cache triggers a network fetch and persists the
+    /// result to cache for the next visit.
+    func test_loadReceived_withEmptyCache_callsNetworkAndPersistsToCache() async {
+        let request = FriendRequestFixture.make(id: "r1", status: "pending")
+
+        let (sut, mock) = makeSUT()
+        mock.receivedRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [request]))
+
+        await sut.loadReceived()
+
+        XCTAssertEqual(sut.receivedRequests.map(\.id), ["r1"])
+        XCTAssertEqual(mock.receivedRequestsCallCount, 1)
+
+        let cacheValue = await CacheCoordinator.shared.friendRequests.load(for: "requests:received").value
+        XCTAssertEqual(cacheValue?.map(\.id), ["r1"])
+    }
+
+    /// `loadSent` follows the same cache-first pipeline; pending-only filter
+    /// is applied at the network layer so the cache only ever stores pending
+    /// items.
+    func test_loadSent_withCachedFreshData_skipsNetworkAndAppliesCache() async {
+        let cached = [FriendRequestFixture.make(id: "sent-cached", status: "pending")]
+        await CacheCoordinator.shared.friendRequests.save(cached, for: "requests:sent")
+
+        let (sut, mock) = makeSUT()
+        mock.sentRequestsResult = .success(FriendRequestFixture.makePaginated(requests: [
+            FriendRequestFixture.make(id: "sent-fresh", status: "pending")
+        ]))
+
+        await sut.loadSent()
+
+        XCTAssertEqual(sut.sentRequests.map(\.id), ["sent-cached"])
+        XCTAssertEqual(mock.sentRequestsCallCount, 0)
     }
 }
