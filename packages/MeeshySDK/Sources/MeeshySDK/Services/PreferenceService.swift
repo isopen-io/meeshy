@@ -10,6 +10,8 @@ public protocol PreferenceServiceProviding: Sendable {
     func getAllPreferences() async throws -> UserPreferences
     func patchPreferences<T: Encodable>(category: PreferenceCategory, body: T) async throws
     func resetPreferences(category: PreferenceCategory) async throws
+    func createCategory(name: String, color: String?, icon: String?) async throws -> ConversationCategory
+    func getMyConversationTags() async throws -> [String]
 }
 
 public final class PreferenceService: PreferenceServiceProviding, @unchecked Sendable {
@@ -62,5 +64,29 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
         let _: APIResponse<[String: Bool]> = try await api.delete(
             endpoint: "/me/preferences/\(category.rawValue)"
         )
+    }
+
+    // MARK: - Category Creation
+
+    public func createCategory(name: String, color: String? = nil, icon: String? = nil) async throws -> ConversationCategory {
+        struct Body: Encodable {
+            let name: String
+            let color: String?
+            let icon: String?
+        }
+        let response: APIResponse<ConversationCategory> = try await api.post(
+            endpoint: "/me/preferences/categories",
+            body: Body(name: name, color: color, icon: icon)
+        )
+        return response.data
+    }
+
+    // MARK: - User Conversation Tags
+
+    public func getMyConversationTags() async throws -> [String] {
+        let response: APIResponse<ConversationTagsPayload> = try await api.request(
+            endpoint: "/me/preferences/conversation-tags"
+        )
+        return response.data.tags
     }
 }

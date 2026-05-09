@@ -72,15 +72,37 @@ public struct APIConversationLastMessage: Decodable, Sendable {
 public typealias APIConversationMember = APIParticipant
 
 public struct APIConversationPreferences: Decodable, Sendable {
-    public let isPinned: Bool?
-    public let isMuted: Bool?
-    public let isArchived: Bool?
-    public let deletedForUserAt: Date?
-    public let tags: [String]?
-    public let categoryId: String?
-    public let reaction: String?
-    public let customName: String?
-    public let mentionsOnly: Bool?
+    public var isPinned: Bool?
+    public var isMuted: Bool?
+    public var isArchived: Bool?
+    public var deletedForUserAt: Date?
+    public var tags: [String]?
+    public var categoryId: String?
+    public var reaction: String?
+    public var customName: String?
+    public var mentionsOnly: Bool?
+
+    public init(
+        isPinned: Bool? = nil,
+        isMuted: Bool? = nil,
+        isArchived: Bool? = nil,
+        deletedForUserAt: Date? = nil,
+        tags: [String]? = nil,
+        categoryId: String? = nil,
+        reaction: String? = nil,
+        customName: String? = nil,
+        mentionsOnly: Bool? = nil
+    ) {
+        self.isPinned = isPinned
+        self.isMuted = isMuted
+        self.isArchived = isArchived
+        self.deletedForUserAt = deletedForUserAt
+        self.tags = tags
+        self.categoryId = categoryId
+        self.reaction = reaction
+        self.customName = customName
+        self.mentionsOnly = mentionsOnly
+    }
 }
 
 public struct APIConversation: Decodable, Sendable {
@@ -274,6 +296,9 @@ extension APIConversation {
             isPinned: prefs?.isPinned ?? false,
             sectionId: prefs?.categoryId,
             isMuted: prefs?.isMuted ?? false,
+            mentionsOnly: prefs?.mentionsOnly ?? false,
+            isArchivedByUser: prefs?.isArchived ?? false,
+            customName: prefs?.customName,
             participantUserId: otherParticipant?.userId,
             participantUsername: participantUsername,
             participantAvatarURL: participantAvatar,

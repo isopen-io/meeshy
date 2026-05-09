@@ -7,6 +7,7 @@ import { FastifyInstance } from 'fastify';
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
 import { createPreferenceRouter } from './preference-router-factory';
 import { categoriesRoutes } from './categories';
+import { conversationTagsRoutes } from './conversation-tags';
 import {
   PrivacyPreferenceSchema,
   AudioPreferenceSchema,
@@ -239,4 +240,8 @@ export async function userPreferencesRoutes(fastify: FastifyInstance) {
   // Note: Les catégories utilisent une table séparée (conversationCategory) et non un champ JSON,
   // donc elles ne peuvent pas utiliser la factory pattern des autres préférences
   fastify.register(categoriesRoutes, { prefix: '/categories' });
+
+  // /me/preferences/conversation-tags
+  // Agrège les tags utilisés à travers les préférences de conversation pour l'autocomplétion
+  fastify.register(conversationTagsRoutes, { prefix: '/conversation-tags' });
 }

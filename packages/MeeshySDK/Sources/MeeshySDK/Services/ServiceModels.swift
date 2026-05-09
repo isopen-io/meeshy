@@ -169,6 +169,23 @@ public struct ConversationCategory: Decodable, Identifiable {
     public let icon: String?
     public let order: Int?
     public let isExpanded: Bool?
+
+    public init(id: String, name: String, color: String?, icon: String?, order: Int?, isExpanded: Bool?) {
+        self.id = id
+        self.name = name
+        self.color = color
+        self.icon = icon
+        self.order = order
+        self.isExpanded = isExpanded
+    }
+}
+
+public struct ConversationTagsPayload: Decodable, Sendable {
+    public let tags: [String]
+
+    public init(tags: [String]) {
+        self.tags = tags
+    }
 }
 
 // MARK: - Translation

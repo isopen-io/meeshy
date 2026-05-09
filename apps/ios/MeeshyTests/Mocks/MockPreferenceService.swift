@@ -19,6 +19,10 @@ final class MockPreferenceService: PreferenceServiceProviding {
     var getAllPreferencesResult: Result<UserPreferences, Error> = .success(.defaults)
     var patchPreferencesResult: Result<Void, Error> = .success(())
     var resetPreferencesResult: Result<Void, Error> = .success(())
+    var createCategoryResult: Result<ConversationCategory, Error> = .success(
+        ConversationCategory(id: "new-cat", name: "New", color: nil, icon: nil, order: 0, isExpanded: true)
+    )
+    var getMyConversationTagsResult: Result<[String], Error> = .success([])
 
     // MARK: - Call Tracking
 
@@ -42,6 +46,13 @@ final class MockPreferenceService: PreferenceServiceProviding {
 
     var resetPreferencesCallCount = 0
     var lastResetPreferencesCategory: PreferenceCategory?
+
+    var createCategoryCallCount = 0
+    var lastCreateCategoryName: String?
+    var lastCreateCategoryColor: String?
+    var lastCreateCategoryIcon: String?
+
+    var getMyConversationTagsCallCount = 0
 
     // MARK: - Protocol Conformance
 
@@ -97,6 +108,21 @@ final class MockPreferenceService: PreferenceServiceProviding {
         try await MainActor.run { try resetPreferencesResult.get() }
     }
 
+    nonisolated func createCategory(name: String, color: String?, icon: String?) async throws -> ConversationCategory {
+        await MainActor.run {
+            createCategoryCallCount += 1
+            lastCreateCategoryName = name
+            lastCreateCategoryColor = color
+            lastCreateCategoryIcon = icon
+        }
+        return try await MainActor.run { try createCategoryResult.get() }
+    }
+
+    nonisolated func getMyConversationTags() async throws -> [String] {
+        await MainActor.run { getMyConversationTagsCallCount += 1 }
+        return try await MainActor.run { try getMyConversationTagsResult.get() }
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -114,5 +140,10 @@ final class MockPreferenceService: PreferenceServiceProviding {
         lastPatchPreferencesCategory = nil
         resetPreferencesCallCount = 0
         lastResetPreferencesCategory = nil
+        createCategoryCallCount = 0
+        lastCreateCategoryName = nil
+        lastCreateCategoryColor = nil
+        lastCreateCategoryIcon = nil
+        getMyConversationTagsCallCount = 0
     }
 }
