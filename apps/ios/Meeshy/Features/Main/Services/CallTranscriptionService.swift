@@ -18,7 +18,7 @@ struct TranscriptionSegment: Identifiable, Equatable {
     let translatedText: String?
     let translatedLanguage: String?
 
-    init(
+    nonisolated init(
         id: UUID,
         text: String,
         speakerId: String,
@@ -166,6 +166,13 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
     @Published private(set) var role: TranscriptionRole = .undecided
     @Published private(set) var localCapability: TranscriptionCapabilityLevel = .none
 
+    /// PERF-005: when the live transcription panel is hidden, we still consume
+    /// audio for finals (so recordings remain accurate) but skip all partial
+    /// result work. Toggled by CallView when the transcription overlay is
+    /// shown/dismissed. Defaults to false → cold start = no partial render
+    /// cost until the user opens the overlay.
+    @Published var isShowingOverlay: Bool = false
+
     var displayedSegments: [TranscriptionSegment] {
         Array(segments.suffix(Constants.maxDisplayedSegments))
     }
@@ -278,46 +285,91 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
         let speakerId = stream.speakerId
         let language = stream.language
 
+        // PERF-005: SFSpeechRecognizer with on-device recognition runs CPU-
+        // intensive work in its callback (audio decoding + acoustic model
+        // forward pass for partials). The callback already runs off the
+        // MainActor on the recognizer's private queue, so we extract the
+        // Sendable scalars (segment strings, timestamps, isFinal,
+        // confidence) right in the closure and only hop to MainActor with
+        // the small Sendable payload. This keeps SFSpeechRecognitionResult
+        // (non-Sendable) inside the recognizer's domain.
         stream.task = stream.recognizer.recognitionTask(with: request) { [weak self] result, error in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.handleRecognitionResult(result, error: error, speakerId: speakerId, language: language)
-            }
+            self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language)
         }
     }
 
-    // MARK: - Private — Result Handling
-
-    private func handleRecognitionResult(_ result: SFSpeechRecognitionResult?, error: Error?, speakerId: String, language: String) {
+    /// PERF-005: runs synchronously on the recognizer's queue (off-Main).
+    /// Pulls sendable data out of the result, then hands it to MainActor for
+    /// state mutation. Partials are gated on isShowingOverlay so we skip the
+    /// per-frame UI churn while the panel is hidden.
+    nonisolated private func handleRecognizerCallback(
+        result: SFSpeechRecognitionResult?,
+        error: Error?,
+        speakerId: String,
+        language: String
+    ) {
         if let error {
-            guard isTranscribing else { return }
-            lastError = .recognitionFailed(underlying: error)
-            callsLogger.error("Recognition error for speaker \(speakerId): \(error.localizedDescription)")
+            let errorDescription = error.localizedDescription
+            Task.detached(priority: .utility) { [weak self] in
+                await MainActor.run { [weak self] in
+                    guard let self, self.isTranscribing else { return }
+                    self.lastError = .recognitionFailed(underlying: NSError(
+                        domain: "CallTranscriptionService",
+                        code: -2,
+                        userInfo: [NSLocalizedDescriptionKey: errorDescription]
+                    ))
+                    callsLogger.error("Recognition error for speaker \(speakerId, privacy: .public): \(errorDescription, privacy: .public)")
+                }
+            }
             return
         }
 
         guard let result else { return }
+        let isFinal = result.isFinal
 
-        let newSegments = result.bestTranscription.segments.map { segment in
+        // Extract sendable scalars from the non-Sendable result inside the
+        // recognizer's queue — this is a pure read, no further callbacks.
+        let newSegments: [TranscriptionSegment] = result.bestTranscription.segments.map { segment in
             TranscriptionSegment(
                 id: UUID(),
                 text: segment.substring,
                 speakerId: speakerId,
                 startTime: segment.timestamp,
                 endTime: segment.timestamp + segment.duration,
-                isFinal: result.isFinal,
+                isFinal: isFinal,
                 confidence: Double(segment.confidence),
                 language: language
             )
         }
+        let boundaryText: String? = isFinal ? result.bestTranscription.formattedString : nil
 
-        replaceSegments(for: speakerId, with: newSegments, isFinal: result.isFinal)
+        Task.detached(priority: .utility) { [weak self] in
+            await self?.applyRecognitionResult(
+                segments: newSegments,
+                speakerId: speakerId,
+                isFinal: isFinal,
+                boundaryText: boundaryText
+            )
+        }
+    }
 
-        if result.isFinal {
-            let boundaryText = result.bestTranscription.formattedString
+    /// PERF-005: MainActor-isolated apply step. Skips partial work while the
+    /// overlay is hidden so the cost of partial recognition becomes nearly
+    /// zero when the user has dismissed the transcription panel.
+    private func applyRecognitionResult(
+        segments newSegments: [TranscriptionSegment],
+        speakerId: String,
+        isFinal: Bool,
+        boundaryText: String?
+    ) {
+        guard isFinal || isShowingOverlay else { return }
+        replaceSegments(for: speakerId, with: newSegments, isFinal: isFinal)
+        if isFinal, let boundaryText {
             rotateRecognitionRequest(for: speakerId, boundaryText: boundaryText)
         }
     }
+
+    // MARK: - Private — Result Handling
 
     private func rotateRecognitionRequest(for speakerId: String, boundaryText: String) {
         let stream: StreamRecognizer?
@@ -341,11 +393,9 @@ final class CallTranscriptionService: ObservableObject, CallTranscriptionService
 
         let language = stream.language
 
+        // PERF-005: same nonisolated-callback hop as startRecognitionTask.
         stream.task = stream.recognizer.recognitionTask(with: newRequest) { [weak self] result, error in
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                self.handleRecognitionResult(result, error: error, speakerId: speakerId, language: language)
-            }
+            self?.handleRecognizerCallback(result: result, error: error, speakerId: speakerId, language: language)
         }
 
         if stream.task == nil {
