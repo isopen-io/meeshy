@@ -259,15 +259,78 @@ public final class StoryCanvasUIView: UIView {
             let translation = recognizer.translation(in: self)
             let dxNorm = Double(translation.x / bounds.width)
             let dyNorm = Double(translation.y / bounds.height)
-            let newX = clamp(dragStartSlideX + dxNorm)
-            let newY = clamp(dragStartSlideY + dyNorm)
-            slide = updatePosition(slideId: id, x: newX, y: newY)
+            let rawX = clamp(dragStartSlideX + dxNorm)
+            let rawY = clamp(dragStartSlideY + dyNorm)
+            let (snappedX, didSnapX) = snap(rawX)
+            let (snappedY, didSnapY) = snap(rawY)
+            updateSnapGuides(x: didSnapX ? snappedX : nil,
+                             y: didSnapY ? snappedY : nil)
+            slide = updatePosition(slideId: id, x: snappedX, y: snappedY)
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
             manipulatedItemId = nil
+            hideSnapGuides()
         default:
             break
         }
+    }
+
+    // MARK: - Snap guides
+
+    private static let snapTargets: [Double] = [0.18, 0.25, 0.5, 0.75, 0.82]
+    private static let snapTolerance: Double = 0.02
+
+    private var snapGuideLayers: [CAShapeLayer] = []
+
+    private nonisolated func snap(_ value: Double) -> (snapped: Double, didSnap: Bool) {
+        for target in Self.snapTargets where abs(value - target) < Self.snapTolerance {
+            return (target, true)
+        }
+        return (value, false)
+    }
+
+    private func updateSnapGuides(x: Double?, y: Double?) {
+        hideSnapGuides()
+        guard bounds.size != .zero else { return }
+        if let x {
+            let line = makeGuideLine(verticalAt: CGFloat(x) * bounds.width,
+                                     length: bounds.height,
+                                     vertical: true)
+            editOverlayLayer.addSublayer(line)
+            snapGuideLayers.append(line)
+        }
+        if let y {
+            let line = makeGuideLine(verticalAt: CGFloat(y) * bounds.height,
+                                     length: bounds.width,
+                                     vertical: false)
+            editOverlayLayer.addSublayer(line)
+            snapGuideLayers.append(line)
+        }
+    }
+
+    private func hideSnapGuides() {
+        snapGuideLayers.forEach { $0.removeFromSuperlayer() }
+        snapGuideLayers.removeAll()
+    }
+
+    private func makeGuideLine(verticalAt offset: CGFloat,
+                               length: CGFloat,
+                               vertical: Bool) -> CAShapeLayer {
+        let path = UIBezierPath()
+        if vertical {
+            path.move(to: CGPoint(x: offset, y: 0))
+            path.addLine(to: CGPoint(x: offset, y: length))
+        } else {
+            path.move(to: CGPoint(x: 0, y: offset))
+            path.addLine(to: CGPoint(x: length, y: offset))
+        }
+        let line = CAShapeLayer()
+        line.path = path.cgPath
+        line.strokeColor = UIColor.systemPink.cgColor
+        line.lineWidth = 1
+        line.lineDashPattern = [4, 4]
+        line.fillColor = UIColor.clear.cgColor
+        return line
     }
 
     // MARK: - Hit testing
