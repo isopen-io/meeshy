@@ -377,7 +377,10 @@ export interface CallInitiateEvent {
 export interface CallInitiatedEvent {
   readonly callId: string;
   readonly conversationId: string;
+  /** Architecture mode (`'p2p'` or `'sfu'`). NOT the media type — see `type`. */
   readonly mode: CallMode;
+  /** Media type (`'audio'` or `'video'`). Drives CallKit `hasVideo` on iOS. */
+  readonly type: 'audio' | 'video';
   readonly initiator: {
     readonly userId: string;
     readonly username: string;

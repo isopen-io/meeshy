@@ -989,7 +989,18 @@ final class CallManager: ObservableObject {
                 let myUserId = AuthManager.shared.currentUser?.id
                 guard event.initiator.userId != myUserId else { return }
                 guard self.currentCallId != event.callId else { return }
-                let isVideo = event.mode == "video" || event.mode == nil
+                // `mode` est l'architecture WebRTC ('p2p' | 'sfu'), PAS le
+                // type média. Le type média est dans `type` ('audio' | 'video').
+                // Avant le fix gateway, `mode` était lu et valait toujours 'p2p'
+                // → isVideo == false même pour les appels vidéo.
+                // On lit maintenant `type`. Si absent (anciens builds gateway),
+                // on retombe sur `mode == "video"` pour compat ascendante.
+                let isVideo: Bool
+                if let typeValue = event.type {
+                    isVideo = typeValue == "video"
+                } else {
+                    isVideo = event.mode == "video"
+                }
                 let callerName = event.initiator.displayName ?? event.initiator.username
                 let dynamicIceServers = event.iceServers?.map { server in
                     IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)

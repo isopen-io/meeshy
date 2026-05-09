@@ -398,7 +398,12 @@ public struct SocketIceServer: Decodable, Sendable {
 public struct CallOfferData: Decodable, Sendable {
     public let callId: String
     public let conversationId: String
+    /// Architecture mode (`"p2p"` or `"sfu"`). NOT the media type — see `type`.
     public let mode: String?
+    /// Media type (`"audio"` or `"video"`). Drives CallKit `hasVideo`.
+    /// Optional for backwards compatibility with older gateway builds that
+    /// did not include this field; absence is treated as audio call.
+    public let type: String?
     public let initiator: CallInitiatorInfo
     public let iceServers: [SocketIceServer]?
 

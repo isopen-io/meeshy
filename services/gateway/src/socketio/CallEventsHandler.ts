@@ -214,10 +214,18 @@ export class CallEventsHandler {
         });
 
         // Prepare event data
+        // CRITIQUE — `mode` est l'architecture WebRTC (`'p2p' | 'sfu'`), PAS
+        // le type média. Le type média (`'audio' | 'video'`) est stocké dans
+        // `callSession.metadata.type` (cf. CallService.initiateCall:339). Sans
+        // ce champ explicite, l'iOS recevait `mode: 'p2p'` et décidait
+        // toujours `isVideo = false` → CallKit affichait l'incoming call en
+        // audio même quand l'appelant voulait un appel vidéo.
+        const callType: 'audio' | 'video' = (callSession.metadata as any)?.type === 'video' ? 'video' : 'audio';
         const initiatedEvent: CallInitiatedEvent = {
           callId: callSession.id,
           conversationId: data.conversationId,
           mode: callSession.mode,
+          type: callType,
           initiator: {
             userId: callSession.initiator.id,
             username: callSession.initiator.username,
