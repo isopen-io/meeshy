@@ -471,6 +471,18 @@ struct AudioMediaView: View, Equatable {
             Image(systemName: "clock")
                 .font(.system(size: 9))
                 .foregroundColor(metaColor)
+        case .invisible:
+            // Spec §6.2 — pre-200ms debounce, no glyph rendered to keep audio
+            // bubble timestamp row visually still during optimistic phase.
+            EmptyView()
+        case .clock:
+            Image(systemName: "clock")
+                .font(.system(size: 9))
+                .foregroundColor(metaColor.opacity(0.7))
+        case .slow:
+            Image(systemName: "clock.badge.exclamationmark")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(MeeshyColors.warning)
         case .sent:
             Image(systemName: "checkmark")
                 .font(.system(size: 9, weight: .semibold))

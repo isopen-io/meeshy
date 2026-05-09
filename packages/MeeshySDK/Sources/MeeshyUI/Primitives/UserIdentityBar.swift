@@ -313,6 +313,22 @@ public struct UserIdentityBar: View {
             Image(systemName: "clock")
                 .font(.system(size: 10))
                 .foregroundColor(secondaryColor)
+        case .invisible:
+            // Spec §6.2 — optimistic applied locally, debounced for 200ms before
+            // the clock icon appears. Render an empty placeholder so the meta
+            // row layout stays stable while the user perceives instant send.
+            EmptyView()
+        case .clock:
+            // 200ms-5s without ACK: subtle clock glyph hinting "still sending".
+            Image(systemName: "clock")
+                .font(.system(size: 10))
+                .foregroundColor(secondaryColor.opacity(0.7))
+        case .slow:
+            // 5s-30s without ACK: warmer "slow send" indicator using the
+            // semantic warning color to nudge the user without alarming them.
+            Image(systemName: "clock.badge.exclamationmark")
+                .font(.system(size: 10))
+                .foregroundColor(MeeshyColors.warning)
         case .sent:
             Image(systemName: "checkmark")
                 .font(.system(size: 10, weight: .semibold))

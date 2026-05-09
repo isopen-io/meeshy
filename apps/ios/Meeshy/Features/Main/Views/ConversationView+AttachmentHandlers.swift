@@ -221,7 +221,7 @@ extension ConversationView {
                 let lang = composerState.selectedLanguage
 
                 if hasAudio && !uploadedIds.isEmpty {
-                    let messageId = await MessageSocketManager.shared.sendWithAttachmentsAsync(
+                    let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
                         conversationId: viewModel.conversationId,
                         content: content.isEmpty ? nil : content,
                         attachmentIds: uploadedIds,
@@ -229,12 +229,12 @@ extension ConversationView {
                         storyReplyToId: storyReplyId,
                         originalLanguage: lang
                     )
-                    if let messageId {
+                    if let ack {
                         // Optimistic GRDB row inserted earlier with tempId; map
                         // it to the server id so the message:new broadcast (and
                         // any future delete/edit/react ops) can resolve back to
                         // the original optimistic row.
-                        viewModel.pendingServerIds[tempId] = messageId
+                        viewModel.pendingServerIds[tempId] = ack.messageId
                         sendSuccess = true
                     } else {
                         viewModel.error = "Echec de l'envoi du message vocal"

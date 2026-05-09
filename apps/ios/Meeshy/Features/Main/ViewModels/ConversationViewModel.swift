@@ -1304,17 +1304,24 @@ class ConversationViewModel: ObservableObject {
         // directly with the same `tempId` already used by the original send.
         guard !isSending else { return false }
 
-        // Offline: enqueue for later delivery + show optimistic message
-        if NetworkMonitor.shared.isOffline {
+        // Offline: enqueue for later delivery + show optimistic message.
+        // Phase 4 §6.1 — also branch offline when the socket is not currently
+        // connected (transient disconnect with NetworkMonitor still reporting
+        // online), since otherwise the POST would race against an unhealthy
+        // socket and the optimistic row would never reconcile.
+        if NetworkMonitor.shared.isOffline || !MessageSocketManager.shared.isConnected {
+            let offlineClientMessageId = existingTempId ?? ClientMessageId.generate()
             let queueItem = OfflineQueueItem(
                 conversationId: conversationId,
                 content: text,
+                clientMessageId: offlineClientMessageId,
+                originalLanguage: originalLanguage,
                 replyToId: replyToId,
                 forwardedFromId: forwardedFromId,
                 forwardedFromConversationId: forwardedFromConversationId,
                 attachmentIds: attachmentIds
             )
-            Task { await OfflineQueue.shared.enqueue(queueItem) }
+            Task { try? await OfflineQueue.shared.enqueue(queueItem) }
 
             let offlineTempId = queueItem.tempId
             let offlineMessage = Message(
@@ -1445,8 +1452,15 @@ class ConversationViewModel: ObservableObject {
             )
         }
 
-        // Optimistic insert
-        let tempId = existingTempId ?? "temp_\(UUID().uuidString)"
+        // Optimistic insert.
+        // Phase 4 §6.1 — local id is the canonical `cid_<uuid v4 lowercase>`
+        // sent end-to-end so the gateway can dedup via the unique
+        // `(conversationId, clientMessageId)` index and the iOS reconciliation
+        // by-cid path can match the server-assigned record without ambiguity.
+        // The legacy `temp_/offline_/retry_*` prefix scheme is gone — every
+        // local id (online send, offline queue, retry queue) now flows through
+        // `ClientMessageId.generate()`.
+        let tempId = existingTempId ?? ClientMessageId.generate()
         let resolvedAttachments = localAttachments ?? []
         let optimisticMessageType: Message.MessageType = {
             guard let first = resolvedAttachments.first else { return .text }
@@ -1538,7 +1552,8 @@ class ConversationViewModel: ObservableObject {
                 isBlurred: resolvedBlur,
                 effectFlags: pendingEffects.hasAnyEffect ? pendingEffects.flags.rawValue : nil,
                 isEncrypted: isEncrypted ? true : nil,
-                encryptionMode: encryptionMode
+                encryptionMode: encryptionMode,
+                clientMessageId: tempId
             )
             print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
             let responseData = try await messageService.send(
@@ -1615,9 +1630,9 @@ class ConversationViewModel: ObservableObject {
                 originalLanguage: originalLanguage ?? "fr",
                 replyToId: replyToId,
                 attachmentIds: attachmentIds,
-                tempId: tempId
+                clientMessageId: tempId
             )
-            Task { await MessageRetryQueue.shared.enqueue(retryItem) }
+            Task { try? await MessageRetryQueue.shared.enqueue(retryItem) }
 
             isSending = false
             return false
@@ -1820,7 +1835,7 @@ class ConversationViewModel: ObservableObject {
                 messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
             )
             Task {
-                await ReactionQueue.shared.enqueue(item)
+                try? await ReactionQueue.shared.enqueue(item)
                 await ReactionQueue.shared.retryAll()
             }
         } else {
@@ -1835,7 +1850,7 @@ class ConversationViewModel: ObservableObject {
                 messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
             )
             Task {
-                await ReactionQueue.shared.enqueue(item)
+                try? await ReactionQueue.shared.enqueue(item)
                 await ReactionQueue.shared.retryAll()
             }
         }

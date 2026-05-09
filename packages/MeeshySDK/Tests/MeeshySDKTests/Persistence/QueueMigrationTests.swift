@@ -32,7 +32,7 @@ final class QueueMigrationTests: XCTestCase {
             conversationId: "c1",
             content: "hello offline"
         )
-        await OfflineQueue.shared.enqueue(item)
+        try await OfflineQueue.shared.enqueue(item)
 
         await OfflineQueue.shared.migrateToOutbox(pool: pool)
 
@@ -57,7 +57,7 @@ final class QueueMigrationTests: XCTestCase {
             conversationId: "conv-abc",
             content: "test content"
         )
-        await OfflineQueue.shared.enqueue(item)
+        try await OfflineQueue.shared.enqueue(item)
 
         await OfflineQueue.shared.migrateToOutbox(pool: pool)
 
@@ -74,7 +74,7 @@ final class QueueMigrationTests: XCTestCase {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
 
-        await OfflineQueue.shared.enqueue(
+        try await OfflineQueue.shared.enqueue(
             OfflineQueueItem(conversationId: "c1", content: "msg")
         )
 
@@ -99,7 +99,7 @@ final class QueueMigrationTests: XCTestCase {
             content: "hello retry",
             originalLanguage: "en"
         )
-        await MessageRetryQueue.shared.enqueue(item)
+        try await MessageRetryQueue.shared.enqueue(item)
 
         await MessageRetryQueue.shared.migrateToOutbox(pool: pool)
 
@@ -124,7 +124,7 @@ final class QueueMigrationTests: XCTestCase {
             conversationId: "c2",
             content: "retry content"
         )
-        await MessageRetryQueue.shared.enqueue(item)
+        try await MessageRetryQueue.shared.enqueue(item)
 
         await MessageRetryQueue.shared.migrateToOutbox(pool: pool)
 
@@ -140,7 +140,7 @@ final class QueueMigrationTests: XCTestCase {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
 
-        await MessageRetryQueue.shared.enqueue(
+        try await MessageRetryQueue.shared.enqueue(
             RetryQueueItem(conversationId: "c2", content: "msg")
         )
 
@@ -160,10 +160,10 @@ final class QueueMigrationTests: XCTestCase {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
 
-        await OfflineQueue.shared.enqueue(
+        try await OfflineQueue.shared.enqueue(
             OfflineQueueItem(conversationId: "c1", content: "offline msg")
         )
-        await MessageRetryQueue.shared.enqueue(
+        try await MessageRetryQueue.shared.enqueue(
             RetryQueueItem(conversationId: "c2", content: "retry msg")
         )
 
@@ -178,7 +178,7 @@ final class QueueMigrationTests: XCTestCase {
         let pool = try makeFreshPool()
         try MessageDatabaseMigrations.runAll(on: pool)
 
-        await OfflineQueue.shared.enqueue(
+        try await OfflineQueue.shared.enqueue(
             OfflineQueueItem(conversationId: "c1", content: "offline")
         )
 

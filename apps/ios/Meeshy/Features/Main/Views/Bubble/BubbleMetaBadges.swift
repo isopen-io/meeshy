@@ -91,6 +91,19 @@ struct BubbleMediaDeliveryCheckmark: View, Equatable {
             Image(systemName: "clock")
                 .font(.system(size: 9))
                 .foregroundColor(.white.opacity(0.8))
+        case .invisible:
+            // Spec §6.2 — debounced pre-clock state, no glyph on the dark
+            // capsule overlay. Keeps the timestamp row stable during the
+            // perceived-instant send.
+            EmptyView()
+        case .clock:
+            Image(systemName: "clock")
+                .font(.system(size: 9))
+                .foregroundColor(.white.opacity(0.65))
+        case .slow:
+            Image(systemName: "clock.badge.exclamationmark")
+                .font(.system(size: 9, weight: .semibold))
+                .foregroundColor(MeeshyColors.warning)
         case .sent:
             Image(systemName: "checkmark")
                 .font(.system(size: 9, weight: .semibold))
