@@ -33,6 +33,17 @@ public final class StoryCanvasUIView: UIView {
     /// Called whenever a gesture mutates the slide (Tasks 2.7+).
     public var onItemModified: ((StorySlide) -> Void)?
 
+    /// Classifies an item that was hit by a gesture so the parent can route to
+    /// the correct editor (text panel vs media editor sheet vs sticker UX).
+    public enum CanvasItemKind: Sendable, Equatable {
+        case text, media, sticker
+    }
+
+    /// Called when the user double-taps an item on the canvas. The parent
+    /// composer typically uses this to open the inline text editor or the
+    /// media editor sheet (legacy `onEditText` / `onEditMedia` UX parity).
+    public var onItemDoubleTapped: ((String, CanvasItemKind) -> Void)?
+
     // MARK: - Internal layers
 
     private let rootLayer = CALayer()
@@ -44,6 +55,7 @@ public final class StoryCanvasUIView: UIView {
     private var panRecognizer: UIPanGestureRecognizer!
     private var pinchRecognizer: UIPinchGestureRecognizer!
     private var rotationRecognizer: UIRotationGestureRecognizer!
+    private var doubleTapRecognizer: UITapGestureRecognizer!
 
     // MARK: - Drawing mode (Phase 3 Task 3.4)
 
@@ -368,12 +380,28 @@ public final class StoryCanvasUIView: UIView {
         panRecognizer = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         pinchRecognizer = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
         rotationRecognizer = UIRotationGestureRecognizer(target: self, action: #selector(handleRotation(_:)))
-        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer] {
+        doubleTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
+        doubleTapRecognizer.numberOfTapsRequired = 2
+        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, doubleTapRecognizer] {
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
         }
         addInteraction(UIPointerInteraction(delegate: self))
         addInteraction(UIContextMenuInteraction(delegate: self))
+    }
+
+    @objc private func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {
+        guard mode == .edit, recognizer.state == .ended else { return }
+        let location = recognizer.location(in: self)
+        guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else { return }
+        onItemDoubleTapped?(id, kind)
+    }
+
+    private func itemKind(forId id: String) -> CanvasItemKind? {
+        if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
+        if (slide.effects.mediaObjects ?? []).contains(where: { $0.id == id }) { return .media }
+        if (slide.effects.stickerObjects ?? []).contains(where: { $0.id == id }) { return .sticker }
+        return nil
     }
 
     @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
