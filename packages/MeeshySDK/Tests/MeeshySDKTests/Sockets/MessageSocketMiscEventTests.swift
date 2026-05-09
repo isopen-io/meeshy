@@ -180,7 +180,7 @@ final class MessageSocketMiscEventTests: XCTestCase {
 
     // MARK: - ConversationUpdatedEvent
 
-    func test_conversationUpdatedEvent_allFields() throws {
+    func test_conversationUpdatedEvent_decodesWithUpdatedBy() throws {
         let json = """
         {
             "conversationId": "conv1",
@@ -207,7 +207,7 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertEqual(event.isAnnouncementChannel, true)
         XCTAssertEqual(event.slowModeSeconds, 30)
         XCTAssertEqual(event.autoTranslateEnabled, true)
-        XCTAssertEqual(event.updatedBy.id, "u1")
+        XCTAssertEqual(event.updatedBy?.id, "u1")
         XCTAssertEqual(event.updatedAt, "2026-04-09T10:00:00.000Z")
     }
 
@@ -231,6 +231,41 @@ final class MessageSocketMiscEventTests: XCTestCase {
         XCTAssertNil(event.slowModeSeconds)
         XCTAssertNil(event.autoTranslateEnabled)
         XCTAssertNil(event.lastMessageAt, "Old payloads without lastMessageAt must still decode and expose nil")
+    }
+
+    /// The gateway's message-driven CONVERSATION_UPDATED payload
+    /// (handlers/MessageHandler.ts on every new message) carries
+    /// `{ conversationId, lastMessageAt, lastMessageId,
+    /// lastMessagePreview, senderId, updatedAt }` — no `updatedBy`. Before
+    /// `updatedBy` was made optional, this payload silently failed to
+    /// decode with `keyNotFound` and `bumpToTop` never fired in production.
+    /// This test pins the SDK to the gateway's real shape.
+    func test_conversationUpdatedEvent_decodesWithoutUpdatedBy() throws {
+        let json = """
+        {
+            "conversationId": "conv-msg-driven",
+            "lastMessageAt": "2026-05-09T08:30:00.000Z",
+            "lastMessageId": "msg-42",
+            "lastMessagePreview": "Hello there",
+            "senderId": "u-sender",
+            "updatedAt": "2026-05-09T08:30:00.000Z"
+        }
+        """.data(using: .utf8)!
+
+        let isoFormatter = ISO8601DateFormatter()
+        isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let dateDecoder = JSONDecoder()
+        dateDecoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let str = try container.decode(String.self)
+            if let date = isoFormatter.date(from: str) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(str)")
+        }
+
+        let event = try dateDecoder.decode(ConversationUpdatedEvent.self, from: json)
+        XCTAssertEqual(event.conversationId, "conv-msg-driven")
+        XCTAssertNil(event.updatedBy, "Message-driven payload has no updatedBy and must decode it as nil instead of failing")
+        XCTAssertNotNil(event.lastMessageAt)
     }
 
     /// The gateway broadcasts CONVERSATION_UPDATED on every new message

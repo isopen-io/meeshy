@@ -281,7 +281,15 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
     /// pre-existing CONVERSATION_UPDATED payloads (rename, avatar change,
     /// etc.) that don't advance lastMessageAt.
     public let lastMessageAt: Date?
-    public let updatedBy: SocketEventUser
+    /// Optional because the gateway's message-driven CONVERSATION_UPDATED
+    /// payload (handlers/MessageHandler.ts on every new message) only
+    /// carries `{ conversationId, lastMessageAt, lastMessageId,
+    /// lastMessagePreview, senderId, updatedAt }` — no `updatedBy`. Decoding
+    /// it as required would silently fail with `keyNotFound` on every
+    /// inbound message, which is the entire signal that drives bumpToTop.
+    /// Metadata-driven updates (rename, avatar change, etc.) keep emitting
+    /// `updatedBy` and continue to populate this field.
+    public let updatedBy: SocketEventUser?
     public let updatedAt: String
 
     private enum CodingKeys: String, CodingKey {
@@ -302,7 +310,7 @@ public struct ConversationUpdatedEvent: Decodable, Sendable {
         slowModeSeconds = try container.decodeIfPresent(Int.self, forKey: .slowModeSeconds)
         autoTranslateEnabled = try container.decodeIfPresent(Bool.self, forKey: .autoTranslateEnabled)
         lastMessageAt = try container.decodeIfPresent(Date.self, forKey: .lastMessageAt)
-        updatedBy = try container.decode(SocketEventUser.self, forKey: .updatedBy)
+        updatedBy = try container.decodeIfPresent(SocketEventUser.self, forKey: .updatedBy)
         updatedAt = try container.decode(String.self, forKey: .updatedAt)
     }
 }

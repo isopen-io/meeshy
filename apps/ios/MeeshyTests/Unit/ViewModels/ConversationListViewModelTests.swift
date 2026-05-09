@@ -1220,6 +1220,36 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(sut.conversations.first?.id, "c",
                        "Event with lastMessageAt must promote the conversation to the top")
     }
+
+    /// Pins the production payload shape: handlers/MessageHandler.ts emits
+    /// CONVERSATION_UPDATED on every new message WITHOUT `updatedBy`. If
+    /// the SDK ever requires that field again the decode silently fails,
+    /// the publisher never fires, and bumpToTop dies — exactly the bug
+    /// the spec review caught. This test fails loudly if that regression
+    /// returns.
+    func test_conversationUpdatedEvent_messageDriven_withoutUpdatedBy_triggersBumpToTop() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+        sut.setConversations([
+            makeConversation(id: "a", lastMessageAt: Date(timeIntervalSince1970: 5_000)),
+            makeConversation(id: "b", lastMessageAt: Date(timeIntervalSince1970: 4_000)),
+            makeConversation(id: "c", lastMessageAt: Date(timeIntervalSince1970: 3_000))
+        ])
+
+        let newer = Date(timeIntervalSince1970: 9_000)
+        let event = makeConversationUpdatedEvent(
+            conversationId: "c",
+            lastMessageAt: newer,
+            includeUpdatedBy: false
+        )
+        XCTAssertNil(event.updatedBy, "Factory must produce a payload mirroring the gateway's message-driven shape")
+        messageSocket.conversationUpdated.send(event)
+
+        try await Task.sleep(nanoseconds: 80_000_000)
+
+        XCTAssertEqual(sut.conversations.first?.id, "c",
+                       "Message-driven payload (no updatedBy) must still promote the conversation to the top")
+    }
 }
 
 // MARK: - ConversationUpdatedEvent factory
@@ -1228,15 +1258,18 @@ private func makeConversationUpdatedEvent(
     conversationId: String,
     lastMessageAt: Date?,
     title: String? = nil,
-    avatar: String? = nil
+    avatar: String? = nil,
+    includeUpdatedBy: Bool = true
 ) -> ConversationUpdatedEvent {
     let isoFormatter = ISO8601DateFormatter()
     isoFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
     var json: [String: Any] = [
         "conversationId": conversationId,
-        "updatedBy": ["id": "test-user"],
         "updatedAt": isoFormatter.string(from: Date())
     ]
+    if includeUpdatedBy {
+        json["updatedBy"] = ["id": "test-user"]
+    }
     if let title { json["title"] = title }
     if let avatar { json["avatar"] = avatar }
     if let lastMessageAt {
