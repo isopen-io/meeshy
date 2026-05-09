@@ -115,6 +115,15 @@ class GlobalSearchViewModel: ObservableObject {
     /// network rather than serving stale results indefinitely.
     private static let messageQueryCacheStaleTTL: TimeInterval = 120
 
+    /// Tracks the in-flight debounced search so a fresh keystroke can cancel
+    /// the previous round-trip before launching a new one. Marked
+    /// `nonisolated(unsafe)` because writes always happen on the main
+    /// thread (the Combine debounce sink runs on `DispatchQueue.main`) and
+    /// `deinit` — which is implicitly non-isolated under Swift 6 — needs to
+    /// reach the property to cancel a still-flying task. `Task<Void, Never>`
+    /// is `Sendable` so the unchecked access is safe.
+    nonisolated(unsafe) private var searchTask: Task<Void, Never>?
+
     // MARK: - Init
 
     init(
@@ -133,6 +142,14 @@ class GlobalSearchViewModel: ObservableObject {
         setupDebounce()
     }
 
+    deinit {
+        // `searchTask` is `nonisolated(unsafe)` so the implicitly
+        // non-isolated `deinit` can reach it without a Swift 6 isolation
+        // warning. Cancel any in-flight search so we don't leak network
+        // work after the view disappears.
+        searchTask?.cancel()
+    }
+
     // MARK: - Debounced Search
 
     private func setupDebounce() {
@@ -143,10 +160,18 @@ class GlobalSearchViewModel: ObservableObject {
                 guard let self else { return }
                 let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
                 if trimmed.count >= 2 {
-                    Task { [weak self] in
+                    // Cancel the previous in-flight search before launching
+                    // a new one. Without this each keystroke spawned a
+                    // detached Task that ran to completion (zombie network
+                    // work and stale `messageResults` writes once the user
+                    // had moved on).
+                    self.searchTask?.cancel()
+                    self.searchTask = Task { [weak self] in
                         await self?.performSearch(query: trimmed)
                     }
                 } else {
+                    self.searchTask?.cancel()
+                    self.searchTask = nil
                     self.clearResults()
                 }
             }
@@ -176,6 +201,13 @@ class GlobalSearchViewModel: ObservableObject {
         async let messagesTask = searchMessages(query: query)
 
         let (convs, users, msgs) = await (conversationsTask, usersTask, messagesTask)
+
+        // Bail out gracefully if the debounce-cancel kicked in mid-flight —
+        // we don't want a stale Task overwriting the next query's results
+        // or transitioning the load state away from the new query's
+        // `.loading` / `.cachedStale`.
+        guard !Task.isCancelled else { return }
+
         conversationResults = convs
         userResults = users
         messageResults = msgs
