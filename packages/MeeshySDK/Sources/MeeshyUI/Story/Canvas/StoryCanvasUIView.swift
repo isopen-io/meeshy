@@ -205,6 +205,7 @@ public final class StoryCanvasUIView: UIView {
             addGestureRecognizer(recognizer)
         }
         addInteraction(UIPointerInteraction(delegate: self))
+        addInteraction(UIContextMenuInteraction(delegate: self))
     }
 
     @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
@@ -428,6 +429,107 @@ public final class StoryCanvasUIView: UIView {
 
     private nonisolated func clamp(_ value: Double) -> Double {
         max(0, min(1, value))
+    }
+
+    // MARK: - Item commands (used by context menu + accessibility)
+
+    func deleteItem(id: String) {
+        var newSlide = slide
+        newSlide.effects.textObjects.removeAll { $0.id == id }
+        newSlide.effects.mediaObjects?.removeAll { $0.id == id }
+        newSlide.effects.stickerObjects?.removeAll { $0.id == id }
+        slide = newSlide
+        onItemModified?(slide)
+    }
+
+    func duplicateItem(id: String) {
+        var newSlide = slide
+        if let original = newSlide.effects.textObjects.first(where: { $0.id == id }) {
+            var copy = original
+            copy.id = UUID().uuidString
+            copy.x = clamp(copy.x + 0.05)
+            copy.y = clamp(copy.y + 0.05)
+            copy.zIndex = nextTopZ()
+            newSlide.effects.textObjects.append(copy)
+            slide = newSlide
+            onItemModified?(slide)
+            return
+        }
+        if let original = newSlide.effects.mediaObjects?.first(where: { $0.id == id }) {
+            var copy = original
+            copy.id = UUID().uuidString
+            copy.x = clamp(copy.x + 0.05)
+            copy.y = clamp(copy.y + 0.05)
+            copy.zIndex = nextTopZ()
+            newSlide.effects.mediaObjects = (newSlide.effects.mediaObjects ?? []) + [copy]
+            slide = newSlide
+            onItemModified?(slide)
+            return
+        }
+        if let original = newSlide.effects.stickerObjects?.first(where: { $0.id == id }) {
+            var copy = original
+            copy.id = UUID().uuidString
+            copy.x = clamp(copy.x + 0.05)
+            copy.y = clamp(copy.y + 0.05)
+            copy.zIndex = nextTopZ()
+            newSlide.effects.stickerObjects = (newSlide.effects.stickerObjects ?? []) + [copy]
+            slide = newSlide
+            onItemModified?(slide)
+            return
+        }
+    }
+
+    func sendToBack(id: String) {
+        let newZ = nextBottomZ()
+        slide = mutateItem(slideId: id,
+                           text:    { $0.zIndex = newZ },
+                           media:   { $0.zIndex = newZ },
+                           sticker: { $0.zIndex = newZ })
+        onItemModified?(slide)
+    }
+
+    private func nextTopZ() -> Int {
+        let allZ = slide.effects.textObjects.map(\.zIndex)
+            + (slide.effects.mediaObjects?.map(\.zIndex) ?? [])
+            + (slide.effects.stickerObjects?.map(\.zIndex) ?? [])
+        return (allZ.max() ?? 0) + 1
+    }
+
+    private func nextBottomZ() -> Int {
+        let allZ = slide.effects.textObjects.map(\.zIndex)
+            + (slide.effects.mediaObjects?.map(\.zIndex) ?? [])
+            + (slide.effects.stickerObjects?.map(\.zIndex) ?? [])
+        return (allZ.min() ?? 0) - 1
+    }
+}
+
+// MARK: - UIContextMenuInteractionDelegate (long-press / right-click)
+
+extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
+    public func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
+                                       configurationForMenuAtLocation location: CGPoint)
+    -> UIContextMenuConfiguration? {
+        guard mode == .edit, let id = hitTestItem(at: location) else { return nil }
+        return UIContextMenuConfiguration(
+            identifier: id as NSString,
+            previewProvider: nil
+        ) { [weak self] _ in
+            UIMenu(children: [
+                UIAction(title: "Duplicate",
+                         image: UIImage(systemName: "doc.on.doc")) { _ in
+                    self?.duplicateItem(id: id)
+                },
+                UIAction(title: "Send to Back",
+                         image: UIImage(systemName: "square.3.stack.3d.bottom.filled")) { _ in
+                    self?.sendToBack(id: id)
+                },
+                UIAction(title: "Delete",
+                         image: UIImage(systemName: "trash"),
+                         attributes: .destructive) { _ in
+                    self?.deleteItem(id: id)
+                },
+            ])
+        }
     }
 }
 
