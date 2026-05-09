@@ -101,7 +101,12 @@ public enum StoryRenderer {
             layer.configure(with: media, geometry: geometry, mode: mode)
             return layer
         }
-        // text wired in Task 2.3, sticker wired in Task 2.4.
+        if let text = item as? StoryTextObject {
+            let layer = StoryTextLayer()
+            layer.configure(with: text, geometry: geometry, mode: mode)
+            return layer
+        }
+        // sticker wired in Task 2.4.
         let layer = CALayer()
         layer.zPosition = CGFloat(item.zIndex)
         layer.name = item.id
