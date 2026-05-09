@@ -2580,8 +2580,19 @@ git commit -m "feat(story-canvas): SwiftUI bridge UIViewControllerRepresentable 
 
 ## Task 2.18 : Migrate `StoryComposerView.swift` to use Representable
 
+> **Status (2026-05-09)** : DONE. Migration livrée par commit `75240f15`. Implémentation finale s'écarte du plan initial — voir « Implementation notes » ci-dessous. La portion canvas du composer utilise désormais `StoryComposerCanvasView` (UIViewRepresentable) au lieu de l'historique `StoryCanvasView` SwiftUI.
+
+> **Implementation notes (2026-05-09)** :
+> - `StoryComposerCanvasView: UIViewRepresentable` ajouté à `StoryCanvasRepresentable.swift` pour wrap directement `StoryCanvasUIView` (sans le chrome dev-time du `StoryComposerVC` qui contient un `UISegmentedControl` Edit/Play).
+> - **Single source of truth** : drawing/sticker/filter/background passent par `slide.effects` (lu par le canvas). Les `@State` SwiftUI (`drawingCanvas: PKCanvasView`, `drawingTool`, `selectedFilter`, `selectedImage`, `stickerObjects`) restent côté composer car les toolbars/sheets les bind directement. Pas de doublon de bindings sur le Representable — le slide suffit.
+> - **Double-tap parity** : `StoryCanvasUIView` étendu avec `enum CanvasItemKind { text, media, sticker }` + `var onItemDoubleTapped: ((String, CanvasItemKind) -> Void)?` + `UITapGestureRecognizer(numberOfTapsRequired: 2)`. Préserve l'UX legacy `onEditText` / `onEditMedia`.
+> - **PencilKit drawing** : préservé via overlay SwiftUI `DrawingOverlayView` au-dessus du canvas (pas via le `setDrawingMode` interne du UIView). La toolbar undo/redo/clear continue d'opérer sur le `drawingCanvas` @State, et `viewModel.drawingData` est synchronisé via `PKCanvasViewDelegate.canvasViewDrawingDidChange`.
+> - **Real-time sync** : 5 `.onChange` (selectedFilter / selectedImage / stickerObjects / drawingData / backgroundColor) collapsed dans un seul `.onChange(of: canvasSyncFingerprint)` qui appelle `syncCurrentSlideEffects()` — sinon le SwiftUI type-checker timed out sur le body. Sticker double-tap UX (toggle delete button) est différée.
+
 **Files:**
 - Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift`
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift`
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasRepresentable.swift`
 
 - [ ] **Step 1: Replace canvas portion with `StoryComposerRepresentable`**
 
@@ -2639,15 +2650,43 @@ git commit -m "refactor(story-canvas): StoryComposerView uses StoryComposerRepre
 
 ## Task 2.19 : Delete legacy SwiftUI canvas files
 
-**Files:**
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasView.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/DraggableMediaView.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/DraggableTextObjectView.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/CanvasElementModifiers.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasReaderView.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasReaderView+Timeline.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/SimpleTimelineView.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/TimelinePlaybackEngine.swift`
+> **Status (2026-05-09)** : PARTIEL. Audit pré-exécution a révélé que `StoryCanvasReaderView` (1732 lignes) consomme `DraggableMediaView` ligne 558 et est lui-même utilisé par 5 sites prod (`UnifiedPostComposer.swift:225`, `StoryRepostEmbedCell.swift:32`, `StoryViewerView.swift:450,464`). Migrer ces sites vers la nouvelle infra UIKit nécessite d'étendre `StoryViewerRepresentable` (Story multi-slide, preloaded URLs, langage chain) — projet en soi.
+>
+> **Choix pragmatique (2026-05-09)** : suppression des 5 fichiers SANS dépendances externes au Reader, **différer** Reader + Draggable + tests Reader pour session future.
+>
+> **Supprimés (commit `75240f15`)** :
+> - `StoryCanvasView.swift` (967 lignes) — remplacé par `StoryComposerCanvasView`
+> - `TimelinePanel.swift` (860 lignes) — dead code (référencé seulement par lui-même ; le composer utilise `TimelineContainerSwitcher` v2)
+> - `TimelinePlaybackEngine.swift` (215 lignes) — dead code (consommé seulement par `TimelinePanel`)
+> - `SimpleTimelineView.swift` (452 lignes) — dead code (no external refs)
+> - `CanvasElementModifiers.swift` (86 lignes) — dead code (no external refs)
+> - `Tests/MeeshyUITests/TimelineTests.swift` — tests de `TimelinePlaybackEngine`
+>
+> **Total supprimé : ~2580 lignes** (vs ~4220 dans le scope d'origine).
+>
+> **Différés (Reader migration, session future)** :
+> - `DraggableMediaView.swift` (426 lignes) — consommé par `StoryCanvasReaderView`
+> - `DraggableTextObjectView.swift` (248 lignes) — consommé par `StoryCanvasReaderView`
+> - `StoryCanvasReaderView.swift` (1732 lignes) — consommé par 5 sites prod
+> - `StoryCanvasReaderView+Timeline.swift` (94 lignes) — extensions du Reader
+> - Tests : `StoryCanvasReaderViewMuteTests.swift`, `StoryCanvasReaderTransitionTests.swift`, `StoryCanvasReaderKeyframeTests.swift`
+>
+> **Pour la session Reader migration future** :
+> 1. Étendre `StoryViewerRepresentable` (`StoryCanvasRepresentable.swift`) pour accepter : `story: Story` (multi-slide), `preferredLanguage`/`preferredContentLanguages` (Prisme), `preloadedImages/Videos/AudioURLs`, `mute: Bool`, `repost: RepostPayload?` initializer.
+> 2. Migrer les 5 call sites vers le nouveau Representable (idéalement en gardant la même signature SwiftUI).
+> 3. Supprimer Reader + Draggable + tests.
+
+**Files (initial scope) :**
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasView.swift` ✅
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/DraggableMediaView.swift` ⏳ (différé)
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/DraggableTextObjectView.swift` ⏳ (différé)
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/CanvasElementModifiers.swift` ✅
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasReaderView.swift` ⏳ (différé)
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasReaderView+Timeline.swift` ⏳ (différé)
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/SimpleTimelineView.swift` ✅
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/TimelinePlaybackEngine.swift` ✅
+- Delete (bonus): `packages/MeeshySDK/Sources/MeeshyUI/Story/TimelinePanel.swift` ✅
+- Delete (bonus): `packages/MeeshySDK/Tests/MeeshyUITests/TimelineTests.swift` ✅
 
 - [ ] **Step 1: Delete files**
 
