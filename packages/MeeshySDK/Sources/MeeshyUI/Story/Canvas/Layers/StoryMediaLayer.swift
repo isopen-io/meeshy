@@ -70,6 +70,12 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         case .none:
             break
         }
+
+        // Rasterize static images during playback to skip per-frame compositing.
+        // Videos cannot be rasterized (their AVPlayerLayer keeps changing).
+        let staticImage = media.kind == .image && media.isStatic
+        shouldRasterize = mode == .play && staticImage
+        if shouldRasterize { rasterizationScale = UIScreen.main.scale }
     }
 
     // MARK: - Sizing
@@ -120,7 +126,10 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
 
         switch mode {
         case .play:
-            player.play()
+            // Pre-warm decoder so playback start is glitch-free.
+            player.preroll(atRate: 1.0) { ready in
+                if ready { player.play() }
+            }
         case .edit:
             player.seek(to: .zero)
         }

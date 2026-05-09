@@ -61,6 +61,10 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         transform = CATransform3DMakeRotation(CGFloat(text.rotation) * .pi / 180, 0, 0, 1)
         zPosition = CGFloat(text.zIndex)
         name = text.id
+
+        // Static text is a rasterization candidate during playback.
+        shouldRasterize = mode == .play && text.isStatic
+        if shouldRasterize { rasterizationScale = UIScreen.main.scale }
     }
 
     // MARK: - Helpers

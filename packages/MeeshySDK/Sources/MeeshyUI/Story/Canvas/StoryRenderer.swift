@@ -38,6 +38,15 @@ extension StoryTextObject: RenderableItem {}
 extension StoryMediaObject: RenderableItem {}
 extension StorySticker: RenderableItem {}
 
+extension RenderableItem {
+    /// A static item has no timing windows, no fades, no keyframes — its rendered
+    /// representation never changes during a slide, so it's a good rasterization
+    /// candidate during `.play`.
+    public var isStatic: Bool {
+        startTime == nil && duration == nil && fadeIn == nil && fadeOut == nil
+    }
+}
+
 // MARK: - StoryRenderer
 
 /// Single source of rendering for the Story canvas. Called by:
@@ -83,11 +92,18 @@ public enum StoryRenderer {
         return items
     }
 
+    @MainActor
     private static func shouldRender(item: any RenderableItem, at time: CMTime, mode: RenderMode) -> Bool {
         guard mode == .play else { return true }
         let t = CMTimeGetSeconds(time)
         let start = item.startTime ?? 0
         let end = (item.duration.map { start + $0 }) ?? .infinity
+        // Reduce Motion: sharp visibility cut, no fadeIn/fadeOut interpolation
+        // (fade interpolation lands in Phase 3 with CAAnimation; this branch is
+        // structurally future-proof so no diff is needed when fades arrive).
+        if UIAccessibility.isReduceMotionEnabled {
+            return t >= start && t < end
+        }
         return t >= start && t < end
     }
 

@@ -1,6 +1,7 @@
 import UIKit
 import QuartzCore
 import CoreMedia
+import AVFoundation
 import MeeshySDK
 
 /// The UIKit canvas surface that renders a `StorySlide` and switches between
@@ -73,6 +74,11 @@ public final class StoryCanvasUIView: UIView {
         editOverlayLayer.zPosition = 10_000  // always on top
         backgroundColor = .black
         setupGesturesAll()
+        observeAppLifecycle()
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
     }
 
     @available(*, unavailable)
@@ -213,6 +219,44 @@ public final class StoryCanvasUIView: UIView {
             startEditDisplayLinkIfNeeded()
         } else {
             stopEditDisplayLink()
+        }
+    }
+
+    public override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        // Stage Manager / Split View on iPad can change horizontal/vertical
+        // size classes without bounds changing; force a rebuild defensively.
+        rebuildLayers()
+    }
+
+    // MARK: - App lifecycle (UIScene-aware)
+
+    private func observeAppLifecycle() {
+        let nc = NotificationCenter.default
+        nc.addObserver(self,
+                       selector: #selector(handleWillResignActive),
+                       name: UIApplication.willResignActiveNotification,
+                       object: nil)
+        nc.addObserver(self,
+                       selector: #selector(handleDidBecomeActive),
+                       name: UIApplication.didBecomeActiveNotification,
+                       object: nil)
+    }
+
+    @objc private func handleWillResignActive() {
+        forEachAVPlayer { $0.pause() }
+    }
+
+    @objc private func handleDidBecomeActive() {
+        guard mode == .play else { return }
+        forEachAVPlayer { $0.play() }
+    }
+
+    private func forEachAVPlayer(_ block: (AVPlayer) -> Void) {
+        for sub in itemsContainer.sublayers ?? [] {
+            if let media = sub as? StoryMediaLayer, let player = media.avPlayer {
+                block(player)
+            }
         }
     }
 

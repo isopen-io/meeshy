@@ -44,5 +44,10 @@ public final class StoryStickerLayer: CALayer, @unchecked Sendable {
         zPosition = CGFloat(sticker.zIndex)
         contentsScale = UIScreen.main.scale
         name = sticker.id
+
+        // Stickers are pre-rasterized via StoryStickerRasterizer; in .play we
+        // additionally flag the layer for the GPU rasterization fast path.
+        shouldRasterize = mode == .play && sticker.isStatic
+        if shouldRasterize { rasterizationScale = UIScreen.main.scale }
     }
 }
