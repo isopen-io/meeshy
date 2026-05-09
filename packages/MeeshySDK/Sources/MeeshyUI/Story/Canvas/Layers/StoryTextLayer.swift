@@ -27,32 +27,53 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
                           mode: RenderMode) {
         self.textObject = text
 
-        let renderedFontSize = geometry.render(CGFloat(text.fontSize * text.scale))
-        let font = resolveFont(family: text.fontFamily, size: renderedFontSize)
+        // Cross-device parity invariant: every render-space dimension MUST be a
+        // linear function of `geometry.scaleFactor`. Therefore we measure the
+        // text bounding box at the DESIGN font size and project the whole
+        // bounding box through `geometry.render(_:)` once. If we measured in
+        // render space (e.g. `attributed.size()` at the rendered font), font
+        // hinting + sub-pixel rounding would break the iPhone↔iPad linearity
+        // contract enforced by `CrossDeviceEquivalenceTests`.
+        let designFontSize = CGFloat(text.fontSize * text.scale)
+        let designFont = resolveFont(family: text.fontFamily, size: designFontSize)
         let color = parseHexColor(text.textColor) ?? UIColor.white
 
         let alignment = parseAlignment(text.textAlign)
         let para = NSMutableParagraphStyle()
         para.alignment = alignment
-        // RTL auto-detect from content (`.natural` flips for Arabic/Hebrew).
-        para.baseWritingDirection = .natural
+        para.baseWritingDirection = .natural   // RTL auto-detect for Arabic/Hebrew
 
-        let attributed = NSAttributedString(string: text.text, attributes: [
-            .font: font,
+        // Measure in design space.
+        let designAttr = NSAttributedString(string: text.text, attributes: [
+            .font: designFont,
             .foregroundColor: color.cgColor,
             .paragraphStyle: para
         ])
-        string = attributed
+        let designSize = designAttr.size()
+        // Symmetric pad in design pixels (16 design px ≈ ~6 px on iPhone, ~12 on iPad).
+        let designBounds = CGSize(width: ceil(designSize.width) + 16,
+                                  height: ceil(designSize.height) + 16)
+
+        // Render-space bounds is the linear projection of the design bounds.
+        let renderedBounds = geometry.render(designBounds)
+        bounds = CGRect(origin: .zero, size: renderedBounds)
+
+        // Render-space font for actual painting.
+        let renderedFontSize = geometry.render(designFontSize)
+        let renderedFont = resolveFont(family: text.fontFamily, size: renderedFontSize)
+        let renderedAttr = NSAttributedString(string: text.text, attributes: [
+            .font: renderedFont,
+            .foregroundColor: color.cgColor,
+            .paragraphStyle: para
+        ])
+        string = renderedAttr
+        // Mirror the rendered font size on the CATextLayer property so callers
+        // (and tests) can read it directly without unwrapping the attributed string.
+        fontSize = renderedFontSize
         alignmentMode = caTextAlignment(from: alignment)
         contentsScale = UIScreen.main.scale
         isWrapped = true
         truncationMode = .end
-
-        // Frame: derive from text bounding box with padding for descenders.
-        let textSize = attributed.size()
-        let padded = CGSize(width: ceil(textSize.width) + 8,
-                            height: ceil(textSize.height) + 8)
-        bounds = CGRect(origin: .zero, size: padded)
 
         let designCenterX = geometry.designLength(forNormalized: CGFloat(text.x))
         let designCenterY = CGFloat(text.y) * CanvasGeometry.designHeight

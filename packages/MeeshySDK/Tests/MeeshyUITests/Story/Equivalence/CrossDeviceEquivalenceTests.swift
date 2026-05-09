@@ -6,6 +6,7 @@ import CoreMedia
 @testable import MeeshySDK
 
 @Suite("Cross-device equivalence — math invariant")
+@MainActor
 struct CrossDeviceEquivalenceTests {
 
     @Test("render(slide, iPhone) and render(slide, iPad) are linearly equivalent")
