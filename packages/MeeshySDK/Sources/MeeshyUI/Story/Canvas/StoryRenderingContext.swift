@@ -8,18 +8,28 @@ import Metal
 /// CALayer-backed canvas surface (composer Edit, composer Play, viewer, AVFoundation
 /// custom compositor) so the rendered output is bit-exact across all surfaces.
 public final class StoryRenderingContext: @unchecked Sendable {
-    public static let shared = StoryRenderingContext()
+    // `nonisolated` is required because MeeshyUI compiles with
+    // `defaultIsolation(MainActor)` — without these annotations the singleton
+    // and its stored properties would be inferred as `@MainActor`, even though
+    // the underlying Metal device + CIContext are intentionally thread-safe.
+    public nonisolated static let shared = StoryRenderingContext()
 
-    public let metalDevice: MTLDevice
-    public let ciContext: CIContext
-    public let workingColorSpace: CGColorSpace
-    public let outputColorSpace: CGColorSpace
+    public nonisolated let metalDevice: MTLDevice
+    public nonisolated let commandQueue: MTLCommandQueue
+    public nonisolated let ciContext: CIContext
+    public nonisolated let workingColorSpace: CGColorSpace
+    public nonisolated let outputColorSpace: CGColorSpace
 
-    private init() {
+    private nonisolated init() {
         guard let device = MTLCreateSystemDefaultDevice() else {
             fatalError("Metal device unavailable — Story canvas requires Metal")
         }
         self.metalDevice = device
+
+        guard let queue = device.makeCommandQueue() else {
+            fatalError("Metal command queue allocation failed")
+        }
+        self.commandQueue = queue
 
         self.workingColorSpace = CGColorSpace(name: CGColorSpace.displayP3) ?? CGColorSpaceCreateDeviceRGB()
         self.outputColorSpace = CGColorSpace(name: CGColorSpace.sRGB) ?? CGColorSpaceCreateDeviceRGB()
