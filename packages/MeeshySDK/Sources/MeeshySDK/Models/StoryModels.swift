@@ -743,6 +743,28 @@ public struct StorySlide: Identifiable, Codable, Sendable {
     }
 }
 
+extension StorySlide {
+    /// Effective slide duration that completes any background looping video to a full repetition.
+    ///
+    /// If a media object has `isBackground == true && loop == true`, the slide
+    /// duration is rounded up to the next integer multiple of that video's
+    /// duration so the loop never freezes on a partial cycle (Section 3.6 of the
+    /// Story Canvas Fidelity spec). Otherwise returns the static `duration`.
+    ///
+    /// Examples:
+    ///   slide=12s, video=5s → 15s (3 repetitions)
+    ///   slide=12s, video=6s → 12s (exact 2 repetitions)
+    public func effectiveSlideDuration() -> TimeInterval {
+        let base = duration
+        guard let loopMedia = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop }),
+              let videoDuration = loopMedia.duration, videoDuration > 0 else {
+            return base
+        }
+        let repetitions = ceil(base / videoDuration)
+        return repetitions * videoDuration
+    }
+}
+
 // MARK: - Story Transition Effects
 
 public enum StoryTransitionEffect: String, Codable, CaseIterable, Sendable {
