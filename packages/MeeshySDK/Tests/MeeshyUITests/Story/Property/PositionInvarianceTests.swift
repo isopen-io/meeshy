@@ -10,7 +10,7 @@ struct PositionInvarianceTests {
     func center_mapsToCenter() {
         let geometries: [CanvasGeometry] = [
             CanvasGeometry(renderSize: CGSize(width: 412, height: 732)),  // iPhone 16 Pro
-            CanvasGeometry(renderSize: CGSize(width: 820, height: 1456)), // iPad Pro M2
+            CanvasGeometry(renderSize: CGSize(width: 820, height: 1458)), // iPad Pro M2 (true 9:16)
             CanvasGeometry(renderSize: CGSize(width: 375, height: 667)),  // iPhone SE 3
         ]
         for g in geometries {

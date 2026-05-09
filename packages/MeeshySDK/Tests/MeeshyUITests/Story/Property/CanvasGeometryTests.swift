@@ -8,14 +8,16 @@ struct CanvasGeometryTests {
     @Test("render(designPoint) is linear : same relative output for any renderSize")
     func render_designPoint_isLinear() {
         let g1 = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))
-        let g2 = CanvasGeometry(renderSize: CGSize(width: 820, height: 1456))
+        let g2 = CanvasGeometry(renderSize: CGSize(width: 820, height: 1458))
         let designPoint = CGPoint(x: 540, y: 960) // centre
 
         let p1 = g1.render(designPoint)
         let p2 = g2.render(designPoint)
 
-        #expect(abs(p1.x / 412 - p2.x / 820) < 0.0001)
-        #expect(abs(p1.y / 732 - p2.y / 1456) < 0.0001)
+        // Tolerance 0.001 (1‰) absorbs sub-pixel rounding when device dims are not strict 9:16
+        // (412×732 ≈ 412×732.44, 820×1458 ≈ 820×1457.78 — both rounded to integers).
+        #expect(abs(p1.x / 412 - p2.x / 820) < 0.001)
+        #expect(abs(p1.y / 732 - p2.y / 1458) < 0.001)
     }
 
     @Test("scaleFactor is renderSize.width / 1080")
