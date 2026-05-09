@@ -85,9 +85,10 @@ class GlobalSearchViewModel: ObservableObject {
 
     /// Backwards-compatibility shim — earlier consumers (and `GlobalSearchView`)
     /// read `isSearching` directly. Derived from `loadState` so existing call
-    /// sites keep working without churn. Mirrors the convention used by
-    /// `DiscoverViewModel.isSearching`.
-    var isSearching: Bool { loadState == .loading || loadState == .cachedStale }
+    /// sites keep working without churn. Excludes `.cachedStale` so the spinner
+    /// does NOT hide stale LRU results during background revalidation, per the
+    /// non-negotiable "no spinner when cache has data" rule (CLAUDE.md).
+    var isSearching: Bool { loadState == .loading }
 
     // MARK: - Dependencies
 
