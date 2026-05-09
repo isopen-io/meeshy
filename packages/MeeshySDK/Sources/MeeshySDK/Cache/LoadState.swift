@@ -39,3 +39,19 @@ public enum PaginationState: Equatable, Sendable {
     case exhausted
     case error(String)
 }
+
+/// Persisted cursor state for an infinite-scroll surface. Stored
+/// alongside the cached items in the cache backend so a cold-start
+/// can resume scrolling from the deepest position the user reached
+/// instead of refetching page 1. `nextCursor` is the opaque pagination
+/// handle returned by the gateway (typically the last item's id);
+/// `hasMore` distinguishes "ran out of items" from "haven't paged yet".
+public struct PaginationCursor: Codable, Sendable, Equatable {
+    public let nextCursor: String?
+    public let hasMore: Bool
+
+    public init(nextCursor: String?, hasMore: Bool) {
+        self.nextCursor = nextCursor
+        self.hasMore = hasMore
+    }
+}

@@ -299,6 +299,16 @@ class ConversationListViewModel: ObservableObject {
     }
 
     private func reloadFromCache() async {
+        // Restore the cursor BEFORE swapping the conversations array so
+        // that any consumer reacting to `setConversations` (or a follow-
+        // up `loadMore` triggered by a near-end scroll) sees a coherent
+        // (cursor, items) pair rather than a fresh list paired with the
+        // old cursor that may already be invalidated.
+        if let cursor = await CacheCoordinator.shared.conversations.loadCursor(for: "list") {
+            nextCursor = cursor.nextCursor
+            hasMore = cursor.hasMore
+            paginationState = cursor.hasMore ? .idle : .exhausted
+        }
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
         switch cached {
         case .fresh(let data, _), .stale(let data, _):
@@ -484,6 +494,16 @@ class ConversationListViewModel: ObservableObject {
 
         async let categoriesTask: () = loadCategories()
 
+        // Restore the persisted cursor BEFORE the cache load so that a
+        // subsequent loadMore (e.g. user scrolls right after launch)
+        // resumes from the deepest tail reached in the previous session
+        // rather than refetching page 1.
+        if let cursor = await CacheCoordinator.shared.conversations.loadCursor(for: "list") {
+            nextCursor = cursor.nextCursor
+            hasMore = cursor.hasMore
+            paginationState = cursor.hasMore ? .idle : .exhausted
+        }
+
         let cached = await CacheCoordinator.shared.conversations.load(for: "list")
         switch cached {
         case .fresh(let data, _):
@@ -567,6 +587,16 @@ class ConversationListViewModel: ObservableObject {
     }
 
     // MARK: - Load More (cursor-based infinite scroll)
+    //
+    // Cache strategy: Option 1 (blob save) per spec §4.3 recommendation —
+    // the entire merged list is persisted as a single JSON blob via
+    // `CacheCoordinator.shared.conversations.save(snapshot, for: "list")`.
+    // Row-per-conversation (Option 2: one `cache_entries` row per id with
+    // partial reads via `LIMIT/OFFSET`) is deferred to a future migration
+    // if user counts grow beyond ~500 cached conversations. Today's blob
+    // approach round-trips a few KB of JSON per save which is well within
+    // budget for the realistic upper bound, and keeps the cache surface
+    // identical to every other GRDBCacheStore consumer.
 
     /// Fetch the next page of conversations using the gateway's
     /// cursor-paginated endpoint. Cursor-based pagination removes two
@@ -603,12 +633,24 @@ class ConversationListViewModel: ObservableObject {
             hasMore = page.hasMore
             paginationState = page.hasMore ? .idle : .exhausted
 
-            // Persist the merged list so the next cold start serves
-            // the user the deepest scroll position they reached.
-            // `setConversations` already re-sorted the array, so we
-            // save what's actually displayed.
+            // Persist the merged list AND the cursor so the next cold
+            // start serves the user the deepest scroll position they
+            // reached AND resumes pagination from the same tail —
+            // without the cursor we'd refetch page 1 on the first
+            // post-restart loadMore (spec AC §4.8.3). `setConversations`
+            // already re-sorted the array, so we save what's actually
+            // displayed.
             let snapshot = conversations
-            Task { await CacheCoordinator.shared.conversations.save(snapshot, for: "list") }
+            let persistedCursor = nextCursor
+            let persistedHasMore = hasMore
+            Task {
+                await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
+                await CacheCoordinator.shared.conversations.saveCursor(
+                    nextCursor: persistedCursor,
+                    hasMore: persistedHasMore,
+                    for: "list"
+                )
+            }
         } catch {
             // Transient errors (network blip, rate limit) keep
             // `hasMore = true` so the next scroll attempt can retry.
@@ -630,6 +672,10 @@ class ConversationListViewModel: ObservableObject {
         nextCursor = nil
         hasMore = true
         paginationState = .idle
+        // The forceRefresh() below calls invalidateCache() which wipes
+        // both items AND cache_metadata via invalidateAll, so the
+        // persisted cursor is cleared along the way — no separate
+        // saveCursor(nil, true, …) call needed.
         await forceRefresh()
     }
 
