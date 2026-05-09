@@ -472,10 +472,19 @@ export class CallEventsHandler {
 
         // Broadcast to all OTHER call participants with per-user TURN credentials (§3.4)
         // The caller needs iceServers from this event to configure WebRTC before creating SDP offer
+        //
+        // CRITIQUE — utiliser `getUserId(socketId)` (résolution via connectionMap)
+        // PAS `this.getSocketUserId(remoteSocket)` : Socket.IO `fetchSockets()`
+        // retourne des `RemoteSocket` proxies qui n'embarquent PAS les propriétés
+        // server-side custom (comme `.userId` ou `.data.userId`). Sans la
+        // résolution via connectionMap, `remoteUserId` était toujours undefined,
+        // entraînant le fallback STUN-only à chaque broadcast — ICE échouait
+        // sur tout call entre devices derrière des NATs distincts (simulator
+        // ↔ device cellulaire, par ex.).
         const socketsInRoom = await io.in(ROOMS.call(data.callId)).fetchSockets();
         for (const remoteSocket of socketsInRoom) {
           if (remoteSocket.id === socket.id) continue;
-          const remoteUserId = this.getSocketUserId(remoteSocket);
+          const remoteUserId = getUserId(remoteSocket.id);
           if (!remoteUserId) {
             logger.warn('⚠️ Socket in call room has no userId, using STUN-only', { socketId: remoteSocket.id });
           }
