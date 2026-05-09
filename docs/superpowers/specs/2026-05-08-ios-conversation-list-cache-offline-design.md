@@ -11,7 +11,7 @@
 - `OutboxKind.sendReaction` existe deja, mais `ReactionQueue` stocke en JSON file separe — refonte sur OutboxRecord
 - `OfflineQueue.enqueue` actuellement async non-throws (OfflineQueue.swift:115) — passe en `async throws`
 - `MessageTranslation` est un Json field embedded dans `Message.translations`, pas une relation Prisma — pas de `include: { translations: true }`
-- Pas de route REST `POST /messages` ; tout passe par WebSocket
+- **Route REST POST existe** : `POST /conversations/:id/messages` (`services/gateway/src/routes/conversations/messages.ts:1191`) — fallback REST legitime du WS, partage le meme `MessagingService.handleMessage`. Egalement `POST /links/:identifier/messages` (links/messages.ts:27) et `POST /links/:identifier/messages/auth` (links/messages.ts:302) pour le chat anonyme via lien. Toutes a aligner sur `clientMessageId`
 - Pas de `LoadState` enum existant — a creer ex nihilo
 - Cache GRDB actuel = table `cache_entries(key, itemId, encodedData)` generique ; le store conversations evolue vers row-per-conversation via migration v5
 
@@ -101,7 +101,11 @@ Cela impose au SDK iOS de stocker le cursor comme `String?` (ID opaque), pas `Da
   - Cote iOS : RIEN — le `tempId` (3 variantes) est purement local SDK iOS, jamais transmis au backend
   - Cote DB : pas de champ `clientMessageId` en Prisma (`packages/shared/prisma/schema.prisma:515-644` confirme l'absence), pas d'index unique
   - Cote dedup : aucune. Si un message est rejoue, le serveur cree un doublon
-  - **Important** : pas de route REST `POST /messages` — les tests gateway confirment uniquement GET/PUT/DELETE sur les routes messages. Phase 4 doit decider : (a) tout envoi passe par WS, fallback REST web devient obsolete, OU (b) creer la route POST /messages pour aligner les surfaces
+  - **Routes REST POST existantes** (correction apres revue : audit initial superficiel — recherche par `POST /messages` global manquait les routes nestees) :
+    - `POST /conversations/:id/messages` (`services/gateway/src/routes/conversations/messages.ts:1191`) — body type `SendMessageBody` (defini `services/gateway/src/routes/conversations/types.ts:23-44`), schema Fastify body lignes 1206-1225, handler appelle `MessagingService.handleMessage` (meme service que WS) puis `socketIOHandler.broadcastMessage()` pour emit `MESSAGE_NEW`. **Aucun `clientMessageId`** dans le contrat actuel.
+    - `POST /links/:identifier/messages` (`services/gateway/src/routes/links/messages.ts:27`) — chat anonyme via lien partage, schema Zod `links/types.ts:54-62`. Pas de clientMessageId.
+    - `POST /links/:identifier/messages/auth` (`links/messages.ts:302`) — chat authentifie via lien partage. Pas de clientMessageId.
+  - **Pipeline REST = pipeline WS** : meme `MessagingService.handleMessage` partage. La dedup `catch P2002` (cf. §6.2) couvre les deux surfaces nativement, sans logique dupliquee. Le fallback REST web (`MessagingService.sendMessageViaRest`) cible cette route — c'est un fallback **legitime**, pas une surface a deprecier. Phase 4 aligne donc REST + WS sur `clientMessageId` simultanement.
 
 ### 1.6 Audit shared types
 
@@ -124,7 +128,7 @@ Quatre phases independantes, mergeable separement :
 | 1 | Fix tri stale conversations | Non | Faible | XS (~80 LoC + 3 tests) |
 | 2 | Pagination infinite scroll cursor-based | Non (route prete) | Moyen | M (~250 LoC + 6 tests) |
 | 3 | Cache-first sur 5 ViewModels en breche | Non | Moyen | M (~400 LoC + 20 tests) |
-| 4 | Offline queue durcie + clientMessageId end-to-end (iOS + gateway WS + Prisma + web) | Oui (Prisma + WS handler + web migration ; pas de POST /messages REST) | Eleve | L (~900 LoC iOS + ~250 LoC gateway + ~250 LoC web + 30 tests) |
+| 4 | Offline queue durcie + clientMessageId end-to-end (iOS + gateway REST + WS + Prisma + web) | Oui (Prisma + MessagingService dedup + REST + WS schemas + web migration) | Eleve | L (~900 LoC iOS + ~350 LoC gateway + ~250 LoC web + 32 tests) |
 
 **Ordre logique** : 1 → 2 → 3 → 4. Les phases sont **independantes** et peuvent partir en parallele sur 4 worktrees `feat/ios-conv-listing-{phase}` si plusieurs sessions sont disponibles.
 
@@ -704,7 +708,12 @@ public actor OfflineQueue {
 - Cote web (REST fallback) : `MessagingService.sendMessageViaRest()` (`apps/web/services/socketio/messaging.service.ts:379-406`) **NE propage PAS** `clientMessageId` — gap a fixer.
 - Cote web (anonymous) : `apps/web/services/anonymous-chat.service.ts:117` est REST-only sans `clientMessageId` — a ajouter.
 - Cote iOS : envoi absent (audit confirme) — a ajouter.
-- **Route REST `POST /messages`** : **n'existe pas** dans `services/gateway/src/routes/`. Audit confirme uniquement GET/PUT/DELETE sur les routes messages. Decision Phase 4 : (a) tout envoi passe par WS, fallback REST web devient obsolete et la route POST n'est pas creee, OU (b) creer la route POST `/messages` pour aligner les surfaces et rendre le fallback REST web fonctionnel. **Recommandation : option (a)** — moins de surface, le fallback REST web est rare et peut basculer sur reconnexion WS forcee.
+- **Route REST POST EXISTE** (correction post-revue user) : `POST /conversations/:id/messages` (`services/gateway/src/routes/conversations/messages.ts:1191`) est la route de fallback REST partageant le meme `MessagingService.handleMessage` que le WS. Egalement `POST /links/:identifier/messages` et `POST /links/:identifier/messages/auth` pour le chat anonyme. **Phase 4 aligne ces 3 routes sur `clientMessageId`** :
+  1. Ajouter `clientMessageId: string` (obligatoire) au type TypeScript `SendMessageBody` (`services/gateway/src/routes/conversations/types.ts:23-44`)
+  2. Ajouter le champ `clientMessageId` au `schema.body` Fastify (lignes 1206-1225 de `messages.ts`)
+  3. Propager dans l'appel `MessagingService.handleMessage(body, participantId)` — le service applique le pattern catch P2002 atomique (cf. infra)
+  4. Idem pour les 2 routes `links/messages.ts:27` et `links/messages.ts:302`
+  5. Le handler reponse retourne deja `result` du `MessagingService` ; ce result inclut `messageId` — Phase 4 ajoute `clientMessageId` dans la response (echo)
 
 #### Format `cid_<UUID v4 lowercase>` — helper centralise
 
@@ -774,7 +783,11 @@ Migration concrete : `services/gateway/src/validation/socket-event-schemas.ts:14
 
 #### Gateway — pattern catch-on-conflict (atomique)
 
-**Important** : la route REST `POST /messages` **n'existe pas** (cf. §6.2). Le pattern s'applique uniquement au handler Socket.IO `message:send-with-attachments` (`services/gateway/src/socketio/handlers/MessageHandler.ts`).
+**Important** : le pattern catch-P2002 est implemente dans `MessagingService.handleMessage` (service partage par REST + WS), pas dans les handlers de surface. Cela garantit que :
+- Le handler Socket.IO `message:send-with-attachments` (`services/gateway/src/socketio/handlers/MessageHandler.ts`) en herite
+- La route REST `POST /conversations/:id/messages` (`services/gateway/src/routes/conversations/messages.ts:1191`) en herite
+- Les routes `POST /links/:identifier/messages[/auth]` (`services/gateway/src/routes/links/messages.ts`) en heritent
+- Aucune logique dedup dupliquee, single source of truth dans le service
 
 **Le pattern `findUnique → INSERT` n'est PAS atomique** : deux requetes concurrentes avec le meme `clientMessageId` (retry reseau rapide, deux onglets web) passent toutes deux le `findUnique` avec `null`, puis l'une echoue sur la contrainte unique MongoDB → `PrismaClientKnownRequestError P2002`. Solution : INSERT direct + catch P2002.
 
@@ -1355,12 +1368,16 @@ Cette sequence garantit zero requete rejete pendant la transition.
 - `Tests/MeeshySDKTests/*Tests.swift`
 
 ### services/gateway/
-- `src/socketio/handlers/MessageHandler.ts` (Phase 4 — `_sendResponse()` lignes 861-878 AJOUTER clientMessageId au callback ; `broadcastNewMessage()` lignes 388-451 broadcast cible sender via ROOMS.user(senderId) ; pattern catch P2002 sur create)
+- `src/services/MessagingService.ts` (Phase 4 — implementer le pattern catch-P2002 dans `handleMessage`, single source of truth pour REST + WS)
+- `src/socketio/handlers/MessageHandler.ts` (Phase 4 — `_sendResponse()` lignes 861-878 AJOUTER clientMessageId au callback ; `broadcastNewMessage()` lignes 388-451 broadcast cible sender via ROOMS.user(senderId))
+- `src/routes/conversations/messages.ts` (Phase 4 — route POST ligne 1191 schema body lignes 1206-1225 ajouter clientMessageId obligatoire ; response ajouter clientMessageId echo)
+- `src/routes/conversations/types.ts` (Phase 4 — lignes 23-44 ajouter `clientMessageId: string` a `SendMessageBody`)
+- `src/routes/links/messages.ts` (Phase 4 — POST lignes 27 et 302 idem ; schema Zod `links/types.ts:54-62` etendre)
+- `src/routes/links/types.ts` (Phase 4 — schema Zod sendMessageSchema ajouter clientMessageId)
 - `src/services/MessageTranslationService.ts` (Phase 4 — skip retranslate sur dedup, helper isTranslationsEmpty pour Json field)
 - `src/validation/socket-event-schemas.ts` (Phase 4 — lignes 14, 26 — clientMessageId regex obligatoire sur les deux schemas)
 - `src/socketio/__tests__/message-ack.test.ts` (Phase 4 — convertir le contrat decrit lignes 45-50 en test passant)
-- Tests integration nouveaux : `src/socketio/__tests__/message-dedup.test.ts`, `src/socketio/__tests__/message-ack-clientid.test.ts`
-- **Pas de** route REST `POST /messages` a creer (cf. decision §6.2 option (a))
+- Tests integration nouveaux : `src/socketio/__tests__/message-dedup.test.ts`, `src/socketio/__tests__/message-ack-clientid.test.ts`, `src/routes/__tests__/messages-rest-dedup.test.ts`
 
 ### packages/shared/
 - `types/index.ts:653` (Phase 4 — remplacer interface `SendMessageRequest` par `z.infer<typeof SendMessageRequestSchema>`)
