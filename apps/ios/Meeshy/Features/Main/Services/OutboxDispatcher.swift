@@ -46,6 +46,78 @@ struct OutboxDispatcher: OutboxDispatching {
                 logger.error("Corrupt OfflineQueueItem payload for record \(record.id, privacy: .public), dropping")
                 return
             }
+
+            // Phase 4 §6.3 audio offline write-ahead replay path. If the item
+            // carries a `localAudioPath`, the audio bytes were preserved at
+            // enqueue time under `Documents/pending-audio/<cid>.m4a`. The
+            // dispatcher uploads them via TUS first (REST does NOT trigger
+            // the gateway audio pipeline — only `message:send-with-attachments`
+            // over the socket does), then sends through `sendWithAttachmentsAsync`
+            // so the gateway runs Whisper transcription + NLLB translation +
+            // Chatterbox TTS like an online send. The local file is deleted
+            // after the ACK lands.
+            if let localAudioPath = item.localAudioPath, !localAudioPath.isEmpty {
+                let absolutePath = OfflineQueue.absoluteAudioPath(forStored: localAudioPath)
+                guard FileManager.default.fileExists(atPath: absolutePath) else {
+                    logger.error("Audio file missing on dispatch for record \(record.id, privacy: .public), path=\(localAudioPath, privacy: .public)")
+                    throw NSError(
+                        domain: "OutboxDispatcher",
+                        code: 404,
+                        userInfo: [NSLocalizedDescriptionKey: "Audio file missing for offline send: \(localAudioPath)"]
+                    )
+                }
+
+                let serverOrigin = MeeshyConfig.shared.serverOrigin
+                guard let baseURL = URL(string: serverOrigin),
+                      let token = APIClient.shared.authToken else {
+                    throw NSError(
+                        domain: "OutboxDispatcher",
+                        code: 401,
+                        userInfo: [NSLocalizedDescriptionKey: "No baseURL or auth token to upload audio"]
+                    )
+                }
+
+                let uploader = TusUploadManager(baseURL: baseURL)
+                let audioFileURL = URL(fileURLWithPath: absolutePath)
+                let tusResult = try await uploader.uploadFile(
+                    fileURL: audioFileURL,
+                    mimeType: "audio/mp4",
+                    token: token
+                )
+
+                let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
+                    conversationId: item.conversationId,
+                    content: item.content.isEmpty ? nil : item.content,
+                    attachmentIds: [tusResult.id],
+                    replyToId: item.replyToId,
+                    storyReplyToId: nil,
+                    originalLanguage: item.originalLanguage,
+                    clientMessageId: item.clientMessageId
+                )
+                guard let ack else {
+                    throw NSError(
+                        domain: "OutboxDispatcher",
+                        code: 502,
+                        userInfo: [NSLocalizedDescriptionKey: "Socket ACK missing for offline audio dispatch"]
+                    )
+                }
+
+                // Best-effort cleanup of the persisted audio. Failure here is
+                // benign — the file is harmless extra bytes and a future
+                // `OfflineQueue.cleanupOrphanFiles()` sweep will reclaim it.
+                try? FileManager.default.removeItem(atPath: absolutePath)
+
+                await CacheCoordinator.shared.messages.mergeUpdate(for: item.conversationId) { cached in
+                    cached.filter { $0.id != item.clientMessageId }
+                }
+                OfflineQueue.shared.retrySucceeded.send(OfflineRetrySuccess(
+                    clientMessageId: item.clientMessageId,
+                    serverId: ack.messageId,
+                    conversationId: item.conversationId
+                ))
+                return
+            }
+
             let request = SendMessageRequest(
                 content: item.content,
                 replyToId: item.replyToId,

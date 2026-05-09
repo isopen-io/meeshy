@@ -314,6 +314,153 @@ public actor OfflineQueue {
         logger.info("Enqueued offline message for conversation \(item.conversationId, privacy: .public), queue size: \(self.items.count)")
     }
 
+    // MARK: - Audio offline (write-ahead 2-step)
+
+    public enum EnqueueAudioError: Error, Sendable {
+        /// `pool.write` of the outbox record itself threw. The audio file was
+        /// not yet copied — the caller can safely surface the error and let
+        /// the user retry without leaving a phantom on disk.
+        case outboxWriteFailed(underlying: Error)
+        /// `FileManager.copyItem` failed after the outbox record was inserted.
+        /// We marked the record `.failed` to prevent the flusher from retrying
+        /// against a missing file. The caller should also roll back any
+        /// optimistic UI it inserted.
+        case audioCopyFailed(underlying: Error)
+        /// `configure(pool:)` was never called.
+        case poolNotConfigured
+    }
+
+    /// Result of an `enqueueAudio` call. The relative `localAudioPath` is
+    /// returned so the caller can update its optimistic UI to reference the
+    /// stable persisted path (under `Documents/pending-audio/`) instead of
+    /// the volatile `tmp/recording_*.m4a` URL that `sourceAudioURL` pointed at.
+    public struct EnqueueAudioResult: Sendable {
+        public let outboxId: String
+        public let localAudioPath: String
+    }
+
+    /// Phase 4 §6.3 audio offline write-ahead. Atomicity between the SQLite
+    /// outbox row and the on-disk audio file is impossible (two persistence
+    /// systems), so we do it in two ordered phases :
+    ///
+    /// 1. Phase A — INSERT `OutboxRecord` referencing
+    ///    `Documents/pending-audio/<clientMessageId>.m4a`. The record is
+    ///    `.pending` and the file does NOT exist yet.
+    /// 2. Phase B — `FileManager.copyItem` the source audio into that
+    ///    pending path. On failure we UPDATE the outbox row to `.failed`
+    ///    so the flusher does not retry against a missing file.
+    /// 3. Phase C — best-effort delete the original `tmp/` source.
+    ///
+    /// Crash recovery between Phase A and Phase B is handled by
+    /// `bootRecovery()` which sweeps `.pending` records whose
+    /// `localAudioPath` does not exist on disk and marks them `.failed`.
+    /// The `clientMessageId` end-to-end dedup contract guarantees that an
+    /// audio that actually reached the server before the crash will not
+    /// produce a duplicate when the flusher replays whatever survived.
+    @discardableResult
+    public func enqueueAudio(
+        sourceAudioURL: URL,
+        conversationId: String,
+        content: String?,
+        clientMessageId: String,
+        originalLanguage: String? = nil,
+        replyToId: String? = nil,
+        forwardedFromId: String? = nil,
+        forwardedFromConversationId: String? = nil
+    ) async throws -> EnqueueAudioResult {
+        guard let pool = outboxPool else { throw EnqueueAudioError.poolNotConfigured }
+
+        let relativePath = try Self.pendingAudioRelativePath(for: clientMessageId)
+        let absolutePath = Self.absoluteAudioPath(forStored: relativePath)
+        let outboxId = "ofq_\(UUID().uuidString)"
+        let now = Date()
+
+        let item = OfflineQueueItem(
+            id: UUID().uuidString,
+            clientMessageId: clientMessageId,
+            conversationId: conversationId,
+            content: content ?? "",
+            originalLanguage: originalLanguage,
+            replyToId: replyToId,
+            forwardedFromId: forwardedFromId,
+            forwardedFromConversationId: forwardedFromConversationId,
+            attachmentIds: nil,
+            localAudioPath: relativePath,
+            createdAt: now
+        )
+
+        let payload: Data
+        do {
+            payload = try encoder.encode(item)
+        } catch {
+            throw EnqueueAudioError.outboxWriteFailed(underlying: error)
+        }
+
+        // Phase A — INSERT outbox row first. If this throws, the file is
+        // still untouched on disk and the caller can retry.
+        do {
+            try await pool.write { db in
+                try OutboxRecord(
+                    id: outboxId,
+                    kind: .sendMessage,
+                    conversationId: conversationId,
+                    messageLocalId: clientMessageId,
+                    clientMessageId: clientMessageId,
+                    payload: payload,
+                    status: .pending,
+                    createdAt: now
+                ).insert(db)
+            }
+        } catch {
+            throw EnqueueAudioError.outboxWriteFailed(underlying: error)
+        }
+
+        // Phase B — copy the audio into the pending directory. On failure,
+        // mark the row `.failed` so the flusher does not retry against a
+        // missing file. We must NOT throw before that update lands.
+        do {
+            let dst = URL(fileURLWithPath: absolutePath)
+            if FileManager.default.fileExists(atPath: absolutePath) {
+                try FileManager.default.removeItem(at: dst)
+            }
+            try FileManager.default.copyItem(at: sourceAudioURL, to: dst)
+        } catch {
+            do {
+                try await pool.write { db in
+                    try db.execute(sql: """
+                        UPDATE outbox
+                        SET status = ?, lastError = ?, updatedAt = ?
+                        WHERE id = ?
+                        """, arguments: [
+                            OutboxStatus.failed.rawValue,
+                            "Audio copy failed: \(error.localizedDescription)",
+                            Date(),
+                            outboxId
+                        ])
+                }
+            } catch {
+                logger.error("Failed to mark audio outbox row .failed after copy error: \(error.localizedDescription, privacy: .public)")
+            }
+            throw EnqueueAudioError.audioCopyFailed(underlying: error)
+        }
+
+        // Phase C — best-effort cleanup of the original tmp file. A failure
+        // here is benign: the file lives in `tmp/` and the OS will reclaim
+        // it on its own schedule.
+        try? FileManager.default.removeItem(at: sourceAudioURL)
+
+        // Mirror the new item into the in-memory queue so the hot retry
+        // path picks it up on the next reconnect without re-reading the
+        // outbox.
+        if items.count >= Self.maxQueueSize {
+            items.removeFirst()
+        }
+        items.append(item)
+        logger.info("Enqueued audio for conversation \(conversationId, privacy: .public), path \(relativePath, privacy: .public)")
+
+        return EnqueueAudioResult(outboxId: outboxId, localAudioPath: relativePath)
+    }
+
     /// Persists an `editMessage` request, applying the coalescing rules from
     /// spec §6.3 (merge into a pending sendMessage, merge into a pending edit,
     /// drop after a pending delete).

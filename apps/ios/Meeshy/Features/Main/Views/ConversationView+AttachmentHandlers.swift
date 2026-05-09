@@ -5,6 +5,7 @@ import AVFoundation
 import CoreLocation
 import Combine
 import MeeshySDK
+import os
 
 // MARK: - Recording, Sending & Attachment Handlers
 extension ConversationView {
@@ -159,6 +160,47 @@ extension ConversationView {
 
         Task {
             do {
+                // Phase 4 §6.3 audio offline write-ahead. If the user is
+                // offline AND the only attachment is audio, persist the
+                // recording to `Documents/pending-audio/<cid>.m4a` and
+                // queue an `OutboxRecord` referencing that path. The
+                // dispatcher (`OutboxDispatcher.dispatchSendMessage` audio
+                // branch) will TUS-upload the file and emit
+                // `message:send-with-attachments` over the socket on the
+                // next reconnect, so the gateway audio pipeline (Whisper
+                // transcription + NLLB + TTS) runs as if the user had
+                // sent online. Other attachment types fall through to the
+                // online TUS upload path because they would lose their
+                // local URL across an app restart.
+                let isOffline = NetworkMonitor.shared.isOffline
+                let onlyAudio = audioURL != nil
+                    && attachments.allSatisfy { $0.type == .audio }
+                if isOffline && onlyAudio, let audioURL {
+                    do {
+                        _ = try await OfflineQueue.shared.enqueueAudio(
+                            sourceAudioURL: audioURL,
+                            conversationId: viewModel.conversationId,
+                            content: content.isEmpty ? nil : content,
+                            clientMessageId: tempId,
+                            originalLanguage: composerState.selectedLanguage,
+                            replyToId: replyId,
+                            forwardedFromId: nil,
+                            forwardedFromConversationId: nil
+                        )
+                        await MainActor.run { composerState.isUploading = false }
+                        Logger.messages.info("Audio queued offline for \(tempId)")
+                        return
+                    } catch {
+                        Logger.messages.error("Audio offline enqueue failed: \(error.localizedDescription)")
+                        await MainActor.run {
+                            composerState.isUploading = false
+                            viewModel.error = "Échec de la mise en file du message vocal"
+                        }
+                        ToastManager.shared.showError("Échec de la mise en file du message vocal")
+                        return
+                    }
+                }
+
                 // Reconnect socket if disconnected
                 if !MessageSocketManager.shared.isConnected {
                     MessageSocketManager.shared.connect()
