@@ -96,7 +96,12 @@ public enum StoryRenderer {
                                    into geometry: CanvasGeometry,
                                    at time: CMTime,
                                    mode: RenderMode) -> CALayer {
-        // Per-type specialization wired in Tasks 2.2 (media), 2.3 (text), 2.4 (sticker).
+        if let media = item as? StoryMediaObject {
+            let layer = StoryMediaLayer()
+            layer.configure(with: media, geometry: geometry, mode: mode)
+            return layer
+        }
+        // text wired in Task 2.3, sticker wired in Task 2.4.
         let layer = CALayer()
         layer.zPosition = CGFloat(item.zIndex)
         layer.name = item.id
