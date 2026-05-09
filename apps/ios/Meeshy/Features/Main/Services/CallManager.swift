@@ -1315,10 +1315,28 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // Hand the activated AVAudioSession to WebRTC and flip the audio
         // engine on. Without this bridge, WebRTC's audio I/O thread never
         // starts, so both peers see "ICE connected" but hear silence.
+        //
+        // DIAGNOSTIC: on simulator, l'`AVAudioSession` reçue de CallKit peut
+        // être marquée active côté CallKit mais inactive côté process app
+        // (XPC mediaserverd dans un état dégradé : crashlog typique
+        // "AVAudioSession_iOS.mm:794 destroySession ... connection to
+        // service ... was invalidated"). Dans ce cas, `RTCAudioSession.
+        // isAudioEnabled = true` paraît réussir mais l'ADM sous-jacent ne
+        // démarre jamais → ICE connected, aucun audio.
+        // On force `setActive(true)` AVANT le bridge pour rétablir la
+        // connexion XPC quand elle est cassée. Sur device réel, c'est un
+        // no-op (la session est déjà active).
+        do {
+            try audioSession.setActive(true, options: [])
+            Logger.calls.debug("AVAudioSession force-activated before WebRTC bridge")
+        } catch {
+            Logger.calls.warning("AVAudioSession force-activate failed: \(error.localizedDescription) — proceeding with bridge anyway")
+        }
         RTCAudioSession.sharedInstance().audioSessionDidActivate(audioSession)
         RTCAudioSession.sharedInstance().isAudioEnabled = true
         Task { @MainActor [weak self] in self?.manager?.applySpeakerRoute() }
-        Logger.calls.info("CallKit audio session activated; RTCAudioSession enabled")
+        let outputs = audioSession.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
+        Logger.calls.info("CallKit audio session activated; RTCAudioSession enabled (route=\(outputs), category=\(audioSession.category.rawValue), mode=\(audioSession.mode.rawValue))")
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
