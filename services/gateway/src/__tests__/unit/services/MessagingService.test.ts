@@ -1245,6 +1245,9 @@ describe('MessagingService', () => {
       });
     });
 
+    // REGRESSION GUARD for the read-after-write removal in commit 05c754c3.
+    // This test fails on the pre-fix code (received attachments=[]) and
+    // passes on the fix. See "ÉTAPE 4 bis" in MessageProcessor.saveMessage.
     it('should return the linked attachments on the saved message', async () => {
       const response = await service.handleMessage(
         {
@@ -1265,7 +1268,12 @@ describe('MessagingService', () => {
       );
     });
 
-    it('should call messageAttachment.updateMany to link attachments', async () => {
+    // PREREQUISITE check (NOT a regression guard) — passes regardless of the
+    // fix because handleAttachments() linking was never broken; the bug was
+    // that the in-memory message.attachments array wasn't refreshed AFTER
+    // the link. Kept here so future readers see the linking call is still
+    // wired up; the regression guard is the test above.
+    it('should call messageAttachment.updateMany to link attachments (prerequisite)', async () => {
       await service.handleMessage(
         {
           conversationId: testConversationId,

@@ -1659,6 +1659,12 @@ class ConversationViewModel: ObservableObject {
     /// `tempId` est la clé locale (= `MessageRecord.localId` dans GRDB).
     /// Préfixes attendus : `temp_<UUID>` (envoi en ligne), `offline_<UUID>`
     /// (queue offline), `retry_<UUID>` (queue retry).
+    ///
+    /// `originalLanguage` doit être la langue du composer (sélectionnée par
+    /// l'utilisateur ou détectée). Hardcoder "fr" violerait le Prisme
+    /// Linguistique pour les utilisateurs non-francophones — l'affichage
+    /// optimiste afficherait le mauvais drapeau de langue jusqu'à la
+    /// réconciliation serveur.
     func insertOptimisticMediaMessage(
         tempId: String,
         content: String,
@@ -1666,18 +1672,19 @@ class ConversationViewModel: ObservableObject {
         messageType: Message.MessageType,
         replyToId: String?,
         storyReplyToId: String? = nil,
-        replyReference: ReplyReference? = nil
+        replyReference: ReplyReference? = nil,
+        originalLanguage: String? = nil
     ) {
         let now = Date()
         let attachmentsJson = attachments.isEmpty ? nil : try? JSONEncoder().encode(attachments)
         let replyToJson = replyReference.flatMap { try? JSONEncoder().encode($0) }
-        let contentTypeForRecord: String = messageType == .audio ? "audio" : "text"
+        let resolvedOriginalLanguage = originalLanguage ?? detectKeyboardLanguage()
         let record = MessageRecord(
             localId: tempId, serverId: nil,
             conversationId: conversationId, senderId: currentUserId,
             content: content.isEmpty ? nil : content,
-            originalLanguage: "fr",
-            messageType: messageType.rawValue, messageSource: "user", contentType: contentTypeForRecord,
+            originalLanguage: resolvedOriginalLanguage,
+            messageType: messageType.rawValue, messageSource: "user", contentType: messageType.rawValue,
             state: .sending, retryCount: 0, lastError: nil,
             isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
             replyToId: replyToId,
@@ -1706,56 +1713,12 @@ class ConversationViewModel: ObservableObject {
         )
         let persistence = messagePersistence
         Task.detached(priority: .userInitiated) {
-            try? await persistence.insertOptimistic(record)
-        }
-    }
-
-    func insertOptimisticAudioMessage(
-        messageId: String,
-        content: String,
-        attachments: [MeeshyMessageAttachment],
-        replyToId: String?,
-        replyReference: ReplyReference? = nil
-    ) {
-        let now = Date()
-        let attachmentsJson = try? JSONEncoder().encode(attachments)
-        let replyToJson = replyReference.flatMap { try? JSONEncoder().encode($0) }
-        let record = MessageRecord(
-            localId: messageId, serverId: nil,
-            conversationId: conversationId, senderId: currentUserId,
-            content: content.isEmpty ? nil : content,
-            originalLanguage: "fr",
-            messageType: "audio", messageSource: "user", contentType: "audio",
-            state: .sent, retryCount: 0, lastError: nil,
-            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
-            replyToId: replyToId,
-            storyReplyToId: replyReference?.isStoryReply == true ? replyReference?.messageId : nil,
-            forwardedFromId: nil, forwardedFromConversationId: nil,
-            replyToJson: replyToJson, forwardedFromJson: nil,
-            expiresAt: nil, effectFlags: 0,
-            maxViewOnceCount: nil, viewOnceCount: 0,
-            isEdited: false, editedAt: nil, deletedAt: nil,
-            pinnedAt: nil, pinnedBy: nil,
-            senderName: authManager.currentUser?.displayName,
-            senderUsername: authManager.currentUser?.username,
-            senderColor: nil, senderAvatarURL: authManager.currentUser?.avatar,
-            deliveredCount: 0, readCount: 0,
-            deliveredToAllAt: nil, readByAllAt: nil,
-            createdAt: now, sentAt: now,
-            deliveredAt: nil, readAt: nil, updatedAt: now,
-            attachmentsJson: attachmentsJson, reactionsJson: nil,
-            reactionCount: 0, currentUserReactionsJson: nil,
-            mentionedUsersJson: nil,
-            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
-            cachedLastLineWidth: nil, cachedLineCount: nil,
-            cachedTimestampInline: nil,
-            layoutVersion: 0, layoutMaxWidth: nil,
-            changeVersion: 0
-        )
-        let persistence = messagePersistence
-        Task.detached(priority: .userInitiated) {
-            // Store observation surfaces the new audio row to `messages` automatically.
-            try? await persistence.insertOptimistic(record)
+            do {
+                try await persistence.insertOptimistic(record)
+                print("[SendFlow] insertOptimisticMedia OK tempId=\(tempId) state=.sending convId=\(record.conversationId) attachments=\(attachments.count)")
+            } catch {
+                print("[SendFlow] insertOptimisticMedia FAILED tempId=\(tempId) error=\(error.localizedDescription)")
+            }
         }
     }
 

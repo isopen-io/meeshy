@@ -328,6 +328,119 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageService.lastSendRequest?.replyToId, "parent-msg")
     }
 
+    // MARK: - insertOptimisticMediaMessage Tests
+    //
+    // Regression guards for the disappearing-bubble bug. The contract:
+    // 1. Calling the helper must persist a MessageRecord through GRDB so the
+    //    row survives any subsequent MessageStore observation refresh
+    //    (otherwise the bubble would only live in `messages` for one tick).
+    // 2. The persisted row must carry the local file:// attachments so the
+    //    bubble can render the image/audio immediately, including offline.
+    // 3. The originalLanguage must NOT be hardcoded (Prisme Linguistique).
+
+    func test_insertOptimisticMediaMessage_persistsRecordToGRDB() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let imageAttachment = MeeshyMessageAttachment(
+            id: "att_image_001",
+            mimeType: "image/jpeg",
+            fileUrl: "file:///tmp/photo.jpg",
+            uploadedBy: testUserId
+        )
+        let tempId = "temp_\(UUID().uuidString)"
+
+        sut.insertOptimisticMediaMessage(
+            tempId: tempId,
+            content: "Caption",
+            attachments: [imageAttachment],
+            messageType: .image,
+            replyToId: nil,
+            originalLanguage: "es"
+        )
+
+        // The helper writes via Task.detached — wait for the row to land.
+        let record = await MessageStoreObservationHelper.awaitRecord(
+            localId: tempId,
+            from: pool
+        ) { _ in true }
+
+        XCTAssertNotNil(record, "Optimistic media row must reach GRDB")
+        XCTAssertEqual(record?.localId, tempId)
+        XCTAssertEqual(record?.state, .sending)
+        XCTAssertEqual(record?.messageType, "image")
+        XCTAssertEqual(record?.contentType, "image", "contentType must mirror messageType, not be hardcoded to 'text'")
+        XCTAssertEqual(record?.originalLanguage, "es", "originalLanguage must come from the caller, not be hardcoded to 'fr'")
+        XCTAssertEqual(record?.content, "Caption")
+        XCTAssertNotNil(record?.attachmentsJson, "Local attachments must be serialized into attachmentsJson")
+
+        let decoded = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: record!.attachmentsJson!)
+        XCTAssertEqual(decoded.count, 1)
+        XCTAssertEqual(decoded.first?.id, "att_image_001")
+        XCTAssertEqual(decoded.first?.fileUrl, "file:///tmp/photo.jpg")
+    }
+
+    func test_insertOptimisticMediaMessage_surfacesBubbleInViewModel() async throws {
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let audioAttachment = MeeshyMessageAttachment(
+            id: "att_audio_001",
+            mimeType: "audio/mp4",
+            fileUrl: "file:///tmp/voice.m4a",
+            duration: 3500,
+            uploadedBy: testUserId
+        )
+        let tempId = "temp_\(UUID().uuidString)"
+
+        sut.insertOptimisticMediaMessage(
+            tempId: tempId,
+            content: "",
+            attachments: [audioAttachment],
+            messageType: .audio,
+            replyToId: nil,
+            originalLanguage: "fr"
+        )
+
+        let surfaced = await MessageStoreObservationHelper.awaitMessage(in: sut) { $0.id == tempId }
+
+        XCTAssertNotNil(surfaced, "Store observation must surface the optimistic bubble")
+        XCTAssertEqual(surfaced?.deliveryStatus, .sending)
+        XCTAssertEqual(surfaced?.messageType, .audio)
+        XCTAssertEqual(surfaced?.attachments.count, 1)
+        XCTAssertEqual(surfaced?.attachments.first?.fileUrl, "file:///tmp/voice.m4a")
+    }
+
+    func test_insertOptimisticMediaMessage_emptyAttachments_persistsNilJson() async throws {
+        // Edge case: caller decides to use the helper for a content-only path.
+        // Should still produce a valid row but with attachmentsJson = nil
+        // (so we don't store an empty `[]` blob taking disk space).
+        let pool = try makeInMemoryPool()
+        let persistence = MessagePersistenceActor(dbWriter: pool)
+        let sut = makeSUT(dependencies: ConversationDependencies(dbPool: pool, persistence: persistence))
+
+        let tempId = "temp_\(UUID().uuidString)"
+
+        sut.insertOptimisticMediaMessage(
+            tempId: tempId,
+            content: "Just text",
+            attachments: [],
+            messageType: .text,
+            replyToId: nil,
+            originalLanguage: "en"
+        )
+
+        let record = await MessageStoreObservationHelper.awaitRecord(
+            localId: tempId,
+            from: pool
+        ) { _ in true }
+
+        XCTAssertNotNil(record)
+        XCTAssertNil(record?.attachmentsJson, "Empty attachments must serialize to nil, not Data([])")
+    }
+
     // MARK: - editMessage Tests
     //
     // Post Phase 1.5: `editMessage` writes through `messagePersistence.markEdited`.

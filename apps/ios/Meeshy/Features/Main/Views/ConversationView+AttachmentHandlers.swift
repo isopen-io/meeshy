@@ -142,7 +142,8 @@ extension ConversationView {
                 messageType: msgType,
                 replyToId: replyId,
                 storyReplyToId: storyReplyId,
-                replyReference: storyRef
+                replyReference: storyRef,
+                originalLanguage: composerState.selectedLanguage
             )
         }
 
