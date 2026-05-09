@@ -621,7 +621,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
     func emitLiveLocationStop(conversationId: String)
     func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool)
-    func emitCallInitiate(conversationId: String, isVideo: Bool)
+    func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
     func emitCallSignal(callId: String, type: String, payload: [String: String])
@@ -1018,11 +1018,67 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Call Signaling Emission
 
-    public func emitCallInitiate(conversationId: String, isVideo: Bool) {
-        socket?.emit("call:initiate", [
+    public enum CallInitiateError: Error, Sendable {
+        case noSocket
+        case timeout
+        case serverError(String)
+        case malformedResponse
+    }
+
+    public struct CallInitiateAck: Sendable {
+        public let callId: String
+        public let mode: String?
+        public let iceServers: [SocketIceServer]
+
+        public init(callId: String, mode: String?, iceServers: [SocketIceServer]) {
+            self.callId = callId
+            self.mode = mode
+            self.iceServers = iceServers
+        }
+    }
+
+    /// Emits `call:initiate` and awaits the gateway ACK that returns the real
+    /// MongoDB callId, mode and per-user ICE servers (TURN credentials).
+    /// The caller MUST configure WebRTC with these ICE servers BEFORE building
+    /// any SDP offer — otherwise NAT-symmetric peers can never connect.
+    public func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> CallInitiateAck {
+        guard let socket else { throw CallInitiateError.noSocket }
+        let payload: [String: Any] = [
             "conversationId": conversationId,
             "type": isVideo ? "video" : "audio"
-        ])
+        ]
+        return try await withCheckedThrowingContinuation { continuation in
+            var resumed = false
+            socket.emitWithAck("call:initiate", payload).timingOut(after: 10) { items in
+                guard !resumed else { return }
+                resumed = true
+
+                guard let response = items.first as? [String: Any] else {
+                    continuation.resume(throwing: CallInitiateError.timeout)
+                    return
+                }
+                guard let success = response["success"] as? Bool, success,
+                      let data = response["data"] as? [String: Any],
+                      let callId = data["callId"] as? String else {
+                    let message = (response["error"] as? [String: Any])?["message"] as? String
+                        ?? (response["error"] as? String)
+                        ?? "unknown error"
+                    continuation.resume(throwing: CallInitiateError.serverError(message))
+                    return
+                }
+
+                let mode = data["mode"] as? String
+                let rawServers = data["iceServers"] as? [[String: Any]] ?? []
+
+                guard let serversData = try? JSONSerialization.data(withJSONObject: rawServers),
+                      let servers = try? JSONDecoder().decode([SocketIceServer].self, from: serversData) else {
+                    continuation.resume(throwing: CallInitiateError.malformedResponse)
+                    return
+                }
+
+                continuation.resume(returning: CallInitiateAck(callId: callId, mode: mode, iceServers: servers))
+            }
+        }
     }
 
     public func emitCallJoin(callId: String) {

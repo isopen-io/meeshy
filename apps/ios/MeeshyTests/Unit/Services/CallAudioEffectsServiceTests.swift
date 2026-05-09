@@ -25,6 +25,24 @@ private final class MockBackSoundFileProvider: BackSoundFileProviding, @unchecke
 
 final class CallAudioEffectsServiceTests: XCTestCase {
 
+    // MARK: - Audio Hardware Guard
+    //
+    // BackSound tests require the AVAudioEngine to connect an input node to the
+    // mixer, which fails on headless CI runners (no audio HW) with
+    // "Input HW format is invalid" (-10851). We skip those tests when the
+    // simulator has no active audio input route to avoid spurious CI failures.
+    // The pure voice-effect DSP tests do not start the engine with an input node
+    // and therefore run correctly in all environments.
+
+    private static var audioInputAvailable: Bool = {
+        // On CI / headless simulators, the audio engine input node reports a
+        // 0 Hz sample rate (no real audio I/O hardware). Attempting to start
+        // the engine in this state raises "Input HW format is invalid" (-10851).
+        // Detect this upfront so affected tests can skip gracefully.
+        let engine = AVAudioEngine()
+        return engine.inputNode.outputFormat(forBus: 0).sampleRate > 0
+    }()
+
     // MARK: - Factory
 
     private func makeSUT() -> CallAudioEffectsService {
@@ -115,6 +133,7 @@ final class CallAudioEffectsServiceTests: XCTestCase {
     // MARK: - BackSound Combination
 
     func test_backSound_combinesWithVoiceEffect() throws {
+        try XCTSkipUnless(Self.audioInputAvailable, "No audio input device — skipping back-sound test")
         let sut = makeSUT()
         try sut.setEffect(.voiceCoder(.default))
         try sut.setEffect(.backSound(.default))
@@ -123,6 +142,7 @@ final class CallAudioEffectsServiceTests: XCTestCase {
     }
 
     func test_backSound_canBeActiveAlone() throws {
+        try XCTSkipUnless(Self.audioInputAvailable, "No audio input device — skipping back-sound test")
         let sut = makeSUT()
         try sut.setEffect(.backSound(.default))
         XCTAssertNil(sut.activeVoiceEffect)
@@ -131,6 +151,7 @@ final class CallAudioEffectsServiceTests: XCTestCase {
     }
 
     func test_settingVoiceEffect_doesNotClearBackSound() throws {
+        try XCTSkipUnless(Self.audioInputAvailable, "No audio input device — skipping back-sound test")
         let sut = makeSUT()
         try sut.setEffect(.backSound(.default))
         try sut.setEffect(.voiceCoder(.default))
@@ -139,6 +160,7 @@ final class CallAudioEffectsServiceTests: XCTestCase {
     }
 
     func test_clearingVoiceEffect_doesNotClearBackSound() throws {
+        try XCTSkipUnless(Self.audioInputAvailable, "No audio input device — skipping back-sound test")
         let sut = makeSUT()
         try sut.setEffect(.voiceCoder(.default))
         try sut.setEffect(.backSound(.default))
@@ -148,6 +170,7 @@ final class CallAudioEffectsServiceTests: XCTestCase {
     }
 
     func test_clearingBackSound_doesNotClearVoiceEffect() throws {
+        try XCTSkipUnless(Self.audioInputAvailable, "No audio input device — skipping back-sound test")
         let sut = makeSUT()
         try sut.setEffect(.voiceCoder(.default))
         try sut.setEffect(.backSound(.default))
@@ -242,6 +265,7 @@ final class CallAudioEffectsServiceTests: XCTestCase {
     // MARK: - Reset
 
     func test_reset_clearsAllState() throws {
+        try XCTSkipUnless(Self.audioInputAvailable, "No audio input device — skipping back-sound test")
         let sut = makeSUT()
         try sut.setEffect(.voiceCoder(.default))
         try sut.setEffect(.backSound(.default))

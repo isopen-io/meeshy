@@ -75,7 +75,9 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload) {}
     func emitLiveLocationStop(conversationId: String) {}
     func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool) {}
-    func emitCallInitiate(conversationId: String, isVideo: Bool) {}
+    func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck {
+        MessageSocketManager.CallInitiateAck(callId: "mock-call-id", mode: "audio", iceServers: [])
+    }
     func emitCallJoin(callId: String) {}
     func emitCallLeave(callId: String) {}
     func emitCallSignal(callId: String, type: String, payload: [String: String]) {}
