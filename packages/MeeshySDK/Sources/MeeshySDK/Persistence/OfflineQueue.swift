@@ -490,6 +490,13 @@ public actor OfflineQueue {
         } catch {
             throw OfflineQueueError.writeFailed(underlying: error)
         }
+
+        // Mirror the GRDB transaction in the in-memory queue used by the hot
+        // retry path: a delete that collapsed a pending sendMessage must not
+        // leave a phantom item in `items`, otherwise `retryAll()` will replay
+        // a logically-deleted message until the next app restart. The gateway
+        // dedup catches the duplicate but the optimistic row would flicker.
+        items.removeAll { $0.clientMessageId == clientMessageId }
     }
 
     public func dequeue(_ itemId: String) async {

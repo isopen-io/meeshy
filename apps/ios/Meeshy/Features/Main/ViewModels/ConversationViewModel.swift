@@ -1297,12 +1297,18 @@ class ConversationViewModel: ObservableObject {
         // concurrent `sendMessage` runs, both inserting their own optimistic
         // record with a fresh `tempId`, both POSTing the request — the user
         // saw the same content twice in the bubble list. The `isSending`
-        // flag flips to `true` for the duration of the send (cleared in
-        // both the success and failure paths), so the second tap exits
+        // flag flips to `true` for the duration of the online send (cleared
+        // in both the success and failure paths), so the second tap exits
         // early instead of duplicating. Retries from the offline / retry
         // queues bypass this entry point — they call lower-level paths
-        // directly with the same `tempId` already used by the original send.
-        guard !isSending else { return false }
+        // directly with the same `clientMessageId` already used by the
+        // original send.
+        //
+        // Phase 4 §6.1 — the offline path runs BEFORE the debounce guard so
+        // a user typing quickly while disconnected (subway, airplane) can
+        // queue back-to-back messages without the second one being silently
+        // dropped. The offline branch is itself debounced inside `OfflineQueue`
+        // by the `clientMessageId` coalescing rules.
 
         // Offline: enqueue for later delivery + show optimistic message.
         // Phase 4 §6.1 — also branch offline when the socket is not currently
@@ -1421,6 +1427,12 @@ class ConversationViewModel: ObservableObject {
         // Resolve blur: use explicit param or ViewModel state
         let resolvedBlur = isBlurred ?? (isBlurEnabled ? true : nil)
 
+        // Phase 4 §6.1 — debounce only the ONLINE send path. The offline
+        // branch above already returned, so a fast double-tap while offline
+        // queues both messages (deduped server-side via `clientMessageId`).
+        // For online sends, two concurrent runs would each post an HTTP
+        // request — `isSending` blocks the second tap.
+        guard !isSending else { return false }
         isSending = true
 
         // Build ReplyReference from quoted message or story
@@ -1647,12 +1659,23 @@ class ConversationViewModel: ObservableObject {
         guard failedMsg.deliveryStatus == .failed else { return }
 
         // Delete the failed row from GRDB; store observation removes it from
-        // `messages` automatically. Then re-send, which inserts a fresh optimistic row.
+        // `messages` automatically. Then re-send, which inserts a fresh
+        // optimistic row.
+        //
+        // Phase 4 §6.2 — reuse the failed message's `clientMessageId` so
+        // the gateway dedup contract `(conversationId, clientMessageId)`
+        // catches a previous attempt that DID reach the server (e.g. ACK
+        // was lost mid-flight). A fresh `cid_*` here would bypass the
+        // dedup index and produce a duplicate server-side record.
+        // The local id of a Phase 4 optimistic message IS its
+        // `clientMessageId` (legacy `temp_/offline_/retry_*` prefixes are
+        // gone), so passing `messageId` straight through is correct.
         let content = failedMsg.content
         let replyToId = failedMsg.replyToId
+        let priorClientMessageId = messageId
         try? await messagePersistence.markDeleted(localId: messageId, deletedAt: Date())
 
-        await sendMessage(content: content, replyToId: replyToId)
+        await sendMessage(content: content, replyToId: replyToId, existingTempId: priorClientMessageId)
     }
 
     func removeFailedMessage(messageId: String) {

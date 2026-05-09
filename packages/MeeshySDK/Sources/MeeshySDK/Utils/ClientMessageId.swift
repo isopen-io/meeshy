@@ -25,9 +25,14 @@ public enum ClientMessageId {
     public static let regexPattern =
         #"^cid_[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$"#
 
+    /// Cached regex compiled once at type-init time. `isValid` is called on
+    /// the hot path (every incoming socket event matches the optimistic by
+    /// `clientMessageId`), so re-compiling on each call is wasteful.
+    private static let compiledRegex: NSRegularExpression? = try? NSRegularExpression(pattern: regexPattern)
+
     /// Returns `true` when `value` matches the canonical `cid_<uuid v4 lowercase>` format.
     public static func isValid(_ value: String) -> Bool {
-        guard let regex = try? NSRegularExpression(pattern: regexPattern) else { return false }
+        guard let regex = compiledRegex else { return false }
         let range = NSRange(value.startIndex..<value.endIndex, in: value)
         return regex.firstMatch(in: value, range: range) != nil
     }
