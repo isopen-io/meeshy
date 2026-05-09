@@ -11,6 +11,9 @@ final class MockConversationService: ConversationServiceProviding {
         {"success":true,"data":[],"pagination":null,"error":null}
         """)
     )
+    var listPageResult: Result<ConversationPage, Error> = .success(
+        ConversationPage(items: [], nextCursor: nil, hasMore: false)
+    )
     var getByIdResult: Result<APIConversation, Error> = .success(
         JSONStub.decode("""
         {"id":"000000000000000000000001","type":"direct","createdAt":"2026-01-01T00:00:00.000Z"}
@@ -45,6 +48,16 @@ final class MockConversationService: ConversationServiceProviding {
     var listCallCount = 0
     var lastListOffset: Int?
     var lastListLimit: Int?
+
+    var listPageCallCount = 0
+    var lastListPageCursor: String?
+    var lastListPageLimit: Int?
+    var lastListPageCurrentUserId: String?
+    /// Optional injection point for tests that need a different page on
+    /// each call (e.g. drive a 3-page scroll). When set it takes
+    /// precedence over `listPageResult` and is invoked with the cursor
+    /// the ViewModel passed in.
+    var listPageHandler: (@Sendable (String?) -> Result<ConversationPage, Error>)?
 
     var getByIdCallCount = 0
     var lastGetByIdConversationId: String?
@@ -121,6 +134,20 @@ final class MockConversationService: ConversationServiceProviding {
             lastListLimit = limit
         }
         return try await MainActor.run { try listResult.get() }
+    }
+
+    nonisolated func listPage(before cursor: String?, limit: Int, currentUserId: String) async throws -> ConversationPage {
+        let handler = await MainActor.run { listPageHandler }
+        await MainActor.run {
+            listPageCallCount += 1
+            lastListPageCursor = cursor
+            lastListPageLimit = limit
+            lastListPageCurrentUserId = currentUserId
+        }
+        if let handler {
+            return try handler(cursor).get()
+        }
+        return try await MainActor.run { try listPageResult.get() }
     }
 
     nonisolated func getById(_ conversationId: String) async throws -> APIConversation {
@@ -271,6 +298,11 @@ final class MockConversationService: ConversationServiceProviding {
         listCallCount = 0
         lastListOffset = nil
         lastListLimit = nil
+        listPageCallCount = 0
+        lastListPageCursor = nil
+        lastListPageLimit = nil
+        lastListPageCurrentUserId = nil
+        listPageHandler = nil
         getByIdCallCount = 0
         lastGetByIdConversationId = nil
         createCallCount = 0
