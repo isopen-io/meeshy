@@ -132,7 +132,7 @@ struct ConversationPreferencesTab: View {
         ) {
             Button((viewModel.prefs.isArchived ?? false) ? "Désarchiver" : "Archiver",
                    role: (viewModel.prefs.isArchived ?? false) ? .none : .destructive) {
-                Task { await viewModel.toggleArchive() }
+                viewModel.toggleArchive()
             }
             Button("Annuler", role: .cancel) {}
         }
@@ -230,7 +230,7 @@ struct ConversationPreferencesTab: View {
                 quickReactions: ["❤️", "😂", "👍", "🔥", "😍", "😮", "😢", "👏", "🎉"],
                 onSelect: { emoji in
                     showEmojiPicker = false
-                    Task { await viewModel.setReaction(emoji) }
+                    viewModel.setReaction(emoji)
                 }
             )
             .presentationDetents([.medium, .large])
@@ -243,7 +243,7 @@ struct ConversationPreferencesTab: View {
             settingsRow(icon: "pin.fill", iconColor: "3B82F6", title: "Épingler") {
                 Toggle("", isOn: Binding(
                     get: { viewModel.prefs.isPinned ?? false },
-                    set: { val in Task { await viewModel.setPinned(val) } }
+                    set: { val in viewModel.setPinned(val) }
                 ))
                 .labelsHidden()
                 .tint(Color(hex: "3B82F6"))
@@ -268,7 +268,7 @@ struct ConversationPreferencesTab: View {
                     categories: viewModel.categories,
                     selectedId: Binding(
                         get: { viewModel.prefs.categoryId },
-                        set: { newId in Task { await viewModel.setCategory(newId) } }
+                        set: { newId in viewModel.setCategory(newId) }
                     ),
                     accentColor: Color(hex: "3B82F6"),
                     onCreateCategory: { name in
@@ -297,9 +297,7 @@ struct ConversationPreferencesTab: View {
                 TagInputField(
                     selectedTags: Binding(
                         get: { viewModel.prefs.tags ?? [] },
-                        set: { newTags in
-                            Task { await viewModel.setTags(newTags) }
-                        }
+                        set: { newTags in viewModel.setTags(newTags) }
                     ),
                     knownTags: viewModel.allTags,
                     accentColor: Color(hex: "3B82F6")
@@ -315,7 +313,7 @@ struct ConversationPreferencesTab: View {
             settingsRow(icon: "bell.slash.fill", iconColor: "FF6B6B", title: "Muet") {
                 Toggle("", isOn: Binding(
                     get: { viewModel.prefs.isMuted ?? false },
-                    set: { val in Task { await viewModel.setMuted(val) } }
+                    set: { val in viewModel.setMuted(val) }
                 ))
                 .labelsHidden()
                 .tint(Color(hex: "FF6B6B"))
@@ -324,7 +322,7 @@ struct ConversationPreferencesTab: View {
             settingsRow(icon: "at", iconColor: "FF6B6B", title: "Mentions seulement") {
                 Toggle("", isOn: Binding(
                     get: { viewModel.prefs.mentionsOnly ?? false },
-                    set: { val in Task { await viewModel.setMentionsOnly(val) } }
+                    set: { val in viewModel.setMentionsOnly(val) }
                 ))
                 .labelsHidden()
                 .tint(Color(hex: "FF6B6B"))

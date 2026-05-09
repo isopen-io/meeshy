@@ -55,28 +55,37 @@ final class ConversationOptionsViewModel: ObservableObject {
     }
 
     // MARK: - Setters with optimistic + rollback
+    //
+    // These setters mutate `prefs` SYNCHRONOUSLY on the MainActor so the UI
+    // reflects the change in the same render frame as the user's interaction.
+    // The server PUT runs in a detached Task; on failure the optimistic
+    // mutation is rolled back. The returned Task lets tests `await task.value`
+    // to wait for persistence to complete.
 
-    func setPinned(_ value: Bool) async {
+    @discardableResult
+    func setPinned(_ value: Bool) -> Task<Void, Never> {
         let previous = prefs.isPinned
         prefs.isPinned = value
-        await persist(UpdateConversationPreferencesRequest(isPinned: value)) { [weak self] in
-            await MainActor.run { self?.prefs.isPinned = previous }
+        return persistAsync(UpdateConversationPreferencesRequest(isPinned: value)) { [weak self] in
+            self?.prefs.isPinned = previous
         }
     }
 
-    func setMuted(_ value: Bool) async {
+    @discardableResult
+    func setMuted(_ value: Bool) -> Task<Void, Never> {
         let previous = prefs.isMuted
         prefs.isMuted = value
-        await persist(UpdateConversationPreferencesRequest(isMuted: value)) { [weak self] in
-            await MainActor.run { self?.prefs.isMuted = previous }
+        return persistAsync(UpdateConversationPreferencesRequest(isMuted: value)) { [weak self] in
+            self?.prefs.isMuted = previous
         }
     }
 
-    func setMentionsOnly(_ value: Bool) async {
+    @discardableResult
+    func setMentionsOnly(_ value: Bool) -> Task<Void, Never> {
         let previous = prefs.mentionsOnly
         prefs.mentionsOnly = value
-        await persist(UpdateConversationPreferencesRequest(mentionsOnly: value)) { [weak self] in
-            await MainActor.run { self?.prefs.mentionsOnly = previous }
+        return persistAsync(UpdateConversationPreferencesRequest(mentionsOnly: value)) { [weak self] in
+            self?.prefs.mentionsOnly = previous
         }
     }
 
@@ -85,27 +94,30 @@ final class ConversationOptionsViewModel: ObservableObject {
         customNameSubject.send(value)
     }
 
-    func setReaction(_ emoji: String?) async {
+    @discardableResult
+    func setReaction(_ emoji: String?) -> Task<Void, Never> {
         let previous = prefs.reaction
         prefs.reaction = emoji
-        await persist(UpdateConversationPreferencesRequest(reaction: emoji)) { [weak self] in
-            await MainActor.run { self?.prefs.reaction = previous }
+        return persistAsync(UpdateConversationPreferencesRequest(reaction: emoji)) { [weak self] in
+            self?.prefs.reaction = previous
         }
     }
 
-    func setCategory(_ id: String?) async {
+    @discardableResult
+    func setCategory(_ id: String?) -> Task<Void, Never> {
         let previous = prefs.categoryId
         prefs.categoryId = id
-        await persist(UpdateConversationPreferencesRequest(categoryId: id)) { [weak self] in
-            await MainActor.run { self?.prefs.categoryId = previous }
+        return persistAsync(UpdateConversationPreferencesRequest(categoryId: id)) { [weak self] in
+            self?.prefs.categoryId = previous
         }
     }
 
-    func addTag(_ tag: String) async {
+    @discardableResult
+    func addTag(_ tag: String) -> Task<Void, Never> {
         let trimmed = tag.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
+        guard !trimmed.isEmpty else { return Task {} }
         let current = prefs.tags ?? []
-        guard !current.contains(trimmed) else { return }
+        guard !current.contains(trimmed) else { return Task {} }
         let next = current + [trimmed]
         let previous = current
         prefs.tags = next
@@ -113,29 +125,30 @@ final class ConversationOptionsViewModel: ObservableObject {
             allTags.append(trimmed)
             allTags.sort()
         }
-        await persist(UpdateConversationPreferencesRequest(tags: next)) { [weak self] in
-            await MainActor.run { self?.prefs.tags = previous }
+        return persistAsync(UpdateConversationPreferencesRequest(tags: next)) { [weak self] in
+            self?.prefs.tags = previous
         }
     }
 
-    func removeTag(_ tag: String) async {
+    @discardableResult
+    func removeTag(_ tag: String) -> Task<Void, Never> {
         let current = prefs.tags ?? []
         let next = current.filter { $0 != tag }
         let previous = current
         prefs.tags = next
-        await persist(UpdateConversationPreferencesRequest(tags: next)) { [weak self] in
-            await MainActor.run { self?.prefs.tags = previous }
+        return persistAsync(UpdateConversationPreferencesRequest(tags: next)) { [weak self] in
+            self?.prefs.tags = previous
         }
     }
 
     /// Replace the entire tag set in one server call. Use this when the binding
     /// emits a fully-resolved next state (e.g. TagInputField setter) to avoid the
     /// last-write-wins race that fan-out add/remove tasks would create.
-    func setTags(_ next: [String]) async {
+    @discardableResult
+    func setTags(_ next: [String]) -> Task<Void, Never> {
         let normalized = next
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
-        // Dedupe preserving order
         var seen = Set<String>()
         let deduped = normalized.filter { seen.insert($0).inserted }
 
@@ -145,17 +158,18 @@ final class ConversationOptionsViewModel: ObservableObject {
             allTags.append(tag)
         }
         allTags.sort()
-        await persist(UpdateConversationPreferencesRequest(tags: deduped)) { [weak self] in
-            await MainActor.run { self?.prefs.tags = previous }
+        return persistAsync(UpdateConversationPreferencesRequest(tags: deduped)) { [weak self] in
+            self?.prefs.tags = previous
         }
     }
 
-    func toggleArchive() async {
+    @discardableResult
+    func toggleArchive() -> Task<Void, Never> {
         let next = !(prefs.isArchived ?? false)
         let previous = prefs.isArchived
         prefs.isArchived = next
-        await persist(UpdateConversationPreferencesRequest(isArchived: next)) { [weak self] in
-            await MainActor.run { self?.prefs.isArchived = previous }
+        return persistAsync(UpdateConversationPreferencesRequest(isArchived: next)) { [weak self] in
+            self?.prefs.isArchived = previous
         }
     }
 
@@ -169,7 +183,7 @@ final class ConversationOptionsViewModel: ObservableObject {
                 categories.append(created)
                 categories.sort { ($0.order ?? 0) < ($1.order ?? 0) }
             }
-            await setCategory(created.id)
+            await setCategory(created.id).value
             return created
         } catch {
             Self.logger.error("createCategory failed: \(error.localizedDescription)")
@@ -206,25 +220,34 @@ final class ConversationOptionsViewModel: ObservableObject {
             .sink { [weak self] value in
                 guard let self else { return }
                 let body = UpdateConversationPreferencesRequest(customName: value.isEmpty ? nil : value)
-                Task { await self.persist(body, rollback: nil) }
+                _ = self.persistAsync(body, rollback: nil)
             }
             .store(in: &cancellables)
     }
 
-    private func persist(
+    /// Schedules a server-side PUT of the given request and returns the Task so
+    /// callers can `await task.value` if they need to wait for completion. The
+    /// `rollback` closure runs on the MainActor on failure and may rewind the
+    /// optimistic mutation done by the caller.
+    @discardableResult
+    private func persistAsync(
         _ request: UpdateConversationPreferencesRequest,
-        rollback: (@Sendable () async -> Void)?
-    ) async {
-        do {
-            try await preferenceService.updateConversationPreferences(
-                conversationId: conversationId,
-                request: request
-            )
-            errorMessage = nil
-        } catch {
-            Self.logger.error("persist failed: \(error.localizedDescription)")
-            await rollback?()
-            errorMessage = "Erreur lors de la sauvegarde."
+        rollback: (@MainActor () -> Void)?
+    ) -> Task<Void, Never> {
+        let convId = conversationId
+        let service = preferenceService
+        return Task { @MainActor [weak self] in
+            do {
+                try await service.updateConversationPreferences(
+                    conversationId: convId,
+                    request: request
+                )
+                self?.errorMessage = nil
+            } catch {
+                Self.logger.error("persist failed: \(error.localizedDescription)")
+                rollback?()
+                self?.errorMessage = "Erreur lors de la sauvegarde."
+            }
         }
     }
 }

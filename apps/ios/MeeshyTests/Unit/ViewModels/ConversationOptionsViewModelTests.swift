@@ -71,7 +71,7 @@ final class ConversationOptionsViewModelTests: XCTestCase {
 
     func test_setPinned_optimistic_persists() async {
         let s = makeSUT()
-        await s.vm.setPinned(true)
+        await s.vm.setPinned(true).value
         XCTAssertEqual(s.vm.prefs.isPinned, true)
         XCTAssertEqual(s.prefs.updateConversationPreferencesCallCount, 1)
         XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.isPinned, true)
@@ -80,34 +80,34 @@ final class ConversationOptionsViewModelTests: XCTestCase {
     func test_setPinned_rollsBackOnFailure() async {
         let s = makeSUT()
         s.prefs.updateConversationPreferencesResult = .failure(NSError(domain: "x", code: 0))
-        await s.vm.setPinned(true)
+        await s.vm.setPinned(true).value
         XCTAssertEqual(s.vm.prefs.isPinned, false, "isPinned should roll back to false")
         XCTAssertNotNil(s.vm.errorMessage)
     }
 
     func test_setMuted_persists() async {
         let s = makeSUT()
-        await s.vm.setMuted(true)
+        await s.vm.setMuted(true).value
         XCTAssertEqual(s.vm.prefs.isMuted, true)
         XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.isMuted, true)
     }
 
     func test_setMentionsOnly_persists() async {
         let s = makeSUT()
-        await s.vm.setMentionsOnly(true)
+        await s.vm.setMentionsOnly(true).value
         XCTAssertEqual(s.vm.prefs.mentionsOnly, true)
     }
 
     func test_setReaction_persists() async {
         let s = makeSUT()
-        await s.vm.setReaction("🔥")
+        await s.vm.setReaction("🔥").value
         XCTAssertEqual(s.vm.prefs.reaction, "🔥")
         XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.reaction, "🔥")
     }
 
     func test_setCategory_persists() async {
         let s = makeSUT()
-        await s.vm.setCategory("cat1")
+        await s.vm.setCategory("cat1").value
         XCTAssertEqual(s.vm.prefs.categoryId, "cat1")
         XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.categoryId, "cat1")
     }
@@ -116,7 +116,7 @@ final class ConversationOptionsViewModelTests: XCTestCase {
 
     func test_addTag_appendsAndPersists() async {
         let s = makeSUT()
-        await s.vm.addTag("urgent")
+        await s.vm.addTag("urgent").value
         XCTAssertEqual(s.vm.prefs.tags, ["urgent"])
         XCTAssertTrue(s.vm.allTags.contains("urgent"))
         XCTAssertEqual(s.prefs.lastUpdateConversationPreferencesRequest?.tags, ["urgent"])
@@ -125,27 +125,27 @@ final class ConversationOptionsViewModelTests: XCTestCase {
     func test_addTag_dedupes() async {
         let s = makeSUT()
         s.vm.prefs.tags = ["urgent"]
-        await s.vm.addTag("urgent")
+        await s.vm.addTag("urgent").value
         XCTAssertEqual(s.vm.prefs.tags, ["urgent"])
         XCTAssertEqual(s.prefs.updateConversationPreferencesCallCount, 0)
     }
 
     func test_addTag_trimsWhitespace() async {
         let s = makeSUT()
-        await s.vm.addTag("  important  ")
+        await s.vm.addTag("  important  ").value
         XCTAssertEqual(s.vm.prefs.tags, ["important"])
     }
 
     func test_removeTag_persists() async {
         let s = makeSUT()
         s.vm.prefs.tags = ["urgent", "work"]
-        await s.vm.removeTag("urgent")
+        await s.vm.removeTag("urgent").value
         XCTAssertEqual(s.vm.prefs.tags, ["work"])
     }
 
     func test_setTags_dedupesAndTrimsAndPersistsInOneCall() async {
         let s = makeSUT()
-        await s.vm.setTags(["urgent", " family ", "Urgent", "family", ""])
+        await s.vm.setTags(["urgent", " family ", "Urgent", "family", ""]).value
         XCTAssertEqual(s.vm.prefs.tags, ["urgent", "family", "Urgent"])
         // setTags fires a single PUT regardless of how many entries
         XCTAssertEqual(s.prefs.updateConversationPreferencesCallCount, 1)
@@ -157,7 +157,7 @@ final class ConversationOptionsViewModelTests: XCTestCase {
         let s = makeSUT()
         s.vm.prefs.tags = ["work"]
         s.prefs.updateConversationPreferencesResult = .failure(NSError(domain: "x", code: 0))
-        await s.vm.setTags(["work", "urgent"])
+        await s.vm.setTags(["work", "urgent"]).value
         XCTAssertEqual(s.vm.prefs.tags, ["work"])
         XCTAssertNotNil(s.vm.errorMessage)
     }
@@ -199,9 +199,9 @@ final class ConversationOptionsViewModelTests: XCTestCase {
     func test_toggleArchive_flipsAndPersists() async {
         let s = makeSUT()
         XCTAssertEqual(s.vm.prefs.isArchived, false)
-        await s.vm.toggleArchive()
+        await s.vm.toggleArchive().value
         XCTAssertEqual(s.vm.prefs.isArchived, true)
-        await s.vm.toggleArchive()
+        await s.vm.toggleArchive().value
         XCTAssertEqual(s.vm.prefs.isArchived, false)
     }
 
@@ -226,5 +226,36 @@ final class ConversationOptionsViewModelTests: XCTestCase {
         let s = makeSUT()
         await s.vm.leave()
         XCTAssertTrue(s.vm.didLeave)
+    }
+
+    // MARK: - Synchronous UI feedback (regression: toggle was reverting on tap)
+
+    func test_setPinned_appliesSynchronouslyForUIFeedback() {
+        let s = makeSUT()
+        XCTAssertEqual(s.vm.prefs.isPinned, false)
+        _ = s.vm.setPinned(true)
+        // The optimistic mutation is visible BEFORE the persist Task runs.
+        // SwiftUI's Binding read in the same render frame must see the new value.
+        XCTAssertEqual(s.vm.prefs.isPinned, true)
+    }
+
+    func test_setReaction_appliesSynchronouslyForUIFeedback() {
+        let s = makeSUT()
+        XCTAssertNil(s.vm.prefs.reaction)
+        _ = s.vm.setReaction("🔥")
+        XCTAssertEqual(s.vm.prefs.reaction, "🔥")
+    }
+
+    func test_setCategory_appliesSynchronouslyForUIFeedback() {
+        let s = makeSUT()
+        XCTAssertNil(s.vm.prefs.categoryId)
+        _ = s.vm.setCategory("cat1")
+        XCTAssertEqual(s.vm.prefs.categoryId, "cat1")
+    }
+
+    func test_toggleArchive_appliesSynchronouslyForUIFeedback() {
+        let s = makeSUT()
+        _ = s.vm.toggleArchive()
+        XCTAssertEqual(s.vm.prefs.isArchived, true)
     }
 }

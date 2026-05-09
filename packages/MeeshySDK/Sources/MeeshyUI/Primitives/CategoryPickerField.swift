@@ -34,7 +34,13 @@ public struct CategoryPickerField: View {
 
     private var displayedCategories: [ConversationCategory] {
         let trimmed = editing.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.isEmpty {
+        // Show ALL categories when:
+        //   - the field is empty, OR
+        //   - the typed text matches the currently selected category exactly
+        //     (the default state on focus-gained — user hasn't started searching)
+        let showAll = trimmed.isEmpty
+            || (selectedCategory?.name.lowercased() == trimmed.lowercased())
+        if showAll {
             return categories.sorted { ($0.order ?? 0) < ($1.order ?? 0) }
         }
         return categories
@@ -45,6 +51,8 @@ public struct CategoryPickerField: View {
     private var canCreate: Bool {
         let trimmed = editing.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return false }
+        // Hide "Create X" when X is exactly the already-selected category name
+        if selectedCategory?.name.lowercased() == trimmed.lowercased() { return false }
         return !categories.contains(where: { $0.name.lowercased() == trimmed.lowercased() })
     }
 
