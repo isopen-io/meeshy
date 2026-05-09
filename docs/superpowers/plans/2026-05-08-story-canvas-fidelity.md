@@ -3226,7 +3226,25 @@ git tag story-canvas-p3-complete
 
 # Phase 4 — AVFoundation custom compositor (3 jours)
 
-**Objectif** : `StoryAVCompositor` utilise `StoryRenderer.render()` pour produire chaque frame d'export. Identité bit-exact avec live preview.
+**Objectif** : `StoryAVCompositor` utilise `StoryRenderer.render()` pour produire chaque frame d'export. Identité bit-exact (à la tolérance H.264 près) avec live preview.
+
+---
+
+## Phase 4 — Patches post-Phase 3 audit (2026-05-09)
+
+Le code template original de Phase 4 a été écrit avant que les contraintes runtime ne soient découvertes en Phase 2/3. Avant d'implémenter, on patche :
+
+1. **iOS 17, pas 18.** `Package.swift` cible `.iOS(.v17)`. `AVAssetExportSession.export(to:as:)` (iOS 18+) doit être remplacé par le pattern legacy `exportAsynchronously(completionHandler:)` enveloppé dans `withCheckedThrowingContinuation`.
+2. **`mediaObjects` est optionnel.** `slide.effects.mediaObjects: [StoryMediaObject]?` — `?? []` ou `?.first(where:)` requis.
+3. **`StoryRenderer.render` est `@MainActor`.** `AVVideoCompositing.startRequest(_:)` est appelé par AVFoundation sur un worker thread interne. On bridge via `DispatchQueue.main.sync { ... StoryRenderer.render + layer.render(in:) ... }`. Sécurité : `StoryExporter.export()` est exposé en `async` ; le caller ne doit jamais l'appeler depuis `MainActor.run` synchronisé pour éviter le deadlock croisé.
+4. **CGContext bitmap info pour 32BGRA.** `kCVPixelFormatType_32BGRA` exige `CGImageByteOrderInfo.order32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue`. Le template original n'a que `premultipliedFirst.rawValue` (interprété en big-endian par défaut sur iOS) → buffer corrompu.
+5. **Cas no-bg-video : pour Phase 4 on lève `StoryExporterError.noBackgroundVideo`.** Le pattern AVMutableComposition exige au moins une track source. Cas "static slide sans bg video" → follow-up (générer un track noir 1s programmatique ou utiliser `AVMutableComposition.insertEmptyTimeRange`).
+6. **Fixture pour test 4.3.** `StoryFixtures.complexSlide()` n'a pas de `mediaURL` résolvable. Test 4.3 fournit son propre fixture programmatique (asset noir 2s généré via AVAssetWriter) ou s'appuie sur un bundle ressource minimal. Cf. patch ci-dessous dans Task 4.3.
+7. **Pixel-exact 0 diff irréaliste.** H.264 encoding est lossy ; color space sRGB↔Display P3 round-trip ; AVAssetImageGenerator interpolation. Tolérance documentée : SSIM > 0.97 sur le frame ou max-pixel-diff < 8 niveaux sur 99 % des pixels. Le test peut aussi être marqué `XCTSkipIf` si l'env n'a pas de simulateur GPU adéquat.
+8. **`videoComposition.renderSize`.** Ajusté à `CanvasGeometry.designSize` (1080×1920) pour produire un master haute fidélité ; live preview rendu à la taille écran reste équivalent au scale factor près.
+9. **Build via xcodebuild, pas swift build.** Comme Phases 1-3 : `xcodebuild build -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5' -derivedDataPath /tmp/meeshy-derived-data`. `swift build` échoue car MeeshyUI importe UIKit/AVFoundation.
+
+Toute occurrence ci-dessous des steps "Build check / Run test" se réfère à ces commandes patchées, même si la signature originale apparaît littéralement.
 
 ---
 
