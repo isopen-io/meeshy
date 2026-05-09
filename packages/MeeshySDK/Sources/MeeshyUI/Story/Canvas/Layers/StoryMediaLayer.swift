@@ -126,10 +126,12 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
 
         switch mode {
         case .play:
-            // Pre-warm decoder so playback start is glitch-free.
-            player.preroll(atRate: 1.0) { ready in
-                if ready { player.play() }
-            }
+            // Start playback immediately — `play()` is safe regardless of
+            // AVPlayer status (it queues until ready). `preroll(atRate:)`,
+            // by contrast, requires `.readyToPlay` and throws
+            // NSInvalidArgumentException when the player has just been
+            // initialised — bug discovered by ExportEquivalenceTests.
+            player.play()
         case .edit:
             player.seek(to: .zero)
         }
