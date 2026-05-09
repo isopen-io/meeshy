@@ -1647,6 +1647,69 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    /// Insère un MessageRecord optimiste GRDB pour un message média (image,
+    /// vidéo, audio, fichier) AVANT que l'upload TUS ne soit terminé. Les
+    /// attachments fournis pointent sur les fichiers locaux (file:// URLs)
+    /// pour que la bulle affiche l'image / le player audio immédiatement —
+    /// y compris hors-ligne. Le store observation surface la nouvelle ligne
+    /// dans `messages` automatiquement, donc l'appelant n'a PAS besoin de
+    /// faire `messages.append(...)` en parallèle (cela serait écrasé à la
+    /// prochaine emission du publisher).
+    ///
+    /// `tempId` est la clé locale (= `MessageRecord.localId` dans GRDB).
+    /// Préfixes attendus : `temp_<UUID>` (envoi en ligne), `offline_<UUID>`
+    /// (queue offline), `retry_<UUID>` (queue retry).
+    func insertOptimisticMediaMessage(
+        tempId: String,
+        content: String,
+        attachments: [MeeshyMessageAttachment],
+        messageType: Message.MessageType,
+        replyToId: String?,
+        storyReplyToId: String? = nil,
+        replyReference: ReplyReference? = nil
+    ) {
+        let now = Date()
+        let attachmentsJson = attachments.isEmpty ? nil : try? JSONEncoder().encode(attachments)
+        let replyToJson = replyReference.flatMap { try? JSONEncoder().encode($0) }
+        let contentTypeForRecord: String = messageType == .audio ? "audio" : "text"
+        let record = MessageRecord(
+            localId: tempId, serverId: nil,
+            conversationId: conversationId, senderId: currentUserId,
+            content: content.isEmpty ? nil : content,
+            originalLanguage: "fr",
+            messageType: messageType.rawValue, messageSource: "user", contentType: contentTypeForRecord,
+            state: .sending, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: replyToId,
+            storyReplyToId: storyReplyToId,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: replyToJson, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: authManager.currentUser?.displayName,
+            senderUsername: authManager.currentUser?.username,
+            senderColor: nil, senderAvatarURL: authManager.currentUser?.avatar,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: now, sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: now,
+            attachmentsJson: attachmentsJson, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil,
+            changeVersion: 0
+        )
+        let persistence = messagePersistence
+        Task.detached(priority: .userInitiated) {
+            try? await persistence.insertOptimistic(record)
+        }
+    }
+
     func insertOptimisticAudioMessage(
         messageId: String,
         content: String,

@@ -81,6 +81,11 @@ extension ConversationView {
         HapticFeedback.light()
 
         // --- Optimistic media insert: show bubble immediately with local files ---
+        // Persist via GRDB (insertOptimisticMediaMessage) so the row survives
+        // the next MessageStore observation refresh. A direct
+        // `viewModel.messages.append` would only live in memory and be wiped
+        // the moment any other GRDB write fires `messagesDidChange` (e.g. a
+        // status update or another conversation receiving a message).
         let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         let senderName = AuthManager.shared.currentUser?.displayName
         let senderColor = DynamicColorGenerator.colorForName(senderName ?? "?")
@@ -106,31 +111,39 @@ extension ConversationView {
             }
         }
 
+        // Synthesize a local audio attachment so the bubble can render the
+        // waveform/player against the file:// URL while the upload runs.
+        // The server message:new reconciliation will overwrite this with the
+        // canonical fileUrl once the upload completes.
+        var localAudioPreview: MeeshyMessageAttachment?
+        if let audioURL,
+           let audioAttachment = attachments.first(where: { $0.type == .audio }) {
+            localAudioPreview = MeeshyMessageAttachment(
+                id: audioAttachment.id,
+                mimeType: audioAttachment.mimeType.isEmpty ? "audio/mp4" : audioAttachment.mimeType,
+                fileUrl: audioURL.absoluteString,
+                duration: audioAttachment.duration,
+                uploadedBy: currentUserId,
+                thumbnailColor: senderColor
+            )
+        }
+
+        let allLocalAttachments: [MeeshyMessageAttachment] = previewAttachments + (localAudioPreview.map { [$0] } ?? [])
         let tempId = "temp_\(UUID().uuidString)"
-        if !previewAttachments.isEmpty || audioURL != nil {
+
+        if !allLocalAttachments.isEmpty {
             let msgType: Message.MessageType = audioURL != nil ? .audio
                 : (previewAttachments.first?.mimeType.hasPrefix("video/") == true ? .video : .image)
 
-            let optimistic = Message(
-                id: tempId,
-                conversationId: viewModel.conversationId,
-                senderId: currentUserId,
+            viewModel.insertOptimisticMediaMessage(
+                tempId: tempId,
                 content: content,
+                attachments: allLocalAttachments,
                 messageType: msgType,
                 replyToId: replyId,
                 storyReplyToId: storyReplyId,
-                createdAt: Date(),
-                updatedAt: Date(),
-                attachments: previewAttachments,
-                replyTo: storyRef,
-                senderName: senderName,
-                senderColor: senderColor,
-                senderAvatarURL: AuthManager.shared.currentUser?.avatar,
-                deliveryStatus: .sending,
-                isMe: true
+                replyReference: storyRef
             )
-            viewModel.messages.append(optimistic)
-            viewModel.newMessageAppended += 1
         }
 
         composerState.pendingAttachments.removeAll()
@@ -216,17 +229,11 @@ extension ConversationView {
                         originalLanguage: lang
                     )
                     if let messageId {
-                        if previewAttachments.isEmpty {
-                            viewModel.insertOptimisticAudioMessage(
-                                messageId: messageId,
-                                content: content,
-                                attachments: localAttachments,
-                                replyToId: replyId,
-                                replyReference: storyRef
-                            )
-                        } else {
-                            viewModel.pendingServerIds[tempId] = messageId
-                        }
+                        // Optimistic GRDB row inserted earlier with tempId; map
+                        // it to the server id so the message:new broadcast (and
+                        // any future delete/edit/react ops) can resolve back to
+                        // the original optimistic row.
+                        viewModel.pendingServerIds[tempId] = messageId
                         sendSuccess = true
                     } else {
                         viewModel.error = "Echec de l'envoi du message vocal"
