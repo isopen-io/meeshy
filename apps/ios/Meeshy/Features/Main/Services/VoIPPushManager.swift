@@ -117,11 +117,14 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             callerUsername: payloadUsername
         )
 
-        // Format with call type suffix for CallKit display
-        let callTypeLabel = isVideo ? "Meeshy Vidéo" : "Meeshy Audio"
-        let displayName = "\(resolvedName) (\(callTypeLabel))"
+        // CallKit affiche déjà le nom de l'app (Meeshy) et l'icône audio/
+        // vidéo dans son UI système — y dupliquer "(Meeshy Audio)" /
+        // "(Meeshy Vidéo)" alourdit la lockscreen et la Dynamic Island
+        // sans rien apporter. On passe le nom du caller seul ; le type de
+        // média est porté par CXCallUpdate.hasVideo (cf. CallManager).
+        let displayName = resolvedName
 
-        logger.info("VoIP push received: callId=\(callId), caller=\(displayName), iceServers=\(iceServers?.count ?? 0)")
+        logger.info("VoIP push received: callId=\(callId), caller=\(displayName), isVideo=\(isVideo), iceServers=\(iceServers?.count ?? 0)")
 
         // PushKit delivers this on .main (configured in register()). We are
         // guaranteed to be on the main thread but the function is nonisolated,
@@ -143,8 +146,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             Task { @MainActor in
                 let cachedName = await Self.resolveCallerNameFromCache(callerUserId: callerUserId)
                 guard let cachedName, !cachedName.isEmpty else { return }
-                let updatedDisplay = "\(cachedName) (\(callTypeLabel))"
-                CallManager.shared.updateIncomingCallName(updatedDisplay)
+                CallManager.shared.updateIncomingCallName(cachedName)
             }
         }
 

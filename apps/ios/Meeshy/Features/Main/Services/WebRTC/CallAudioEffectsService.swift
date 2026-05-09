@@ -411,6 +411,20 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
     // MARK: - Private — Engine Graph (config queue)
 
     private func rebuildEngineGraphOnConfigQueue() {
+        // Garde-fou pour le simulateur (ou tout device sans mic configurée
+        // par AVAudioSession). `engine.inputNode` peut retourner un node
+        // avec un format invalide (sampleRate=0 ou channelCount=0). Dans
+        // ce cas, `engine.connect(_:to:format:)` lève une NSException
+        // (NSInvalidArgumentException) Objective-C non-rattrapable par
+        // Swift `try`, ce qui crashe l'app au lancement de l'appel
+        // (cf. crash report 2026-05-09 11:48 — AVAudioIONodeImpl::
+        // SetOutputFormat trap pendant rebuildEngineGraphOnConfigQueue).
+        let inputFormat = engine.inputNode.outputFormat(forBus: 0)
+        guard inputFormat.sampleRate > 0, inputFormat.channelCount > 0 else {
+            Logger.audioEffects.warning("Skipping engine graph rebuild — inputNode invalid (sr=\(inputFormat.sampleRate), ch=\(inputFormat.channelCount)). Audio effects disabled for this session (likely simulator without mic).")
+            return
+        }
+
         let format = AVAudioFormat(
             standardFormatWithSampleRate: AudioEffectsConstants.defaultSampleRate,
             channels: 1
@@ -427,12 +441,18 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
             engine.attach(mixer)
         }
 
+        // Première connection (inputNode → premier voice node) avec le
+        // format natif de l'inputNode — `connect` exige que le format
+        // passé matche l'outputFormat du source node, sinon NSException.
+        // AVAudioEngine convertit automatiquement vers le format aval.
         var previousNode: AVAudioNode = engine.inputNode
+        var previousFormat: AVAudioFormat = inputFormat
         for node in voiceEffectNodes {
-            engine.connect(previousNode, to: node, format: format)
+            engine.connect(previousNode, to: node, format: previousFormat)
             previousNode = node
+            previousFormat = format
         }
-        engine.connect(previousNode, to: engine.mainMixerNode, format: format)
+        engine.connect(previousNode, to: engine.mainMixerNode, format: previousFormat)
 
         if let player = backSoundPlayerNode, let mixer = backSoundMixerNode,
            let file = backSoundAudioFile {
@@ -442,7 +462,7 @@ final class CallAudioEffectsService: CallAudioEffectsServiceProviding {
 
         do {
             try engine.start()
-            Logger.audioEffects.info("Audio engine started")
+            Logger.audioEffects.info("Audio engine started (inputFormat sr=\(inputFormat.sampleRate), ch=\(inputFormat.channelCount))")
         } catch {
             Logger.audioEffects.error("Failed to start audio engine: \(error.localizedDescription)")
         }
