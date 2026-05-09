@@ -79,9 +79,15 @@ class GlobalSearchViewModel: ObservableObject {
     @Published var messageResults: [GlobalSearchMessageResult] = []
     @Published var conversationResults: [GlobalSearchConversationResult] = []
     @Published var userResults: [GlobalSearchUserResult] = []
-    @Published var isSearching = false
+    @Published private(set) var loadState: LoadState = .idle
     @Published var recentSearches: [String] = []
     @Published var hasSearched = false
+
+    /// Backwards-compatibility shim — earlier consumers (and `GlobalSearchView`)
+    /// read `isSearching` directly. Derived from `loadState` so existing call
+    /// sites keep working without churn. Mirrors the convention used by
+    /// `DiscoverViewModel.isSearching`.
+    var isSearching: Bool { loadState == .loading || loadState == .cachedStale }
 
     // MARK: - Dependencies
 
@@ -150,8 +156,20 @@ class GlobalSearchViewModel: ObservableObject {
     // MARK: - Search
 
     func performSearch(query: String) async {
-        isSearching = true
         hasSearched = true
+
+        // If we have a cached LRU hit for the message tab we are still going
+        // to revalidate downstream (FTS5 + cached merge are served first,
+        // network for conversations/users still runs), so we surface
+        // `.cachedStale` per the architecture-bible rule "no spinner when
+        // cache has data". Otherwise this is a cold load and we honour
+        // `.loading`.
+        let key = query.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+        let hasCachedHit = messageQueryCache.contains { entry in
+            entry.query == key &&
+            Date().timeIntervalSince(entry.cachedAt) < Self.messageQueryCacheStaleTTL
+        }
+        loadState = hasCachedHit ? .cachedStale : .loading
 
         async let conversationsTask = searchConversations(query: query)
         async let usersTask = searchUsers(query: query)
@@ -162,7 +180,11 @@ class GlobalSearchViewModel: ObservableObject {
         userResults = users
         messageResults = msgs
 
-        isSearching = false
+        if NetworkMonitor.shared.isOffline {
+            loadState = .offline
+        } else {
+            loadState = .loaded
+        }
     }
 
     // MARK: - Search Conversations (FTS5-first, network fallback)
@@ -464,6 +486,7 @@ class GlobalSearchViewModel: ObservableObject {
         conversationResults = []
         userResults = []
         hasSearched = false
+        loadState = .idle
     }
 
     // MARK: - Recent Searches
