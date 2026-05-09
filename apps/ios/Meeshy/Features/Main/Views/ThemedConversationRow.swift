@@ -148,11 +148,18 @@ struct ThemedConversationRow: View {
                 HStack(alignment: .top) {
                     // Name with type indicator
                     HStack(spacing: 6) {
-                        Text(conversation.name)
+                        Text(conversation.displayName)
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundColor(textPrimary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
+
+                        // Reaction emoji (favorites classification)
+                        if let r = conversation.reaction, !r.isEmpty {
+                            Text(r)
+                                .font(.system(size: 12))
+                                .accessibilityLabel(Text("réaction \(r)"))
+                        }
 
                         // Type badge
                         if conversation.type != .direct {

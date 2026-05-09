@@ -125,6 +125,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var isPinned: Bool = false
     public var sectionId: String? = nil
     public var isMuted: Bool = false
+    public var mentionsOnly: Bool = false
+    public var isArchivedByUser: Bool = false
+    public var customName: String? = nil
     public var participantUserId: String? = nil
     public var participantUsername: String? = nil
     public var participantAvatarURL: String? = nil
@@ -148,6 +151,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
     public var accentColor: String { colorPalette.primary }
     public var name: String { title ?? identifier }
+    public var displayName: String { customName ?? title ?? identifier }
     public var isArchived: Bool { !isActive }
 
     public var lastSeenText: String? {
@@ -175,6 +179,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(name)
         h.combine(isMuted)
         h.combine(isPinned)
+        h.combine(isArchivedByUser)
+        h.combine(mentionsOnly)
+        h.combine(customName)
         h.combine(avatar)
         h.combine(participantUsername)
         h.combine(participantAvatarURL)
@@ -214,7 +221,8 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 lastMessageExpiresAt: Date? = nil,
                 recentMessages: [RecentMessagePreview] = [],
                 tags: [MeeshyConversationTag] = [], isAnnouncementChannel: Bool = false, defaultWriteRole: String? = nil, slowModeSeconds: Int? = nil, autoTranslateEnabled: Bool? = nil, isPinned: Bool = false, sectionId: String? = nil,
-                isMuted: Bool = false, participantUserId: String? = nil, participantUsername: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
+                isMuted: Bool = false, mentionsOnly: Bool = false, isArchivedByUser: Bool = false, customName: String? = nil,
+                participantUserId: String? = nil, participantUsername: String? = nil, participantAvatarURL: String? = nil, lastSeenAt: Date? = nil,
                 closedAt: Date? = nil, closedBy: String? = nil,
                 currentUserRole: String? = nil, currentUserJoinedAt: Date? = nil, reaction: String? = nil,
                 language: ConversationContext.ConversationLanguage = .french,
@@ -228,6 +236,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         self.isAnnouncementChannel = isAnnouncementChannel
         self.defaultWriteRole = defaultWriteRole; self.slowModeSeconds = slowModeSeconds; self.autoTranslateEnabled = autoTranslateEnabled
         self.isPinned = isPinned; self.sectionId = sectionId; self.isMuted = isMuted
+        self.mentionsOnly = mentionsOnly; self.isArchivedByUser = isArchivedByUser; self.customName = customName
         self.participantUserId = participantUserId; self.participantUsername = participantUsername; self.participantAvatarURL = participantAvatarURL; self.lastSeenAt = lastSeenAt
         self.closedAt = closedAt; self.closedBy = closedBy
         self.currentUserRole = currentUserRole; self.currentUserJoinedAt = currentUserJoinedAt; self.reaction = reaction

@@ -44,32 +44,22 @@ struct ConversationPreferencesTab: View {
     @EnvironmentObject private var statusViewModel: StatusViewModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var isPinned: Bool = false
-    @State private var isMuted: Bool = false
-    @State private var mentionsOnly: Bool = false
-    @State private var isArchived: Bool = false
-    @State private var customName: String = ""
-    @State private var reaction: String = ""
-    @State private var tags: [String] = []
-    @State private var categoryId: String? = nil
+    @StateObject private var viewModel: ConversationOptionsViewModel
 
-    @State private var isLoading: Bool = false
-    @State private var isSaving: Bool = false
     @State private var showArchiveConfirm: Bool = false
     @State private var showLeaveConfirm: Bool = false
     @State private var showDeleteConfirm: Bool = false
-    @State private var errorMessage: String? = nil
     @State private var showEmojiPicker: Bool = false
+    @State private var customNameLocal: String = ""
 
     @State private var memberSearchQuery: String = ""
     @State private var platformSearchResults: [PrefsUserSearchResult] = []
     @State private var isSearchingPlatform: Bool = false
     @State private var addingUserId: String? = nil
     @State private var addedUserIds: Set<String> = []
+    @State private var memberCancellable: AnyCancellable?
 
-    private let customNameSubject = PassthroughSubject<String, Never>()
     private let memberSearchSubject = PassthroughSubject<String, Never>()
-    @State private var cancellables = Set<AnyCancellable>()
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-prefs")
     private var presenceManager: PresenceManager { PresenceManager.shared }
@@ -78,9 +68,7 @@ struct ConversationPreferencesTab: View {
     private var isCreator: Bool { conversation.currentUserRole?.lowercased() == "creator" }
     private var accent: Color { Color(hex: accentColor) }
 
-    private var canLeave: Bool {
-        !isDirect && !isCreator
-    }
+    private var canLeave: Bool { !isDirect && !isCreator }
 
     private var canManageMembers: Bool {
         guard let role = conversation.currentUserRole?.lowercased() else { return false }
@@ -100,9 +88,16 @@ struct ConversationPreferencesTab: View {
         Set(participants.compactMap(\.userId))
     }
 
+    init(conversation: Conversation, participants: [PaginatedParticipant], accentColor: String) {
+        self.conversation = conversation
+        self.participants = participants
+        self.accentColor = accentColor
+        self._viewModel = StateObject(wrappedValue: ConversationOptionsViewModel(conversationId: conversation.id))
+    }
+
     var body: some View {
         VStack(spacing: 16) {
-            if isLoading {
+            if viewModel.loadState == .loading && viewModel.prefs.tags == nil {
                 ProgressView()
                     .frame(maxWidth: .infinity, minHeight: 200)
             } else {
@@ -112,7 +107,7 @@ struct ConversationPreferencesTab: View {
                 actionsSection
             }
 
-            if let error = errorMessage {
+            if let error = viewModel.errorMessage {
                 Text(error)
                     .font(.system(size: 13))
                     .foregroundColor(Color(hex: "F87171"))
@@ -123,21 +118,27 @@ struct ConversationPreferencesTab: View {
         .padding(.horizontal, 20)
         .padding(.top, 16)
         .padding(.bottom, 32)
-        .task { await loadPreferences() }
-        .onAppear { setupDebounce() }
+        .task {
+            await viewModel.load()
+            customNameLocal = viewModel.prefs.customName ?? ""
+        }
+        .onAppear { setupMemberSearchDebounce() }
+        .onChange(of: viewModel.didDelete) { _, deleted in if deleted { dismiss() } }
+        .onChange(of: viewModel.didLeave) { _, left in if left { dismiss() } }
         .confirmationDialog(
-            isArchived ? "Désarchiver la conversation ?" : "Archiver la conversation ?",
+            (viewModel.prefs.isArchived ?? false) ? "Désarchiver la conversation ?" : "Archiver la conversation ?",
             isPresented: $showArchiveConfirm,
             titleVisibility: .visible
         ) {
-            Button(isArchived ? "Désarchiver" : "Archiver", role: isArchived ? .none : .destructive) {
-                Task { await toggleArchive() }
+            Button((viewModel.prefs.isArchived ?? false) ? "Désarchiver" : "Archiver",
+                   role: (viewModel.prefs.isArchived ?? false) ? .none : .destructive) {
+                Task { await viewModel.toggleArchive() }
             }
             Button("Annuler", role: .cancel) {}
         }
         .confirmationDialog("Quitter la conversation ?", isPresented: $showLeaveConfirm, titleVisibility: .visible) {
             Button("Quitter", role: .destructive) {
-                Task { await leaveConversation() }
+                Task { await viewModel.leave() }
             }
             Button("Annuler", role: .cancel) {}
         } message: {
@@ -145,7 +146,7 @@ struct ConversationPreferencesTab: View {
         }
         .confirmationDialog("Supprimer pour moi ?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("Supprimer", role: .destructive) {
-                Task { await deleteForMe() }
+                Task { await viewModel.deleteForMe() }
             }
             Button("Annuler", role: .cancel) {}
         } message: {
@@ -153,234 +154,10 @@ struct ConversationPreferencesTab: View {
         }
     }
 
-    // MARK: - Members Section
-
-    private var membersSection: some View {
-        settingsSection(title: "Membres (\(participants.count))", icon: "person.2.fill", color: "6366F1") {
-            memberSearchField
-            Divider().padding(.leading, 54).opacity(0.3)
-
-            if filteredParticipants.isEmpty && memberSearchQuery.isEmpty {
-                HStack {
-                    Spacer()
-                    Text("Aucun membre")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                    Spacer()
-                }
-                .padding(.vertical, 16)
-            } else {
-                ForEach(filteredParticipants) { participant in
-                    participantRow(participant)
-                    if participant.id != filteredParticipants.last?.id {
-                        Divider().padding(.leading, 54).opacity(0.3)
-                    }
-                }
-
-                if !memberSearchQuery.isEmpty && filteredParticipants.isEmpty {
-                    HStack {
-                        Spacer()
-                        Text("Aucun membre correspondant")
-                            .font(.system(size: 12, weight: .medium))
-                            .foregroundColor(theme.textMuted)
-                        Spacer()
-                    }
-                    .padding(.vertical, 10)
-                }
-            }
-
-            if !platformSearchResults.isEmpty && canManageMembers {
-                Divider().opacity(0.3)
-                HStack(spacing: 6) {
-                    Image(systemName: "magnifyingglass")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(accent)
-                    Text("Résultats de recherche")
-                        .font(.system(size: 11, weight: .bold, design: .rounded))
-                        .foregroundColor(accent)
-                        .tracking(0.5)
-                }
-                .padding(.horizontal, 14)
-                .padding(.top, 8)
-                .padding(.bottom, 4)
-
-                ForEach(platformSearchResults) { user in
-                    platformUserRow(user)
-                    if user.id != platformSearchResults.last?.id {
-                        Divider().padding(.leading, 54).opacity(0.3)
-                    }
-                }
-            }
-
-            if isSearchingPlatform {
-                HStack {
-                    Spacer()
-                    ProgressView()
-                        .scaleEffect(0.8)
-                    Spacer()
-                }
-                .padding(.vertical, 8)
-            }
-        }
-    }
-
-    private var memberSearchField: some View {
-        HStack(spacing: 10) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(theme.textMuted)
-
-            TextField("Rechercher ou ajouter...", text: $memberSearchQuery)
-                .font(.system(size: 14))
-                .foregroundColor(theme.textPrimary)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .onChange(of: memberSearchQuery) { _, newValue in
-                    memberSearchSubject.send(newValue)
-                    if newValue.trimmingCharacters(in: .whitespacesAndNewlines).count < 3 {
-                        platformSearchResults = []
-                    }
-                }
-
-            if !memberSearchQuery.isEmpty {
-                Button {
-                    memberSearchQuery = ""
-                    platformSearchResults = []
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14))
-                        .foregroundColor(theme.textMuted)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-    }
-
-    private func participantRow(_ participant: PaginatedParticipant) -> some View {
-        let color = DynamicColorGenerator.colorForName(participant.name)
-        let presence = presenceManager.presenceState(for: participant.id)
-
-        return HStack(spacing: 10) {
-            MeeshyAvatar(
-                name: participant.name,
-                context: .userListItem,
-                accentColor: color,
-                avatarURL: participant.avatar,
-                moodEmoji: participant.userId.flatMap { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                presenceState: presence,
-                onMoodTap: participant.userId.flatMap { statusViewModel.moodTapHandler(for: $0) }
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
-                HStack(spacing: 6) {
-                    Text(participant.name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(theme.textPrimary)
-                        .lineLimit(1)
-
-                    if let role = participant.conversationRole,
-                       role.lowercased() != "member" {
-                        Text(roleBadgeLabel(role))
-                            .font(.system(size: 9, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 5)
-                            .padding(.vertical, 1)
-                            .background(Capsule().fill(roleBadgeColor(role)))
-                    }
-                }
-
-                if let username = participant.username {
-                    Text("@\(username)")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(theme.textMuted)
-                        .lineLimit(1)
-                }
-            }
-
-            Spacer()
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-    }
-
-    private func platformUserRow(_ user: PrefsUserSearchResult) -> some View {
-        let isMember = existingMemberIds.contains(user.id) || addedUserIds.contains(user.id)
-        let isAdding = addingUserId == user.id
-        let color = DynamicColorGenerator.colorForName(user.username)
-
-        return HStack(spacing: 10) {
-            MeeshyAvatar(
-                name: user.name,
-                context: .userListItem,
-                accentColor: color,
-                avatarURL: user.avatar
-            )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(user.name)
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(1)
-
-                Text("@\(user.username)")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundColor(theme.textMuted)
-                    .lineLimit(1)
-            }
-
-            Spacer()
-
-            if isMember {
-                Text("Membre")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(theme.textMuted)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(Capsule().fill(theme.textMuted.opacity(0.1)))
-            } else if isAdding {
-                ProgressView()
-                    .scaleEffect(0.7)
-            } else {
-                Button {
-                    Task { await addParticipant(userId: user.id) }
-                } label: {
-                    Text("Ajouter")
-                        .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(accent))
-                }
-                .buttonStyle(.plain)
-            }
-        }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 8)
-    }
-
-    private func roleBadgeLabel(_ role: String) -> String {
-        switch role.lowercased() {
-        case "admin", "creator": return "Admin"
-        case "moderator": return "Mod"
-        default: return role.capitalized
-        }
-    }
-
-    private func roleBadgeColor(_ role: String) -> Color {
-        switch role.lowercased() {
-        case "admin", "creator": return Color(hex: "FF6B6B")
-        case "moderator": return Color(hex: "F8B500")
-        default: return Color(hex: "45B7D1")
-        }
-    }
-
     // MARK: - Sections
 
     private var displaySection: some View {
         settingsSection(title: "Mon affichage", icon: "paintbrush.fill", color: "A855F7") {
-            // Nom personnalisé — label above, field below
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "pencil")
@@ -394,17 +171,17 @@ struct ConversationPreferencesTab: View {
                 }
 
                 HStack(spacing: 6) {
-                    TextField("Donner un surnom à cette conversation...", text: $customName)
+                    TextField("Donner un surnom à cette conversation...", text: $customNameLocal)
                         .textFieldStyle(.plain)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(theme.textPrimary)
-                        .onChange(of: customName) { _, newValue in
-                            customNameSubject.send(newValue)
+                        .onChange(of: customNameLocal) { _, newValue in
+                            viewModel.setCustomName(newValue)
                         }
-                    if !customName.isEmpty {
+                    if !customNameLocal.isEmpty {
                         Button {
-                            customName = ""
-                            customNameSubject.send("")
+                            customNameLocal = ""
+                            viewModel.setCustomName("")
                         } label: {
                             Image(systemName: "xmark.circle.fill")
                                 .font(.system(size: 14))
@@ -428,19 +205,17 @@ struct ConversationPreferencesTab: View {
 
             Divider().padding(.leading, 54).opacity(0.3)
 
-            // Réaction — tap to open emoji picker
             Button {
                 showEmojiPicker = true
             } label: {
                 settingsRow(icon: "heart.fill", iconColor: "A855F7", title: "Réaction") {
                     HStack(spacing: 6) {
-                        if reaction.isEmpty {
+                        if let r = viewModel.prefs.reaction, !r.isEmpty {
+                            Text(r).font(.system(size: 24))
+                        } else {
                             Text("Aucune")
                                 .font(.system(size: 14))
                                 .foregroundColor(theme.textMuted)
-                        } else {
-                            Text(reaction)
-                                .font(.system(size: 24))
                         }
                         Image(systemName: "chevron.right")
                             .font(.system(size: 11, weight: .semibold))
@@ -454,47 +229,29 @@ struct ConversationPreferencesTab: View {
             EmojiPickerSheet(
                 quickReactions: ["❤️", "😂", "👍", "🔥", "😍", "😮", "😢", "👏", "🎉"],
                 onSelect: { emoji in
-                    reaction = emoji
                     showEmojiPicker = false
-                    Task { await save(UpdateConversationPreferencesRequest(reaction: emoji)) }
+                    Task { await viewModel.setReaction(emoji) }
                 }
             )
             .presentationDetents([.medium, .large])
         }
     }
 
-    @State private var categoryInput: String = ""
-    @State private var tagInput: String = ""
-    @State private var existingCategories: [String] = []
-    @State private var existingTags: [String] = []
-
-    private var filteredCategories: [String] {
-        let q = categoryInput.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return existingCategories }
-        return existingCategories.filter { $0.lowercased().contains(q) }
-    }
-
-    private var filteredExistingTags: [String] {
-        let q = tagInput.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !q.isEmpty else { return [] }
-        return existingTags.filter { $0.lowercased().contains(q) && !tags.contains($0) }
-    }
-
     private var organizationSection: some View {
         settingsSection(title: "Organisation", icon: "folder.fill", color: "3B82F6") {
             // Pin toggle
-            settingsRow(icon: "pin.fill", iconColor: "3B82F6", title: "Epingler") {
-                Toggle("", isOn: $isPinned)
-                    .labelsHidden()
-                    .tint(Color(hex: "3B82F6"))
-                    .onChange(of: isPinned) { _, newValue in
-                        Task { await save(UpdateConversationPreferencesRequest(isPinned: newValue)) }
-                    }
+            settingsRow(icon: "pin.fill", iconColor: "3B82F6", title: "Épingler") {
+                Toggle("", isOn: Binding(
+                    get: { viewModel.prefs.isPinned ?? false },
+                    set: { val in Task { await viewModel.setPinned(val) } }
+                ))
+                .labelsHidden()
+                .tint(Color(hex: "3B82F6"))
             }
 
             Divider().padding(.leading, 54).opacity(0.3)
 
-            // Catégorie — label above, field with autocomplete below
+            // Catégorie
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "square.grid.2x2.fill")
@@ -502,98 +259,29 @@ struct ConversationPreferencesTab: View {
                         .foregroundColor(Color(hex: "3B82F6"))
                         .frame(width: 28, height: 28)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "3B82F6").opacity(0.12)))
-                    Text("Categorie")
+                    Text("Catégorie")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
                 }
 
-                HStack(spacing: 6) {
-                    TextField("Choisir ou creer une categorie...", text: $categoryInput)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
-                        .autocorrectionDisabled()
-                        .onSubmit { selectCategory(categoryInput) }
-                    if !categoryInput.isEmpty {
-                        Button {
-                            categoryInput = ""
-                            categoryId = nil
-                            Task { await save(UpdateConversationPreferencesRequest(categoryId: nil)) }
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(theme.textMuted)
-                        }
-                        .buttonStyle(.plain)
+                CategoryPickerField(
+                    categories: viewModel.categories,
+                    selectedId: Binding(
+                        get: { viewModel.prefs.categoryId },
+                        set: { newId in Task { await viewModel.setCategory(newId) } }
+                    ),
+                    accentColor: Color(hex: "3B82F6"),
+                    onCreateCategory: { name in
+                        await viewModel.createCategoryAndSelect(name: name)
                     }
-                }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(theme.textMuted.opacity(0.15), lineWidth: 1)
-                )
-
-                // Autocomplete suggestions
-                if !categoryInput.isEmpty && !filteredCategories.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(filteredCategories, id: \.self) { cat in
-                            Button {
-                                selectCategory(cat)
-                            } label: {
-                                HStack {
-                                    Text(cat)
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(theme.textPrimary)
-                                    Spacer()
-                                    Image(systemName: "arrow.turn.down.left")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(theme.textMuted)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(isDark ? Color.white.opacity(0.06) : Color.white)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(theme.textMuted.opacity(0.12), lineWidth: 1)
-                    )
-                }
-
-                // "Créer" option if input doesn't match any existing
-                if !categoryInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-                   !existingCategories.contains(where: { $0.lowercased() == categoryInput.lowercased() }) {
-                    Button {
-                        selectCategory(categoryInput.trimmingCharacters(in: .whitespacesAndNewlines))
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(Color(hex: "3B82F6"))
-                            Text("Creer \"\(categoryInput.trimmingCharacters(in: .whitespacesAndNewlines))\"")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(Color(hex: "3B82F6"))
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.plain)
-                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
 
             Divider().padding(.leading, 54).opacity(0.3)
 
-            // Tags — label above, field with autocomplete below, chips
+            // Tags
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "tag.fill")
@@ -606,161 +294,47 @@ struct ConversationPreferencesTab: View {
                         .foregroundColor(theme.textSecondary)
                 }
 
-                // Existing tags as chips
-                if !tags.isEmpty {
-                    FlowLayout(spacing: 6) {
-                        ForEach(tags, id: \.self) { tag in
-                            HStack(spacing: 4) {
-                                Text(tag)
-                                    .font(.system(size: 12, weight: .medium))
-                                    .foregroundColor(Color(hex: "3B82F6"))
-                                Button {
-                                    tags.removeAll { $0 == tag }
-                                    Task { await save(UpdateConversationPreferencesRequest(tags: tags)) }
-                                } label: {
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 8, weight: .bold))
-                                        .foregroundColor(Color(hex: "3B82F6").opacity(0.6))
-                                }
-                                .buttonStyle(.plain)
-                            }
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(
-                                Capsule().fill(Color(hex: "3B82F6").opacity(isDark ? 0.15 : 0.1))
-                            )
+                TagInputField(
+                    selectedTags: Binding(
+                        get: { viewModel.prefs.tags ?? [] },
+                        set: { newTags in
+                            let current = viewModel.prefs.tags ?? []
+                            let added = newTags.filter { !current.contains($0) }
+                            let removed = current.filter { !newTags.contains($0) }
+                            for t in added { Task { await viewModel.addTag(t) } }
+                            for t in removed { Task { await viewModel.removeTag(t) } }
                         }
-                    }
-                }
-
-                // Tag input field
-                HStack(spacing: 6) {
-                    TextField("Ajouter un tag...", text: $tagInput)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(theme.textPrimary)
-                        .autocorrectionDisabled()
-                        .onSubmit { addTag(tagInput) }
-                    if !tagInput.isEmpty {
-                        Button {
-                            tagInput = ""
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(theme.textMuted)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(12)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(isDark ? Color.white.opacity(0.04) : Color.black.opacity(0.03))
+                    ),
+                    knownTags: viewModel.allTags,
+                    accentColor: Color(hex: "3B82F6")
                 )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .strokeBorder(theme.textMuted.opacity(0.15), lineWidth: 1)
-                )
-
-                // Autocomplete tag suggestions
-                if !tagInput.isEmpty && !filteredExistingTags.isEmpty {
-                    VStack(spacing: 0) {
-                        ForEach(filteredExistingTags.prefix(5), id: \.self) { tag in
-                            Button {
-                                addTag(tag)
-                            } label: {
-                                HStack {
-                                    Text(tag)
-                                        .font(.system(size: 14, weight: .medium))
-                                        .foregroundColor(theme.textPrimary)
-                                    Spacer()
-                                    Image(systemName: "arrow.turn.down.left")
-                                        .font(.system(size: 10))
-                                        .foregroundColor(theme.textMuted)
-                                }
-                                .padding(.horizontal, 12)
-                                .padding(.vertical, 8)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    }
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(isDark ? Color.white.opacity(0.06) : Color.white)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 8)
-                            .strokeBorder(theme.textMuted.opacity(0.12), lineWidth: 1)
-                    )
-                }
-
-                // "Créer" tag option
-                if !tagInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty &&
-                   !tags.contains(where: { $0.lowercased() == tagInput.lowercased() }) &&
-                   !existingTags.contains(where: { $0.lowercased() == tagInput.lowercased() }) {
-                    Button {
-                        addTag(tagInput.trimmingCharacters(in: .whitespacesAndNewlines))
-                    } label: {
-                        HStack(spacing: 6) {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 12))
-                                .foregroundColor(Color(hex: "3B82F6"))
-                            Text("Creer \"\(tagInput.trimmingCharacters(in: .whitespacesAndNewlines))\"")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(Color(hex: "3B82F6"))
-                        }
-                        .padding(.vertical, 4)
-                    }
-                    .buttonStyle(.plain)
-                }
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
         }
     }
 
-    private func selectCategory(_ name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        categoryInput = trimmed
-        if !existingCategories.contains(trimmed) {
-            existingCategories.append(trimmed)
-        }
-        Task { await save(UpdateConversationPreferencesRequest(categoryId: trimmed)) }
-    }
-
-    private func addTag(_ name: String) {
-        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty, !tags.contains(trimmed) else { return }
-        tags.append(trimmed)
-        tagInput = ""
-        if !existingTags.contains(trimmed) {
-            existingTags.append(trimmed)
-        }
-        Task { await save(UpdateConversationPreferencesRequest(tags: tags)) }
-    }
-
     private var notificationsSection: some View {
         settingsSection(title: "Notifications", icon: "bell.fill", color: "FF6B6B") {
             settingsRow(icon: "bell.slash.fill", iconColor: "FF6B6B", title: "Muet") {
-                Toggle("", isOn: $isMuted)
-                    .labelsHidden()
-                    .tint(Color(hex: "FF6B6B"))
-                    .onChange(of: isMuted) { _, newValue in
-                        Task { await save(UpdateConversationPreferencesRequest(isMuted: newValue)) }
-                    }
+                Toggle("", isOn: Binding(
+                    get: { viewModel.prefs.isMuted ?? false },
+                    set: { val in Task { await viewModel.setMuted(val) } }
+                ))
+                .labelsHidden()
+                .tint(Color(hex: "FF6B6B"))
             }
             Divider().padding(.leading, 54).opacity(0.3)
             settingsRow(icon: "at", iconColor: "FF6B6B", title: "Mentions seulement") {
-                Toggle("", isOn: $mentionsOnly)
-                    .labelsHidden()
-                    .tint(Color(hex: "FF6B6B"))
-                    .disabled(isMuted)
-                    .onChange(of: mentionsOnly) { _, newValue in
-                        Task { await save(UpdateConversationPreferencesRequest(mentionsOnly: newValue)) }
-                    }
+                Toggle("", isOn: Binding(
+                    get: { viewModel.prefs.mentionsOnly ?? false },
+                    set: { val in Task { await viewModel.setMentionsOnly(val) } }
+                ))
+                .labelsHidden()
+                .tint(Color(hex: "FF6B6B"))
+                .disabled(viewModel.prefs.isMuted ?? false)
             }
-            .opacity(isMuted ? 0.4 : 1)
+            .opacity((viewModel.prefs.isMuted ?? false) ? 0.4 : 1)
         }
     }
 
@@ -769,9 +343,11 @@ struct ConversationPreferencesTab: View {
             Button {
                 showArchiveConfirm = true
             } label: {
-                settingsRow(icon: isArchived ? "archivebox.fill" : "archivebox", iconColor: "F59E0B", title: isArchived ? "Désarchiver" : "Archiver") {
-                    EmptyView()
-                }
+                settingsRow(
+                    icon: (viewModel.prefs.isArchived ?? false) ? "archivebox.fill" : "archivebox",
+                    iconColor: "F59E0B",
+                    title: (viewModel.prefs.isArchived ?? false) ? "Désarchiver" : "Archiver"
+                ) { EmptyView() }
                 .foregroundColor(Color(hex: "F59E0B"))
             }
             .buttonStyle(.plain)
@@ -859,20 +435,12 @@ struct ConversationPreferencesTab: View {
         .padding(.vertical, 10)
     }
 
-    // MARK: - Data
-
-    private func setupDebounce() {
-        customNameSubject
-            .debounce(for: .milliseconds(500), scheduler: DispatchQueue.main)
-            .sink { value in
-                Task { await save(UpdateConversationPreferencesRequest(customName: value.isEmpty ? nil : value)) }
-            }
-            .store(in: &cancellables)
-    }
+    // MARK: - Member Search (unchanged behavior)
 
     private func setupMemberSearchDebounce() {
+        guard memberCancellable == nil else { return }
         let manage = canManageMembers
-        memberSearchSubject
+        memberCancellable = memberSearchSubject
             .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
             .sink { query in
                 guard manage else { return }
@@ -883,7 +451,6 @@ struct ConversationPreferencesTab: View {
                 }
                 Task { await searchPlatformUsers(query: trimmed) }
             }
-            .store(in: &cancellables)
     }
 
     private func searchPlatformUsers(query: String) async {
@@ -904,103 +471,6 @@ struct ConversationPreferencesTab: View {
         } catch {
             Self.logger.error("Platform user search failed: \(error.localizedDescription)")
             platformSearchResults = []
-        }
-    }
-
-    private func addParticipant(userId: String) async {
-        addingUserId = userId
-
-        struct AddBody: Encodable { let userId: String }
-
-        do {
-            let _: APIResponse<[String: String]> = try await APIClient.shared.post(
-                endpoint: "/conversations/\(conversation.id)/participants",
-                body: AddBody(userId: userId)
-            )
-            HapticFeedback.success()
-            addedUserIds.insert(userId)
-            platformSearchResults.removeAll { $0.id == userId }
-        } catch {
-            Self.logger.error("Failed to add participant: \(error.localizedDescription)")
-            HapticFeedback.error()
-            errorMessage = "Impossible d'ajouter ce membre."
-        }
-
-        addingUserId = nil
-    }
-
-    private func loadPreferences() async {
-        isLoading = true
-        defer { isLoading = false }
-        do {
-            let prefs = try await PreferenceService.shared.getConversationPreferences(conversationId: conversation.id)
-            isPinned = prefs.isPinned ?? false
-            isMuted = prefs.isMuted ?? false
-            mentionsOnly = prefs.mentionsOnly ?? false
-            isArchived = prefs.isArchived ?? false
-            customName = prefs.customName ?? ""
-            reaction = prefs.reaction ?? ""
-            tags = prefs.tags ?? []
-            categoryId = prefs.categoryId
-            categoryInput = prefs.categoryId ?? ""
-            // Load existing categories/tags from other conversations for autocomplete
-            await loadExistingCategoriesAndTags()
-        } catch {
-            errorMessage = "Impossible de charger les préférences."
-        }
-    }
-
-    private func save(_ request: UpdateConversationPreferencesRequest) async {
-        do {
-            try await PreferenceService.shared.updateConversationPreferences(
-                conversationId: conversation.id,
-                request: request
-            )
-            errorMessage = nil
-        } catch {
-            errorMessage = "Erreur lors de la sauvegarde."
-        }
-    }
-
-    private func loadExistingCategoriesAndTags() async {
-        do {
-            let allPrefs: APIResponse<[APIConversationPreferences]> = try await APIClient.shared.request(
-                endpoint: "/conversations/preferences/all"
-            )
-            var cats = Set<String>()
-            var allTags = Set<String>()
-            for p in allPrefs.data {
-                if let c = p.categoryId, !c.isEmpty { cats.insert(c) }
-                for t in p.tags ?? [] { allTags.insert(t) }
-            }
-            existingCategories = Array(cats).sorted()
-            existingTags = Array(allTags).sorted()
-        } catch {
-            // Non-critical — autocomplete simply won't suggest existing values
-        }
-    }
-
-    private func toggleArchive() async {
-        let newValue = !isArchived
-        isArchived = newValue
-        await save(UpdateConversationPreferencesRequest(isArchived: newValue))
-    }
-
-    private func leaveConversation() async {
-        do {
-            try await ConversationService.shared.leave(conversationId: conversation.id)
-            dismiss()
-        } catch {
-            errorMessage = "Impossible de quitter la conversation."
-        }
-    }
-
-    private func deleteForMe() async {
-        do {
-            try await ConversationService.shared.deleteForMe(conversationId: conversation.id)
-            dismiss()
-        } catch {
-            errorMessage = "Impossible de supprimer la conversation."
         }
     }
 }

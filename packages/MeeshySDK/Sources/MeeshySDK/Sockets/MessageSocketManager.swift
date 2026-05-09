@@ -60,13 +60,30 @@ public struct UserPreferencesUpdatedEvent: Decodable, Sendable {
     public let isPinned: Bool?
     public let isMuted: Bool?
     public let isArchived: Bool?
+    public let mentionsOnly: Bool?
     public let categoryId: String?
     public let reaction: String?
+    public let customName: String?
+    public let tags: [String]?
 
-    public init(userId: String, category: String, conversationId: String? = nil, isPinned: Bool? = nil, isMuted: Bool? = nil, isArchived: Bool? = nil, categoryId: String? = nil, reaction: String? = nil) {
+    public init(
+        userId: String,
+        category: String,
+        conversationId: String? = nil,
+        isPinned: Bool? = nil,
+        isMuted: Bool? = nil,
+        isArchived: Bool? = nil,
+        mentionsOnly: Bool? = nil,
+        categoryId: String? = nil,
+        reaction: String? = nil,
+        customName: String? = nil,
+        tags: [String]? = nil
+    ) {
         self.userId = userId; self.category = category; self.conversationId = conversationId
         self.isPinned = isPinned; self.isMuted = isMuted; self.isArchived = isArchived
+        self.mentionsOnly = mentionsOnly
         self.categoryId = categoryId; self.reaction = reaction
+        self.customName = customName; self.tags = tags
     }
 }
 

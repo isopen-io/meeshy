@@ -138,16 +138,18 @@ class ConversationListViewModel: ObservableObject {
     ) -> [Conversation] {
         return conversations.filter { c in
             let filterMatch: Bool
+            // Hide user-archived conversations from all filters except .archived
+            let userArchiveOk = filter == .archived ? c.isArchivedByUser : !c.isArchivedByUser
             switch filter {
-            case .all: filterMatch = c.isActive
-            case .unread: filterMatch = c.unreadCount > 0
-            case .personnel: filterMatch = c.type == .direct && c.isActive
-            case .privee: filterMatch = c.type == .group && c.isActive
-            case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive
-            case .globales: filterMatch = c.type == .global && c.isActive
-            case .channels: filterMatch = c.isAnnouncementChannel && c.isActive
-            case .favoris: filterMatch = c.reaction != nil && c.isActive
-            case .archived: filterMatch = !c.isActive
+            case .all: filterMatch = c.isActive && userArchiveOk
+            case .unread: filterMatch = c.unreadCount > 0 && userArchiveOk
+            case .personnel: filterMatch = c.type == .direct && c.isActive && userArchiveOk
+            case .privee: filterMatch = c.type == .group && c.isActive && userArchiveOk
+            case .ouvertes: filterMatch = (c.type == .public || c.type == .community) && c.isActive && userArchiveOk
+            case .globales: filterMatch = c.type == .global && c.isActive && userArchiveOk
+            case .channels: filterMatch = c.isAnnouncementChannel && c.isActive && userArchiveOk
+            case .favoris: filterMatch = c.reaction != nil && c.isActive && userArchiveOk
+            case .archived: filterMatch = c.isArchivedByUser
             }
             let searchMatch = searchText.isEmpty || c.name.localizedCaseInsensitiveContains(searchText)
             return filterMatch && searchMatch
@@ -262,6 +264,16 @@ class ConversationListViewModel: ObservableObject {
                     var conv = conversations[idx]
                     if let isPinned = event.isPinned { conv.isPinned = isPinned }
                     if let isMuted = event.isMuted { conv.isMuted = isMuted }
+                    if let isArchived = event.isArchived { conv.isArchivedByUser = isArchived }
+                    if let mentionsOnly = event.mentionsOnly { conv.mentionsOnly = mentionsOnly }
+                    if let categoryId = event.categoryId { conv.sectionId = categoryId }
+                    if let reaction = event.reaction { conv.reaction = reaction }
+                    if let customName = event.customName { conv.customName = customName }
+                    if let tags = event.tags {
+                        conv.tags = tags.enumerated().map { index, name in
+                            MeeshyConversationTag(name: name, color: MeeshyConversationTag.colors[index % MeeshyConversationTag.colors.count])
+                        }
+                    }
                     conversations[idx] = conv
                 }
             }
