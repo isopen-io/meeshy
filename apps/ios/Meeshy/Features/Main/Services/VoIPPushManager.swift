@@ -31,6 +31,18 @@ final class VoIPPushManager: NSObject, ObservableObject {
         voipToken = nil
         logger.info("VoIP push unregistered")
     }
+
+    /// Forces a fresh PushKit registration cycle, which delivers a new token
+    /// via `pushRegistry(_:didUpdate:for:)`. Use this after a token has been
+    /// invalidated (e.g., the leaked-push bug burned tokens, or the gateway
+    /// has marked the device row inactive). The gateway upserts by
+    /// (userId, token, type) so a new register call reactivates a deactivated
+    /// row server-side.
+    func forceReregister() {
+        unregister()
+        register()
+        logger.info("VoIP push force re-registration triggered")
+    }
 }
 
 // MARK: - PKPushRegistryDelegate
@@ -56,9 +68,46 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         }
 
         let data = payload.dictionaryPayload
-        let callId = data["callId"] as? String ?? UUID().uuidString
+
+        // Defense-in-depth: validate the payload BEFORE waking the call UI.
+        // PushKit requires that we report a call for every received push;
+        // failure to do so causes the system to kill the app and revoke the
+        // VoIP token. So when the payload is malformed (stale push from the
+        // leaked-push window, or unrelated data push misrouted here), report
+        // a phantom call and immediately end it.
+        let payloadType = data["type"] as? String
+        let hasCallId = (data["callId"] as? String).map { !$0.isEmpty } ?? false
+        let isCallPayload = (payloadType == "call" || payloadType == "voip_call") && hasCallId
+
+        guard isCallPayload else {
+            let phantomUUID = UUID()
+            let update = CXCallUpdate()
+            update.localizedCallerName = ""
+            update.hasVideo = false
+            MainActor.assumeIsolated {
+                CallManager.shared.reportPhantomVoIPCall(uuid: phantomUUID, update: update)
+            }
+            logger.error("VoIP push without valid call payload — reporting phantom call (type=\(payloadType ?? "nil"))")
+            completion()
+            return
+        }
+
+        let callId = (data["callId"] as? String) ?? UUID().uuidString
         let callerUserId = data["callerUserId"] as? String ?? ""
-        let isVideo = data["isVideo"] as? Bool ?? false
+
+        // Backend sends `isVideo` as a string ("true"/"false") because APNs
+        // payloads are Record<string,string>, but older builds may still send
+        // it as a Bool. Accept both for forward compatibility.
+        let isVideo: Bool = {
+            if let b = data["isVideo"] as? Bool { return b }
+            if let s = data["isVideo"] as? String { return s.lowercased() == "true" }
+            return false
+        }()
+
+        // Per-user TURN credentials carried in the push payload — required so
+        // RTCPeerConnection is built with TURN BEFORE the SDP answer is
+        // produced, otherwise NAT-symmetric peers can never connect.
+        let iceServers = Self.parseIceServers(data["iceServers"])
 
         // Resolve caller display name from payload fields (synchronous)
         let payloadName = data["callerName"] as? String
@@ -72,7 +121,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         let callTypeLabel = isVideo ? "Meeshy Vidéo" : "Meeshy Audio"
         let displayName = "\(resolvedName) (\(callTypeLabel))"
 
-        logger.info("VoIP push received: callId=\(callId), caller=\(displayName)")
+        logger.info("VoIP push received: callId=\(callId), caller=\(displayName), iceServers=\(iceServers?.count ?? 0)")
 
         // PushKit delivers this on .main (configured in register()). We are
         // guaranteed to be on the main thread but the function is nonisolated,
@@ -83,7 +132,8 @@ extension VoIPPushManager: PKPushRegistryDelegate {
                 callId: callId,
                 callerUserId: callerUserId,
                 callerName: displayName,
-                isVideo: isVideo
+                isVideo: isVideo,
+                iceServers: iceServers
             )
         }
 
@@ -99,6 +149,22 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         }
 
         completion()
+    }
+
+    // MARK: - Payload Parsers
+
+    /// Decode the JSON-encoded `iceServers` field carried by VoIP pushes.
+    /// Returns nil when the field is missing, empty, or unparsable — callers
+    /// fall back to default STUN servers in that case.
+    nonisolated private static func parseIceServers(_ rawJSON: Any?) -> [IceServer]? {
+        guard let str = rawJSON as? String, !str.isEmpty,
+              let data = str.data(using: .utf8) else { return nil }
+        guard let decoded = try? JSONDecoder().decode([SocketIceServer].self, from: data) else {
+            return nil
+        }
+        return decoded.map { server in
+            IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
+        }
     }
 
     // MARK: - Caller Name Resolution
@@ -128,9 +194,15 @@ extension VoIPPushManager: PKPushRegistryDelegate {
 
     nonisolated func pushRegistry(_ registry: PKPushRegistry, didInvalidatePushTokenFor type: PKPushType) {
         guard type == .voIP else { return }
-        logger.info("VoIP token invalidated")
+        logger.info("VoIP token invalidated — forcing re-registration")
         Task { @MainActor [weak self] in
-            self?.voipToken = nil
+            guard let self else { return }
+            self.voipToken = nil
+            // Re-arm desiredPushTypes so PushKit emits a fresh
+            // didUpdatePushCredentials with a new token. Without this, the
+            // user has no working VoIP token until next cold start.
+            self.voipRegistry?.desiredPushTypes = []
+            self.voipRegistry?.desiredPushTypes = [.voIP]
         }
     }
 

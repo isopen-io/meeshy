@@ -327,7 +327,12 @@ struct MeeshyApp: App {
                         Task { await requestPushPermissionIfNeeded() }
                         Task { await NotificationManager.shared.refreshUnreadCount() }
                         pushManager.reRegisterTokenIfNeeded()
-                        VoIPPushManager.shared.register()
+                        // Force a PushKit re-registration on every login so the
+                        // gateway UPSERT-by-(userId,token,type) flips back to
+                        // isActive=true any device row deactivated during a
+                        // previous BadDeviceToken burst. register() alone is a
+                        // no-op when voipRegistry is already set.
+                        VoIPPushManager.shared.forceReregister()
                         Task {
                             do {
                                 let bundle = try E2EEService.shared.generatePublicBundle()

@@ -55,7 +55,7 @@ extension ConversationView {
                     CallManager.shared.startCall(
                         conversationId: conversation?.id ?? "",
                         userId: userId,
-                        username: calleeName,
+                        displayName: calleeName,
                         isVideo: false
                     )
                 } label: {
@@ -77,7 +77,7 @@ extension ConversationView {
                     CallManager.shared.startCall(
                         conversationId: conversation?.id ?? "",
                         userId: userId,
-                        username: calleeName,
+                        displayName: calleeName,
                         isVideo: true
                     )
                 } label: {

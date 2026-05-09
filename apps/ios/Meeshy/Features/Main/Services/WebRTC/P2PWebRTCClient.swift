@@ -38,6 +38,18 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
         super.init()
         RTCInitializeSSL()
+
+        // CallKit owns AVAudioSession lifecycle (didActivate/didDeactivate).
+        // Switching WebRTC into manual-audio mode means it stops touching the
+        // session on its own and waits for us (CallManager + CallKit delegate)
+        // to flip `isAudioEnabled`. Without this, WebRTC's auto-managed mode
+        // races with CallKit and the audio engine never starts cleanly.
+        let session = RTCAudioSession.sharedInstance()
+        session.lockForConfiguration()
+        session.useManualAudio = true
+        session.isAudioEnabled = false
+        session.unlockForConfiguration()
+
         let encoderFactory = RTCDefaultVideoEncoderFactory()
         let decoderFactory = RTCDefaultVideoDecoderFactory()
         factory = RTCPeerConnectionFactory(

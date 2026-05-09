@@ -240,8 +240,20 @@ export class CallEventsHandler {
           }))
         };
 
-        // ACK to initiator with callId and mode
-        ack?.({ success: true, data: { callId: callSession.id, mode: callSession.mode } });
+        // ACK to initiator with callId, mode AND iceServers — the iceServers
+        // MUST be returned synchronously so the initiator's RTCPeerConnection
+        // is built with TURN credentials BEFORE the SDP offer is created.
+        // Without this, the offer carries STUN-only candidates and NAT-symmetric
+        // peers can never connect.
+        const initiatorIceServers = this.callService.generateIceServers(userId);
+        ack?.({
+          success: true,
+          data: {
+            callId: callSession.id,
+            mode: callSession.mode,
+            iceServers: initiatorIceServers
+          }
+        });
 
         // Get all conversation participants to notify (excluding initiator)
         const conversationParticipants = await this.prisma.participant.findMany({
@@ -305,6 +317,11 @@ export class CallEventsHandler {
           );
 
           for (const offlineUserId of offlineUserIds) {
+            // Per-user TURN credentials so the answerer's RTCPeerConnection has
+            // TURN at construction time (VoIPPushManager.didReceiveIncomingPush
+            // configures WebRTC immediately, before any socket reconnect).
+            // Serialized as JSON string because APNs `data` is Record<string,string>.
+            const memberIceServers = this.callService.generateIceServers(offlineUserId);
             this.pushService.sendToUser({
               userId: offlineUserId,
               payload: {
@@ -320,7 +337,11 @@ export class CallEventsHandler {
                   callerName,
                   callerUserId: userId,
                   callerAvatar: callerAvatar || '',
+                  // String "true"/"false" — iOS VoIPPushManager parses both bool and string forms.
                   isVideo: String(data.type === 'video'),
+                  // JSON-encoded; iOS deserializes into [SocketIceServer] before
+                  // calling WebRTCService.configure(iceServers:).
+                  iceServers: JSON.stringify(memberIceServers),
                 },
               },
               types: ['voip'],

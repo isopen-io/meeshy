@@ -5,6 +5,7 @@ import Combine
 import Network
 import UIKit
 import MeeshySDK
+@preconcurrency import WebRTC
 import os
 
 // MARK: - Call State
@@ -91,7 +92,13 @@ final class CallManager: ObservableObject {
         config.maximumCallsPerCallGroup = 1
         config.maximumCallGroups = 2
         config.supportedHandleTypes = [.generic]
-        config.iconTemplateImageData = nil
+        config.includesCallsInRecents = true
+        // Custom CallKit icon: bundle a 40x40 PNG named "CallKitIcon" in Assets
+        // to brand the lock-screen call card. Falls back to the default phone
+        // icon if the asset is missing.
+        if let icon = UIImage(named: "CallKitIcon") {
+            config.iconTemplateImageData = icon.pngData()
+        }
         callProvider = CXProvider(configuration: config)
 
         let delegateProxy = CallKitDelegateProxy()
@@ -110,29 +117,29 @@ final class CallManager: ObservableObject {
 
     // MARK: - Outgoing Call
 
-    func startCall(conversationId: String, userId: String, username: String, isVideo: Bool) {
+    func startCall(conversationId: String, userId: String, displayName: String, isVideo: Bool) {
         guard callState == .idle else {
             Logger.calls.warning("Cannot start call: already in state \(String(describing: self.callState))")
             return
         }
 
-        let callId = UUID().uuidString
-        currentCallId = callId
+        // Optimistic local state — `currentCallId` is reassigned to the real
+        // gateway-issued ObjectId once the ACK lands.
         remoteUserId = userId
-        remoteUsername = username
+        remoteUsername = displayName
         isVideoEnabled = isVideo
         isMuted = false
         isSpeaker = isVideo
         callState = .ringing(isOutgoing: true)
 
-        webRTCService.configure(isVideo: isVideo)
-
         let uuid = UUID()
         activeCallUUID = uuid
-        let handle = CXHandle(type: .generic, value: username)
+        // CXHandle.value persists in the iOS Phone app Recents list — use the
+        // userId for stable identity rather than a (possibly localized) name.
+        let handle = CXHandle(type: .generic, value: userId)
         let startAction = CXStartCallAction(call: uuid, handle: handle)
         startAction.isVideo = isVideo
-        startAction.contactIdentifier = username
+        startAction.contactIdentifier = displayName
         let transaction = CXTransaction(action: startAction)
         let provider = callProvider
         callController.request(transaction) { [weak self] error in
@@ -141,33 +148,51 @@ final class CallManager: ObservableObject {
                 Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
             } else {
                 let update = CXCallUpdate()
-                update.remoteHandle = CXHandle(type: .generic, value: username)
-                update.localizedCallerName = username
+                update.remoteHandle = CXHandle(type: .generic, value: userId)
+                update.localizedCallerName = displayName
                 update.hasVideo = isVideo
                 provider.reportCall(with: uuid, updated: update)
             }
         }
 
-        // Emit call:initiate to server FIRST — creates the CallSession in DB
-        MessageSocketManager.shared.emitCallInitiate(conversationId: conversationId, isVideo: isVideo)
-
+        // Await call:initiate ACK to obtain the real callId + per-user ICE
+        // servers. WebRTC MUST be configured with these BEFORE local media or
+        // SDP offer creation, otherwise the offer carries STUN-only candidates.
         Task { [weak self] in
             guard let self else { return }
-            await webRTCService.startLocalMedia(isVideo: isVideo)
-            if isVideo { self.hasLocalVideoTrack = true }
-            Logger.calls.info("Outgoing call initiated: \(callId) to \(username), waiting for participant joined")
+            do {
+                let ack = try await MessageSocketManager.shared.emitCallInitiate(
+                    conversationId: conversationId,
+                    isVideo: isVideo
+                )
+                let dynamicServers = ack.iceServers.map { server in
+                    IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
+                }
+                self.currentCallId = ack.callId
+                self.webRTCService.configure(isVideo: isVideo, iceServers: dynamicServers)
+                self.configureAudioSession()
+                await self.webRTCService.startLocalMedia(isVideo: isVideo)
+                if isVideo { self.hasLocalVideoTrack = true }
+                self.listenForParticipantJoined(callId: ack.callId, toUserId: userId, isVideo: isVideo)
+                Logger.calls.info("Outgoing call initiated: \(ack.callId) to \(displayName), waiting for participant joined (\(dynamicServers.count) ICE servers)")
+            } catch {
+                Logger.calls.error("call:initiate ACK failed: \(error.localizedDescription)")
+                self.endCallInternal(reason: .failed("Failed to initiate call"))
+            }
         }
 
-        listenForParticipantJoined(callId: callId, toUserId: userId, isVideo: isVideo)
         HapticFeedback.medium()
     }
 
     // MARK: - VoIP Push Incoming Call
 
-    func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool) {
+    func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil) {
         let uuid = UUID()
         let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .generic, value: callerName)
+        // Use the callerUserId as the CXHandle.value so Recents stays stable
+        // across language/avatar changes; localizedCallerName is what the lock
+        // screen displays.
+        update.remoteHandle = CXHandle(type: .generic, value: callerUserId.isEmpty ? callerName : callerUserId)
         update.localizedCallerName = callerName
         update.hasVideo = isVideo
         update.supportsGrouping = false
@@ -202,18 +227,32 @@ final class CallManager: ObservableObject {
             }
         }
 
-        // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
-        webRTCService.configure(isVideo: isVideo)
+        // Auto-join call room + configure WebRTC so SDP offer can be received while ringing.
+        // The VoIP push payload carries the per-user ICE servers (TURN credentials)
+        // so RTCPeerConnection is built with TURN BEFORE the offer is set.
+        webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
+        configureAudioSession()
         Task { [weak self] in
             guard let self else { return }
             await self.webRTCService.startLocalMedia(isVideo: isVideo)
             if isVideo { self.hasLocalVideoTrack = true }
             MessageSocketManager.shared.emitCallJoin(callId: callId)
-            Logger.calls.info("VoIP push — auto-joined room, awaiting SDP offer: \(callId)")
+            Logger.calls.info("VoIP push — auto-joined room, awaiting SDP offer: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
         }
 
         Logger.calls.info("VoIP push incoming call reported: \(callId) from \(callerName)")
         HapticFeedback.medium()
+    }
+
+    // MARK: - Phantom VoIP Call (defense-in-depth)
+
+    /// Apple PushKit requires reporting a call for every incoming VoIP push,
+    /// otherwise the system kills the app and revokes the token. When a push
+    /// arrives without a valid call payload (malformed or stale), report a
+    /// phantom call and immediately end it so the user never sees the call UI.
+    func reportPhantomVoIPCall(uuid: UUID, update: CXCallUpdate) {
+        callProvider.reportNewIncomingCall(with: uuid, update: update) { _ in }
+        callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
     }
 
     // MARK: - Update Incoming Call Name
@@ -251,7 +290,7 @@ final class CallManager: ObservableObject {
         let uuid = UUID()
         activeCallUUID = uuid
         let update = CXCallUpdate()
-        update.remoteHandle = CXHandle(type: .generic, value: fromUsername)
+        update.remoteHandle = CXHandle(type: .generic, value: fromUserId.isEmpty ? fromUsername : fromUserId)
         update.localizedCallerName = fromUsername
         update.hasVideo = isVideo
         update.supportsGrouping = false
@@ -266,6 +305,7 @@ final class CallManager: ObservableObject {
 
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
+        configureAudioSession()
         Task { [weak self] in
             guard let self else { return }
             await self.webRTCService.startLocalMedia(isVideo: isVideo)
@@ -321,7 +361,8 @@ final class CallManager: ObservableObject {
         guard let callId = currentCallId, let userId = remoteUserId else { return }
 
         callState = .connecting
-        configureAudioSession()
+        // Audio session is configured at peer-connection setup (handleIncoming…),
+        // not here — CallKit drives activation via provider:didActivate:.
 
         if let uuid = activeCallUUID {
             let answerAction = CXAnswerCallAction(call: uuid)
@@ -348,6 +389,36 @@ final class CallManager: ObservableObject {
             Logger.calls.info("Call answered but SDP offer not yet received, waiting: \(callId)")
             signalOfferCancellable?.cancel()
             signalOfferCancellable = nil
+            Task { @MainActor [weak self] in
+                try? await Task.sleep(for: .seconds(30))
+                guard let self, case .connecting = self.callState, self.currentCallId == callId else { return }
+                Logger.calls.error("SDP offer timeout after 30s for call: \(callId)")
+                self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
+            }
+        }
+
+        HapticFeedback.success()
+    }
+
+    /// Async wrapper used by CXAnswerCallAction so `action.fulfill()` is only
+    /// called once the SDP+media setup task has been queued. This prevents
+    /// CallKit from racing the WebRTC setup pipeline.
+    func answerCallReady() async {
+        guard case .ringing(isOutgoing: false) = callState else { return }
+        guard let callId = currentCallId, let userId = remoteUserId else { return }
+
+        callState = .connecting
+
+        if let remoteOffer = pendingRemoteOffer {
+            self.pendingRemoteOffer = nil
+            guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
+                self.endCallInternal(reason: .failed("Failed to create SDP answer"))
+                return
+            }
+            self.emitCallAnswer(callId: callId, toUserId: userId, sdp: answer)
+            Logger.calls.info("Call answered (CallKit) with buffered SDP offer: \(callId)")
+        } else {
+            Logger.calls.info("Call answered (CallKit), awaiting SDP offer: \(callId)")
             Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(30))
                 guard let self, case .connecting = self.callState, self.currentCallId == callId else { return }
@@ -505,8 +576,10 @@ final class CallManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             await webRTCService.setRemoteDescription(sdp)
-            transitionToConnected()
-            Logger.calls.info("Remote answer received for: \(callId)")
+            // The single source of truth for `.connected` is webRTCServiceDidConnect
+            // (driven by ICE-connected). Transitioning here would race with the
+            // real callback and double-activate the audio session.
+            Logger.calls.info("Remote answer received for: \(callId), awaiting ICE connected")
         }
     }
 
@@ -539,7 +612,9 @@ final class CallManager: ObservableObject {
 
     private func transitionToConnected() {
         callState = .connected
-        configureAudioSession()
+        // Audio session was configured ONCE at peer-connection setup; CallKit
+        // drives activation via provider:didActivate:, which is the single
+        // place that flips RTCAudioSession.isAudioEnabled.
         playHaptic(.heavy)
         startScreenCaptureMonitoring()
         callStartDate = Date()
@@ -762,45 +837,54 @@ final class CallManager: ObservableObject {
     }
 
     // MARK: - Audio Session
+    //
+    // CallKit controls audio activation via `provider:didActivate:` and
+    // `provider:didDeactivate:`. We MUST NOT call `setActive(true)` ourselves
+    // — doing so causes priority inversion and silent audio. Our job is to
+    // pre-configure the RTCAudioSessionConfiguration so when CallKit fires
+    // didActivate, WebRTC's audio engine starts immediately with the right
+    // category/mode. RTCAudioSession.isAudioEnabled is only flipped from
+    // didActivate/didDeactivate.
 
     private func configureAudioSession() {
         let isVideo = isVideoEnabled
-        let speaker = isSpeaker
-        audioSessionQueue.async {
-            let session = AVAudioSession.sharedInstance()
-            do {
-                try session.setCategory(.playAndRecord, mode: isVideo ? .videoChat : .voiceChat, options: [.allowBluetoothHFP, .allowBluetoothA2DP])
-                try session.setActive(true)
-                if speaker {
-                    try session.overrideOutputAudioPort(.speaker)
-                }
-                Logger.calls.info("Audio session configured — video: \(isVideo), speaker: \(speaker)")
-            } catch {
-                Logger.calls.error("Audio session configuration failed: \(error.localizedDescription)")
-            }
+        let configuration = RTCAudioSessionConfiguration.webRTC()
+        configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+        configuration.mode = (isVideo ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
+        configuration.categoryOptions = [.allowBluetoothHFP, .allowBluetoothA2DP, .duckOthers]
+
+        let session = RTCAudioSession.sharedInstance()
+        session.lockForConfiguration()
+        defer { session.unlockForConfiguration() }
+        do {
+            try session.setConfiguration(configuration, active: false)
+            Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo) (CallKit will activate)")
+        } catch {
+            Logger.calls.error("RTCAudioSession configuration failed: \(error.localizedDescription)")
         }
     }
 
-    private func applySpeakerRoute() {
+    fileprivate func applySpeakerRoute() {
         guard callState.isActive else { return }
         let speaker = isSpeaker
-        audioSessionQueue.async {
-            do {
-                try AVAudioSession.sharedInstance().overrideOutputAudioPort(speaker ? .speaker : .none)
-            } catch {
-                Logger.calls.error("Audio route change failed: \(error.localizedDescription)")
-            }
+        let session = RTCAudioSession.sharedInstance()
+        session.lockForConfiguration()
+        defer { session.unlockForConfiguration() }
+        do {
+            try session.overrideOutputAudioPort(speaker ? .speaker : .none)
+        } catch {
+            Logger.calls.error("Audio route change failed: \(error.localizedDescription)")
         }
     }
 
     private func deactivateAudioSession() {
-        audioSessionQueue.async {
-            do {
-                try AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-            } catch {
-                Logger.calls.error("Audio session deactivation failed: \(error.localizedDescription)")
-            }
-        }
+        // CallKit deactivates the AVAudioSession on its own when the call ends.
+        // We only flip RTCAudioSession.isAudioEnabled; setActive(false) is the
+        // job of provider:didDeactivate:.
+        let session = RTCAudioSession.sharedInstance()
+        session.lockForConfiguration()
+        session.isAudioEnabled = false
+        session.unlockForConfiguration()
     }
 
     // MARK: - Socket.IO Signaling
@@ -1109,9 +1193,9 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
 
     func provider(_ provider: CXProvider, perform action: CXAnswerCallAction) {
         Task { @MainActor [weak self] in
-            self?.manager?.answerCall()
+            await self?.manager?.answerCallReady()
+            action.fulfill()
         }
-        action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
@@ -1133,15 +1217,26 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     }
 
     func provider(_ provider: CXProvider, perform action: CXStartCallAction) {
+        // The outgoing call path is initiated by the user's UI tap; CallManager
+        // builds the WebRTC stack asynchronously. Fulfilling immediately here is
+        // safe because we don't await any media setup from this delegate.
         action.fulfill()
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
-        Logger.calls.info("CallKit audio session activated")
+        // Hand the activated AVAudioSession to WebRTC and flip the audio
+        // engine on. Without this bridge, WebRTC's audio I/O thread never
+        // starts, so both peers see "ICE connected" but hear silence.
+        RTCAudioSession.sharedInstance().audioSessionDidActivate(audioSession)
+        RTCAudioSession.sharedInstance().isAudioEnabled = true
+        Task { @MainActor [weak self] in self?.manager?.applySpeakerRoute() }
+        Logger.calls.info("CallKit audio session activated; RTCAudioSession enabled")
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
-        Logger.calls.info("CallKit audio session deactivated")
+        RTCAudioSession.sharedInstance().isAudioEnabled = false
+        RTCAudioSession.sharedInstance().audioSessionDidDeactivate(audioSession)
+        Logger.calls.info("CallKit audio session deactivated; RTCAudioSession disabled")
     }
 }
 
