@@ -17,9 +17,9 @@ final class ProTimelineViewSnapshotTests: XCTestCase {
     }
 
     private func projectWithEditorialContent() -> TimelineProject {
-        var video1 = StoryMediaObject(id: "v1", postMediaId: "v1", kind: .video)
+        var video1 = StoryMediaObject(id: "v1", postMediaId: "v1", kind: .video, aspectRatio: 1.0)
         video1.startTime = 0; video1.duration = 4
-        var video2 = StoryMediaObject(id: "v2", postMediaId: "v2", kind: .video)
+        var video2 = StoryMediaObject(id: "v2", postMediaId: "v2", kind: .video, aspectRatio: 1.0)
         video2.startTime = 4; video2.duration = 4
         var audio = StoryAudioPlayerObject(id: "a1", postMediaId: "a1")
         audio.startTime = 0; audio.duration = 8; audio.volume = 0.7

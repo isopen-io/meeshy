@@ -228,12 +228,12 @@ final class StoryModelsExtensionsTests: XCTestCase {
     // MARK: - StoryMediaObject.keyframes extension
 
     func test_storyMediaObject_keyframes_defaultsToNil() {
-        let media = StoryMediaObject()
+        let media = StoryMediaObject(aspectRatio: 1.0)
         XCTAssertNil(media.keyframes)
     }
 
     func test_storyMediaObject_keyframes_canBeAssignedAndPersisted() throws {
-        var media = StoryMediaObject(postMediaId: "pm-1", mediaType: "video")
+        var media = StoryMediaObject(postMediaId: "pm-1", mediaType: "video", aspectRatio: 1.0)
         media.keyframes = [
             StoryKeyframe(time: 0.0, x: 0.0, y: 0.0, scale: 1.0, opacity: 0.0),
             StoryKeyframe(time: 1.0, x: 0.5, y: 0.5, scale: 1.5, opacity: 1.0,
@@ -311,7 +311,8 @@ final class StoryModelsExtensionsTests: XCTestCase {
         var effects = StoryEffects()
         effects.mediaObjects = [
             StoryMediaObject(id: "m1", postMediaId: "pm",
-                             mediaType: "image", placement: "media")
+                             mediaType: "image", placement: "media",
+                             aspectRatio: 1.0)
         ]
         effects.mediaObjects?[0].keyframes = [
             StoryKeyframe(time: 0.0, x: 0.0, y: 0.0),
@@ -336,6 +337,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         effects.mediaObjects = [
             StoryMediaObject(id: "m1", postMediaId: "pm-1",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 0, duration: 3.0)
         ]
         effects.audioPlayerObjects = [
@@ -516,6 +518,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         var project = makeEmptyProject()
         let media = StoryMediaObject(id: "v1", postMediaId: "pm",
                                      mediaType: "video", placement: "media",
+                                     aspectRatio: 1.0,
                                      startTime: 0, duration: 2)
         project.mediaObjects = [media]
         let cmd = DeleteClipCommand(clipId: "v1", kind: .video,
@@ -530,11 +533,11 @@ final class StoryModelsExtensionsTests: XCTestCase {
     func test_deleteClipCommand_revert_restoresClipAtOriginalIndex() throws {
         var project = makeEmptyProject()
         let m1 = StoryMediaObject(id: "v1", postMediaId: "pm1",
-                                  mediaType: "video", placement: "media")
+                                  mediaType: "video", placement: "media", aspectRatio: 1.0)
         let m2 = StoryMediaObject(id: "v2", postMediaId: "pm2",
-                                  mediaType: "video", placement: "media")
+                                  mediaType: "video", placement: "media", aspectRatio: 1.0)
         let m3 = StoryMediaObject(id: "v3", postMediaId: "pm3",
-                                  mediaType: "video", placement: "media")
+                                  mediaType: "video", placement: "media", aspectRatio: 1.0)
         project.mediaObjects = [m1, m2, m3]
         let cmd = DeleteClipCommand(clipId: "v2", kind: .video,
                                     snapshotMedia: m2, snapshotAudio: nil,
@@ -558,7 +561,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
 
     func test_deleteClipCommand_codableRoundTrip() throws {
         let media = StoryMediaObject(id: "v1", postMediaId: "pm",
-                                     mediaType: "video", placement: "media")
+                                     mediaType: "video", placement: "media", aspectRatio: 1.0)
         let cmd = DeleteClipCommand(clipId: "v1", kind: .video,
                                     snapshotMedia: media, snapshotAudio: nil,
                                     snapshotText: nil, insertionIndex: 0)
@@ -575,6 +578,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 1.0, duration: 2.0)
         ]
         let cmd = MoveClipCommand(clipId: "v1", kind: .video,
@@ -624,6 +628,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 0, duration: 5.0)
         ]
         let cmd = TrimClipCommand(clipId: "v1", kind: .video,
@@ -681,6 +686,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 0, duration: 5.0)
         ]
         let cmd = SplitClipCommand(clipId: "v1", kind: .video,
@@ -699,6 +705,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         var project = makeEmptyProject()
         let original = StoryMediaObject(id: "v1", postMediaId: "pm",
                                         mediaType: "video", placement: "media",
+                                        aspectRatio: 1.0,
                                         startTime: 0, duration: 5.0)
         project.mediaObjects = [original]
         let cmd = SplitClipCommand(clipId: "v1", kind: .video,
@@ -871,6 +878,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 0, duration: 5)
         ]
         return project
@@ -1020,7 +1028,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         var project = makeEmptyProject()
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
-                             mediaType: "video", placement: "media")
+                             mediaType: "video", placement: "media", aspectRatio: 1.0)
         ]
         let cmd = SetClipPropertyCommand(clipId: "v1", kind: .video,
                                          property: .fadeIn(old: nil, new: 0.5))
@@ -1032,7 +1040,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         var project = makeEmptyProject()
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
-                             mediaType: "video", placement: "media")
+                             mediaType: "video", placement: "media", aspectRatio: 1.0)
         ]
         let cmd = SetClipPropertyCommand(clipId: "v1", kind: .video,
                                          property: .loop(old: nil, new: true))
@@ -1094,7 +1102,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
 
     private func makeAllCommandCases() -> [AnyEditCommand] {
         let media = StoryMediaObject(id: "v1", postMediaId: "pm",
-                                     mediaType: "video", placement: "media")
+                                     mediaType: "video", placement: "media", aspectRatio: 1.0)
         let audio = StoryAudioPlayerObject(id: "a1", postMediaId: "pm",
                                            placement: "overlay",
                                            waveformSamples: [])
@@ -1194,9 +1202,11 @@ final class StoryModelsExtensionsTests: XCTestCase {
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm1",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 0, duration: 5),
             StoryMediaObject(id: "v2", postMediaId: "pm2",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 5, duration: 3),
         ]
         project.mediaObjects[0].keyframes = [
@@ -1227,6 +1237,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
     func test_allEditCommands_applyThenRevert_isIdempotentOnRichProject() throws {
         let media = StoryMediaObject(id: "v1", postMediaId: "pm1",
                                      mediaType: "video", placement: "media",
+                                     aspectRatio: 1.0,
                                      startTime: 0, duration: 5,
                                      keyframes: [StoryKeyframe(id: "kf-existing", time: 1, opacity: 0.5)])
         let audio = StoryAudioPlayerObject(id: "a1", postMediaId: "pmA",

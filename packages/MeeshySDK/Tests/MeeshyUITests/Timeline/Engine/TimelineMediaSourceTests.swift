@@ -16,6 +16,7 @@ final class TimelineMediaSourceTests: XCTestCase {
         let media = StoryMediaObject(
             id: "m1", postMediaId: "pm1",
             mediaType: "video", placement: "media",
+            aspectRatio: 1.0,
             x: 0.5, y: 0.5
         )
         let url = URL(fileURLWithPath: "/tmp/v.mp4")
@@ -29,7 +30,8 @@ final class TimelineMediaSourceTests: XCTestCase {
     func test_fromMediaObject_imageKind_returnsImageSourceWithNilURL() {
         let media = StoryMediaObject(
             id: "m2", postMediaId: "pm2",
-            mediaType: "image", placement: "media"
+            mediaType: "image", placement: "media",
+            aspectRatio: 1.0
         )
         let source = TimelineMediaSource.fromMediaObject(media, videoURLs: [:], audioURLs: [:])
         XCTAssertEqual(source?.kind, .image)
@@ -39,7 +41,8 @@ final class TimelineMediaSourceTests: XCTestCase {
     func test_fromMediaObject_unknownKind_returnsNil() {
         let media = StoryMediaObject(
             id: "m3", postMediaId: "pm3",
-            mediaType: "unknown_type", placement: "media"
+            mediaType: "unknown_type", placement: "media",
+            aspectRatio: 1.0
         )
         let source = TimelineMediaSource.fromMediaObject(media, videoURLs: [:], audioURLs: [:])
         XCTAssertNil(source)

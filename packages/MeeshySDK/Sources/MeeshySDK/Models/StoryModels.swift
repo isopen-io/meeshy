@@ -335,83 +335,197 @@ public enum StoryMediaKind: String, Codable, Sendable {
 
 public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var id: String
-    public var postMediaId: String      // référence PostMedia en DB
-    public var mediaType: String        // raw string, see `kind` for type-safe access
-    public var placement: String        // kept for backward compat; no longer drives rendering
-    public var x: CGFloat              // normalisé 0–1
-    public var y: CGFloat
-    public var scale: CGFloat
-    public var rotation: CGFloat
-    public var volume: Float           // 0.0–1.0
-    /// Quand true, ce media joue en fond (fullscreen, boucle infinie, sans UI draggable).
-    /// Un seul media peut être en background par slide. Si `nil` à la lecture, on applique
-    /// la règle legacy : le 1er media du tableau est traité comme background.
-    public var isBackground: Bool?
-    /// Z-order persistent (cf. `StoryTextObject.zIndex`).
-    public var zIndex: Int?
+    public var postMediaId: String         // référence PostMedia en DB (kept)
+    public var mediaURL: String?           // optional URL (e.g. "fixture://media")
+    public var mediaType: String           // raw string, see `kind` for type-safe access
+    public var placement: String           // kept for backward compat; no longer drives rendering
+    public var x: Double                   // normalisé 0–1
+    public var y: Double
+    public var scale: Double
+    public var rotation: Double
+    public var volume: Float               // 0.0–1.0
 
-    // Timeline timing
-    public var startTime: Float?            // offset en secondes (défaut 0)
-    public var duration: Float?             // durée de lecture (nil = jusqu'à la fin)
-    public var loop: Bool?                  // boucle automatique
-    public var fadeIn: Float?               // fade-in (secondes)
-    public var fadeOut: Float?              // fade-out (secondes)
+    // NEW — Phase 1 Canvas Fidelity fields
+    public var aspectRatio: Double         // figé à la composition (REQUIRED, fallback 1.0 on legacy decode)
+    public var anchor: CGPoint             // pivot rotation/scale, default (0.5, 0.5)
+    public var intrinsicDuration: Double?  // durée native de l'asset, peuplée à la composition
+
+    // Promoted to non-optional
+    /// Quand true, ce media joue en fond (fullscreen, boucle infinie, sans UI draggable).
+    /// Un seul media peut être en background par slide.
+    public var isBackground: Bool          // was: Bool?, now non-opt with default false
+    public var loop: Bool                  // was: Bool?, now non-opt with default false
+    /// Z-order persistent (cf. `StoryTextObject.zIndex`).
+    public var zIndex: Int                 // was: Int?, now non-opt with default 0
+
+    // Timeline timing — Double, optional
+    public var startTime: Double?          // offset en secondes (défaut 0)
+    public var duration: Double?           // durée de lecture (nil = jusqu'à la fin)
+    public var fadeIn: Double?             // fade-in (secondes)
+    public var fadeOut: Double?            // fade-out (secondes)
+
+    // Heritage (kept)
     public var sourceLanguage: String?
     // Timeline V2 — animation keyframes (position/scale/opacity)
     public var keyframes: [StoryKeyframe]?
 
     enum CodingKeys: String, CodingKey {
-        case id, postMediaId, mediaType, placement, x, y, scale, rotation, volume
-        case isBackground, zIndex
-        case startTime, duration, loop, fadeIn, fadeOut, sourceLanguage
-        case keyframes
+        case id, postMediaId, mediaURL, mediaType, placement
+        case x, y, scale, rotation, volume
+        case aspectRatio, anchor, intrinsicDuration
+        case isBackground, loop, zIndex
+        case startTime, duration, fadeIn, fadeOut
+        case sourceLanguage, keyframes
     }
 
-    public init(id: String = UUID().uuidString, postMediaId: String = "",
-                mediaType: String = "image", placement: String = "media",
-                x: CGFloat = 0.5, y: CGFloat = 0.5,
-                scale: CGFloat = 1.0, rotation: CGFloat = 0,
+    public init(id: String = UUID().uuidString,
+                postMediaId: String = "",
+                mediaURL: String? = nil,
+                mediaType: String = "image",
+                placement: String = "media",
+                aspectRatio: Double,                        // REQUIRED, no default
+                x: Double = 0.5, y: Double = 0.5,
+                scale: Double = 1.0, rotation: Double = 0,
+                anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
                 volume: Float = 1.0,
-                isBackground: Bool? = nil,
-                startTime: Float? = nil, duration: Float? = nil,
-                loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
+                isBackground: Bool = false,
+                loop: Bool = false,
+                zIndex: Int = 0,
+                intrinsicDuration: Double? = nil,
+                startTime: Double? = nil,
+                duration: Double? = nil,
+                fadeIn: Double? = nil,
+                fadeOut: Double? = nil,
                 sourceLanguage: String? = nil,
                 keyframes: [StoryKeyframe]? = nil) {
-        self.id = id; self.postMediaId = postMediaId
-        self.mediaType = mediaType; self.placement = placement
-        self.x = x; self.y = y; self.scale = scale
-        self.rotation = rotation; self.volume = volume
+        self.id = id
+        self.postMediaId = postMediaId
+        self.mediaURL = mediaURL
+        self.mediaType = mediaType
+        self.placement = placement
+        self.x = x; self.y = y
+        self.scale = scale; self.rotation = rotation
+        self.anchor = anchor
+        self.volume = volume
+        self.aspectRatio = aspectRatio
         self.isBackground = isBackground
+        self.loop = loop
+        self.zIndex = zIndex
+        self.intrinsicDuration = intrinsicDuration
         self.startTime = startTime; self.duration = duration
-        self.loop = loop; self.fadeIn = fadeIn; self.fadeOut = fadeOut
+        self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
         self.keyframes = keyframes
     }
 
-    /// Convenience init that takes a typed `StoryMediaKind` instead of a raw string.
-    public init(id: String = UUID().uuidString, postMediaId: String = "",
-                kind: StoryMediaKind, placement: String = "media",
-                x: CGFloat = 0.5, y: CGFloat = 0.5,
-                scale: CGFloat = 1.0, rotation: CGFloat = 0,
-                volume: Float = 1.0,
-                isBackground: Bool? = nil,
-                startTime: Float? = nil, duration: Float? = nil,
-                loop: Bool? = nil, fadeIn: Float? = nil, fadeOut: Float? = nil,
-                sourceLanguage: String? = nil,
-                keyframes: [StoryKeyframe]? = nil) {
-        self.init(id: id, postMediaId: postMediaId,
-                  mediaType: kind.rawValue, placement: placement,
-                  x: x, y: y, scale: scale, rotation: rotation,
-                  volume: volume, isBackground: isBackground,
-                  startTime: startTime, duration: duration,
-                  loop: loop, fadeIn: fadeIn, fadeOut: fadeOut,
-                  sourceLanguage: sourceLanguage,
-                  keyframes: keyframes)
+    // Custom init(from decoder:) for legacy backward compat
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        postMediaId = try c.decodeIfPresent(String.self, forKey: .postMediaId) ?? ""
+        mediaURL = try c.decodeIfPresent(String.self, forKey: .mediaURL)
+        mediaType = try c.decodeIfPresent(String.self, forKey: .mediaType) ?? "image"
+        placement = try c.decodeIfPresent(String.self, forKey: .placement) ?? "media"
+        x = try c.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+        y = try c.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
+        scale = try c.decodeIfPresent(Double.self, forKey: .scale) ?? 1.0
+        rotation = try c.decodeIfPresent(Double.self, forKey: .rotation) ?? 0
+        volume = try c.decodeIfPresent(Float.self, forKey: .volume) ?? 1.0
+        // aspectRatio: REQUIRED but falls back to 1.0 for legacy drafts that predate this field
+        aspectRatio = try c.decodeIfPresent(Double.self, forKey: .aspectRatio) ?? 1.0
+        if let anchorContainer = try? c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor) {
+            let ax = try anchorContainer.decodeIfPresent(Double.self, forKey: .x) ?? 0.5
+            let ay = try anchorContainer.decodeIfPresent(Double.self, forKey: .y) ?? 0.5
+            anchor = CGPoint(x: ax, y: ay)
+        } else {
+            anchor = CGPoint(x: 0.5, y: 0.5)
+        }
+        intrinsicDuration = try c.decodeIfPresent(Double.self, forKey: .intrinsicDuration)
+        isBackground = try c.decodeIfPresent(Bool.self, forKey: .isBackground) ?? false
+        loop = try c.decodeIfPresent(Bool.self, forKey: .loop) ?? false
+        zIndex = try c.decodeIfPresent(Int.self, forKey: .zIndex) ?? 0
+        startTime = try c.decodeIfPresent(Double.self, forKey: .startTime)
+        duration = try c.decodeIfPresent(Double.self, forKey: .duration)
+        fadeIn = try c.decodeIfPresent(Double.self, forKey: .fadeIn)
+        fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
+        sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
+        keyframes = try c.decodeIfPresent([StoryKeyframe].self, forKey: .keyframes)
     }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(postMediaId, forKey: .postMediaId)
+        try c.encodeIfPresent(mediaURL, forKey: .mediaURL)
+        try c.encode(mediaType, forKey: .mediaType)
+        try c.encode(placement, forKey: .placement)
+        try c.encode(x, forKey: .x); try c.encode(y, forKey: .y)
+        try c.encode(scale, forKey: .scale); try c.encode(rotation, forKey: .rotation)
+        try c.encode(volume, forKey: .volume)
+        try c.encode(aspectRatio, forKey: .aspectRatio)
+        var anchorContainer = c.nestedContainer(keyedBy: AnchorKeys.self, forKey: .anchor)
+        try anchorContainer.encode(Double(anchor.x), forKey: .x)
+        try anchorContainer.encode(Double(anchor.y), forKey: .y)
+        try c.encodeIfPresent(intrinsicDuration, forKey: .intrinsicDuration)
+        try c.encode(isBackground, forKey: .isBackground)
+        try c.encode(loop, forKey: .loop)
+        try c.encode(zIndex, forKey: .zIndex)
+        try c.encodeIfPresent(startTime, forKey: .startTime)
+        try c.encodeIfPresent(duration, forKey: .duration)
+        try c.encodeIfPresent(fadeIn, forKey: .fadeIn)
+        try c.encodeIfPresent(fadeOut, forKey: .fadeOut)
+        try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
+        try c.encodeIfPresent(keyframes, forKey: .keyframes)
+    }
+
+    private enum AnchorKeys: String, CodingKey { case x, y }
 
     /// Type-safe view on `mediaType`. Returns `nil` if the persisted value is unrecognized
     /// (forward compat with future API kinds).
     public var kind: StoryMediaKind? { StoryMediaKind(rawValue: mediaType) }
+}
+
+/// Convenience init with typed kind (kept as extension to avoid conflict with main init).
+extension StoryMediaObject {
+    public init(id: String = UUID().uuidString,
+                postMediaId: String = "",
+                mediaURL: String? = nil,
+                kind: StoryMediaKind,
+                placement: String = "media",
+                aspectRatio: Double,
+                x: Double = 0.5, y: Double = 0.5,
+                scale: Double = 1.0, rotation: Double = 0,
+                anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
+                volume: Float = 1.0,
+                isBackground: Bool = false,
+                loop: Bool = false,
+                zIndex: Int = 0,
+                intrinsicDuration: Double? = nil,
+                startTime: Double? = nil,
+                duration: Double? = nil,
+                fadeIn: Double? = nil,
+                fadeOut: Double? = nil,
+                sourceLanguage: String? = nil,
+                keyframes: [StoryKeyframe]? = nil) {
+        self.init(id: id,
+                  postMediaId: postMediaId,
+                  mediaURL: mediaURL,
+                  mediaType: kind.rawValue,
+                  placement: placement,
+                  aspectRatio: aspectRatio,
+                  x: x, y: y, scale: scale, rotation: rotation,
+                  anchor: anchor,
+                  volume: volume,
+                  isBackground: isBackground,
+                  loop: loop,
+                  zIndex: zIndex,
+                  intrinsicDuration: intrinsicDuration,
+                  startTime: startTime,
+                  duration: duration,
+                  fadeIn: fadeIn, fadeOut: fadeOut,
+                  sourceLanguage: sourceLanguage,
+                  keyframes: keyframes)
+    }
 }
 
 // MARK: - Story Audio Player Object (player waveform sur canvas)
@@ -814,20 +928,11 @@ public struct StoryEffects: Codable, Sendable {
     // MARK: - Background / Foreground resolution
 
     /// Retourne le media background résolu.
-    /// - Flag explicite `true` → cet objet.
-    /// - Aucun flag explicite (tous `nil`) → fallback legacy sur `mediaObjects[0]`
-    ///   pour rétro-compatibilité avec les stories pré-`isBackground`.
-    /// - Au moins un flag `false` explicite et aucun `true` → `nil` (l'utilisateur
-    ///   a explicitement retiré le background, on ne le force pas via fallback).
+    /// - `isBackground == true` → cet objet (non-optional post-migration).
+    /// - Aucun objet avec `isBackground == true` → `nil`.
     public var resolvedBackgroundMedia: StoryMediaObject? {
         guard let objects = mediaObjects, !objects.isEmpty else { return nil }
-        if let explicit = objects.first(where: { $0.isBackground == true }) {
-            return explicit
-        }
-        if objects.allSatisfy({ $0.isBackground == nil }) {
-            return objects.first
-        }
-        return nil
+        return objects.first(where: { $0.isBackground == true })
     }
 
     /// Retourne tous les media foreground résolus (exclut le background déterminé par `resolvedBackgroundMedia`).
@@ -905,10 +1010,10 @@ public struct StoryEffects: Codable, Sendable {
                 var d: [String: Any] = ["id": o.id, "postMediaId": o.postMediaId, "mediaType": o.mediaType,
                  "placement": o.placement, "x": o.x, "y": o.y,
                  "scale": o.scale, "rotation": o.rotation, "volume": o.volume]
-                if let bg = o.isBackground { d["isBackground"] = bg }
+                d["isBackground"] = o.isBackground
                 if let st = o.startTime { d["startTime"] = st }
                 if let dur = o.duration { d["duration"] = dur }
-                if let lp = o.loop { d["loop"] = lp }
+                d["loop"] = o.loop
                 if let fi = o.fadeIn { d["fadeIn"] = fi }
                 if let fo = o.fadeOut { d["fadeOut"] = fo }
                 return d
@@ -1398,7 +1503,8 @@ public struct AddClipCommand: EditCommand {
             project.mediaObjects.append(
                 StoryMediaObject(id: clipId, postMediaId: postMediaId,
                                  mediaType: mediaType, placement: "media",
-                                 startTime: startTime, duration: duration)
+                                 aspectRatio: 1.0, // TODO Phase 2/3: compute real aspectRatio from asset
+                                 startTime: Double(startTime), duration: Double(duration))
             )
         case .audio:
             project.audioPlayerObjects.append(
@@ -1536,7 +1642,7 @@ public struct MoveClipCommand: EditCommand {
             guard let idx = project.mediaObjects.firstIndex(where: { $0.id == clipId }) else {
                 throw EditCommandError.clipNotFound(id: clipId)
             }
-            project.mediaObjects[idx].startTime = startTime
+            project.mediaObjects[idx].startTime = Double(startTime)
         case .audio:
             guard let idx = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
                 throw EditCommandError.clipNotFound(id: clipId)
@@ -1594,8 +1700,8 @@ public struct TrimClipCommand: EditCommand {
             guard let idx = project.mediaObjects.firstIndex(where: { $0.id == clipId }) else {
                 throw EditCommandError.clipNotFound(id: clipId)
             }
-            project.mediaObjects[idx].startTime = startTime
-            project.mediaObjects[idx].duration = duration
+            project.mediaObjects[idx].startTime = Double(startTime)
+            project.mediaObjects[idx].duration = Double(duration)
         case .audio:
             guard let idx = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
                 throw EditCommandError.clipNotFound(id: clipId)
@@ -1646,13 +1752,14 @@ public struct SplitClipCommand: EditCommand {
             let original = project.mediaObjects[idx]
             let originalStart = original.startTime ?? 0
             let originalDuration = original.duration ?? 0
+            let splitD = Double(splitAtRelativeTime)
             var left = original
             left.id = leftId
-            left.duration = splitAtRelativeTime
+            left.duration = splitD
             var right = original
             right.id = rightId
-            right.startTime = originalStart + splitAtRelativeTime
-            right.duration = max(0, originalDuration - splitAtRelativeTime)
+            right.startTime = originalStart + splitD
+            right.duration = max(0, originalDuration - splitD)
             project.mediaObjects.replaceSubrange(idx...idx, with: [left, right])
         case .audio:
             guard let idx = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) else {
@@ -1972,8 +2079,8 @@ public struct DeleteKeyframeCommand: EditCommand {
 public struct SetClipPropertyCommand: EditCommand {
     public enum ClipProperty: Codable, Sendable, Equatable {
         case volume(old: Float, new: Float)
-        case fadeIn(old: Float?, new: Float?)
-        case fadeOut(old: Float?, new: Float?)
+        case fadeIn(old: Double?, new: Double?)
+        case fadeOut(old: Double?, new: Double?)
         case loop(old: Bool?, new: Bool?)
         case isBackground(old: Bool?, new: Bool?)
         case isLocked(old: Bool?, new: Bool?)
@@ -1995,12 +2102,12 @@ public struct SetClipPropertyCommand: EditCommand {
                 let new = try c.decode(Float.self, forKey: .newFloat)
                 self = .volume(old: old, new: new)
             case .fadeIn:
-                let old = try c.decodeIfPresent(Float.self, forKey: .oldFloat)
-                let new = try c.decodeIfPresent(Float.self, forKey: .newFloat)
+                let old = try c.decodeIfPresent(Double.self, forKey: .oldFloat)
+                let new = try c.decodeIfPresent(Double.self, forKey: .newFloat)
                 self = .fadeIn(old: old, new: new)
             case .fadeOut:
-                let old = try c.decodeIfPresent(Float.self, forKey: .oldFloat)
-                let new = try c.decodeIfPresent(Float.self, forKey: .newFloat)
+                let old = try c.decodeIfPresent(Double.self, forKey: .oldFloat)
+                let new = try c.decodeIfPresent(Double.self, forKey: .newFloat)
                 self = .fadeOut(old: old, new: new)
             case .loop:
                 let old = try c.decodeIfPresent(Bool.self, forKey: .oldBool)
@@ -2105,9 +2212,9 @@ public struct SetClipPropertyCommand: EditCommand {
         case .fadeOut(let old, let new):
             media.fadeOut = useNew ? new : old
         case .loop(let old, let new):
-            media.loop = useNew ? new : old
+            media.loop = (useNew ? new : old) ?? false
         case .isBackground(let old, let new):
-            media.isBackground = useNew ? new : old
+            media.isBackground = (useNew ? new : old) ?? false
         case .isLocked:
             break
         }
@@ -2120,9 +2227,11 @@ public struct SetClipPropertyCommand: EditCommand {
         case .volume(let old, let new):
             audio.volume = useNew ? new : old
         case .fadeIn(let old, let new):
-            audio.fadeIn = useNew ? new : old
+            let val: Double? = useNew ? new : old
+            audio.fadeIn = val.map { Float($0) }
         case .fadeOut(let old, let new):
-            audio.fadeOut = useNew ? new : old
+            let val: Double? = useNew ? new : old
+            audio.fadeOut = val.map { Float($0) }
         case .loop(let old, let new):
             audio.loop = useNew ? new : old
         case .isBackground(let old, let new):
@@ -2139,11 +2248,11 @@ public struct SetClipPropertyCommand: EditCommand {
         case .isLocked(let old, let new):
             text.isLocked = useNew ? new : old
         case .fadeIn(let old, let new):
-            let val: Float? = useNew ? new : old
-            text.fadeIn = val.map { Double($0) }
+            let val: Double? = useNew ? new : old
+            text.fadeIn = val
         case .fadeOut(let old, let new):
-            let val: Float? = useNew ? new : old
-            text.fadeOut = val.map { Double($0) }
+            let val: Double? = useNew ? new : old
+            text.fadeOut = val
         case .volume, .loop, .isBackground:
             break
         }

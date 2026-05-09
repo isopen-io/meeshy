@@ -18,7 +18,7 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
     }
 
     private func projectWithThreeTracks() -> TimelineProject {
-        var video = StoryMediaObject(id: "clip-v", postMediaId: "clip-v", kind: .video)
+        var video = StoryMediaObject(id: "clip-v", postMediaId: "clip-v", kind: .video, aspectRatio: 1.0)
         video.startTime = 0; video.duration = 5
         var audio = StoryAudioPlayerObject(id: "clip-a", postMediaId: "clip-a")
         audio.startTime = 1; audio.duration = 4; audio.volume = 0.8

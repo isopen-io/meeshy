@@ -14,24 +14,24 @@ public enum ReaderTransitionResolver {
         transitions: [StoryClipTransition],
         currentTime: Float
     ) -> Float {
-        let start = media.startTime ?? 0
-        let duration = media.duration ?? 0
+        let start = Float(media.startTime ?? 0)
+        let duration = Float(media.duration ?? 0)
         let end = start + duration
         guard currentTime >= start, currentTime <= end else { return 0 }
 
         var opacity: Float = 1.0
         for transition in transitions where transition.kind == .crossfade {
             if transition.fromClipId == media.id {
-                let outgoingStart = end - transition.duration
+                let outgoingStart = end - Float(transition.duration)
                 if currentTime > outgoingStart {
-                    let progress = (currentTime - outgoingStart) / transition.duration
+                    let progress = (currentTime - outgoingStart) / Float(transition.duration)
                     opacity *= max(0, 1 - progress)
                 }
             }
             if transition.toClipId == media.id {
-                let incomingEnd = start + transition.duration
+                let incomingEnd = start + Float(transition.duration)
                 if currentTime < incomingEnd {
-                    let progress = (currentTime - start) / transition.duration
+                    let progress = (currentTime - start) / Float(transition.duration)
                     opacity *= max(0, min(1, progress))
                 }
             }
@@ -52,7 +52,7 @@ public enum ReaderKeyframeResolver {
         currentTime: Float
     ) -> CGPoint? {
         guard let frames = keyframes, !frames.isEmpty else { return nil }
-        let start = media.startTime ?? 0
+        let start = Float(media.startTime ?? 0)
         let local = currentTime - start
 
         let xs: [(time: Float, value: CGFloat, easing: StoryEasing)] = frames.compactMap { kf in
@@ -65,7 +65,7 @@ public enum ReaderKeyframeResolver {
         let x = KeyframeInterpolator.interpolate(keyframes: xs, at: local)
         let y = KeyframeInterpolator.interpolate(keyframes: ys, at: local)
         if x == nil && y == nil { return nil }
-        return CGPoint(x: x ?? media.x, y: y ?? media.y)
+        return CGPoint(x: x ?? CGFloat(media.x), y: y ?? CGFloat(media.y))
     }
 
     /// Returns the interpolated scale at `currentTime`, or `nil` if no keyframes.

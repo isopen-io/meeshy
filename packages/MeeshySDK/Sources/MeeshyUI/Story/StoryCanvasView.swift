@@ -498,7 +498,7 @@ struct StoryCanvasView: View {
     private func foregroundMediaLayer(interactive: Bool) -> some View {
         let backgroundId = viewModel.currentEffects.resolvedBackgroundMedia?.id
         ForEach(mediaObjects.filter { $0.id != backgroundId }, id: \.id) { obj in
-            if isElementVisible(startTime: obj.startTime, duration: obj.duration) {
+            if isElementVisible(startTime: obj.startTime.map { Float($0) }, duration: obj.duration.map { Float($0) }) {
                 positionedMediaElement(obj: obj, interactive: interactive)
             }
         }
@@ -531,7 +531,7 @@ struct StoryCanvasView: View {
                 HapticFeedback.light()
             }
         )
-        .opacity(elementOpacity(startTime: obj.startTime, duration: obj.duration, fadeIn: obj.fadeIn, fadeOut: obj.fadeOut))
+        .opacity(elementOpacity(startTime: obj.startTime.map { Float($0) }, duration: obj.duration.map { Float($0) }, fadeIn: obj.fadeIn.map { Float($0) }, fadeOut: obj.fadeOut.map { Float($0) }))
         .selectionGlow(viewModel.selectedElementId == obj.id)
         .overlay(alignment: .topTrailing) {
             if viewModel.selectedElementId == obj.id {
@@ -618,7 +618,7 @@ struct StoryCanvasView: View {
         Binding(
             get: {
                 viewModel.currentEffects.mediaObjects?.first(where: { $0.id == id })
-                    ?? StoryMediaObject()
+                    ?? StoryMediaObject(aspectRatio: 1.0)
             },
             set: { newValue in
                 var effects = viewModel.currentEffects

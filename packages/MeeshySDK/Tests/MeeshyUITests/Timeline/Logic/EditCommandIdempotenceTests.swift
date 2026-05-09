@@ -28,9 +28,11 @@ final class EditCommandIdempotenceTests: XCTestCase {
         p.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm1",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 0, duration: 5),
             StoryMediaObject(id: "v2", postMediaId: "pm2",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 5, duration: 5)
         ]
         p.audioPlayerObjects = [

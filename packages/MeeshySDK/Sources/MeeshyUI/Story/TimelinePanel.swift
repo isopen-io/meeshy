@@ -102,8 +102,8 @@ struct TimelinePanel: View {
             }
             elements.append(TimelinePlaybackEngine.MediaElement(
                 id: media.id, type: mediaType, url: url,
-                startTime: media.startTime ?? 0,
-                duration: media.duration ?? slideDuration,
+                startTime: Float(media.startTime ?? 0),
+                duration: Float(media.duration ?? Double(slideDuration)),
                 volume: media.volume
             ))
         }
@@ -678,18 +678,18 @@ struct TimelinePanel: View {
                 let vidURL = viewModel.loadedVideoURLs[media.id]
                 result.append(TimelineTrack(
                     id: media.id, name: String(localized: "story.timeline.video", defaultValue: "Video", bundle: .module), type: .video,
-                    startTime: media.startTime ?? 0, duration: media.duration,
-                    volume: media.volume, loop: media.loop ?? false,
-                    fadeIn: media.fadeIn, fadeOut: media.fadeOut,
+                    startTime: Float(media.startTime ?? 0), duration: media.duration.map { Float($0) },
+                    volume: media.volume, loop: media.loop,
+                    fadeIn: media.fadeIn.map { Float($0) }, fadeOut: media.fadeOut.map { Float($0) },
                     videoURL: vidURL,
                     mediaDuration: mediaDurationCache[media.id] ?? intrinsicDuration(url: vidURL)
                 ))
             } else {
                 result.append(TimelineTrack(
                     id: media.id, name: String(localized: "story.timeline.image", defaultValue: "Image", bundle: .module), type: .image,
-                    startTime: media.startTime ?? 0, duration: media.duration,
+                    startTime: Float(media.startTime ?? 0), duration: media.duration.map { Float($0) },
                     volume: nil, loop: false,
-                    fadeIn: media.fadeIn, fadeOut: media.fadeOut,
+                    fadeIn: media.fadeIn.map { Float($0) }, fadeOut: media.fadeOut.map { Float($0) },
                     image: viewModel.loadedImages[media.id]
                 ))
             }
@@ -774,12 +774,12 @@ struct TimelinePanel: View {
 
         if let idx = effects.mediaObjects?.firstIndex(where: { $0.id == track.id }) {
             let currentVolume = effects.mediaObjects?[idx].volume ?? 1.0
-            effects.mediaObjects?[idx].startTime = track.startTime
-            effects.mediaObjects?[idx].duration = track.duration
+            effects.mediaObjects?[idx].startTime = Double(track.startTime)
+            effects.mediaObjects?[idx].duration = track.duration.map { Double($0) }
             effects.mediaObjects?[idx].volume = track.volume ?? currentVolume
             effects.mediaObjects?[idx].loop = track.loop
-            effects.mediaObjects?[idx].fadeIn = track.fadeIn
-            effects.mediaObjects?[idx].fadeOut = track.fadeOut
+            effects.mediaObjects?[idx].fadeIn = track.fadeIn.map { Double($0) }
+            effects.mediaObjects?[idx].fadeOut = track.fadeOut.map { Double($0) }
             viewModel.currentEffects = effects
             return
         }

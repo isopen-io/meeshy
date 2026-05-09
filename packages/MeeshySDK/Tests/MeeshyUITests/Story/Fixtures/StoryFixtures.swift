@@ -38,9 +38,10 @@ enum StoryFixtures {
             postMediaId: UUID().uuidString,
             mediaType: "image",
             placement: "media",
+            aspectRatio: aspectRatio,
             x: x, y: y,
             scale: scale,
-            rotation: CGFloat(rotation)
+            rotation: rotation
         )
         var effects = StoryEffects()
         effects.mediaObjects = [mediaObj]
@@ -53,16 +54,17 @@ enum StoryFixtures {
     static func complexSlide() -> StorySlide {
         // Vidéo de fond 5s en boucle + 2 textes + 1 sticker à différents startTime
         let videoId = UUID().uuidString
-        var video = StoryMediaObject(
+        let video = StoryMediaObject(
             id: videoId,
             postMediaId: UUID().uuidString,
             mediaType: "video",
             placement: "media",
+            aspectRatio: 9.0 / 16.0,
+            isBackground: true,
+            loop: true,
             startTime: 0.0,
             duration: 5.0
         )
-        video.loop = true
-        video.isBackground = true
 
         let text1 = StoryTextObject(
             id: UUID().uuidString,
@@ -102,16 +104,17 @@ enum StoryFixtures {
 
     static func loopVideoSlide(videoDurationSec: Double,
                                staticBase: Double = 12.0) -> StorySlide {
-        var video = StoryMediaObject(
+        let video = StoryMediaObject(
             id: UUID().uuidString,
             postMediaId: UUID().uuidString,
             mediaType: "video",
             placement: "media",
+            aspectRatio: 9.0 / 16.0,
+            isBackground: true,
+            loop: true,
             startTime: 0.0,
-            duration: Float(videoDurationSec)
+            duration: videoDurationSec
         )
-        video.loop = true
-        video.isBackground = true
 
         var effects = StoryEffects()
         effects.mediaObjects = [video]

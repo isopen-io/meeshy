@@ -228,6 +228,7 @@ final class StoryTimelineEngineTests: XCTestCase {
         let media = StoryMediaObject(
             id: "v1", postMediaId: "pm1",
             mediaType: "video", placement: "media",
+            aspectRatio: 1.0,
             startTime: 0, duration: 5
         )
         let project = makeProject(slideDuration: 5, media: [media])

@@ -259,13 +259,14 @@ public final class StoryComposerViewModel {
             postMediaId: "_bg_image_\(slide.id)",
             mediaType: StoryMediaKind.image.rawValue,
             placement: "media",
+            aspectRatio: 1.0, // TODO Phase 2/3: compute real aspectRatio from asset
             x: 0.5, y: 0.5,
             scale: 1.0,
             rotation: 0,
             volume: 0,
             isBackground: true,
             startTime: 0,
-            duration: slide.effects.slideDuration ?? Float(slide.duration)
+            duration: Double(slide.effects.slideDuration ?? Float(slide.duration))
         )
     }
 
@@ -558,7 +559,7 @@ public final class StoryComposerViewModel {
             map[obj.id] = obj.zIndex; maxZ = max(maxZ, obj.zIndex)
         }
         for obj in (effects.mediaObjects ?? []) {
-            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+            map[obj.id] = obj.zIndex; maxZ = max(maxZ, obj.zIndex)
         }
         for obj in (effects.audioPlayerObjects ?? []) {
             if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
@@ -639,12 +640,13 @@ public final class StoryComposerViewModel {
             postMediaId: "",
             kind: kind,
             placement: "media",
+            aspectRatio: 1.0, // TODO Phase 2/3: compute real aspectRatio from asset
             x: center.x,
             y: center.y,
             scale: 1.0,
             rotation: 0,
             volume: 1.0,
-            isBackground: shouldBeBackground ? true : nil,
+            isBackground: shouldBeBackground,
             sourceLanguage: detectedKeyboardLanguage
         )
         var medias = targetEffects.mediaObjects ?? []
@@ -674,7 +676,7 @@ public final class StoryComposerViewModel {
         var effects = slides[targetIndex].effects
         guard var medias = effects.mediaObjects,
               let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
-        medias[mediaIdx].duration = duration
+        medias[mediaIdx].duration = Double(duration)
         effects.mediaObjects = medias
         slides[targetIndex].effects = effects
     }

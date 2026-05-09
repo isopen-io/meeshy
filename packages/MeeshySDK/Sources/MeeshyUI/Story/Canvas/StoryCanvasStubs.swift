@@ -47,12 +47,18 @@ public final class StoryCanvasUIView: UIView {
     }
 }
 
-// MARK: - StorySlide + effectiveSlideDuration (Phase 1 oracle stub)
-// effectiveSlideDuration() will be fully implemented in Task 1.3.
-// This stub exists so SlideDurationLoopTests compiles during Phase 1.
+// MARK: - StorySlide + effectiveSlideDuration (Phase 1 — Task 1.3)
+// Returns the slide duration rounded up to the next full loop boundary if
+// a background looping video is present; otherwise returns the static base.
 
 extension StorySlide {
     public nonisolated func effectiveSlideDuration() -> TimeInterval {
-        fatalError("Phase 1 not yet implemented — Task 1.3")
+        let base = duration
+        guard let loopMedia = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop }),
+              let videoDuration = loopMedia.duration, videoDuration > 0 else {
+            return base
+        }
+        let repetitions = ceil(base / videoDuration)
+        return repetitions * videoDuration
     }
 }

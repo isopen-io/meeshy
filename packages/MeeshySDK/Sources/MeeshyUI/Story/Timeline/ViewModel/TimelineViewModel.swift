@@ -232,7 +232,7 @@ public final class TimelineViewModel {
     // MARK: - Private helpers
 
     func clipStartTime(id: String) -> Float? {
-        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.startTime ?? 0 }
+        if let m = project.mediaObjects.first(where: { $0.id == id }) { return Float(m.startTime ?? 0) }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.startTime ?? 0 }
         if let t = project.textObjects.first(where: { $0.id == id }) { return Float(t.startTime ?? 0) }
         return nil
@@ -240,7 +240,7 @@ public final class TimelineViewModel {
 
     private func applyClipPosition(clipId: String, newStartTime: Float) {
         if let i = project.mediaObjects.firstIndex(where: { $0.id == clipId }) {
-            project.mediaObjects[i].startTime = newStartTime
+            project.mediaObjects[i].startTime = Double(newStartTime)
             return
         }
         if let i = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) {
@@ -340,7 +340,7 @@ public final class TimelineViewModel {
 
     /// Returns the duration of any clip (media/audio/text) by id, or nil.
     private func clipDuration(forId id: String) -> Float? {
-        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration }
+        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration.map { Float($0) } }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
         if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
         return nil

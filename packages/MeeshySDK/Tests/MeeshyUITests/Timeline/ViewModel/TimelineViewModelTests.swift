@@ -111,7 +111,7 @@ final class TimelineViewModelTests: XCTestCase {
 
         let medias = sut.project.mediaObjects
         XCTAssertEqual(medias.count, 2, "split should produce two clips")
-        let totalDuration = medias.reduce(Float(0)) { $0 + ($1.duration ?? 0) }
+        let totalDuration = medias.reduce(Double(0)) { $0 + ($1.duration ?? 0) }
         XCTAssertEqual(totalDuration, 4, accuracy: 0.001, "total duration preserved")
     }
 
@@ -328,8 +328,8 @@ final class TimelineViewModelTests: XCTestCase {
         sut2.restoreCommandHistory(snapshot)
 
         XCTAssertEqual(sut2.project.mediaObjects.count, sut1.project.mediaObjects.count)
-        let starts1 = sut1.project.mediaObjects.compactMap { $0.startTime }.sorted()
-        let starts2 = sut2.project.mediaObjects.compactMap { $0.startTime }.sorted()
+        let starts1 = sut1.project.mediaObjects.compactMap { $0.startTime }.sorted().map { Float($0) }
+        let starts2 = sut2.project.mediaObjects.compactMap { $0.startTime }.sorted().map { Float($0) }
         assertFloatArraysEqual(starts1, starts2, accuracy: 0.001)
         XCTAssertTrue(sut2.canUndo)
     }

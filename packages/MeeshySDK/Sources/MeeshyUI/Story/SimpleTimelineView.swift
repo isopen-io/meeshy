@@ -376,11 +376,11 @@ struct SimpleTimelineView: View {
             viewModel.currentEffects = effects
             viewModel.autoExtendDuration(forElementEnd: Float((effects.textObjects[idx].startTime ?? 0) + newDuration))
         } else if let idx = effects.mediaObjects?.firstIndex(where: { $0.id == id }) {
-            let current = effects.mediaObjects?[idx].duration ?? viewModel.currentSlideDuration
-            let newDuration = max(0.5, current + delta)
+            let current = effects.mediaObjects?[idx].duration ?? Double(viewModel.currentSlideDuration)
+            let newDuration = max(0.5, current + Double(delta))
             effects.mediaObjects?[idx].duration = newDuration
             viewModel.currentEffects = effects
-            viewModel.autoExtendDuration(forElementEnd: (effects.mediaObjects?[idx].startTime ?? 0) + newDuration)
+            viewModel.autoExtendDuration(forElementEnd: Float((effects.mediaObjects?[idx].startTime ?? 0) + newDuration))
         } else if let idx = effects.audioPlayerObjects?.firstIndex(where: { $0.id == id }) {
             let current = effects.audioPlayerObjects?[idx].duration ?? viewModel.currentSlideDuration
             let newDuration = max(0.5, current + delta)
@@ -419,8 +419,8 @@ struct SimpleTimelineView: View {
                 id: media.id,
                 name: media.kind == .video ? "Video" : "Image",
                 type: trackType,
-                startTime: media.startTime ?? 0,
-                duration: media.duration ?? slideDur,
+                startTime: Float(media.startTime ?? 0),
+                duration: Float(media.duration ?? Double(slideDur)),
                 image: img,
                 sourceLanguage: media.sourceLanguage
             ))

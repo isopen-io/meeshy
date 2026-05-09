@@ -82,10 +82,10 @@ public struct DraggableMediaView: View {
         mediaObject.kind == .video
     }
 
-    private var currentX: CGFloat { baseX ?? mediaObject.x }
-    private var currentY: CGFloat { baseY ?? mediaObject.y }
-    private var currentScale: CGFloat { baseScale ?? mediaObject.scale }
-    private var currentRotation: CGFloat { baseRotation ?? mediaObject.rotation }
+    private var currentX: CGFloat { baseX ?? CGFloat(mediaObject.x) }
+    private var currentY: CGFloat { baseY ?? CGFloat(mediaObject.y) }
+    private var currentScale: CGFloat { baseScale ?? CGFloat(mediaObject.scale) }
+    private var currentRotation: CGFloat { baseRotation ?? CGFloat(mediaObject.rotation) }
 
     /// Resolved aspect ratio used for sizing. Falls back to `image.size` when the parent
     /// hasn't supplied a value (free for images), then to 1.0 (square) as last resort.
@@ -155,10 +155,10 @@ public struct DraggableMediaView: View {
     // MARK: - Sync base state from binding
 
     private func syncBaseFromBinding() {
-        baseX = mediaObject.x
-        baseY = mediaObject.y
-        baseScale = mediaObject.scale
-        baseRotation = mediaObject.rotation
+        baseX = CGFloat(mediaObject.x)
+        baseY = CGFloat(mediaObject.y)
+        baseScale = CGFloat(mediaObject.scale)
+        baseRotation = CGFloat(mediaObject.rotation)
     }
 
     // MARK: - Aspect-aware sizing
@@ -251,8 +251,8 @@ public struct DraggableMediaView: View {
                 let snapped = StoryAlignmentSnap.apply(to: CGPoint(x: rawX, y: rawY))
                 baseX = snapped.x
                 baseY = snapped.y
-                mediaObject.x = snapped.x
-                mediaObject.y = snapped.y
+                mediaObject.x = Double(snapped.x)
+                mediaObject.y = Double(snapped.y)
                 dragInitialized = false
                 onDragCommitted?()
                 onDragEnd()
@@ -267,7 +267,7 @@ public struct DraggableMediaView: View {
             .onEnded { value in
                 let newScale = min(4.0, max(0.3, currentScale * value))
                 baseScale = newScale
-                mediaObject.scale = newScale
+                mediaObject.scale = Double(newScale)
                 onDragEnd()
             }
     }
@@ -280,7 +280,7 @@ public struct DraggableMediaView: View {
             .onEnded { value in
                 let newRotation = currentRotation + value.degrees
                 baseRotation = newRotation
-                mediaObject.rotation = newRotation
+                mediaObject.rotation = Double(newRotation)
                 onDragEnd()
             }
     }

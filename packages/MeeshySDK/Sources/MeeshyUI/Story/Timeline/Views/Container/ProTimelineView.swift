@@ -326,10 +326,10 @@ public struct ProTimelineView: View {
             VideoClipBar(
                 clipId: media.id,
                 title: QuickTimelineView.clipTitle(for: media, isSynthetic: isSynthetic),
-                startTime: media.startTime ?? 0,
-                duration: media.duration ?? 0,
-                fadeIn: media.fadeIn ?? 0,
-                fadeOut: media.fadeOut ?? 0,
+                startTime: Float(media.startTime ?? 0),
+                duration: Float(media.duration ?? 0),
+                fadeIn: Float(media.fadeIn ?? 0),
+                fadeOut: Float(media.fadeOut ?? 0),
                 isSelected: viewModel.selection.selectedClipId == media.id,
                 isLocked: isSynthetic,
                 isDark: colorScheme == .dark,
@@ -376,8 +376,8 @@ public struct ProTimelineView: View {
             AudioClipBar(
                 clipId: audio.id,
                 title: audio.postMediaId,
-                startTime: audio.startTime ?? 0,
-                duration: audio.duration ?? 0,
+                startTime: Float(audio.startTime ?? 0),
+                duration: Float(audio.duration ?? 0),
                 volume: audio.volume,
                 isMuted: false,
                 isSelected: viewModel.selection.selectedClipId == audio.id,
@@ -391,7 +391,7 @@ public struct ProTimelineView: View {
                 onLongPress: { viewModel.selectClip(id: audio.id) },
                 onMoveDelta: { delta in
                     let audioId = audio.id
-                    let originalStart = audio.startTime ?? 0
+                    let originalStart = Float(audio.startTime ?? 0)
                     viewModel.beginClipDrag(clipId: audioId)
                     viewModel.dragClipMoved(
                         rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
@@ -436,13 +436,13 @@ public struct ProTimelineView: View {
                 // No `url` on StoryMediaObject — use postMediaId as display name
                 displayName: media.postMediaId,
                 kind: media.mediaType == "audio" ? .audio : .video,
-                startTime: media.startTime ?? 0,
-                duration: media.duration ?? 0,
+                startTime: Float(media.startTime ?? 0),
+                duration: Float(media.duration ?? 0),
                 volume: media.volume,
-                fadeInDuration: media.fadeIn ?? 0,
-                fadeOutDuration: media.fadeOut ?? 0,
-                isLooping: media.loop ?? false,
-                isBackground: media.isBackground ?? false
+                fadeInDuration: Float(media.fadeIn ?? 0),
+                fadeOutDuration: Float(media.fadeOut ?? 0),
+                isLooping: media.loop,
+                isBackground: media.isBackground
             )
         }
         if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {

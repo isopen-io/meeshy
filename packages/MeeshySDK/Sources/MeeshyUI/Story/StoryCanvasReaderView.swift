@@ -525,13 +525,13 @@ public struct StoryCanvasReaderView: View {
         if let pos = ReaderKeyframeResolver.resolvedPosition(
             for: media, keyframes: media.keyframes, currentTime: time
         ) {
-            overridden.x = pos.x
-            overridden.y = pos.y
+            overridden.x = Double(pos.x)
+            overridden.y = Double(pos.y)
         }
         if let scale = ReaderKeyframeResolver.resolvedScale(
             keyframes: media.keyframes, currentTime: time
         ) {
-            overridden.scale = scale
+            overridden.scale = Double(scale)
         }
         return overridden
     }
@@ -567,7 +567,7 @@ public struct StoryCanvasReaderView: View {
                     }
                 )
                 .opacity(combinedOpacity)
-                .zIndex(Double(media.zIndex ?? 0))
+                .zIndex(Double(media.zIndex))
                 .animation(.easeInOut(duration: 0.15), value: combinedOpacity)
             }
         }

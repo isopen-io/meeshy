@@ -19,9 +19,9 @@ enum TimelineProjectFactory {
         startTime: Float = 0,
         duration: Float = 5
     ) -> TimelineProject {
-        var media = StoryMediaObject(id: clipId, postMediaId: clipId, kind: .video)
-        media.startTime = startTime
-        media.duration = duration
+        var media = StoryMediaObject(id: clipId, postMediaId: clipId, kind: .video, aspectRatio: 1.0)
+        media.startTime = Double(startTime)
+        media.duration = Double(duration)
         return TimelineProject(
             slideId: "slide-1",
             slideDuration: 10,
@@ -33,10 +33,10 @@ enum TimelineProjectFactory {
     }
 
     static func projectWithTwoContiguousClips() -> TimelineProject {
-        var a = StoryMediaObject(id: "clip-a", postMediaId: "clip-a", kind: .video)
+        var a = StoryMediaObject(id: "clip-a", postMediaId: "clip-a", kind: .video, aspectRatio: 1.0)
         a.startTime = 0
         a.duration = 4
-        var b = StoryMediaObject(id: "clip-b", postMediaId: "clip-b", kind: .video)
+        var b = StoryMediaObject(id: "clip-b", postMediaId: "clip-b", kind: .video, aspectRatio: 1.0)
         b.startTime = 4
         b.duration = 4
         return TimelineProject(

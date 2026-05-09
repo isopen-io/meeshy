@@ -123,7 +123,7 @@ extension TimelineViewModel {
     // MARK: - Internal clip dimension helper (accessible to extension)
 
     func clipDuration(id: String) -> Float? {
-        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration }
+        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration.map { Float($0) } }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
         if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
         return nil
@@ -149,33 +149,33 @@ extension TimelineViewModel {
 
     public func setClipFadeIn(id: String, fadeIn: Float) {
         guard let kind = clipKind(forId: id) else { return }
-        let oldFadeIn: Float?
+        let oldFadeIn: Double?
         switch kind {
         case .video, .image:
             oldFadeIn = project.mediaObjects.first(where: { $0.id == id })?.fadeIn
         case .audio:
-            oldFadeIn = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeIn
+            oldFadeIn = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeIn.map { Double($0) }
         case .text:
-            oldFadeIn = project.textObjects.first(where: { $0.id == id })?.fadeIn.map { Float($0) }
+            oldFadeIn = project.textObjects.first(where: { $0.id == id })?.fadeIn
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
-                                         property: .fadeIn(old: oldFadeIn, new: fadeIn))
+                                         property: .fadeIn(old: oldFadeIn, new: Double(fadeIn)))
         applySetClipProperty(cmd)
     }
 
     public func setClipFadeOut(id: String, fadeOut: Float) {
         guard let kind = clipKind(forId: id) else { return }
-        let oldFadeOut: Float?
+        let oldFadeOut: Double?
         switch kind {
         case .video, .image:
             oldFadeOut = project.mediaObjects.first(where: { $0.id == id })?.fadeOut
         case .audio:
-            oldFadeOut = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeOut
+            oldFadeOut = project.audioPlayerObjects.first(where: { $0.id == id })?.fadeOut.map { Double($0) }
         case .text:
-            oldFadeOut = project.textObjects.first(where: { $0.id == id })?.fadeOut.map { Float($0) }
+            oldFadeOut = project.textObjects.first(where: { $0.id == id })?.fadeOut
         }
         let cmd = SetClipPropertyCommand(clipId: id, kind: kind,
-                                         property: .fadeOut(old: oldFadeOut, new: fadeOut))
+                                         property: .fadeOut(old: oldFadeOut, new: Double(fadeOut)))
         applySetClipProperty(cmd)
     }
 
