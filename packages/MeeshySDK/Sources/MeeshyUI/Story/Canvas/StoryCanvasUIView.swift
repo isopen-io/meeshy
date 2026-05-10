@@ -58,6 +58,10 @@ public final class StoryCanvasUIView: UIView {
     /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
     private let backgroundLayer = StoryBackgroundLayer()
 
+    /// Optional Metal filter overlay (Task 19). Non-nil iff `slide.effects.filter` maps to a
+    /// known `StoryFilteredLayer.Kind`. Owned and removed by `updateFilterLayer()`.
+    private var filteredLayer: StoryFilteredLayer?
+
     // MARK: - Gestures
 
     private var panRecognizer: UIPanGestureRecognizer!
@@ -337,6 +341,28 @@ public final class StoryCanvasUIView: UIView {
         for sub in rendered.sublayers ?? [] {
             itemsContainer.addSublayer(sub)
         }
+
+        updateFilterLayer()
+    }
+
+    /// Inserts, updates, or removes the `StoryFilteredLayer` overlay driven by
+    /// `slide.effects.filter` + `slide.effects.filterIntensity`.
+    private func updateFilterLayer() {
+        guard let raw = slide.effects.filter,
+              let kind = StoryFilteredLayer.Kind(rawValue: raw) else {
+            filteredLayer?.removeFromSuperlayer()
+            filteredLayer = nil
+            return
+        }
+        let intensity = Float(slide.effects.filterIntensity ?? 1.0)
+        if filteredLayer == nil {
+            let l = StoryFilteredLayer()
+            rootLayer.addSublayer(l)
+            filteredLayer = l
+        }
+        filteredLayer?.frame = CGRect(origin: .zero, size: geometry.renderSize)
+        filteredLayer?.kind = kind
+        filteredLayer?.intensity = intensity
     }
 
     // MARK: - Window lifecycle
