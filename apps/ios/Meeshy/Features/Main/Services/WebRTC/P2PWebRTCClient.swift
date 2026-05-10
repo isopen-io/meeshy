@@ -268,6 +268,24 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         } catch {
             Logger.webrtc.warning("[WEBRTC] setCodecPreferences failed: \(error.localizedDescription, privacy: .public)")
         }
+
+        // Phase 2 — apply Opus bitrate range via RTCRtpEncodingParameters.
+        // DTX in libwebrtc 141 iOS Objective-C binding is NOT exposed on
+        // RTCRtpEncodingParameters (the WebIDL `dtx` field has no ObjC analog
+        // in this xcframework — verified against
+        // WebRTC.xcframework/.../RTCRtpEncodingParameters.h). DTX therefore
+        // remains driven by `usedtx=1` injected into Opus fmtp via
+        // mungeOpusSDP. Bitrate min/max are honored by the encoder directly
+        // through RtpEncodingParameters.
+        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.8 + ADR-4
+        let params = audioTransceiver.sender.parameters
+        for encoding in params.encodings {
+            // DTX: no native API — see comment above; handled via SDP fmtp `usedtx=1`.
+            encoding.maxBitrateBps = NSNumber(value: 64_000)
+            encoding.minBitrateBps = NSNumber(value: 16_000)
+        }
+        audioTransceiver.sender.parameters = params
+        Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=64kbps, min=16kbps)")
     }
 
     // Phase 2 — Apply video codec preferences via libwebrtc 141 API.
@@ -329,12 +347,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
 
         var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
-        // DIAGNOSTIC: RED désactivé temporairement. Suspect du flux audio
-        // nul après ICE connected — `a=fmtp:63 PT/PT` (RFC 2198) peut être
-        // mal négocié par certains chemins du SDK iOS WebRTC, entraînant
-        // un drop silencieux des paquets audio à la décode. À ré-activer
-        // une fois la cause confirmée.
-        // mungedSDP = Self.addAudioRedundancy(mungedSDP)
+        // Phase 2 — RED is now negotiated via setCodecPreferences (libwebrtc 141 API).
+        // The previous SDP munging path (addAudioRedundancy) was disabled in 9e663039
+        // due to a PT/PT negotiation bug. The setCodecPreferences API avoids the
+        // regex entirely. addAudioRedundancy is kept as a static function for
+        // diagnostic comparison but MUST NOT be called.
+        // Reference §3.8 + ADR-4.
         mungedSDP = Self.addTransportCC(mungedSDP)
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
         let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
@@ -372,12 +390,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
 
         var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
-        // DIAGNOSTIC: RED désactivé temporairement. Suspect du flux audio
-        // nul après ICE connected — `a=fmtp:63 PT/PT` (RFC 2198) peut être
-        // mal négocié par certains chemins du SDK iOS WebRTC, entraînant
-        // un drop silencieux des paquets audio à la décode. À ré-activer
-        // une fois la cause confirmée.
-        // mungedSDP = Self.addAudioRedundancy(mungedSDP)
+        // Phase 2 — RED is now negotiated via setCodecPreferences (libwebrtc 141 API).
+        // The previous SDP munging path (addAudioRedundancy) was disabled in 9e663039
+        // due to a PT/PT negotiation bug. The setCodecPreferences API avoids the
+        // regex entirely. addAudioRedundancy is kept as a static function for
+        // diagnostic comparison but MUST NOT be called.
+        // Reference §3.8 + ADR-4.
         mungedSDP = Self.addTransportCC(mungedSDP)
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
         let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
@@ -613,16 +631,20 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     }
 
     static func mungeOpusSDP(_ sdp: String) -> String {
-        // DIAGNOSTIC: `usedtx=1` était suspect du flux audio nul après ICE
-        // connected — DTX ne transmet aucun paquet quand le mic capture du
-        // silence (ex: simulator macOS sans permission micro). On le repasse
-        // à 0 pour forcer un flux RTP continu et confirmer/infirmer la
-        // cause. À ré-activer plus tard si le diagnostic remonte ailleurs.
+        // Phase 2 — `usedtx=1` enables Opus discontinuous transmission (silence
+        // suppression). libwebrtc 141 iOS ObjC binding does NOT expose a `dtx`
+        // property on RTCRtpEncodingParameters, so DTX remains driven via fmtp
+        // here. `useinbandfec=1` is similarly fmtp-only (no native API).
+        // maxaveragebitrate, stereo, maxplaybackrate remain as quality hints.
+        // The earlier diagnostic that toggled `usedtx=0` (suspected of silent
+        // audio after ICE) was disproven once RED munging was disabled in
+        // 9e663039 — the PT/PT bug was the real cause, not DTX.
+        // Reference §3.8 + ADR-4.
         let opusParams = [
             "maxaveragebitrate=128000",
             "stereo=1",
             "useinbandfec=1",
-            "usedtx=0",
+            "usedtx=1",
             "maxplaybackrate=48000"
         ]
         let paramString = opusParams.joined(separator: ";")
