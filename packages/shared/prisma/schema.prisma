@@ -1585,6 +1585,11 @@ model CallSession {
   /// Post-call quality feedback (rating + issues)
   feedback Json?
 
+  /// Optimistic locking version. Incremented on every status transition.
+  /// Pattern: where: { id, version: known }, data: { ..., version: { increment: 1 } }.
+  /// See docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.7.
+  version Int @default(1)
+
   /// Indexes
   @@index([conversationId])
   @@index([status])
