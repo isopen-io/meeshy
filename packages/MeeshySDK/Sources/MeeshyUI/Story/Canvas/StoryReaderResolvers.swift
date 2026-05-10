@@ -3,7 +3,7 @@ import CoreGraphics
 import MeeshySDK
 
 /// Pure resolver applying timeline transitions to media object opacity at a given playback time.
-/// Used by `StoryCanvasReaderView` to render `clipTransitions` in lecture seule (read-only).
+/// Moved from the deleted `StoryCanvasReaderView+Timeline.swift` during Phase A4 reader migration.
 public enum ReaderTransitionResolver {
 
     /// Returns the rendered opacity for `media` at `currentTime`, accounting for any matching
@@ -41,7 +41,7 @@ public enum ReaderTransitionResolver {
 }
 
 /// Pure resolver applying keyframe interpolation to a media object at a given playback time.
-/// Read-only — used by `StoryCanvasReaderView` to honor `keyframes` published in story V2.
+/// Moved from the deleted `StoryCanvasReaderView+Timeline.swift` during Phase A4 reader migration.
 public enum ReaderKeyframeResolver {
 
     /// Returns the interpolated position (x, y) at `currentTime`, or `nil` if no keyframes.

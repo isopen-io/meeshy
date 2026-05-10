@@ -5,6 +5,24 @@ import AVFoundation
 import PencilKit
 import MeeshySDK
 
+// MARK: - Story Canvas Notifications
+
+/// Notification names shared across the story canvas, composer, viewer, and audio player.
+/// Previously defined in StoryCanvasReaderView.swift (legacy); moved here after that file
+/// was deleted in the Phase A4 reader migration.
+public extension Notification.Name {
+    /// Posted by the viewer approximately 2 s before the end of a slide to trigger audio fade-out.
+    static let storyAudioFadeOut = Notification.Name("storyAudioFadeOut")
+    /// Posted by the composer to mute all canvas audio (e.g., while the audio picker is open).
+    static let storyComposerMuteCanvas = Notification.Name("storyComposerMuteCanvas")
+    /// Posted by the composer to restore canvas audio after muting.
+    static let storyComposerUnmuteCanvas = Notification.Name("storyComposerUnmuteCanvas")
+    /// Posted by the timeline when playback starts inside the composer.
+    static let timelineDidStartPlaying = Notification.Name("timelineDidStartPlaying")
+    /// Posted by the timeline when playback stops inside the composer.
+    static let timelineDidStopPlaying = Notification.Name("timelineDidStopPlaying")
+}
+
 /// The UIKit canvas surface that renders a `StorySlide` and switches between
 /// `.edit` (gestures, all items visible, ProMotion 120 Hz) and `.play`
 /// (timing-driven playback at 60 Hz with optional 120 Hz wake-up for gestures).

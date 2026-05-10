@@ -212,7 +212,7 @@ struct FeedPostCard: View {
                 // Repost-of-STORY: render the embedded story canvas (muted, autoplay).
                 // For this branch the gateway has snapshotted the original story media
                 // into the outer POST, but the canonical source is `post.repost` —
-                // we reuse `StoryCanvasReaderView(repost:)` so the rendering matches
+                // we reuse `StoryReaderRepresentable(repost:)` so the rendering matches
                 // the in-viewer experience pixel-for-pixel.
                 if isStoryRepost {
                     StoryRepostEmbedCell(
