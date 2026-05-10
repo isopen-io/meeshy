@@ -418,6 +418,7 @@
 		CMGT000000002F01 /* CallManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMGT000000001F01 /* CallManagerTests.swift */; };
 		CMAS000000002F01 /* CallManagerAudioSessionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMAS000000001F01 /* CallManagerAudioSessionTests.swift */; };
 		WRET000000002F01 /* WebRTCErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WRET000000001F01 /* WebRTCErrorTests.swift */; };
+		WTTT000000002F01 /* WebRTCTypesTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WTTT000000001F01 /* WebRTCTypesTests.swift */; };
 		WSTB000100010001000100B0 /* WebRTCStubs.swift in Sources */ = {isa = PBXBuildFile; fileRef = WSTB000100010001000100F0 /* WebRTCStubs.swift */; };
 		WT86A001000100010001B001 /* WebRTCServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = WT86A001000100010001F001 /* WebRTCServiceTests.swift */; };
 		WV4400000000002F44 /* WebRTCVideoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = WV4400000000001F44 /* WebRTCVideoView.swift */; };
@@ -878,6 +879,7 @@
 		CMGT000000001F01 /* CallManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManagerTests.swift; sourceTree = "<group>"; };
 		CMAS000000001F01 /* CallManagerAudioSessionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManagerAudioSessionTests.swift; sourceTree = "<group>"; };
 		WRET000000001F01 /* WebRTCErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCErrorTests.swift; sourceTree = "<group>"; };
+		WTTT000000001F01 /* WebRTCTypesTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCTypesTests.swift; sourceTree = "<group>"; };
 		WSTB000100010001000100F0 /* WebRTCStubs.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCStubs.swift; sourceTree = "<group>"; };
 		WT86A001000100010001F001 /* WebRTCServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCServiceTests.swift; sourceTree = "<group>"; };
 		WV4400000000001F44 /* WebRTCVideoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WebRTCVideoView.swift; sourceTree = "<group>"; };
@@ -1699,6 +1701,7 @@
 				CMGT000000001F01 /* CallManagerTests.swift */,
 				CMAS000000001F01 /* CallManagerAudioSessionTests.swift */,
 				WRET000000001F01 /* WebRTCErrorTests.swift */,
+				WTTT000000001F01 /* WebRTCTypesTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -2256,6 +2259,7 @@
 				CMGT000000002F01 /* CallManagerTests.swift in Sources */,
 				CMAS000000002F01 /* CallManagerAudioSessionTests.swift in Sources */,
 				WRET000000002F01 /* WebRTCErrorTests.swift in Sources */,
+				WTTT000000002F01 /* WebRTCTypesTests.swift in Sources */,
 				MCAE000100010001000100B0 /* MockCallAudioEffectsService.swift in Sources */,
 				CAET000100010001000100B0 /* CallAudioEffectsServiceTests.swift in Sources */,
 				MAPT000100010001000100B0 /* MeeshyAudioProcessingModuleTests.swift in Sources */,

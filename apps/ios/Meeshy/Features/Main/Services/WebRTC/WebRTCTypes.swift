@@ -162,7 +162,18 @@ enum QualityThresholds {
     static let defaultBitrate: Int = 64_000
 
     static let statsIntervalSeconds: TimeInterval = 3.0
-    static let heartbeatIntervalSeconds: TimeInterval = 15.0
+    /// Phase 1 fix P1: cellular networks have RTT 800ms+ ; 5s heartbeat with
+    /// 15s lost was too aggressive (false-positive reconnects). SOTA matches
+    /// WhatsApp/Telegram with 10s/30s. Reference §5.12.
+    static let heartbeatIntervalSeconds: TimeInterval = 10.0
+
+    /// 3 missed beats (~30s) marks heartbeat as lost. After this, FSM
+    /// transitions active → reconnecting.
+    static let heartbeatLostThresholdSeconds: TimeInterval = 30.0
+
+    /// Phase 1 fix P10: cellular ACK round-trip can take 3-4s in poor signal.
+    /// 5s timeout absorbs worst-case without false positives.
+    static let heartbeatAckTimeoutSeconds: TimeInterval = 5.0
     static let maxReconnectAttempts: Int = 3
 
     static let initialVideoBitrate: Int = 500_000
