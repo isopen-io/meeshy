@@ -214,3 +214,61 @@ extension StoryRenderer {
         return UIColor(red: r, green: g, blue: b, alpha: 1)
     }
 }
+
+// MARK: - applyKeyframes
+
+extension StoryRenderer {
+
+    /// Interpolated overrides produced by `applyKeyframes`.
+    public struct KeyframeOverrides: Sendable {
+        public nonisolated let position: CGPoint?
+        public nonisolated let scale: Double?
+        public nonisolated let opacity: Double?
+
+        public nonisolated init(position: CGPoint?, scale: Double?, opacity: Double?) {
+            self.position = position
+            self.scale = scale
+            self.opacity = opacity
+        }
+    }
+
+    /// Returns interpolated overrides at `currentTime` (global seconds) for an
+    /// item whose animation clock starts at `startTime`.
+    ///
+    /// Pure computation — no UIKit access. `nonisolated` so tests can call it
+    /// without hopping to `@MainActor`. Delegates per-channel arithmetic to
+    /// `KeyframeInterpolator`. Returns `nil` overrides when `keyframes` is empty.
+    public nonisolated static func applyKeyframes(keyframes: [StoryKeyframe],
+                                                  at currentTime: Double,
+                                                  startTime: Double = 0) -> KeyframeOverrides {
+        guard !keyframes.isEmpty else {
+            return KeyframeOverrides(position: nil, scale: nil, opacity: nil)  // nonisolated init
+        }
+        let local = Float(max(0, currentTime - startTime))
+
+        let xTuples: [(time: Float, value: CGFloat, easing: StoryEasing)] = keyframes.compactMap { kf in
+            kf.x.map { (kf.time, $0, kf.easing ?? .linear) }
+        }
+        let yTuples: [(time: Float, value: CGFloat, easing: StoryEasing)] = keyframes.compactMap { kf in
+            kf.y.map { (kf.time, $0, kf.easing ?? .linear) }
+        }
+        let scaleTuples: [(time: Float, value: CGFloat, easing: StoryEasing)] = keyframes.compactMap { kf in
+            kf.scale.map { (kf.time, $0, kf.easing ?? .linear) }
+        }
+        let opacityTuples: [(time: Float, value: CGFloat, easing: StoryEasing)] = keyframes.compactMap { kf in
+            kf.opacity.map { (kf.time, $0, kf.easing ?? .linear) }
+        }
+
+        let xVal = KeyframeInterpolator.interpolate(keyframes: xTuples, at: local)
+        let yVal = KeyframeInterpolator.interpolate(keyframes: yTuples, at: local)
+        let sVal = KeyframeInterpolator.interpolate(keyframes: scaleTuples, at: local)
+        let oVal = KeyframeInterpolator.interpolate(keyframes: opacityTuples, at: local)
+
+        let pos: CGPoint? = (xVal != nil && yVal != nil) ? CGPoint(x: xVal!, y: yVal!) : nil
+        return KeyframeOverrides(
+            position: pos,
+            scale: sVal.map { Double($0) },
+            opacity: oVal.map { Double($0) }
+        )
+    }
+}
