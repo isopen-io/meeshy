@@ -160,6 +160,9 @@
     "Admins" : {
 
     },
+    "Ajouter le tag %@" : {
+
+    },
     "Ajouter un tag..." : {
 
     },
@@ -2320,6 +2323,9 @@
 
     },
     "Cette conversation sera fermee pour tous les membres. Plus personne ne pourra ecrire." : {
+
+    },
+    "Choisir ou créer une catégorie..." : {
 
     },
     "common.cancel" : {
@@ -6879,6 +6885,15 @@
     "Creator" : {
 
     },
+    "Créer \"%@\"" : {
+
+    },
+    "Créer la catégorie %@" : {
+
+    },
+    "Créer le tag %@" : {
+
+    },
     "Desactive" : {
 
     },
@@ -6892,6 +6907,9 @@
 
     },
     "Echantillon %lld" : {
+
+    },
+    "Effacer la saisie" : {
 
     },
     "emoji.category.animals" : {
@@ -12812,6 +12830,12 @@
     "Rechercher une langue" : {
 
     },
+    "Retirer la catégorie %@" : {
+
+    },
+    "Retirer le tag %@" : {
+
+    },
     "Retour" : {
 
     },
@@ -12822,6 +12846,9 @@
 
     },
     "Safe area" : {
+
+    },
+    "Sélectionner la catégorie %@" : {
 
     },
     "Seuls les admins peuvent ecrire" : {
