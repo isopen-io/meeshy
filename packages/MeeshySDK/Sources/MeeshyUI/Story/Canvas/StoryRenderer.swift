@@ -215,6 +215,63 @@ extension StoryRenderer {
     }
 }
 
+// MARK: - applyOpening
+
+extension StoryRenderer {
+
+    /// Applies a slide-opening animation to `rootLayer` at playback position `elapsed`.
+    ///
+    /// - `.reveal`: attaches a circular `CAShapeLayer` mask and animates its `path`
+    ///   from a 1-pt circle to a circle that fully covers the layer bounds.
+    /// - `.fade`: adds a `CABasicAnimation` on `opacity` keyed `"opening-fade"`.
+    /// - `.zoom`, `.slide`: reserved for future implementation; currently no-op.
+    /// - `nil`: no-op.
+    ///
+    /// Call only when transitioning into `.play` at `elapsed = 0`. The animations use
+    /// `fillMode = .forwards` + `isRemovedOnCompletion = false` so the final state
+    /// persists after the animation completes.
+    @MainActor
+    public static func applyOpening(_ effect: StoryTransitionEffect?,
+                                    rootLayer: CALayer,
+                                    elapsed: Double) {
+        guard let effect, elapsed < 0.5 else { return }
+        switch effect {
+        case .reveal:
+            let mask = CAShapeLayer()
+            mask.frame = rootLayer.bounds
+            let center = CGPoint(x: rootLayer.bounds.midX, y: rootLayer.bounds.midY)
+            let maxRadius = hypot(rootLayer.bounds.width, rootLayer.bounds.height) / 2
+            let startPath = UIBezierPath(arcCenter: center, radius: 1,
+                                         startAngle: 0, endAngle: .pi * 2,
+                                         clockwise: true).cgPath
+            let endPath = UIBezierPath(arcCenter: center, radius: maxRadius,
+                                       startAngle: 0, endAngle: .pi * 2,
+                                       clockwise: true).cgPath
+            mask.path = startPath
+            rootLayer.mask = mask
+            let anim = CABasicAnimation(keyPath: "path")
+            anim.fromValue = startPath
+            anim.toValue = endPath
+            anim.duration = 0.5
+            anim.fillMode = .forwards
+            anim.isRemovedOnCompletion = false
+            mask.add(anim, forKey: "opening-reveal")
+
+        case .fade:
+            let anim = CABasicAnimation(keyPath: "opacity")
+            anim.fromValue = 0
+            anim.toValue = 1
+            anim.duration = 0.5
+            anim.fillMode = .forwards
+            anim.isRemovedOnCompletion = false
+            rootLayer.add(anim, forKey: "opening-fade")
+
+        case .zoom, .slide:
+            break   // reserved — no-op in current phase
+        }
+    }
+}
+
 // MARK: - clipTransitionOpacity
 
 extension StoryRenderer {
