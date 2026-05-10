@@ -13,6 +13,11 @@ import os
 enum CallState: Equatable {
     case idle
     case ringing(isOutgoing: Bool)
+    /// Outgoing call: peer joined the room, we created and sent the SDP offer,
+    /// awaiting the SDP answer. Distinct from `ringing` because at this point
+    /// our local description is set and ICE candidates are flying.
+    /// Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.2
+    case offering
     case connecting
     case connected
     case reconnecting(attempt: Int)

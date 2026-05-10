@@ -39,6 +39,8 @@ struct CallView: View {
                 } else {
                     IncomingCallView()
                 }
+            case .offering:
+                connectingView
             case .connecting:
                 connectingView
             case .connected:

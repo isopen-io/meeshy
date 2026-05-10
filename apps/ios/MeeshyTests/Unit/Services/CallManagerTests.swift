@@ -38,6 +38,18 @@ final class CallStateTests: XCTestCase {
         XCTAssertNotEqual(CallState.ringing(isOutgoing: true), CallState.ringing(isOutgoing: false))
         XCTAssertNotEqual(CallState.idle, CallState.connecting)
     }
+
+    func test_offering_isActive() {
+        XCTAssertTrue(CallState.offering.isActive)
+    }
+
+    func test_offering_notEqualConnecting() {
+        XCTAssertNotEqual(CallState.offering, CallState.connecting)
+    }
+
+    func test_offering_notEqualRinging() {
+        XCTAssertNotEqual(CallState.offering, CallState.ringing(isOutgoing: true))
+    }
 }
 
 // MARK: - WebRTC Types Tests
@@ -115,6 +127,9 @@ final class WebRTCTypesTests: XCTestCase {
 final class MockWebRTCClient: WebRTCClientProviding {
     weak var delegate: (any WebRTCClientDelegate)?
     var isConnected: Bool = false
+    var localVideoTrack: Any?
+    var remoteVideoTrack: Any?
+    var audioEffectsService: CallAudioEffectsServiceProviding?
 
     var configureCallCount = 0
     var createOfferResult: Result<SessionDescription, Error> = .success(SessionDescription(type: .offer, sdp: "mock"))
@@ -126,6 +141,7 @@ final class MockWebRTCClient: WebRTCClientProviding {
     var lastVideoEnabled: Bool?
 
     func configure(iceServers: [IceServer]) throws { configureCallCount += 1 }
+    func updateIceServers(_ iceServers: [IceServer]) {}
     func createOffer() async throws -> SessionDescription { try createOfferResult.get() }
     func createAnswer(for offer: SessionDescription) async throws -> SessionDescription { try createAnswerResult.get() }
     func setRemoteAnswer(_ answer: SessionDescription) async throws {}
@@ -135,7 +151,11 @@ final class MockWebRTCClient: WebRTCClientProviding {
     func toggleVideo(_ enabled: Bool) { toggleVideoCallCount += 1; lastVideoEnabled = enabled }
     func switchCamera() async throws {}
     func getStats() async -> CallStats? { nil }
+    func createDataChannel(label: String) -> Bool { false }
+    func sendDataChannelMessage(_ data: Data) {}
     func disconnect() { disconnectCallCount += 1; isConnected = false }
+    func setAudioEffect(_ effect: AudioEffectConfig?) throws {}
+    func updateAudioEffectParams(_ config: AudioEffectConfig) throws {}
 }
 
 final class MockWebRTCClientTests: XCTestCase {
