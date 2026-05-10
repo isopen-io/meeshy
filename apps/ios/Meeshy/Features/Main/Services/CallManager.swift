@@ -57,6 +57,11 @@ final class CallManager: ObservableObject {
 
     // MARK: - Internal
 
+    /// Phase 0 scaffold — owned but not yet wired into transitions.
+    /// Subsequent phases migrate transition logic from CallManager into this actor.
+    /// Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.2
+    private let eventQueue = CallEventQueue()
+
     private let webRTCService: WebRTCService
     // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
     // Timers run on RunLoop.main and have no native cancellation hand-off; Tasks
