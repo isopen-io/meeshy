@@ -1383,18 +1383,33 @@ export const conversationListResponseSchema = {
 } as const;
 
 /**
- * Single conversation response schema
+ * Single conversation response schema.
+ *
+ * `data` is the **flat** conversation object — NOT wrapped under
+ * `data.conversation`. This matches:
+ *   - what the handlers actually return (`sendSuccess(reply, { ...conversation })`
+ *     in `routes/conversations/core.ts` for both `GET /:id` and `POST /conversations`)
+ *   - what the iOS / web clients decode (`APIResponse<APIConversation>`,
+ *     iOS `ConversationService.getById` reads `response.data.id` directly)
+ *   - the convention used by `conversationListResponseSchema` above (data
+ *     is the array directly, no `data.conversations` wrapper).
+ *
+ * Historical bug : the previous version declared
+ * `data: { properties: { conversation: conversationSchema } }`. Fastify's
+ * `fast-json-stringify` strips fields not in the schema, so the actual
+ * wire response was effectively `{ success: true, data: {} }` (the handler
+ * returned a flat conversation, but the schema kept only the
+ * `data.conversation` key which the handler never set). iOS failed to
+ * decode with `Key 'id' not found at path data`. The bug was masked for
+ * conversations already in the local cache (the cache hit short-circuits
+ * the network call) and only surfaced when tapping a notification for a
+ * brand-new conversation forced the network fallback.
  */
 export const conversationResponseSchema = {
   type: 'object',
   properties: {
     success: { type: 'boolean', example: true },
-    data: {
-      type: 'object',
-      properties: {
-        conversation: conversationSchema
-      }
-    }
+    data: conversationSchema
   }
 } as const;
 
