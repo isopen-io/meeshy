@@ -35,6 +35,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private let factory: RTCPeerConnectionFactory
     private var localAudioTrack: RTCAudioTrack?
     private var audioTransceiver: RTCRtpTransceiver?
+    private var videoTransceiver: RTCRtpTransceiver?
     private var localVideoTrack_: RTCVideoTrack?
     private var videoCapturer: RTCCameraVideoCapturer?
     private var videoFilterDelegate: VideoFilterCapturerDelegate?
@@ -193,8 +194,17 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let videoTrack = factory.videoTrack(with: videoSource, trackId: "video0")
         videoTrack.isEnabled = true
         localVideoTrack_ = videoTrack
-        Logger.webrtc.info("[WEBRTC] add video track to PC")
-        peerConnection?.add(videoTrack, streamIds: ["meeshy-stream-0"])
+        Logger.webrtc.info("[WEBRTC] addTransceiver video")
+        let videoInit = RTCRtpTransceiverInit()
+        videoInit.direction = .sendRecv
+        videoInit.streamIds = ["meeshy-stream-0"]
+        guard let pc = peerConnection,
+              let videoTransceiver = pc.addTransceiver(of: .video, init: videoInit) else {
+            throw WebRTCError.failedToCreatePeerConnection
+        }
+        videoTransceiver.sender.track = videoTrack
+        self.videoTransceiver = videoTransceiver
+        applyVideoCodecPreferences(videoTransceiver: videoTransceiver)
 
         let filterDelegate = VideoFilterCapturerDelegate(target: videoSource, pipeline: videoFilterPipeline)
         videoFilterDelegate = filterDelegate
@@ -257,6 +267,37 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             Logger.webrtc.info("[WEBRTC] audio codec preferences applied: \(names, privacy: .public)")
         } catch {
             Logger.webrtc.warning("[WEBRTC] setCodecPreferences failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    // Phase 2 — Apply video codec preferences via libwebrtc 141 API.
+    // Order H264 > VP8 > VP9 (cross-platform iOS↔Web compatibility — §6.7).
+    // AV1 excluded (uneven HW support across iOS/Chrome/Safari).
+    // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.8 + §6.7
+    //
+    // Priority rationale:
+    // - H264: hardware-accelerated on iOS (VideoToolbox), supported by Chrome 80+, Safari 13+
+    // - VP8: software but ubiquitous, fallback for clients without H264 HW
+    // - VP9: better compression, software-only on most iOS, optional fallback
+    private func applyVideoCodecPreferences(videoTransceiver: RTCRtpTransceiver) {
+        let factory = WebRTCSharedFactory.factory
+        let capabilities = factory.rtpReceiverCapabilities(forKind: kRTCMediaStreamTrackKindVideo)
+
+        let priorityOrder = ["H264", "VP8", "VP9"]
+        let preferred = priorityOrder.flatMap { name in
+            capabilities.codecs.filter { $0.name == name }
+        }
+        guard !preferred.isEmpty else {
+            Logger.webrtc.warning("[WEBRTC] no preferred video codecs available — leaving default")
+            return
+        }
+
+        do {
+            try videoTransceiver.setCodecPreferences(preferred)
+            let names = preferred.map { $0.name }.joined(separator: ", ")
+            Logger.webrtc.info("[WEBRTC] video codec preferences applied: \(names, privacy: .public)")
+        } catch {
+            Logger.webrtc.warning("[WEBRTC] setCodecPreferences (video) failed: \(error.localizedDescription, privacy: .public)")
         }
     }
 

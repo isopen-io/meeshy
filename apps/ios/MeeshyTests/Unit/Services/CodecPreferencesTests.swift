@@ -46,4 +46,42 @@ final class CodecPreferencesTests: XCTestCase {
             "Must call setCodecPreferences (libwebrtc 141 API)"
         )
     }
+
+    func test_p2pClient_uses_addTransceiver_video() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertFalse(
+            source.contains("peerConnection?.add(videoTrack, streamIds:"),
+            "video track must be added via addTransceiver(of: .video)"
+        )
+        XCTAssertTrue(
+            source.contains("addTransceiver(of: .video"),
+            "P2PWebRTCClient must call addTransceiver(of: .video, init:) for video track"
+        )
+    }
+
+    func test_p2pClient_appliesVideoCodecPreferences() throws {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertTrue(
+            source.contains("applyVideoCodecPreferences"),
+            "P2PWebRTCClient must define applyVideoCodecPreferences method"
+        )
+        // Verify priority order: H264 > VP8 > VP9
+        let priorityRange = source.range(of: "[\"H264\", \"VP8\", \"VP9\"]")
+            ?? source.range(of: "[ \"H264\", \"VP8\", \"VP9\" ]")
+        XCTAssertNotNil(priorityRange, "video codec priority must list H264, VP8, VP9 in that order")
+    }
 }
