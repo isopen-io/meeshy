@@ -30,6 +30,11 @@ public final class StoryCanvasUIView: UIView {
     public private(set) var mode: RenderMode
     public private(set) var currentTime: CMTime = .zero
 
+    // MARK: - Reader context (Task 5)
+
+    private var readerContext: StoryReaderContext = .empty
+    private var completionFired: Bool = false
+
     /// Called whenever a gesture mutates the slide (Tasks 2.7+).
     public var onItemModified: ((StorySlide) -> Void)?
 
@@ -241,10 +246,20 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
+    /// Injects runtime params for mode `.play` reader playback (Prisme Linguistique,
+    /// mute state, completion callback). Idempotent — safe to call from `updateUIView`.
+    public func setReaderContext(_ context: StoryReaderContext) {
+        readerContext = context
+        rebuildLayers()
+    }
+
     public func setMode(_ newMode: RenderMode, time: CMTime = .zero) {
         let didChange = mode != newMode
         mode = newMode
         currentTime = time
+        if newMode == .play {
+            completionFired = false
+        }
         rebuildLayers()
         if didChange {
             switch newMode {
@@ -351,6 +366,24 @@ public final class StoryCanvasUIView: UIView {
         rebuildLayers()
         if clamped >= effectiveDuration {
             stopPlayback()
+            if !completionFired {
+                completionFired = true
+                readerContext.onCompletion?()
+            }
+        }
+    }
+
+    /// Test-only seam: simulate a displayLink tick at a specific timestamp
+    /// to validate completion logic without spinning a real CADisplayLink.
+    public func simulateTickAt(seconds: Double) {
+        let effectiveDuration = slide.effectiveSlideDuration()
+        currentTime = CMTime(seconds: seconds, preferredTimescale: 600_000)
+        rebuildLayers()
+        if !completionFired,
+           mode == .play,
+           currentTime.seconds >= effectiveDuration {
+            completionFired = true
+            readerContext.onCompletion?()
         }
     }
 
