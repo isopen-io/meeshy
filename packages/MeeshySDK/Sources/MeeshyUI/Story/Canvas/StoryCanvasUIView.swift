@@ -85,6 +85,14 @@ public final class StoryCanvasUIView: UIView {
     private var baseScale: Double = 1.0
     private var baseRotation: Double = 0.0
 
+    // MARK: - Audio
+
+    /// Sample-accurate foreground+background audio engine for mode `.play`.
+    private let audioMixer = ReaderAudioMixer()
+    /// Reflects the current mute state driven by `setReaderContext` or
+    /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` notifications.
+    public private(set) var isAudioMuted: Bool = false
+
     // MARK: - Display link
 
     /// Drives `currentTime` advance during `.play` mode (preferred 60 Hz, range 60–120).
@@ -110,6 +118,7 @@ public final class StoryCanvasUIView: UIView {
         backgroundColor = .black
         setupGesturesAll()
         observeAppLifecycle()
+        observeMuteNotifications()
     }
 
     deinit {
@@ -254,6 +263,8 @@ public final class StoryCanvasUIView: UIView {
     /// mute state, completion callback). Idempotent — safe to call from `updateUIView`.
     public func setReaderContext(_ context: StoryReaderContext) {
         readerContext = context
+        isAudioMuted = context.mute
+        audioMixer.setMute(context.mute)
         rebuildLayers()
     }
 
@@ -270,8 +281,10 @@ public final class StoryCanvasUIView: UIView {
             case .play:
                 stopEditDisplayLink()
                 startPlayback()
+                try? audioMixer.play()
             case .edit:
                 stopPlayback()
+                audioMixer.pause()
                 startEditDisplayLinkIfNeeded()
             }
         }
@@ -348,6 +361,28 @@ public final class StoryCanvasUIView: UIView {
                        selector: #selector(handleDidBecomeActive),
                        name: UIApplication.didBecomeActiveNotification,
                        object: nil)
+    }
+
+    private func observeMuteNotifications() {
+        let nc = NotificationCenter.default
+        nc.addObserver(self,
+                       selector: #selector(handleComposerMute),
+                       name: .storyComposerMuteCanvas,
+                       object: nil)
+        nc.addObserver(self,
+                       selector: #selector(handleComposerUnmute),
+                       name: .storyComposerUnmuteCanvas,
+                       object: nil)
+    }
+
+    @objc private func handleComposerMute() {
+        isAudioMuted = true
+        audioMixer.setMute(true)
+    }
+
+    @objc private func handleComposerUnmute() {
+        isAudioMuted = false
+        audioMixer.setMute(false)
     }
 
     @objc private func handleWillResignActive() {
