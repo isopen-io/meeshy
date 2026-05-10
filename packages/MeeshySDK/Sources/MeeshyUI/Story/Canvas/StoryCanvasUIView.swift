@@ -269,6 +269,7 @@ public final class StoryCanvasUIView: UIView {
     }
 
     public func setMode(_ newMode: RenderMode, time: CMTime = .zero) {
+        let wasPlay = mode == .play
         let didChange = mode != newMode
         mode = newMode
         currentTime = time
@@ -276,6 +277,13 @@ public final class StoryCanvasUIView: UIView {
             completionFired = false
         }
         rebuildLayers()
+        // Apply slide opening animation when transitioning edit→play at t=0.
+        // Runs after rebuildLayers() so the layer tree is fresh.
+        if newMode == .play && !wasPlay {
+            StoryRenderer.applyOpening(slide.effects.opening,
+                                       rootLayer: rootLayer,
+                                       elapsed: time.seconds)
+        }
         if didChange {
             switch newMode {
             case .play:

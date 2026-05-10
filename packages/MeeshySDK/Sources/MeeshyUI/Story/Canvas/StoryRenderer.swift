@@ -140,6 +140,14 @@ public enum StoryRenderer {
         if let media = item as? StoryMediaObject {
             let layer = StoryMediaLayer()
             layer.configure(with: media, geometry: geometry, mode: mode)
+            // Keyframe overrides for media objects (position, scale, opacity)
+            if mode == .play, let kfs = media.keyframes, !kfs.isEmpty {
+                applyKeyframeOverrides(kfs,
+                                       startTime: media.startTime ?? 0,
+                                       at: time.seconds,
+                                       geometry: geometry,
+                                       into: layer)
+            }
             return layer
         }
         if let text = item as? StoryTextObject {
@@ -153,6 +161,14 @@ public enum StoryRenderer {
             var displayObj = text
             displayObj.text = displayText
             layer.configure(with: displayObj, geometry: geometry, mode: mode)
+            // Keyframe overrides for text objects (position, scale, opacity)
+            if mode == .play, let kfs = text.keyframes, !kfs.isEmpty {
+                applyKeyframeOverrides(kfs,
+                                       startTime: text.startTime ?? 0,
+                                       at: time.seconds,
+                                       geometry: geometry,
+                                       into: layer)
+            }
             return layer
         }
         if let sticker = item as? StorySticker {
@@ -165,6 +181,33 @@ public enum StoryRenderer {
         layer.zPosition = CGFloat(item.zIndex)
         layer.name = item.id
         return layer
+    }
+
+    /// Applies position/scale/opacity from keyframe interpolation onto an already-configured layer.
+    ///
+    /// Converts the normalized [0,1] keyframe x/y into design-space coordinates then
+    /// projects through `geometry` to render-space coordinates, matching the same
+    /// coordinate pipeline used by the individual layer `configure()` methods.
+    @MainActor
+    private static func applyKeyframeOverrides(_ keyframes: [StoryKeyframe],
+                                               startTime: Double,
+                                               at currentTime: Double,
+                                               geometry: CanvasGeometry,
+                                               into layer: CALayer) {
+        let overrides = applyKeyframes(keyframes: keyframes, at: currentTime, startTime: startTime)
+        if let pos = overrides.position {
+            let designX = geometry.designLength(forNormalized: pos.x)
+            let designY = pos.y * CanvasGeometry.designHeight
+            layer.position = geometry.render(CGPoint(x: designX, y: designY))
+        }
+        if let s = overrides.scale {
+            let existing = layer.transform
+            let sx = Float(s)
+            layer.transform = CATransform3DScale(existing, CGFloat(sx), CGFloat(sx), 1)
+        }
+        if let o = overrides.opacity {
+            layer.opacity = Float(o)
+        }
     }
 }
 

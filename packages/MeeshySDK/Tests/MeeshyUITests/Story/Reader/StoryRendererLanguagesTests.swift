@@ -39,7 +39,7 @@ final class StoryRendererLanguagesTests: XCTestCase {
     }
 }
 
-private extension CALayer {
+extension CALayer {
     func findFirst(named targetName: String) -> CALayer? {
         if self.name == targetName { return self }
         for sub in (sublayers ?? []) {
