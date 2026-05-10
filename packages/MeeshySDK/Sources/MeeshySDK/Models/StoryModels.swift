@@ -1515,6 +1515,25 @@ extension StorySlide {
     }
 }
 
+// MARK: - StoryItem → StorySlide reconstruction (Reader runtime)
+
+extension StoryItem {
+    /// Reconstructs a renderable `StorySlide` from a published `StoryItem`.
+    /// Resolves `content` via the Prisme Linguistique chain when available.
+    /// Used by `StoryReaderRepresentable` to feed the canvas.
+    public func toRenderableSlide(preferredLanguages: [String]) -> StorySlide {
+        let resolvedContent = self.resolvedContent(preferredLanguage: preferredLanguages.first)
+                              ?? self.content
+        let effects = self.storyEffects ?? StoryEffects()
+        return StorySlide(
+            id: self.id,
+            mediaURL: self.media.first?.url,
+            content: resolvedContent,
+            effects: effects
+        )
+    }
+}
+
 // MARK: - Timeline Project (Snapshot for Command Pattern)
 
 /// Snapshot Codable d'un slide pour le pattern Command (undo/redo).
