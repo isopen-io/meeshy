@@ -34,6 +34,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private var peerConnection: RTCPeerConnection?
     private let factory: RTCPeerConnectionFactory
     private var localAudioTrack: RTCAudioTrack?
+    private var audioTransceiver: RTCRtpTransceiver?
     private var localVideoTrack_: RTCVideoTrack?
     private var videoCapturer: RTCCameraVideoCapturer?
     private var videoFilterDelegate: VideoFilterCapturerDelegate?
@@ -153,8 +154,22 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let audioTrack = factory.audioTrack(with: audioSource, trackId: "audio0")
         audioTrack.isEnabled = true
         localAudioTrack = audioTrack
-        Logger.webrtc.info("[WEBRTC] add audio track to PC")
-        peerConnection?.add(audioTrack, streamIds: ["meeshy-stream-0"])
+        Logger.webrtc.info("[WEBRTC] addTransceiver audio")
+        // Phase 2 — addTransceiver garantit la présence du transceiver dans
+        // pc.transceivers AVANT setLocalDescription, ce qui permet d'appliquer
+        // setCodecPreferences de manière fiable. add(track:streamIds:) crée
+        // un transceiver implicite mais la liste pc.transceivers peut rester
+        // vide jusqu'au premier setLocalDescription, rendant setCodecPreferences
+        // inopérant. Reference §3.8 + §7 E9/E12.
+        let audioInit = RTCRtpTransceiverInit()
+        audioInit.direction = .sendRecv
+        audioInit.streamIds = ["meeshy-stream-0"]
+        guard let pc = peerConnection,
+              let audioTransceiver = pc.addTransceiver(of: .audio, init: audioInit) else {
+            throw WebRTCError.failedToCreatePeerConnection
+        }
+        audioTransceiver.sender.track = audioTrack
+        self.audioTransceiver = audioTransceiver
 
         guard type == .audioVideo else {
             Logger.webrtc.info("Local audio track started")
