@@ -114,13 +114,9 @@ final class WebRTCService: @unchecked Sendable {
         }
     }
 
-    func startLocalMedia(isVideo: Bool) async {
-        do {
-            try await client.startLocalMedia(type: isVideo ? .audioVideo : .audioOnly)
-            Logger.webrtc.info("Local media started - video: \(isVideo)")
-        } catch {
-            Logger.webrtc.error("Failed to start local media: \(error.localizedDescription)")
-        }
+    func startLocalMedia(isVideo: Bool) async throws {
+        try await client.startLocalMedia(type: isVideo ? .audioVideo : .audioOnly)
+        Logger.webrtc.info("Local media started - video: \(isVideo)")
     }
 
     // MARK: - Media Controls

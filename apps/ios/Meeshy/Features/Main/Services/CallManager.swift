@@ -203,9 +203,20 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("[CALL_SETUP] outgoing 2/4 configureAudioSession begin")
                 self.configureAudioSession()
                 Logger.calls.info("[CALL_SETUP] outgoing 3/4 startLocalMedia begin (isVideo=\(isVideo))")
-                await self.webRTCService.startLocalMedia(isVideo: isVideo)
+                do {
+                    try await self.webRTCService.startLocalMedia(isVideo: isVideo)
+                    if isVideo { self.hasLocalVideoTrack = true }
+                } catch WebRTCError.simulatorVideoUnsupported {
+                    // Phase 1 fix E7/B4: simulator can't run video — degrade to audio-only
+                    Logger.calls.warning("Simulator video unsupported — continuing audio-only")
+                    self.isVideoEnabled = false
+                    try? await self.webRTCService.startLocalMedia(isVideo: false)
+                } catch {
+                    Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
+                    self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
+                    return
+                }
                 Logger.calls.info("[CALL_SETUP] outgoing 4/4 startLocalMedia done")
-                if isVideo { self.hasLocalVideoTrack = true }
                 self.listenForParticipantJoined(callId: ack.callId, toUserId: userId, isVideo: isVideo)
                 Logger.calls.info("Outgoing call initiated: \(ack.callId) to \(displayName), waiting for participant joined (\(dynamicServers.count) ICE servers)")
             } catch {
@@ -271,9 +282,20 @@ final class CallManager: ObservableObject {
         Task { [weak self] in
             guard let self else { return }
             Logger.calls.info("[CALL_SETUP] incoming 3/4 startLocalMedia begin (isVideo=\(isVideo))")
-            await self.webRTCService.startLocalMedia(isVideo: isVideo)
+            do {
+                try await self.webRTCService.startLocalMedia(isVideo: isVideo)
+                if isVideo { self.hasLocalVideoTrack = true }
+            } catch WebRTCError.simulatorVideoUnsupported {
+                // Phase 1 fix E7/B4: simulator can't run video — degrade to audio-only
+                Logger.calls.warning("Simulator video unsupported — continuing audio-only")
+                self.isVideoEnabled = false
+                try? await self.webRTCService.startLocalMedia(isVideo: false)
+            } catch {
+                Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
+                self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
+                return
+            }
             Logger.calls.info("[CALL_SETUP] incoming 4/4 startLocalMedia done")
-            if isVideo { self.hasLocalVideoTrack = true }
             MessageSocketManager.shared.emitCallJoin(callId: callId)
             Logger.calls.info("VoIP push — auto-joined room, awaiting SDP offer: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
         }
@@ -347,8 +369,19 @@ final class CallManager: ObservableObject {
         configureAudioSession()
         Task { [weak self] in
             guard let self else { return }
-            await self.webRTCService.startLocalMedia(isVideo: isVideo)
-            if isVideo { self.hasLocalVideoTrack = true }
+            do {
+                try await self.webRTCService.startLocalMedia(isVideo: isVideo)
+                if isVideo { self.hasLocalVideoTrack = true }
+            } catch WebRTCError.simulatorVideoUnsupported {
+                // Phase 1 fix E7/B4: simulator can't run video — degrade to audio-only
+                Logger.calls.warning("Simulator video unsupported — continuing audio-only")
+                self.isVideoEnabled = false
+                try? await self.webRTCService.startLocalMedia(isVideo: false)
+            } catch {
+                Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
+                self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
+                return
+            }
             MessageSocketManager.shared.emitCallJoin(callId: callId)
             Logger.calls.info("Incoming call — auto-joined room, awaiting SDP offer: \(callId)")
         }

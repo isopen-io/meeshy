@@ -226,6 +226,7 @@ enum WebRTCError: Error, LocalizedError {
     case noCameraAvailable
     case noCameraFormatAvailable
     case notSupported
+    case simulatorVideoUnsupported
 
     var errorDescription: String? {
         switch self {
@@ -235,6 +236,9 @@ enum WebRTCError: Error, LocalizedError {
         case .noCameraAvailable: "No camera available"
         case .noCameraFormatAvailable: "No suitable camera format"
         case .notSupported: "WebRTC not available on this device"
+        case .simulatorVideoUnsupported:
+            "Video unsupported on iOS Simulator (FigCaptureSourceRemote XPC failure). " +
+            "Use a real device for video calls."
         }
     }
 }

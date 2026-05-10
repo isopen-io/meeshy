@@ -161,6 +161,16 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
 
+        #if targetEnvironment(simulator)
+        // iOS Simulator's AVCaptureDevice.DiscoverySession returns phantom devices,
+        // but RTCCameraVideoCapturer.startCapture fails with FigCaptureSourceRemote
+        // err=-17281 (kCMIOHardwareDeviceUnsupportedFormatError) on most simulator
+        // images. Throw a typed error so the UI can degrade to audio-only.
+        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §4.8
+        Logger.webrtc.warning("[WEBRTC] simulator detected — skipping video capture (audio-only fallback)")
+        throw WebRTCError.simulatorVideoUnsupported
+        #else
+
         Logger.webrtc.info("[WEBRTC] videoSource begin")
         let videoSource = factory.videoSource()
         Logger.webrtc.info("[WEBRTC] videoTrack begin")
@@ -199,6 +209,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         Logger.webrtc.info("[WEBRTC] capturer.startCapture begin fps=\(fps)")
         try await capturer.startCapture(with: frontCamera, format: format, fps: fps)
         Logger.webrtc.info("Local audio + video tracks started (front camera, \(fps)fps)")
+        #endif
     }
 
     // MARK: - SDP Negotiation
