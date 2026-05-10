@@ -594,6 +594,21 @@ public struct StoryAudioPlayerObject: Codable, Identifiable, Sendable {
     }
 }
 
+extension StoryAudioPlayerObject {
+    /// Resolves the localized background audio postMediaId via the Prisme
+    /// Linguistique chain. Falls back to default `postMediaId` when no variant
+    /// matches. Used by the reader pipeline to pick the correct language
+    /// variant of a background audio track.
+    public func resolvedPostMediaId(preferredLanguages: [String]) -> String {
+        guard let variants = backgroundAudioVariants, !variants.isEmpty,
+              !preferredLanguages.isEmpty else { return postMediaId }
+        for lang in preferredLanguages {
+            if let v = variants.first(where: { $0.language == lang }) { return v.postMediaId }
+        }
+        return postMediaId
+    }
+}
+
 // MARK: - Story Audio Variant (TTS auto-généré par langue)
 
 public struct StoryAudioVariant: Codable, Sendable {
