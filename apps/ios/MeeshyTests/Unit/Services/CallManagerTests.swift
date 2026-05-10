@@ -182,3 +182,61 @@ final class MockWebRTCClientTests: XCTestCase {
         XCTAssertEqual(mock.disconnectCallCount, 1)
     }
 }
+
+@MainActor
+final class CallManagerOfferingTransitionTests: XCTestCase {
+
+    func test_listenForParticipantJoined_setsCallStateToOffering_inSourceCode() throws {
+        // This is a source-level guard against regression. The actual transition
+        // is hard to test without mocking the entire WebRTC stack. We verify
+        // that listenForParticipantJoined function body sets self.callState = .offering
+        // (NOT .connecting) when participant-joined is received.
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        guard let funcRange = source.range(of: "func listenForParticipantJoined") else {
+            XCTFail("listenForParticipantJoined function not found")
+            return
+        }
+        // Bound the search to the function body — find the next private func declaration after it
+        let searchEnd = source.range(of: "private func ", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+                     ?? source.endIndex
+        let funcBody = String(source[funcRange.lowerBound..<searchEnd])
+
+        XCTAssertTrue(
+            funcBody.contains("self.callState = .offering"),
+            "listenForParticipantJoined must transition state to .offering after participant-joined. " +
+            "Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.2"
+        )
+    }
+
+    func test_handleRemoteAnswer_transitions_offering_to_connecting() throws {
+        // Source-level guard: after setRemoteDescription(answer) returns, the FSM
+        // must transition .offering → .connecting (NOT remain in .offering or jump elsewhere).
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        // Look for the answer subscription block OR a handleRemoteAnswer function
+        let hasInSubscription = source.contains("setRemoteDescription") &&
+            source.range(of: "if case .offering = self.callState") != nil
+
+        let hasInFunction = source.range(of: "func handleRemoteAnswer") != nil &&
+            source.contains("if case .offering")
+
+        XCTAssertTrue(
+            hasInSubscription || hasInFunction,
+            "After setRemoteDescription(answer), CallManager must transition .offering → .connecting. " +
+            "Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.2"
+        )
+    }
+}

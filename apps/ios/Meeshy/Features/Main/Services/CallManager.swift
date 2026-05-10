@@ -653,12 +653,17 @@ final class CallManager: ObservableObject {
 
     func handleRemoteAnswer(callId: String, sdp: SessionDescription) {
         guard currentCallId == callId else { return }
-        Task { [weak self] in
+        Task { @MainActor [weak self] in
             guard let self else { return }
-            await webRTCService.setRemoteDescription(sdp)
-            // The single source of truth for `.connected` is webRTCServiceDidConnect
-            // (driven by ICE-connected). Transitioning here would race with the
-            // real callback and double-activate the audio session.
+            await self.webRTCService.setRemoteDescription(sdp)
+            // Phase 1 fix E5: now that remote answer is applied, ICE
+            // checking starts. Transition .offering → .connecting.
+            // The single source of truth for `.connected` remains
+            // webRTCServiceDidConnect (driven by ICE-connected) — we only
+            // bridge .offering → .connecting here.
+            if case .offering = self.callState {
+                self.callState = .connecting
+            }
             Logger.calls.info("Remote answer received for: \(callId), awaiting ICE connected")
         }
     }
@@ -1117,7 +1122,10 @@ final class CallManager: ObservableObject {
                     self.webRTCService.updateIceServers(dynamicServers)
                 }
 
-                self.callState = .connecting
+                // Phase 1 fix E5: distinct .offering state. We're no longer ringing
+                // (peer joined) but not yet connecting (no answer received). This
+                // makes the FSM observable and matches the SOTA spec §2.2.
+                self.callState = .offering
                 Task { [weak self] in
                     guard let self else { return }
                     guard let offer = await self.webRTCService.createOffer() else {
