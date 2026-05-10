@@ -285,7 +285,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             encoding.minBitrateBps = NSNumber(value: 16_000)
         }
         audioTransceiver.sender.parameters = params
-        Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=64kbps, min=16kbps)")
+        let encodingsCount = params.encodings.count
+        if encodingsCount > 0 {
+            Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=64kbps, min=16kbps, encodings=\(encodingsCount, privacy: .public))")
+        } else {
+            Logger.webrtc.warning("[WEBRTC] audio bitrate NOT applied — encodings array empty")
+        }
     }
 
     // Phase 2 — Apply video codec preferences via libwebrtc 141 API.
@@ -686,6 +691,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         return lines.joined(separator: "\r\n")
     }
 
+    @available(*, deprecated, message: "RED is now negotiated via setCodecPreferences. Calling this re-introduces the PT/PT silent-audio bug from 9e663039. Reference §3.8 + ADR-4.")
     static func addAudioRedundancy(_ sdp: String) -> String {
         var lines = sdp.components(separatedBy: "\r\n")
 
