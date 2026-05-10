@@ -167,3 +167,50 @@ public enum StoryRenderer {
         return layer
     }
 }
+
+// MARK: - renderBackground
+
+extension StoryRenderer {
+
+    /// Resolves the background `Kind` for a slide, reading SDK model fields.
+    ///
+    /// Priority order:
+    /// 1. Background video media object (`isBackground == true`, kind == .video`)
+    /// 2. Background image media object (`isBackground == true`, kind == .image`)
+    /// 3. `effects.background` hex color string
+    /// 4. Fallback: `.solidColor(.black)`
+    public static func renderBackground(slide: StorySlide,
+                                        languages: [String]) -> StoryBackgroundLayer.Kind {
+        // Video background object
+        if let bgVideo = slide.effects.mediaObjects?.first(where: { $0.isBackground && $0.kind == .video }) {
+            return .video(postMediaId: bgVideo.postMediaId,
+                          looping: bgVideo.loop ?? true,
+                          mute: true)
+        }
+        // Image background object or slide.mediaURL
+        if let bgImage = slide.effects.mediaObjects?.first(where: { $0.isBackground && $0.kind == .image }) {
+            return .image(postMediaId: bgImage.postMediaId,
+                          thumbHash: slide.effects.thumbHash)
+        }
+        if let urlString = slide.mediaURL, !urlString.isEmpty {
+            return .image(postMediaId: slide.id, thumbHash: slide.effects.thumbHash)
+        }
+        // Hex color from effects.background
+        if let hex = slide.effects.background, let color = uiColor(fromHex: hex) {
+            return .solidColor(color)
+        }
+        return .solidColor(.black)
+    }
+
+    // MARK: Private helpers
+
+    private static func uiColor(fromHex hex: String) -> UIColor? {
+        var s = hex
+        if s.hasPrefix("#") { s.removeFirst() }
+        guard let v = UInt32(s, radix: 16), s.count == 6 else { return nil }
+        let r = CGFloat((v >> 16) & 0xff) / 255
+        let g = CGFloat((v >> 8) & 0xff) / 255
+        let b = CGFloat(v & 0xff) / 255
+        return UIColor(red: r, green: g, blue: b, alpha: 1)
+    }
+}

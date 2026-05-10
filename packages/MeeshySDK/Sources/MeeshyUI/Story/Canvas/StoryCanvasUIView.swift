@@ -55,6 +55,9 @@ public final class StoryCanvasUIView: UIView {
     private let itemsContainer = CALayer()
     private let editOverlayLayer = CALayer()
 
+    /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
+    private let backgroundLayer = StoryBackgroundLayer()
+
     // MARK: - Gestures
 
     private var panRecognizer: UIPanGestureRecognizer!
@@ -100,6 +103,7 @@ public final class StoryCanvasUIView: UIView {
         self.mode = mode
         super.init(frame: .zero)
         layer.addSublayer(rootLayer)
+        rootLayer.insertSublayer(backgroundLayer, at: 0)
         rootLayer.addSublayer(itemsContainer)
         rootLayer.addSublayer(editOverlayLayer)
         editOverlayLayer.zPosition = 10_000  // always on top
@@ -283,6 +287,26 @@ public final class StoryCanvasUIView: UIView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
 
+        // Background layer
+        let bgKind = StoryRenderer.renderBackground(slide: slide,
+                                                    languages: readerContext.preferredLanguages)
+        let bgTransform: BackgroundTransform = {
+            guard let t = slide.effects.backgroundTransform else { return .identity }
+            return BackgroundTransform(scale: Double(t.scale ?? 1),
+                                       offsetX: Double(t.offsetX ?? 0),
+                                       offsetY: Double(t.offsetY ?? 0),
+                                       rotation: t.rotation ?? 0)
+        }()
+        backgroundLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
+        backgroundLayer.configure(
+            kind: bgKind,
+            transform: bgTransform,
+            geometry: geometry,
+            resolver: readerContext.postMediaURLResolver,
+            imageCache: readerContext.imageCache
+        )
+
+        // Items
         itemsContainer.sublayers?.forEach { $0.removeFromSuperlayer() }
         let rendered = StoryRenderer.render(slide: slide,
                                             into: geometry,
@@ -328,11 +352,13 @@ public final class StoryCanvasUIView: UIView {
 
     @objc private func handleWillResignActive() {
         forEachAVPlayer { $0.pause() }
+        backgroundLayer.handleAppLifecycle(active: false)
     }
 
     @objc private func handleDidBecomeActive() {
         guard mode == .play else { return }
         forEachAVPlayer { $0.play() }
+        backgroundLayer.handleAppLifecycle(active: true)
     }
 
     private func forEachAVPlayer(_ block: (AVPlayer) -> Void) {
