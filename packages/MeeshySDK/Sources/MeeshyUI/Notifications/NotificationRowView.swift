@@ -183,8 +183,10 @@ public struct NotificationRowView: View {
             return "Clone vocal pret"
         case .postRepost:
             return "A repartage votre publication"
-        case .addedToConversation, .newConversation:
+        case .addedToConversation, .newConversation, .newConversationGroup:
             return "Ajoute a une conversation"
+        case .newConversationDirect:
+            return "Nouvelle conversation"
         case .removedFromConversation, .memberRemoved:
             return "Retire de la conversation"
         case .memberPromoted:

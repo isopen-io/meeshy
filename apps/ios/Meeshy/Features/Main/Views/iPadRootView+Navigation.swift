@@ -159,7 +159,7 @@ extension iPadRootView {
 
         case .communityInvite, .communityJoined, .communityLeft, .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
              .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
-             .addedToConversation, .newConversation, .removedFromConversation:
+             .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup, .removedFromConversation:
             if let conversationId = data?.conversationId {
                 navigateToConversationById(conversationId)
             }
@@ -224,7 +224,7 @@ extension iPadRootView {
         switch event.notificationType {
         case .newMessage, .messageReply, .messageReaction, .reaction,
              .mention, .missedCall,
-             .newConversation, .addedToConversation, .memberJoined:
+             .newConversation, .newConversationDirect, .newConversationGroup, .addedToConversation, .memberJoined:
             if let conversationId = event.conversationId {
                 navigateToConversationById(conversationId)
             }
@@ -296,7 +296,7 @@ extension iPadRootView {
         case .communityInvite, .communityJoined, .communityLeft,
              .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
              .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
-             .addedToConversation, .newConversation, .removedFromConversation:
+             .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup, .removedFromConversation:
             if let conversationId = payload.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
             }

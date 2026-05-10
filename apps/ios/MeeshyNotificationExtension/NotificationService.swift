@@ -126,7 +126,16 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
              "message_reply",
              "reply",
              "message_forwarded",
-             "message_reaction":
+             "message_reaction",
+             // First-message notification for a freshly created conversation
+             // (direct or group) — same actions as a new message: tap opens
+             // the conversation, quick reply + mark-as-read are useful from
+             // the lock screen. The gateway emits these from
+             // `NotificationService.createConversationInviteNotification`.
+             "new_conversation",
+             "new_conversation_direct",
+             "new_conversation_group",
+             "added_to_conversation":
             category = "MEESHY_MESSAGE"
 
         // Mentions — view + reply + mark as read

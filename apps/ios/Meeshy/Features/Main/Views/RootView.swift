@@ -748,7 +748,7 @@ struct RootView: View {
         case .communityInvite, .communityJoined, .communityLeft,
              .legacyGroupInvite, .legacyGroupJoined, .legacyGroupLeft,
              .memberJoined, .memberLeft, .memberRemoved, .memberPromoted, .memberDemoted, .memberRoleChanged,
-             .addedToConversation, .newConversation, .removedFromConversation:
+             .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup, .removedFromConversation:
             if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
             }

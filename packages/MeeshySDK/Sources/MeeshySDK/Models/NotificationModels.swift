@@ -69,6 +69,15 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
 
     // Conversation events
     case newConversation = "new_conversation"
+    /// First-message notification for a freshly created **direct** conversation.
+    /// Emitted by `gateway/.../NotificationService.createConversationInviteNotification`
+    /// when `conversationType == "direct"`. Distinct from `.newConversation` so
+    /// the iOS UI can choose a DM-specific icon / avatar treatment, but the
+    /// navigation target is identical: open the conversation by `conversationId`.
+    case newConversationDirect = "new_conversation_direct"
+    /// Same as `.newConversationDirect` but for a freshly created **group**
+    /// conversation (`conversationType == "group"`).
+    case newConversationGroup = "new_conversation_group"
     case addedToConversation = "added_to_conversation"
     case removedFromConversation = "removed_from_conversation"
 
@@ -178,7 +187,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .legacyStatusUpdate: return "circle.fill"
         case .voiceCloneReady: return "waveform"
         case .postRepost: return "arrow.2.squarepath"
-        case .addedToConversation, .newConversation: return "bubble.left.and.bubble.right.fill"
+        case .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup: return "bubble.left.and.bubble.right.fill"
         case .removedFromConversation: return "person.badge.minus"
         case .memberRemoved: return "person.badge.minus"
         case .memberPromoted: return "star.fill"
@@ -216,7 +225,7 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
             return "6366F1"
         case .postRepost:
             return "9B59B6"
-        case .addedToConversation, .newConversation, .removedFromConversation:
+        case .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup, .removedFromConversation:
             return "4ECDC4"
         case .messageEdited, .messageDeleted, .messagePinned, .messageForwarded:
             return "3498DB"
@@ -402,7 +411,7 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
             return "\(actorName) veut se connecter"
         case .friendAccepted, .contactAccepted, .legacyFriendAccepted:
             return "\(actorName) a accepte votre invitation"
-        case .addedToConversation, .newConversation:
+        case .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup:
             return "Invitation a \(conversationTitle)"
         case .removedFromConversation:
             return "Retire de \(conversationTitle)"
