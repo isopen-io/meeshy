@@ -215,6 +215,34 @@ extension StoryRenderer {
     }
 }
 
+// MARK: - clipTransitionOpacity
+
+extension StoryRenderer {
+
+    /// Returns the effective opacity `[0, 1]` for `media` at playback time `at`,
+    /// given a list of `StoryClipTransition` entries and the global time at which
+    /// the transition window starts (`transitionStart`).
+    ///
+    /// Only `kind == .crossfade` is handled; other kinds are treated as opaque.
+    /// Outside the transition window the function returns `1.0`.
+    ///
+    /// `nonisolated` — pure arithmetic, no UIKit.
+    public nonisolated static func clipTransitionOpacity(for media: StoryMediaObject,
+                                                         transitions: [StoryClipTransition],
+                                                         transitionStart: Double,
+                                                         at time: Double) -> Double {
+        for tr in transitions where tr.kind == .crossfade {
+            let duration = Double(tr.duration)
+            let inWindow = time >= transitionStart && time <= (transitionStart + duration)
+            guard inWindow else { continue }
+            let progress = (time - transitionStart) / duration
+            if media.id == tr.fromClipId { return 1.0 - progress }
+            if media.id == tr.toClipId   { return progress }
+        }
+        return 1.0
+    }
+}
+
 // MARK: - applyKeyframes
 
 extension StoryRenderer {
