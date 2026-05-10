@@ -1344,36 +1344,30 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
-        // Hand the activated AVAudioSession to WebRTC and flip the audio
-        // engine on. Without this bridge, WebRTC's audio I/O thread never
-        // starts, so both peers see "ICE connected" but hear silence.
-        //
-        // DIAGNOSTIC: on simulator, l'`AVAudioSession` reçue de CallKit peut
-        // être marquée active côté CallKit mais inactive côté process app
-        // (XPC mediaserverd dans un état dégradé : crashlog typique
-        // "AVAudioSession_iOS.mm:794 destroySession ... connection to
-        // service ... was invalidated"). Dans ce cas, `RTCAudioSession.
-        // isAudioEnabled = true` paraît réussir mais l'ADM sous-jacent ne
-        // démarre jamais → ICE connected, aucun audio.
-        // On force `setActive(true)` AVANT le bridge pour rétablir la
-        // connexion XPC quand elle est cassée. Sur device réel, c'est un
-        // no-op (la session est déjà active).
-        do {
-            try audioSession.setActive(true, options: [])
-            Logger.calls.debug("AVAudioSession force-activated before WebRTC bridge")
-        } catch {
-            Logger.calls.warning("AVAudioSession force-activate failed: \(error.localizedDescription) — proceeding with bridge anyway")
-        }
-        RTCAudioSession.sharedInstance().audioSessionDidActivate(audioSession)
-        RTCAudioSession.sharedInstance().isAudioEnabled = true
+        // CallKit owns AVAudioSession lifecycle; we ONLY bridge it to libwebrtc.
+        // DO NOT call audioSession.setActive(true) here — CallKit already did.
+        // Forcing it again creates desync between AVAudioSession and RTCAudioSession,
+        // visible as alternating routes (Receiver/Speaker) in logs and silent calls.
+        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.2
+        let rtc = RTCAudioSession.sharedInstance()
+        rtc.lockForConfiguration()
+        rtc.audioSessionDidActivate(audioSession)
+        rtc.isAudioEnabled = true
+        rtc.unlockForConfiguration()
+
         Task { @MainActor [weak self] in self?.manager?.applySpeakerRoute() }
-        let outputs = audioSession.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
+        let outputs = audioSession.currentRoute.outputs
+            .map { $0.portType.rawValue }
+            .joined(separator: ",")
         Logger.calls.info("CallKit audio session activated; RTCAudioSession enabled (route=\(outputs), category=\(audioSession.category.rawValue), mode=\(audioSession.mode.rawValue))")
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
-        RTCAudioSession.sharedInstance().isAudioEnabled = false
-        RTCAudioSession.sharedInstance().audioSessionDidDeactivate(audioSession)
+        let rtc = RTCAudioSession.sharedInstance()
+        rtc.lockForConfiguration()
+        rtc.isAudioEnabled = false
+        rtc.audioSessionDidDeactivate(audioSession)
+        rtc.unlockForConfiguration()
         Logger.calls.info("CallKit audio session deactivated; RTCAudioSession disabled")
     }
 }
