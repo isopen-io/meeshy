@@ -55,11 +55,26 @@ enum PeerConnectionState: String, Sendable {
 
 // MARK: - Call Stats
 
-struct CallStats: Sendable {
+struct CallStats: Equatable, Sendable {
     let roundTripTimeMs: Double
     let packetsLost: Int
     let bandwidth: Int
     let codec: String?
+    let inboundPacketsReceived: Int   // Phase 1 fix E6 — RTP gate
+
+    init(
+        roundTripTimeMs: Double = 0,
+        packetsLost: Int = 0,
+        bandwidth: Int = 0,
+        codec: String? = nil,
+        inboundPacketsReceived: Int = 0
+    ) {
+        self.roundTripTimeMs = roundTripTimeMs
+        self.packetsLost = packetsLost
+        self.bandwidth = bandwidth
+        self.codec = codec
+        self.inboundPacketsReceived = inboundPacketsReceived
+    }
 }
 
 // MARK: - WebRTC Client Protocol
@@ -153,6 +168,17 @@ enum QualityThresholds {
     static let initialVideoBitrate: Int = 500_000
     static let minVideoBitrate: Int = 100_000
     static let maxVideoBitrate: Int = 2_500_000
+
+    /// Phase 1 fix E6 — RTP gate before transitioning to .connected.
+    /// ICE connected does NOT mean media flows: NAT, codec mismatch, audio
+    /// session not flipped, or routing bug can leave us with iceState=.connected
+    /// but zero RTP packets. We poll stats every 2s up to 5 times (10s budget),
+    /// require ≥5 inbound RTP packets (≈100ms of audio at 50pps Opus) before
+    /// declaring "connected". Beyond 10s with no RTP → ended(.failed).
+    /// Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.3
+    static let rtpGatePollIntervalSeconds: TimeInterval = 2.0
+    static let rtpGateMaxAttempts: Int = 5
+    static let rtpGateRequiredPackets: Int = 5
 }
 
 // MARK: - Video Quality Level (§4.8)

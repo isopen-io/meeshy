@@ -402,7 +402,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                     roundTripTimeMs: rtt,
                     packetsLost: packetsLost,
                     bandwidth: bytesSent,
-                    codec: codec
+                    codec: codec,
+                    inboundPacketsReceived: packetsReceived
                 ))
             }
         }

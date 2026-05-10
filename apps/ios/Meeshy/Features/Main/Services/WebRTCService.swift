@@ -148,6 +148,13 @@ final class WebRTCService: @unchecked Sendable {
 
     // MARK: - Quality Monitoring
 
+    /// Public passthrough to the underlying client's stats. Used by the RTP gate
+    /// in CallManager to confirm media is flowing before transitioning .connecting → .connected.
+    /// Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.3
+    func getStats() async -> CallStats? {
+        await client.getStats()
+    }
+
     func startQualityMonitor() {
         stopQualityMonitor()
         qualityMonitorTimer = Timer.scheduledTimer(

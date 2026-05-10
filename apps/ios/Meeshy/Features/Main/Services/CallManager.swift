@@ -74,6 +74,7 @@ final class CallManager: ObservableObject {
     // immediately stop their work loop on cancel.
     private var durationTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
+    private var rtpGateTask: Task<Void, Never>?
     private var callStartDate: Date?
     private var reconnectAttempt = 0
     private var participantJoinedCancellable: AnyCancellable?
@@ -700,6 +701,34 @@ final class CallManager: ObservableObject {
 
     // MARK: - Private: State Transitions
 
+    @MainActor
+    private func startRTPGatePolling() {
+        rtpGateTask?.cancel()
+        rtpGateTask = Task { @MainActor [weak self] in
+            guard let self else { return }
+            for attempt in 1...QualityThresholds.rtpGateMaxAttempts {
+                let nanos = UInt64(QualityThresholds.rtpGatePollIntervalSeconds * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: nanos)
+                guard !Task.isCancelled else { return }
+                guard let stats = await self.webRTCService.getStats() else { continue }
+                if stats.inboundPacketsReceived >= QualityThresholds.rtpGateRequiredPackets {
+                    Logger.calls.info(
+                        "RTP gate passed at attempt \(attempt) (packets=\(stats.inboundPacketsReceived))"
+                    )
+                    self.transitionToConnected()
+                    return
+                }
+                Logger.calls.debug(
+                    "RTP gate attempt \(attempt)/\(QualityThresholds.rtpGateMaxAttempts) — packets=\(stats.inboundPacketsReceived) (need \(QualityThresholds.rtpGateRequiredPackets))"
+                )
+            }
+            Logger.calls.error(
+                "RTP gate timeout after \(QualityThresholds.rtpGateMaxAttempts) attempts — ICE connected but no media. Ending call."
+            )
+            self.endCallInternal(reason: .failed("media path broken (no inbound RTP)"))
+        }
+    }
+
     private func transitionToConnected() {
         callState = .connected
         // Audio session was configured ONCE at peer-connection setup; CallKit
@@ -891,6 +920,8 @@ final class CallManager: ObservableObject {
     private func endCallInternal(reason: CallEndReason) {
         durationTask?.cancel()
         durationTask = nil
+        rtpGateTask?.cancel()
+        rtpGateTask = nil
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
@@ -1250,10 +1281,14 @@ extension CallManager: WebRTCServiceDelegate {
             guard let self else { return }
             switch self.callState {
             case .connecting:
-                self.transitionToConnected()
+                // Phase 1 fix E6: ICE connected does not guarantee media flows.
+                // Poll stats every 2s up to 5 attempts (10s budget). Require
+                // ≥5 inbound RTP packets before declaring .connected. If no
+                // RTP after 10s, end with .failed("media path broken").
+                self.startRTPGatePolling()
             case .reconnecting:
-                Logger.calls.info("Reconnection successful")
-                self.transitionToConnected()
+                Logger.calls.info("Reconnection successful — running RTP gate")
+                self.startRTPGatePolling()
             default:
                 break
             }

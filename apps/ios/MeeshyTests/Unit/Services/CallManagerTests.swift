@@ -240,3 +240,51 @@ final class CallManagerOfferingTransitionTests: XCTestCase {
         )
     }
 }
+
+@MainActor
+final class CallManagerRTPGateTests: XCTestCase {
+
+    func test_webRTCServiceDidConnect_invokesRTPGate_notDirectTransition() throws {
+        // Source-level guard: webRTCServiceDidConnect must NOT call transitionToConnected
+        // directly. It must call startRTPGatePolling instead, which internally polls
+        // stats and only transitions if inboundPacketsReceived >= rtpGateRequiredPackets.
+        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.3
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        guard let funcRange = source.range(of: "func webRTCServiceDidConnect") else {
+            XCTFail("webRTCServiceDidConnect not found")
+            return
+        }
+        // Bound to next func declaration
+        let blockEnd = source.range(of: "func webRTCServiceDidDisconnect", range: funcRange.upperBound..<source.endIndex)?.lowerBound
+                    ?? source.endIndex
+        let funcBody = String(source[funcRange.lowerBound..<blockEnd])
+
+        XCTAssertTrue(
+            funcBody.contains("startRTPGatePolling"),
+            "webRTCServiceDidConnect must invoke startRTPGatePolling instead of direct transitionToConnected"
+        )
+    }
+
+    func test_qualityThresholds_rtpGate_constants() {
+        XCTAssertEqual(QualityThresholds.rtpGatePollIntervalSeconds, 2.0)
+        XCTAssertEqual(QualityThresholds.rtpGateMaxAttempts, 5)
+        XCTAssertEqual(QualityThresholds.rtpGateRequiredPackets, 5)
+    }
+
+    func test_callStats_inboundPacketsReceived_defaultsToZero() {
+        let stats = CallStats()
+        XCTAssertEqual(stats.inboundPacketsReceived, 0)
+    }
+
+    func test_callStats_inboundPacketsReceived_canBeSet() {
+        let stats = CallStats(inboundPacketsReceived: 42)
+        XCTAssertEqual(stats.inboundPacketsReceived, 42)
+    }
+}
