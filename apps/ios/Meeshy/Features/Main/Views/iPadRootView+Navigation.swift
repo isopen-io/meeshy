@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import os
 
 // MARK: - iPad Root View Navigation Helpers
 
@@ -362,20 +363,35 @@ extension iPadRootView {
             return
         }
         Task {
-            do {
-                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-                let apiConv = try await ConversationService.shared.getById(conversationId)
-                var conv = apiConv.toConversation(currentUserId: currentUserId)
-                if ensureUnread && conv.unreadCount == 0 {
-                    conv.unreadCount = 1
+            // Phase: navigate-from-notification timing race. Same retry-once
+            // pattern as `RootView.navigateToConversationById` — a push for
+            // a freshly-created conversation can land before the gateway
+            // commit is visible to the recipient's auth context.
+            let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+            var lastError: Error?
+            for attempt in 0..<2 {
+                do {
+                    let apiConv = try await ConversationService.shared.getById(conversationId)
+                    var conv = apiConv.toConversation(currentUserId: currentUserId)
+                    if ensureUnread && conv.unreadCount == 0 {
+                        conv.unreadCount = 1
+                    }
+                    if let messageId = highlightMessageId {
+                        router.pendingHighlightMessageId = messageId
+                    }
+                    openConversation(conv)
+                    return
+                } catch {
+                    lastError = error
+                    Logger.messages.error("[iPadRootView] navigateToConversationById attempt=\(attempt) id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+                    if attempt == 0 {
+                        try? await Task.sleep(nanoseconds: 600_000_000)
+                    }
                 }
-                if let messageId = highlightMessageId {
-                    router.pendingHighlightMessageId = messageId
-                }
-                openConversation(conv)
-            } catch {
-                ToastManager.shared.showError("Impossible d'ouvrir la conversation")
             }
+            let underlying = (lastError as? LocalizedError)?.errorDescription ?? lastError?.localizedDescription
+            let detail = underlying.map { " (\($0))" } ?? ""
+            ToastManager.shared.showError("Impossible d'ouvrir la conversation" + detail)
         }
     }
 

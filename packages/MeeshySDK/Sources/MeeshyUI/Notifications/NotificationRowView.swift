@@ -183,10 +183,19 @@ public struct NotificationRowView: View {
             return "Clone vocal pret"
         case .postRepost:
             return "A repartage votre publication"
-        case .addedToConversation, .newConversation, .newConversationGroup:
-            return "Ajoute a une conversation"
         case .newConversationDirect:
-            return "Nouvelle conversation"
+            // Direct DM — surface the sender name so the row reads like
+            // "Jean / Nouvelle conversation" instead of an opaque
+            // "Ajouté à une conversation".
+            return "Nouvelle conversation avec \(notification.senderName ?? "un contact")"
+        case .newConversationGroup:
+            // Group invite — title is the meaningful label.
+            if let title = notification.context?.conversationTitle, !title.isEmpty {
+                return "Invitation au groupe \(title)"
+            }
+            return "Invitation a un nouveau groupe"
+        case .addedToConversation, .newConversation:
+            return "Ajoute a une conversation"
         case .removedFromConversation, .memberRemoved:
             return "Retire de la conversation"
         case .memberPromoted:

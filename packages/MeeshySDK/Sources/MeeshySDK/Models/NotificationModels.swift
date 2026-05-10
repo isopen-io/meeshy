@@ -411,7 +411,16 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
             return "\(actorName) veut se connecter"
         case .friendAccepted, .contactAccepted, .legacyFriendAccepted:
             return "\(actorName) a accepte votre invitation"
-        case .addedToConversation, .newConversation, .newConversationDirect, .newConversationGroup:
+        case .newConversationDirect:
+            // Direct DM: the conversation has no real title — surface the
+            // sender name so the user immediately knows who started it.
+            // Mirror of the gateway push body
+            // ("Nouvelle conversation avec ${actor.displayName}").
+            return "Nouvelle conversation avec \(actorName)"
+        case .newConversationGroup:
+            // Group invite: the conversation title is the meaningful label.
+            return "Invitation au groupe \(conversationTitle)"
+        case .addedToConversation, .newConversation:
             return "Invitation a \(conversationTitle)"
         case .removedFromConversation:
             return "Retire de \(conversationTitle)"

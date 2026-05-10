@@ -864,19 +864,38 @@ struct RootView: View {
             }
 
             // 3. Network fallback: cache miss + offline-aware error UX.
-            do {
-                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-                let apiConv = try await ConversationService.shared.getById(conversationId)
-                var conv = apiConv.toConversation(currentUserId: currentUserId)
-                if ensureUnread && conv.unreadCount == 0 {
-                    conv.unreadCount = 1
+            //    A push notification for a freshly-created conversation can
+            //    race the gateway's commit transaction (rare but observed
+            //    in production) — the client sees the notification before
+            //    the conversation row is fully visible to the same user
+            //    via `findFirst`. Retry once after a short delay before
+            //    surfacing an error to the user. This eats one extra
+            //    round-trip in the worst case but turns "Impossible
+            //    d'ouvrir" into a working open in the common case.
+            let currentUserId = AuthManager.shared.currentUser?.id ?? ""
+            var lastError: Error?
+            for attempt in 0..<2 {
+                do {
+                    let apiConv = try await ConversationService.shared.getById(conversationId)
+                    var conv = apiConv.toConversation(currentUserId: currentUserId)
+                    if ensureUnread && conv.unreadCount == 0 {
+                        conv.unreadCount = 1
+                    }
+                    router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
+                    return
+                } catch {
+                    lastError = error
+                    Logger.messages.error("[RootView] navigateToConversationById attempt=\(attempt) id=\(conversationId, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+                    if attempt == 0 {
+                        try? await Task.sleep(nanoseconds: 600_000_000)
+                    }
                 }
-                router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
-            } catch {
-                ToastManager.shared.showError(
-                    String(localized: "Impossible d'ouvrir la conversation", defaultValue: "Impossible d'ouvrir la conversation")
-                )
             }
+            let underlying = (lastError as? LocalizedError)?.errorDescription ?? lastError?.localizedDescription
+            let detail = underlying.map { " (\($0))" } ?? ""
+            ToastManager.shared.showError(
+                String(localized: "Impossible d'ouvrir la conversation", defaultValue: "Impossible d'ouvrir la conversation") + detail
+            )
         }
     }
 
