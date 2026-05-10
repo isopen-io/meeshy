@@ -133,9 +133,39 @@ interface LeaveCallData {
 export class CallService {
   private turnCredentialService: TURNCredentialService;
   private heartbeats: Map<string, Map<string, number>> = new Map();
+  private ringingTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private readonly RINGING_TIMEOUT_MS = 60_000;   // Phase 1 fix P2 — FaceTime parity
 
   constructor(private prisma: PrismaClient) {
     this.turnCredentialService = new TURNCredentialService();
+  }
+
+  /**
+   * Phase 1 fix P2 — Schedule a 60s timeout for a ringing call. If no answer
+   * arrives in time, the callback is invoked (caller will transition the call
+   * to `missed`). Replaces any previously scheduled timeout for this callId.
+   *
+   * NOTE: Phase 1 uses in-process setTimeout. Multi-instance gateway deployments
+   * may race on the timeout; Phase 4 introduces optimistic-locked transitions
+   * which are idempotent against this race.
+   *
+   * Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.5
+   */
+  scheduleRingingTimeout(callId: string, onTimeout: () => void): void {
+    this.clearRingingTimeout(callId);
+    const handle = setTimeout(() => {
+      this.ringingTimeouts.delete(callId);
+      onTimeout();
+    }, this.RINGING_TIMEOUT_MS);
+    this.ringingTimeouts.set(callId, handle);
+  }
+
+  clearRingingTimeout(callId: string): void {
+    const handle = this.ringingTimeouts.get(callId);
+    if (handle) {
+      clearTimeout(handle);
+      this.ringingTimeouts.delete(callId);
+    }
   }
 
   /**

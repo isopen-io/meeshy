@@ -306,6 +306,44 @@ export class CallEventsHandler {
           notifiedSockets: notifiedSocketsCount
         });
 
+        // Phase 1 fix P2 — schedule 60s ringing timeout. If no answer arrives,
+        // force transition to 'missed' and broadcast call:ended.
+        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.5
+        this.callService.scheduleRingingTimeout(callSession.id, async () => {
+          try {
+            const current = await this.prisma.callSession.findUnique({
+              where: { id: callSession.id },
+              select: { status: true, conversationId: true },
+            });
+            // Only force missed if still in initiated/ringing (not connecting/active/ended)
+            if (current && (current.status === 'initiated' || current.status === 'ringing')) {
+              const ended = await this.callService.updateCallStatus(
+                callSession.id,
+                'missed' as any,
+                'no_answer' as any
+              ).catch((err: any) => {
+                logger.warn('Ringing timeout: updateCallStatus failed', { callId: callSession.id, err: err?.message });
+                return null;
+              });
+              if (ended) {
+                const endedEvent = {
+                  callId: callSession.id,
+                  duration: 0,
+                  endedBy: undefined,
+                  reason: 'no_answer',
+                };
+                io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.ENDED, endedEvent);
+                io.to(ROOMS.conversation(current.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+                logger.info('Ringing timeout fired — call marked as missed', {
+                  callId: callSession.id,
+                });
+              }
+            }
+          } catch (err) {
+            logger.error('Ringing timeout handler error', err);
+          }
+        });
+
         // Send VoIP push to offline members for incoming call wake-up
         if (this.pushService) {
           const initiatorUser = await this.prisma.user.findUnique({
@@ -441,6 +479,9 @@ export class CallEventsHandler {
         });
 
         const { callSession, iceServers } = joinResult;
+
+        // Phase 1 fix P2 — callee answered, clear the 60s ringing timeout
+        this.callService.clearRingingTimeout(data.callId);
 
         // Join call room
         socket.join(ROOMS.call(data.callId));
@@ -589,6 +630,9 @@ export class CallEventsHandler {
           userId,
           participantId: leaveParticipantId || userId
         });
+
+        // Phase 1 fix P2 — caller cancel or callee reject ends ringing
+        this.callService.clearRingingTimeout(data.callId);
 
         // Prepare event data BEFORE leaving room
         const leftEvent: CallParticipantLeftEvent = {
@@ -887,6 +931,8 @@ export class CallEventsHandler {
 
         // Transition to active on first successful signal exchange
         if (data.signal.type === 'answer') {
+          // Phase 1 fix P2 — answer signal transitions ringing → active
+          this.callService.clearRingingTimeout(data.callId);
           await this.callService.updateCallStatus(data.callId, 'active' as any).catch(() => {});
         }
 
@@ -1118,6 +1164,9 @@ export class CallEventsHandler {
         const callSession = await this.callService.endCall(
           data.callId, userId, endParticipantId, isAnonymous, data.reason
         );
+
+        // Phase 1 fix P2 — explicit end clears any pending ringing timeout
+        this.callService.clearRingingTimeout(data.callId);
 
         const endReason = (callSession.endReason || 'completed') as CallEndReason;
 
