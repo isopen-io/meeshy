@@ -67,3 +67,116 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
         fatalError("StoryBackgroundLayer does not support NSCoder")
     }
 }
+
+// MARK: - Configure
+
+extension StoryBackgroundLayer {
+    @MainActor
+    public func configure(kind: Kind,
+                          transform: BackgroundTransform,
+                          geometry: CanvasGeometry,
+                          resolver: ((String) -> URL?)?,
+                          imageCache: ImageCacheReader?) {
+        self.kind = kind
+        self.transform3D = transform
+        self.frame = CGRect(origin: .zero, size: geometry.renderSize)
+
+        // Clear existing content
+        contentLayer?.removeFromSuperlayer()
+        avPlayerLayer?.removeFromSuperlayer()
+        avPlayer?.pause()
+        avPlayer = nil
+        avPlayerLayer = nil
+        avPlayerLooper = nil
+        contentLayer = nil
+
+        switch kind {
+        case .solidColor(let color):
+            backgroundColor = color.cgColor
+        case .gradient(let colors, let direction):
+            backgroundColor = nil
+            let g = CAGradientLayer()
+            g.frame = bounds
+            g.colors = colors.map { $0.cgColor }
+            switch direction {
+            case .topToBottom:
+                g.startPoint = CGPoint(x: 0.5, y: 0); g.endPoint = CGPoint(x: 0.5, y: 1)
+            case .leftToRight:
+                g.startPoint = CGPoint(x: 0, y: 0.5); g.endPoint = CGPoint(x: 1, y: 0.5)
+            case .topLeftToBottomRight:
+                g.startPoint = .zero; g.endPoint = CGPoint(x: 1, y: 1)
+            }
+            addSublayer(g)
+            contentLayer = g
+        case .image(let postMediaId, let thumbHash):
+            backgroundColor = UIColor.black.cgColor
+            let img = CALayer()
+            img.frame = bounds
+            img.contentsGravity = .resizeAspectFill
+            img.masksToBounds = true
+            addSublayer(img)
+            contentLayer = img
+
+            // Synchronous thumbHash placeholder (if any)
+            if let hash = thumbHash,
+               let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash, size: bounds.size) {
+                img.contents = placeholderImage.cgImage
+            }
+
+            // Async swap to cached / network image
+            if let cache = imageCache, let resolver = resolver {
+                Task { @MainActor [weak img] in
+                    if let cached = await cache.cachedImage(for: postMediaId) {
+                        img?.contents = cached.cgImage
+                        return
+                    }
+                    if let url = resolver(postMediaId),
+                       let (data, _) = try? await URLSession.shared.data(from: url),
+                       let uiImage = UIImage(data: data) {
+                        img?.contents = uiImage.cgImage
+                    }
+                }
+            }
+        case .video(let postMediaId, let looping, let mute):
+            backgroundColor = UIColor.black.cgColor
+            guard let url = resolver?(postMediaId) else { break }
+            let item = AVPlayerItem(url: url)
+            if looping {
+                let queuePlayer = AVQueuePlayer()
+                self.avPlayerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
+                self.avPlayer = queuePlayer
+            } else {
+                self.avPlayer = AVPlayer(playerItem: item)
+            }
+            self.avPlayer?.isMuted = mute
+            let pl = AVPlayerLayer(player: avPlayer)
+            pl.frame = bounds
+            pl.videoGravity = .resizeAspectFill
+            addSublayer(pl)
+            self.avPlayerLayer = pl
+            self.avPlayer?.play()
+        }
+
+        self.transform = transform.caTransform()
+    }
+}
+
+// MARK: - App Lifecycle
+
+extension StoryBackgroundLayer {
+    @MainActor
+    public func handleAppLifecycle(active: Bool) {
+        guard let player = avPlayer else { return }
+        if active { player.play() } else { player.pause() }
+    }
+}
+
+// MARK: - ThumbHash Placeholder
+
+/// No-op fallback decoder. Returns nil until a real ThumbHash library is linked.
+enum ThumbHashDecoder {
+    static func decodeIfAvailable(_ hash: String, size: CGSize) -> UIImage? {
+        // ThumbHash library wiring (if linked). Conservative no-op for now.
+        return nil
+    }
+}
