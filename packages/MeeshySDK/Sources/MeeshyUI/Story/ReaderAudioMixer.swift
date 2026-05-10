@@ -37,6 +37,8 @@ public final class ReaderAudioMixer {
     /// used to derive the sample-accurate host-time targets for each clip.
     private var playbackStartHostTime: UInt64?
     private var didShutdown: Bool = false
+    /// Stored background audio entry (at most one per slide).
+    private var backgroundEntry: BackgroundEntry?
 
     public init() {}
 
@@ -292,5 +294,38 @@ public final class ReaderAudioMixer {
         let loop: Bool
         var fadeTimers: [Timer] = []
         var fadeTasks: [Task<Void, Never>] = []
+    }
+
+    /// Internal helper for the single background audio slot.
+    private struct BackgroundEntry {
+        let player: AVAudioPlayerNode
+        let file: AVAudioFile
+        let looping: Bool
+        let audioId: String
+    }
+}
+
+// MARK: - Background audio
+
+extension ReaderAudioMixer {
+    /// Number of configured background entries (0 or 1).
+    public var backgroundClipCount: Int { backgroundEntry == nil ? 0 : 1 }
+
+    /// Configures a single background audio source. Replaces any prior bg entry.
+    /// `looping=true` schedules the buffer to repeat sample-accurately.
+    public func configureBackground(audio: StoryAudioPlayerObject,
+                                    url: URL,
+                                    looping: Bool) throws {
+        // Tear down any prior background node before re-attaching.
+        if let prior = backgroundEntry {
+            prior.player.stop()
+            engine.detach(prior.player)
+        }
+        let file = try AVAudioFile(forReading: url)
+        let player = AVAudioPlayerNode()
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: file.processingFormat)
+        backgroundEntry = BackgroundEntry(player: player, file: file,
+                                         looping: looping, audioId: audio.id)
     }
 }
