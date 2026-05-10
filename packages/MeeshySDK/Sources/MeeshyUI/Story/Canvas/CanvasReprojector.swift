@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import PencilKit
 import MeeshySDK
 
 // MARK: - Canvas Reprojector
@@ -73,5 +74,34 @@ public struct CanvasReprojector: Sendable {
         let clampedX = min(max(projectedX, 0), 1)
         let clampedY = min(max(projectedY, 0), 1)
         return (clampedX, clampedY, needsClamp ? .clamped(originalX: x, originalY: y) : nil)
+    }
+}
+
+// MARK: - PKDrawing reprojection
+
+extension CanvasReprojector {
+    /// Reprojects a PKDrawing by applying a uniform scale transform that maps
+    /// source canvas pixels to target canvas pixels (min of x/y scale factors).
+    public func reproject(drawing: PKDrawing) -> ReprojectedItem<PKDrawing> {
+        let scaleX = targetSize.width / sourceSize.width
+        let scaleY = targetSize.height / sourceSize.height
+        let s = min(scaleX, scaleY)
+        let transform = CGAffineTransform(scaleX: s, y: s)
+        let scaled = drawing.transformed(using: transform)
+        let warning: ReprojectionWarning? = (scaled.bounds.maxY > targetSize.height ||
+                                             scaled.bounds.maxX > targetSize.width)
+            ? .clamped(originalX: 0, originalY: 0) : nil
+        return ReprojectedItem(value: scaled, warning: warning)
+    }
+
+    /// Deserializes `drawingData` into a PKDrawing and reprojects it.
+    /// Returns a nil value (no warning) when `drawingData` is nil or invalid.
+    public func reproject(drawingData: Data?) -> ReprojectedItem<PKDrawing?> {
+        guard let data = drawingData,
+              let drawing = try? PKDrawing(data: data) else {
+            return ReprojectedItem(value: nil, warning: nil)
+        }
+        let r = reproject(drawing: drawing)
+        return ReprojectedItem(value: r.value, warning: r.warning)
     }
 }
