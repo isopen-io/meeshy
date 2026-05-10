@@ -63,12 +63,16 @@ public enum StoryRenderer {
     ///   - geometry: The target canvas dimensions (drives design→render scaling).
     ///   - time: The current playback time (used in `.play` mode for timing windows).
     ///   - mode: `.edit` shows everything, `.play` respects startTime/duration.
+    ///   - languages: Preferred languages for Prisme Linguistique text resolution (`.play` only).
+    ///     In `.edit` mode, the raw source text is always displayed regardless of this parameter.
+    ///     Defaults to `[]` for backward compat with existing call sites.
     /// - Returns: A root `CALayer` whose sublayers represent the slide's items.
     @MainActor
     public static func render(slide: StorySlide,
                               into geometry: CanvasGeometry,
                               at time: CMTime,
-                              mode: RenderMode) -> CALayer {
+                              mode: RenderMode,
+                              languages: [String] = []) -> CALayer {
         let root = CALayer()
         root.frame = CGRect(origin: .zero, size: geometry.renderSize)
         root.anchorPoint = CGPoint(x: 0, y: 0)
@@ -77,7 +81,7 @@ public enum StoryRenderer {
         let allItems = collectItems(from: slide)
         for item in allItems.sorted(by: { $0.zIndex < $1.zIndex }) {
             guard shouldRender(item: item, at: time, mode: mode) else { continue }
-            let layer = renderItem(item, into: geometry, at: time, mode: mode)
+            let layer = renderItem(item, into: geometry, at: time, mode: mode, languages: languages)
             root.addSublayer(layer)
         }
 
@@ -131,7 +135,8 @@ public enum StoryRenderer {
     private static func renderItem(_ item: any RenderableItem,
                                    into geometry: CanvasGeometry,
                                    at time: CMTime,
-                                   mode: RenderMode) -> CALayer {
+                                   mode: RenderMode,
+                                   languages: [String] = []) -> CALayer {
         if let media = item as? StoryMediaObject {
             let layer = StoryMediaLayer()
             layer.configure(with: media, geometry: geometry, mode: mode)
@@ -139,7 +144,15 @@ public enum StoryRenderer {
         }
         if let text = item as? StoryTextObject {
             let layer = StoryTextLayer()
-            layer.configure(with: text, geometry: geometry, mode: mode)
+            // Prisme Linguistique: in .play mode resolve the preferred-language
+            // translation; in .edit mode always show the raw source text so the
+            // author edits the original, not a translated copy.
+            let displayText = (mode == .play)
+                ? text.resolvedText(preferredLanguages: languages)
+                : text.text
+            var displayObj = text
+            displayObj.text = displayText
+            layer.configure(with: displayObj, geometry: geometry, mode: mode)
             return layer
         }
         if let sticker = item as? StorySticker {

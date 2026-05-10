@@ -287,7 +287,8 @@ public final class StoryCanvasUIView: UIView {
         let rendered = StoryRenderer.render(slide: slide,
                                             into: geometry,
                                             at: currentTime,
-                                            mode: mode)
+                                            mode: mode,
+                                            languages: readerContext.preferredLanguages)
         for sub in rendered.sublayers ?? [] {
             itemsContainer.addSublayer(sub)
         }
