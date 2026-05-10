@@ -170,6 +170,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
         audioTransceiver.sender.track = audioTrack
         self.audioTransceiver = audioTransceiver
+        applyAudioCodecPreferences(audioTransceiver: audioTransceiver)
 
         guard type == .audioVideo else {
             Logger.webrtc.info("Local audio track started")
@@ -225,6 +226,38 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         try await capturer.startCapture(with: frontCamera, format: format, fps: fps)
         Logger.webrtc.info("Local audio + video tracks started (front camera, \(fps)fps)")
         #endif
+    }
+
+    // Phase 2 — Apply audio codec preferences via libwebrtc 141 API.
+    // Order: Opus first (primary), RED second (RFC 2198 redundancy).
+    // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.8 + ADR-4
+    //
+    // RED was previously enabled via SDP munging (`addAudioRedundancy`) which
+    // triggered an iOS libwebrtc bug with `a=fmtp:63 PT/PT` (silent audio after
+    // ICE connected, commit 9e663039). Using setCodecPreferences avoids the
+    // SDP regex path entirely — libwebrtc 141 negotiates RED via the standard
+    // API correctly.
+    private func applyAudioCodecPreferences(audioTransceiver: RTCRtpTransceiver) {
+        let factory = WebRTCSharedFactory.factory
+        let capabilities = factory.rtpReceiverCapabilities(forKind: kRTCMediaStreamTrackKindAudio)
+
+        let opusCodecs = capabilities.codecs.filter { $0.name.lowercased() == "opus" }
+        let redCodecs = capabilities.codecs.filter { $0.name.lowercased() == "red" }
+
+        // Opus primary, RED secondary. Drop CN, telephone-event, G722, PCMU.
+        let preferred = opusCodecs + redCodecs
+        guard !preferred.isEmpty else {
+            Logger.webrtc.warning("[WEBRTC] no Opus/RED codecs available — leaving default preferences")
+            return
+        }
+
+        do {
+            try audioTransceiver.setCodecPreferences(preferred)
+            let names = preferred.map { $0.name }.joined(separator: ", ")
+            Logger.webrtc.info("[WEBRTC] audio codec preferences applied: \(names, privacy: .public)")
+        } catch {
+            Logger.webrtc.warning("[WEBRTC] setCodecPreferences failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     // MARK: - SDP Negotiation

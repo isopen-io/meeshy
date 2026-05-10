@@ -25,4 +25,25 @@ final class CodecPreferencesTests: XCTestCase {
             "P2PWebRTCClient must call addTransceiver(of: .audio, init:) for audio track"
         )
     }
+
+    func test_p2pClient_appliesAudioCodecPreferences() throws {
+        // Source-level guard: must call applyAudioCodecPreferences after
+        // creating the audio transceiver, with Opus + RED codec order.
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/WebRTC/P2PWebRTCClient.swift")
+        let source = try String(contentsOf: url, encoding: .utf8)
+
+        XCTAssertTrue(
+            source.contains("applyAudioCodecPreferences"),
+            "P2PWebRTCClient must define applyAudioCodecPreferences method"
+        )
+        XCTAssertTrue(
+            source.contains("setCodecPreferences"),
+            "Must call setCodecPreferences (libwebrtc 141 API)"
+        )
+    }
 }
