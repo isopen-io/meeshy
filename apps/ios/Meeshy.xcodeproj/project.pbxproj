@@ -187,6 +187,9 @@
 		CHPW002A002A002A002A0002 /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHPW001A001A001A001A0001 /* ChangePasswordView.swift */; };
 		CL6001A001A001A001A00001 /* CommunityLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CL6002A002A002A002A00002 /* CommunityLinksView.swift */; };
 		CM3600000000002F36 /* CallManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = CM3600000000001F36 /* CallManager.swift */; };
+		RTNE000000000002F01 /* Ringtone.caf in Resources */ = {isa = PBXBuildFile; fileRef = RTNE000000000001F01 /* Ringtone.caf */; };
+		RBTN000000000002F01 /* RingbackTone.caf in Resources */ = {isa = PBXBuildFile; fileRef = RBTN000000000001F01 /* RingbackTone.caf */; };
+		RBTP000000000002F01 /* RingbackTonePlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = RBTP000000000001F01 /* RingbackTonePlayer.swift */; };
 		CPREF0000000004F01 /* ConversationPreferencesTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = CPREF0000000003F01 /* ConversationPreferencesTab.swift */; };
 		CRS00100010001000100B001 /* CrashReportSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CRS00100010001000100F001 /* CrashReportSheet.swift */; };
 		CS6001A001A001A001A00001 /* CreateShareLinkView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CS6002A002A002A002A00002 /* CreateShareLinkView.swift */; };
@@ -661,6 +664,9 @@
 		CHPW001A001A001A001A0001 /* ChangePasswordView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChangePasswordView.swift; sourceTree = "<group>"; };
 		CL6002A002A002A002A00002 /* CommunityLinksView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CommunityLinksView.swift; sourceTree = "<group>"; };
 		CM3600000000001F36 /* CallManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CallManager.swift; sourceTree = "<group>"; };
+		RTNE000000000001F01 /* Ringtone.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = Ringtone.caf; sourceTree = "<group>"; };
+		RBTN000000000001F01 /* RingbackTone.caf */ = {isa = PBXFileReference; lastKnownFileType = file; path = RingbackTone.caf; sourceTree = "<group>"; };
+		RBTP000000000001F01 /* RingbackTonePlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RingbackTonePlayer.swift; sourceTree = "<group>"; };
 		CPREF0000000003F01 /* ConversationPreferencesTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationPreferencesTab.swift; sourceTree = "<group>"; };
 		CRS00100010001000100F001 /* CrashReportSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CrashReportSheet.swift; sourceTree = "<group>"; };
 		CS6002A002A002A002A00002 /* CreateShareLinkView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CreateShareLinkView.swift; sourceTree = "<group>"; };
@@ -1036,11 +1042,21 @@
 				BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */,
 				22D7D8C0B82CB88F1D3D5CA2 /* AppDelegate.swift */,
 				MUIEXP001A001A001A001A01 /* MeeshyUIExports.swift */,
+				RSRCGRP00000000001 /* Resources */,
 				DCB1A7308B47ADD1671F2CED /* Features */,
 				58252ECAB7DBD4DACBE41E87 /* Core */,
 				2BEFD5263BA6B871876F93E9 /* Features */,
 			);
 			path = Meeshy;
+			sourceTree = "<group>";
+		};
+		RSRCGRP00000000001 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				RTNE000000000001F01 /* Ringtone.caf */,
+				RBTN000000000001F01 /* RingbackTone.caf */,
+			);
+			path = Resources;
 			sourceTree = "<group>";
 		};
 		4B839730A63FC9359E52BECF = {
@@ -1236,6 +1252,7 @@
 				TM2800000000001F28 /* ToastManager.swift */,
 				SPS2800000000001F28 /* StoryPublishService.swift */,
 				CM3600000000001F36 /* CallManager.swift */,
+				RBTP000000000001F01 /* RingbackTonePlayer.swift */,
 				CEQ000000001F01 /* CallEventQueue.swift */,
 				BT3600000000001F36 /* BackgroundTaskManager.swift */,
 				VP3600000000001F36 /* VoIPPushManager.swift */,
@@ -1869,6 +1886,8 @@
 				L10N0002B002B002B002B0002 /* InfoPlist.xcstrings in Resources */,
 				A1F8D3E5B7C2094A6E3F81B2 /* PrivacyInfo.xcprivacy in Resources */,
 				F2632D432F804A220061F392 /* QUICKSTART.md in Resources */,
+				RTNE000000000002F01 /* Ringtone.caf in Resources */,
+				RBTN000000000002F01 /* RingbackTone.caf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2088,6 +2107,7 @@
 				ANA00100010001000100B001 /* AnalyticsManager.swift in Sources */,
 				LANG0010010010010010002 /* LanguageProviding.swift in Sources */,
 				CM3600000000002F36 /* CallManager.swift in Sources */,
+				RBTP000000000002F01 /* RingbackTonePlayer.swift in Sources */,
 				BT3600000000002F36 /* BackgroundTaskManager.swift in Sources */,
 				VP3600000000002F36 /* VoIPPushManager.swift in Sources */,
 				WR3700000000002F37 /* WebRTCService.swift in Sources */,

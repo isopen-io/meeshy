@@ -68,6 +68,7 @@ final class CallManager: ObservableObject {
     private let eventQueue = CallEventQueue()
 
     private let webRTCService: WebRTCService
+    private let ringbackPlayer = RingbackTonePlayer()
     // PERF-011: replace Timer.scheduledTimer with cancellable @MainActor Tasks.
     // Timers run on RunLoop.main and have no native cancellation hand-off; Tasks
     // are cooperative, energy-efficient (no RunLoop wakeup overhead), and
@@ -114,6 +115,14 @@ final class CallManager: ObservableObject {
         if let icon = UIImage(named: "CallKitIcon") {
             config.iconTemplateImageData = icon.pngData()
         }
+        // Phase 1.5 fix — explicit ringtone for incoming calls.
+        // CallKit's default `ringtoneSound = nil` falls back to system ringtone,
+        // but iOS 17+ has been reporting unreliable behavior (UI shows but no
+        // audio) on real devices. Apple's SOTA pattern (FaceTime, WhatsApp) is
+        // to bundle a custom .caf and set it explicitly. The file must be in
+        // the main app bundle, ≤30s, CAF format.
+        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.3
+        config.ringtoneSound = "Ringtone.caf"
         callProvider = CXProvider(configuration: config)
 
         let delegateProxy = CallKitDelegateProxy()
@@ -166,6 +175,10 @@ final class CallManager: ObservableObject {
         isMuted = false
         isSpeaker = isVideo
         callState = .ringing(isOutgoing: true)
+
+        // Phase 1.5 — start ringback tone immediately when caller initiates.
+        // The tone plays until state transitions to .connected or .ended.
+        ringbackPlayer.start()
 
         let uuid = UUID()
         activeCallUUID = uuid
@@ -730,6 +743,7 @@ final class CallManager: ObservableObject {
     }
 
     private func transitionToConnected() {
+        ringbackPlayer.stop()
         callState = .connected
         // Audio session was configured ONCE at peer-connection setup; CallKit
         // drives activation via provider:didActivate:, which is the single
@@ -918,6 +932,7 @@ final class CallManager: ObservableObject {
     }
 
     private func endCallInternal(reason: CallEndReason) {
+        ringbackPlayer.stop()
         durationTask?.cancel()
         durationTask = nil
         rtpGateTask?.cancel()
