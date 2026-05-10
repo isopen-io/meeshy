@@ -28,15 +28,25 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     public init(story: StoryItem,
                 preferredLanguage: String? = nil,
                 preferredLanguages: [String] = [],
+                preferredContentLanguages: [String]? = nil,
+                preloadedImages: [String: UIImage] = [:],
+                preloadedVideoURLs: [String: URL] = [:],
+                preloadedAudioURLs: [String: URL] = [:],
                 mute: Bool = false,
                 onCompletion: (@Sendable () -> Void)? = nil) {
         self.storyItem = story
-        let chain: [String] = preferredLanguages.isEmpty
+        // `preferredContentLanguages` is the legacy label; it takes priority over
+        // `preferredLanguages` when provided so existing call-sites compile unchanged.
+        let effective = preferredContentLanguages ?? preferredLanguages
+        let chain: [String] = effective.isEmpty
             ? (preferredLanguage.map { [$0] } ?? [])
-            : preferredLanguages
+            : effective
         self.preferredLanguages = chain
         self.mute = mute
         self.onCompletion = onCompletion
+        // preloadedImages / preloadedVideoURLs / preloadedAudioURLs are accepted for
+        // call-site backward-compat but intentionally unused — the new canvas resolves
+        // media from StoryItem.media and StoryReaderContext.postMediaURLResolver.
     }
 
     // MARK: - UIViewRepresentable
