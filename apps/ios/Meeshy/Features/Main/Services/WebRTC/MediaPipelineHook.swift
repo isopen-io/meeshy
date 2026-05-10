@@ -36,7 +36,9 @@ struct CallContext: Sendable {
 /// Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §1.bis.1
 protocol MediaPipelineHook: Sendable {
     /// Stable identifier used for deregistration / diagnostics.
-    var identifier: String { get }
+    /// Marked `nonisolated` so non-MainActor contexts (e.g. the
+    /// `CallEventQueue` actor) can read it without hopping to the main actor.
+    nonisolated var identifier: String { get }
 
     /// Called once per call setup, before peer connection is created.
     /// Hook can request additional codecs, data channels, encryption layer, etc.
