@@ -13,7 +13,7 @@ struct MeeshyApp: App {
     @StateObject private var toastManager = ToastManager.shared
     @StateObject private var pushManager = PushNotificationManager.shared
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
-    @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var theme = ThemeManager.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showSplash = AuthManager.shared.authToken == nil
     @State private var hasCheckedSession = false
