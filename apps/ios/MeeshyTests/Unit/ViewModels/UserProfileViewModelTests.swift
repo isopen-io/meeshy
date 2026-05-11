@@ -200,6 +200,44 @@ final class UserProfileViewModelTests: XCTestCase {
         XCTAssertFalse(sut.isBlocked)
     }
 
+    // MARK: - Outcome Observer Rollback (Phase 4 Task 4.9)
+    //
+    // The VM subscribes to `OfflineQueue.outcomeStream(for: cmid)` from
+    // `blockUser` / `unblockUser`. When the OutboxFlusher exhausts the row
+    // (5 failed retries) it calls `publishOutcome(.exhausted(cmid:))` ; the
+    // VM rolls back the optimistic flip. Since the cmid is internal, we
+    // assert the contract indirectly: the outcome-stream primitive must
+    // yield exactly one terminal event then complete, which is the building
+    // block the VM relies on.
+
+    func test_offlineQueue_outcomeStream_exhaustedFires_rollbackContract() async {
+        let cmid = "rollback-contract-001"
+        let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+        await OfflineQueue.shared.publishOutcome(.exhausted(cmid: cmid))
+
+        var collected: [OutboxOutcome] = []
+        for await event in stream {
+            collected.append(event)
+        }
+
+        XCTAssertEqual(collected.count, 1)
+        XCTAssertEqual(collected.first, .exhausted(cmid: cmid))
+    }
+
+    func test_offlineQueue_outcomeStream_appliedFires_isObserved() async {
+        let cmid = "applied-contract-001"
+        let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+        await OfflineQueue.shared.publishOutcome(.applied(cmid: cmid))
+
+        var collected: [OutboxOutcome] = []
+        for await event in stream {
+            collected.append(event)
+        }
+
+        XCTAssertEqual(collected.count, 1)
+        XCTAssertEqual(collected.first, .applied(cmid: cmid))
+    }
+
     // MARK: - findSharedConversations Tests
 
     func test_findSharedConversations_filtersDirectConversationsWithTargetUser() {

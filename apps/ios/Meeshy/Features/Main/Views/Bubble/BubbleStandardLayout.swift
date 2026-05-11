@@ -598,45 +598,99 @@ struct BubbleStandardLayout: View {
         let deliveryStatus: MeeshyMessage.DeliveryStatus? = shouldShowTimeAndDelivery
             ? content.meta.deliveryStatus
             : nil
+        // Phase 4 Task 4.6: offline-pending hourglass + failed-retry button.
+        // Only surfaces on outgoing bubbles for `.sending`+offline or `.failed`;
+        // BubbleDeliveryBadge collapses to EmptyView otherwise so the layout
+        // stays untouched in the happy path.
+        let showDeliveryBadge: Bool = {
+            guard isMe else { return false }
+            let raw = message.deliveryStatus
+            if raw == .failed { return true }
+            if raw == .sending && !networkIsOnline { return true }
+            return false
+        }()
         if showIdentityBar {
-            UserIdentityBar.messageBubble(
-                name: content.senderName ?? "?",
-                username: message.senderUsername.map { "@\($0)" },
-                avatarURL: message.senderAvatarURL,
-                accentColor: message.senderColor ?? contactColor,
-                role: nil,
-                time: timeString,
-                delivery: deliveryStatus,
-                flags: showTranslation ? buildAvailableFlags() : [],
-                activeFlag: showTranslation ? secondaryLangCode : nil,
-                onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
-                onTranslateTap: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
-                presenceState: presenceState,
-                moodEmoji: senderMoodEmoji,
-                storyRingState: senderStoryRingState,
-                onAvatarTap: { selectedProfileUser = .from(message: message) },
-                onViewStory: onViewStory,
-                // Group conversations show the timestamp inline with the
-                // author (`Name · 12:45`); direct conversations keep the
-                // edge-pinned variant for the rare bubble that displays
-                // the trailing time/delivery group (last sent / last
-                // received).
-                inlineTime: !isDirect
-            )
+            HStack(spacing: 6) {
+                UserIdentityBar.messageBubble(
+                    name: content.senderName ?? "?",
+                    username: message.senderUsername.map { "@\($0)" },
+                    avatarURL: message.senderAvatarURL,
+                    accentColor: message.senderColor ?? contactColor,
+                    role: nil,
+                    time: timeString,
+                    delivery: deliveryStatus,
+                    flags: showTranslation ? buildAvailableFlags() : [],
+                    activeFlag: showTranslation ? secondaryLangCode : nil,
+                    onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
+                    onTranslateTap: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
+                    presenceState: presenceState,
+                    moodEmoji: senderMoodEmoji,
+                    storyRingState: senderStoryRingState,
+                    onAvatarTap: { selectedProfileUser = .from(message: message) },
+                    onViewStory: onViewStory,
+                    // Group conversations show the timestamp inline with the
+                    // author (`Name · 12:45`); direct conversations keep the
+                    // edge-pinned variant for the rare bubble that displays
+                    // the trailing time/delivery group (last sent / last
+                    // received).
+                    inlineTime: !isDirect
+                )
+                if showDeliveryBadge {
+                    BubbleDeliveryBadge(
+                        status: message.deliveryStatus,
+                        isMe: true,
+                        isOnline: networkIsOnline,
+                        onRetry: { performManualRetry() }
+                    )
+                    .equatable()
+                }
+            }
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
         } else {
-            UserIdentityBar.metaRow(
-                time: timeString,
-                delivery: deliveryStatus,
-                flags: showTranslation ? buildAvailableFlags() : [],
-                activeFlag: showTranslation ? secondaryLangCode : nil,
-                onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
-                onTranslateTap: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
-                isMe: isMe
-            )
+            HStack(spacing: 6) {
+                UserIdentityBar.metaRow(
+                    time: timeString,
+                    delivery: deliveryStatus,
+                    flags: showTranslation ? buildAvailableFlags() : [],
+                    activeFlag: showTranslation ? secondaryLangCode : nil,
+                    onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
+                    onTranslateTap: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
+                    isMe: isMe
+                )
+                if showDeliveryBadge {
+                    BubbleDeliveryBadge(
+                        status: message.deliveryStatus,
+                        isMe: true,
+                        isOnline: networkIsOnline,
+                        onRetry: { performManualRetry() }
+                    )
+                    .equatable()
+                }
+            }
             .padding(.horizontal, 14)
             .padding(.bottom, 8)
+        }
+    }
+
+    /// Live read of the global network monitor. Kept as a computed property
+    /// so the bubble doesn't subscribe to its `@Published` and re-render on
+    /// every offline/online edge — the parent (`ConversationViewModel`) is
+    /// what bumps `message.deliveryStatus` and `updatedAt` to drive the
+    /// bubble's Equatable.
+    private var networkIsOnline: Bool {
+        NetworkMonitor.shared.isOnline
+    }
+
+    /// Manual retry path triggered by `BubbleDeliveryBadge`. Resolves the
+    /// outbox row from the message's `clientMessageId` and resets the retry
+    /// budget so the flusher's next pass picks it up immediately. Errors are
+    /// swallowed (no-op if the row no longer exists — the optimistic message
+    /// has already been reconciled or the user manually cleared the queue).
+    private func performManualRetry() {
+        let cmid = message.clientMessageId ?? message.id
+        Task {
+            try? await OfflineQueue.shared.retryByClientMessageId(cmid)
         }
     }
 

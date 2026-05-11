@@ -211,6 +211,59 @@ struct BubbleForwardedIndicator: View, Equatable {
     }
 }
 
+// MARK: - Delivery Offline/Retry Badge (Phase 4 Task 4.6)
+
+/// Hourglass + retry control surfaced on outgoing bubbles when the user is
+/// offline or the outbox flusher has exhausted its retry budget. Stateless +
+/// Equatable so it never re-evaluates unless its primitive inputs change.
+///
+/// Visibility matrix (only rendered when `isMe == true`):
+///   - `.sending` + `!isOnline` -> hourglass glyph (offline-pending)
+///   - `.failed`                -> tap-to-retry button (arrow.clockwise)
+///   - everything else          -> `EmptyView` (no overhead in the bubble row)
+struct BubbleDeliveryBadge: View, Equatable {
+    let status: MeeshyMessage.DeliveryStatus
+    let isMe: Bool
+    let isOnline: Bool
+    let onRetry: () -> Void
+
+    static func == (lhs: BubbleDeliveryBadge, rhs: BubbleDeliveryBadge) -> Bool {
+        lhs.status == rhs.status &&
+        lhs.isMe == rhs.isMe &&
+        lhs.isOnline == rhs.isOnline
+    }
+
+    var body: some View {
+        if !isMe {
+            EmptyView()
+        } else {
+            switch status {
+            case .sending where !isOnline:
+                Image(systemName: "hourglass")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(MeeshyColors.warning)
+                    .accessibilityLabel("Pending offline")
+            case .failed:
+                Button(action: {
+                    HapticFeedback.light()
+                    onRetry()
+                }) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(MeeshyColors.error)
+                        .padding(4)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Retry sending")
+                .accessibilityHint("Resends this message")
+            default:
+                EmptyView()
+            }
+        }
+    }
+}
+
 // MARK: - Ephemeral Badge (was: ThemedMessageBubble.ephemeralTimerOverlay)
 
 /// Capsule "flame + timer" affichee sous les messages ephemeres pour

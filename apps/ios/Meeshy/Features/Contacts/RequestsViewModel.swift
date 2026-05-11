@@ -130,6 +130,11 @@ final class RequestsViewModel: ObservableObject {
         let cmid = ClientMutationId.generate()
         receivedRequests.removeAll { $0.id == requestId }
         HapticFeedback.success()
+        observeOutcome(
+            cmid: cmid,
+            rollback: { [weak self] in self?.receivedRequests = snapshot },
+            toast: "Impossible d'accepter cette demande"
+        )
         let payload = RespondFriendRequestPayload(
             clientMutationId: cmid,
             friendRequestId: requestId,
@@ -150,6 +155,11 @@ final class RequestsViewModel: ObservableObject {
         let cmid = ClientMutationId.generate()
         receivedRequests.removeAll { $0.id == requestId }
         HapticFeedback.medium()
+        observeOutcome(
+            cmid: cmid,
+            rollback: { [weak self] in self?.receivedRequests = snapshot },
+            toast: "Impossible de refuser cette demande"
+        )
         let payload = RespondFriendRequestPayload(
             clientMutationId: cmid,
             friendRequestId: requestId,
@@ -162,6 +172,29 @@ final class RequestsViewModel: ObservableObject {
             receivedRequests = snapshot
             HapticFeedback.error()
             ToastManager.shared.showError("Impossible de refuser")
+        }
+    }
+
+    // MARK: - Outcome Observer (Phase 4 Task 4.9)
+
+    /// Subscribes to `OfflineQueue.outcomeStream(for: cmid)` and rolls back
+    /// the optimistic mutation if the OutboxFlusher escalates the row to
+    /// `.exhausted` after exhausting its retry budget. `.applied` events are
+    /// a no-op (the optimistic state is already the final state).
+    private func observeOutcome(
+        cmid: String,
+        rollback: @escaping @MainActor () -> Void,
+        toast: String
+    ) {
+        Task { @MainActor in
+            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    rollback()
+                    ToastManager.shared.showError(toast)
+                    HapticFeedback.error()
+                }
+            }
         }
     }
 
