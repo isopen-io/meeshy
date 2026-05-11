@@ -13,7 +13,7 @@ import { EncryptionService } from '../EncryptionService';
 import { NotificationService } from '../notifications/NotificationService';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
-import { enhancedLogger } from '../../utils/logger-enhanced';
+import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 // Logger dédié pour MessageProcessor
@@ -315,12 +315,22 @@ export class MessageProcessor {
     expiresAt?: Date;
     clientMessageId?: string;
   }): Promise<Message> {
+    const corr: Record<string, any> = {
+      clientMessageId: data.clientMessageId,
+      conversationId: data.conversationId,
+      senderId: data.senderId
+    };
+
     // ÉTAPE 1: Traiter les liens AVANT de sauvegarder le message
-    const processedContent = await this.processLinksInContent(
-      data.content,
-      data.conversationId,
-      data.senderId,
-      undefined
+    const processedContent = await performanceLogger.withTiming(
+      'messaging.processLinks',
+      () => this.processLinksInContent(
+        data.content,
+        data.conversationId,
+        data.senderId,
+        undefined
+      ),
+      corr
     );
 
     // ÉTAPE 2: Get encryption context for this message
@@ -335,10 +345,14 @@ export class MessageProcessor {
         encryptionMetadata: data.encryptionMetadata
       };
     } else {
-      encryptionContext = await this.getEncryptionContext(
-        data.conversationId,
-        processedContent.trim(),
-        data.messageType || 'text'
+      encryptionContext = await performanceLogger.withTiming(
+        'messaging.encryptionContext',
+        () => this.getEncryptionContext(
+          data.conversationId,
+          processedContent.trim(),
+          data.messageType || 'text'
+        ),
+        corr
       );
     }
 
@@ -380,31 +394,10 @@ export class MessageProcessor {
     let message: Message;
     let isDuplicate = false;
     try {
-      message = await this.prisma.message.create({
-        data: messageData,
-      include: {
-        sender: {
-          select: {
-            id: true,
-            displayName: true,
-            avatar: true,
-            type: true,
-            nickname: true,
-            userId: true,
-            user: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                firstName: true,
-                lastName: true,
-                avatar: true
-              }
-            }
-          }
-        },
-        attachments: true,
-        replyTo: {
+      message = await performanceLogger.withTiming(
+        'messaging.prismaMessageCreate',
+        () => this.prisma.message.create({
+          data: messageData,
           include: {
             sender: {
               select: {
@@ -425,11 +418,36 @@ export class MessageProcessor {
                   }
                 }
               }
+            },
+            attachments: true,
+            replyTo: {
+              include: {
+                sender: {
+                  select: {
+                    id: true,
+                    displayName: true,
+                    avatar: true,
+                    type: true,
+                    nickname: true,
+                    userId: true,
+                    user: {
+                      select: {
+                        id: true,
+                        username: true,
+                        displayName: true,
+                        firstName: true,
+                        lastName: true,
+                        avatar: true
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
-        }
-      }
-    });
+        }),
+        corr
+      );
     } catch (e) {
       const isP2002 =
         typeof e === 'object' && e !== null
@@ -443,43 +461,47 @@ export class MessageProcessor {
       // a Prisma `@@unique` directive — so the `findUnique` compound
       // type is not generated. The compound `@@index` declared in the
       // schema still backs this query for performance.
-      const existing = await this.prisma.message.findFirst({
-        where: {
-          conversationId: data.conversationId,
-          clientMessageId: data.clientMessageId
-        },
-        include: {
-          sender: {
-            select: {
-              id: true, displayName: true, avatar: true, type: true,
-              nickname: true, userId: true,
-              user: {
-                select: {
-                  id: true, username: true, displayName: true,
-                  firstName: true, lastName: true, avatar: true
+      const existing = await performanceLogger.withTiming(
+        'messaging.dedupFindFirst',
+        () => this.prisma.message.findFirst({
+          where: {
+            conversationId: data.conversationId,
+            clientMessageId: data.clientMessageId
+          },
+          include: {
+            sender: {
+              select: {
+                id: true, displayName: true, avatar: true, type: true,
+                nickname: true, userId: true,
+                user: {
+                  select: {
+                    id: true, username: true, displayName: true,
+                    firstName: true, lastName: true, avatar: true
+                  }
                 }
               }
-            }
-          },
-          attachments: true,
-          replyTo: {
-            include: {
-              sender: {
-                select: {
-                  id: true, displayName: true, avatar: true, type: true,
-                  nickname: true, userId: true,
-                  user: {
-                    select: {
-                      id: true, username: true, displayName: true,
-                      firstName: true, lastName: true, avatar: true
+            },
+            attachments: true,
+            replyTo: {
+              include: {
+                sender: {
+                  select: {
+                    id: true, displayName: true, avatar: true, type: true,
+                    nickname: true, userId: true,
+                    user: {
+                      select: {
+                        id: true, username: true, displayName: true,
+                        firstName: true, lastName: true, avatar: true
+                      }
                     }
                   }
                 }
               }
             }
           }
-        }
-      });
+        }),
+        corr
+      );
       if (!existing) {
         // Race condition we cannot reconcile — bubble up the original error.
         logger.error('P2002 raised but no existing record found for clientMessageId', {
@@ -513,8 +535,14 @@ export class MessageProcessor {
       } as Message;
     }
 
+    const corrWithMsg = { ...corr, messageId: message.id };
+
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
-    await this.handleAttachments(data, message);
+    await performanceLogger.withTiming(
+      'messaging.handleAttachments',
+      () => this.handleAttachments(data, message),
+      corrWithMsg
+    );
 
     // ÉTAPE 4 bis: Rafraîchir les attachments en mémoire. `prisma.message.create`
     // a capturé `attachments: []` AVANT que `handleAttachments` ne fasse le
@@ -527,18 +555,30 @@ export class MessageProcessor {
       (data.attachmentIds && data.attachmentIds.length > 0) ||
       Boolean(data.forwardedFromId);
     if (hasAttachmentLinks) {
-      const refreshedAttachments = await this.prisma.messageAttachment.findMany({
-        where: { messageId: message.id }
-      });
+      const refreshedAttachments = await performanceLogger.withTiming(
+        'messaging.refreshAttachments',
+        () => this.prisma.messageAttachment.findMany({
+          where: { messageId: message.id }
+        }),
+        corrWithMsg
+      );
       (message as Message & { attachments: unknown[] }).attachments = refreshedAttachments;
     }
 
     // ÉTAPE 5: Mettre à jour les liens de tracking avec le messageId
-    await this.updateTrackingLinksWithMessageId(processedContent, data, message.id);
+    await performanceLogger.withTiming(
+      'messaging.trackingLinks',
+      () => this.updateTrackingLinksWithMessageId(processedContent, data, message.id),
+      corrWithMsg
+    );
 
     // ÉTAPE 6: Traiter les mentions et déclencher TOUTES les notifications
     // (Mentions, Réponses, Messages réguliers)
-    await this.handleMentionsAndNotifications(data, message, processedContent);
+    await performanceLogger.withTiming(
+      'messaging.mentionsAndNotifications',
+      () => this.handleMentionsAndNotifications(data, message, processedContent),
+      corrWithMsg
+    );
 
     return {
       ...message,
