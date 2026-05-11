@@ -1799,7 +1799,14 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // safe because we don't await any media setup from this delegate.
         Logger.calls.info("[CALLKIT_DIAG] provider:perform:CXStartCallAction RECEIVED (callUUID=\(action.callUUID)) — fulfilling")
         action.fulfill()
-        Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction.fulfill() RETURNED")
+        // Also signal progress straight from the delegate so CallKit's
+        // outgoing-call grace window starts ticking from "connecting" as
+        // soon as possible — the symmetric call from the
+        // `callController.request(_:completion:)` completion handler still
+        // happens, this just covers the case where that completion is
+        // delayed by the main-queue load of WebRTC setup.
+        provider.reportOutgoingCall(with: action.callUUID, startedConnectingAt: Date())
+        Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction.fulfill() + reportOutgoingCall(_:startedConnectingAt:) from delegate")
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
