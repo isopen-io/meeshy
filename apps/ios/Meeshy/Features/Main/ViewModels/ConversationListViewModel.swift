@@ -73,11 +73,19 @@ class ConversationListViewModel: ObservableObject {
     private let authManager: AuthManaging
     private let storyService: StoryServiceProviding
     private let syncEngine: ConversationSyncEngineProviding
-    /// Number of conversations fetched per `loadMore` page. Tuned at
-    /// 30 to match the spec's 30-row windows: large enough to fill a
-    /// screen on most devices without scrolling, small enough that the
-    /// cursor request stays under ~50KB even with rich metadata.
-    private let pageLimit = 30
+    /// Number of conversations fetched per `loadMore` page.
+    ///
+    /// Tuned at 100 (gateway max) so the first paginated page after the
+    /// cold cache covers the long tail of the user's conversation list
+    /// in a SINGLE request — empirically every user falls under this
+    /// ceiling, so the second `loadMore` call returns hasMore=false and
+    /// the infinite-scroll sentinel goes silent. Keeping it at 30 forced
+    /// the sentinel to fire 4-5 times for a 100-row account, every onAppear
+    /// re-trigger amplifying any pagination glitch (cf. the May 2026
+    /// `cursorPagination` schema strip bug that turned this into an
+    /// uncapped loop). The payload at limit=100 stays well under 200 KB
+    /// even with rich metadata.
+    private let pageLimit = 100
     private var cancellables = Set<AnyCancellable>()
     var storyPrefetchTask: Task<Void, Never>?
 
@@ -179,7 +187,12 @@ class ConversationListViewModel: ObservableObject {
         persistTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: UInt64(debounce * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
+            // Cache .save() est devenu throwing (Wave 1 Local-First) :
+            // utilise try? pour preserver le comportement historique
+            // best-effort. Une defaillance d'ecriture (encryption, disque
+            // plein) est loggee par GRDBCacheStore et ne doit pas casser
+            // le persist debounce.
+            try? await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
             await CacheCoordinator.shared.conversations.saveCursor(
                 nextCursor: cursor, hasMore: more, for: "list"
             )
@@ -680,27 +693,16 @@ class ConversationListViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        // On socket reconnection, pull the delta so the list reflects anything
-        // that changed while the socket was down (renames, new conversations,
-        // archived/deleted, unread counts). Without this the user lands on a
-        // stale list after coming back from background until they pull to
-        // refresh manually.
-        messageSocket.didReconnect
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                // Random 0-500ms jitter before firing the delta sync so that
-                // a server blip that drops every client simultaneously
-                // doesn't produce a thundering herd of `/conversations?updatedSince=…`
-                // requests the instant the gateway comes back online.
-                let jitter = UInt64.random(in: 0...500_000_000)
-                Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: jitter)
-                    await self?.syncEngine.syncSinceLastCheckpoint()
-                    await self?.reloadFromCache()
-                }
-            }
-            .store(in: &cancellables)
+        // NOTE: `messageSocket.didReconnect` is intentionally NOT observed here.
+        // `ConversationSyncEngine.startSocketRelay()` already handles the
+        // reconnect → `syncSinceLastCheckpoint()` chain at the SDK boundary,
+        // and any resulting list mutation flows back into this view-model
+        // through `syncEngine.conversationsDidChange` (subscribed in
+        // `observeSync()` above) which triggers `reloadFromCache()`.
+        // Subscribing twice produced N× delta-sync calls per flap — the
+        // 2026-05-11 audit traced a `/conversations` request burst back to
+        // exactly this duplication. Keeping the relay in the engine keeps
+        // one and only one delta sync per reconnect.
     }
 
     // MARK: - Typing Cleanup
@@ -924,6 +926,8 @@ class ConversationListViewModel: ObservableObject {
 
         do {
             let userId = currentUserId
+            let previousCursor = nextCursor
+            let knownIds = Set(conversations.map(\.id))
             let page = try await conversationService.listPage(
                 before: nextCursor,
                 limit: pageLimit,
@@ -935,6 +939,28 @@ class ConversationListViewModel: ObservableObject {
             // isOnline flags) because the domain model strips them.
             PresenceManager.shared.seed(from: page.rawItems, currentUserId: userId)
             appendConversations(page.items)
+
+            // Loop guard 1 : zero-progress detection. If the gateway
+            // returned items but ALL of them were already known locally,
+            // or if the cursor did not advance, we are looping. This
+            // happened in May 2026 when `fast-json-stringify` stripped
+            // `cursorPagination` from the response (schema didn't
+            // declare it), so `page.nextCursor` came back nil despite
+            // the server having more rows — the sentinel kept refiring
+            // `loadMore`, every page request returned the same first 30
+            // rows, and the user saw a runaway burst of GET /conversations
+            // until the socket-driven render eventually unblocked things.
+            let newIds = Set(page.items.map(\.id)).subtracting(knownIds)
+            let cursorAdvanced = page.nextCursor != nil && page.nextCursor != previousCursor
+            let madeProgress = !newIds.isEmpty && cursorAdvanced
+            if !madeProgress, !page.items.isEmpty {
+                Logger.messages.error("[ConversationListVM] loadMore zero-progress (cursor=\(self.nextCursor ?? "nil") → \(page.nextCursor ?? "nil"), newIds=\(newIds.count)) — forcing exhausted to break loop")
+                nextCursor = page.nextCursor
+                hasMore = false
+                paginationState = .exhausted
+                return
+            }
+
             nextCursor = page.nextCursor
             hasMore = page.hasMore
             paginationState = page.hasMore ? .idle : .exhausted
@@ -954,7 +980,9 @@ class ConversationListViewModel: ObservableObject {
             // always the one that should win.
             persistTask?.cancel()
             persistTask = Task {
-                await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
+                // try? : Wave 1 Local-First a rendu .save() throwing.
+                // Best-effort persist — l'erreur est loggee en aval.
+                try? await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
                 await CacheCoordinator.shared.conversations.saveCursor(
                     nextCursor: persistedCursor,
                     hasMore: persistedHasMore,
@@ -1283,7 +1311,7 @@ class ConversationListViewModel: ObservableObject {
                                 let messages = response.data.reversed().map {
                                     $0.toMessage(currentUserId: userId, currentUsername: username)
                                 }
-                                await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
+                                try? await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
                             }
                         } catch { }
                     }
@@ -1355,7 +1383,7 @@ class ConversationListViewModel: ObservableObject {
                     }
                 }
 
-                await CacheCoordinator.shared.stories.save(storyGroups, for: "recent_tray")
+                try? await CacheCoordinator.shared.stories.save(storyGroups, for: "recent_tray")
                 Logger.messages.info("[ConversationListVM] Stories prefetched: \(storyGroups.count) groups, \(uniqueImageURLs.count) images, \(uniqueVideoURLs.count) videos")
             } catch {
                 Logger.messages.error("[ConversationListVM] Story prefetch failed: \(error.localizedDescription)")

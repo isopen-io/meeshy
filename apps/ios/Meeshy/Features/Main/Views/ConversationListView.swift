@@ -99,19 +99,16 @@ struct ConversationListView: View {
     @State private var headerScrollOffset: CGFloat = 0
     @State private var lastScrollDirectionChange: Date = .distantPast
 
-    // Pull-to-refresh state machine (custom Meeshy indicator avec logo
-    // dashes + dégradé indigo + haptics). Remplace le `.refreshable`
-    // standard d'iOS pour avoir un visuel brand-coherent. Le drag-end
-    // est détecté via simultaneousGesture sur le ScrollView.
-    @State private var pullPhase: MeeshyPullPhase = .idle
-    @State private var peakPullDistance: CGFloat = 0
-    @State private var hasFiredArmedHaptic: Bool = false
-    @State private var pullRefreshTask: Task<Void, Never>? = nil
+    // Pull-to-refresh : delegue tout a `MeeshyRefreshableScroll` (wrapper
+    // brand-coherent qui combine `.refreshable` natif iOS + animation
+    // Meeshy custom : logo dashes, degrade indigo, haptic au seuil et au
+    // success). L'ancien state machine custom (pullPhase, peakPullDistance,
+    // simultaneousGesture, startPullRefresh, completePullRefresh) ne
+    // declenchait pas l'haptic ni le refresh sur device — `simultaneousGesture`
+    // ne firait pas systematiquement parce que le ScrollView consomme le
+    // drag vertical en priorite. Le wrapper utilise `.refreshable` qui est
+    // robuste.
 
-    /// Distance de pull (pt) à partir de laquelle le refresh s'amorce
-    /// au release. ~90pt = doigt confortable sur grand écran.
-    private static let pullRefreshThreshold: CGFloat = 90
-    
     // UI states
     @State var blockTargetConversation: Conversation? = nil
     @State var showBlockConfirmation = false
@@ -703,20 +700,35 @@ struct ConversationListView: View {
     private var mainContentZStack: some View {
         ZStack(alignment: .bottom) {
             // Layer 1: Full-screen scroll content
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    // Scroll offset detector (MUST be first child)
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ScrollOffsetPreferenceKey.self,
-                            value: geo.frame(in: .named("scroll")).minY
-                        )
+            // Wrapper Meeshy : `.refreshable` natif iOS + indicator brand
+            // anime (logo dashes + degrade indigo). Le contenu est insere
+            // tel quel, le wrapper s'occupe du sentinel scrollOffset, du
+            // MeeshyPullIndicator au top, des haptics et de l'orchestration
+            // de la sequence pull -> armed -> refreshing -> completing -> idle.
+            MeeshyRefreshableScroll(
+                onRefresh: {
+                    async let convRefresh: Void = conversationViewModel.pullToRefresh()
+                    async let storyRefresh: Void = storyViewModel.loadStories(forceNetwork: true)
+                    async let statusRefresh: Void = statusViewModel.refresh()
+                    async let communitiesRefresh: Void = loadUserCommunities()
+                    _ = await (convRefresh, storyRefresh, statusRefresh, communitiesRefresh)
+                },
+                coordinateSpaceName: "scroll",
+                onScrollOffsetChange: { offset in
+                    headerScrollOffset = offset
+                    guard !isSearching, !showSearchOverlay else { return }
+                    let scrollingDown = offset < -30
+                    if scrollingDown != isScrollingDown {
+                        // Throttle direction changes to avoid rapid toggling during bounce/overscroll
+                        let now = Date()
+                        guard now.timeIntervalSince(lastScrollDirectionChange) > 0.15 else { return }
+                        lastScrollDirectionChange = now
+                        isScrollingDown = scrollingDown
                     }
-                    .frame(height: 0)
-
-                    // Header spacer — pushes content below the expanded header
-                    Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
-
+                },
+                topPadding: CollapsibleHeaderMetrics.expandedHeight
+            ) {
+                VStack(spacing: 0) {
                     // Story carousel
                     StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
                         onStoryViewRequest?(userId, true)
@@ -794,30 +806,7 @@ struct ConversationListView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 120)
             }
-            .coordinateSpace(name: "scroll")
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
-                headerScrollOffset = offset
-                updatePullPhase(scrollOffset: offset)
-                guard !isSearching, !showSearchOverlay else { return }
-                let scrollingDown = offset < -30
-                if scrollingDown != isScrollingDown {
-                    // Throttle direction changes to avoid rapid toggling during bounce/overscroll
-                    let now = Date()
-                    guard now.timeIntervalSince(lastScrollDirectionChange) > 0.15 else { return }
-                    lastScrollDirectionChange = now
-                    isScrollingDown = scrollingDown
-                }
-            }
             .scrollDismissesKeyboard(.interactively)
-            // simultaneousGesture co-existe avec le scroll natif du
-            // ScrollView (ne bloque pas le drag). onEnded fire au
-            // moment où le doigt se lève — c'est là qu'on décide si le
-            // refresh est armé (peak dépasse threshold).
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 0).onEnded { _ in
-                    handlePullDragEnded()
-                }
-            )
 
             // Layer 2: Bottom overlay — Search bar + Communities & Filters
             VStack(spacing: 0) {
@@ -845,20 +834,6 @@ struct ConversationListView: View {
             .opacity(isScrollingDown ? 0 : 1)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isScrollingDown)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSearchOverlay)
-        }
-        // Layer 2.5: Pull-to-refresh indicator overlay — positionné JUSTE
-        // SOUS le header (donc au-dessus du contenu scrollé), avec une
-        // hauteur auto-gérée par la phase. Quand idle : hauteur 0 →
-        // invisible. Pull/refresh : pousse visuellement sous le header
-        // pendant que l'utilisateur tire. Doit apparaître AVANT le
-        // header overlay pour que CollapsibleHeader reste topmost.
-        .overlay(alignment: .top) {
-            VStack(spacing: 0) {
-                Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
-                MeeshyPullIndicator(phase: pullPhase)
-                Spacer(minLength: 0)
-            }
-            .allowsHitTesting(false)
         }
         // Layer 3: Collapsible header overlay — pinned to top, respects safe area
         .overlay(alignment: .top) {
@@ -1036,120 +1011,8 @@ struct ConversationListView: View {
 
     // See ConversationListView+Overlays.swift for communitiesSection, categoryFilters, themedSearchBar
 
-    // MARK: - Custom Pull-to-Refresh
-
-    /// Mise à jour de la phase pull à partir du scroll offset courant.
-    /// Appelée depuis `.onPreferenceChange(ScrollOffsetPreferenceKey)`.
-    ///
-    /// Convention de signe de `ScrollOffsetPreferenceKey` (via
-    /// `geo.frame(in: .named("scroll")).minY`) :
-    /// - `offset == 0` : repos au sommet de la liste
-    /// - `offset > 0`  : utilisateur **tire vers le bas** (overscroll
-    ///   au top → contenu descend → minY positif). C'est notre signal
-    ///   de pull-to-refresh.
-    /// - `offset < 0`  : utilisateur scroll vers le bas pour lire plus
-    ///   loin (contenu remonte → minY négatif). Pas un pull, c'est de
-    ///   la navigation normale (la valeur < -30 cache la search bar).
-    private func updatePullPhase(scrollOffset: CGFloat) {
-        // Ne pas perturber l'affichage pendant le refresh ou la sortie
-        // en cours — le state machine reste en .refreshing/.completing
-        // tant que le Task n'est pas terminé.
-        if case .refreshing = pullPhase { return }
-        if case .completing = pullPhase { return }
-
-        let pullDistance = max(0, scrollOffset)
-        peakPullDistance = max(peakPullDistance, pullDistance)
-
-        if pullDistance == 0 {
-            // Retour à l'état neutre quand le scroll est revenu à 0.
-            if pullPhase != .idle {
-                pullPhase = .idle
-            }
-            return
-        }
-
-        let threshold = Self.pullRefreshThreshold
-        if pullDistance >= threshold {
-            if pullPhase != .armed {
-                pullPhase = .armed
-            }
-            // Haptic feedback "armé" tiré une seule fois au crossing.
-            if !hasFiredArmedHaptic {
-                hasFiredArmedHaptic = true
-                HapticFeedback.medium()
-            }
-        } else {
-            // Progression normalisée 0...1 jusqu'au seuil.
-            let progress = pullDistance / threshold
-            pullPhase = .pulling(progress: progress)
-            // Repasse en pull < threshold → on reset le flag haptic
-            // pour qu'un nouveau crossing produise à nouveau le tap.
-            if hasFiredArmedHaptic {
-                hasFiredArmedHaptic = false
-            }
-        }
-    }
-
-    /// Appelée au release du doigt (drag end). Si on a franchi le seuil,
-    /// on déclenche le refresh — sinon on remet en .idle proprement.
-    private func handlePullDragEnded() {
-        defer {
-            peakPullDistance = 0
-            hasFiredArmedHaptic = false
-        }
-        guard pullRefreshTask == nil else { return }
-        if peakPullDistance >= Self.pullRefreshThreshold,
-           case .armed = pullPhase {
-            startPullRefresh()
-        }
-    }
-
-    /// Orchestre le refresh : invalidation transverse via le ViewModel
-    /// (qui purge listing + préférences + assets) puis re-fetch stories,
-    /// statuses et communautés en parallèle. Spring-back + haptic
-    /// success au succès, error au pire.
-    private func startPullRefresh() {
-        pullPhase = .refreshing
-        pullRefreshTask = Task { [weak conversationViewModel, weak storyViewModel, weak statusViewModel] in
-            // Démarre tous les refresh en parallèle. ConversationListVM
-            // a l'invalidation la plus large (caches transverses), les
-            // autres ViewModels gèrent leur propre store.
-            async let convRefresh: Void = conversationViewModel?.pullToRefresh() ?? ()
-            async let storyRefresh: Void = storyViewModel?.loadStories(forceNetwork: true) ?? ()
-            async let statusRefresh: Void = statusViewModel?.refresh() ?? ()
-            async let communitiesRefresh: Void = loadUserCommunities()
-            _ = await (convRefresh, storyRefresh, statusRefresh, communitiesRefresh)
-
-            await MainActor.run {
-                completePullRefresh(success: true)
-            }
-        }
-    }
-
-    /// Sortie propre du refresh — animation spring-back, haptic et
-    /// retour en idle après une courte phase .completing pour laisser
-    /// l'utilisateur percevoir que le refresh est fini.
-    @MainActor
-    private func completePullRefresh(success: Bool) {
-        pullRefreshTask = nil
-        if success {
-            HapticFeedback.success()
-        } else {
-            HapticFeedback.error()
-        }
-        withAnimation(.spring(response: 0.45, dampingFraction: 0.85)) {
-            pullPhase = .completing
-        }
-        // Brève fenêtre où l'utilisateur voit que c'est terminé, puis
-        // l'indicator se replie. Le scroll content se remet en place
-        // automatiquement via le spring (l'indicator passe à hauteur 0).
-        Task { @MainActor in
-            try? await Task.sleep(nanoseconds: 350_000_000)
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-                pullPhase = .idle
-            }
-        }
-    }
+    // Pull-to-refresh entierement gere par MeeshyRefreshableScroll.
+    // Voir Layer 1 dans `mainContentZStack`.
 }
 
 // See ThemedConversationRow.swift

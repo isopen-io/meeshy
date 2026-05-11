@@ -267,6 +267,10 @@ extension VoIPPushManager: PKPushRegistryDelegate {
 
     // MARK: - Backend Registration
 
+    private static let lastVoIPTokenKey = "com.meeshy.voip.lastRegisteredToken"
+    private static let lastVoIPRegisteredAtKey = "com.meeshy.voip.lastRegisteredAt"
+    private static let voipRegistrationCooldown: TimeInterval = 300
+
     private func registerTokenWithBackend(_ token: String) async {
         // Audit P2-CC-1 — queue the token if auth isn't ready yet, then
         // retry from `authBecameAvailable`. Previously the token was
@@ -275,6 +279,21 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         guard APIClient.shared.authToken != nil else {
             pendingTokenToRegister = token
             logger.info("VoIP token received before auth — queued for retry on login")
+            return
+        }
+
+        // Idempotence: same VoIP token within the cooldown window is a
+        // no-op. PushKit re-emits the same token on every `register()` call
+        // (`forceReregister` etc.) — without this guard each cycle produced
+        // a redundant POST.
+        let now = Date()
+        let lastToken = UserDefaults.standard.string(forKey: Self.lastVoIPTokenKey)
+        let lastAt = UserDefaults.standard.object(forKey: Self.lastVoIPRegisteredAtKey) as? Date
+        if lastToken == token,
+           let lastAt,
+           now.timeIntervalSince(lastAt) < Self.voipRegistrationCooldown {
+            pendingTokenToRegister = nil
+            logger.debug("Skipping VoIP token registration: same token registered \(Int(now.timeIntervalSince(lastAt)))s ago")
             return
         }
 
@@ -290,6 +309,8 @@ extension VoIPPushManager: PKPushRegistryDelegate {
                 endpoint: "/users/register-device-token",
                 body: body
             )
+            UserDefaults.standard.set(token, forKey: Self.lastVoIPTokenKey)
+            UserDefaults.standard.set(now, forKey: Self.lastVoIPRegisteredAtKey)
             pendingTokenToRegister = nil
             logger.info("VoIP token registered with backend (env=\(PushNotificationManager.apnsEnvironment))")
         } catch {

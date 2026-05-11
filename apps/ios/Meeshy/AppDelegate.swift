@@ -40,6 +40,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         registerNotificationCategories()
         BackgroundTaskManager.shared.registerTasks()
 
+        // Masquer le spinner natif d'iOS pour les pull-to-refresh
+        // SwiftUI `.refreshable`. `.tint(.clear)` au site d'utilisation
+        // ne suffit pas sur iOS 17+ — l'UIRefreshControl sous-jacent
+        // garde sa couleur systeme par defaut. En forcant tintColor
+        // = .clear AU NIVEAU de l'appearance proxy, le ProgressView
+        // natif est totalement invisible et seul notre `MeeshyPullIndicator`
+        // brand est visible pendant le refresh.
+        UIRefreshControl.appearance().tintColor = .clear
+
         // NotificationCoordinator must be wired as early as possible so unread/badge
         // state stays aligned even if no view is yet in the hierarchy.
         // Accessing @MainActor state requires an explicit hop since the delegate
