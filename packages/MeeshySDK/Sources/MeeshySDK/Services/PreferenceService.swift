@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - Protocol
 
@@ -177,7 +178,11 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
     }
 
     public func persistCategories(_ categories: [ConversationCategory]) async {
-        await CacheCoordinator.shared.categories.save(categories, for: Self.cacheKey)
+        do {
+            try await CacheCoordinator.shared.categories.save(categories, for: Self.cacheKey)
+        } catch {
+            Logger.cache.error("persistCategories failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     public func loadCachedConversationTags() async -> [String]? {
@@ -198,7 +203,11 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
 
     public func persistConversationTags(_ tags: [String]) async {
         let entries = tags.map { ConversationTagEntry(name: $0) }
-        await CacheCoordinator.shared.userTags.save(entries, for: Self.cacheKey)
+        do {
+            try await CacheCoordinator.shared.userTags.save(entries, for: Self.cacheKey)
+        } catch {
+            Logger.cache.error("persistConversationTags failed: \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     public func loadCachedAllPreferences() async -> UserPreferences? {
@@ -219,7 +228,14 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
 
     public func persistAllPreferences(_ prefs: UserPreferences) async {
         let wrapped = PreferenceValue(id: Self.allPrefsKey, value: prefs)
-        await CacheCoordinator.shared.userPreferences.save([wrapped], for: Self.allPrefsKey)
+        do {
+            try await CacheCoordinator.shared.userPreferences.save([wrapped], for: Self.allPrefsKey)
+        } catch {
+            // Encrypted store: a failure here means the user's preferences
+            // were not persisted. Surface in the log so the user can be
+            // warned by a higher layer once Task 1.2 wires error UX.
+            Logger.cache.error("persistAllPreferences failed (encrypted store): \(error.localizedDescription, privacy: .public)")
+        }
     }
 
     public func loadCachedConversationPreferences(conversationId: String) async -> APIConversationPreferences? {
@@ -240,6 +256,10 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
 
     public func persistConversationPreferences(conversationId: String, prefs: APIConversationPreferences) async {
         let wrapped = PreferenceValue(id: conversationId, value: prefs)
-        await CacheCoordinator.shared.conversationPreferences.save([wrapped], for: conversationId)
+        do {
+            try await CacheCoordinator.shared.conversationPreferences.save([wrapped], for: conversationId)
+        } catch {
+            Logger.cache.error("persistConversationPreferences failed (encrypted store): \(error.localizedDescription, privacy: .public)")
+        }
     }
 }

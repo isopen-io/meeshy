@@ -2,7 +2,16 @@ import Foundation
 import CryptoKit
 import os
 
-public final class DatabaseEncryption: @unchecked Sendable {
+/// Abstraction over `DatabaseEncryption.shared` so callers can inject a stub
+/// in tests (e.g. one that simulates a corrupted Keychain key by returning
+/// `nil` on encrypt). The shared singleton conforms by virtue of its public
+/// `encrypt(_:)` / `decrypt(_:)` API.
+public protocol DatabaseEncryptionProviding: Sendable {
+    func encrypt(_ plaintext: Data) -> Data?
+    func decrypt(_ ciphertext: Data) -> Data?
+}
+
+public final class DatabaseEncryption: DatabaseEncryptionProviding, @unchecked Sendable {
     public static let shared = DatabaseEncryption()
 
     private static let keychainKey = "meeshy_db_encryption_key"

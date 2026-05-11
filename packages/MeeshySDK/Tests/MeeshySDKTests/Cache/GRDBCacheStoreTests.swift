@@ -33,7 +33,7 @@ final class GRDBCacheStoreTests: XCTestCase {
         let store = try makeStore()
         let items = [CacheTestItem(id: "1", name: "Alice"), CacheTestItem(id: "2", name: "Bob")]
 
-        await store.save(items, for: "key1")
+        try await store.save(items, for: "key1")
         let result = await store.load(for: "key1")
 
         switch result {
@@ -61,7 +61,7 @@ final class GRDBCacheStoreTests: XCTestCase {
         let store = try makeStore(db: db)
         let items = [CacheTestItem(id: "1", name: "Alice")]
 
-        await store.save(items, for: "testkey")
+        try await store.save(items, for: "testkey")
 
         let count = try await db.read { db in
             try CacheEntry.filter(Column("key") == "testkey").fetchCount(db)
@@ -74,7 +74,7 @@ final class GRDBCacheStoreTests: XCTestCase {
         let store = try makeStore(db: db)
         let items = [CacheTestItem(id: "1", name: "Alice")]
 
-        await store.save(items, for: "metakey")
+        try await store.save(items, for: "metakey")
 
         let meta = try await db.read { db in
             try DBCacheMetadata.filter(Column("key") == "metakey").fetchOne(db)
@@ -91,7 +91,7 @@ final class GRDBCacheStoreTests: XCTestCase {
             CacheTestItem(id: "3", name: "C")
         ]
 
-        await store.save(items, for: "trimkey")
+        try await store.save(items, for: "trimkey")
         let result = await store.load(for: "trimkey")
 
         XCTAssertEqual(result.value?.count, 2)
@@ -102,7 +102,7 @@ final class GRDBCacheStoreTests: XCTestCase {
     func test_update_mutatesL1() async throws {
         let store = try makeStore()
         let items = [CacheTestItem(id: "1", name: "Alice")]
-        await store.save(items, for: "upkey")
+        try await store.save(items, for: "upkey")
 
         await store.update(for: "upkey") { existing in
             existing + [CacheTestItem(id: "2", name: "Bob")]
@@ -134,7 +134,7 @@ final class GRDBCacheStoreTests: XCTestCase {
         let db = try makeDB()
         let store = try makeStore(db: db)
         let items = [CacheTestItem(id: "1", name: "Alice")]
-        await store.save(items, for: "invkey")
+        try await store.save(items, for: "invkey")
 
         await store.invalidate(for: "invkey")
 
@@ -155,8 +155,8 @@ final class GRDBCacheStoreTests: XCTestCase {
     func test_invalidateAll_clearsEverything() async throws {
         let db = try makeDB()
         let store = try makeStore(db: db)
-        await store.save([CacheTestItem(id: "1", name: "A")], for: "k1")
-        await store.save([CacheTestItem(id: "2", name: "B")], for: "k2")
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "k1")
+        try await store.save([CacheTestItem(id: "2", name: "B")], for: "k2")
 
         await store.invalidateAll()
 
@@ -175,7 +175,7 @@ final class GRDBCacheStoreTests: XCTestCase {
     func test_flushDirtyKeys_persistsMutation() async throws {
         let db = try makeDB()
         let store = try makeStore(db: db)
-        await store.save([CacheTestItem(id: "1", name: "Alice")], for: "flushkey")
+        try await store.save([CacheTestItem(id: "1", name: "Alice")], for: "flushkey")
 
         await store.update(for: "flushkey") { existing in
             existing + [CacheTestItem(id: "2", name: "Bob")]
@@ -192,7 +192,7 @@ final class GRDBCacheStoreTests: XCTestCase {
     func test_flushDirtyKeys_noDirty_isNoOp() async throws {
         let db = try makeDB()
         let store = try makeStore(db: db)
-        await store.save([CacheTestItem(id: "1", name: "Alice")], for: "cleankey")
+        try await store.save([CacheTestItem(id: "1", name: "Alice")], for: "cleankey")
 
         await store.flushDirtyKeys()
 
@@ -205,7 +205,7 @@ final class GRDBCacheStoreTests: XCTestCase {
     func test_flushDirtyKeys_removesDeletedItems() async throws {
         let db = try makeDB()
         let store = try makeStore(db: db)
-        await store.save([CacheTestItem(id: "1", name: "A"), CacheTestItem(id: "2", name: "B")], for: "delkey")
+        try await store.save([CacheTestItem(id: "1", name: "A"), CacheTestItem(id: "2", name: "B")], for: "delkey")
 
         await store.update(for: "delkey") { _ in
             [CacheTestItem(id: "1", name: "A")]
@@ -225,9 +225,9 @@ final class GRDBCacheStoreTests: XCTestCase {
         let db = try makeDB()
         let store = try makeStore(maxL1Keys: 2, db: db)
 
-        await store.save([CacheTestItem(id: "1", name: "A")], for: "lru1")
-        await store.save([CacheTestItem(id: "2", name: "B")], for: "lru2")
-        await store.save([CacheTestItem(id: "3", name: "C")], for: "lru3")
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "lru1")
+        try await store.save([CacheTestItem(id: "2", name: "B")], for: "lru2")
+        try await store.save([CacheTestItem(id: "3", name: "C")], for: "lru3")
 
         let l2Count = try await db.read { db in
             try CacheEntry.filter(Column("key") == "lru1").fetchCount(db)
@@ -244,8 +244,8 @@ final class GRDBCacheStoreTests: XCTestCase {
         let db = try makeDB()
         let store = try makeStore(ttl: 1, staleTTL: 0.5, maxL1Keys: 1, db: db)
 
-        await store.save([CacheTestItem(id: "1", name: "A")], for: "freshkey")
-        await store.save([CacheTestItem(id: "2", name: "B")], for: "otherkey")
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "freshkey")
+        try await store.save([CacheTestItem(id: "2", name: "B")], for: "otherkey")
 
         try await Task.sleep(nanoseconds: 600_000_000)
 
@@ -266,15 +266,15 @@ final class GRDBCacheStoreTests: XCTestCase {
         let db = try makeDB()
         let store = try makeStore(maxL1Keys: 3, db: db)
 
-        await store.save([CacheTestItem(id: "1", name: "A")], for: "k1")
-        await store.save([CacheTestItem(id: "2", name: "B")], for: "k2")
-        await store.save([CacheTestItem(id: "3", name: "C")], for: "k3")
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "k1")
+        try await store.save([CacheTestItem(id: "2", name: "B")], for: "k2")
+        try await store.save([CacheTestItem(id: "3", name: "C")], for: "k3")
 
         // Touch k1 to make it recently used
         _ = await store.load(for: "k1")
 
         // Adding k4 should evict k2 (least recently used), not k1
-        await store.save([CacheTestItem(id: "4", name: "D")], for: "k4")
+        try await store.save([CacheTestItem(id: "4", name: "D")], for: "k4")
 
         let loadedKeys = await store.loadedKeys()
         XCTAssertTrue(loadedKeys.contains("k1"), "k1 should remain in L1 (recently accessed)")
@@ -291,10 +291,10 @@ final class GRDBCacheStoreTests: XCTestCase {
         let db = try makeDB()
         let store = try makeStore(maxL1Keys: 2, db: db)
 
-        await store.save([CacheTestItem(id: "1", name: "A")], for: "a")
-        await store.save([CacheTestItem(id: "2", name: "B")], for: "b")
-        await store.save([CacheTestItem(id: "3", name: "C")], for: "c")
-        await store.save([CacheTestItem(id: "4", name: "D")], for: "d")
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "a")
+        try await store.save([CacheTestItem(id: "2", name: "B")], for: "b")
+        try await store.save([CacheTestItem(id: "3", name: "C")], for: "c")
+        try await store.save([CacheTestItem(id: "4", name: "D")], for: "d")
 
         let loadedKeys = await store.loadedKeys()
         XCTAssertEqual(loadedKeys.count, 2, "Only maxL1Keys entries should remain in L1")
@@ -318,7 +318,7 @@ final class GRDBCacheStoreTests: XCTestCase {
             encrypted: true
         )
         let items = [CacheTestItem(id: "1", name: "Secret")]
-        await store.save(items, for: "key1")
+        try await store.save(items, for: "key1")
         let result = await store.load(for: "key1")
         switch result {
         case .fresh(let loaded, _):
@@ -350,7 +350,7 @@ final class GRDBCacheStoreTests: XCTestCase {
     func test_saveCursor_doesNotClobberItems() async throws {
         let store = try makeStore()
         let items = [CacheTestItem(id: "1", name: "Alice"), CacheTestItem(id: "2", name: "Bob")]
-        await store.save(items, for: "list")
+        try await store.save(items, for: "list")
 
         await store.saveCursor(nextCursor: "tail-2", hasMore: true, for: "list")
 
@@ -365,7 +365,7 @@ final class GRDBCacheStoreTests: XCTestCase {
         // A subsequent items-save (e.g. another loadMore wrote a fresh
         // snapshot) must NOT reset the cursor — the cursor is owned by
         // the caller's saveCursor calls.
-        await store.save([CacheTestItem(id: "1", name: "A")], for: "list")
+        try await store.save([CacheTestItem(id: "1", name: "A")], for: "list")
 
         let cursor = await store.loadCursor(for: "list")
         XCTAssertEqual(cursor?.nextCursor, "tail-1",
@@ -388,12 +388,12 @@ final class GRDBCacheStoreTests: XCTestCase {
         // First "session": save page 1 + advance cursor to tail of page 1.
         let session1 = try makeStore(db: db)
         let page1 = (1...30).map { CacheTestItem(id: "item-\($0)", name: "C\($0)") }
-        await session1.save(page1, for: "list")
+        try await session1.save(page1, for: "list")
         await session1.saveCursor(nextCursor: "item-30", hasMore: true, for: "list")
 
         // Save page 2 (merged with page 1) + advance cursor to tail of page 2.
         let merged = page1 + (31...60).map { CacheTestItem(id: "item-\($0)", name: "C\($0)") }
-        await session1.save(merged, for: "list")
+        try await session1.save(merged, for: "list")
         await session1.saveCursor(nextCursor: "item-60", hasMore: true, for: "list")
 
         // Flush any dirty L1 to L2 before "killing" the session.
@@ -425,7 +425,10 @@ final class GRDBCacheStoreTests: XCTestCase {
             for i in 0..<20 {
                 group.addTask {
                     let item = CacheTestItem(id: "\(i)", name: "Item \(i)")
-                    await store.save([item], for: "concurrent-\(i % 5)")
+                    // Swallow encryption / write errors inside the
+                    // task group — this is a stress test for crash
+                    // safety, not for write success.
+                    try? await store.save([item], for: "concurrent-\(i % 5)")
                 }
                 group.addTask {
                     _ = await store.load(for: "concurrent-\(i % 5)")
@@ -443,7 +446,7 @@ final class GRDBCacheStoreTests: XCTestCase {
         let db = try makeDB()
         let store = try makeStore(db: db)
 
-        await store.save([CacheTestItem(id: "1", name: "Initial")], for: "shared")
+        try await store.save([CacheTestItem(id: "1", name: "Initial")], for: "shared")
 
         await withTaskGroup(of: Void.self) { group in
             for i in 0..<10 {

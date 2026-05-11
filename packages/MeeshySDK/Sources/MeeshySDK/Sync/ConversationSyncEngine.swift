@@ -436,7 +436,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             let toKeep = recentByDate.count > recentByCount.count ? recentByDate : recentByCount
 
             if toKeep.count < messages.count {
-                await cache.messages.save(toKeep, for: conv.id)
+                do {
+                    try await cache.messages.save(toKeep, for: conv.id)
+                } catch {
+                    Logger.cache.error("ConversationSyncEngine cleanup save failed for \(conv.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
 
@@ -851,6 +855,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// so the engine must enforce the order rather than trust the network.
     private func saveSorted(_ items: [MeeshyConversation], to cacheKey: String) async {
         let sorted = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
-        await cache.conversations.save(sorted, for: cacheKey)
+        do {
+            try await cache.conversations.save(sorted, for: cacheKey)
+        } catch {
+            Logger.cache.error("ConversationSyncEngine saveSorted failed for \(cacheKey, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 }

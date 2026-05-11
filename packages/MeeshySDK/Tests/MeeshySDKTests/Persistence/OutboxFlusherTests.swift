@@ -12,11 +12,13 @@ final class OutboxFlusherTests: XCTestCase {
         try await pool.write { db in
             try OutboxRecord(
                 id: "1", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_1",
                 payload: Data(), status: .pending, attempts: 0, lastError: nil,
                 createdAt: now, updatedAt: now, nextAttemptAt: now
             ).insert(db)
             try OutboxRecord(
                 id: "2", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_2",
                 payload: Data(), status: .pending, attempts: 0, lastError: nil,
                 createdAt: now.addingTimeInterval(0.1), updatedAt: now, nextAttemptAt: now
             ).insert(db)
@@ -44,6 +46,7 @@ final class OutboxFlusherTests: XCTestCase {
         try await pool.write { db in
             try OutboxRecord(
                 id: "x", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_x",
                 payload: Data(), status: .pending, attempts: 0, lastError: nil,
                 createdAt: now, updatedAt: now, nextAttemptAt: now
             ).insert(db)
@@ -69,6 +72,7 @@ final class OutboxFlusherTests: XCTestCase {
         try await pool.write { db in
             try OutboxRecord(
                 id: "x", kind: .sendMessage, conversationId: "c1",
+                clientMessageId: "cid_x",
                 payload: Data(), status: .pending, attempts: 4, lastError: nil,
                 createdAt: now, updatedAt: now, nextAttemptAt: now
             ).insert(db)

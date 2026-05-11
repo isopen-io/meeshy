@@ -46,6 +46,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
     let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
     let callEnded = PassthroughSubject<CallEndData, Never>()
+    let callMissed = PassthroughSubject<CallMissedData, Never>()
+    let callAlreadyAnswered = PassthroughSubject<CallAlreadyAnsweredData, Never>()
     let callParticipantJoined = PassthroughSubject<CallParticipantData, Never>()
     let callParticipantLeft = PassthroughSubject<CallParticipantData, Never>()
     let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()

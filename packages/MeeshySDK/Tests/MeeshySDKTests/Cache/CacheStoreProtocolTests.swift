@@ -31,14 +31,14 @@ final class CacheStoreProtocolTests: XCTestCase {
 
     func test_saveAndLoad() async {
         let store = MockMutableStore()
-        await store.save([TestItem(id: "1", name: "Alice")], for: "k")
+        try await store.save([TestItem(id: "1", name: "Alice")], for: "k")
         let result = await store.load(for: "k")
         XCTAssertEqual(result.value, [TestItem(id: "1", name: "Alice")])
     }
 
     func test_update_mutatesInPlace() async {
         let store = MockMutableStore()
-        await store.save([TestItem(id: "1", name: "Alice")], for: "k")
+        try await store.save([TestItem(id: "1", name: "Alice")], for: "k")
         await store.update(for: "k") { $0.map { var i = $0; i.name = "Bob"; return i } }
         let result = await store.load(for: "k")
         XCTAssertEqual(result.value?.first?.name, "Bob")
@@ -46,7 +46,7 @@ final class CacheStoreProtocolTests: XCTestCase {
 
     func test_invalidate_removesKey() async {
         let store = MockMutableStore()
-        await store.save([TestItem(id: "1", name: "A")], for: "k")
+        try await store.save([TestItem(id: "1", name: "A")], for: "k")
         await store.invalidate(for: "k")
         let result = await store.load(for: "k")
         XCTAssertNil(result.value)
@@ -54,8 +54,8 @@ final class CacheStoreProtocolTests: XCTestCase {
 
     func test_invalidateAll() async {
         let store = MockMutableStore()
-        await store.save([TestItem(id: "1", name: "A")], for: "k1")
-        await store.save([TestItem(id: "2", name: "B")], for: "k2")
+        try await store.save([TestItem(id: "1", name: "A")], for: "k1")
+        try await store.save([TestItem(id: "2", name: "B")], for: "k2")
         await store.invalidateAll()
         let result1 = await store.load(for: "k1")
         let result2 = await store.load(for: "k2")

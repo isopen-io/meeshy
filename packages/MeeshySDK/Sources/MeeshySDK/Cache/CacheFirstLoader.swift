@@ -80,7 +80,7 @@ public final class CacheFirstLoader<Store: MutableCacheStore>: @unchecked Sendab
                         apply(fresh)
                         setLoadState(.loaded)
                     }
-                    await store.save(fresh, for: key)
+                    try await store.save(fresh, for: key)
                 } catch {
                     Logger.cache.warning(
                         "CacheFirstLoader silent revalidate failed for \(keyDescription, privacy: .public): \(error.localizedDescription, privacy: .public)"
@@ -99,7 +99,7 @@ public final class CacheFirstLoader<Store: MutableCacheStore>: @unchecked Sendab
                     apply(data)
                     setLoadState(.loaded)
                 }
-                await store.save(data, for: key)
+                try await store.save(data, for: key)
             } catch {
                 let isOnline = networkMonitor.isOnline
                 await MainActor.run {

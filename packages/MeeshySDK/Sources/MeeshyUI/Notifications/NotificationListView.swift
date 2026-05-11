@@ -453,7 +453,7 @@ final class NotificationListViewModel: ObservableObject {
             notifications = response.data
             hasMore = response.pagination?.hasMore ?? false
             offset = limit
-            await CacheCoordinator.shared.notifications.save(response.data, for: "all")
+            try await CacheCoordinator.shared.notifications.save(response.data, for: "all")
             await NotificationManager.shared.refreshUnreadCount()
         } catch {
             Logger.notifications.error("Failed to refresh notifications: \(error.localizedDescription)")
