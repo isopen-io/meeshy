@@ -27,3 +27,27 @@ public final class SendablePassthrough<Output: Sendable>: @unchecked Sendable {
         subject.eraseToAnyPublisher()
     }
 }
+
+/// A thread-safe wrapper around `CurrentValueSubject<Output, Never>` that conforms
+/// to `Sendable`. Same rationale as `SendablePassthrough` — `CurrentValueSubject`
+/// is thread-safe at runtime but not declared `Sendable`, so we wrap it for use
+/// as a `nonisolated` stored property inside Swift actors.
+public final class SendableCurrentValueSubject<Output: Sendable>: @unchecked Sendable {
+    private let subject: CurrentValueSubject<Output, Never>
+
+    public init(_ initialValue: Output) {
+        self.subject = CurrentValueSubject<Output, Never>(initialValue)
+    }
+
+    public func send(_ value: Output) {
+        subject.send(value)
+    }
+
+    public var value: Output {
+        subject.value
+    }
+
+    public var publisher: AnyPublisher<Output, Never> {
+        subject.eraseToAnyPublisher()
+    }
+}

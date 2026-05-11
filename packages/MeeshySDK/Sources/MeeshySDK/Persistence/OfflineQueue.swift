@@ -150,6 +150,34 @@ public enum OfflineQueueError: Error, Sendable {
     case payloadCodingFailed(underlying: Error)
     /// The GRDB write transaction itself failed.
     case writeFailed(underlying: Error)
+    /// `retryItem(_:)` was called with an `outboxId` that no longer exists in
+    /// the outbox table — either it succeeded, was manually cleared, or the
+    /// caller passed a stale id.
+    case itemNotFound
+}
+
+// MARK: - Outcome
+
+/// Terminal outcome of a queued mutation, observed via `outcomeStream(for:)`.
+///
+/// - `.applied(cmid)` is emitted when the outbox row for `cmid` is removed
+///   after a successful flush (either via `retryAll`'s sendMessage path or via
+///   `OutboxFlusher`'s generic dispatch path).
+/// - `.exhausted(cmid)` is emitted when the retry budget is exhausted
+///   (`attempts >= maxAttempts`) and the row's status is flipped to
+///   `.exhausted`. The row stays in the table for manual `retryItem(_:)`.
+public enum OutboxOutcome: Sendable, Equatable {
+    case applied(cmid: String)
+    case exhausted(cmid: String)
+
+    /// The `clientMessageId` / `clientMutationId` this outcome describes,
+    /// regardless of variant — convenient for routing observers.
+    public var cmid: String {
+        switch self {
+        case .applied(let cmid), .exhausted(let cmid):
+            return cmid
+        }
+    }
 }
 
 // MARK: - Offline Queue
@@ -158,6 +186,19 @@ public actor OfflineQueue {
     public static let shared = OfflineQueue()
 
     public nonisolated let retrySucceeded = SendablePassthrough<OfflineRetrySuccess>()
+
+    /// Backing subject for `pendingCountPublisher`. `nonisolated` so callers can
+    /// read the publisher synchronously from any context (e.g. SwiftUI views)
+    /// without awaiting the actor.
+    private nonisolated let pendingCountSubject = SendableCurrentValueSubject<Int>(0)
+
+    /// Publishes the current pending outbox count and every subsequent update.
+    /// Emits the latest value immediately on subscription (Combine
+    /// `CurrentValueSubject` semantics) so SwiftUI bindings render correctly
+    /// on first connect.
+    public nonisolated var pendingCountPublisher: AnyPublisher<Int, Never> {
+        pendingCountSubject.publisher
+    }
 
     private static let maxQueueSize = 100
 
@@ -174,6 +215,10 @@ public actor OfflineQueue {
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
     /// Outbox pool — injected at boot via `configure(pool:)`. Nil until wired.
     private var outboxPool: (any DatabaseWriter)?
+    /// Per-`cmid` outcome subscribers (AsyncStream continuations). A single
+    /// cmid may have multiple observers (e.g. one ViewModel + one banner) ;
+    /// each receives the same terminal event before the stream finishes.
+    private var outcomeContinuations: [String: [AsyncStream<OutboxOutcome>.Continuation]] = [:]
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -202,10 +247,119 @@ public actor OfflineQueue {
     /// Must be called once at boot before any `enqueue` calls.
     public func configure(pool: any DatabaseWriter) {
         outboxPool = pool
+        Task { await self.refreshPendingCount() }
     }
 
     private init() {
         Task { await self.observeConnection() }
+    }
+
+    // MARK: - Outcome Observation (Phase 4 prereq)
+
+    /// Returns an `AsyncStream` that emits the terminal `OutboxOutcome` for
+    /// the given `cmid` (clientMessageId or clientMutationId) — exactly one
+    /// `.applied` or `.exhausted` event, then the stream completes.
+    ///
+    /// Callers that subscribe AFTER the outcome has already fired receive an
+    /// empty stream that terminates immediately. The expected lifecycle is :
+    /// subscribe BEFORE issuing the mutation, then `await` the next iterator
+    /// element to observe completion.
+    public func outcomeStream(for cmid: String) -> AsyncStream<OutboxOutcome> {
+        AsyncStream { continuation in
+            self.outcomeContinuations[cmid, default: []].append(continuation)
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                Task { await self.dropContinuation(for: cmid) }
+            }
+        }
+    }
+
+    /// Emits an outcome to every observer registered for `outcome.cmid`,
+    /// finishes their streams, and clears the registry slot.
+    ///
+    /// Called from `retryAll()` (sendMessage success), from the
+    /// `OutboxFlusher.onOutcome` callback (generic dispatch success /
+    /// exhaustion), and from `retryItem(_:)` if the row is missing.
+    public func publishOutcome(_ outcome: OutboxOutcome) {
+        guard let observers = outcomeContinuations.removeValue(forKey: outcome.cmid) else {
+            return
+        }
+        for continuation in observers {
+            continuation.yield(outcome)
+            continuation.finish()
+        }
+    }
+
+    /// Internal: removes a single continuation that was cancelled by its
+    /// consumer (Task cancellation, scope exit). Idempotent — if the slot was
+    /// already cleared by `publishOutcome`, this is a no-op.
+    private func dropContinuation(for cmid: String) {
+        outcomeContinuations.removeValue(forKey: cmid)
+    }
+
+    // MARK: - Manual Retry (Phase 4 prereq)
+
+    /// Manually retries an outbox row that has previously failed or exhausted
+    /// its retry budget. Resets `attempts` to 0, clears `lastError`, flips
+    /// `status` back to `.pending`, and schedules `nextAttemptAt` for
+    /// immediate retry on the flusher's next pass.
+    ///
+    /// Throws `OfflineQueueError.itemNotFound` if no row exists for
+    /// `outboxId`. Throws `OfflineQueueError.poolNotConfigured` if
+    /// `configure(pool:)` was never called.
+    public func retryItem(_ outboxId: String) async throws {
+        guard let pool = outboxPool else {
+            throw OfflineQueueError.poolNotConfigured
+        }
+
+        let exists = (try? await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: outboxId)
+        }) ?? nil
+
+        guard exists != nil else {
+            throw OfflineQueueError.itemNotFound
+        }
+
+        let now = Date()
+        do {
+            try await pool.write { db in
+                try db.execute(sql: """
+                    UPDATE outbox
+                    SET status = ?, attempts = 0, lastError = NULL,
+                        updatedAt = ?, nextAttemptAt = ?
+                    WHERE id = ?
+                    """, arguments: [
+                        OutboxStatus.pending.rawValue,
+                        now,
+                        now,
+                        outboxId
+                    ])
+            }
+        } catch {
+            logger.error("retryItem write failed: \(error.localizedDescription, privacy: .public)")
+            throw OfflineQueueError.writeFailed(underlying: error)
+        }
+
+        await refreshPendingCount()
+    }
+
+    // MARK: - Pending Count
+
+    /// Counts rows currently in `.pending` or `.inflight` state and updates
+    /// `pendingCountSubject`. Called after every enqueue/dequeue/retryItem
+    /// touchpoint. Falls back to the in-memory mirror if no pool is wired.
+    private func refreshPendingCount() async {
+        guard let pool = outboxPool else {
+            pendingCountSubject.send(items.count)
+            return
+        }
+        let count: Int = (try? await pool.read { db in
+            try OutboxRecord
+                .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue]
+                    .contains(Column("status")))
+                .fetchCount(db)
+        }) ?? items.count
+        pendingCountSubject.send(count)
     }
 
     // MARK: - Queue Operations
@@ -331,6 +485,7 @@ public actor OfflineQueue {
         }
         items.append(item)
         logger.info("Enqueued offline message for conversation \(item.conversationId, privacy: .public), queue size: \(self.items.count)")
+        await refreshPendingCount()
     }
 
     // MARK: - Non-message mutation enqueue (Wave 1 Task 3.x)
@@ -422,6 +577,7 @@ public actor OfflineQueue {
         }
 
         logger.info("Enqueued \(kind.rawValue, privacy: .public) outbox row \(outboxId, privacy: .public)")
+        await refreshPendingCount()
         return outboxId
     }
 
@@ -578,6 +734,7 @@ public actor OfflineQueue {
         }
         items.append(item)
         logger.info("Enqueued audio for conversation \(conversationId, privacy: .public), path \(relativePath, privacy: .public)")
+        await refreshPendingCount()
 
         return EnqueueAudioResult(outboxId: outboxId, localAudioPath: relativePath)
     }
@@ -694,6 +851,7 @@ public actor OfflineQueue {
         } catch {
             throw OfflineQueueError.writeFailed(underlying: error)
         }
+        await refreshPendingCount()
     }
 
     /// Persists a `deleteMessage` request. If a pending `sendMessage` or
@@ -798,12 +956,16 @@ public actor OfflineQueue {
         // a logically-deleted message until the next app restart. The gateway
         // dedup catches the duplicate but the optimistic row would flicker.
         items.removeAll { $0.clientMessageId == clientMessageId }
+        await refreshPendingCount()
     }
 
     public func dequeue(_ itemId: String) async {
         let outboxId = "ofq_\(itemId)"
         items.removeAll { $0.id == itemId }
-        guard let pool = outboxPool else { return }
+        guard let pool = outboxPool else {
+            await refreshPendingCount()
+            return
+        }
         do {
             try await pool.write { db in
                 _ = try OutboxRecord.deleteOne(db, key: outboxId)
@@ -811,6 +973,7 @@ public actor OfflineQueue {
         } catch {
             logger.error("dequeue failed: \(error.localizedDescription, privacy: .public)")
         }
+        await refreshPendingCount()
     }
 
     public var pendingItems: [OfflineQueueItem] {
@@ -987,11 +1150,13 @@ public actor OfflineQueue {
                 cached.filter { $0.id != payload.clientMessageId }
             }
             retrySucceeded.send(payload)
+            publishOutcome(.applied(cmid: payload.clientMessageId))
         }
 
         if !successIds.isEmpty {
             logger.info("Successfully retried \(successIds.count) messages, \(self.items.count) remaining")
         }
+        await refreshPendingCount()
     }
 
     // MARK: - Connection Observer
@@ -1018,7 +1183,10 @@ public actor OfflineQueue {
     public func clearAll() async {
         let ids = items.map { $0.id }
         items.removeAll()
-        guard let pool = outboxPool else { return }
+        guard let pool = outboxPool else {
+            await refreshPendingCount()
+            return
+        }
         do {
             try await pool.write { db in
                 for id in ids {
@@ -1028,6 +1196,7 @@ public actor OfflineQueue {
         } catch {
             logger.error("clearAll failed: \(error.localizedDescription, privacy: .public)")
         }
+        await refreshPendingCount()
     }
 
     // MARK: - Outbox Migration (utility / testing)
