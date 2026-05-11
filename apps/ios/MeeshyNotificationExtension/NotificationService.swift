@@ -40,6 +40,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         // E2EE decryption: if the push payload contains encrypted content,
         // attempt to decrypt it locally using the shared Keychain session key.
         // On success, replace the notification body with the decrypted plaintext.
+        var didDecrypt = false
         if let encryptedContent = userInfo["encryptedContent"] as? String,
            let senderId = userInfo["senderId"] as? String,
            !encryptedContent.isEmpty {
@@ -48,15 +49,21 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 senderUserId: senderId
             ) {
                 bestAttemptContent.body = decrypted
+                didDecrypt = true
             }
         }
 
         // Localize protected message placeholders. The gateway sends a
-        // notificationLocKey (e.g. "notification.encrypted_message") and a
-        // plain-English fallback body. If the loc-key is present and the body
-        // was NOT already overridden by the E2EE decryptor above, resolve the
-        // localized string from the NSE bundle's Localizable.xcstrings.
-        if let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
+        // notificationLocKey (e.g. "notification.encrypted_message") AND a
+        // plain placeholder body for EVERY E2EE message. Without the
+        // `didDecrypt` guard the localized "Message chiffré" string would
+        // unconditionally clobber the just-decrypted plaintext from the
+        // E2EE block above, defeating the entire E2EE rich-push feature
+        // for every user on a localized device. Only fall back to the
+        // localized placeholder when decryption did NOT succeed (or was
+        // not applicable because the push wasn't encrypted at all).
+        if !didDecrypt,
+           let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
             let localized = NSLocalizedString(locKey, comment: "")
             if localized != locKey {
                 bestAttemptContent.body = localized
@@ -215,12 +222,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
               let messageId = userInfo["messageId"] as? String,
               !conversationId.isEmpty, !messageId.isEmpty else { return }
 
-        let apiBase = (userInfo["apiBaseURL"] as? String) ?? "https://gate.meeshy.me"
-
+        // Audit 2026-05-11: NSEDataSync now resolves the API base URL
+        // internally from a strict allowlist + App Group UserDefaults.
+        // We deliberately stop reading `userInfo["apiBaseURL"]` — that
+        // path was an SSRF / JWT exfiltration vector for any attacker
+        // who could deliver a push payload.
         NSEDataSync.syncMessage(
             conversationId: conversationId,
-            messageId: messageId,
-            apiBaseURL: apiBase
+            messageId: messageId
         ) { _ in }
     }
 
@@ -233,8 +242,9 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// This is a best-effort, fire-and-forget operation. Any failure is silently
     /// swallowed; the main app will fetch the message from the REST API on resume.
     private static let sharedPool: DatabasePool? = {
+        guard let path = appGroupDatabasePath() else { return nil }
         do {
-            let pool = try DatabasePool(path: appGroupDatabasePath())
+            let pool = try DatabasePool(path: path)
             try MessageDatabaseMigrations.runAll(on: pool)
             return pool
         } catch { return nil }
@@ -247,17 +257,37 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
               let pool = Self.sharedPool
         else { return }
 
+        // Audit 2026-05-11: For E2EE messages we deliberately skip the
+        // pre-persist path. The push payload's plaintext `content` field
+        // is just the placeholder ("Encrypted message"), and writing
+        // `isEncrypted: false` would let attacker-controlled push content
+        // render in the bubble until NSEDataSync.syncMessage's API
+        // response overwrites it. NSEDataSync already fetches the
+        // canonical record from the gateway and writes it via the
+        // pending-messages path — that's the trustworthy source.
+        let isEncryptedPush = (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } ?? false
+        if isEncryptedPush { return }
+
         let content = userInfo["content"] as? String ?? ""
 
         do {
-
             let now = Date()
             let record = MessageRecord(
                 localId: messageId, serverId: messageId,
                 conversationId: conversationId, senderId: senderId,
-                content: content, originalLanguage: "fr",
+                // Don't hardcode "fr" — read from push payload if present, else
+                // default to "en" (the safer fake for an unknown language than
+                // the previous "fr" which guaranteed wrong Prisme Linguistique
+                // resolution for non-French speakers). The NSEDataSync API
+                // fetch will overwrite with the canonical value seconds later.
+                content: content,
+                originalLanguage: (userInfo["originalLanguage"] as? String) ?? "en",
                 messageType: "text", messageSource: "user", contentType: "text",
-                state: .sent, retryCount: 0, lastError: nil,
+                // Incoming messages are .delivered (received by us), not
+                // .sent (which means "sent BY us and acked by server").
+                // The previous .sent value broke any GRDB query that
+                // partitions by sender ownership.
+                state: .delivered, retryCount: 0, lastError: nil,
                 isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
                 replyToId: nil, storyReplyToId: nil,
                 forwardedFromId: nil, forwardedFromConversationId: nil,
@@ -288,12 +318,17 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         }
     }
 
-    /// Returns the path to the shared App Group SQLite database.
-    /// Mirrors `DependencyContainer.databasePath()` from the main app target.
-    private static func appGroupDatabasePath() -> String {
-        let container = FileManager.default.containerURL(
+    /// Returns the path to the shared App Group SQLite database, or nil if
+    /// the App Group entitlement is not available (misconfigured signing,
+    /// stripped entitlement on Ad Hoc builds, etc.). Audit 2026-05-11
+    /// removed the prior `containerURL!` force-unwrap which crashed the
+    /// extension via EXC_BREAKPOINT on the very first push when the
+    /// entitlement was absent — invisible to users, hard to diagnose
+    /// without a sysdiagnose.
+    private static func appGroupDatabasePath() -> String? {
+        guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
-        )!
+        ) else { return nil }
         let dbDir = container.appendingPathComponent("Database")
         try? FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
         return dbDir.appendingPathComponent("meeshy_messages.sqlite").path

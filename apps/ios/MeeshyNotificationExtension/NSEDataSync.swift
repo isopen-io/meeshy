@@ -22,10 +22,19 @@ nonisolated enum NSEDataSync {
     /// Fetch a message from the API and persist it to the shared container.
     /// Call from `didReceive(_:withContentHandler:)` after extracting the
     /// push payload fields.
+    ///
+    /// IMPORTANT — security note (audit 2026-05-11):
+    /// The `apiBaseURL` is resolved from the shared App Group UserDefaults
+    /// (which the main app writes when its environment changes), with a
+    /// strict allowlist + a hardcoded production fallback. We deliberately
+    /// do NOT accept a URL from the push payload anymore — that prior
+    /// design allowed an attacker who could deliver a push (compromised
+    /// FCM credentials, MITM in the APNs delivery chain) to redirect this
+    /// authenticated request to an attacker-controlled host and exfiltrate
+    /// the user's live Bearer JWT.
     static func syncMessage(
         conversationId: String,
         messageId: String,
-        apiBaseURL: String,
         completion: @escaping @Sendable (Bool) -> Void
     ) {
         guard let token = readAuthToken() else {
@@ -33,6 +42,7 @@ nonisolated enum NSEDataSync {
             return
         }
 
+        let apiBaseURL = resolveApiBaseURL()
         let urlString = "\(apiBaseURL)/api/v1/conversations/\(conversationId)/messages/\(messageId)"
         guard let url = URL(string: urlString) else {
             completion(false)
@@ -119,6 +129,33 @@ nonisolated enum NSEDataSync {
             try? fm.removeItem(at: file)
         }
         return results
+    }
+
+    // MARK: - Trusted base URL resolution
+    //
+    // The NSE never trusts a URL coming from the push payload (see security
+    // note on syncMessage). The base URL is resolved from a small allowlist
+    // matching the xcconfig environments (Production, Staging, Localhost).
+    // The main app writes the active environment to App Group UserDefaults
+    // (`meeshy_api_base_url`) when the user switches environment via the
+    // dev menu; the NSE reads it at request time. Anything outside the
+    // allowlist falls back to production.
+
+    private static let allowedApiBaseURLs: Set<String> = [
+        "https://gate.meeshy.me",
+        "https://gate.staging.meeshy.me",
+        "http://localhost:3000"
+    ]
+    private static let defaultApiBaseURL = "https://gate.meeshy.me"
+    private static let apiBaseURLDefaultsKey = "meeshy_api_base_url"
+
+    private static func resolveApiBaseURL() -> String {
+        guard let defaults = UserDefaults(suiteName: appGroupId),
+              let stored = defaults.string(forKey: apiBaseURLDefaultsKey),
+              allowedApiBaseURLs.contains(stored) else {
+            return defaultApiBaseURL
+        }
+        return stored
     }
 
     // MARK: - Auth token from shared Keychain
