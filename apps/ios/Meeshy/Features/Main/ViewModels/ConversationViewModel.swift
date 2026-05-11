@@ -1473,6 +1473,11 @@ class ConversationViewModel: ObservableObject {
         // local id (online send, offline queue, retry queue) now flows through
         // `ClientMessageId.generate()`.
         let tempId = existingTempId ?? ClientMessageId.generate()
+        // Phase A real-time instrumentation: chronometer the send → ACK delta
+        // so we can correlate it with the gateway-side `perf:http.message.post`
+        // / `perf:messaging.handleMessage` logs through the same cmid.
+        let sendStartedAt = Date()
+        Logger.messages.info("perf:ios.send.start clientMessageId=\(tempId, privacy: .public) conversationId=\(self.conversationId, privacy: .public) existingTempId=\(existingTempId != nil, privacy: .public)")
         let resolvedAttachments = localAttachments ?? []
         let optimisticMessageType: Message.MessageType = {
             guard let first = resolvedAttachments.first else { return .text }
@@ -1588,6 +1593,8 @@ class ConversationViewModel: ObservableObject {
                 event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
             )
             print("[SendFlow] applyEvent serverAck tempId=\(tempId) → resultState=\(ackResult.map { String(describing: $0) } ?? "nil")")
+            let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
+            Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(responseData.id, privacy: .public) durationMs=\(ackElapsedMs, privacy: .public)")
 
             // Move conversation to top of list immediately (optimistic)
             let convId = conversationId
@@ -1625,6 +1632,8 @@ class ConversationViewModel: ObservableObject {
             isSending = false
             return true
         } catch {
+            let failElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
+            Logger.messages.warning("perf:ios.send.fail clientMessageId=\(tempId, privacy: .public) durationMs=\(failElapsedMs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             // Apply sendFailed — state machine increments retryCount and transitions
             // to .queued (retries remaining) or .failed (budget exhausted).
             // The store observation surfaces the updated state to the view.
