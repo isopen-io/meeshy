@@ -130,7 +130,10 @@ final class CallManager: ObservableObject {
         let config = CXProviderConfiguration()
         config.supportsVideo = true
         config.maximumCallsPerCallGroup = 1
-        config.maximumCallGroups = 2
+        // Audit P2-iOS-5 — was 2 but the app declares supportsHolding=false
+        // on every CXCallUpdate. Contradictory pair confused some iOS
+        // versions into showing a hold button on the lock screen.
+        config.maximumCallGroups = 1
         config.supportedHandleTypes = [.generic]
         config.includesCallsInRecents = true
         // Custom CallKit icon: bundle a 40x40 PNG named "CallKitIcon" in Assets
@@ -840,8 +843,12 @@ final class CallManager: ObservableObject {
 
     func handleRemoteReject(callId: String) {
         guard currentCallId == callId else { return }
+        // Audit P2-iOS-6 — was .remoteEnded which Recents displays as
+        // "Ended". The semantically correct CXCallEndedReason for an
+        // explicit decline by the remote is .declinedElsewhere (Recents
+        // shows "Declined" — better UX + analytics).
         if let uuid = activeCallUUID {
-            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
+            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .declinedElsewhere)
         }
         endCallInternal(reason: .rejected)
         HapticFeedback.error()

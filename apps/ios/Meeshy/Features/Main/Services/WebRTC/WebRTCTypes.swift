@@ -161,7 +161,10 @@ enum QualityThresholds {
     static let minBitrate: Int = 24_000
     static let defaultBitrate: Int = 64_000
 
-    static let statsIntervalSeconds: TimeInterval = 3.0
+    // Audit P2-iOS-12 — bumped from 3s to 5s. RTCPeerConnection.statistics
+    // walks the entire stats graph (~5–10ms CPU per call); 5s is the
+    // industry baseline (WhatsApp/Jitsi use 2–5s during reconnection only).
+    static let statsIntervalSeconds: TimeInterval = 5.0
     /// Phase 1 fix P1: cellular networks have RTT 800ms+ ; 5s heartbeat with
     /// 15s lost was too aggressive (false-positive reconnects). SOTA matches
     /// WhatsApp/Telegram with 10s/30s. Reference §5.12.

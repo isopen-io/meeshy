@@ -1124,10 +1124,21 @@ export class CallEventsHandler {
           enabled: data.enabled
         });
 
-        // Update participant media state
+        // Audit P2-GW-5 — `updateParticipantMedia` queries on
+        // `participantId` (Participant.id ObjectId), NOT userId. Passing
+        // userId here matched nothing and the toggle silently failed.
+        // Resolve to the real participantId before calling the service.
+        const audioParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!audioParticipantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this call'
+          } as CallError);
+          return;
+        }
         await this.callService.updateParticipantMedia(
           data.callId,
-          userId,
+          audioParticipantId,
           'audio',
           data.enabled
         );
@@ -1135,7 +1146,7 @@ export class CallEventsHandler {
         // Broadcast to all call participants
         const toggleEvent: CallMediaToggleEvent = {
           callId: data.callId,
-          participantId: userId,
+          participantId: audioParticipantId,
           mediaType: 'audio',
           enabled: data.enabled
         };
@@ -1204,10 +1215,18 @@ export class CallEventsHandler {
           enabled: data.enabled
         });
 
-        // Update participant media state
+        // Audit P2-GW-5 — see audio toggle handler for rationale.
+        const videoParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!videoParticipantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this call'
+          } as CallError);
+          return;
+        }
         await this.callService.updateParticipantMedia(
           data.callId,
-          userId,
+          videoParticipantId,
           'video',
           data.enabled
         );
@@ -1215,7 +1234,7 @@ export class CallEventsHandler {
         // Broadcast to all call participants
         const toggleEvent: CallMediaToggleEvent = {
           callId: data.callId,
-          participantId: userId,
+          participantId: videoParticipantId,
           mediaType: 'video',
           enabled: data.enabled
         };
@@ -1698,13 +1717,18 @@ export class CallEventsHandler {
       const callerName = callSession.initiator.displayName || callSession.initiator.username;
       const callerAvatar = callSession.initiator.avatar || undefined;
 
+      // Audit P2-GW-2 — derive callType from metadata.type (set by
+      // initiateCall) instead of hardcoding 'video'. Misclassified
+      // notifications confuse users about what they actually missed.
+      const inferredCallType: 'audio' | 'video' =
+        ((callSession.metadata as any)?.type === 'video' ? 'video' : 'audio');
       for (const participantId of unrespondedParticipants) {
         await this.notificationService.createMissedCallNotification({
           recipientUserId: participantId,
           callerId: callSession.initiatorId,
           conversationId: callSession.conversationId,
           callSessionId: callSession.id,
-          callType: 'video', // TODO: Récupérer le type d'appel depuis les métadonnées
+          callType: inferredCallType,
         });
       }
 
