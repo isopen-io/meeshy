@@ -1377,8 +1377,22 @@ extension CallManager: WebRTCServiceDelegate {
             case .reconnecting:
                 Logger.calls.info("Reconnection successful — running RTP gate")
                 self.startRTPGatePolling()
+            case .offering:
+                // Audit 2026-05-11 §B-Claim-3 — defensive recovery path.
+                // Normally handleRemoteAnswer transitions .offering → .connecting
+                // before ICE establishes. If that transition is missed (callId
+                // guard mismatch, setRemoteDescription throw inside the await,
+                // a re-entrant flow that left state at .offering), the call
+                // silently hangs in .offering with media flowing — the original
+                // outgoing-ring timeout was already cancelled, so there's no
+                // fallback. Treat ICE-connected on .offering as an implicit
+                // catch-up to .connecting and run the RTP gate so the user
+                // sees the call connect rather than spin until they cancel.
+                Logger.calls.warning("[CallFSM] ICE connected while state=.offering — recovering via RTP gate")
+                self.callState = .connecting
+                self.startRTPGatePolling()
             default:
-                break
+                Logger.calls.debug("[CallFSM] webRTCServiceDidConnect ignored in state \(String(describing: self.callState))")
             }
         }
     }

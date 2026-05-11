@@ -1243,7 +1243,8 @@ export const createConversationRequestSchema = {
     participantIds: {
       type: 'array',
       items: { type: 'string' },
-      description: 'Initial participant user IDs'
+      maxItems: 250,
+      description: 'Initial participant user IDs (max 250 — use incremental add for larger groups)'
     },
     communityId: {
       type: 'string',
