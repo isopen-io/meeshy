@@ -446,6 +446,51 @@ export const performanceLogger = {
         );
       }
     };
+  },
+
+  /**
+   * Phase A real-time instrumentation — wraps an async fn with a
+   * start/end pair of structured logs carrying durationMs. The end
+   * log is still emitted when the fn throws (with error:true) and the
+   * original error is rethrown so callers see no behavioural change.
+   *
+   * Convention: `step` follows `snake.dotted` (e.g. `messaging.saveMessage`)
+   * and `context` MUST include `clientMessageId` for end-to-end correlation
+   * when the wrapped call is on the message-send path.
+   */
+  async withTiming<T>(
+    step: string,
+    fn: () => Promise<T>,
+    context: Record<string, any> = {}
+  ): Promise<T> {
+    const startTime = Date.now();
+    logger.info(
+      redactPII({ ...context, step, phase: 'start' }),
+      `perf:${step}`
+    );
+    try {
+      const result = await fn();
+      const durationMs = Date.now() - startTime;
+      logger.info(
+        redactPII({ ...context, step, phase: 'end', durationMs }),
+        `perf:${step}`
+      );
+      return result;
+    } catch (err) {
+      const durationMs = Date.now() - startTime;
+      logger.warn(
+        redactPII({
+          ...context,
+          step,
+          phase: 'end',
+          durationMs,
+          error: true,
+          errorMessage: err instanceof Error ? err.message : String(err)
+        }),
+        `perf:${step}`
+      );
+      throw err;
+    }
   }
 };
 
