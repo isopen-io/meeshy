@@ -585,7 +585,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     deinit {
         // disconnect() is MainActor-isolated; callers must call it explicitly
         // before release. ARC handles per-property cleanup here.
-        RTCCleanupSSL()
+        //
+        // RTCCleanupSSL() must NOT be called here: `WebRTCSharedFactory.factory`
+        // initializes SSL exactly once for the whole process (PERF-001), and the
+        // factory keeps using the SSL context across every P2PWebRTCClient
+        // instance. Tearing it down per-deinit broke any 2nd call in the same
+        // app session (silent DTLS failure or crash on the next handshake).
+        // SSL state is reclaimed by the OS at process exit — that is correct
+        // on iOS, no explicit cleanup needed.
     }
 
     // MARK: - Private Helpers
