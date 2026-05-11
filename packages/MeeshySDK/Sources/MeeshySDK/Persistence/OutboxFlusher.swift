@@ -5,6 +5,26 @@ public protocol OutboxDispatching: Sendable {
     func dispatch(_ record: OutboxRecord) async throws
 }
 
+/// Helper that hydrates a `ReactionContext` from a `.sendReaction` outbox
+/// row. Used by both `OutboxFlusher` (terminal failure → `retryExhausted`)
+/// and `OutboxDispatcher` (permanent reject → `retryExhausted`). Returns
+/// `nil` if the record is not a reaction or the payload fails to decode —
+/// callers fall back to a `kind`-only exhausted event in that case.
+@inline(__always)
+internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.ReactionContext? {
+    guard record.kind == .sendReaction else { return nil }
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    guard let payload = try? decoder.decode(ReactionOutboxPayload.self, from: record.payload) else {
+        return nil
+    }
+    return OfflineRetrySuccess.ReactionContext(
+        messageId: payload.messageId,
+        emoji: payload.emoji,
+        action: payload.action
+    )
+}
+
 /// Drains the `outbox` table FIFO, dispatching each pending item via the
 /// supplied `OutboxDispatching`. Failures schedule an exponential backoff
 /// retry; after `maxAttempts` failures the item is marked `.exhausted`.
@@ -78,6 +98,24 @@ public actor OutboxFlusher {
             let failedSnapshot = current
             try? await pool.write { db in
                 try failedSnapshot.update(db)
+            }
+
+            // Wave 1 Task 3.6 — emit the unified `retryExhausted` signal on
+            // the maxAttempts boundary so ViewModels can flip optimistic rows
+            // to `.failed` without subscribing to per-queue Combine sources.
+            // Lives in the flusher (not the dispatcher) because the flusher
+            // owns the attempt-count bookkeeping. Reactions need their typed
+            // context surfaced too ; `reactionContext(for:)` decodes the
+            // payload best-effort and falls back to `nil` for non-reaction
+            // kinds or corrupt rows.
+            if current.status == .exhausted {
+                OfflineQueue.shared.emitRetryExhausted(OfflineRetryExhausted(
+                    kind: current.kind,
+                    clientMessageId: current.clientMessageId,
+                    conversationId: current.conversationId,
+                    reaction: reactionContext(for: current),
+                    lastError: current.lastError
+                ))
             }
         }
     }

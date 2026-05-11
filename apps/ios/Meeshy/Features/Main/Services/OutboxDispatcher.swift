@@ -586,27 +586,48 @@ struct OutboxDispatcher: OutboxDispatching {
             ))
 
         } else if record.id.hasPrefix("mrq_") {
-            guard let item = try? decoder.decode(RetryQueueItem.self, from: record.payload) else {
-                logger.error("Corrupt RetryQueueItem payload for record \(record.id, privacy: .public), dropping")
+            // Wave 1 Task 3.6 — `MessageRetryQueue` was removed but legacy
+            // `mrq_*` rows may still live on user devices that upgraded mid-
+            // queue. The payload format (`RetryQueueItem`) was a strict
+            // superset of the fields we care about for replay (content,
+            // originalLanguage, replyToId, attachmentIds, clientMessageId) ;
+            // we hand-roll a minimal struct here so we don't need to keep
+            // the deleted public types around just for legacy decoding.
+            //
+            // Decoded rows are sent through the SAME unified
+            // `OfflineQueue.shared.retrySucceeded` signal as `ofq_*` rows so
+            // ConversationViewModel reconciles via a single subscription.
+            struct LegacyMrqPayload: Decodable {
+                let conversationId: String
+                let content: String
+                let originalLanguage: String?
+                let replyToId: String?
+                let attachmentIds: [String]?
+                let clientMessageId: String?
+            }
+            guard let item = try? decoder.decode(LegacyMrqPayload.self, from: record.payload),
+                  let clientMessageId = item.clientMessageId else {
+                logger.error("Corrupt legacy mrq_* payload for record \(record.id, privacy: .public), dropping")
                 return
             }
             let request = SendMessageRequest(
                 content: item.content,
-                originalLanguage: item.originalLanguage,
+                originalLanguage: item.originalLanguage ?? "fr",
                 replyToId: item.replyToId,
                 attachmentIds: item.attachmentIds,
-                clientMessageId: item.clientMessageId
+                clientMessageId: clientMessageId
             )
             let response = try await MessageService.shared.send(
                 conversationId: item.conversationId, request: request
             )
             await CacheCoordinator.shared.messages.mergeUpdate(for: item.conversationId) { cached in
-                cached.filter { $0.id != item.clientMessageId }
+                cached.filter { $0.id != clientMessageId }
             }
-            MessageRetryQueue.shared.retrySucceeded.send(RetryQueueSuccess(
-                clientMessageId: item.clientMessageId,
+            OfflineQueue.shared.retrySucceeded.send(OfflineRetrySuccess(
+                clientMessageId: clientMessageId,
                 serverId: response.id,
-                conversationId: item.conversationId
+                conversationId: item.conversationId,
+                kind: .sendMessage
             ))
         }
         // Unknown namespace prefix — stale row, accept so the flusher removes it.
@@ -647,18 +668,61 @@ struct OutboxDispatcher: OutboxDispatching {
             logger.error("Corrupt ReactionOutboxPayload for record \(record.id, privacy: .public), dropping")
             return
         }
-        switch payload.action {
-        case .add:
-            try await ReactionService.shared.add(
-                messageId: payload.messageId,
-                emoji: payload.emoji
-            )
-        case .remove:
-            try await ReactionService.shared.remove(
-                messageId: payload.messageId,
-                emoji: payload.emoji
-            )
+        do {
+            switch payload.action {
+            case .add:
+                try await ReactionService.shared.add(
+                    messageId: payload.messageId,
+                    emoji: payload.emoji
+                )
+            case .remove:
+                try await ReactionService.shared.remove(
+                    messageId: payload.messageId,
+                    emoji: payload.emoji
+                )
+            }
+            logger.info("Reaction \(payload.action.rawValue, privacy: .public) \(payload.emoji, privacy: .public) dispatched for message \(payload.messageId, privacy: .public)")
+            // Wave 1 Task 3.6 — emit unified success. We don't have a
+            // server-assigned id for reactions (the gateway broadcasts
+            // `reaction:added` / `reaction:removed` over the socket which
+            // the rest of the app already consumes), but the call still
+            // carries enough context for any pending-indicator UI to clear
+            // its hint. `serverId` is set to the reaction `clientMessageId`
+            // as a stable placeholder so subscribers reading it never see
+            // an empty string.
+            OfflineQueue.shared.retrySucceeded.send(OfflineRetrySuccess(
+                clientMessageId: payload.clientMessageId,
+                serverId: payload.clientMessageId,
+                conversationId: payload.conversationId,
+                kind: .sendReaction,
+                reaction: OfflineRetrySuccess.ReactionContext(
+                    messageId: payload.messageId,
+                    emoji: payload.emoji,
+                    action: payload.action
+                )
+            ))
+        } catch APIError.serverError(let code, _) where code == 404 || code == 409 || code == 410 {
+            // Permanent rejection — 404/410 (message gone) and 409 (state
+            // conflict: already reacted / already removed). Replaying the
+            // same request would bounce forever, so we treat the row as
+            // exhausted right now, emit the unified signal so the optimistic
+            // UI rolls back, and return success so the flusher deletes the
+            // row instead of retrying.
+            logger.warning("Reaction \(payload.action.rawValue, privacy: .public) \(payload.emoji, privacy: .public) on \(payload.messageId, privacy: .public) rejected (\(code, privacy: .public)) — dropping")
+            OfflineQueue.shared.retryExhausted.send(OfflineRetryExhausted(
+                kind: .sendReaction,
+                clientMessageId: payload.clientMessageId,
+                conversationId: payload.conversationId,
+                reaction: OfflineRetrySuccess.ReactionContext(
+                    messageId: payload.messageId,
+                    emoji: payload.emoji,
+                    action: payload.action
+                ),
+                lastError: "HTTP \(code)"
+            ))
+            // Returning normally drains the row. The flusher.deleteOne path
+            // is the same as for a true success — gateway dedup means the
+            // server-side outcome is already terminal regardless.
         }
-        logger.info("Reaction \(payload.action.rawValue, privacy: .public) \(payload.emoji, privacy: .public) dispatched for message \(payload.messageId, privacy: .public)")
     }
 }
