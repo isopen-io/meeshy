@@ -273,7 +273,13 @@ struct MeeshyApp: App {
                     // This runs at every boot (not just once) so items from the
                     // previous session are retried as soon as the app is active.
                     Task.detached(priority: .background) {
-                        let flusher = OutboxFlusher(pool: bootPool, dispatcher: OutboxDispatcher())
+                        let flusher = OutboxFlusher(
+                            pool: bootPool,
+                            dispatcher: OutboxDispatcher(),
+                            onOutcome: { @Sendable outcome in
+                                Task { await OfflineQueue.shared.publishOutcome(outcome) }
+                            }
+                        )
                         await flusher.flush()
                     }
 

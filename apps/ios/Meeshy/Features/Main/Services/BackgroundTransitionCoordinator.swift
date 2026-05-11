@@ -105,7 +105,13 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         }
         await withBudget("outbox.flush") {
             let pool = DependencyContainer.shared.dbPool
-            let flusher = OutboxFlusher(pool: pool, dispatcher: OutboxDispatcher())
+            let flusher = OutboxFlusher(
+                pool: pool,
+                dispatcher: OutboxDispatcher(),
+                onOutcome: { @Sendable outcome in
+                    Task { await OfflineQueue.shared.publishOutcome(outcome) }
+                }
+            )
             await flusher.flush()
         }
     }
