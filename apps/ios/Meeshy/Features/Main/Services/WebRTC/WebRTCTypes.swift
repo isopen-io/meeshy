@@ -47,8 +47,10 @@ enum CallMediaType: Sendable {
 enum PeerConnectionState: String, Sendable {
     case new
     case connecting
+    case checking      // ICE checking — UX warning lors d'une nouvelle tentative de connexion
     case connected
     case disconnected
+    case reconnecting  // ICE restart en cours après perte de connectivité
     case failed
     case closed
 }

@@ -181,22 +181,28 @@ final class CallManager: ObservableObject {
     /// ended, even though WebRTC ICE was still connected.
     @MainActor
     private func startAudioInterruptionMonitoring() {
+        // Swift 6 : Notification n'est pas Sendable, donc on extrait les
+        // valeurs primitives (UInt? sont Sendable) AVANT de traverser la
+        // frontière Task. Le closure d'observateur exécute déjà sur .main
+        // (queue: .main), l'extraction est donc synchrone et sûre.
         NotificationCenter.default.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: nil,
             queue: .main
         ) { [weak self] notification in
+            let info = notification.userInfo
+            let typeRaw = info?[AVAudioSessionInterruptionTypeKey] as? UInt
+            let optionsRaw = info?[AVAudioSessionInterruptionOptionKey] as? UInt
             Task { @MainActor [weak self] in
-                self?.handleAudioInterruption(notification)
+                self?.handleAudioInterruption(typeRaw: typeRaw, optionsRaw: optionsRaw)
             }
         }
     }
 
     @MainActor
-    private func handleAudioInterruption(_ notification: Notification) {
+    private func handleAudioInterruption(typeRaw: UInt?, optionsRaw: UInt?) {
         guard callState.isActive else { return }
-        guard let info = notification.userInfo,
-              let typeRaw = info[AVAudioSessionInterruptionTypeKey] as? UInt,
+        guard let typeRaw,
               let type = AVAudioSession.InterruptionType(rawValue: typeRaw) else {
             return
         }
@@ -204,8 +210,7 @@ final class CallManager: ObservableObject {
         case .began:
             Logger.calls.info("Audio interruption began (call active)")
         case .ended:
-            let optionsRaw = info[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
-            let options = AVAudioSession.InterruptionOptions(rawValue: optionsRaw)
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsRaw ?? 0)
             guard options.contains(.shouldResume) else {
                 Logger.calls.info("Audio interruption ended without shouldResume hint — skipping resume")
                 return
