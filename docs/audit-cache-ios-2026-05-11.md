@@ -4,22 +4,24 @@
 **Scope :** apps/ios + packages/MeeshySDK + interactions services/gateway
 **Objectif :** Évaluer l'état actuel du cache local-first sur 5 axes (couverture, architecture, offline queue, UX, sync delta backend) pour cibler "local-first 100% + sync delta intelligent".
 
+> **Mise à jour 2026-05-11 fin de matinée :** vérification ligne par ligne du code actuel a révélé qu'un effort antérieur "Phase 4 §6.2" (commit ~2026-05-09) avait déjà résolu 5 des 8 brèches identifiées (#4, #5 partial via dedup mais pas couverture writes, #6 sequenceNumber non, #7 partial, #8 ✅). Brèches restantes vraiment ouvertes : #1 (couverture 4 domaines à 0 %), #2 (staleTTL), #3 (`.value` usage), #5 résiduel (14 writes online-only), #6 (delta sync gateway). Voir section "État réel post-vérification" en bas.
+
 ---
 
 ## Synthèse exécutive
 
 L'app iOS Meeshy dispose déjà d'une fondation cache mature (CacheCoordinator, GRDB + Disk stores, CacheFirstLoader, CacheResult, OfflineQueue), mais il reste **8 brèches structurelles** qui empêchent l'atteinte d'un "vrai local-first" :
 
-| # | Brèche | Sévérité | Axe |
-|---|--------|----------|-----|
-| 1 | Couverture cache à ~54 % (Communities 0 %, Notifications 0 %, Calls 0 %, Drafts 0 %, Search 37 %, Settings 25 %) | P0 | Couverture |
-| 2 | `staleTTL` court (2-10 min) → spinner réseau inévitable au-delà | P0 | Architecture |
-| 3 | 7+ usages de `CacheResult.value` qui masquent `.stale` (pas de SWR) | P0 | UX |
-| 4 | Dédup gateway absente : pas de `@@unique(conversationId, clientMessageId)`, pas de `catch P2002` | P0 | Offline |
-| 5 | 14 actions write *online-only* (block, friend req, profile, settings, post, like, comment...) | P0 | Offline |
-| 6 | Gateway : 1 seul endpoint sur 30 supporte `?since=`, aucun event Socket.IO n'a de sequence number | P0 | Sync |
-| 7 | Encryption fallback silencieux (plaintext si erreur) sur stores sensibles | P1 | Architecture |
-| 8 | `OfflineQueue.enqueue()` async non-throws → erreurs avalées par `try?` | P1 | Offline |
+| # | Brèche | Sévérité | Axe | État réel 2026-05-11 |
+|---|--------|----------|-----|---------------------|
+| 1 | Couverture cache à ~54 % (Communities 0 %, Notifications 0 %, Calls 0 %, Drafts 0 %, Search 37 %, Settings 25 %) | P0 | Couverture | ❌ Toujours ouvert |
+| 2 | `staleTTL` court (2-10 min) → spinner réseau inévitable au-delà | P0 | Architecture | ❌ Toujours ouvert |
+| 3 | 7+ usages de `CacheResult.value` qui masquent `.stale` (pas de SWR) | P0 | UX | ❌ Toujours ouvert |
+| 4 | Dédup gateway absente : pas de `@@unique(conversationId, clientMessageId)`, pas de `catch P2002` | P0 | Offline | ✅ Fait (migration `2026-05-09-message-client-id.mongodb.js` + `MessageProcessor.ts:352-495`) |
+| 5 | 14 actions write *online-only* (block, friend req, profile, settings, post, like, comment...) | P0 | Offline | ❌ Toujours ouvert |
+| 6 | Gateway : 1 seul endpoint sur 30 supporte `?since=`, aucun event Socket.IO n'a de sequence number | P0 | Sync | ❌ Toujours ouvert (Vague 2) |
+| 7 | Encryption fallback silencieux (plaintext si erreur) sur stores sensibles | P1 | Architecture | ✅ Fait (commit `5e650328`, `GRDBCacheError.encryptionFailed` strict throw) |
+| 8 | `OfflineQueue.enqueue()` async non-throws → erreurs avalées par `try?` | P1 | Offline | ✅ Fait (signature `async throws` à `OfflineQueue.swift:225`) |
 
 **Couverture moyenne cache-first par domaine :** ~54 %
 **Actions write offline-capable :** 6 / 20+
@@ -282,7 +284,43 @@ Risque race : même `clientMessageId` peut être enqueued dans 2 queues si onlin
 
 ## Prochaines étapes recommandées
 
-Voir spec design `docs/superpowers/specs/2026-05-11-ios-local-first-complete-design.md` (à venir) pour :
+Voir spec design `docs/superpowers/specs/2026-05-11-ios-local-first-complete-design.md` pour :
 1. Architecture cible (SyncEngine + push-invalidation + staleTTL = ∞)
 2. Plan de migration phasé (5-7 sprints)
 3. Acceptance criteria mesurables (0 spinner sur cache chaud, 100 % actions offline-capable, sync delta < 500 ms)
+
+Plan d'implémentation Vague 1 : `docs/superpowers/plans/2026-05-11-ios-local-first-wave1.md`
+
+---
+
+## État réel post-vérification (2026-05-11, fin de matinée)
+
+Vérification ligne par ligne du code après le 1er rapport d'audit a révélé qu'un effort antérieur "Phase 4 §6.2" (correspondant à la spec `docs/superpowers/specs/2026-05-08-ios-conversation-list-cache-offline-design.md`) avait déjà été partiellement shippé dans `main` avant cette session.
+
+### Tasks Phase 1 (Sprint 1) — toutes terminées
+
+| Task | Description | Commit |
+|------|-------------|--------|
+| 1.1 | Strict encryption failure (`GRDBCacheError.encryptionFailed`) | `5e650328` (session 2026-05-11 matin) |
+| 1.2 | Throws propagation sur 33 consumer sites (`try?` wrap) | `079aa9aa` (agent parallèle 09:11) |
+| 1.3 | `BGProcessingTask` flush + drop semaphore race | `fd113508` (agent parallèle 09:47) |
+| 1.4 | Partial unique index `(conversationId, clientMessageId)` MongoDB | migration `2026-05-09-message-client-id.mongodb.js` |
+| 1.5 | Gateway INSERT + catch P2002 atomique | `MessageProcessor.ts:352-495` (Phase 4 §6.2) |
+| 1.6 | Socket ACK echo `clientMessageId` | `MessageHandler.ts:_sendResponse` (Phase 4 §6.2) |
+| 1.7 | iOS reconciliation par cmid | Implémentation différente mais supérieure : `pendingServerIds[tempId] = serverId` reste optimal (tempId = identité locale), `clientMessageId` est utilisé seulement pour la dédup serveur — pas besoin de changer keyspace |
+| 1.8 | `OfflineQueue.enqueue` async throws | `OfflineQueue.swift:225` (Phase 4 §6.2) |
+
+### Travail réellement restant
+
+| Bloc | Sprint | Tasks | Adresse brèches |
+|------|--------|-------|-----------------|
+| Phase 2 — Couverture | S2 | 6 tasks | #1 (4 domaines à 0 %) |
+| Phase 3 — Offline writes | S3 | 8 tasks | #5 (14 writes online-only) |
+| Phase 4 — UX local-first | S4 | 9 tasks | #2 (staleTTL), #3 (`.value`), badges offline, optimistic |
+| Vague 2 — SyncEngine | S5-S12 | plan à générer | #6 (delta sync), `staleTTL=∞` push-driven |
+
+### Lesson apprise
+
+Mon audit du matin a sous-estimé l'état réel parce que la spec source (`2026-05-08-ios-conversation-list-cache-offline-design.md`) était une SPEC D'IMPLÉMENTATION, déjà partiellement appliquée à l'instant T de l'audit. Le code source actuel l'emportait sur la spec écrite.
+
+Règle pour audits futurs : **cross-check tous les éléments "P0 toujours ouvert"** avec un `grep` ciblé sur le code source AVANT de dresser la liste des brèches. La spec antérieure n'est pas une autorité — le code est l'autorité.

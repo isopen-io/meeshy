@@ -23,7 +23,28 @@
 
 ---
 
-## Phase 1 — Sprint 1 : Foundational fixes (3 faiblesses architecturales)
+## Phase 1 status (mise à jour 2026-05-11 fin de matinée)
+
+**Phase 1 (Sprint 1) est de fait TERMINÉE.** Vérification du code actuel a montré :
+
+| Task | État | Référence |
+|------|------|-----------|
+| 1.1 Strict encryption | ✅ | commit `5e650328` (cette session) |
+| 1.2 Throws propagation | ✅ | commit `079aa9aa` (agent parallèle, try? wrap) |
+| 1.3 BGProcessingTask flush | ✅ | commit `fd113508` (agent parallèle) |
+| 1.4 Prisma partial unique index | ✅ | migration `2026-05-09-message-client-id.mongodb.js` (Phase 4 §6.2 — pre-session) |
+| 1.5 Gateway P2002 catch | ✅ | `MessageProcessor.ts:352-495` (Phase 4 §6.2 — pre-session) |
+| 1.6 Socket ACK clientMessageId | ✅ | `MessageHandler.ts:_sendResponse` (Phase 4 §6.2 — pre-session) |
+| 1.7 iOS reconciliation by cmid | ≈ | Architecture différente du plan mais SUPÉRIEURE : `pendingServerIds[tempId] = serverId` (mapping local optimal), clientMessageId sert uniquement à la dédup serveur. Pas besoin de changer keyspace. |
+| 1.8 OfflineQueue async throws | ✅ | `OfflineQueue.swift:225` (Phase 4 §6.2 — pre-session) |
+
+iOS app build green ✅, MeeshyUITests 611/611 passent, encryption test Task 1.1 vert.
+
+Prochaine étape : **Phase 2** (Sprint 2, ci-dessous) qui couvre les domaines à 0 % de couverture cache (Communities, Notifications, Calls, Drafts).
+
+---
+
+## Phase 1 — Sprint 1 : Foundational fixes (3 faiblesses architecturales) [TERMINÉE]
 
 ### Task 1.1: GRDBCacheError + DatabaseEncryption strict failure semantics
 

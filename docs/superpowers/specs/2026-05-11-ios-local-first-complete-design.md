@@ -26,6 +26,18 @@
 
 ---
 
+## Status mise à jour 2026-05-11 fin de matinée
+
+**Vague 1, Sprint 1 (foundational fixes) — TERMINÉ.** Vérification ligne par ligne du code actuel a montré qu'un effort antérieur "Phase 4 §6.2" (spec `2026-05-08-ios-conversation-list-cache-offline-design.md`) avait déjà résolu 5 des 8 tasks S1 ; les 3 restantes (Task 1.1, 1.2, 1.3) ont été shippées le 2026-05-11 matin par cette session + un agent parallèle.
+
+État : iOS app build green, MeeshyUITests 611/611 verts, brèches #4 #7 #8 fermées définitivement.
+
+Reste à faire : Sprint 2 (couverture 4 domaines), Sprint 3 (14 OutboxKind), Sprint 4 (UX), Vague 2 entière (SyncEngine + delta sync + sequenceNumber).
+
+Voir `docs/audit-cache-ios-2026-05-11.md` section "État réel post-vérification" pour le détail.
+
+---
+
 ## 1. Contexte & motivation
 
 L'audit `docs/audit-cache-ios-2026-05-11.md` identifie 8 brèches structurelles bloquant le "vrai local-first" iOS :
