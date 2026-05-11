@@ -7,10 +7,14 @@ import os
 /// silent plaintext fallback (`encrypt(json) ?? json`) no longer leaks
 /// unencrypted data into SQLite when the Keychain key is corrupted or
 /// otherwise unavailable.
+///
+/// Decryption-on-read failures intentionally do NOT throw — `readFromL2`
+/// returns nil so the caller falls through to network (SWR alignment).
+/// Pool configuration is mandatory at construction time so no runtime
+/// `poolNotConfigured` case is needed here (cf. `OfflineQueueError` which
+/// owns its own variant).
 public enum GRDBCacheError: Error, Sendable {
     case encryptionFailed
-    case decryptionFailed
-    case poolNotConfigured
 }
 
 public actor GRDBCacheStore<Key, Value>: MutableCacheStore

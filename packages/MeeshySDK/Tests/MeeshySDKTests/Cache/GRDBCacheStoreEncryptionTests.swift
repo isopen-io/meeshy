@@ -83,4 +83,102 @@ final class GRDBCacheStoreEncryptionTests: XCTestCase {
         }
         XCTAssertEqual(count, 1, "Plaintext store must persist normally regardless of encryption stub")
     }
+
+    // MARK: - load returns nil when decryption fails (SWR alignment, no crash)
+
+    /// Stub that successfully encrypts but FAILS to decrypt. Models the case
+    /// where the on-disk ciphertext is unreadable (corrupted key, wrong-key
+    /// tampering, leftover row from a previous identity). The contract:
+    /// readFromL2 MUST skip the entry and return nil so the caller falls
+    /// through to network — never feed garbage ciphertext to the JSON
+    /// decoder, never crash.
+    private final class DecryptFailingEncryption: DatabaseEncryptionProviding, @unchecked Sendable {
+        func encrypt(_ plaintext: Data) -> Data? { plaintext }   // pass-through write
+        func decrypt(_ ciphertext: Data) -> Data? { nil }         // unreadable on read
+    }
+
+    func test_load_whenDecryptFails_returnsEmptyCacheMiss() async throws {
+        let db = try makeDB()
+        let policy = CachePolicy(ttl: .hours(1), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
+        let writer = GRDBCacheStore<String, EncTestItem>(
+            policy: policy,
+            db: db,
+            namespace: "dec_fail",
+            encrypted: true,
+            encryption: DecryptFailingEncryption()
+        )
+        let item = EncTestItem(id: "1", title: "stored")
+        try await writer.save([item], for: "k")
+
+        // Cold-restart scenario: drop L1 in-memory cache by creating a new store
+        // sharing the same underlying SQLite db. The load now MUST go through
+        // readFromL2 → decryption fails → entry skipped → empty result.
+        let reader = GRDBCacheStore<String, EncTestItem>(
+            policy: policy,
+            db: db,
+            namespace: "dec_fail",
+            encrypted: true,
+            encryption: DecryptFailingEncryption()
+        )
+        let result = await reader.load(for: "k")
+
+        switch result {
+        case .empty, .expired:
+            // expected — decrypt failure surfaces as empty cache
+            break
+        case .fresh(let items, _):
+            XCTFail("Expected .empty on decrypt failure, got .fresh with \(items.count) items")
+        case .stale(let items, _):
+            XCTFail("Expected .empty on decrypt failure, got .stale with \(items.count) items")
+        }
+    }
+
+    // MARK: - flush keeps key dirty when encryption fails (retry contract)
+
+    /// Stub that fails encryption only AFTER a successful first save (e.g.
+    /// Keychain key revoked between writes). Used to verify the deferred
+    /// flush path on `update`/`upsert`/`mergeUpdate` doesn't silently lose
+    /// data — the key must remain dirty so the next flush window retries.
+    private final class TransientFailingEncryption: DatabaseEncryptionProviding, @unchecked Sendable {
+        private let counter: NSLock = NSLock()
+        private nonisolated(unsafe) var calls = 0
+        private let failAfter: Int
+
+        init(failAfter: Int) { self.failAfter = failAfter }
+
+        func encrypt(_ plaintext: Data) -> Data? {
+            counter.lock(); defer { counter.unlock() }
+            calls += 1
+            return calls > failAfter ? nil : plaintext
+        }
+        func decrypt(_ ciphertext: Data) -> Data? { ciphertext }
+    }
+
+    func test_update_whenEncryptionFailsDuringDeferredFlush_keepsKeyDirty() async throws {
+        let db = try makeDB()
+        let policy = CachePolicy(ttl: .hours(1), staleTTL: .minutes(5), maxItemCount: nil, storageLocation: .grdb)
+        let encryption = TransientFailingEncryption(failAfter: 0)
+        let store = GRDBCacheStore<String, EncTestItem>(
+            policy: policy,
+            db: db,
+            namespace: "flush_fail",
+            encrypted: true,
+            encryption: encryption
+        )
+
+        // update() is non-throwing — it should swallow encryption failure and
+        // mark the key dirty so the next flush window will retry. Verify
+        // that no row reaches SQLite and that the next save() (which goes
+        // through writeToL2 and *does* throw) surfaces the failure.
+        await store.update(for: "k") { _ in [EncTestItem(id: "1", title: "v1")] }
+
+        // Allow background flush task to fire (2s debounce + 200ms margin).
+        try await Task.sleep(nanoseconds: 2_300_000_000)
+
+        let rowCountAfterFlush = try await db.read { db in
+            try CacheEntry.filter(Column("key") == "flush_fail:k").fetchCount(db)
+        }
+        XCTAssertEqual(rowCountAfterFlush, 0,
+            "Encryption-failed flush must NOT leak rows into SQLite — key stays dirty for retry")
+    }
 }
