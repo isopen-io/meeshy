@@ -4,7 +4,14 @@ import MeeshyUI
 // MARK: - Floating Call Pill View
 
 struct FloatingCallPillView: View {
-    @EnvironmentObject var callManager: CallManager
+    // Use the singleton directly via @ObservedObject like the rest of the
+    // app (RootView, CallView). The previous @EnvironmentObject form
+    // crashed at launch because the pill is mounted as a `.overlay` on
+    // the RootView/iPadRootView ZStack — SwiftUI does NOT propagate
+    // environment objects into overlay closures by default, and the app
+    // does not inject CallManager via `.environmentObject(...)` either
+    // (the singleton is the only source of truth).
+    @ObservedObject private var callManager = CallManager.shared
 
     private let pillHeight: CGFloat = 64
 
