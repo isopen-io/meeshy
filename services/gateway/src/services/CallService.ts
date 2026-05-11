@@ -802,6 +802,19 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
     }
 
+    // Audit P2-GW-3 — guard against non-ringing states. The ringing
+    // timeout callback already performs an atomic `updateMany` scoped to
+    // `[initiated, ringing]`, so when this path runs the row is typically
+    // already `missed`. Unconditionally re-writing it drifts `endedAt`
+    // (+a few ms) and `duration` (+a few seconds) on every retry.
+    if (callSession.status !== CallStatus.initiated && callSession.status !== CallStatus.ringing) {
+      logger.info('Call already in non-ringing state — skipping markCallAsMissed write', {
+        callId,
+        currentStatus: callSession.status
+      });
+      return this.getCallSession(callId);
+    }
+
     // Mettre à jour le statut de l'appel
     const now = new Date();
     const duration = Math.floor((now.getTime() - callSession.startedAt.getTime()) / 1000);

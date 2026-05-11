@@ -61,8 +61,13 @@ export class TURNCredentialService {
     const turnServersEnv = process.env.TURN_SERVERS || '';
     this.turnServers = this.parseTURNServers(turnServersEnv);
 
-    // Credential TTL in seconds (default: 1 hour for security)
-    this.credentialTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '3600', 10);
+    // Credential TTL in seconds.
+    // Audit P2-GW-4 — bumped from 3600s to 600s (10 min). A 1-hour window
+    // is excessive for ephemeral TURN credentials; 10 min still covers a
+    // long call (median call < 90s) while sharply reducing the blast
+    // radius of any leak / replay. Operators can override via env if they
+    // need the longer window for long-running calls.
+    this.credentialTTL = parseInt(process.env.TURN_CREDENTIAL_TTL || '600', 10);
 
     // STUN servers (public Google STUN servers)
     this.stunServers = [

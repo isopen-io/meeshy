@@ -13,6 +13,9 @@ struct IncomingCallView: View {
     // subscription throughout the view's lifetime.
     @ObservedObject var callManager: CallManager
     @Environment(\.colorScheme) private var colorScheme
+    // Audit P2-iOS-9 — see CallView; skip repeating animations for
+    // motion-sensitive users.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @State private var ringScale: CGFloat = 0.8
@@ -61,8 +64,8 @@ struct IncomingCallView: View {
                     .stroke(
                         LinearGradient(
                             colors: [
-                                Color(hex: "4ADE80").opacity(0.4 - Double(index) * 0.08),
-                                Color(hex: "08D9D6").opacity(0.2 - Double(index) * 0.04)
+                                MeeshyColors.success.opacity(0.4 - Double(index) * 0.08),
+                                MeeshyColors.indigo400.opacity(0.2 - Double(index) * 0.04)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -76,9 +79,11 @@ struct IncomingCallView: View {
                     .scaleEffect(ringScale)
                     .opacity(ringOpacity - Double(index) * 0.15)
                     .animation(
-                        .easeInOut(duration: 1.2)
-                            .repeatForever(autoreverses: true)
-                            .delay(Double(index) * 0.2),
+                        reduceMotion
+                            ? nil
+                            : .easeInOut(duration: 1.2)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(index) * 0.2),
                         value: ringScale
                     )
             }
@@ -87,15 +92,18 @@ struct IncomingCallView: View {
             avatarView
                 .scaleEffect(avatarBounce ? 1.05 : 1.0)
                 .animation(
-                    .spring(response: 0.6, dampingFraction: 0.5)
-                        .repeatForever(autoreverses: true),
+                    reduceMotion
+                        ? nil
+                        : .spring(response: 0.6, dampingFraction: 0.5).repeatForever(autoreverses: true),
                     value: avatarBounce
                 )
         }
         .onAppear {
-            ringScale = 1.1
-            ringOpacity = 0.6
-            avatarBounce = true
+            // Audit P2-iOS-9 — only kick off the infinite animations when
+            // Reduce Motion is OFF. Otherwise the static layout is shown.
+            ringScale = reduceMotion ? 1.0 : 1.1
+            ringOpacity = reduceMotion ? 0.85 : 0.6
+            avatarBounce = !reduceMotion
         }
         .onDisappear {
             withTransaction(Transaction(animation: nil)) {
@@ -114,7 +122,7 @@ struct IncomingCallView: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [Color(hex: "A855F7"), Color(hex: "08D9D6")],
+                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -125,7 +133,7 @@ struct IncomingCallView: View {
                 .font(.system(size: 44, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
-        .shadow(color: Color(hex: "A855F7").opacity(0.4), radius: 16, y: 6)
+        .shadow(color: MeeshyColors.indigo500.opacity(0.4), radius: 16, y: 6)
     }
 
     // MARK: - Call Type Badge
@@ -137,15 +145,15 @@ struct IncomingCallView: View {
             Text(callManager.isVideoEnabled ? "Video" : "Audio")
                 .font(.system(size: 13, weight: .semibold))
         }
-        .foregroundColor(Color(hex: "08D9D6"))
+        .foregroundColor(MeeshyColors.indigo400)
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(Color(hex: "08D9D6").opacity(0.15))
+                .fill(MeeshyColors.indigo400.opacity(0.15))
                 .overlay(
                     Capsule()
-                        .stroke(Color(hex: "08D9D6").opacity(0.3), lineWidth: 0.5)
+                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 0.5)
                 )
         )
     }
@@ -163,13 +171,13 @@ struct IncomingCallView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color(hex: "FF2E63"), Color(hex: "FF6B6B")],
+                                    colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.85)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
                             )
                             .frame(width: 70, height: 70)
-                            .shadow(color: Color(hex: "FF2E63").opacity(0.4), radius: 10, y: 4)
+                            .shadow(color: MeeshyColors.error.opacity(0.4), radius: 10, y: 4)
 
                         Image(systemName: "phone.down.fill")
                             .font(.system(size: 28, weight: .semibold))
@@ -178,7 +186,7 @@ struct IncomingCallView: View {
 
                     Text("Refuser")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color(hex: "FF2E63"))
+                        .foregroundColor(MeeshyColors.error)
                 }
             }
             .pressable()
@@ -193,13 +201,13 @@ struct IncomingCallView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    colors: [Color(hex: "4ADE80"), Color(hex: "08D9D6")],
+                                    colors: [MeeshyColors.success, MeeshyColors.indigo400],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
                             )
                             .frame(width: 70, height: 70)
-                            .shadow(color: Color(hex: "4ADE80").opacity(0.4), radius: 10, y: 4)
+                            .shadow(color: MeeshyColors.success.opacity(0.4), radius: 10, y: 4)
 
                         Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
                             .font(.system(size: 28, weight: .semibold))
@@ -208,7 +216,7 @@ struct IncomingCallView: View {
 
                     Text("Accepter")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color(hex: "4ADE80"))
+                        .foregroundColor(MeeshyColors.success)
                 }
             }
             .pressable()

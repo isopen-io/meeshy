@@ -103,7 +103,12 @@ final class CallManager: ObservableObject {
     private var callStartDate: Date?
     private var reconnectAttempt = 0
     private var participantJoinedCancellable: AnyCancellable?
-    private var signalOfferCancellable: AnyCancellable?
+    /// Audit P3 — replaces the never-assigned `signalOfferCancellable`
+    /// (AnyCancellable, dead) with a properly typed Task slot. Two callers
+    /// (`answerCall` and `answerCallReady`) schedule a 30s SDP-offer
+    /// timeout; both now store the Task here so `endCallInternal` can
+    /// cancel it cleanly instead of leaking it for the remaining sleep.
+    private var sdpOfferTimeoutTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
     private var cancellables = Set<AnyCancellable>()
     private let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
@@ -606,11 +611,11 @@ final class CallManager: ObservableObject {
         } else {
             // SDP offer not yet received — wait for it via handleSignalOffer with 30s timeout
             Logger.calls.info("Call answered but SDP offer not yet received, waiting: \(callId)")
-            signalOfferCancellable?.cancel()
-            signalOfferCancellable = nil
-            Task { @MainActor [weak self] in
+            sdpOfferTimeoutTask?.cancel()
+            sdpOfferTimeoutTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(30))
-                guard let self, case .connecting = self.callState, self.currentCallId == callId else { return }
+                guard let self, !Task.isCancelled else { return }
+                guard case .connecting = self.callState, self.currentCallId == callId else { return }
                 Logger.calls.error("SDP offer timeout after 30s for call: \(callId)")
                 self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
             }
@@ -645,9 +650,11 @@ final class CallManager: ObservableObject {
             Logger.calls.info("Call answered (CallKit) with buffered SDP offer: \(callId)")
         } else {
             Logger.calls.info("Call answered (CallKit), awaiting SDP offer: \(callId)")
-            Task { @MainActor [weak self] in
+            sdpOfferTimeoutTask?.cancel()
+            sdpOfferTimeoutTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(30))
-                guard let self, case .connecting = self.callState, self.currentCallId == callId else { return }
+                guard let self, !Task.isCancelled else { return }
+                guard case .connecting = self.callState, self.currentCallId == callId else { return }
                 Logger.calls.error("SDP offer timeout after 30s for call: \(callId)")
                 self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
             }
@@ -1167,8 +1174,8 @@ final class CallManager: ObservableObject {
         }
         participantJoinedCancellable?.cancel()
         participantJoinedCancellable = nil
-        signalOfferCancellable?.cancel()
-        signalOfferCancellable = nil
+        sdpOfferTimeoutTask?.cancel()
+        sdpOfferTimeoutTask = nil
         pendingRemoteOffer = nil
         thermalMonitor.stopMonitoring()
         activeAudioEffect = nil
@@ -1181,6 +1188,12 @@ final class CallManager: ObservableObject {
         callState = .ended(reason: reason)
         connectionQuality = .new
         activeCallUUID = nil
+        // Audit P2-iOS-1 — drop any pending "busy" incoming call. If a 2nd
+        // call arrived while this one was active and got immediately ended
+        // (.unanswered), the banner kept pointing at a callId that the
+        // gateway has already torn down — tapping it joined a phantom room.
+        pendingIncomingCall = nil
+        showCallWaitingBanner = false
 
         // L'UI se base sur `callState == .ended` pour afficher le panneau de
         // fin d'appel ; on garde l'état visible 1.5s avant de reset à `.idle`
@@ -1388,6 +1401,22 @@ final class CallManager: ObservableObject {
                 if self.currentCallId == event.callId {
                     self.handleRemoteEnd(callId: event.callId, rawReason: "missed")
                 }
+            }
+            .store(in: &cancellables)
+
+        // Audit P1-30 — on Socket.IO reconnect, re-emit `call:join` so the
+        // gateway puts us back in the call's room. Without this rejoin, ICE
+        // continued via NWPathMonitor restart but every gateway-relayed
+        // event targeting `ROOMS.call(callId)` (ICE candidates from peer,
+        // re-offer on ICE restart, `call:ended`) was silently dropped — the
+        // call became a zombie.
+        socket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                guard self.callState.isActive, let callId = self.currentCallId else { return }
+                Logger.calls.info("Socket reconnected — re-joining call room \(callId)")
+                MessageSocketManager.shared.emitCallJoin(callId: callId)
             }
             .store(in: &cancellables)
     }
@@ -1716,7 +1745,15 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         rtc.isAudioEnabled = true
         rtc.unlockForConfiguration()
 
-        Task { @MainActor [weak self] in self?.manager?.applySpeakerRoute() }
+        // Audit P2-iOS-2 — `overrideOutputAudioPort` is only honored once
+        // RTCAudioSession's audio engine has actually started. Calling it
+        // synchronously from `didActivate` races the engine start; the
+        // speaker toggle would silently fall back to earpiece. Defer by
+        // ~200ms so the engine is up by the time we override.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            self?.manager?.applySpeakerRoute()
+        }
         let outputs = audioSession.currentRoute.outputs
             .map { $0.portType.rawValue }
             .joined(separator: ",")

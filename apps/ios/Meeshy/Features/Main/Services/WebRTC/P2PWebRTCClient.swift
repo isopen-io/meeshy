@@ -597,9 +597,10 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                     }
                 }
 
-                // DIAGNOSTIC : log explicite des bytes/packets pour confirmer
-                // si l'audio circule réellement (vs juste ICE keepalives).
-                Logger.webrtc.info("[STATS] sent=\(bytesSent)B/\(packetsSent)pkt recv=\(bytesReceived)B/\(packetsReceived)pkt rtt=\(rtt)ms loss=\(packetsLost)")
+                // Audit P3 — was .info, fired every 5s (statsIntervalSeconds);
+                // demoted to .debug so release builds don't accumulate ~720
+                // log lines/hour per call.
+                Logger.webrtc.debug("[STATS] sent=\(bytesSent)B/\(packetsSent)pkt recv=\(bytesReceived)B/\(packetsReceived)pkt rtt=\(rtt)ms loss=\(packetsLost)")
 
                 continuation.resume(returning: CallStats(
                     roundTripTimeMs: rtt,

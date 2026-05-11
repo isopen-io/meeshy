@@ -1,5 +1,6 @@
 import PushKit
 import CallKit
+import Combine
 import MeeshySDK
 import os
 
@@ -12,8 +13,35 @@ final class VoIPPushManager: NSObject, ObservableObject {
     private var voipRegistry: PKPushRegistry?
     @Published private(set) var voipToken: String?
 
+    /// Audit P2-CC-4 — bounded ring of recently-reported callIds to dedup
+    /// duplicate VoIP push deliveries. PushKit can retry a push if APNs
+    /// times out before our ack; two deliveries with the same callId would
+    /// produce two `reportNewIncomingCall` with different UUIDs and CallKit
+    /// would render two incoming-call cards for the same call.
+    private var recentlyReportedCallIds: [String] = []
+    private static let dedupRingSize = 12
+
+    /// Audit P2-CC-1 — pending token to register once the user is logged in.
+    /// Without this, a VoIP token delivered before login completes was
+    /// silently dropped (`authToken == nil` short-circuit in
+    /// `registerTokenWithBackend`) and the device received no VoIP pushes
+    /// until the next cold start.
+    private var pendingTokenToRegister: String?
+    private var authCancellable: AnyCancellable?
+
     override private init() {
         super.init()
+        // Audit P2-CC-1 — observe AuthManager.isAuthenticated transitions
+        // false→true so a VoIP token that arrived pre-login can be retried.
+        authCancellable = AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .filter { $0 }
+            .sink { [weak self] _ in
+                Task { @MainActor [weak self] in
+                    guard let self, let token = self.pendingTokenToRegister else { return }
+                    await self.registerTokenWithBackend(token)
+                }
+            }
     }
 
     func register() {
@@ -93,6 +121,32 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         }
 
         let callId = (data["callId"] as? String) ?? UUID().uuidString
+
+        // Audit P2-CC-4 — if we already reported this callId recently,
+        // treat the duplicate push as a no-op (just ack PushKit). We still
+        // need a phantom-call report to keep PushKit happy when the dedup
+        // ring already covers the callId, because PushKit demands a call
+        // report per delivery. Use a phantom that ends immediately.
+        let alreadyReported = MainActor.assumeIsolated { Self.shared.recentlyReportedCallIds.contains(callId) }
+        if alreadyReported {
+            logger.info("VoIP push duplicate detected (callId=\(callId)) — phantom-acking")
+            let phantomUUID = UUID()
+            let update = CXCallUpdate()
+            update.localizedCallerName = ""
+            update.hasVideo = false
+            MainActor.assumeIsolated {
+                CallManager.shared.reportPhantomVoIPCall(uuid: phantomUUID, update: update)
+            }
+            completion()
+            return
+        }
+        MainActor.assumeIsolated {
+            Self.shared.recentlyReportedCallIds.append(callId)
+            if Self.shared.recentlyReportedCallIds.count > Self.dedupRingSize {
+                Self.shared.recentlyReportedCallIds.removeFirst(Self.shared.recentlyReportedCallIds.count - Self.dedupRingSize)
+            }
+        }
+
         let callerUserId = data["callerUserId"] as? String ?? ""
 
         // Backend sends `isVideo` as a string ("true"/"false") because APNs
@@ -211,7 +265,15 @@ extension VoIPPushManager: PKPushRegistryDelegate {
     // MARK: - Backend Registration
 
     private func registerTokenWithBackend(_ token: String) async {
-        guard APIClient.shared.authToken != nil else { return }
+        // Audit P2-CC-1 — queue the token if auth isn't ready yet, then
+        // retry from `authBecameAvailable`. Previously the token was
+        // silently dropped and the user received no VoIP pushes until the
+        // next cold start.
+        guard APIClient.shared.authToken != nil else {
+            pendingTokenToRegister = token
+            logger.info("VoIP token received before auth — queued for retry on login")
+            return
+        }
 
         let body = RegisterDeviceTokenRequest(
             token: token,
@@ -225,6 +287,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
                 endpoint: "/users/register-device-token",
                 body: body
             )
+            pendingTokenToRegister = nil
             logger.info("VoIP token registered with backend (env=\(PushNotificationManager.apnsEnvironment))")
         } catch {
             logger.error("Failed to register VoIP token: \(error.localizedDescription)")

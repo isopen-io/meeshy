@@ -101,6 +101,13 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         recorder = nil
         duration = 0
         audioLevels = Array(repeating: 0, count: 15)
+
+        // Audit P2-iOS-4 — deactivate the AVAudioSession so the mic indicator
+        // turns off. Without this, cancelling a voice message left the
+        // session active indefinitely (drained battery + kept mic icon on).
+        if !CallManager.shared.callState.isActive {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     func result() -> AudioRecordingResult? {

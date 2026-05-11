@@ -9,6 +9,10 @@ import os
 struct CallView: View {
     @ObservedObject var callManager = CallManager.shared
     @Environment(\.colorScheme) private var colorScheme
+    // Audit P2-iOS-9 — respect the user's Reduce Motion preference. Without
+    // this check, the continuous pulse/ring animations ran indefinitely
+    // even for motion-sensitive users (and burned battery).
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var transcriptionService = CallTranscriptionService()
@@ -89,21 +93,21 @@ struct CallView: View {
 
             // Animated ambient orbs
             Circle()
-                .fill(Color(hex: "A855F7").opacity(0.15))
+                .fill(MeeshyColors.indigo500.opacity(0.15))
                 .frame(width: 300, height: 300)
                 .blur(radius: 80)
                 .offset(x: -80, y: -200)
                 .floating(range: 20, duration: 5)
 
             Circle()
-                .fill(Color(hex: "08D9D6").opacity(0.12))
+                .fill(MeeshyColors.indigo400.opacity(0.12))
                 .frame(width: 350, height: 350)
                 .blur(radius: 90)
                 .offset(x: 100, y: 200)
                 .floating(range: 25, duration: 6)
 
             Circle()
-                .fill(Color(hex: "FF2E63").opacity(0.1))
+                .fill(MeeshyColors.error.opacity(0.1))
                 .frame(width: 250, height: 250)
                 .blur(radius: 70)
                 .offset(x: 80, y: -100)
@@ -168,7 +172,7 @@ struct CallView: View {
 
             HStack(spacing: 8) {
                 ProgressView()
-                    .tint(Color(hex: "08D9D6"))
+                    .tint(MeeshyColors.indigo400)
                 Text("Connexion...")
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
@@ -237,16 +241,19 @@ struct CallView: View {
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
-            // Duration
-            Text(callManager.formattedDuration)
-                .font(.system(size: 18, weight: .medium).monospacedDigit())
-                .foregroundColor(Color(hex: "08D9D6"))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(Color(hex: "08D9D6").opacity(0.15))
-                )
+            // Duration + audit P2-iOS-10 connection quality indicator
+            HStack(spacing: 6) {
+                connectionQualityDot
+                Text(callManager.formattedDuration)
+                    .font(.system(size: 18, weight: .medium).monospacedDigit())
+                    .foregroundColor(durationColor)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 6)
+            .background(
+                Capsule()
+                    .fill(durationColor.opacity(0.15))
+            )
 
             // Status indicators
             HStack(spacing: 12) {
@@ -256,8 +263,52 @@ struct CallView: View {
                 if callManager.isSpeaker {
                     statusPill(icon: "speaker.wave.3.fill", text: "Haut-parleur", color: "08D9D6")
                 }
+                if isConnectionDegraded {
+                    statusPill(icon: "wifi.exclamationmark", text: "Connexion instable", color: "FBBF24")
+                }
             }
         }
+    }
+
+    // MARK: - Connection Quality (P2-iOS-10)
+
+    /// Audit P2-iOS-10 — `CallManager.connectionQuality` was tracked but
+    /// never surfaced in the UI. Without this dot the user has no feedback
+    /// when the call degrades (disconnected/failed), until it actually drops.
+    private var connectionQualityDot: some View {
+        Circle()
+            .fill(connectionQualityColor)
+            .frame(width: 8, height: 8)
+            .accessibilityLabel(connectionQualityAccessibilityLabel)
+    }
+
+    private var connectionQualityColor: Color {
+        switch callManager.connectionQuality {
+        case .connected: return MeeshyColors.success
+        case .reconnecting, .checking, .new: return MeeshyColors.warning
+        case .disconnected, .failed, .closed: return MeeshyColors.error
+        default: return MeeshyColors.indigo400
+        }
+    }
+
+    private var connectionQualityAccessibilityLabel: String {
+        switch callManager.connectionQuality {
+        case .connected: return "Connexion bonne"
+        case .reconnecting, .checking, .new: return "Reconnexion"
+        case .disconnected, .failed, .closed: return "Connexion perdue"
+        default: return "Connexion en cours"
+        }
+    }
+
+    private var isConnectionDegraded: Bool {
+        switch callManager.connectionQuality {
+        case .disconnected, .failed: return true
+        default: return false
+        }
+    }
+
+    private var durationColor: Color {
+        isConnectionDegraded ? MeeshyColors.warning : MeeshyColors.indigo400
     }
 
     private var videoCallLayout: some View {
@@ -417,12 +468,14 @@ struct CallView: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 24) {
                 // Mute
+                // Audit P2-iOS-7 — dynamic VoiceOver label so users hear the
+                // outcome of the tap, not just "Micro".
                 callControlButton(
                     icon: callManager.isMuted ? "mic.slash.fill" : "mic.fill",
                     color: callManager.isMuted ? "FF2E63" : "FFFFFF",
                     bgColor: callManager.isMuted ? "FF2E63" : "FFFFFF",
                     isActive: callManager.isMuted,
-                    label: "Micro"
+                    label: callManager.isMuted ? "Réactiver le micro" : "Couper le micro"
                 ) {
                     callManager.toggleMute()
                 }
@@ -433,7 +486,7 @@ struct CallView: View {
                     color: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
                     bgColor: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
                     isActive: callManager.isSpeaker,
-                    label: "HP"
+                    label: callManager.isSpeaker ? "Désactiver le haut-parleur" : "Activer le haut-parleur"
                 ) {
                     callManager.toggleSpeaker()
                 }
@@ -452,13 +505,13 @@ struct CallView: View {
                 }
 
                 if callManager.isVideoEnabled {
-                    // Camera flip
+                    // Camera flip — P2-iOS-8: explicit label about flipping
                     callControlButton(
                         icon: "camera.rotate.fill",
                         color: "FFFFFF",
                         bgColor: "FFFFFF",
                         isActive: false,
-                        label: "Camera"
+                        label: "Basculer la caméra avant/arrière"
                     ) {
                         callManager.switchCamera()
                     }
@@ -469,7 +522,7 @@ struct CallView: View {
                         color: "A855F7",
                         bgColor: "A855F7",
                         isActive: false,
-                        label: "Video"
+                        label: callManager.isVideoEnabled ? "Désactiver la vidéo" : "Activer la vidéo"
                     ) {
                         callManager.toggleVideo()
                     }
@@ -491,7 +544,7 @@ struct CallView: View {
                 Circle()
                     .stroke(
                         LinearGradient(
-                            colors: [Color(hex: "A855F7").opacity(0.3), Color(hex: "08D9D6").opacity(0.1)],
+                            colors: [MeeshyColors.indigo500.opacity(0.3), MeeshyColors.indigo400.opacity(0.1)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
@@ -520,7 +573,7 @@ struct CallView: View {
             Circle()
                 .fill(
                     LinearGradient(
-                        colors: [Color(hex: "A855F7"), Color(hex: "08D9D6")],
+                        colors: [MeeshyColors.indigo500, MeeshyColors.indigo400],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
@@ -531,7 +584,7 @@ struct CallView: View {
                 .font(.system(size: size * 0.4, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
         }
-        .shadow(color: Color(hex: "A855F7").opacity(0.3), radius: 12, y: 4)
+        .shadow(color: MeeshyColors.indigo500.opacity(0.3), radius: 12, y: 4)
     }
 
     private var callTypeBadge: some View {
@@ -541,15 +594,15 @@ struct CallView: View {
             Text(callManager.isVideoEnabled ? "Appel video" : "Appel audio")
                 .font(.system(size: 13, weight: .semibold))
         }
-        .foregroundColor(Color(hex: "08D9D6"))
+        .foregroundColor(MeeshyColors.indigo400)
         .padding(.horizontal, 14)
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(Color(hex: "08D9D6").opacity(0.15))
+                .fill(MeeshyColors.indigo400.opacity(0.15))
                 .overlay(
                     Capsule()
-                        .stroke(Color(hex: "08D9D6").opacity(0.3), lineWidth: 0.5)
+                        .stroke(MeeshyColors.indigo400.opacity(0.3), lineWidth: 0.5)
                 )
         )
     }
@@ -617,13 +670,13 @@ struct CallView: View {
                 Circle()
                     .fill(
                         LinearGradient(
-                            colors: [Color(hex: "FF2E63"), Color(hex: "FF6B6B")],
+                            colors: [MeeshyColors.error, MeeshyColors.error.opacity(0.85)],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
                     .frame(width: 64, height: 64)
-                    .shadow(color: Color(hex: "FF2E63").opacity(0.4), radius: 8, y: 4)
+                    .shadow(color: MeeshyColors.error.opacity(0.4), radius: 8, y: 4)
 
                 Image(systemName: "phone.down.fill")
                     .font(.system(size: 26, weight: .semibold))
@@ -653,6 +706,10 @@ struct CallView: View {
     // MARK: - Helpers
 
     private func startPulseAnimation() {
+        // Audit P2-iOS-9 — skip the repeating animation when Reduce Motion
+        // is enabled. A one-shot scale is still informative; the infinite
+        // loop is what's problematic for motion-sensitive users.
+        guard !reduceMotion else { return }
         withAnimation(.easeInOut(duration: 1.5).repeatForever(autoreverses: true)) {
             pulseScale = 1.15
         }

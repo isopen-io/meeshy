@@ -406,10 +406,26 @@ public struct CallOfferData: Decodable, Sendable {
     public let type: String?
     public let initiator: CallInitiatorInfo
     public let iceServers: [SocketIceServer]?
+    /// Audit P1-26 — initial participant list emitted by the gateway in
+    /// `call:initiated`. Optional for backwards compat with older builds.
+    /// Lets the iOS UI show all participants during the ringing phase
+    /// rather than waiting for `call:participant-joined` events.
+    public let participants: [CallParticipantInfo]?
 
     public struct CallInitiatorInfo: Decodable, Sendable {
         public let userId: String
         public let username: String
+        public let displayName: String?
+        public let avatar: String?
+    }
+
+    public struct CallParticipantInfo: Decodable, Sendable {
+        public let id: String
+        public let userId: String?
+        public let role: String?
+        public let isAudioEnabled: Bool?
+        public let isVideoEnabled: Bool?
+        public let username: String?
         public let displayName: String?
         public let avatar: String?
     }
