@@ -414,40 +414,41 @@ struct EditProfileView: View {
         }
     }
 
+    /// Wave 1 Phase B — the profile PATCH (`displayName` + `bio` + `avatar`)
+    /// flows through the offline outbox so a network blip or app kill
+    /// doesn't lose the change. The avatar upload itself stays online-only
+    /// — it requires bytes on the wire and is keyed off the returned URL,
+    /// so queuing it offline would change semantics. When an avatar is
+    /// selected we first upload it synchronously, then enqueue a single
+    /// `.updateProfile` mutation with the resulting URL embedded so the
+    /// gateway applies all three fields atomically via `MutationLog`
+    /// dedup.
     private func saveProfile() {
         isSaving = true
         errorMessage = nil
 
         Task { [weak authManager] in
             do {
+                var uploadedAvatarUrl: String? = nil
                 if let imageData = selectedImageData {
                     isUploadingAvatar = true
-                    let avatarURL = try await uploadAvatar(imageData)
+                    uploadedAvatarUrl = try await uploadAvatar(imageData)
                     isUploadingAvatar = false
-
-                    struct AvatarBody: Encodable {
-                        let avatar: String
-                    }
-                    let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.request(
-                        endpoint: "/users/me/avatar",
-                        method: "PATCH",
-                        body: try JSONEncoder().encode(AvatarBody(avatar: avatarURL))
-                    )
                 }
 
-                struct UpdateProfileBody: Encodable {
-                    let displayName: String?
-                    let bio: String?
-                }
-                let body = UpdateProfileBody(
+                let cmid = ClientMutationId.generate()
+                let payload = UpdateProfilePayload(
+                    clientMutationId: cmid,
                     displayName: displayName.isEmpty ? nil : displayName,
-                    bio: bio
+                    bio: bio.isEmpty ? nil : bio,
+                    avatarUrl: uploadedAvatarUrl
                 )
-                let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.patch(
-                    endpoint: "/users/me",
-                    body: body
-                )
+                try await OfflineQueue.shared.enqueue(.updateProfile, payload: payload)
 
+                // The OutboxFlusher fires PATCH /users/me asynchronously. We
+                // refresh the local session view immediately so the UI shows
+                // the new fields right after dismissal. The eventual server
+                // round-trip is idempotent via cmid + MutationLog.
                 await authManager?.checkExistingSession()
                 if let userId = authManager?.currentUser?.id {
                     await CacheCoordinator.shared.profiles.invalidate(for: userId)

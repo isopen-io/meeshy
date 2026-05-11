@@ -115,14 +115,28 @@ final class RequestsViewModel: ObservableObject {
         } catch {}
     }
 
-    // MARK: - Accept
+    // MARK: - Accept / Reject (Wave 1 Phase B)
+    //
+    // Accept / Reject flow through the offline outbox. The list is
+    // updated optimistically and a `.respondFriendRequest` row is
+    // enqueued ; the OutboxFlusher fires the gateway PATCH with
+    // `X-Client-Mutation-Id` so a transient network failure replays
+    // safely without producing a duplicate. The success toast fires
+    // immediately because from the user's perspective the action is
+    // done — the OutboxFlusher cleans up the wire side in the background.
 
     func accept(requestId: String) async {
         let snapshot = receivedRequests
+        let cmid = ClientMutationId.generate()
         receivedRequests.removeAll { $0.id == requestId }
         HapticFeedback.success()
+        let payload = RespondFriendRequestPayload(
+            clientMutationId: cmid,
+            friendRequestId: requestId,
+            action: .accept
+        )
         do {
-            _ = try await friendService.respond(requestId: requestId, accepted: true)
+            try await OfflineQueue.shared.enqueue(.respondFriendRequest, payload: payload)
             ToastManager.shared.showSuccess("Connexion acceptee")
         } catch {
             receivedRequests = snapshot
@@ -131,14 +145,18 @@ final class RequestsViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Reject
-
     func reject(requestId: String) async {
         let snapshot = receivedRequests
+        let cmid = ClientMutationId.generate()
         receivedRequests.removeAll { $0.id == requestId }
         HapticFeedback.medium()
+        let payload = RespondFriendRequestPayload(
+            clientMutationId: cmid,
+            friendRequestId: requestId,
+            action: .reject
+        )
         do {
-            _ = try await friendService.respond(requestId: requestId, accepted: false)
+            try await OfflineQueue.shared.enqueue(.respondFriendRequest, payload: payload)
             ToastManager.shared.showSuccess("Demande refusee")
         } catch {
             receivedRequests = snapshot
