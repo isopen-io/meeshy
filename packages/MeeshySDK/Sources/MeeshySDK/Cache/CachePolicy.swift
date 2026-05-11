@@ -67,6 +67,16 @@ extension CachePolicy {
     /// Long fresh window keeps the UI snappy; 10-min stale window guarantees
     /// a server-truth revalidate within minutes of session resume.
     public static let preferences = CachePolicy(ttl: .hours(24), staleTTL: .minutes(10), maxItemCount: 500, storageLocation: .grdb)
+    /// User communities list — 24 h TTL, 5 min fresh window. Communities
+    /// change rarely (explicit gesture: join / leave / create / get invited)
+    /// so most reads can be served from cache. The 5-min fresh window lets
+    /// the conversation list show communities instantly on cold start /
+    /// quick reopen; anything older falls into the `.stale` branch which
+    /// surfaces cached data immediately and revalidates silently in the
+    /// background. The 24 h ttl ceiling prevents a multi-day-old cache from
+    /// silently driving the UI; beyond that we fall through to `.expired`
+    /// and gate a full refetch on the spinner path.
+    public static let communities = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: 500, storageLocation: .grdb)
 }
 
 // MARK: - TimeInterval Helpers

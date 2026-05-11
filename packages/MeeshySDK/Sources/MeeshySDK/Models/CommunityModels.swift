@@ -33,7 +33,7 @@ public enum CommunityPermissions {
 
 // MARK: - API Community User
 
-public struct APICommunityUser: Decodable {
+public struct APICommunityUser: Codable, Sendable {
     public let id: String
     public let username: String
     public let displayName: String?
@@ -45,7 +45,7 @@ public struct APICommunityUser: Decodable {
 
 // MARK: - API Community Member
 
-public struct APICommunityMember: Decodable, Identifiable {
+public struct APICommunityMember: Codable, Identifiable, Sendable {
     public let id: String
     public let communityId: String
     public let userId: String
@@ -60,7 +60,7 @@ public struct APICommunityMember: Decodable, Identifiable {
 
 // MARK: - API Community Count
 
-public struct APICommunityCount: Decodable {
+public struct APICommunityCount: Codable, Sendable {
     public let members: Int?
     public let Conversation: Int?
 
@@ -74,7 +74,12 @@ public struct APICommunityCount: Decodable {
 
 // MARK: - API Community
 
-public struct APICommunity: Decodable, Identifiable {
+/// API community payload used both for REST decoding and for the cache-first
+/// store wired into `CacheCoordinator.shared.communities`. The persistence
+/// requirements (`Codable + Sendable + CacheIdentifiable`) are why this type
+/// is not limited to `Decodable` — the SWR pipeline needs to round-trip the
+/// payload through GRDB.
+public struct APICommunity: Codable, Identifiable, Sendable, CacheIdentifiable {
     public let id: String
     public let identifier: String
     public let name: String

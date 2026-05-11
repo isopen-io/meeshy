@@ -23,6 +23,12 @@ public actor CacheCoordinator {
     public let shareLinks: GRDBCacheStore<String, MyShareLink>
     public let trackingLinks: GRDBCacheStore<String, TrackingLink>
     public let communityLinks: GRDBCacheStore<String, CommunityLink>
+    /// User communities list (the ones the current user is a member of).
+    /// Single key "list" stores the full ordered set; the conversation list
+    /// pulls from here cache-first so the Communities section renders
+    /// instantly on cold start instead of flashing through an empty state
+    /// while `/communities` round-trips the network.
+    public let communities: GRDBCacheStore<String, APICommunity>
     public let statuses: GRDBCacheStore<String, StatusEntry>
     public let friends: GRDBCacheStore<String, FriendRequestUser>
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
@@ -169,6 +175,7 @@ public actor CacheCoordinator {
         self.shareLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "slinks")
         self.trackingLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "tlinks")
         self.communityLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "clinks")
+        self.communities = GRDBCacheStore(policy: .communities, db: db, namespace: "communities")
         self.statuses = GRDBCacheStore(policy: .statuses, db: db, namespace: "statuses")
         self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
         self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
@@ -242,6 +249,7 @@ public actor CacheCoordinator {
         await shareLinks.invalidateAll()
         await trackingLinks.invalidateAll()
         await communityLinks.invalidateAll()
+        await communities.invalidateAll()
         await statuses.invalidateAll()
         await friends.invalidateAll()
         await friendRequests.invalidateAll()
@@ -589,6 +597,7 @@ public actor CacheCoordinator {
         await friendRequests.invalidateAll()
         await blockedUsers.invalidateAll()
         await userSearch.invalidateAll()
+        await communities.invalidateAll()
         await images.invalidateAll()
         await audio.invalidateAll()
         await video.invalidateAll()
