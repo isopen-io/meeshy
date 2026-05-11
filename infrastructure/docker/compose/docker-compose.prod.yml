@@ -533,8 +533,12 @@ services:
   # Surveille /letsencrypt/acme.json via inotify et ecrit chaque certificat
   # extrait dans /dumped/certs/<domain>.crt + /dumped/private/<domain>.key
   # (structure de sortie par defaut de ldez/traefik-certs-dumper v2).
-  # Pas de --post-hook : le reload coturn est pilote cote coturn via
-  # inotifywait, ce qui evite tout mount de docker.sock.
+  # --post-hook=chmod : le dumper ecrit les .key en 0600 root:root par
+  # defaut, mais coturn tourne en nobody:nogroup et ne peut donc pas les
+  # lire. On rend le volume world-readable apres chaque extraction. Comme
+  # le volume est prive (sur un host single-tenant Docker), c est un
+  # compromis acceptable. Ce post-hook ne necessite PAS docker.sock — il
+  # tourne juste dans le PID namespace du dumper, donc aucune escalade.
   certs-dumper:
     image: ldez/traefik-certs-dumper:v2.11.2
     container_name: meeshy-certs-dumper
@@ -546,6 +550,7 @@ services:
       - --watch
       - --source=/letsencrypt/acme.json
       - --dest=/dumped
+      - --post-hook=chmod -R a+r /dumped
     volumes:
       - traefik_certs:/letsencrypt:ro
       - traefik_dumped_certs:/dumped
