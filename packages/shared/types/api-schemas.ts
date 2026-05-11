@@ -1379,6 +1379,22 @@ export const conversationListResponseSchema = {
         total: { type: 'number', description: 'Total number of conversations' },
         hasMore: { type: 'boolean', description: 'More conversations available' }
       }
+    },
+    // CRITICAL: cursorPagination MUST be declared here. fast-json-stringify
+    // (Fastify's response serializer) STRIPS any field not present in the
+    // schema, so without this the gateway's `cursorPagination` block was
+    // silently dropped on the wire — the iOS SDK received `nextCursor: null`,
+    // never advanced the cursor, and `loadMore()` looped forever requesting
+    // page 1 (~100 GET /conversations?limit=30 per cold start). Same root
+    // cause as the historical `data.conversation` strip bug documented
+    // below for `conversationResponseSchema`.
+    cursorPagination: {
+      type: 'object',
+      properties: {
+        limit: { type: 'number', description: 'Page size requested' },
+        hasMore: { type: 'boolean', description: 'More conversations available beyond this cursor' },
+        nextCursor: { type: ['string', 'null'], description: 'Opaque cursor (last conversation id) for the next page; null when exhausted' }
+      }
     }
   }
 } as const;
