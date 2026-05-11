@@ -733,11 +733,15 @@ class ConversationViewModel: ObservableObject {
     }
 
     /// Reconcile optimistic messages with their server-assigned ids when the
-    /// OfflineQueue or MessageRetryQueue finally lands the send, and flip rows
-    /// to `.failed` when the retry budget is exhausted. Without this mapping a
+    /// unified `OfflineQueue` finally lands the send, and flip rows to
+    /// `.failed` when the retry budget is exhausted. Without this mapping a
     /// `message:new` socket broadcast arrives with an unknown id and the
     /// optimistic row would stay stuck in `.sending` forever while a duplicate
     /// appears.
+    ///
+    /// Wave 1 Task 3.6 — collapsed onto the unified `OfflineQueue.retrySucceeded` /
+    /// `.retryExhausted` / `.retryDropped` signals, replacing the legacy
+    /// per-queue publishers from `MessageRetryQueue` and `ReactionQueue`.
     // MARK: - MessageStore Observation (Task 1.3)
 
     /// Subscribes to `messageStore.messagesDidChange` so that GRDB-driven
@@ -774,10 +778,18 @@ class ConversationViewModel: ObservableObject {
     }
 
     private func subscribeToQueueReconciliation() {
+        // Wave 1 Task 3.6 — unified `OfflineQueue.retrySucceeded` covers both
+        // message-centric (sendMessage/edit/delete) and reaction
+        // (sendReaction) outbox kinds. We only act on `.sendMessage` here
+        // because that's the only kind that produces a server-assigned id
+        // worth reconciling with the optimistic local id. Reaction success
+        // is a no-op at the ViewModel level — the `reaction:added` /
+        // `reaction:removed` socket broadcast keeps every client in sync.
         OfflineQueue.shared.retrySucceeded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
+                guard payload.kind == .sendMessage else { return }
                 pendingServerIds[payload.tempId] = payload.serverId
                 let localId = payload.tempId
                 let serverId = payload.serverId
@@ -790,64 +802,54 @@ class ConversationViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        MessageRetryQueue.shared.retrySucceeded
+        // Unified terminal-failure signal — fires both for message sends
+        // exhausted by `OutboxFlusher` (5 attempts) and for reactions that
+        // the dispatcher rejected permanently (404/409/410). We dispatch on
+        // `kind` to apply the right rollback strategy.
+        OfflineQueue.shared.retryExhausted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
-                pendingServerIds[payload.tempId] = payload.serverId
-                let localId = payload.tempId
-                let serverId = payload.serverId
-                Task { [weak self] in
-                    _ = try? await self?.messagePersistence.applyEvent(
-                        localId: localId,
-                        event: .serverAck(serverId: serverId, at: Date())
-                    )
-                }
-            }
-            .store(in: &cancellables)
-
-        MessageRetryQueue.shared.retryExhausted
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] payload in
-                guard let self, payload.conversationId == self.conversationId else { return }
-                let localId = payload.tempId
-                Task { [weak self] in
-                    _ = try? await self?.messagePersistence.applyEvent(
-                        localId: localId,
-                        event: .retryExhausted
-                    )
-                }
-            }
-            .store(in: &cancellables)
-
-        // ReactionQueue: roll back the optimistic heart/reaction if the
-        // server permanently rejects (404/409/410). We ignore `.succeeded`
-        // because the `reaction:added` / `reaction:removed` socket broadcast
-        // keeps every client in sync — nothing extra to do here.
-        ReactionQueue.shared.retryExhausted
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] payload in
-                guard let self, payload.conversationId == self.conversationId else { return }
-                let participantId = self._resolvedParticipantId ?? self.currentUserId
-                let localId = payload.messageId
-                let emoji = payload.emoji
-                switch payload.action {
-                case .add:
-                    // Optimistic add failed permanently — remove the reaction we wrote
+                switch payload.kind {
+                case .sendMessage:
+                    let localId = payload.tempId
                     Task { [weak self] in
-                        try? await self?.messagePersistence.removeReaction(
-                            localId: localId, emoji: emoji, participantId: participantId
+                        _ = try? await self?.messagePersistence.applyEvent(
+                            localId: localId,
+                            event: .retryExhausted
                         )
                     }
-                case .remove:
-                    // Optimistic remove failed permanently — restore the reaction we erased
-                    let remoteId = self.serverId(for: localId)
-                    Task { [weak self] in
-                        try? await self?.messagePersistence.appendReaction(
-                            localId: localId, reactionId: UUID().uuidString,
-                            messageId: remoteId, participantId: participantId, emoji: emoji
-                        )
+                case .sendReaction:
+                    guard let reaction = payload.reaction else { return }
+                    let participantId = self._resolvedParticipantId ?? self.currentUserId
+                    let localId = reaction.messageId
+                    let emoji = reaction.emoji
+                    switch reaction.action {
+                    case .add:
+                        // Optimistic add failed permanently — remove the
+                        // reaction we wrote.
+                        Task { [weak self] in
+                            try? await self?.messagePersistence.removeReaction(
+                                localId: localId, emoji: emoji, participantId: participantId
+                            )
+                        }
+                    case .remove:
+                        // Optimistic remove failed permanently — restore the
+                        // reaction we erased.
+                        let remoteId = self.serverId(for: localId)
+                        Task { [weak self] in
+                            try? await self?.messagePersistence.appendReaction(
+                                localId: localId, reactionId: UUID().uuidString,
+                                messageId: remoteId, participantId: participantId, emoji: emoji
+                            )
+                        }
                     }
+                default:
+                    // Other outbox kinds (edit, delete, blockUser, etc.)
+                    // surface their own exhausted paths through dedicated
+                    // ViewModels ; this conversation-level subscription is
+                    // scoped to the optimistic message+reaction lifecycle.
+                    break
                 }
             }
             .store(in: &cancellables)
@@ -1642,18 +1644,22 @@ class ConversationViewModel: ObservableObject {
                 event: .sendFailed(error)
             )
 
-            // Enqueue for persistent auto-retry (5 attempts × 10s interval).
-            // Pass the optimistic tempId so `MessageRetryQueue.retrySucceeded`
-            // and `.retryExhausted` events match the exact row in memory.
-            let retryItem = RetryQueueItem(
+            // Enqueue for persistent auto-retry. The unified outbox
+            // (`OfflineQueue` + `OutboxFlusher`) owns the retry loop now —
+            // exponential backoff up to 5 attempts (`OutboxFlusher.maxAttempts`)
+            // with `retryExhausted` firing on the unified signal at the end.
+            // Wave 1 Task 3.6 — the deleted `MessageRetryQueue` used to own a
+            // parallel retry loop ; both paths converged on the same outbox
+            // table so behavior is preserved while LoC drops by ~600.
+            let retryItem = OfflineQueueItem(
                 conversationId: conversationId,
                 content: text,
+                clientMessageId: tempId,
                 originalLanguage: originalLanguage ?? "fr",
                 replyToId: replyToId,
-                attachmentIds: attachmentIds,
-                clientMessageId: tempId
+                attachmentIds: attachmentIds
             )
-            Task { try? await MessageRetryQueue.shared.enqueue(retryItem) }
+            Task { try? await OfflineQueue.shared.enqueue(retryItem) }
 
             isSending = false
             return false
@@ -1863,12 +1869,14 @@ class ConversationViewModel: ObservableObject {
                     localId: messageId, emoji: emoji, participantId: participantId
                 )
             }
-            let item = ReactionQueueItem(
-                messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
-            )
+            // Wave 1 Task 3.6 — unified outbox replaces the legacy
+            // ReactionQueue. `enqueueReaction` preserves the coalescing state
+            // machine (add+remove cancels, idempotent dedup) and the
+            // `OutboxFlusher` drives retry on the next reconnect tick.
             Task {
-                try? await ReactionQueue.shared.enqueue(item)
-                await ReactionQueue.shared.retryAll()
+                try? await OfflineQueue.shared.enqueueReaction(
+                    messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
+                )
             }
         } else {
             let reactionId = UUID().uuidString
@@ -1878,12 +1886,10 @@ class ConversationViewModel: ObservableObject {
                     messageId: remoteId, participantId: participantId, emoji: emoji
                 )
             }
-            let item = ReactionQueueItem(
-                messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
-            )
             Task {
-                try? await ReactionQueue.shared.enqueue(item)
-                await ReactionQueue.shared.retryAll()
+                try? await OfflineQueue.shared.enqueueReaction(
+                    messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
+                )
             }
         }
 
