@@ -53,18 +53,49 @@ struct OutboxDispatcher: OutboxDispatching {
         case .updateProfile:
             try await dispatchUpdateProfile(record)
 
-        // Wave 1 Phase C — remaining kinds land in a later wave. Throw so
-        // a stray insertion surfaces in CI instead of being swallowed.
-        case .markAsRead, .createConversation, .updateConversation,
-             .updateSettings, .publishStory, .repostStory, .createPost,
-             .toggleLikePost, .createComment, .deleteComment,
-             .toggleLikeComment:
-            logger.error("OutboxDispatcher received \(record.kind.rawValue, privacy: .public) but Phase C handler is not wired yet (record \(record.id, privacy: .public))")
+        // Wave 1 Phase C — 9 of the 11 remaining kinds are now wired.
+        // `publishStory` / `repostStory` stay in the existing
+        // `StoryOfflineQueue` pipeline for now (Tier C queue merge will
+        // unify them later) and surface here as a permanent failure so a
+        // stray row doesn't loop in the flusher.
+        case .markAsRead:
+            try await dispatchMarkAsRead(record)
+
+        case .createConversation:
+            try await dispatchCreateConversation(record)
+
+        case .updateConversation:
+            try await dispatchUpdateConversation(record)
+
+        case .updateSettings:
+            try await dispatchUpdateSettings(record)
+
+        case .createPost:
+            try await dispatchCreatePost(record)
+
+        case .toggleLikePost:
+            try await dispatchToggleLikePost(record)
+
+        case .createComment:
+            try await dispatchCreateComment(record)
+
+        case .deleteComment:
+            try await dispatchDeleteComment(record)
+
+        case .toggleLikeComment:
+            try await dispatchToggleLikeComment(record)
+
+        case .publishStory, .repostStory:
+            // Story publish/repost remains routed through `StoryOfflineQueue`
+            // until Tier C merges the two persistence stores. A row landing
+            // here is a programming error — surface it loudly instead of
+            // silently retrying forever.
+            logger.error("OutboxDispatcher received \(record.kind.rawValue, privacy: .public) but story publish lives in StoryOfflineQueue (record \(record.id, privacy: .public))")
             throw NSError(
                 domain: "OutboxDispatcher",
                 code: 501,
                 userInfo: [
-                    NSLocalizedDescriptionKey: "Outbox kind '\(record.kind.rawValue)' not implemented yet (Wave 1 Phase C pending)"
+                    NSLocalizedDescriptionKey: "Outbox kind '\(record.kind.rawValue)' is handled by StoryOfflineQueue, not OutboxDispatcher"
                 ]
             )
         }
@@ -193,6 +224,262 @@ struct OutboxDispatcher: OutboxDispatching {
             headers: ["X-Client-Mutation-Id": payload.clientMutationId]
         )
         logger.info("updateProfile dispatched cmid=\(payload.clientMutationId, privacy: .public)")
+    }
+
+    // MARK: - Non-message mutation dispatch (Wave 1 Phase C)
+
+    /// `POST /conversations/:id/mark-read` — the gateway treats read
+    /// receipts as monotonic + idempotent at the storage layer (a higher
+    /// cursor wins, a lower one is a no-op), so the route does NOT wrap
+    /// through `MutationLog`. We still dispatch via the outbox so an
+    /// offline mark survives an app kill ; we just don't forward the
+    /// `X-Client-Mutation-Id` header (no server-side dedup to feed).
+    /// A 404 means the conversation was deleted while the row was pending
+    /// — swallow as success so the flusher removes the row.
+    private func dispatchMarkAsRead(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: MarkAsReadPayload.self)
+        do {
+            let _: APIResponse<[String: Int]> = try await APIClient.shared.request(
+                endpoint: "/conversations/\(payload.conversationId)/mark-read",
+                method: "POST",
+                body: nil,
+                queryItems: nil
+            )
+            logger.info("markAsRead dispatched for conversation \(payload.conversationId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
+            logger.warning("markAsRead 404 for conversation \(payload.conversationId, privacy: .public) — conversation gone, accepting as success")
+        }
+    }
+
+    /// `POST /conversations` — the gateway accepts the canonical
+    /// `{ type, title?, participantIds }` shape. The route does not yet
+    /// wrap through `MutationLog`, so the cmid is sent on a best-effort
+    /// basis (gateway middleware records it but `withMutationLog` is not
+    /// yet invoked) — a future gateway upgrade picks the dedup up for
+    /// free without an iOS-side change.
+    private func dispatchCreateConversation(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: CreateConversationPayload.self)
+        struct CreateConversationBody: Encodable {
+            let type: String
+            let title: String?
+            let participantIds: [String]
+        }
+        let body = CreateConversationBody(
+            type: payload.type,
+            title: payload.title,
+            participantIds: payload.participantIds
+        )
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+            endpoint: "/conversations",
+            method: "POST",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+        )
+        logger.info("createConversation dispatched cmid=\(payload.clientMutationId, privacy: .public)")
+    }
+
+    /// `PUT /conversations/:id` — the gateway accepts a partial update
+    /// shape ; we forward only the fields the payload carries non-nil.
+    /// A 404 means the conversation was deleted while the row was
+    /// pending — swallow as success so the flusher removes the row.
+    private func dispatchUpdateConversation(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: UpdateConversationPayload.self)
+        struct UpdateConversationBody: Encodable {
+            let title: String?
+            let description: String?
+            let avatar: String?
+
+            enum CodingKeys: String, CodingKey { case title, description, avatar }
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                if let title { try container.encode(title, forKey: .title) }
+                if let description { try container.encode(description, forKey: .description) }
+                if let avatar { try container.encode(avatar, forKey: .avatar) }
+            }
+        }
+        let body = UpdateConversationBody(
+            title: payload.title,
+            description: payload.description,
+            avatar: payload.avatarUrl
+        )
+        do {
+            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+                endpoint: "/conversations/\(payload.conversationId)",
+                method: "PUT",
+                body: try JSONEncoder().encode(body),
+                queryItems: nil,
+                headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+            )
+            logger.info("updateConversation dispatched for \(payload.conversationId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
+            logger.warning("updateConversation 404 for \(payload.conversationId, privacy: .public) — conversation gone, accepting as success")
+        }
+    }
+
+    /// `PATCH /me/preferences/:category` — the gateway path is
+    /// category-typed (`privacy`, `audio`, …) and dedupes via
+    /// `kind = updateSettings:${category}`. The opaque `body` blob is
+    /// the JSON-encoded category-specific preferences struct produced
+    /// by the caller at enqueue time.
+    private func dispatchUpdateSettings(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: UpdateSettingsPayload.self)
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+            endpoint: "/me/preferences/\(payload.category)",
+            method: "PATCH",
+            body: payload.body,
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+        )
+        logger.info("updateSettings dispatched for category \(payload.category, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+    }
+
+    /// `POST /posts` — gateway wraps through `withMutationLog`. Body
+    /// shape matches `CreatePostSchema` ; `attachmentIds` becomes
+    /// `mediaIds` at the wire boundary to match the gateway field name.
+    private func dispatchCreatePost(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: CreatePostPayload.self)
+        struct CreatePostBody: Encodable {
+            let content: String?
+            let mediaIds: [String]?
+            let visibility: String
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                if let content, !content.isEmpty { try container.encode(content, forKey: .content) }
+                if let mediaIds, !mediaIds.isEmpty { try container.encode(mediaIds, forKey: .mediaIds) }
+                try container.encode(visibility, forKey: .visibility)
+            }
+
+            enum CodingKeys: String, CodingKey {
+                case content, mediaIds, visibility
+            }
+        }
+        let body = CreatePostBody(
+            content: payload.content,
+            mediaIds: payload.attachmentIds.isEmpty ? nil : payload.attachmentIds,
+            visibility: payload.visibility
+        )
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+            endpoint: "/posts",
+            method: "POST",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+        )
+        logger.info("createPost dispatched cmid=\(payload.clientMutationId, privacy: .public)")
+    }
+
+    /// `POST|DELETE /posts/:id/like` — gateway wraps through
+    /// `withMutationLog`. Both directions are naturally idempotent at
+    /// the storage layer, so a 404 ("post gone") is treated as success.
+    private func dispatchToggleLikePost(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: ToggleLikePostPayload.self)
+        let method = payload.liked ? "POST" : "DELETE"
+        do {
+            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+                endpoint: "/posts/\(payload.postId)/like",
+                method: method,
+                body: nil,
+                queryItems: nil,
+                headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+            )
+            logger.info("toggleLikePost \(payload.liked, privacy: .public) dispatched for \(payload.postId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
+            logger.warning("toggleLikePost 404 for \(payload.postId, privacy: .public) — post gone, accepting as success")
+        }
+    }
+
+    /// `POST /posts/:id/comments` — gateway wraps through
+    /// `withMutationLog`. Body matches `CreateCommentSchema` :
+    /// `{ content, parentId? }`.
+    private func dispatchCreateComment(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: CreateCommentPayload.self)
+        struct CreateCommentBody: Encodable {
+            let content: String
+            let parentId: String?
+
+            enum CodingKeys: String, CodingKey { case content, parentId }
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                try container.encode(content, forKey: .content)
+                if let parentId { try container.encode(parentId, forKey: .parentId) }
+            }
+        }
+        let body = CreateCommentBody(
+            content: payload.content,
+            parentId: payload.parentCommentId
+        )
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+            endpoint: "/posts/\(payload.postId)/comments",
+            method: "POST",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+        )
+        logger.info("createComment dispatched on \(payload.postId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+    }
+
+    /// `DELETE /posts/:postId/comments/:commentId` — gateway wraps
+    /// through `withMutationLog`. The route needs `postId` so the
+    /// payload carries it ; without it we'd have to look up the comment
+    /// owner which defeats the offline-first invariant.
+    /// 404 = comment gone (raced with another delete), accept as success.
+    private func dispatchDeleteComment(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: DeleteCommentPayload.self)
+        // `DeleteCommentPayload` only carries `commentId`. The gateway
+        // route is `/posts/:postId/comments/:commentId`. We persist the
+        // `postId` in `OutboxRecord.conversationId` at enqueue time so
+        // the dispatcher can recover it here without re-introducing it
+        // in the payload schema (which is shared with the gateway
+        // `MutationLog` dedup key).
+        let postId = record.conversationId
+        guard postId != OfflineQueue.globalConversationSentinel else {
+            logger.error("deleteComment record \(record.id, privacy: .public) missing postId in conversationId field — dropping")
+            return
+        }
+        do {
+            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+                endpoint: "/posts/\(postId)/comments/\(payload.commentId)",
+                method: "DELETE",
+                body: nil,
+                queryItems: nil,
+                headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+            )
+            logger.info("deleteComment dispatched for \(payload.commentId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
+            logger.warning("deleteComment 404 for \(payload.commentId, privacy: .public) — comment gone, accepting as success")
+        }
+    }
+
+    /// `POST|DELETE /posts/:postId/comments/:commentId/like` — like and
+    /// unlike are naturally idempotent at the storage layer ; the route
+    /// does NOT currently wrap through `MutationLog` (only the post-level
+    /// like/unlike does), but we still send the cmid header so a future
+    /// gateway upgrade picks it up for free.
+    /// 404 = comment gone, accept as success.
+    private func dispatchToggleLikeComment(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: ToggleLikeCommentPayload.self)
+        let postId = record.conversationId
+        guard postId != OfflineQueue.globalConversationSentinel else {
+            logger.error("toggleLikeComment record \(record.id, privacy: .public) missing postId in conversationId field — dropping")
+            return
+        }
+        let method = payload.liked ? "POST" : "DELETE"
+        do {
+            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+                endpoint: "/posts/\(postId)/comments/\(payload.commentId)/like",
+                method: method,
+                body: nil,
+                queryItems: nil,
+                headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+            )
+            logger.info("toggleLikeComment \(payload.liked, privacy: .public) dispatched for \(payload.commentId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+        } catch let MeeshyError.server(statusCode, _) where statusCode == 404 {
+            logger.warning("toggleLikeComment 404 for \(payload.commentId, privacy: .public) — comment gone, accepting as success")
+        }
     }
 
     // MARK: - Send Message

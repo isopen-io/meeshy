@@ -2120,9 +2120,23 @@ class ConversationViewModel: ObservableObject {
         NotificationCenter.default.post(name: .conversationMarkedRead, object: convId)
         // 3. Send to server in background (fire-and-forget, queue on failure)
         guard UserPreferencesManager.shared.privacy.showReadReceipts else { return }
+        // Wave 1 Phase C — route through the offline outbox so a read
+        // receipt produced while offline survives an app kill and replays
+        // on reconnect. The gateway route is naturally idempotent (read
+        // cursor only moves forward) so a replay is harmless ; we still
+        // tag it with a cmid for instrumentation parity with the other
+        // outbox kinds. Fall back to the legacy `PendingStatusQueue` if
+        // the outbox enqueue itself fails (e.g. pool not configured).
+        let lastMessageId = messages.last?.id ?? ""
         Task {
+            let cmid = ClientMutationId.generate()
+            let payload = MarkAsReadPayload(
+                clientMutationId: cmid,
+                conversationId: convId,
+                upToMessageId: lastMessageId
+            )
             do {
-                try await conversationService.markRead(conversationId: convId)
+                try await OfflineQueue.shared.enqueue(.markAsRead, payload: payload, conversationId: convId)
             } catch {
                 await PendingStatusQueue.shared.enqueue(.init(
                     conversationId: convId, type: "read", timestamp: Date()

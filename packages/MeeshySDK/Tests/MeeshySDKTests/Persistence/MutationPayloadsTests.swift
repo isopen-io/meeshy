@@ -167,4 +167,181 @@ final class MutationPayloadsTests: XCTestCase {
             XCTAssertTrue(ClientMutationId.isValid(cmid), "Generated cmid \(cmid) must satisfy the gateway regex")
         }
     }
+
+    // MARK: - MarkAsReadPayload (Phase C)
+
+    func test_markAsReadPayload_roundtrip() throws {
+        let original = MarkAsReadPayload(
+            clientMutationId: ClientMutationId.generate(),
+            conversationId: "conv-123",
+            upToMessageId: "msg-456"
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(MarkAsReadPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+
+    // MARK: - CreateConversationPayload (Phase C)
+
+    func test_createConversationPayload_encoding_directType() throws {
+        let payload = CreateConversationPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000010",
+            type: "direct",
+            title: nil,
+            participantIds: ["u-1", "u-2"]
+        )
+        let data = try encoder.encode(payload)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["type"] as? String, "direct")
+        XCTAssertEqual(object["participantIds"] as? [String], ["u-1", "u-2"])
+        // Swift's default synthesized Codable conformance OMITS nil
+        // optionals from the JSON output — so `title` is absent when nil
+        // rather than serialized as `null`. The gateway treats absent and
+        // null identically for an optional field, so this is fine ; we
+        // assert the absence here to lock the wire shape.
+        XCTAssertNil(object["title"], "Expected nil title to be omitted from JSON output")
+    }
+
+    func test_createConversationPayload_encoding_withTitle() throws {
+        let payload = CreateConversationPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000013",
+            type: "group",
+            title: "Team chat",
+            participantIds: ["u-1", "u-2", "u-3"]
+        )
+        let data = try encoder.encode(payload)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["title"] as? String, "Team chat")
+        XCTAssertEqual(object["type"] as? String, "group")
+    }
+
+    // MARK: - UpdateConversationPayload (Phase C)
+
+    func test_updateConversationPayload_roundtrip_partialFields() throws {
+        let original = UpdateConversationPayload(
+            clientMutationId: ClientMutationId.generate(),
+            conversationId: "conv-789",
+            title: "New title",
+            description: nil,
+            avatarUrl: "https://cdn.example.com/avatar.jpg"
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(UpdateConversationPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+
+    // MARK: - UpdateSettingsPayload (Phase C — refactored shape)
+
+    func test_updateSettingsPayload_carriesCategoryAndOpaqueBody() throws {
+        let bodyJSON = #"{"showReadReceipts":true}"#
+        let bodyData = try XCTUnwrap(bodyJSON.data(using: .utf8))
+        let payload = UpdateSettingsPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000011",
+            category: "privacy",
+            body: bodyData
+        )
+        let data = try encoder.encode(payload)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["category"] as? String, "privacy")
+        // `body` is base64-encoded when a Data is encoded via JSONEncoder
+        // default strategy — this is fine because the dispatcher uses the
+        // decoded Swift value, not the JSON wire form.
+        XCTAssertNotNil(object["body"])
+    }
+
+    func test_updateSettingsPayload_roundtrip_preservesBodyBytes() throws {
+        let bodyJSON = #"{"audioQuality":"high","extras":{}}"#
+        let bodyData = try XCTUnwrap(bodyJSON.data(using: .utf8))
+        let original = UpdateSettingsPayload(
+            clientMutationId: ClientMutationId.generate(),
+            category: "audio",
+            body: bodyData
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(UpdateSettingsPayload.self, from: data)
+        XCTAssertEqual(decoded.category, original.category)
+        XCTAssertEqual(decoded.body, original.body)
+        XCTAssertEqual(decoded.clientMutationId, original.clientMutationId)
+    }
+
+    // MARK: - CreatePostPayload (Phase C)
+
+    func test_createPostPayload_roundtrip() throws {
+        let original = CreatePostPayload(
+            clientMutationId: ClientMutationId.generate(),
+            content: "Hello world",
+            attachmentIds: ["att-1"],
+            visibility: "PUBLIC"
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(CreatePostPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+
+    // MARK: - ToggleLikePostPayload (Phase C)
+
+    func test_toggleLikePostPayload_encodes_likedBool() throws {
+        let payload = ToggleLikePostPayload(
+            clientMutationId: "cmid_00000000-0000-4000-8000-000000000012",
+            postId: "post-1",
+            liked: true
+        )
+        let data = try encoder.encode(payload)
+        let object = try XCTUnwrap(try JSONSerialization.jsonObject(with: data) as? [String: Any])
+        XCTAssertEqual(object["liked"] as? Bool, true)
+        XCTAssertEqual(object["postId"] as? String, "post-1")
+    }
+
+    // MARK: - CreateCommentPayload (Phase C)
+
+    func test_createCommentPayload_roundtrip_topLevel() throws {
+        let original = CreateCommentPayload(
+            clientMutationId: ClientMutationId.generate(),
+            postId: "post-1",
+            parentCommentId: nil,
+            content: "Great post!"
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(CreateCommentPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+
+    func test_createCommentPayload_roundtrip_reply() throws {
+        let original = CreateCommentPayload(
+            clientMutationId: ClientMutationId.generate(),
+            postId: "post-1",
+            parentCommentId: "comment-parent",
+            content: "Agreed"
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(CreateCommentPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+
+    // MARK: - DeleteCommentPayload (Phase C)
+
+    func test_deleteCommentPayload_roundtrip() throws {
+        let original = DeleteCommentPayload(
+            clientMutationId: ClientMutationId.generate(),
+            commentId: "comment-xyz"
+        )
+        let data = try encoder.encode(original)
+        let decoded = try decoder.decode(DeleteCommentPayload.self, from: data)
+        XCTAssertEqual(decoded, original)
+    }
+
+    // MARK: - ToggleLikeCommentPayload (Phase C)
+
+    func test_toggleLikeCommentPayload_roundtrip_both_directions() throws {
+        for liked in [true, false] {
+            let original = ToggleLikeCommentPayload(
+                clientMutationId: ClientMutationId.generate(),
+                commentId: "comment-\(liked)",
+                liked: liked
+            )
+            let data = try encoder.encode(original)
+            let decoded = try decoder.decode(ToggleLikeCommentPayload.self, from: data)
+            XCTAssertEqual(decoded, original)
+        }
+    }
 }

@@ -182,20 +182,61 @@ public final class UserPreferencesManager: ObservableObject {
         }
     }
 
+    /// Wave 1 Phase C — route preference sync through the offline outbox
+    /// so a change made while offline survives an app kill and replays on
+    /// reconnect with `X-Client-Mutation-Id` for gateway-side
+    /// `MutationLog` dedup. The category body is encoded once at enqueue
+    /// time so the dispatcher can route to `PATCH /me/preferences/:cat`
+    /// without re-encoding. On enqueue failure (pool not configured at
+    /// app boot, transient GRDB error) we fall back to the direct PATCH
+    /// path so we don't drop preference changes silently.
     private func syncCategoryToBackend(_ category: PreferenceCategory) async {
         guard AuthManager.shared.isAuthenticated else { return }
+        let cmid = ClientMutationId.generate()
+        let body: Data?
         do {
             switch category {
-            case .privacy: try await service.patchPreferences(category: .privacy, body: privacy)
-            case .audio: try await service.patchPreferences(category: .audio, body: audio)
-            case .message: try await service.patchPreferences(category: .message, body: message)
-            case .notification: try await service.patchPreferences(category: .notification, body: notification)
-            case .video: try await service.patchPreferences(category: .video, body: video)
-            case .document: try await service.patchPreferences(category: .document, body: document)
-            case .application: try await service.patchPreferences(category: .application, body: application)
+            case .privacy: body = try encoder.encode(privacy)
+            case .audio: body = try encoder.encode(audio)
+            case .message: body = try encoder.encode(message)
+            case .notification: body = try encoder.encode(notification)
+            case .video: body = try encoder.encode(video)
+            case .document: body = try encoder.encode(document)
+            case .application: body = try encoder.encode(application)
             }
         } catch {
-            // Sync failure is non-fatal; next fetchFromBackend() will reconcile
+            // Encoding a preference struct should never fail in practice,
+            // but if it does we cannot enqueue a row referencing a body
+            // we can't produce — bail out and rely on the next
+            // `fetchFromBackend()` to reconcile.
+            return
+        }
+
+        guard let encodedBody = body else { return }
+        let payload = UpdateSettingsPayload(
+            clientMutationId: cmid,
+            category: category.rawValue,
+            body: encodedBody
+        )
+        do {
+            try await OfflineQueue.shared.enqueue(.updateSettings, payload: payload)
+        } catch {
+            // Fall back to the direct PATCH path — outbox enqueue can
+            // fail if the pool was never wired (early-boot UI surfaces
+            // a preference change before AppDatabase initialises).
+            do {
+                switch category {
+                case .privacy: try await service.patchPreferences(category: .privacy, body: privacy)
+                case .audio: try await service.patchPreferences(category: .audio, body: audio)
+                case .message: try await service.patchPreferences(category: .message, body: message)
+                case .notification: try await service.patchPreferences(category: .notification, body: notification)
+                case .video: try await service.patchPreferences(category: .video, body: video)
+                case .document: try await service.patchPreferences(category: .document, body: document)
+                case .application: try await service.patchPreferences(category: .application, body: application)
+                }
+            } catch {
+                // Sync failure is non-fatal; next fetchFromBackend() will reconcile
+            }
         }
     }
 

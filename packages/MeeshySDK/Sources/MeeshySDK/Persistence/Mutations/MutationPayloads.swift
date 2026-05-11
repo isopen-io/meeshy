@@ -142,28 +142,36 @@ public struct UpdateProfilePayload: Codable, Sendable, Equatable {
     }
 }
 
+/// Wave 1 Phase C — the gateway exposes 7 preference categories (privacy,
+/// audio, message, notification, video, document, application) at
+/// `PUT|PATCH /me/preferences/{category}`. Instead of inflating
+/// `OutboxKind` with 7 cases, a single `.updateSettings` row carries the
+/// category alongside an opaque `body` JSON blob — the dispatcher routes
+/// to the correct path by reading `payload.category`, and the gateway
+/// dedup key is `updateSettings:${category}` so two categories with the
+/// same cmid would still be distinct mutation log rows.
+///
+/// `body` is encoded once at enqueue time so we don't need to know the
+/// concrete preference struct (PrivacyPreferences, AudioPreferences, …)
+/// here — keeps the SDK payload layer category-agnostic.
 public struct UpdateSettingsPayload: Codable, Sendable, Equatable {
     public let clientMutationId: String
-    public let language: String?
-    public let regionalLanguage: String?
-    public let customDestinationLanguage: String?
-    public let notificationsEnabled: Bool?
-    public let isPrivate: Bool?
+    /// One of `"privacy" | "audio" | "message" | "notification" | "video"
+    /// | "document" | "application"` — matches the gateway category name.
+    public let category: String
+    /// JSON-encoded category body (e.g. encoded `PrivacyPreferences`).
+    /// Stored as raw `Data` so the SDK doesn't need to know the concrete
+    /// preference struct type at this layer.
+    public let body: Data
 
     public init(
         clientMutationId: String,
-        language: String?,
-        regionalLanguage: String?,
-        customDestinationLanguage: String?,
-        notificationsEnabled: Bool?,
-        isPrivate: Bool?
+        category: String,
+        body: Data
     ) {
         self.clientMutationId = clientMutationId
-        self.language = language
-        self.regionalLanguage = regionalLanguage
-        self.customDestinationLanguage = customDestinationLanguage
-        self.notificationsEnabled = notificationsEnabled
-        self.isPrivate = isPrivate
+        self.category = category
+        self.body = body
     }
 }
 

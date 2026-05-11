@@ -140,19 +140,22 @@ final class OutboxKindCodableTests: XCTestCase {
     }
 
     func test_updateSettings_roundTrips() throws {
+        // Phase C — the payload now carries an opaque `body` Data blob
+        // alongside the category name so the dispatcher can route to
+        // `PATCH /me/preferences/:cat` without inflating OutboxKind with
+        // 7 cases. See `MutationPayloadsTests.test_updateSettingsPayload_*`
+        // for the new contract.
+        let bodyJSON = #"{"showReadReceipts":true}"#
+        let bodyData = try XCTUnwrap(bodyJSON.data(using: .utf8))
         let p = UpdateSettingsPayload(
             clientMutationId: "cmid_us",
-            language: "fr",
-            regionalLanguage: "es",
-            customDestinationLanguage: nil,
-            notificationsEnabled: true,
-            isPrivate: false
+            category: "privacy",
+            body: bodyData
         )
         let d = try roundTrip(p)
-        XCTAssertEqual(d.language, "fr")
-        XCTAssertEqual(d.regionalLanguage, "es")
-        XCTAssertEqual(d.notificationsEnabled, true)
-        XCTAssertEqual(d.isPrivate, false)
+        XCTAssertEqual(d.category, "privacy")
+        XCTAssertEqual(d.body, bodyData)
+        XCTAssertEqual(d.clientMutationId, "cmid_us")
     }
 
     func test_publishStory_roundTrips() throws {

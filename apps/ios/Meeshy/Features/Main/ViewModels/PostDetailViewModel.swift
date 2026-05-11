@@ -206,21 +206,31 @@ class PostDetailViewModel: ObservableObject {
 
     // MARK: - Actions
 
+    /// Wave 1 Phase C — like/unlike flows through the offline outbox so
+    /// the optimistic UI flips instantly, the network call survives an
+    /// app kill, and the gateway `MutationLog` dedups replays. Rollback
+    /// on enqueue failure ; permanent failures (a 404 from a deleted
+    /// post) are swallowed by the dispatcher.
     func likePost() async {
         guard var current = post else { return }
-        current.isLiked.toggle()
-        current.likes += current.isLiked ? 1 : -1
+        let nowLiked = !current.isLiked
+        current.isLiked = nowLiked
+        current.likes += nowLiked ? 1 : -1
         post = current
+        let cmid = ClientMutationId.generate()
+        let payload = ToggleLikePostPayload(
+            clientMutationId: cmid,
+            postId: current.id,
+            liked: nowLiked
+        )
         do {
-            if current.isLiked {
-                try await postService.like(postId: current.id)
-            } else {
-                try await postService.unlike(postId: current.id)
-            }
+            try await OfflineQueue.shared.enqueue(.toggleLikePost, payload: payload)
         } catch {
-            current.isLiked.toggle()
-            current.likes += current.isLiked ? 1 : -1
+            // Roll back optimistic state if the outbox refuses the row.
+            current.isLiked = !nowLiked
+            current.likes += nowLiked ? -1 : 1
             post = current
+            ToastManager.shared.showError("Erreur lors du like")
         }
     }
 
@@ -233,31 +243,43 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
+    /// Wave 1 Phase C — comment creation flows through the offline
+    /// outbox so the optimistic comment appears instantly and survives
+    /// app kill. The gateway response is the authoritative comment id ;
+    /// while it's pending the optimistic id (`cmid`) is shown in the
+    /// list — when the server response arrives, the socket
+    /// `comment:added` broadcast reconciles via the normal path.
     func sendComment(_ content: String, effectFlags: Int? = nil) async {
         guard let post else { return }
+        let cmid = ClientMutationId.generate()
+        let snapshot = comments
+        let snapshotCount = self.post?.commentCount ?? 0
+        let currentUser = AuthManager.shared.currentUser
+        let optimistic = FeedComment(
+            id: cmid,
+            author: currentUser?.displayName ?? currentUser?.username ?? "",
+            authorId: currentUser?.id ?? "",
+            authorAvatarURL: currentUser?.avatar,
+            content: content,
+            timestamp: Date(),
+            likes: 0,
+            replies: 0,
+            effectFlags: effectFlags ?? 0
+        )
+        comments.insert(optimistic, at: 0)
+        self.post?.commentCount = snapshotCount + 1
+        let payload = CreateCommentPayload(
+            clientMutationId: cmid,
+            postId: post.id,
+            parentCommentId: nil,
+            content: content
+        )
         do {
-            let apiComment = try await postService.addComment(postId: post.id, content: content, parentId: nil, effectFlags: effectFlags)
-            let comment = FeedComment(
-                id: apiComment.id, author: apiComment.author.name, authorId: apiComment.author.id,
-                authorAvatarURL: apiComment.author.avatar,
-                content: apiComment.content, timestamp: apiComment.createdAt,
-                likes: 0, replies: 0,
-                effectFlags: apiComment.effectFlags ?? effectFlags ?? 0
-            )
-            comments.insert(comment, at: 0)
-            self.post?.commentCount += 1
+            try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
             try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
-
-            // Persist to GRDB
-            if let persistence = feedPersistence,
-               let record = CommentRecord(from: apiComment, postId: post.id) {
-                let newCount = self.post?.commentCount ?? 0
-                Task.detached(priority: .utility) {
-                    try? await persistence.insertComment(record)
-                    try? await persistence.updateCommentCount(postId: post.id, count: newCount)
-                }
-            }
         } catch {
+            comments = snapshot
+            self.post?.commentCount = snapshotCount
             ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
         }
     }

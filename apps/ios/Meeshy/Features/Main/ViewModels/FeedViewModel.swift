@@ -393,15 +393,19 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    /// Wave 1 Phase C — comment like flows through the offline outbox.
+    /// `emoji` is currently fixed to `❤️` server-side ; until the route
+    /// accepts custom emojis the parameter is ignored at the wire layer
+    /// but still threaded through here for API stability with the view.
     func likeComment(postId: String, commentId: String, emoji: String = "❤️") async {
-        let body: [String: String] = ["emoji": emoji]
+        let cmid = ClientMutationId.generate()
+        let payload = ToggleLikeCommentPayload(
+            clientMutationId: cmid,
+            commentId: commentId,
+            liked: true
+        )
         do {
-            let bodyData = try JSONSerialization.data(withJSONObject: body)
-            let _: SimpleAPIResponse = try await api.request(
-                endpoint: "/posts/\(postId)/comments/\(commentId)/like",
-                method: "POST",
-                body: bodyData
-            )
+            try await OfflineQueue.shared.enqueue(.toggleLikeComment, payload: payload, conversationId: postId)
         } catch {
             ToastManager.shared.showError("Erreur lors du like")
         }
