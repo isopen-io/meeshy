@@ -244,9 +244,13 @@ extension VoIPPushManager: PKPushRegistryDelegate {
     /// Returns the participant's username from a direct conversation matching the caller's user ID.
     nonisolated private static func resolveCallerNameFromCache(callerUserId: String) async -> String? {
         guard !callerUserId.isEmpty else { return nil }
+        // CallKit display path: we need whatever name the user already has
+        // cached for the conversation (snapshot semantics — kicking a
+        // revalidate during an incoming call would only fight with the
+        // CallKit deadline).
         let cache = CacheCoordinator.shared
         let result = await cache.conversations.load(for: "list")
-        guard let conversations = result.value else { return nil }
+        guard let conversations = result.snapshot() else { return nil }
         let match = conversations.first { $0.participantUserId == callerUserId }
         return match?.participantUsername ?? match?.title
     }

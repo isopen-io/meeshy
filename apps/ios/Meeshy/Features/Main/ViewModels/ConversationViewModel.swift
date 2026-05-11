@@ -1878,12 +1878,26 @@ class ConversationViewModel: ObservableObject {
             }
         }
 
-        // Resolve participantId lazily for future reactions
+        // Resolve participantId lazily for future reactions.
+        //
+        // SWR: a fresh or stale cache hit is enough — participantId is an
+        // immutable mapping (userId × conversationId → participantId) so
+        // staleness has no impact. `.expired` / `.empty` means we have no
+        // cached members; the next reaction will retry naturally once
+        // `ensureConversationDetail` (or a socket join event) populates the
+        // participants cache.
         if _resolvedParticipantId == nil {
             let convId = conversationId
             let userId = currentUserId
             Task {
-                let cached = await CacheCoordinator.shared.participants.load(for: convId).value ?? []
+                let result = await CacheCoordinator.shared.participants.load(for: convId)
+                let cached: [PaginatedParticipant]
+                switch result {
+                case .fresh(let v, _), .stale(let v, _):
+                    cached = v
+                case .expired, .empty:
+                    cached = []
+                }
                 if let match = cached.first(where: { $0.userId == userId }) {
                     self._resolvedParticipantId = match.id
                 }

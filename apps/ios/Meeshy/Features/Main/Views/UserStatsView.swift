@@ -188,11 +188,19 @@ final class UserStatsViewModel: ObservableObject {
         // Load stats from cache
         let cacheResult = await CacheCoordinator.shared.stats.load(for: userId)
 
-        // Load timeline from cache
+        // Load timeline from cache.
+        //
+        // SWR: timeline data only matters when it has rows to render — both
+        // fresh and stale variants satisfy the cache-first contract. The
+        // stats branch below already drives the network revalidation when
+        // appropriate, so we do not kick a separate refresh here.
         let timelineCacheKey = "timeline_\(userId)"
         let timelineCached = await CacheCoordinator.shared.timeline.load(for: timelineCacheKey)
-        if let cachedTimeline = timelineCached.value, !cachedTimeline.isEmpty {
-            timeline = cachedTimeline
+        switch timelineCached {
+        case .fresh(let cached, _), .stale(let cached, _):
+            if !cached.isEmpty { timeline = cached }
+        case .expired, .empty:
+            break
         }
 
         switch cacheResult {

@@ -309,8 +309,21 @@ class FeedViewModel: ObservableObject {
         // Optimistic: insert into the local "bookmarks" cache so opening the
         // Favoris tab shows the post immediately. Mirror BookmarksViewModel's
         // snapshot/rollback pattern on failure.
+        //
+        // SWR: an in-cache list (fresh or stale) is the rollback target; an
+        // expired/empty cache means there is nothing to roll back to and we
+        // simply seed the bookmarks list with this post. The bookmarks list
+        // itself is revalidated by `BookmarksViewModel` when the user opens
+        // the Favoris tab, so we do NOT trigger a remote refresh here.
         let bookmarksKey = "bookmarks"
-        let cachedBookmarks = await CacheCoordinator.shared.feed.load(for: bookmarksKey).value ?? []
+        let result = await CacheCoordinator.shared.feed.load(for: bookmarksKey)
+        let cachedBookmarks: [FeedPost]
+        switch result {
+        case .fresh(let v, _), .stale(let v, _):
+            cachedBookmarks = v
+        case .expired, .empty:
+            cachedBookmarks = []
+        }
         let snapshot = cachedBookmarks
         if !cachedBookmarks.contains(where: { $0.id == postId }) {
             var updated = cachedBookmarks

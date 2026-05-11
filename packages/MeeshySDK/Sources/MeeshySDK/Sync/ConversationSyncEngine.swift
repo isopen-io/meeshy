@@ -381,7 +381,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             let userId = await currentUserId()
             let deltaConversations = response.data.map { $0.toConversation(currentUserId: userId) }
 
-            let existing = await cache.conversations.load(for: "list").value ?? []
+            let existing = await cache.conversations.load(for: "list").snapshot() ?? []
             var merged = existing
 
             for delta in deltaConversations {
@@ -472,10 +472,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
 
         let oneYearAgo = Calendar.current.date(byAdding: .year, value: -1, to: Date()) ?? Date()
-        let convs = await cache.conversations.load(for: "list").value ?? []
+        let convs = await cache.conversations.load(for: "list").snapshot() ?? []
 
         for conv in convs {
-            let messages = await cache.messages.load(for: conv.id).value ?? []
+            let messages = await cache.messages.load(for: conv.id).snapshot() ?? []
             guard messages.count > 600 else { continue }
 
             let recentByDate = messages.filter { $0.createdAt > oneYearAgo }
@@ -677,7 +677,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // already exists. The `update` mutate closure is sync +
         // nonisolated, so we can't fetch from inside it — branch here.
         let cachedList = await cache.conversations.load(for: "list")
-        let conversationExists = cachedList.value?.contains(where: { $0.id == msg.conversationId }) ?? false
+        let conversationExists = cachedList.snapshot()?.contains(where: { $0.id == msg.conversationId }) ?? false
 
         if conversationExists {
             await cache.conversations.update(for: "list") { conversations in

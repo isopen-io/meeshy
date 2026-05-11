@@ -138,8 +138,12 @@ final class BackgroundTaskManager {
         scheduleMessagePrefetch()
 
         let prefetchTask = Task {
+            // Background prefetch: read whatever the cache currently has
+            // (snapshot semantics). We are running in a `BGProcessingTask`
+            // with a budget deadline, so we cannot meaningfully act on a
+            // staleness signal here.
             let conversations = await CacheCoordinator.shared.conversations.load(for: "list")
-            guard let items = conversations.value else { return }
+            guard let items = conversations.snapshot() else { return }
 
             let unreadConversations = items.filter { $0.unreadCount > 0 }
             for conversation in unreadConversations.prefix(10) {
