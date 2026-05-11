@@ -298,6 +298,25 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: createdAt
                     ).insert(db)
+
+                default:
+                    // Wave 1 Task 3.2 extended `OutboxKind` with 14 non-message
+                    // kinds. They should never share a `clientMessageId` with a
+                    // message row (different id-space: `cid_*` vs `cmid_*`), but
+                    // if a collision happens, fall through to a clean INSERT and
+                    // surface the anomaly in logs for diagnostics.
+                    Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                        .error("sendMessage collides with non-message outbox kind \(String(describing: existing?.kind), privacy: .public) on \(clientMessageId, privacy: .public) — inserting alongside")
+                    try OutboxRecord(
+                        id: outboxId,
+                        kind: .sendMessage,
+                        conversationId: conversationId,
+                        messageLocalId: clientMessageId,
+                        clientMessageId: clientMessageId,
+                        payload: payload,
+                        status: .pending,
+                        createdAt: createdAt
+                    ).insert(db)
                 }
             }
         } catch let error as OfflineQueueError {
@@ -552,6 +571,22 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: now
                     ).insert(db)
+
+                case .some(let other):
+                    // Wave 1 Task 3.2 — non-message outbox kinds. Should not
+                    // share a message `clientMessageId` ; if it ever does,
+                    // insert alongside and log so the inconsistency surfaces.
+                    log.error("editMessage collides with non-message outbox kind \(String(describing: other), privacy: .public) on \(clientMessageId, privacy: .public) — inserting alongside")
+                    try OutboxRecord(
+                        id: recordId,
+                        kind: .editMessage,
+                        conversationId: conversationId,
+                        messageLocalId: clientMessageId,
+                        clientMessageId: clientMessageId,
+                        payload: encoded,
+                        status: .pending,
+                        createdAt: now
+                    ).insert(db)
                 }
             }
         } catch {
@@ -622,6 +657,23 @@ public actor OfflineQueue {
 
                 case .sendReaction:
                     // Delete alongside a pending reaction — INSERT.
+                    try OutboxRecord(
+                        id: recordId,
+                        kind: .deleteMessage,
+                        conversationId: conversationId,
+                        messageLocalId: clientMessageId,
+                        clientMessageId: clientMessageId,
+                        payload: encoded,
+                        status: .pending,
+                        createdAt: now
+                    ).insert(db)
+
+                case .some(let other):
+                    // Wave 1 Task 3.2 — non-message outbox kinds. Should not
+                    // share a message `clientMessageId` ; if collision happens,
+                    // INSERT the delete alongside and log for diagnostics.
+                    Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                        .error("deleteMessage collides with non-message outbox kind \(String(describing: other), privacy: .public) on \(clientMessageId, privacy: .public) — inserting alongside")
                     try OutboxRecord(
                         id: recordId,
                         kind: .deleteMessage,

@@ -34,6 +34,27 @@ struct OutboxDispatcher: OutboxDispatching {
 
         case .sendReaction:
             try await dispatchSendReaction(record)
+
+        // Wave 1 Task 3.2 — 14 new OutboxKind cases were added for the
+        // upcoming non-message mutation outbox. Their dispatch handlers
+        // land in Tier B (gateway wiring) ; until then, no caller should
+        // be inserting these rows through paths that reach this dispatcher.
+        // Throw rather than silently no-op so a stray insertion surfaces
+        // immediately in CI rather than being swallowed.
+        case .markAsRead, .sendFriendRequest, .respondFriendRequest,
+             .blockUser, .unblockUser, .createConversation,
+             .updateConversation, .updateProfile, .updateSettings,
+             .publishStory, .repostStory, .createPost,
+             .toggleLikePost, .createComment, .deleteComment,
+             .toggleLikeComment:
+            logger.error("OutboxDispatcher received \(record.kind.rawValue, privacy: .public) but Tier B handler is not wired yet (record \(record.id, privacy: .public))")
+            throw NSError(
+                domain: "OutboxDispatcher",
+                code: 501,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Outbox kind '\(record.kind.rawValue)' not implemented yet (Wave 1 Tier B pending)"
+                ]
+            )
         }
     }
 

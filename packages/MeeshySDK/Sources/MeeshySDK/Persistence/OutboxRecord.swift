@@ -1,11 +1,53 @@
 import Foundation
 import GRDB
 
-public enum OutboxKind: String, Codable, Sendable {
+/// Kind of write mutation persisted in the outbox.
+///
+/// Raw values are stable on-disk identifiers (column `outbox.kind`) — renaming
+/// a case is a migration, not a refactor. New cases MUST be appended ;
+/// existing cases MUST NOT have their raw value changed.
+///
+/// The first four (`.sendMessage`, `.sendReaction`, `.editMessage`,
+/// `.deleteMessage`) are the message-centric kinds shipped in Phase 4 §6.
+/// The 14 additional cases (Wave 1 Task 3.2) generalize the outbox to all
+/// write mutations and key into the gateway `MutationLog` table via
+/// `(userId, clientMutationId)`.
+///
+/// `CaseIterable` is required by `OutboxKindCodableTests` to lock the
+/// total surface, and by future migration tooling.
+public enum OutboxKind: String, Codable, CaseIterable, Sendable {
+    // Message-centric (Phase 4 §6 — existing rows in the outbox table use
+    // these raw values, do not rename).
     case sendMessage
     case sendReaction
     case editMessage
     case deleteMessage
+
+    // Wave 1 Task 3.2 — non-message mutations. Keyed to the gateway
+    // `MutationLog` via `clientMutationId` (`cmid_<uuid>`).
+    case markAsRead
+    case sendFriendRequest
+    /// accept | reject — see `RespondFriendRequestPayload.action`.
+    case respondFriendRequest
+    case blockUser
+    case unblockUser
+    case createConversation
+    /// title, description, avatar — see `UpdateConversationPayload`.
+    case updateConversation
+    /// displayName, bio, avatarUrl — see `UpdateProfilePayload`.
+    case updateProfile
+    /// language, regional, custom, notifications, privacy — see `UpdateSettingsPayload`.
+    case updateSettings
+    /// Existing `StoryOfflineQueue` items will migrate here (Tier C). The
+    /// payload (`PublishStoryPayload`) holds the offline-queue item id so
+    /// the slide snapshot stays in its current JSON file for now.
+    case publishStory
+    case repostStory
+    case createPost
+    case toggleLikePost
+    case createComment
+    case deleteComment
+    case toggleLikeComment
 }
 
 public enum OutboxStatus: String, Codable, Sendable {

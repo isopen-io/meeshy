@@ -3439,3 +3439,45 @@ model OrphanMediaCleanup {
   @@index([cleanupAfter])
   @@index([source])
 }
+
+/// Idempotency log for offline-queue write mutations (Wave 1 Task 3.3).
+///
+/// Generalized counterpart of `Message.clientMessageId` for non-message
+/// write operations (friend request, block, profile update, settings
+/// update, post create/like, comment create/like, story repost, etc.).
+/// Each row records the result of applying a mutation identified by
+/// `(userId, clientMutationId)`. When the client replays a mutation
+/// (network retry, app restart, BGProcessingTask flush), the gateway
+/// looks up this row and returns the recorded `resultId` instead of
+/// re-applying the side-effect — the same dedup pattern used today on
+/// `Message.clientMessageId` (Phase 4 §6.2), generalized to every
+/// outbox kind defined in iOS `OutboxKind`.
+///
+/// Retention: 30 days. A background cron (Task 3.8) prunes rows older
+/// than the retention window using `@@index([createdAt])`.
+///
+/// Indexes:
+///   - `@@unique([userId, clientMutationId])` is the dedup key. A unique
+///     violation on this index is the signal to read the existing row
+///     and return its `resultId` (catch-P2002 pattern, mirroring
+///     `messages_conversationId_clientMessageId_unique`).
+///   - `@@index([createdAt])` supports the TTL cleanup pass.
+model MutationLog {
+  id               String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId           String   @db.ObjectId
+  /// Format: `cmid_<uuid v4 lowercase>` — see iOS `ClientMutationId`.
+  clientMutationId String   @db.String
+  /// Matches iOS `OutboxKind` raw value (e.g. `"sendFriendRequest"`).
+  /// Free-form string on purpose: schema evolves with iOS without a
+  /// Prisma migration each time a new OutboxKind case is added.
+  kind             String   @db.String
+  /// ObjectId of the record created/mutated by this mutation (e.g.
+  /// `friendRequest.id`, `post.id`, `comment.id`). Nullable because some
+  /// mutations don't produce a single canonical id (e.g. `markAsRead`).
+  resultId         String?  @db.String
+  createdAt        DateTime @default(now())
+
+  @@unique([userId, clientMutationId])
+  @@index([createdAt])
+  @@map("mutation_logs")
+}
