@@ -37,8 +37,15 @@ struct StoryTrayView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if viewModel.isLoading && viewModel.storyGroups.isEmpty {
-                shimmerPlaceholder
+            // Cache-first: only show the skeleton row when the carousel
+            // has no cached groups AND a load is in flight. Once any
+            // story arrives (even from a stale cache) we drop straight
+            // into the live scroll view so the row never jumps.
+            if SkeletonVisibilityResolver.shouldShowSkeleton(
+                isLoading: viewModel.isLoading,
+                hasCachedData: !viewModel.storyGroups.isEmpty
+            ) {
+                SkeletonStoryTrayRow()
             } else {
                 storyScrollView
             }
@@ -219,32 +226,6 @@ struct StoryTrayView: View {
         }
     }
 
-    // MARK: - Shimmer Placeholder
-
-    private var shimmerPlaceholder: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(0..<6, id: \.self) { _ in
-                    VStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.white.opacity(0.06))
-                            .frame(width: 44, height: 44)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white.opacity(0.08), lineWidth: 2)
-                                    .frame(width: 50, height: 50)
-                            )
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.white.opacity(0.06))
-                            .frame(width: 36, height: 7)
-                    }
-                    .shimmer()
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-    }
 }
 
 // MARK: - My Story Button (extracted struct to avoid PAC issues with @ViewBuilder + @EnvironmentObject)

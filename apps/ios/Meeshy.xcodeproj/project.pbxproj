@@ -133,6 +133,11 @@
 		BB22CC33DD44EE55FF660058 /* StoryViewerView+Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */; };
 		BB7000000000002FB7 /* ImageEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB7000000000001FB7 /* ImageEditView.swift */; };
 		BBLA0001000100010001BLD /* BubbleMetaBadges.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLA0001000100010001REF /* BubbleMetaBadges.swift */; };
+		SKLN0001000100010001BLD /* SkeletonVisibilityResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0001000100010001REF /* SkeletonVisibilityResolver.swift */; };
+		SKLN0002000100010001BLD /* SkeletonProfileHeader.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0002000100010001REF /* SkeletonProfileHeader.swift */; };
+		SKLN0003000100010001BLD /* SkeletonStoryThumb.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0003000100010001REF /* SkeletonStoryThumb.swift */; };
+		SKLN0004000100010001BLD /* SkeletonFeedPost.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0004000100010001REF /* SkeletonFeedPost.swift */; };
+		SKLN0005000100010001BLD /* SkeletonVisibilityResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0005000100010001REF /* SkeletonVisibilityResolverTests.swift */; };
 		BBLB0001000100010001BLD /* BubbleContentBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLB0001000100010001REF /* BubbleContentBuilder.swift */; };
 		BBLC0001000100010001BLD /* BubbleContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLC0001000100010001REF /* BubbleContent.swift */; };
 		BBLD0001000100010001BLD /* BubbleStandardLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLD0001000100010001REF /* BubbleStandardLayout.swift */; };
@@ -603,6 +608,11 @@
 		BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusComposerView.swift; sourceTree = "<group>"; };
 		BB7000000000001FB7 /* ImageEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageEditView.swift; sourceTree = "<group>"; };
 		BBLA0001000100010001REF /* BubbleMetaBadges.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift; sourceTree = SOURCE_ROOT; };
+		SKLN0001000100010001REF /* SkeletonVisibilityResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Skeletons/SkeletonVisibilityResolver.swift; sourceTree = SOURCE_ROOT; };
+		SKLN0002000100010001REF /* SkeletonProfileHeader.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift; sourceTree = SOURCE_ROOT; };
+		SKLN0003000100010001REF /* SkeletonStoryThumb.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift; sourceTree = SOURCE_ROOT; };
+		SKLN0004000100010001REF /* SkeletonFeedPost.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Skeletons/SkeletonFeedPost.swift; sourceTree = SOURCE_ROOT; };
+		SKLN0005000100010001REF /* SkeletonVisibilityResolverTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Skeletons/SkeletonVisibilityResolverTests.swift; sourceTree = SOURCE_ROOT; };
 		BBLB0001000100010001REF /* BubbleContentBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift; sourceTree = SOURCE_ROOT; };
 		BBLC0001000100010001REF /* BubbleContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleContent.swift; sourceTree = SOURCE_ROOT; };
 		BBLD0001000100010001REF /* BubbleStandardLayout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift; sourceTree = SOURCE_ROOT; };
@@ -1218,6 +1228,7 @@
 				823B2865CE9642B487B0FC22 /* VideoFilterControlView.swift */,
 				SMV0010010010010010001 /* StarredMessagesView.swift */,
 				BBLC0001000100010001GRP /* Bubble */,
+				SKLN0001000100010001GRP /* Skeletons */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -1352,6 +1363,25 @@
 				0DC6B1EFE559FE8634F4D330 /* ConversationOptionsViewModel.swift */,
 			);
 			path = ViewModels;
+			sourceTree = "<group>";
+		};
+		SKLN0001000100010001GRP /* Skeletons */ = {
+			isa = PBXGroup;
+			children = (
+				SKLN0001000100010001REF /* SkeletonVisibilityResolver.swift */,
+				SKLN0002000100010001REF /* SkeletonProfileHeader.swift */,
+				SKLN0003000100010001REF /* SkeletonStoryThumb.swift */,
+				SKLN0004000100010001REF /* SkeletonFeedPost.swift */,
+			);
+			path = Skeletons;
+			sourceTree = "<group>";
+		};
+		SKLN0002000100010001GRP /* Skeletons */ = {
+			isa = PBXGroup;
+			children = (
+				SKLN0005000100010001REF /* SkeletonVisibilityResolverTests.swift */,
+			);
+			path = Skeletons;
 			sourceTree = "<group>";
 		};
 		BBLC0001000100010001GRP /* Bubble */ = {
@@ -1503,6 +1533,7 @@
 				AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */,
 				TSTVWHLPR000G000G000001 /* Helpers */,
 				BBLM0001000100010001GRP /* Bubble */,
+				SKLN0002000100010001GRP /* Skeletons */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -2067,6 +2098,10 @@
 				BBLK0001000100010001BLD /* BubbleCallbacks.swift in Sources */,
 				BBLG0001000100010001BLD /* BubbleBackground.swift in Sources */,
 				BBLA0001000100010001BLD /* BubbleMetaBadges.swift in Sources */,
+				SKLN0001000100010001BLD /* SkeletonVisibilityResolver.swift in Sources */,
+				SKLN0002000100010001BLD /* SkeletonProfileHeader.swift in Sources */,
+				SKLN0003000100010001BLD /* SkeletonStoryThumb.swift in Sources */,
+				SKLN0004000100010001BLD /* SkeletonFeedPost.swift in Sources */,
 				BBLR0001000100010001BLD /* BubbleReactionsOverlay.swift in Sources */,
 				BBLY0001000100010001BLD /* BubbleQuotedReply.swift in Sources */,
 				BBLZ0001000100010001BLD /* BubbleAttachmentView.swift in Sources */,
@@ -2259,6 +2294,7 @@
 				CVLT0001000100010001001 /* ConversationViewLifecycleTests.swift in Sources */,
 				CVRC0001000100010001001 /* ConversationReplyContextTests.swift in Sources */,
 				AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */,
+				SKLN0005000100010001BLD /* SkeletonVisibilityResolverTests.swift in Sources */,
 				TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */,
 				NTFY0001000100010001001 /* NotificationTests.swift in Sources */,
 				DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */,
