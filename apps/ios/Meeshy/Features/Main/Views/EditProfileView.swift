@@ -9,7 +9,7 @@ struct EditProfileView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
-    @ObservedObject private var authManager = AuthManager.shared
+    @EnvironmentObject private var authManager: AuthManager
 
     @State private var displayName: String = ""
     @State private var bio: String = ""
@@ -427,7 +427,8 @@ struct EditProfileView: View {
         isSaving = true
         errorMessage = nil
 
-        Task { [weak authManager] in
+        let auth = authManager
+        Task { [weak auth] in
             do {
                 var uploadedAvatarUrl: String? = nil
                 if let imageData = selectedImageData {
@@ -449,8 +450,8 @@ struct EditProfileView: View {
                 // refresh the local session view immediately so the UI shows
                 // the new fields right after dismissal. The eventual server
                 // round-trip is idempotent via cmid + MutationLog.
-                await authManager?.checkExistingSession()
-                if let userId = authManager?.currentUser?.id {
+                await auth?.checkExistingSession()
+                if let userId = auth?.currentUser?.id {
                     await CacheCoordinator.shared.profiles.invalidate(for: userId)
                 }
 

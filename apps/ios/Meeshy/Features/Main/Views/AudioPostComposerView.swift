@@ -10,7 +10,7 @@ struct AudioPostComposerView: View {
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
     @StateObject private var audioRecorder = AudioRecorderManager()
 
     @State private var transcription: OnDeviceTranscription?
@@ -25,7 +25,7 @@ struct AudioPostComposerView: View {
         case idle, recording, transcribing, preview
     }
 
-    private var isDark: Bool { theme.mode.isDark }
+    private var isDark: Bool { colorScheme == .dark }
 
     // MARK: - Body
 
@@ -631,7 +631,7 @@ private struct WaveformView: View {
 
 struct AudioLanguagePickerView: View {
     @Binding var selectedLocale: Locale
-    @ObservedObject private var theme = ThemeManager.shared
+    private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
     @State private var showAllLanguages = false
