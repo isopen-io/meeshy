@@ -978,6 +978,13 @@ class ConversationListViewModel: ObservableObject {
     /// down both clears the pagination cursor (otherwise the next
     /// `loadMore` would page from the old tail) and triggers the
     /// usual cache-first reload.
+    ///
+    /// Pull-to-refresh invalide AUSSI les caches transverses utilisés
+    /// par la home : préférences utilisateur/conversation, catégories
+    /// et tags personnalisés, profils (mood, last seen) et assets
+    /// visuels (avatars + bannières). La logique reset+fullSync ensuite
+    /// repeuple uniquement la listing — les autres stores se
+    /// rehydratent paresseusement à la prochaine lecture, cache-first.
     func pullToRefresh() async {
         // Cancel any in-flight persist BEFORE we reset the cursor or
         // invalidate the cache. Otherwise a `loadMore` save scheduled
@@ -988,11 +995,34 @@ class ConversationListViewModel: ObservableObject {
         nextCursor = nil
         hasMore = true
         paginationState = .idle
-        // The forceRefresh() below calls invalidateCache() which wipes
-        // both items AND cache_metadata via invalidateAll, so the
-        // persisted cursor is cleared along the way — no separate
-        // saveCursor(nil, true, …) call needed.
+        await invalidatePullRefreshScope()
+        // forceRefresh() rappelle invalidateCache() (conversations) sur
+        // sa propre piste — l'idempotence d'invalidateAll garantit que
+        // ce double appel est gratuit (L1 vide → no-op, L2 already
+        // dropped → no-op).
         await forceRefresh()
+    }
+
+    /// Périmètre d'invalidation déclenché par le pull-to-refresh sur la
+    /// home. Sépare l'orchestration de cache du fetch reseau qui suit
+    /// (forceRefresh), pour que les tests unitaires puissent vérifier
+    /// la liste exacte des stores touchés.
+    private func invalidatePullRefreshScope() async {
+        // Listing + pagination (re-fetché immédiatement par forceRefresh)
+        await CacheCoordinator.shared.conversations.invalidateAll()
+        // Préférences (re-fetch lazy au prochain accès paramètres conv)
+        await CacheCoordinator.shared.conversationPreferences.invalidateAll()
+        await CacheCoordinator.shared.userPreferences.invalidateAll()
+        // Filtrage métadonnées (catégories + tags)
+        await CacheCoordinator.shared.categories.invalidateAll()
+        await CacheCoordinator.shared.userTags.invalidateAll()
+        // Profils (mood, presence cachée, dernière vue)
+        await CacheCoordinator.shared.profiles.invalidateAll()
+        // Assets visuels (avatars + bannières partagent le store images,
+        // les thumbs de message ont leur propre store). Re-download au
+        // prochain rendu des AsyncImage.
+        await CacheCoordinator.shared.images.invalidateAll()
+        await CacheCoordinator.shared.thumbnails.invalidateAll()
     }
 
     // MARK: - Persist Category Expansion
