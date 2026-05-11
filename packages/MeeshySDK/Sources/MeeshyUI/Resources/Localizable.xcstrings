@@ -136,9 +136,6 @@
     "1min" : {
 
     },
-    "1x" : {
-
-    },
     "5min" : {
 
     },
@@ -13453,61 +13450,6 @@
         }
       }
     },
-    "story.canvas.bringToFront" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Mettre devant"
-          }
-        }
-      }
-    },
-    "story.canvas.delete" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Supprimer"
-          }
-        }
-      }
-    },
-    "story.canvas.duplicate" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Dupliquer"
-          }
-        }
-      }
-    },
-    "story.canvas.sendToBack" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Mettre derriere"
-          }
-        }
-      }
-    },
-    "story.canvas.timing" : {
-      "extractionState" : "extracted_with_value",
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "Timing"
-          }
-        }
-      }
-    },
     "story.composer.addAudioFile" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -15768,6 +15710,17 @@
         }
       }
     },
+    "story.repost.reprojected" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%d item(s) repositioned for the new aspect ratio"
+          }
+        }
+      }
+    },
     "story.slide.addSlide" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -16376,7 +16329,7 @@
       }
     },
     "story.timeline.addContent" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16411,7 +16364,7 @@
       }
     },
     "story.timeline.audio" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16446,7 +16399,7 @@
       }
     },
     "story.timeline.bgAudio" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16481,7 +16434,7 @@
       }
     },
     "story.timeline.bgImage" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16777,7 +16730,7 @@
       }
     },
     "story.timeline.drawing" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -16936,7 +16889,7 @@
       }
     },
     "story.timeline.image" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -17142,7 +17095,7 @@
       }
     },
     "story.timeline.mediaUnavailable" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -17376,7 +17329,7 @@
       }
     },
     "story.timeline.text" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -17915,7 +17868,7 @@
       }
     },
     "story.timeline.video" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
