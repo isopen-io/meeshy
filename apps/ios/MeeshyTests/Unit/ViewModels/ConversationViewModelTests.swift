@@ -26,9 +26,19 @@ final class ConversationViewModelTests: XCTestCase {
         mockConversationService = MockConversationService()
         mockReactionService = MockReactionService()
         mockReportService = MockReportService()
+        // ConversationViewModel.sendMessage references MessageSocketManager.shared
+        // directly (the singleton, not an injected dep) at line 1318: if the
+        // socket is not connected it routes through the offline OutboxQueue
+        // path and never calls `messageService.send`. Tests for the ONLINE
+        // send semantics need the singleton to report connected. Tests that
+        // exercise the offline path explicitly flip this to false.
+        MessageSocketManager.shared.isConnected = true
     }
 
     override func tearDown() {
+        // Reset singleton so other test classes don't inherit a forced
+        // connected state. The default for a fresh app session is false.
+        MessageSocketManager.shared.isConnected = false
         mockAuthManager = nil
         mockMessageService = nil
         mockConversationService = nil
