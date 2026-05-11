@@ -293,28 +293,19 @@ final class CallManager: ObservableObject {
                 Logger.calls.error("[CALLKIT_DIAG] CXStartCallAction request FAILED: \(error.localizedDescription)")
                 Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
             } else {
-                Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction request ACCEPTED — reporting update + startedConnectingAt (uuid=\(uuid))")
+                Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction request ACCEPTED (uuid=\(uuid))")
                 let update = CXCallUpdate()
                 update.remoteHandle = CXHandle(type: .generic, value: userId)
                 update.localizedCallerName = displayName
                 update.hasVideo = isVideo
                 provider.reportCall(with: uuid, updated: update)
-
-                // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT —
-                // CallKit autonomously fires `CXEndCallAction` (~4-5 seconds
-                // after `CXStartCallAction.fulfill()`) on outgoing calls that
-                // never report progress, which surfaced in production as
-                // "calls drop after 2-4 seconds" before the SDP answer round-
-                // trip completes. Reporting `startedConnectingAt` here as
-                // soon as the transaction is accepted signals to CallKit
-                // that the call is making progress, so it waits for our
-                // explicit `outgoingRingTimeoutSeconds` budget (45 s) instead
-                // of killing the call out from under us. The later call from
-                // `handleRemoteAnswer` (P1-12) still fires once the real
-                // answer lands — CallKit accepts that as a refresh of the
-                // connecting timestamp and uses it to drive the system UI.
-                provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
-                Logger.calls.info("[CALLKIT_DIAG] reportOutgoingCall(_:startedConnectingAt:) called (uuid=\(uuid))")
+                // Pre-regression flow: only `reportCall(updated:)` here. The
+                // experiment of calling `reportOutgoingCall(_:startedConnectingAt:)`
+                // from this completion handler (and from the CXStartCallAction
+                // delegate) did not stop the autonomous teardown — neither
+                // a single nor a double call helped. The original `P1-12`
+                // call from `handleRemoteAnswer` is kept untouched and remains
+                // the canonical "we're connecting now" signal.
             }
         }
 
@@ -1302,27 +1293,15 @@ final class CallManager: ObservableObject {
             session.unlockForConfiguration()
         }
         do {
-            Logger.calls.info("[AUDIO_SESS] setConfiguration call (active=true)")
-            // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT (commit-d834c78b reversion) —
-            // the previous version of this method called `setConfiguration(_, active: false)`
-            // assuming CallKit would activate the session via
-            // `provider:didActivate:audioSession:`. Production logs prove
-            // CallKit NEVER fires `didActivate` for outgoing calls on the
-            // current iOS build: it tears the call down ~3 s after fulfill
-            // with state still `.ringing`. The earlier (pre-d834c78b) code
-            // path force-activated the AVAudioSession in `configureAudioSession`
-            // / in the `didActivate` bridge — that was reportedly the
-            // working state. Reversing the "trust CallKit" cleanup and
-            // setting `active: true` here gives CallKit a live, ready
-            // audio session at fulfill time, which is the only state where
-            // it accepts an outgoing call. Bridge-only activation (the
-            // pattern that broke) is preserved as the second branch.
-            try session.setConfiguration(configuration, active: true)
-            // Mirror to RTCAudioSession's internal state so libwebrtc's
-            // ADM picks up the freshly active session.
-            session.audioSessionDidActivate(AVAudioSession.sharedInstance())
-            session.isAudioEnabled = true
-            Logger.calls.info("RTCAudioSession pre-configured AND activated — video: \(isVideo)")
+            Logger.calls.info("[AUDIO_SESS] setConfiguration call")
+            // Restore the pre-regression pattern from commit 4dbb387e (last
+            // known working state two days ago): configure category+mode
+            // only, leave the activation to CallKit's `didActivate`. The
+            // force-`active:true` + manual bridge experiment proved flaky
+            // — audio calls still hit the autonomous CallKit teardown and
+            // video calls failed on the second attempt.
+            try session.setConfiguration(configuration, active: false)
+            Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo) (CallKit will activate)")
         } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
             // "Session deactivation failed" — le call précédent a laissé
             // AVAudioSession dans un état non-deactivable depuis ce process
@@ -1825,44 +1804,17 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // builds the WebRTC stack asynchronously. Fulfilling immediately here is
         // safe because we don't await any media setup from this delegate.
         Logger.calls.info("[CALLKIT_DIAG] provider:perform:CXStartCallAction RECEIVED (callUUID=\(action.callUUID))")
-
-        // ROOT-CAUSE FIX — outgoing calls were dying ~3 s in with state
-        // still `.ringing`/`.offering` and `provider:didActivate:audioSession:`
-        // never firing, even with `reportOutgoingCall(_:startedConnectingAt:)`
-        // called from both the delegate and the request completion handler.
-        // The Apple-documented contract (and the consistent community
-        // guidance) for outgoing calls is:
-        //
-        //   "Configure your app's audio session (call configureAudioSession)
-        //    in the perform method for CXStartCallAction, BEFORE fulfilling
-        //    the action."
-        //
-        // Our previous flow deferred `configureAudioSession()` behind the
-        // `Task` that awaits the gateway's `call:initiate` ACK in
-        // `startCall(...)`. That meant the audio session was only set up
-        // 1-2 s AFTER `action.fulfill()`, by which point CallKit had
-        // already given up on activating it and was about to tear the
-        // call down. Moving the configure call here, before `fulfill()`,
-        // hands CallKit a sane RTCAudioSession at the exact moment it
-        // checks — so it fires `didActivate` and the call proceeds.
-        //
-        // References:
-        //   - Apple Developer Forums "CallKit does not activate audio
-        //     session on iOS 15.1" (thread 694836)
-        //   - Apple Developer Forums "iOS doesn't call
-        //     didActivateAudioSession" (thread 758386)
-        //   - https://medium.com/@tsivilko/mastering-voip-audio-with-callkit
-        //     -and-webrtc-on-ios-0f2092402331 (production VoIP pattern)
-        //
-        // The duplicate `configureAudioSession()` still in the async Task
-        // is kept as a safety net for the cases where the delegate path
-        // never runs (e.g. the request fails to dispatch). It is safe to
-        // call twice — the configuration is idempotent.
-        manager?.configureAudioSession()
-        Logger.calls.info("[CALLKIT_DIAG] RTCAudioSession pre-configured from CXStartCallAction delegate — fulfilling")
+        // Restore pre-regression pattern: just fulfill the action. The
+        // configureAudioSession() / reportOutgoingCall() experiments did
+        // NOT restore the working flow either; CallKit kept tearing
+        // outgoing audio calls down. The async `startCall(...)` Task is
+        // responsible for `configureAudioSession()`; the
+        // `handleRemoteAnswer` path is responsible for
+        // `reportOutgoingCall(_:startedConnectingAt:)`. This minimal
+        // delegate matches commit 4dbb387e — the last known working
+        // state.
         action.fulfill()
-        provider.reportOutgoingCall(with: action.callUUID, startedConnectingAt: Date())
-        Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction.fulfill() + reportOutgoingCall(_:startedConnectingAt:) from delegate")
+        Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction.fulfill() returned")
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
