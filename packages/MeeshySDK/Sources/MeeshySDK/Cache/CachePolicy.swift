@@ -77,6 +77,15 @@ extension CachePolicy {
     /// silently driving the UI; beyond that we fall through to `.expired`
     /// and gate a full refetch on the spinner path.
     public static let communities = CachePolicy(ttl: .hours(24), staleTTL: .minutes(5), maxItemCount: 500, storageLocation: .grdb)
+    /// Per-conversation message drafts. Drafts are local-only (no server
+    /// sync) so the SWR notion of "stale" doesn't apply: `staleTTL` is set
+    /// equal to `ttl` to keep every read in the `.fresh` branch until the
+    /// 30-day eviction horizon. The horizon exists only to bound disk usage
+    /// — an abandoned draft from six months ago has approximately zero
+    /// chance of being resumed, so we let LRU + TTL recycle the slot.
+    /// `maxItemCount: 500` matches `preferences` and covers the practical
+    /// ceiling of concurrent open conversations per user.
+    public static let drafts = CachePolicy(ttl: .days(30), staleTTL: .days(30), maxItemCount: 500, storageLocation: .grdb)
 }
 
 // MARK: - TimeInterval Helpers

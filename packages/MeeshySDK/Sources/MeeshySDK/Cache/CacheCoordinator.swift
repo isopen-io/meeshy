@@ -29,6 +29,12 @@ public actor CacheCoordinator {
     /// instantly on cold start instead of flashing through an empty state
     /// while `/communities` round-trips the network.
     public let communities: GRDBCacheStore<String, APICommunity>
+    /// Per-conversation message drafts. Key = conversationId, value = a single
+    /// `ConversationDraft` (wrapped in a single-element array to fit the
+    /// `GRDBCacheStore` `[Value]` shape). Local-only — drafts are never
+    /// synced to the server, so the cache IS the source of truth. Reads
+    /// always hit the `.fresh` branch (see `CachePolicy.drafts`).
+    public let drafts: GRDBCacheStore<String, ConversationDraft>
     public let statuses: GRDBCacheStore<String, StatusEntry>
     public let friends: GRDBCacheStore<String, FriendRequestUser>
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
@@ -176,6 +182,7 @@ public actor CacheCoordinator {
         self.trackingLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "tlinks")
         self.communityLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "clinks")
         self.communities = GRDBCacheStore(policy: .communities, db: db, namespace: "communities")
+        self.drafts = GRDBCacheStore(policy: .drafts, db: db, namespace: "drafts")
         self.statuses = GRDBCacheStore(policy: .statuses, db: db, namespace: "statuses")
         self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
         self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
@@ -250,6 +257,7 @@ public actor CacheCoordinator {
         await trackingLinks.invalidateAll()
         await communityLinks.invalidateAll()
         await communities.invalidateAll()
+        await drafts.invalidateAll()
         await statuses.invalidateAll()
         await friends.invalidateAll()
         await friendRequests.invalidateAll()
@@ -598,6 +606,7 @@ public actor CacheCoordinator {
         await blockedUsers.invalidateAll()
         await userSearch.invalidateAll()
         await communities.invalidateAll()
+        await drafts.invalidateAll()
         await images.invalidateAll()
         await audio.invalidateAll()
         await video.invalidateAll()
