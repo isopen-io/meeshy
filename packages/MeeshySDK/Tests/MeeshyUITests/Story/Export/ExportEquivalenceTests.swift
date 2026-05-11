@@ -15,14 +15,13 @@ import UIKit
 ///   1. The pipeline runs to completion and produces a non-empty MP4.
 ///   2. The output's render size matches `CanvasGeometry.designSize` (1080×1920).
 ///   3. The output's duration matches `slide.effectiveSlideDuration()`.
+///   4. The exported frame at t=5s is perceptually equivalent to the live
+///      StoryRenderer output via SSIM ≥ 0.99 (PixelComparison helper, B2).
 ///
-/// The "pixel-exact" frame equivalence between live preview and export — promised
-/// by the original Phase 4 plan — is intentionally NOT asserted byte-by-byte.
-/// H.264 encode + decode is lossy, the AVAssetImageGenerator decoder applies
-/// chroma resampling, and Display P3 ↔ sRGB color management round-trips
-/// non-trivially. The dedicated `test_export_frame_visually_resembles_live_render_at_t5s`
-/// is `XCTSkip`-ed with a rationale and contains the full comparison scaffold
-/// for future use once a tolerance metric (SSIM / max-channel-diff) is wired in.
+/// Byte equality between live preview and AVFoundation export remains
+/// unreachable — H.264 is lossy, AVAssetImageGenerator applies chroma
+/// resampling, Display P3 ↔ sRGB round-trips drift sub-LSB — so the visual
+/// resemblance test uses the SSIM tolerance metric introduced in B2.
 final class ExportEquivalenceTests: XCTestCase {
 
     // MARK: - Pipeline smoke test
@@ -81,38 +80,93 @@ final class ExportEquivalenceTests: XCTestCase {
                        "Export duration should equal effectiveSlideDuration()")
     }
 
-    // MARK: - Visual resemblance scaffold (skipped for now)
+    // MARK: - Visual resemblance — SSIM tolerance metric (B2)
 
     @MainActor
     func test_export_frame_visually_resembles_live_render_at_t5s() async throws {
-        try XCTSkipIf(true, """
-            Pixel-exact comparison between live preview and AVFoundation export is
-            unreachable without a tolerance metric: H.264 is lossy, AVAssetImageGenerator
-            applies chroma resampling, and Display P3 ↔ sRGB management round-trips
-            with sub-LSB drift.
+        // Activated in B2 with PixelComparison.ssim ≥ 0.99. H.264 is lossy and
+        // AVAssetImageGenerator applies chroma resampling, so byte equality
+        // between the UIKit live snapshot and the AVFoundation-encoded export
+        // is unreachable — SSIM captures the perceptually-relevant difference
+        // while tolerating the 1-2 LSB drift on anti-aliased text edges.
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["MEESHY_SKIP_EXPORT_TESTS"] != nil,
+            "Export tests skipped via MEESHY_SKIP_EXPORT_TESTS env var"
+        )
 
-            This scaffold is kept for future enablement once a structural metric
-            (SSIM > 0.97 or max-channel-diff < 8 LSB on 99 % of pixels) is wired in.
-            See docs/superpowers/specs/2026-05-08-story-canvas-fidelity-design.md
-            section "Acceptance Criteria — pixel parity".
-            """)
+        let bgVideoURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("export_equiv_bg_\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: bgVideoURL) }
 
-        // ---- The scaffold below would be the comparison once tolerance is wired ----
-        // let bgVideoURL = ...
-        // try await ExportFixture.makeBlackBackgroundVideo(...)
-        // let slide = ExportFixture.slide(backgroundURL: bgVideoURL, ...)
-        // let geometry = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))
-        // let liveLayer = StoryRenderer.render(slide: slide, into: geometry,
-        //                                       at: CMTime(seconds: 5, ...), mode: .play)
-        // let liveImage = renderLayerToImage(liveLayer, size: geometry.renderSize)
-        //
-        // try await StoryExporter.export(slide, to: outputURL)
-        // let exportFrame = try await extractFrame(from: outputURL,
-        //                                            at: CMTime(seconds: 5, ...),
-        //                                            scaledTo: geometry.renderSize)
-        //
-        // let metric = ssim(liveImage, exportFrame)
-        // XCTAssertGreaterThan(metric, 0.97)
+        // Background video is sized at the design canvas so the compositor's
+        // natural render size matches the live snapshot dimensions exactly.
+        try await ExportFixture.makeBlackBackgroundVideo(
+            duration: 6.0,
+            size: CanvasGeometry.designSize,
+            at: bgVideoURL
+        )
+
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("export_equiv_out_\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+
+        let slide = ExportFixture.slide(
+            backgroundURL: bgVideoURL,
+            videoDurationSec: 6.0,
+            staticBaseDuration: 6.0
+        )
+
+        // Live render at t=5s. Use designSize so the live image and the export
+        // frame share the same dimensions — SSIM treats size mismatch as worst
+        // case, which would mask a real comparison.
+        let geometry = CanvasGeometry(renderSize: CanvasGeometry.designSize)
+        let liveTime = CMTime(seconds: 5.0, preferredTimescale: 600)
+        let liveLayer = StoryRenderer.render(
+            slide: slide,
+            into: geometry,
+            at: liveTime,
+            mode: .play
+        )
+        let liveImage = Self.renderLayerToCGImage(liveLayer, size: geometry.renderSize)
+
+        try await Task.detached(priority: .userInitiated) {
+            try await StoryExporter.export(slide, to: outputURL)
+        }.value
+
+        // Extract the t=5s frame from the export.
+        let asset = AVURLAsset(url: outputURL)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.05, preferredTimescale: 600)
+        let (exportFrame, _) = try await generator.image(at: liveTime)
+
+        let metric = PixelComparison.ssim(liveImage, exportFrame)
+        if metric < 0.99 {
+            let diff = PixelComparison.diffImage(liveImage, exportFrame)
+            let attachment = XCTAttachment(image: UIImage(cgImage: diff))
+            attachment.name = "ssim_diff_t5s_\(String(format: "%.4f", metric))"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            XCTFail("SSIM \(metric) < 0.99 at t=5s — diff attached to test report")
+        }
+    }
+
+    // MARK: - Helpers
+
+    /// Render a CALayer onto a CGImage of the given size. Mirrors the static-only
+    /// test's helper so both equivalence paths share the same live-snapshot
+    /// pipeline (UIGraphicsImageRenderer → layer.render(in:)).
+    @MainActor
+    fileprivate static func renderLayerToCGImage(_ layer: CALayer, size: CGSize) -> CGImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        let image = renderer.image { ctx in
+            layer.render(in: ctx.cgContext)
+        }
+        return image.cgImage!
     }
 }
 

@@ -98,45 +98,76 @@ final class StoryExporterStaticOnlyTests: XCTestCase {
 
     @MainActor
     func test_export_slideStaticOnly_frameMatchesLiveView() async throws {
-        // Pixel-exact comparison between the live StoryRenderer output and the
-        // AVFoundation-encoded export is unreachable today: H.264 is lossy,
-        // AVAssetImageGenerator applies chroma resampling, and Display P3 ↔ sRGB
-        // round-trips with sub-LSB drift. This scaffold is reactivated in B2
-        // (SSIM tolerance metric ≥ 0.99) — see
-        // docs/superpowers/specs/2026-05-09-story-canvas-phase4-followups-design.md
-        // §3.2.
-        try XCTSkipIf(true, """
-            Skipped pending B2 (SSIM ≥ 0.99 tolerance) — pixel-exact equality
-            between live preview and lossy H.264 export is structurally
-            unreachable. Scaffold preserved for re-activation in B2.
-            """)
+        // Activated in B2 (PixelComparison.ssim ≥ 0.99 tolerance). H.264 is
+        // lossy and AVAssetImageGenerator applies chroma resampling, so we
+        // accept the 1-2 LSB drift via SSIM rather than requiring byte
+        // equality — see PixelComparison.swift docstring + spec
+        // docs/superpowers/specs/2026-05-09-story-canvas-phase4-followups-design.md §3.2.
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["MEESHY_SKIP_EXPORT_TESTS"] != nil,
+            "Export tests skipped via MEESHY_SKIP_EXPORT_TESTS env var"
+        )
 
-        // ---- Scaffold for B2 ----
-        // let outputURL = FileManager.default.temporaryDirectory
-        //     .appendingPathComponent("export_static_match_\(UUID().uuidString).mp4")
-        // defer { try? FileManager.default.removeItem(at: outputURL) }
-        //
-        // let slide = StaticOnlyFixture.makeSlide(staticBaseDuration: 2.0)
-        //
-        // // Live render at t=0.
-        // let geometry = CanvasGeometry(renderSize: CanvasGeometry.designSize)
-        // let liveLayer = StoryRenderer.render(slide: slide,
-        //                                       into: geometry,
-        //                                       at: .zero,
-        //                                       mode: .play)
-        // let liveImage = renderLayerToCGImage(liveLayer, size: geometry.renderSize)
-        //
-        // try await Task.detached(priority: .userInitiated) {
-        //     try await StoryExporter.export(slide, to: outputURL)
-        // }.value
-        //
-        // let asset = AVURLAsset(url: outputURL)
-        // let generator = AVAssetImageGenerator(asset: asset)
-        // generator.appliesPreferredTrackTransform = true
-        // let (exportFrame, _) = try await generator.image(at: .zero)
-        //
-        // let metric = PixelComparison.ssim(liveImage, exportFrame)
-        // XCTAssertGreaterThan(metric, 0.99)
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("export_static_match_\(UUID().uuidString).mp4")
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+
+        let slide = StaticOnlyFixture.makeSlide(staticBaseDuration: 2.0)
+
+        // Live render at t=0 — full design size so it matches the export's
+        // natural size and SSIM is computed on equal-size buffers.
+        let geometry = CanvasGeometry(renderSize: CanvasGeometry.designSize)
+        let liveLayer = StoryRenderer.render(
+            slide: slide,
+            into: geometry,
+            at: .zero,
+            mode: .play
+        )
+        let liveImage = Self.renderLayerToCGImage(liveLayer, size: geometry.renderSize)
+
+        try await Task.detached(priority: .userInitiated) {
+            try await StoryExporter.export(slide, to: outputURL)
+        }.value
+
+        // Extract t=0 from the exported file. We bias the tolerance window
+        // forward (not backward) since negative time before the first frame
+        // can return an empty CGImage on some iOS 26 builds.
+        let asset = AVURLAsset(url: outputURL)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.requestedTimeToleranceBefore = .zero
+        generator.requestedTimeToleranceAfter = CMTime(seconds: 0.05, preferredTimescale: 600)
+        let (exportFrame, _) = try await generator.image(
+            at: CMTime(seconds: 0.0, preferredTimescale: 600)
+        )
+
+        let metric = PixelComparison.ssim(liveImage, exportFrame)
+        if metric < 0.99 {
+            // Attach diff for visual debugging when SSIM falls below threshold.
+            let diff = PixelComparison.diffImage(liveImage, exportFrame)
+            let attachment = XCTAttachment(image: UIImage(cgImage: diff))
+            attachment.name = "ssim_diff_\(String(format: "%.4f", metric))"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            XCTFail("SSIM \(metric) < 0.99 — diff attached to test report")
+        }
+    }
+
+    // MARK: - Helpers
+
+    /// Render a CALayer onto a CGImage of the given size. UIGraphicsImageRenderer
+    /// gives us the same UIKit-backed compositor that powers `view.snapshot()`,
+    /// which is the closest analogue to "what the user sees on screen".
+    @MainActor
+    private static func renderLayerToCGImage(_ layer: CALayer, size: CGSize) -> CGImage {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0   // Render at 1:1 with the design size, no scale wobble.
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: size, format: format)
+        let image = renderer.image { ctx in
+            layer.render(in: ctx.cgContext)
+        }
+        return image.cgImage!
     }
 
     // MARK: - Synthetic asset cache contract
