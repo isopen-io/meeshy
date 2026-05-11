@@ -135,14 +135,10 @@ final class CallManager: ObservableObject {
         let config = CXProviderConfiguration()
         config.supportsVideo = true
         config.maximumCallsPerCallGroup = 1
-        // Restore the pre-regression value (commit 4dbb387e). The
-        // P2-iOS-5 audit lowered this to 1 on the theory that an iOS bug
-        // surfaced a hold button on the lock screen — but production has
-        // since shown CallKit autonomously tearing outgoing calls down
-        // after ~3 s, which matches a number of community reports of
-        // CallKit being picky about outgoing-call configuration on iOS
-        // 18. Going back to 2 matches the last known working state.
-        config.maximumCallGroups = 2
+        // Audit P2-iOS-5 — was 2 but the app declares supportsHolding=false
+        // on every CXCallUpdate. Contradictory pair confused some iOS
+        // versions into showing a hold button on the lock screen.
+        config.maximumCallGroups = 1
         config.supportedHandleTypes = [.generic]
         config.includesCallsInRecents = true
         // Custom CallKit icon: bundle a 40x40 PNG named "CallKitIcon" in Assets
@@ -151,23 +147,14 @@ final class CallManager: ObservableObject {
         if let icon = UIImage(named: "CallKitIcon") {
             config.iconTemplateImageData = icon.pngData()
         }
-        // ROOT-CAUSE HYPOTHESIS — `config.ringtoneSound = "Ringtone.caf"`
-        // was added in commit 5a1248c0 (Phase 1.5). It is one of only two
-        // CXProviderConfiguration differences vs the last known working
-        // state at 4dbb387e (the other being maximumCallGroups, also
-        // reverted above). Ringtone.caf in the bundle is 1.3 MB —
-        // suspicious, since CallKit requires <= 30 s and most well-formed
-        // ringtones are ~20-100 KB. Bundling an oversized / wrong-format
-        // ringtone makes iOS reject the call configuration silently on
-        // outgoing setup and tear the call down within a few seconds.
-        // Falling back to `nil` (system default ringtone, no custom file)
-        // brings the config back to the working shape.
-        // The previous spec reference (2026-05-10 SOTA §3.3) flagged
-        // unreliable system-default behavior on iOS 17 — if we still
-        // observe a silent incoming-call ring after this revert, the right
-        // fix is to ship a sane CAF (mono 16-bit 44.1 kHz, < 30 s, ~50 KB)
-        // rather than the current oversized blob.
-        // config.ringtoneSound = "Ringtone.caf"
+        // Phase 1.5 fix — explicit ringtone for incoming calls.
+        // CallKit's default `ringtoneSound = nil` falls back to system ringtone,
+        // but iOS 17+ has been reporting unreliable behavior (UI shows but no
+        // audio) on real devices. Apple's SOTA pattern (FaceTime, WhatsApp) is
+        // to bundle a custom .caf and set it explicitly. The file must be in
+        // the main app bundle, ≤30s, CAF format.
+        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.3
+        config.ringtoneSound = "Ringtone.caf"
         callProvider = CXProvider(configuration: config)
 
         let delegateProxy = CallKitDelegateProxy()
@@ -282,11 +269,8 @@ final class CallManager: ObservableObject {
         callState = .ringing(isOutgoing: true)
         lastCallWasOutgoing = true
 
-        // Ringback restored — the previous isolation test confirmed that
-        // disabling it did NOT prevent the autonomous CallKit teardown,
-        // ruling out the AVAudioSession-ownership hypothesis. Keeping the
-        // user-facing audible feedback while we keep investigating the
-        // real cause.
+        // Phase 1.5 — start ringback tone immediately when caller initiates.
+        // The tone plays until state transitions to .connected or .ended.
         ringbackPlayer.start()
         startOutgoingRingTimeout()
 
@@ -300,25 +284,31 @@ final class CallManager: ObservableObject {
         startAction.contactIdentifier = displayName
         let transaction = CXTransaction(action: startAction)
         let provider = callProvider
-        Logger.calls.info("[CALLKIT_DIAG] callController.request(CXStartCallAction) submitted (uuid=\(uuid))")
         callController.request(transaction) { [weak self] error in
             if let error {
-                Logger.calls.error("[CALLKIT_DIAG] CXStartCallAction request FAILED: \(error.localizedDescription)")
+                Logger.calls.error("CallKit start call failed: \(error.localizedDescription)")
                 Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
             } else {
-                Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction request ACCEPTED (uuid=\(uuid))")
                 let update = CXCallUpdate()
                 update.remoteHandle = CXHandle(type: .generic, value: userId)
                 update.localizedCallerName = displayName
                 update.hasVideo = isVideo
                 provider.reportCall(with: uuid, updated: update)
-                // Pre-regression flow: only `reportCall(updated:)` here. The
-                // experiment of calling `reportOutgoingCall(_:startedConnectingAt:)`
-                // from this completion handler (and from the CXStartCallAction
-                // delegate) did not stop the autonomous teardown — neither
-                // a single nor a double call helped. The original `P1-12`
-                // call from `handleRemoteAnswer` is kept untouched and remains
-                // the canonical "we're connecting now" signal.
+
+                // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT —
+                // CallKit autonomously fires `CXEndCallAction` (~4-5 seconds
+                // after `CXStartCallAction.fulfill()`) on outgoing calls that
+                // never report progress, which surfaced in production as
+                // "calls drop after 2-4 seconds" before the SDP answer round-
+                // trip completes. Reporting `startedConnectingAt` here as
+                // soon as the transaction is accepted signals to CallKit
+                // that the call is making progress, so it waits for our
+                // explicit `outgoingRingTimeoutSeconds` budget (45 s) instead
+                // of killing the call out from under us. The later call from
+                // `handleRemoteAnswer` (P1-12) still fires once the real
+                // answer lands — CallKit accepts that as a refresh of the
+                // connecting timestamp and uses it to drive the system UI.
+                provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
             }
         }
 
@@ -1278,15 +1268,7 @@ final class CallManager: ObservableObject {
     // category/mode. RTCAudioSession.isAudioEnabled is only flipped from
     // didActivate/didDeactivate.
 
-    /// Pre-configures `RTCAudioSession` (category, mode, options) without
-    /// activating it. CallKit owns the activation lifecycle (via
-    /// `provider:didActivate:audioSession:`) but it will only fire that
-    /// callback if the session is already in a sane configuration when
-    /// `CXStartCallAction` is fulfilled. Calling this BEFORE
-    /// `action.fulfill()` is the documented contract on outgoing calls.
-    /// Exposed at file-scope so the `CallKitDelegateProxy` can invoke it
-    /// from the delegate.
-    fileprivate func configureAudioSession() {
+    private func configureAudioSession() {
         Logger.calls.info("[AUDIO_SESS] configure begin")
         let isVideo = isVideoEnabled
         let configuration = RTCAudioSessionConfiguration.webRTC()
@@ -1307,20 +1289,16 @@ final class CallManager: ObservableObject {
         }
         do {
             Logger.calls.info("[AUDIO_SESS] setConfiguration call")
-            // Restore the pre-regression pattern from commit 4dbb387e (last
-            // known working state two days ago): configure category+mode
-            // only, leave the activation to CallKit's `didActivate`. The
-            // force-`active:true` + manual bridge experiment proved flaky
-            // — audio calls still hit the autonomous CallKit teardown and
-            // video calls failed on the second attempt.
             try session.setConfiguration(configuration, active: false)
             Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo) (CallKit will activate)")
         } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
             // "Session deactivation failed" — le call précédent a laissé
             // AVAudioSession dans un état non-deactivable depuis ce process
             // (CallKit gère la deactivation via provider:didDeactivate:).
-            // Bénin : on retombe sur le bridge-only via didActivate.
-            Logger.calls.warning("RTCAudioSession setConfiguration deactivation skipped — bridge-only fallback (\(error.localizedDescription))")
+            // Bénin : RTCAudioSession.useManualAudio est déjà setté, et
+            // CallKit pilote l'activation via didActivate. Downgrade en
+            // warning pour ne pas polluer les crash dashboards.
+            Logger.calls.warning("RTCAudioSession setConfiguration deactivation skipped — CallKit owns the session lifecycle (\(error.localizedDescription))")
         } catch {
             Logger.calls.error("RTCAudioSession configuration failed: \(error.localizedDescription)")
         }
@@ -1816,18 +1794,7 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // The outgoing call path is initiated by the user's UI tap; CallManager
         // builds the WebRTC stack asynchronously. Fulfilling immediately here is
         // safe because we don't await any media setup from this delegate.
-        Logger.calls.info("[CALLKIT_DIAG] provider:perform:CXStartCallAction RECEIVED (callUUID=\(action.callUUID))")
-        // Restore pre-regression pattern: just fulfill the action. The
-        // configureAudioSession() / reportOutgoingCall() experiments did
-        // NOT restore the working flow either; CallKit kept tearing
-        // outgoing audio calls down. The async `startCall(...)` Task is
-        // responsible for `configureAudioSession()`; the
-        // `handleRemoteAnswer` path is responsible for
-        // `reportOutgoingCall(_:startedConnectingAt:)`. This minimal
-        // delegate matches commit 4dbb387e — the last known working
-        // state.
         action.fulfill()
-        Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction.fulfill() returned")
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
@@ -1836,7 +1803,6 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // Forcing it again creates desync between AVAudioSession and RTCAudioSession,
         // visible as alternating routes (Receiver/Speaker) in logs and silent calls.
         // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.2
-        Logger.calls.info("[CALLKIT_DIAG] provider:didActivate:audioSession RECEIVED — CallKit considers the call active")
         let rtc = RTCAudioSession.sharedInstance()
         rtc.lockForConfiguration()
         rtc.audioSessionDidActivate(audioSession)
