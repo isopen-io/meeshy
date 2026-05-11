@@ -504,8 +504,9 @@ struct CallView: View {
                     }
                 }
 
+                // Audit P3 — Camera flip only when video is currently
+                // capturing; flipping a stopped capturer has no effect.
                 if callManager.isVideoEnabled {
-                    // Camera flip — P2-iOS-8: explicit label about flipping
                     callControlButton(
                         icon: "camera.rotate.fill",
                         color: "FFFFFF",
@@ -515,13 +516,18 @@ struct CallView: View {
                     ) {
                         callManager.switchCamera()
                     }
+                }
 
-                    // Toggle video
+                // Audit P3 — toggle button stays visible even when video is
+                // disabled so the user can re-enable it. Was gated by
+                // `if isVideoEnabled` which left the user unable to bring
+                // video back after disabling it.
+                if callManager.hasLocalVideoTrack || callManager.isVideoEnabled {
                     callControlButton(
                         icon: callManager.isVideoEnabled ? "video.fill" : "video.slash.fill",
                         color: "A855F7",
                         bgColor: "A855F7",
-                        isActive: false,
+                        isActive: !callManager.isVideoEnabled,
                         label: callManager.isVideoEnabled ? "Désactiver la vidéo" : "Activer la vidéo"
                     ) {
                         callManager.toggleVideo()

@@ -555,6 +555,21 @@ export class CallService {
     const activeParticipants = call.participants.filter((p) => !p.leftAt && p.id !== callParticipant.id);
     const isLastParticipant = activeParticipants.length === 0;
 
+    // Audit P1-29 — distinguish "leave during ringing/connecting" (callee
+    // declined or initiator cancelled before media negotiation completed)
+    // from "leave during an active call". The pre-answer case must map to
+    // `missed` (with `endReason: missed`) so:
+    //   - the iOS UI surfaces a missed-call banner on the OTHER device,
+    //   - Recents shows "Missed" / "Cancelled" instead of "Ended",
+    //   - the gateway emits `call:missed` in addition to `call:ended` and
+    //     can create missed-call push notifications for offline callees.
+    const wasPreAnswered =
+      call.status === CallStatus.initiated ||
+      call.status === CallStatus.ringing ||
+      call.status === CallStatus.connecting;
+    const targetEndedStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
+    const targetEndReason = wasPreAnswered ? CallEndReason.missed : CallEndReason.completed;
+
     // Update in transaction
     await this.prisma.$transaction(async (tx) => {
       // Update participant left time
@@ -563,7 +578,7 @@ export class CallService {
         data: { leftAt }
       });
 
-      // If last participant, end the call
+      // If last participant, end the call (status depends on pre/post-answer).
       if (isLastParticipant) {
         const duration = Math.floor(
           (leftAt.getTime() - call.startedAt.getTime()) / 1000
@@ -572,17 +587,24 @@ export class CallService {
         await tx.callSession.update({
           where: { id: callId },
           data: {
-            status: CallStatus.ended,
+            status: targetEndedStatus,
+            endReason: targetEndReason,
             endedAt: leftAt,
             duration
           }
         });
 
-        logger.info('✅ Call ended - last participant left', { callId, duration });
+        logger.info('✅ Call closed - last participant left', {
+          callId,
+          duration,
+          status: targetEndedStatus,
+          endReason: targetEndReason,
+          wasPreAnswered
+        });
       }
     });
 
-    logger.info('✅ User left call successfully', { callId, userId });
+    logger.info('✅ User left call successfully', { callId, userId, wasPreAnswered });
 
     return this.getCallSession(callId);
   }

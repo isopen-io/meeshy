@@ -471,13 +471,23 @@ final class CallManager: ObservableObject {
     /// phantom call and immediately end it so the user never sees the call UI.
     func reportPhantomVoIPCall(uuid: UUID, update: CXCallUpdate) {
         callProvider.reportNewIncomingCall(with: uuid, update: update) { _ in }
-        callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
+        // Audit P3 — was `.failed` which Recents shows as a "Failed call"
+        // entry. `.unanswered` is the documented phantom-call idiom on
+        // iOS 17+ — the lock-screen flash is suppressed and Recents shows
+        // a neutral "Missed" entry instead of a hard failure.
+        callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
     }
 
     // MARK: - Update Incoming Call Name
 
     func updateIncomingCallName(_ name: String) {
         guard let uuid = activeCallUUID else { return }
+        // Audit P3 — skip the CallKit update if the user has already
+        // answered/declined. The cache-resolution Task that calls this
+        // method can finish AFTER the user has acted; updating the CallKit
+        // card at that point either flashes a stale name or no-ops with a
+        // log noise.
+        guard case .ringing = callState else { return }
         remoteUsername = name
         let update = CXCallUpdate()
         update.localizedCallerName = name
@@ -689,7 +699,7 @@ final class CallManager: ObservableObject {
         guard case .ringing(isOutgoing: false) = callState else { return }
         guard let callId = currentCallId, let userId = remoteUserId else { return }
 
-        emitCallReject(callId: callId, toUserId: userId)
+        emitCallReject(callId: callId)
 
         if let uuid = activeCallUUID {
             let endAction = CXEndCallAction(call: uuid)
@@ -1524,7 +1534,10 @@ final class CallManager: ObservableObject {
         return acked
     }
 
-    private func emitCallReject(callId: String, toUserId: String) {
+    // Audit P3 — `toUserId` was accepted by the previous signature and
+    // never used. Dropped for clarity — `call:leave` is server-routed via
+    // the call room, no recipient field needed.
+    private func emitCallReject(callId: String) {
         MessageSocketManager.shared.emitCallLeave(callId: callId)
     }
 

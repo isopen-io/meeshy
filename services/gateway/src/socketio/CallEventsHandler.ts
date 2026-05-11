@@ -759,8 +759,13 @@ export class CallEventsHandler {
         // Leave call room AFTER broadcasting
         socket.leave(ROOMS.call(data.callId));
 
-        // If call ended, broadcast to BOTH call room AND conversation room
-        if (callSession.status === 'ended') {
+        // Audit P1-29 — leaveCall service now maps pre-answer last-leave to
+        // `missed` (with endReason=missed). Handle both terminal statuses:
+        // emit `call:ended` always, plus `call:missed` + create missed-call
+        // notifications when the leave actually means "the call never
+        // connected".
+        const finalStatus = callSession.status as string;
+        if (finalStatus === 'ended' || finalStatus === 'missed') {
           const endedEvent: CallEndedEvent = {
             callId: callSession.id,
             duration: callSession.duration || 0,
@@ -771,9 +776,21 @@ export class CallEventsHandler {
           io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, endedEvent);
           io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
 
-          logger.info('Call ended - last participant left', {
+          if (finalStatus === 'missed') {
+            // Reuse the same missed-call notification path as the ringing
+            // timeout so the UX is identical (push notification + in-app
+            // banner) regardless of whether the call was cancelled by the
+            // initiator or timed out server-side.
+            this.handleMissedCall(callSession.id).catch((err) => {
+              logger.error('❌ handleMissedCall failed after leave', { callId: data.callId, err });
+            });
+          }
+
+          logger.info('Call closed - last participant left', {
             callId: data.callId,
-            duration: callSession.duration
+            duration: callSession.duration,
+            status: finalStatus,
+            endReason: callSession.endReason
           });
         } else {
           logger.info('✅ Socket: User left call', {
