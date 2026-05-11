@@ -1302,17 +1302,33 @@ final class CallManager: ObservableObject {
             session.unlockForConfiguration()
         }
         do {
-            Logger.calls.info("[AUDIO_SESS] setConfiguration call")
-            try session.setConfiguration(configuration, active: false)
-            Logger.calls.info("RTCAudioSession pre-configured — video: \(isVideo) (CallKit will activate)")
+            Logger.calls.info("[AUDIO_SESS] setConfiguration call (active=true)")
+            // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT (commit-d834c78b reversion) —
+            // the previous version of this method called `setConfiguration(_, active: false)`
+            // assuming CallKit would activate the session via
+            // `provider:didActivate:audioSession:`. Production logs prove
+            // CallKit NEVER fires `didActivate` for outgoing calls on the
+            // current iOS build: it tears the call down ~3 s after fulfill
+            // with state still `.ringing`. The earlier (pre-d834c78b) code
+            // path force-activated the AVAudioSession in `configureAudioSession`
+            // / in the `didActivate` bridge — that was reportedly the
+            // working state. Reversing the "trust CallKit" cleanup and
+            // setting `active: true` here gives CallKit a live, ready
+            // audio session at fulfill time, which is the only state where
+            // it accepts an outgoing call. Bridge-only activation (the
+            // pattern that broke) is preserved as the second branch.
+            try session.setConfiguration(configuration, active: true)
+            // Mirror to RTCAudioSession's internal state so libwebrtc's
+            // ADM picks up the freshly active session.
+            session.audioSessionDidActivate(AVAudioSession.sharedInstance())
+            session.isAudioEnabled = true
+            Logger.calls.info("RTCAudioSession pre-configured AND activated — video: \(isVideo)")
         } catch let error as NSError where error.domain == NSCocoaErrorDomain && error.code == 4099 {
             // "Session deactivation failed" — le call précédent a laissé
             // AVAudioSession dans un état non-deactivable depuis ce process
             // (CallKit gère la deactivation via provider:didDeactivate:).
-            // Bénin : RTCAudioSession.useManualAudio est déjà setté, et
-            // CallKit pilote l'activation via didActivate. Downgrade en
-            // warning pour ne pas polluer les crash dashboards.
-            Logger.calls.warning("RTCAudioSession setConfiguration deactivation skipped — CallKit owns the session lifecycle (\(error.localizedDescription))")
+            // Bénin : on retombe sur le bridge-only via didActivate.
+            Logger.calls.warning("RTCAudioSession setConfiguration deactivation skipped — bridge-only fallback (\(error.localizedDescription))")
         } catch {
             Logger.calls.error("RTCAudioSession configuration failed: \(error.localizedDescription)")
         }
