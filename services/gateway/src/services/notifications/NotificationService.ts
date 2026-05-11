@@ -844,11 +844,17 @@ export class NotificationService {
       select: { title: true, type: true },
     });
 
+    // Phase C — prefix emoji icône d'appel pour rendu visuel rapide dans le banner.
+    // L'extension iOS expose en plus l'avatar du caller via INSendMessageIntent
+    // (missed_call est ajouté à communicationTypes côté extension dans la même PR).
+    const callIcon = params.callType === 'video' ? '📹' : '📞';
+    const callLabel = params.callType === 'video' ? 'vidéo' : 'audio';
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'missed_call',
       priority: 'high',
-      content: `Appel ${params.callType === 'video' ? 'vidéo' : 'audio'} manqué`,
+      content: `${callIcon} Appel ${callLabel} manqué`,
 
       actor: {
         id: params.callerId,

@@ -388,9 +388,21 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     // MARK: - Communication Notifications
 
     /// Notification types that should use iOS Communication Notification style.
+    /// Phase C — call notifications (APN non-VoIP path) are also routed through
+    /// INSendMessageIntent so the banner shows the caller's avatar on the left
+    /// with the app badge bottom-right. The VoIP `incoming_call` push is NOT
+    /// in this set — it goes through PushKit (PKPushRegistry) and uses CallKit's
+    /// own UI, so the notification extension never sees it.
+    /// Phase D+E — social events (likes, comments, reposts, story reactions)
+    /// and friend requests all carry the actor's avatar in `imageURL`, so the
+    /// Communication path renders them with the same WhatsApp/Telegram style.
     private static let communicationTypes: Set<String> = [
-        "new_message", "message_reply", "reply",
-        "message_reaction", "mention", "user_mentioned"
+        "new_message", "message_reply", "reply", "message_forwarded",
+        "new_conversation", "new_conversation_direct", "new_conversation_group", "added_to_conversation",
+        "message_reaction", "mention", "user_mentioned",
+        "missed_call", "call_ended", "call_declined", "call_recording_ready",
+        "post_like", "post_comment", "post_repost", "story_reaction", "comment_like", "comment_reply",
+        "friend_request", "contact_request"
     ]
 
     /// Creates an `INSendMessageIntent` and returns updated notification content
