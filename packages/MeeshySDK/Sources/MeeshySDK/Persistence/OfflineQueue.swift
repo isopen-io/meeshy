@@ -343,6 +343,28 @@ public actor OfflineQueue {
         await refreshPendingCount()
     }
 
+    /// Convenience wrapper for UI surfaces (e.g. failed-message bubbles) that
+    /// only know the `clientMessageId` of the optimistic message and not the
+    /// underlying outbox row id. Resolves the latest matching row by
+    /// `clientMessageId`, then delegates to `retryItem(_:)`.
+    ///
+    /// Throws `OfflineQueueError.itemNotFound` if no row exists for `cmid`.
+    public func retryByClientMessageId(_ cmid: String) async throws {
+        guard let pool = outboxPool else {
+            throw OfflineQueueError.poolNotConfigured
+        }
+        let row: OutboxRecord? = (try? await pool.read { db in
+            try OutboxRecord
+                .filter(Column("clientMessageId") == cmid)
+                .order(Column("createdAt").desc)
+                .fetchOne(db)
+        }) ?? nil
+        guard let row else {
+            throw OfflineQueueError.itemNotFound
+        }
+        try await retryItem(row.id)
+    }
+
     // MARK: - Pending Count
 
     /// Counts rows currently in `.pending` or `.inflight` state and updates
