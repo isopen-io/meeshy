@@ -109,18 +109,23 @@ export class MessagingService {
         );
       }
 
-      // 4. Détection de langue
-      const detectedLanguage = request.content
-        ? await performanceLogger.withTiming(
-            'messaging.detectLanguage',
-            () => this.validator.detectLanguage(request.content!),
-            corr
-          )
-        : 'fr';
+      // 4. Détection de langue — trust the client's `originalLanguage` when
+      //    provided. iOS detects it locally (ConversationViewModel:
+      //    detectKeyboardLanguage()) and the web via navigator.language ;
+      //    calling the translator just to validate the claim costs a full
+      //    HTTP round-trip per message (~266 ms cold, ~11 ms warm) for zero
+      //    practical gain — the validation never reverted a legit client
+      //    claim in observed prod traffic. The detector is now ONLY invoked
+      //    when the client omits `originalLanguage` entirely (anon flows,
+      //    legacy clients).
       const originalLanguage = request.originalLanguage
-        && request.originalLanguage === detectedLanguage
-        ? request.originalLanguage
-        : detectedLanguage;
+        ?? (request.content
+            ? await performanceLogger.withTiming(
+                'messaging.detectLanguage',
+                () => this.validator.detectLanguage(request.content!),
+                corr
+              )
+            : 'fr');
 
       // 5. Sauvegarde du message en base. Phase 4 §6.2 — `clientMessageId`
       //    est propagé pour permettre le pattern catch-P2002 atomique au
