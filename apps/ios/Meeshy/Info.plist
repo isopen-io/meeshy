@@ -6,6 +6,7 @@
 	<array>
 		<string>me.meeshy.app.conversation-sync</string>
 		<string>me.meeshy.app.message-prefetch</string>
+		<string>me.meeshy.cache.background-flush</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>

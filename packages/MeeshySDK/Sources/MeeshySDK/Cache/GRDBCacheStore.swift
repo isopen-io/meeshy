@@ -197,11 +197,22 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     }
 
     public func flushDirtyKeys() async {
+        await flushDirtyKeys(deadline: nil)
+    }
+
+    /// Deadline-aware variant used by the BGProcessingTask path. When the
+    /// provided deadline elapses mid-iteration we stop scheduling new
+    /// `db.write` calls — keys that have not yet been flushed stay dirty
+    /// so the next opportunity (cold start or next background submission)
+    /// picks them up. A `nil` deadline matches the legacy unbounded
+    /// behavior (used by the 2-second debounce path).
+    public func flushDirtyKeys(deadline: Date?) async {
         guard !dirtyKeys.isEmpty else { return }
 
         let keysToFlush = dirtyKeys
 
         for key in keysToFlush {
+            if let deadline, Date() >= deadline { break }
             guard let l1 = memoryCache[key] else { continue }
             let keyStr = namespacedKey(key.description)
             let items = l1.items
@@ -214,6 +225,31 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
 
         if dirtyKeys.isEmpty {
             firstDirtyAt = nil
+        }
+    }
+
+    /// Number of dirty keys awaiting flush. Exposed for the background
+    /// flush test harness in `CacheBackgroundFlushTests`; production
+    /// callers should not need to introspect this.
+    public func dirtyKeyCount() -> Int {
+        dirtyKeys.count
+    }
+
+    /// Inject `count` synthetic dirty entries for tests. Each entry is a
+    /// fresh `L1Entry` keyed by its insertion index — the data shape is
+    /// irrelevant, only the bookkeeping (dirty set + access order) is
+    /// exercised by the flush path under test. Bypasses the `maxL1Keys`
+    /// LRU cap (which would otherwise evict the early seeds before the
+    /// flush observes them) — production callers should never need this.
+    public func seedDirtyForTest(items: [(Key, [Value])]) {
+        for (key, values) in items {
+            memoryCache[key] = L1Entry(items: values, loadedAt: Date())
+            removeFromAccessOrder(key)
+            accessOrder.append(key)
+            dirtyKeys.insert(key)
+        }
+        if firstDirtyAt == nil, !dirtyKeys.isEmpty {
+            firstDirtyAt = Date()
         }
     }
 

@@ -28,6 +28,18 @@ struct MeeshyApp: App {
         !hasCompletedOnboarding && !authManager.isAuthenticated
     }
 
+    init() {
+        // Task 1.3 — register the BGProcessingTask identifier BEFORE the
+        // scene is created. `BGTaskScheduler.register` MUST run before
+        // `application(_:didFinishLaunchingWithOptions:)` returns, which
+        // for SwiftUI apps means inside the App initializer. Registering
+        // later (e.g. in `.task`) is a programmer error and crashes with
+        // a clear "All launch handlers must be registered before
+        // application finishes launching" exception. The coordinator
+        // submits the request later, when `willTerminate` fires.
+        CacheBackgroundFlushTask().register()
+    }
+
     var body: some Scene {
         WindowGroup {
             SystemThemeDetector {
