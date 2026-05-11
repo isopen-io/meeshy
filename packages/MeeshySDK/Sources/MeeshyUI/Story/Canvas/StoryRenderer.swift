@@ -14,6 +14,20 @@ public enum RenderMode: Sendable {
     case play
 }
 
+// `Equatable` conformance is provided in a `nonisolated` extension so the
+// synthesised `==` is callable from the compositor's worker-thread context
+// (`StoryRendererCache.invalidateIfNeeded`) without crossing actor boundaries.
+// Under MeeshyUI's `defaultIsolation(MainActor)`, the default synthesised
+// conformance would otherwise be MainActor-isolated.
+extension RenderMode: Equatable {
+    public nonisolated static func == (lhs: RenderMode, rhs: RenderMode) -> Bool {
+        switch (lhs, rhs) {
+        case (.edit, .edit), (.play, .play): return true
+        default: return false
+        }
+    }
+}
+
 // MARK: - RenderableItem
 
 /// Common contract for any item drawn into the Story canvas.
@@ -66,13 +80,18 @@ public enum StoryRenderer {
     ///   - languages: Preferred languages for Prisme Linguistique text resolution (`.play` only).
     ///     In `.edit` mode, the raw source text is always displayed regardless of this parameter.
     ///     Defaults to `[]` for backward compat with existing call sites.
+    ///   - cache: Optional per-export layer-tree cache (`StoryAVCompositor` opt-in).
+    ///     When non-nil, item layers whose render signature matches the previous
+    ///     frame are reused as-is instead of rebuilt. Defaults to `nil` for the
+    ///     live composer/viewer canvas which rebuilds every layer each call.
     /// - Returns: A root `CALayer` whose sublayers represent the slide's items.
     @MainActor
     public static func render(slide: StorySlide,
                               into geometry: CanvasGeometry,
                               at time: CMTime,
                               mode: RenderMode,
-                              languages: [String] = []) -> CALayer {
+                              languages: [String] = [],
+                              cache: StoryRendererCache? = nil) -> CALayer {
         let root = CALayer()
         root.frame = CGRect(origin: .zero, size: geometry.renderSize)
         root.anchorPoint = CGPoint(x: 0, y: 0)
@@ -81,7 +100,26 @@ public enum StoryRenderer {
         let allItems = collectItems(from: slide)
         for item in allItems.sorted(by: { $0.zIndex < $1.zIndex }) {
             guard shouldRender(item: item, at: time, mode: mode) else { continue }
-            let layer = renderItem(item, into: geometry, at: time, mode: mode, languages: languages)
+            let layer: CALayer
+            if let cache {
+                // The build closure inherits MainActor isolation from the
+                // enclosing @MainActor `render` function (MeeshyUI's
+                // defaultIsolation), and `cache.layer(for:...)` is itself
+                // MainActor — no actor hop, no Sendable requirement on the
+                // CALayer return.
+                layer = cache.layer(for: item, at: time.seconds, languages: languages) { rebuiltItem in
+                    renderItem(rebuiltItem,
+                               into: geometry,
+                               at: time,
+                               mode: mode,
+                               languages: languages)
+                }
+            } else {
+                layer = renderItem(item, into: geometry, at: time, mode: mode, languages: languages)
+            }
+            // A cached layer might still be attached to the previous frame's
+            // root layer. addSublayer auto-detaches before re-attaching, so
+            // this is safe and cheap (CALayer parenting is O(1) bookkeeping).
             root.addSublayer(layer)
         }
 
