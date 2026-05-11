@@ -138,6 +138,67 @@ public struct StoryTranslation: Codable, Sendable {
     }
 }
 
+// MARK: - Story Text Background Style
+
+/// Background style for a `StoryTextObject`.
+///
+/// Replaces the legacy `textBg: String?` field with a richer surface that can
+/// express the glassmorphism material baked into the live composer + export.
+/// Legacy `textBg` is preserved on the model for round-trip compatibility: when
+/// `backgroundStyle` is `nil` and `textBg` is non-nil, the renderer falls back
+/// to `.solid(hex: textBg!)`.
+public enum StoryTextBackgroundStyle: Codable, Sendable, Equatable {
+    /// No background — text floats directly on the canvas.
+    case none
+    /// Solid color background (hex). Preferred over the legacy `textBg` field
+    /// for new content; the renderer treats both equivalently.
+    case solid(hex: String)
+    /// Glass material : blurs the canvas region beneath the text bounds at
+    /// render time. `radius` is the Gaussian sigma in design pixels (1080×1920
+    /// reference), typically 18–32. Wires `StoryBlurFilter` (MPSImageGaussianBlur)
+    /// into the render pipeline.
+    case glass(radius: Double)
+
+    // MARK: - Codable (tagged union: { type, hex?, radius? })
+
+    private enum CodingKeys: String, CodingKey {
+        case type, hex, radius
+    }
+
+    private enum Kind: String, Codable {
+        case none, solid, glass
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let kind = try c.decode(Kind.self, forKey: .type)
+        switch kind {
+        case .none:
+            self = .none
+        case .solid:
+            let hex = try c.decode(String.self, forKey: .hex)
+            self = .solid(hex: hex)
+        case .glass:
+            let r = try c.decode(Double.self, forKey: .radius)
+            self = .glass(radius: r)
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case .none:
+            try c.encode(Kind.none, forKey: .type)
+        case .solid(let hex):
+            try c.encode(Kind.solid, forKey: .type)
+            try c.encode(hex, forKey: .hex)
+        case .glass(let radius):
+            try c.encode(Kind.glass, forKey: .type)
+            try c.encode(radius, forKey: .radius)
+        }
+    }
+}
+
 // MARK: - Story Text Object (texte sur canvas)
 
 public struct StoryTextObject: Codable, Identifiable, Sendable {
@@ -162,7 +223,13 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var textStyle: String?        // "bold"|"neon"|"typewriter"|"handwriting"|"classic"
     public var textColor: String?        // hex "FFFFFF"
     public var textAlign: String?        // "left"|"center"|"right"
+    /// Legacy solid-color hex background. Preserved for round-trip compat with
+    /// stories on disk. New content should populate `backgroundStyle` instead;
+    /// the renderer prefers `backgroundStyle` when both are set.
     public var textBg: String?           // hex ou nil (pas de fond)
+    /// Rich background style — `.none` / `.solid(hex)` / `.glass(radius)`.
+    /// `nil` means "fall back to legacy `textBg`" for backward compat.
+    public var backgroundStyle: StoryTextBackgroundStyle?
 
     // Translations (kept)
     public var translations: [String: String]?
@@ -182,7 +249,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     enum CodingKeys: String, CodingKey {
         case id, text, x, y, scale, rotation, zIndex, anchor
         case fontSize, fontFamily
-        case textStyle, textColor, textAlign, textBg
+        case textStyle, textColor, textAlign, textBg, backgroundStyle
         case translations, sourceLanguage
         case startTime, duration, fadeIn, fadeOut
         case isLocked, keyframes
@@ -202,6 +269,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 textColor: String? = "FFFFFF",
                 textAlign: String? = "center",
                 textBg: String? = nil,
+                backgroundStyle: StoryTextBackgroundStyle? = nil,
                 translations: [String: String]? = nil,
                 sourceLanguage: String? = nil,
                 startTime: Double? = nil,
@@ -218,6 +286,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.fontSize = fontSize; self.fontFamily = fontFamily
         self.textStyle = textStyle; self.textColor = textColor
         self.textAlign = textAlign; self.textBg = textBg
+        self.backgroundStyle = backgroundStyle
         self.translations = translations
         self.sourceLanguage = sourceLanguage
         self.startTime = startTime; self.duration = duration
@@ -263,6 +332,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         textColor = try c.decodeIfPresent(String.self, forKey: .textColor)
         textAlign = try c.decodeIfPresent(String.self, forKey: .textAlign)
         textBg = try c.decodeIfPresent(String.self, forKey: .textBg)
+        backgroundStyle = try c.decodeIfPresent(StoryTextBackgroundStyle.self, forKey: .backgroundStyle)
         translations = try c.decodeIfPresent([String: String].self, forKey: .translations)
         sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
         startTime = try c.decodeIfPresent(Double.self, forKey: .startTime)
@@ -296,6 +366,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(textColor, forKey: .textColor)
         try c.encodeIfPresent(textAlign, forKey: .textAlign)
         try c.encodeIfPresent(textBg, forKey: .textBg)
+        try c.encodeIfPresent(backgroundStyle, forKey: .backgroundStyle)
         try c.encodeIfPresent(translations, forKey: .translations)
         try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encodeIfPresent(startTime, forKey: .startTime)
@@ -318,7 +389,15 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     /// Legacy helper — returns design-pixel fontSize.
     public var resolvedSize: Double { fontSize }
 
-    public var hasBg: Bool { textBg != nil }
+    public var hasBg: Bool { textBg != nil || backgroundStyle != nil }
+
+    /// Resolves the effective background style honoring backward compat.
+    /// Priority: `backgroundStyle` (new) > `textBg` (legacy) > `.none`.
+    public var resolvedBackgroundStyle: StoryTextBackgroundStyle {
+        if let s = backgroundStyle { return s }
+        if let hex = textBg { return .solid(hex: hex) }
+        return .none
+    }
 }
 
 extension StoryTextObject {

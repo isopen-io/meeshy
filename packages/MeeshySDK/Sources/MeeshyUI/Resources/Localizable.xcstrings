@@ -11438,9 +11438,6 @@
     "Pause" : {
 
     },
-    "Play" : {
-
-    },
     "Polski" : {
 
     },
@@ -13345,6 +13342,17 @@
         }
       }
     },
+    "story.audioPanel.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Audio"
+          }
+        }
+      }
+    },
     "story.audioSource.library" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -15139,6 +15147,17 @@
         }
       }
     },
+    "story.filter.pickerTitle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Filtres"
+          }
+        }
+      }
+    },
     "story.filters.intensity" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -15146,6 +15165,28 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Intensite"
+          }
+        }
+      }
+    },
+    "story.filters.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Filtres"
+          }
+        }
+      }
+    },
+    "story.fontPicker.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Style de texte"
           }
         }
       }
@@ -15181,6 +15222,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Pesquisar música..."
+          }
+        }
+      }
+    },
+    "story.music.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Musique"
           }
         }
       }
@@ -15826,6 +15878,17 @@
         }
       }
     },
+    "story.sticker.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Stickers"
+          }
+        }
+      }
+    },
     "story.textEditor.color" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -16137,6 +16200,17 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Tempo"
+          }
+        }
+      }
+    },
+    "story.textEditor.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Texte"
           }
         }
       }
@@ -18360,6 +18434,17 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Arrêter l'enregistrement"
+          }
+        }
+      }
+    },
+    "story.voiceRecorder.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Enregistrement"
           }
         }
       }

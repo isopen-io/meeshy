@@ -2,6 +2,7 @@ import Foundation
 import QuartzCore
 import CoreText
 import UIKit
+import Metal
 import MeeshySDK
 
 /// `CATextLayer` subclass that renders a `StoryTextObject` with crisp
@@ -12,6 +13,15 @@ import MeeshySDK
 /// physical size show typography at identical visual proportions.
 public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
     public private(set) nonisolated(unsafe) var textObject: StoryTextObject?
+
+    /// Backing layer placed behind the text glyphs when `backgroundStyle` is
+    /// non-`.none`. For `.solid` this is a tinted CALayer; for `.glass` this is
+    /// a `StoryGlassBackdropLayer` which routes through `StoryBlurFilter`
+    /// (`MPSImageGaussianBlur`, GPU) when a backdrop MTLTexture is supplied
+    /// via `setBackdropTexture(_:)`, or falls back to a private `CAFilter`
+    /// "gaussianBlur" attached to the layer's `filters` until then.
+    private var backgroundFillLayer: CALayer?
+    private var glassBackdropLayer: StoryGlassBackdropLayer?
 
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
@@ -86,6 +96,67 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         // Static text is a rasterization candidate during playback.
         shouldRasterize = mode == .play && text.isStatic
         if shouldRasterize { rasterizationScale = UIScreen.main.scale }
+
+        // Install background fill / glass backdrop behind the text glyphs.
+        // The CATextLayer renders its `string` into its own contents; the
+        // background must live in a *sublayer* placed at zPosition < 0 so the
+        // CATextLayer's own drawn glyphs paint above it.
+        applyBackgroundStyle(text.resolvedBackgroundStyle, geometry: geometry)
+    }
+
+    // MARK: - Background style
+
+    @MainActor
+    private func applyBackgroundStyle(_ style: StoryTextBackgroundStyle,
+                                      geometry: CanvasGeometry) {
+        // Tear down previous background layers — `configure` is idempotent.
+        backgroundFillLayer?.removeFromSuperlayer()
+        backgroundFillLayer = nil
+        glassBackdropLayer?.removeFromSuperlayer()
+        glassBackdropLayer = nil
+
+        switch style {
+        case .none:
+            return
+
+        case .solid(let hex):
+            let fill = CALayer()
+            fill.frame = bounds
+            // Symmetric inset already baked into bounds via the +16 design-px pad.
+            fill.cornerRadius = max(4, bounds.height * 0.15)
+            fill.backgroundColor = (parseHexColor(hex) ?? .black.withAlphaComponent(0.5)).cgColor
+            fill.zPosition = -1
+            fill.contentsScale = UIScreen.main.scale
+            addSublayer(fill)
+            backgroundFillLayer = fill
+
+        case .glass(let radius):
+            let backdrop = StoryGlassBackdropLayer()
+            backdrop.frame = bounds
+            backdrop.cornerRadius = max(4, bounds.height * 0.15)
+            backdrop.masksToBounds = true
+            backdrop.zPosition = -1
+            backdrop.contentsScale = UIScreen.main.scale
+            // Sigma is design-px; project to render-px so the blur "feels" the
+            // same on iPhone & iPad (consistent with CanvasGeometry.render).
+            let renderedSigma = Float(geometry.render(CGFloat(radius)))
+            backdrop.configure(sigma: renderedSigma)
+            addSublayer(backdrop)
+            glassBackdropLayer = backdrop
+        }
+    }
+
+    /// Owner hook : when the parent canvas (`StoryCanvasUIView` / compositor) has
+    /// a snapshot of the canvas region *behind* this text layer rendered into an
+    /// `MTLTexture`, it can pass it here. The glass backdrop will run
+    /// `StoryBlurFilter.apply` (MPSImageGaussianBlur on the shared command queue)
+    /// and present the blurred result. When no texture is supplied, the glass
+    /// layer falls back to a `CAFilter` "gaussianBlur" on its own filters chain
+    /// — visually similar but operating on whatever CALayer compositing places
+    /// behind it (which is the canvas, transitively).
+    @MainActor
+    public func setBackdropTexture(_ texture: MTLTexture?) {
+        glassBackdropLayer?.setBackdropTexture(texture)
     }
 
     // MARK: - Helpers
