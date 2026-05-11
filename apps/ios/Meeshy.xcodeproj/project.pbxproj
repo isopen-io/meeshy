@@ -101,6 +101,8 @@
 		AA1000000000002FA1 /* UploadProgressBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA1000000000001FA1 /* UploadProgressBar.swift */; };
 		AA11BB22CC33DD44EE55FF02 /* StoryViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */; };
 		AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */; };
+		CSVM470A470A470A470A4701 /* ConnectionStatusViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = CSVM470B470B470B470B4701 /* ConnectionStatusViewModel.swift */; };
+		CSVT470A470A470A470A4701 /* ConnectionStatusViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CSVT470B470B470B470B4701 /* ConnectionStatusViewModelTests.swift */; };
 		AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */; };
 		AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */; };
 		AA11BB22CC33DD44EE55FF06 /* StatusBarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660066 /* StatusBarView.swift */; };
@@ -601,6 +603,8 @@
 		B9B971DB3A0E6B21CEEC3ADA /* AffiliateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AffiliateView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewModel.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusViewModel.swift; sourceTree = "<group>"; };
+		CSVM470B470B470B470B4701 /* ConnectionStatusViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionStatusViewModel.swift; sourceTree = "<group>"; };
+		CSVT470B470B470B470B4701 /* ConnectionStatusViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConnectionStatusViewModelTests.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryTrayView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Content.swift"; sourceTree = "<group>"; };
@@ -1329,6 +1333,7 @@
 				7789A854759F389975CB9906 /* FeedViewModelTests.swift */,
 				E5AC4E027FC1B934E44A48FD /* GlobalSearchViewModelTests.swift */,
 				E4A4562A9E8160E9EF7098B7 /* StatusViewModelTests.swift */,
+				CSVT470B470B470B470B4701 /* ConnectionStatusViewModelTests.swift */,
 				19B9EAF13A41EDB150DBC0DB /* StoryViewModelTests.swift */,
 				4FF8351314E9A302F775DBCE /* UserProfileViewModelTests.swift */,
 				TFA0VT01B001B001B001B001 /* TwoFactorViewModelTests.swift */,
@@ -1360,6 +1365,7 @@
 				VP01WZ01B001B001B001B001 /* VoiceProfileWizardViewModel.swift */,
 				VP01MG01B001B001B001B001 /* VoiceProfileManageViewModel.swift */,
 				TFA0VM01B001B001B001B001 /* TwoFactorViewModel.swift */,
+				CSVM470B470B470B470B4701 /* ConnectionStatusViewModel.swift */,
 				0DC6B1EFE559FE8634F4D330 /* ConversationOptionsViewModel.swift */,
 			);
 			path = ViewModels;
@@ -2016,6 +2022,7 @@
 				TFA0SV01A001A001A001A001 /* TwoFactorSetupView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF02 /* StoryViewModel.swift in Sources */,
 				AA11BB22CC33DD44EE55FF03 /* StatusViewModel.swift in Sources */,
+				CSVM470A470A470A470A4701 /* ConnectionStatusViewModel.swift in Sources */,
 				AA11BB22CC33DD44EE55FF04 /* StoryTrayView.swift in Sources */,
 				AA11BB22CC33DD44EE55FF05 /* StoryViewerView.swift in Sources */,
 				D974F1384869B32923B076E7 /* StoryViewerContainer.swift in Sources */,
@@ -2282,6 +2289,7 @@
 				031EA7F524ECB3B634B6CFAD /* FeedViewModelTests.swift in Sources */,
 				34135EFA521513464A6DEE23 /* GlobalSearchViewModelTests.swift in Sources */,
 				84522147F0B370813212EA59 /* StatusViewModelTests.swift in Sources */,
+				CSVT470A470A470A470A4701 /* ConnectionStatusViewModelTests.swift in Sources */,
 				A5FCBF3B6F6D49097164DC92 /* StoryViewModelTests.swift in Sources */,
 				24AFF57E3E63AF37DB547005 /* UserProfileViewModelTests.swift in Sources */,
 				TFA0VT01A001A001A001A001 /* TwoFactorViewModelTests.swift in Sources */,
