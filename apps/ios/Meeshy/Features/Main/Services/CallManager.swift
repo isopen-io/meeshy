@@ -269,26 +269,12 @@ final class CallManager: ObservableObject {
         callState = .ringing(isOutgoing: true)
         lastCallWasOutgoing = true
 
-        // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT (root-cause test) —
-        // RingbackTonePlayer relies on AVAudioPlayer, which silently auto-
-        // activates the AVAudioSession with a default category the FIRST
-        // time `play()` succeeds. On a fresh outgoing call this fires
-        // BEFORE `configureAudioSession()` (which is inside an async Task
-        // waiting on the gateway ACK) AND before CallKit's own
-        // `provider:didActivate:audioSession:` callback — leaving the
-        // session in an "already active but with the wrong owner" state
-        // that prevents CallKit from taking control. The user-visible
-        // symptom matches exactly: CallKit fires an autonomous
-        // `CXEndCallAction` 2-3 s in with state=`.ringing(isOutgoing: true)`
-        // and `didActivate` is never observed. Skipping the ringback start
-        // here isolates this hypothesis — if outgoing calls now survive
-        // past the 3-second mark, the ringback start path is the offender
-        // and we need to defer it until after CallKit's `didActivate`
-        // (or migrate it off AVAudioPlayer entirely).
-        // The downstream stop() in transitionToConnected/endCallInternal
-        // remains a no-op when no player is allocated, so this is safe.
-        // ringbackPlayer.start()
-        Logger.calls.info("[CALLKIT_DIAG] ringback start INTENTIONALLY SKIPPED (root-cause test)")
+        // Ringback restored — the previous isolation test confirmed that
+        // disabling it did NOT prevent the autonomous CallKit teardown,
+        // ruling out the AVAudioSession-ownership hypothesis. Keeping the
+        // user-facing audible feedback while we keep investigating the
+        // real cause.
+        ringbackPlayer.start()
         startOutgoingRingTimeout()
 
         let uuid = UUID()
@@ -1816,14 +1802,26 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // safe because we don't await any media setup from this delegate.
         Logger.calls.info("[CALLKIT_DIAG] provider:perform:CXStartCallAction RECEIVED (callUUID=\(action.callUUID)) — fulfilling")
         action.fulfill()
-        // Also signal progress straight from the delegate so CallKit's
-        // outgoing-call grace window starts ticking from "connecting" as
-        // soon as possible — the symmetric call from the
-        // `callController.request(_:completion:)` completion handler still
-        // happens, this just covers the case where that completion is
-        // delayed by the main-queue load of WebRTC setup.
         provider.reportOutgoingCall(with: action.callUUID, startedConnectingAt: Date())
-        Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction.fulfill() + reportOutgoingCall(_:startedConnectingAt:) from delegate")
+        // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT (root-cause test #2) —
+        // Earlier tests showed CallKit fires `CXEndCallAction`
+        // autonomously while the FSM is still `.ringing`, even with
+        // `reportOutgoingCall(_:startedConnectingAt:)` called from both
+        // the delegate and the request completion handler, and even with
+        // the ringback player neutralized. The next discriminator is to
+        // see whether CallKit's autonomous teardown is a "you didn't
+        // reach connected fast enough" timeout. If it is, telling
+        // CallKit the call is ALREADY connected here should stop the
+        // teardown cold; if it isn't, CallKit will still tear the call
+        // down and we know the cause is somewhere else entirely (lock-
+        // screen call card, audio interrupted by another app, an iOS
+        // entitlement gate, etc).
+        // NOT a permanent fix: lying to CallKit about the connected
+        // state breaks the system call timer + Recents duration. Revert
+        // as soon as the experiment has either confirmed or rejected
+        // this hypothesis.
+        provider.reportOutgoingCall(with: action.callUUID, connectedAt: Date())
+        Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction.fulfill() + reportOutgoingCall(connecting+connected) from delegate")
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
