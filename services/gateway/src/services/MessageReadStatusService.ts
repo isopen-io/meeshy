@@ -329,7 +329,12 @@ export class MessageReadStatusService {
 
       const participants = await this.prisma.participant.findMany({
         where: { conversationId, isActive: true },
-        select: { id: true, displayName: true, user: { select: { avatar: true } } },
+        select: {
+          id: true,
+          displayName: true,
+          avatar: true,
+          user: { select: { avatar: true } },
+        },
       });
 
       const totalMembers = Math.max(
@@ -337,18 +342,29 @@ export class MessageReadStatusService {
         participants.length - 1
       );
 
+      // NOTE: `include: { participant }` is intentionally avoided here.
+      // Prisma + MongoDB does not enforce referential integrity on relation
+      // fields, so a `ConversationReadCursor` can outlive its `Participant`
+      // (e.g. participant deleted / banned / data migration). When that
+      // happens, `include` lifts the JOIN to strict mode and Prisma raises
+      // `PrismaClientUnknownRequestError: Inconsistent query result: Field
+      // participant is required to return data, got null instead`, which
+      // crashes the entire endpoint. We therefore read the cursors raw and
+      // join the participants we already loaded above in JS.
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: {
           conversationId,
           participantId: { not: message.senderId },
         },
-        include: {
-          participant: { select: { id: true, displayName: true, user: { select: { avatar: true } } } },
+        select: {
+          participantId: true,
+          lastDeliveredAt: true,
+          lastReadAt: true,
         },
       });
 
-      const participantAvatars = new Map(
-        participants.map(p => [p.id, p.user?.avatar ?? null])
+      const participantById = new Map(
+        participants.map(p => [p.id, p])
       );
 
       const receivedBy: Array<{
@@ -361,8 +377,10 @@ export class MessageReadStatusService {
         [];
 
       for (const cursor of cursors) {
-        if (!cursor.participant) continue;
-        const avatarURL = cursor.participant.user?.avatar ?? participantAvatars.get(cursor.participantId) ?? null;
+        const participant = participantById.get(cursor.participantId);
+        if (!participant) continue; // orphan cursor — participant deleted/banned/inactive
+
+        const avatarURL = participant.avatar ?? participant.user?.avatar ?? null;
 
         if (
           cursor.lastDeliveredAt &&
@@ -370,7 +388,7 @@ export class MessageReadStatusService {
         ) {
           receivedBy.push({
             participantId: cursor.participantId,
-            displayName: cursor.participant.displayName,
+            displayName: participant.displayName,
             avatarURL,
             receivedAt: cursor.lastDeliveredAt,
           });
@@ -379,7 +397,7 @@ export class MessageReadStatusService {
         if (cursor.lastReadAt && cursor.lastReadAt >= message.createdAt) {
           readBy.push({
             participantId: cursor.participantId,
-            displayName: cursor.participant.displayName,
+            displayName: participant.displayName,
             avatarURL,
             readAt: cursor.lastReadAt,
           });
@@ -519,12 +537,30 @@ export class MessageReadStatusService {
 
       if (!message) throw new Error("Message not found");
 
+      // See `getMessageReadStatus` for the rationale: avoid `include` to
+      // prevent Prisma from crashing on orphan cursors.
       const cursors = await this.prisma.conversationReadCursor.findMany({
         where: { conversationId: message.conversationId },
-        include: {
-          participant: { select: { id: true, displayName: true, avatar: true, isActive: true } },
+        select: {
+          participantId: true,
+          lastDeliveredAt: true,
+          lastReadAt: true,
         },
       });
+
+      const participants = cursors.length
+        ? await this.prisma.participant.findMany({
+            where: {
+              id: { in: cursors.map(c => c.participantId) },
+              isActive: true,
+            },
+            select: { id: true, displayName: true, avatar: true },
+          })
+        : [];
+
+      const participantById = new Map(
+        participants.map(p => [p.id, p])
+      );
 
       let results: Array<{
         participantId: string;
@@ -537,7 +573,8 @@ export class MessageReadStatusService {
       }> = [];
 
       for (const cursor of cursors) {
-        if (!cursor.participant || !cursor.participant.isActive) continue;
+        const participant = participantById.get(cursor.participantId);
+        if (!participant) continue; // orphan or inactive
 
         const deliveredAt =
           cursor.lastDeliveredAt && cursor.lastDeliveredAt >= message.createdAt
@@ -554,8 +591,8 @@ export class MessageReadStatusService {
 
         results.push({
           participantId: cursor.participantId,
-          displayName: cursor.participant.displayName,
-          avatar: cursor.participant.avatar,
+          displayName: participant.displayName,
+          avatar: participant.avatar,
           deliveredAt,
           receivedAt: deliveredAt,
           readAt,
@@ -628,32 +665,64 @@ export class MessageReadStatusService {
         where: whereClause,
       });
 
+      // Avoid `include: { participant }` to stay resilient if a status
+      // entry outlives its participant (same orphan-row risk as
+      // ConversationReadCursor). Fetch participants in bulk and join in JS.
       const statuses = await this.prisma.attachmentStatusEntry.findMany({
         where: whereClause,
         take: limit,
         skip: offset,
         orderBy: { createdAt: "desc" },
-        include: {
-          participant: { select: { id: true, displayName: true, avatar: true } },
+        select: {
+          participantId: true,
+          viewedAt: true,
+          downloadedAt: true,
+          listenedAt: true,
+          watchedAt: true,
+          listenCount: true,
+          watchCount: true,
+          listenedComplete: true,
+          watchedComplete: true,
+          lastPlayPositionMs: true,
+          lastWatchPositionMs: true,
         },
       });
 
+      const participants = statuses.length
+        ? await this.prisma.participant.findMany({
+            where: { id: { in: statuses.map(s => s.participantId) } },
+            select: { id: true, displayName: true, avatar: true },
+          })
+        : [];
+
+      const participantById = new Map(
+        participants.map(p => [p.id, p])
+      );
+
+      const enrichedStatuses = statuses
+        .map((s) => {
+          const participant = participantById.get(s.participantId);
+          if (!participant) return null; // skip orphan rows
+          return {
+            participantId: s.participantId,
+            username: participant.displayName || "Unknown",
+            avatar: participant.avatar ?? null,
+            viewedAt: s.viewedAt,
+            downloadedAt: s.downloadedAt,
+            listenedAt: s.listenedAt,
+            watchedAt: s.watchedAt,
+            listenCount: s.listenCount,
+            watchCount: s.watchCount,
+            listenedComplete: s.listenedComplete,
+            watchedComplete: s.watchedComplete,
+            lastPlayPositionMs: s.lastPlayPositionMs,
+            lastWatchPositionMs: s.lastWatchPositionMs,
+          };
+        })
+        .filter((s): s is NonNullable<typeof s> => s !== null);
+
       return {
-        statuses: statuses.map((s) => ({
-          participantId: s.participantId,
-          username: s.participant?.displayName || "Unknown",
-          avatar: s.participant?.avatar,
-          viewedAt: s.viewedAt,
-          downloadedAt: s.downloadedAt,
-          listenedAt: s.listenedAt,
-          watchedAt: s.watchedAt,
-          listenCount: s.listenCount,
-          watchCount: s.watchCount,
-          listenedComplete: s.listenedComplete,
-          watchedComplete: s.watchedComplete,
-          lastPlayPositionMs: s.lastPlayPositionMs,
-          lastWatchPositionMs: s.lastWatchPositionMs,
-        })),
+        statuses: enrichedStatuses,
         pagination: {
           total,
           limit,

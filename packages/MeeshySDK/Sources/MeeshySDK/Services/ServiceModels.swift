@@ -234,8 +234,14 @@ public struct UserSearchResult: Codable, CacheIdentifiable, Identifiable, Sendab
 
 // MARK: - Attachment Status
 
+/// Per-user playback / view stats for a single attachment.
+///
+/// The gateway returns rows keyed by `participantId` (cf. `MessageReadStatusService.getAttachmentStatusDetails`).
+/// Historically this struct used `userId`, which caused `JSONDecoder` to fail
+/// silently against the real payload, leaving the "Écouté" / "Vu" tabs empty
+/// even when stats existed in MongoDB.
 public struct AttachmentStatusUser: Decodable, Identifiable {
-    public let userId: String
+    public let participantId: String
     public let username: String
     public let avatar: String?
     public let viewedAt: Date?
@@ -249,7 +255,7 @@ public struct AttachmentStatusUser: Decodable, Identifiable {
     public let lastPlayPositionMs: Int?
     public let lastWatchPositionMs: Int?
 
-    public var id: String { userId }
+    public var id: String { participantId }
 }
 
 // MARK: - Generic empty success for fire-and-forget
