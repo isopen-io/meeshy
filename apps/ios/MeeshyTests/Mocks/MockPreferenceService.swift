@@ -54,6 +54,34 @@ final class MockPreferenceService: PreferenceServiceProviding {
 
     var getMyConversationTagsCallCount = 0
 
+    // Cache-first stubs (added 2026-05-11). Default: cache empty so legacy
+    // tests keep their network-only behaviour. Set to non-nil in a test to
+    // simulate a warm cache.
+    var cachedCategoriesStub: [ConversationCategory]?
+    var cachedConversationTagsStub: [String]?
+    var cachedAllPreferencesStub: UserPreferences?
+    var cachedConversationPreferencesStubs: [String: APIConversationPreferences] = [:]
+
+    var loadCachedCategoriesCallCount = 0
+    var revalidateCategoriesCallCount = 0
+    var persistCategoriesCallCount = 0
+    var lastPersistedCategories: [ConversationCategory]?
+
+    var loadCachedConversationTagsCallCount = 0
+    var revalidateConversationTagsCallCount = 0
+    var persistConversationTagsCallCount = 0
+    var lastPersistedConversationTags: [String]?
+
+    var loadCachedAllPreferencesCallCount = 0
+    var revalidateAllPreferencesCallCount = 0
+    var persistAllPreferencesCallCount = 0
+    var lastPersistedAllPreferences: UserPreferences?
+
+    var loadCachedConversationPreferencesCallCount = 0
+    var revalidateConversationPreferencesCallCount = 0
+    var persistConversationPreferencesCallCount = 0
+    var lastPersistedConversationPreferences: (id: String, prefs: APIConversationPreferences)?
+
     // MARK: - Protocol Conformance
 
     nonisolated func getCategories() async throws -> [ConversationCategory] {
@@ -123,6 +151,96 @@ final class MockPreferenceService: PreferenceServiceProviding {
         return try await MainActor.run { try getMyConversationTagsResult.get() }
     }
 
+    // MARK: - Cache-first overrides
+
+    nonisolated func loadCachedCategories() async -> [ConversationCategory]? {
+        await MainActor.run {
+            loadCachedCategoriesCallCount += 1
+            return cachedCategoriesStub
+        }
+    }
+
+    nonisolated func revalidateCategories() async throws -> [ConversationCategory] {
+        await MainActor.run { revalidateCategoriesCallCount += 1 }
+        let fresh = try await getCategories()
+        await persistCategories(fresh)
+        return fresh
+    }
+
+    nonisolated func persistCategories(_ categories: [ConversationCategory]) async {
+        await MainActor.run {
+            persistCategoriesCallCount += 1
+            lastPersistedCategories = categories
+            cachedCategoriesStub = categories
+        }
+    }
+
+    nonisolated func loadCachedConversationTags() async -> [String]? {
+        await MainActor.run {
+            loadCachedConversationTagsCallCount += 1
+            return cachedConversationTagsStub
+        }
+    }
+
+    nonisolated func revalidateConversationTags() async throws -> [String] {
+        await MainActor.run { revalidateConversationTagsCallCount += 1 }
+        let fresh = try await getMyConversationTags()
+        await persistConversationTags(fresh)
+        return fresh
+    }
+
+    nonisolated func persistConversationTags(_ tags: [String]) async {
+        await MainActor.run {
+            persistConversationTagsCallCount += 1
+            lastPersistedConversationTags = tags
+            cachedConversationTagsStub = tags
+        }
+    }
+
+    nonisolated func loadCachedAllPreferences() async -> UserPreferences? {
+        await MainActor.run {
+            loadCachedAllPreferencesCallCount += 1
+            return cachedAllPreferencesStub
+        }
+    }
+
+    nonisolated func revalidateAllPreferences() async throws -> UserPreferences {
+        await MainActor.run { revalidateAllPreferencesCallCount += 1 }
+        let fresh = try await getAllPreferences()
+        await persistAllPreferences(fresh)
+        return fresh
+    }
+
+    nonisolated func persistAllPreferences(_ prefs: UserPreferences) async {
+        await MainActor.run {
+            persistAllPreferencesCallCount += 1
+            lastPersistedAllPreferences = prefs
+            cachedAllPreferencesStub = prefs
+        }
+    }
+
+    nonisolated func loadCachedConversationPreferences(conversationId: String) async -> APIConversationPreferences? {
+        await MainActor.run {
+            loadCachedConversationPreferencesCallCount += 1
+            return cachedConversationPreferencesStubs[conversationId]
+        }
+    }
+
+    nonisolated func revalidateConversationPreferences(conversationId: String) async throws -> APIConversationPreferences {
+        await MainActor.run { revalidateConversationPreferencesCallCount += 1 }
+        let fresh = try await getConversationPreferences(conversationId: conversationId)
+        await persistConversationPreferences(conversationId: conversationId, prefs: fresh)
+        return fresh
+    }
+
+    nonisolated func persistConversationPreferences(conversationId: String, prefs: APIConversationPreferences) async {
+        await MainActor.run {
+            persistConversationPreferencesCallCount += 1
+            lastPersistedConversationPreferences = (conversationId, prefs)
+            cachedConversationPreferencesStubs[conversationId] = prefs
+        }
+    }
+
     // MARK: - Reset
 
     func reset() {
@@ -145,5 +263,26 @@ final class MockPreferenceService: PreferenceServiceProviding {
         lastCreateCategoryColor = nil
         lastCreateCategoryIcon = nil
         getMyConversationTagsCallCount = 0
+
+        cachedCategoriesStub = nil
+        cachedConversationTagsStub = nil
+        cachedAllPreferencesStub = nil
+        cachedConversationPreferencesStubs = [:]
+        loadCachedCategoriesCallCount = 0
+        revalidateCategoriesCallCount = 0
+        persistCategoriesCallCount = 0
+        lastPersistedCategories = nil
+        loadCachedConversationTagsCallCount = 0
+        revalidateConversationTagsCallCount = 0
+        persistConversationTagsCallCount = 0
+        lastPersistedConversationTags = nil
+        loadCachedAllPreferencesCallCount = 0
+        revalidateAllPreferencesCallCount = 0
+        persistAllPreferencesCallCount = 0
+        lastPersistedAllPreferences = nil
+        loadCachedConversationPreferencesCallCount = 0
+        revalidateConversationPreferencesCallCount = 0
+        persistConversationPreferencesCallCount = 0
+        lastPersistedConversationPreferences = nil
     }
 }

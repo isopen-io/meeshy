@@ -582,6 +582,22 @@ public struct ConversationNewEvent: Decodable, Sendable {
     public let creatorId: String
     public let participantIds: [String]
     public let createdAt: String
+
+    public init(
+        conversationId: String,
+        conversationType: String,
+        title: String?,
+        creatorId: String,
+        participantIds: [String],
+        createdAt: String
+    ) {
+        self.conversationId = conversationId
+        self.conversationType = conversationType
+        self.title = title
+        self.creatorId = creatorId
+        self.participantIds = participantIds
+        self.createdAt = createdAt
+    }
 }
 
 public struct NotificationReadEvent: Decodable, Sendable {

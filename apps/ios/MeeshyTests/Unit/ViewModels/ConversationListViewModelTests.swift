@@ -1634,6 +1634,85 @@ final class ConversationListViewModelTests: XCTestCase {
                        "Single row must be prepended, not duplicated")
     }
 
+    // MARK: - loadCategories: cache-first
+
+    /// Cache-first guarantees the section grouping has the right buckets
+    /// the very first frame after cold start. Without it the
+    /// CombineLatest4 grouping pipeline fires with userCategories=[] and
+    /// every row lands in "Other" until the network fetch completes,
+    /// causing the visible "category flash".
+    func test_loadCategories_warmCache_appliesCachedBeforeNetwork() async throws {
+        let cachedCat = ConversationCategory(id: "cat-1", name: "Work", color: "FF0000", icon: "briefcase.fill", order: 0, isExpanded: true)
+        let preferenceService = MockPreferenceService()
+        preferenceService.cachedCategoriesStub = [cachedCat]
+        preferenceService.getCategoriesResult = .success([cachedCat])  // network returns same
+        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
+
+        await sut.loadCategories()
+
+        XCTAssertEqual(sut.userCategories.count, 1, "Cached category must populate userCategories")
+        XCTAssertEqual(sut.userCategories.first?.id, "cat-1")
+        XCTAssertEqual(preferenceService.loadCachedCategoriesCallCount, 1)
+        XCTAssertEqual(preferenceService.revalidateCategoriesCallCount, 1,
+                       "Revalidate must run in background even when cache hit")
+    }
+
+    /// Cold cache: VM still must populate via network and persist for next
+    /// session. No flash because there's nothing to flash from.
+    func test_loadCategories_emptyCache_fetchesAndPersists() async throws {
+        let fresh = ConversationCategory(id: "cat-1", name: "Family", color: "00FF00", icon: "house.fill", order: 0, isExpanded: true)
+        let preferenceService = MockPreferenceService()
+        preferenceService.cachedCategoriesStub = nil
+        preferenceService.getCategoriesResult = .success([fresh])
+        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
+
+        await sut.loadCategories()
+
+        XCTAssertEqual(sut.userCategories.first?.id, "cat-1")
+        XCTAssertEqual(preferenceService.persistCategoriesCallCount, 1,
+                       "Empty-cache path must persist the fresh fetch for next session")
+        XCTAssertEqual(preferenceService.lastPersistedCategories?.first?.id, "cat-1")
+    }
+
+    /// Network failure on revalidate must NOT clobber the already-painted
+    /// cached state. Stale-while-revalidate trustfall: cached value lives
+    /// until next successful refresh, never replaced with empty.
+    func test_loadCategories_networkFailure_keepsCachedValue() async throws {
+        struct StubError: Error {}
+        let cachedCat = ConversationCategory(id: "cat-1", name: "Friends", color: "0000FF", icon: "person.2.fill", order: 0, isExpanded: true)
+        let preferenceService = MockPreferenceService()
+        preferenceService.cachedCategoriesStub = [cachedCat]
+        preferenceService.getCategoriesResult = .failure(StubError())
+        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
+
+        await sut.loadCategories()
+
+        XCTAssertEqual(sut.userCategories.first?.id, "cat-1",
+                       "Cached value must survive a revalidate failure")
+        XCTAssertEqual(preferenceService.persistCategoriesCallCount, 0,
+                       "Failed revalidate must NOT persist (no fresh value to write)")
+    }
+
+    /// Server-truth race: cache says 1 category, server now has 2 (user
+    /// added one on web). The fresh value must override the cached one and
+    /// also persist for next session.
+    func test_loadCategories_warmCache_freshFetchOverridesAndPersists() async throws {
+        let cachedCat = ConversationCategory(id: "cat-1", name: "Work", color: "FF0000", icon: "briefcase.fill", order: 0, isExpanded: true)
+        let newCat = ConversationCategory(id: "cat-2", name: "Travel", color: "00FFFF", icon: "airplane", order: 1, isExpanded: true)
+        let preferenceService = MockPreferenceService()
+        preferenceService.cachedCategoriesStub = [cachedCat]
+        preferenceService.getCategoriesResult = .success([cachedCat, newCat])
+        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
+
+        await sut.loadCategories()
+
+        XCTAssertEqual(sut.userCategories.count, 2,
+                       "Fresh fetch with new category must replace stale cached value")
+        XCTAssertEqual(sut.userCategories.map(\.id).sorted(), ["cat-1", "cat-2"])
+        XCTAssertEqual(preferenceService.persistCategoriesCallCount, 1)
+        XCTAssertEqual(preferenceService.lastPersistedCategories?.count, 2)
+    }
+
     // MARK: - recentlyCreatedAt merge protection
 
     /// Race scenario: creator just made a conversation (broadcaster →

@@ -62,6 +62,11 @@ extension CachePolicy {
     public static let userStats = CachePolicy(ttl: .hours(6), staleTTL: .minutes(10), maxItemCount: 10, storageLocation: .grdb)
     public static let linksAndTokens = CachePolicy(ttl: .hours(12), staleTTL: .minutes(5), maxItemCount: 100, storageLocation: .grdb)
     public static let statuses = CachePolicy(ttl: .hours(1), staleTTL: .minutes(2), maxItemCount: 100, storageLocation: .grdb)
+    /// User preferences (categories, tags, app prefs, conversation prefs).
+    /// Change rarely (explicit gesture) but read on every list/sheet open.
+    /// Long fresh window keeps the UI snappy; 10-min stale window guarantees
+    /// a server-truth revalidate within minutes of session resume.
+    public static let preferences = CachePolicy(ttl: .hours(24), staleTTL: .minutes(10), maxItemCount: 500, storageLocation: .grdb)
 }
 
 // MARK: - TimeInterval Helpers

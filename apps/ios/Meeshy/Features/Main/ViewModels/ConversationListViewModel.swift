@@ -743,23 +743,47 @@ class ConversationListViewModel: ObservableObject {
     }
 
     // MARK: - Load Categories
+    //
+    // Cache-first per the architecture bible (Pattern I1). Without this the
+    // grouping pipeline (CombineLatest4 line 230) fires immediately after
+    // setConversations and groups every row into the "Other" bucket because
+    // `userCategories = []` at that point — then 100-300ms later the API
+    // response arrives, userCategories repopulates, the grouping re-runs,
+    // and the user sees the section headers flash in. With cache-first the
+    // categories are populated synchronously on cold start (sub-100ms via
+    // the GRDB actor hop) and the grouping has the right buckets from the
+    // very first frame.
 
     func loadCategories() async {
-        do {
-            let categories = try await preferenceService.getCategories()
-            userCategories = categories.map { cat in
-                ConversationSection(
-                    id: cat.id,
-                    name: cat.name,
-                    icon: cat.icon ?? "folder.fill",
-                    color: cat.color?.replacingOccurrences(of: "#", with: "") ?? "45B7D1",
-                    isExpanded: cat.isExpanded ?? true,
-                    order: cat.order ?? 0
-                )
-            }.sorted { $0.order < $1.order }
-        } catch {
-            // Categories are optional, keep empty
+        if let cached = await preferenceService.loadCachedCategories() {
+            applyCategories(cached)
         }
+        // Background revalidate so the next session picks up server-truth
+        // changes (new category created on web, color renamed, etc.).
+        // Errors here are non-fatal — we keep whatever cached snapshot we
+        // already painted.
+        do {
+            let fresh = try await preferenceService.revalidateCategories()
+            applyCategories(fresh)
+        } catch {
+            // Network blip or unauthorized: cached value (if any) stays.
+        }
+    }
+
+    /// Convert + sort the API model into the section model the grouping
+    /// pipeline consumes. Idempotent — calling with the same input twice
+    /// produces the same `userCategories` array.
+    private func applyCategories(_ categories: [ConversationCategory]) {
+        userCategories = categories.map { cat in
+            ConversationSection(
+                id: cat.id,
+                name: cat.name,
+                icon: cat.icon ?? "folder.fill",
+                color: cat.color?.replacingOccurrences(of: "#", with: "") ?? "45B7D1",
+                isExpanded: cat.isExpanded ?? true,
+                order: cat.order ?? 0
+            )
+        }.sorted { $0.order < $1.order }
     }
 
     // MARK: - Load Conversations

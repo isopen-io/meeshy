@@ -162,7 +162,7 @@ public struct UpdateConversationPreferencesRequest: Encodable, Sendable {
 
 // MARK: - Category
 
-public struct ConversationCategory: Decodable, Identifiable {
+public struct ConversationCategory: Codable, Identifiable, Sendable, CacheIdentifiable {
     public let id: String
     public let name: String
     public let color: String?

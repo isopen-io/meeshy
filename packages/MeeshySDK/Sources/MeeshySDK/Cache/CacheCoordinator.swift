@@ -26,6 +26,22 @@ public actor CacheCoordinator {
     public let blockedUsers: GRDBCacheStore<String, BlockedUser>
     public let userSearch: GRDBCacheStore<String, UserSearchResult>
     public let timeline: GRDBCacheStore<String, TimelinePoint>
+    /// User-defined conversation categories. Single key "list" stores the full
+    /// ordered set (typically <20 items). Stale-while-revalidate via
+    /// PreferenceService.loadCachedCategories so the conversation list shows
+    /// the right section grouping instantly on cold start instead of flashing
+    /// "Other" until the network fetch lands.
+    public let categories: GRDBCacheStore<String, ConversationCategory>
+    /// Distinct user-curated tags across all conversations. Single key "list".
+    public let userTags: GRDBCacheStore<String, ConversationTagEntry>
+    /// Top-level user preferences blob (translation prefs, theme, etc.).
+    /// Single key "all" stores the wrapped UserPreferences.
+    public let userPreferences: GRDBCacheStore<String, PreferenceValue<UserPreferences>>
+    /// Per-conversation user preferences (pin / mute / archive / customName /
+    /// tags / categoryId / mentionsOnly / reaction). Keyed by conversationId
+    /// so a sheet open hits the cache instantly while a background revalidate
+    /// keeps it fresh.
+    public let conversationPreferences: GRDBCacheStore<String, PreferenceValue<APIConversationPreferences>>
 
     public let images: DiskCacheStore
     public let audio: DiskCacheStore
@@ -156,6 +172,10 @@ public actor CacheCoordinator {
         self.blockedUsers = GRDBCacheStore(policy: .participants, db: db, namespace: "blocked", encrypted: true)
         self.userSearch = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "usearch")
         self.timeline = GRDBCacheStore(policy: .userStats, db: db, namespace: "timeline")
+        self.categories = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-cat")
+        self.userTags = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-tags")
+        self.userPreferences = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-user", encrypted: true)
+        self.conversationPreferences = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-conv", encrypted: true)
 
         self.images = DiskCacheStore(policy: .mediaImages)
         self.audio = DiskCacheStore(policy: .mediaAudio)
