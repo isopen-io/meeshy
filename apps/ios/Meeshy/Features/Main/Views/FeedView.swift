@@ -399,6 +399,18 @@ struct FeedView: View {
                         }
                     }
 
+                    // Cold-start skeleton list: only when no cached posts
+                    // AND a load is in flight. Mirrors the height of the
+                    // real cards so the surrounding layout never jumps
+                    // when the first batch arrives.
+                    if SkeletonVisibilityResolver.shouldShowSkeleton(
+                        isLoading: viewModel.isLoading,
+                        hasCachedData: !viewModel.posts.isEmpty
+                    ) {
+                        SkeletonFeedList()
+                            .transition(.opacity)
+                    }
+
                     // Posts with infinite scroll
                     ForEach(posts) { post in
                         feedPostCardView(for: post)

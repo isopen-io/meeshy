@@ -197,13 +197,25 @@ struct ProfileView: View {
             Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
             VStack(spacing: 24) {
-                bannerAndAvatarSection
-                identitySection
-                contactSection
-                languagesSection
-                statsSection
-                friendRequestsSection
-                memberSinceSection
+                // Cold-start placeholder: AuthManager has no cached
+                // user yet (first run, post-logout). Skip rendering the
+                // real banner/avatar/identity sections to avoid the
+                // chain of `?? ""` fallback strings flashing on screen.
+                if SkeletonVisibilityResolver.shouldShowSkeleton(
+                    isLoading: true,
+                    hasCachedData: user != nil
+                ) {
+                    SkeletonProfileHeader()
+                        .transition(.opacity)
+                } else {
+                    bannerAndAvatarSection
+                    identitySection
+                    contactSection
+                    languagesSection
+                    statsSection
+                    friendRequestsSection
+                    memberSinceSection
+                }
                 Spacer().frame(height: 40)
             }
             .padding(.horizontal, 16)

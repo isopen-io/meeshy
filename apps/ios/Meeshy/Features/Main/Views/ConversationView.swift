@@ -756,12 +756,43 @@ struct ConversationView: View {
             }
     }
 
+    // MARK: - Skeleton Overlay
+
+    /// Vertical stack of skeleton bubbles used as the cold-start
+    /// placeholder. The bubble indices alternate left/right inside
+    /// `SkeletonMessageBubble` so the column reads like a real
+    /// conversation thread while the first network/cache pass runs.
+    private var messageSkeletonOverlay: some View {
+        VStack(spacing: 12) {
+            ForEach(0..<6, id: \.self) { index in
+                SkeletonMessageBubble(index: index)
+            }
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 96)
+        .padding(.bottom, composerHeight + 24)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(Text("Chargement des messages"))
+    }
+
     // MARK: - Body Content (extracted to help type-checker)
 
     @ViewBuilder
     private var bodyContent: some View {
         ZStack {
             conversationBackground
+
+            // Cold-start skeleton: shown ONLY while the initial fetch is
+            // in flight AND no cached messages exist yet. Renders above
+            // the (empty) MessageListView so the layout stays stable
+            // when the first batch lands and the placeholder fades out.
+            if viewModel.isLoadingInitial && viewModel.messages.isEmpty {
+                messageSkeletonOverlay
+                    .transition(.opacity)
+                    .zIndex(1)
+            }
 
             // UIKit bridge powered by GRDB store (always available after eager init)
             MessageListView(
