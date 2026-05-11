@@ -15,19 +15,22 @@ public actor OutboxFlusher {
     private let maxAttempts: Int
     private let baseBackoff: TimeInterval
     private let maxBackoff: TimeInterval
+    private let onOutcome: (@Sendable (OutboxOutcome) -> Void)?
 
     public init(
         pool: any DatabaseWriter,
         dispatcher: any OutboxDispatching,
         maxAttempts: Int = 5,
         baseBackoff: TimeInterval = 2,
-        maxBackoff: TimeInterval = 30
+        maxBackoff: TimeInterval = 30,
+        onOutcome: (@Sendable (OutboxOutcome) -> Void)? = nil
     ) {
         self.pool = pool
         self.dispatcher = dispatcher
         self.maxAttempts = maxAttempts
         self.baseBackoff = baseBackoff
         self.maxBackoff = maxBackoff
+        self.onOutcome = onOutcome
     }
 
     public func flush() async {
@@ -61,6 +64,7 @@ public actor OutboxFlusher {
             try? await pool.write { db in
                 try OutboxRecord.deleteOne(db, key: idToDelete)
             }
+            onOutcome?(.applied(cmid: current.clientMessageId))
         } catch {
             current.attempts += 1
             current.lastError = String(describing: error)
@@ -78,6 +82,10 @@ public actor OutboxFlusher {
             let failedSnapshot = current
             try? await pool.write { db in
                 try failedSnapshot.update(db)
+            }
+
+            if current.status == .exhausted {
+                onOutcome?(.exhausted(cmid: current.clientMessageId))
             }
         }
     }
