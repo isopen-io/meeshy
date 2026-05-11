@@ -56,17 +56,10 @@ class AudioPlayerManager: NSObject, ObservableObject, StoppablePlayer, AVAudioPl
         registerIfNeeded()
         PlaybackCoordinator.shared.willStartPlaying(external: self)
 
-        // Audit P1-8 — do NOT touch the audio session category while a VoIP
-        // call is active. RTCAudioSession holds it with .playAndRecord +
-        // .voiceChat; switching to .playback breaks the microphone path
-        // (peer hears silence). Playback under the existing call category is
-        // fine as a side effect of .playAndRecord.
-        if !CallManager.shared.callState.isActive {
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
-                try AVAudioSession.sharedInstance().setActive(true)
-            } catch {}
-        }
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {}
 
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
         loadTask = Task {
@@ -86,13 +79,10 @@ class AudioPlayerManager: NSObject, ObservableObject, StoppablePlayer, AVAudioPl
         registerIfNeeded()
         PlaybackCoordinator.shared.willStartPlaying(external: self)
 
-        // Audit P1-8 — see play(urlString:); same guard for the local-file path.
-        if !CallManager.shared.callState.isActive {
-            do {
-                try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
-                try AVAudioSession.sharedInstance().setActive(true)
-            } catch {}
-        }
+        do {
+            try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [.duckOthers])
+            try AVAudioSession.sharedInstance().setActive(true)
+        } catch {}
 
         do {
             let data = try Data(contentsOf: url)
@@ -138,13 +128,7 @@ class AudioPlayerManager: NSObject, ObservableObject, StoppablePlayer, AVAudioPl
         progress = 0
         loadTask?.cancel()
         loadTask = nil
-        // Audit P1-9 — do NOT deactivate the shared AVAudioSession while a
-        // VoIP call is active. CallKit owns activation/deactivation via
-        // provider:didActivate:/didDeactivate:; tearing it down here drops
-        // call audio until the next route change re-activates it.
-        if !CallManager.shared.callState.isActive {
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
-        }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     func togglePlayPause() {
