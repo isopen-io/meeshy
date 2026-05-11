@@ -70,6 +70,31 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             }
         }
 
+        // Phase B — for `message_reaction`, the gateway sends body = "❤️" (emoji alone).
+        // Reformat it to "<sender> a réagi <emoji> à votre message" so the banner is
+        // self-explanatory. Done BEFORE applyCommunicationIntent so INSendMessageIntent
+        // sees the final body. The avatar of the reactor is still rendered via the
+        // standard Communication Notifications path (INPerson.image from `imageURL`).
+        if (userInfo["type"] as? String) == "message_reaction" {
+            let emoji = (userInfo["reactionEmoji"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                ?? bestAttemptContent.body
+            let senderName = (userInfo["senderDisplayName"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                ?? (userInfo["senderUsername"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                ?? ""
+            let template = NSLocalizedString(
+                "notification.message_reaction.body",
+                value: "%@ a réagi %@ à votre message",
+                comment: "Push body for a message reaction: sender name + emoji"
+            )
+            bestAttemptContent.body = senderName.isEmpty
+                ? String(format: NSLocalizedString(
+                    "notification.message_reaction.body.no_sender",
+                    value: "A réagi %@ à votre message",
+                    comment: "Fallback when no sender name is available"
+                ), emoji)
+                : String(format: template, senderName, emoji)
+        }
+
         let isCommunicationType = Self.communicationTypes.contains(
             userInfo["type"] as? String ?? ""
         )

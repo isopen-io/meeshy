@@ -397,6 +397,12 @@ export class NotificationService {
                 attachmentDurationMs: params.context.firstAttachmentDurationMs != null
                   ? String(params.context.firstAttachmentDurationMs)
                   : '',
+                // Phase B — reactions. Emoji used so the iOS extension can format
+                // the body as "<sender> a réagi <emoji> à votre message" while the
+                // INSendMessageIntent path still renders the reactor's avatar.
+                reactionEmoji: (params.metadata && 'reactionEmoji' in params.metadata
+                  ? String(params.metadata.reactionEmoji ?? '')
+                  : ''),
                 encryptedContent: params.context.encryptedContent || '',
                 notificationLocKey: params.context.notificationLocKey || '',
               },
