@@ -29,6 +29,8 @@ import { MentionService } from './services/MentionService';
 import { StatusService } from './services/StatusService';
 import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
+import { registerClientMutationIdHook } from './middleware/clientMutationId';
+import { MutationLogService } from './services/MutationLogService';
 import { authRoutes } from './routes/auth';
 import { conversationRoutes } from './routes/conversations';
 import { linksRoutes } from './routes/links';
@@ -572,6 +574,18 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     // SÉCURITÉ P1.1: Rate limiting global (300 requêtes/min par IP)
     await registerGlobalRateLimiter(this.server);
     logger.info('✅ Global rate limiter configured (300 req/min per IP)');
+
+    // Wave 1 Task 3.5 — clientMutationId middleware (cmid validation +
+    // request decoration). MUST be registered before any route reads
+    // `request.clientMutationId`.
+    registerClientMutationIdHook(this.server);
+    logger.info('✅ clientMutationId hook registered');
+
+    // Wave 1 Task 3.4 — expose MutationLogService on fastify so routes
+    // can wrap their writes in `recordOrReturn(...)` for idempotency.
+    const mutationLogService = new MutationLogService(this.prisma);
+    this.server.decorate('mutationLogService', mutationLogService);
+    logger.info('✅ MutationLogService registered');
 
     // Client identification logging — enrichit le logger Pino avec version/device/geo client
     this.server.addHook('onRequest', (request, _reply, done) => {
