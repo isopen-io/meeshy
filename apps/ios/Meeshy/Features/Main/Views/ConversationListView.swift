@@ -1040,8 +1040,16 @@ struct ConversationListView: View {
 
     /// Mise à jour de la phase pull à partir du scroll offset courant.
     /// Appelée depuis `.onPreferenceChange(ScrollOffsetPreferenceKey)`.
-    /// Le ScrollView envoie un minY négatif quand le contenu est tiré
-    /// vers le bas — c'est notre signal de pull.
+    ///
+    /// Convention de signe de `ScrollOffsetPreferenceKey` (via
+    /// `geo.frame(in: .named("scroll")).minY`) :
+    /// - `offset == 0` : repos au sommet de la liste
+    /// - `offset > 0`  : utilisateur **tire vers le bas** (overscroll
+    ///   au top → contenu descend → minY positif). C'est notre signal
+    ///   de pull-to-refresh.
+    /// - `offset < 0`  : utilisateur scroll vers le bas pour lire plus
+    ///   loin (contenu remonte → minY négatif). Pas un pull, c'est de
+    ///   la navigation normale (la valeur < -30 cache la search bar).
     private func updatePullPhase(scrollOffset: CGFloat) {
         // Ne pas perturber l'affichage pendant le refresh ou la sortie
         // en cours — le state machine reste en .refreshing/.completing
@@ -1049,7 +1057,7 @@ struct ConversationListView: View {
         if case .refreshing = pullPhase { return }
         if case .completing = pullPhase { return }
 
-        let pullDistance = max(0, -scrollOffset)
+        let pullDistance = max(0, scrollOffset)
         peakPullDistance = max(peakPullDistance, pullDistance)
 
         if pullDistance == 0 {
