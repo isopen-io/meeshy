@@ -238,83 +238,10 @@ public struct StoryComposerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            // Canvas with viewport pan/zoom (2 fingers)
-            StoryCanvasView(
-                viewModel: viewModel,
-                drawingCanvas: $drawingCanvas,
-                drawingTool: $drawingTool,
-                selectedFilter: $selectedFilter,
-                selectedImage: $selectedImage,
-                stickerObjects: $stickerObjects,
-                onEditText: { id in
-                    viewModel.selectedElementId = id
-                    viewModel.activeTool = .text
-                },
-                onEditMedia: { id in
-                    viewModel.selectedElementId = id
-                    openMediaEditor(elementId: id)
-                }
-            )
-            .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
-            .offset(
-                x: viewModel.canvasOffset.width + viewportDragDelta.width,
-                y: viewModel.canvasOffset.height + viewportDragDelta.height
-            )
-            // .gesture (not .highPriority/.simultaneous) — child element gestures
-            // naturally take priority. Canvas gestures only fire on empty areas.
-            .gesture(isCanvasGestureEnabled ? viewportPinchGesture : nil)
-            .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
-            .overlay {
-                if isLoadingMedia {
-                    Color.black.opacity(0.4)
-                        .overlay {
-                            VStack(spacing: 12) {
-                                ZStack {
-                                    Circle()
-                                        .stroke(Color.white.opacity(0.2), lineWidth: 4)
-                                        .frame(width: 56, height: 56)
-                                    Circle()
-                                        .trim(from: 0, to: mediaLoadProgress)
-                                        .stroke(MeeshyColors.brandGradient, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                                        .frame(width: 56, height: 56)
-                                        .rotationEffect(.degrees(-90))
-                                        .animation(.easeInOut(duration: 0.3), value: mediaLoadProgress)
-                                    Text("\(Int(mediaLoadProgress * 100))%")
-                                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                                        .foregroundColor(.white)
-                                }
-                                if !mediaLoadLabel.isEmpty {
-                                    Text(mediaLoadLabel)
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.8))
-                                }
-                            }
-                        }
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
-                }
-            }
-            .overlay(alignment: .topTrailing) {
-                if viewModel.isCanvasZoomed {
-                    Button {
-                        withAnimation(.spring(response: 0.3)) {
-                            viewModel.resetCanvasZoom()
-                        }
-                    } label: {
-                        Image(systemName: "arrow.uturn.backward")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 30, height: 30)
-                            .background(Circle().fill(.black.opacity(0.5)))
-                    }
-                    // When top bar is hidden, move button up to safe area top
-                    .padding(.top, showTopBar ? 70 : 16)
-                    .padding(.trailing, 12)
-                    .transition(.scale.combined(with: .opacity))
-                    .animation(.spring(response: 0.3), value: showTopBar)
-                }
-            }
-            .ignoresSafeArea()
+            // Canvas core (CALayer) + drawing overlay + viewport modifiers,
+            // extracted into `canvasComposerLayer` so the SwiftUI type-checker
+            // doesn't time out on this body's full modifier chain.
+            canvasComposerLayer
 
             // Top bar — auto-hides during canvas zoom to reveal canvas controls
             VStack(spacing: 0) {
@@ -349,6 +276,14 @@ public struct StoryComposerView: View {
             // Cleanup happens after upload completes in StoryViewModel.launchUploadTask.
         }
         .onChange(of: fgMediaItem) { _, item in handleForegroundMediaSelection(from: item) }
+        // Real-time canvas sync — Task 2.18 migration. Toolbars + sheets
+        // mutate composer-local @State (`selectedFilter`, `stickerObjects`,
+        // `selectedImage`, …); the CALayer canvas reads from
+        // `viewModel.currentSlide.effects` exclusively, so re-serialize on
+        // each toolbar mutation. Five separate `.onChange` modifiers tipped
+        // the type-checker over the time-out threshold, so we collapse them
+        // into a single observation of a coarse fingerprint.
+        .onChange(of: canvasSyncFingerprint) { _, _ in syncCurrentSlideEffects() }
         .fileImporter(isPresented: $showAudioDocumentPicker, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first {
                 mediaAudioEditorItem = AudioEditorItemWrapper(url: url)
@@ -745,6 +680,125 @@ public struct StoryComposerView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: viewModel.activeTool)
     }
 
+    // MARK: - Canvas + Drawing Layer (Task 2.18)
+
+    /// CALayer-based canvas + drawing overlay + viewport transform/gestures
+    /// + loading + zoom-reset overlays. Extracted so the SwiftUI type-checker
+    /// doesn't time out on the parent body.
+    @ViewBuilder
+    private var canvasComposerLayer: some View {
+        canvasCore
+            .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
+            .offset(
+                x: viewModel.canvasOffset.width + viewportDragDelta.width,
+                y: viewModel.canvasOffset.height + viewportDragDelta.height
+            )
+            .gesture(isCanvasGestureEnabled ? viewportPinchGesture : nil)
+            .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
+            .overlay { mediaLoadingOverlay }
+            .overlay(alignment: .topTrailing) { canvasZoomResetButton }
+            .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private var canvasCore: some View {
+        StoryComposerCanvasView(
+            slide: $viewModel.currentSlide,
+            onItemDoubleTapped: { id, kind in
+                viewModel.selectedElementId = id
+                switch kind {
+                case .text:
+                    viewModel.activeTool = .text
+                case .media:
+                    openMediaEditor(elementId: id)
+                case .sticker:
+                    break
+                }
+            }
+        )
+        .allowsHitTesting(!viewModel.isDrawingActive)
+        .overlay {
+            if viewModel.isDrawingActive {
+                DrawingOverlayView(
+                    drawingData: $viewModel.drawingData,
+                    isActive: .constant(true),
+                    canvasView: $drawingCanvas,
+                    toolColor: $viewModel.drawingColor,
+                    toolWidth: $viewModel.drawingWidth,
+                    toolType: $drawingTool
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var mediaLoadingOverlay: some View {
+        if isLoadingMedia {
+            Color.black.opacity(0.4)
+                .overlay {
+                    VStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .stroke(Color.white.opacity(0.2), lineWidth: 4)
+                                .frame(width: 56, height: 56)
+                            Circle()
+                                .trim(from: 0, to: mediaLoadProgress)
+                                .stroke(MeeshyColors.brandGradient, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                                .frame(width: 56, height: 56)
+                                .rotationEffect(.degrees(-90))
+                                .animation(.easeInOut(duration: 0.3), value: mediaLoadProgress)
+                            Text("\(Int(mediaLoadProgress * 100))%")
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+                        if !mediaLoadLabel.isEmpty {
+                            Text(mediaLoadLabel)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+        }
+    }
+
+    /// Coarse fingerprint of every composer-local @State that the CALayer
+    /// canvas needs to render. Bumps whenever any of them mutates; observed
+    /// by a single `.onChange` to trigger `syncCurrentSlideEffects()`. Using
+    /// one observation instead of five keeps the body within the SwiftUI
+    /// type-checker's complexity budget (Task 2.18 regression fix).
+    private var canvasSyncFingerprint: Int {
+        var h = selectedFilter?.rawValue.hashValue ?? 0
+        h = h &* 31 &+ (selectedImage != nil ? 1 : 0)
+        h = h &* 31 &+ stickerObjects.count
+        for s in stickerObjects { h = h &* 31 &+ s.id.hashValue }
+        h = h &* 31 &+ (viewModel.drawingData?.count ?? 0)
+        h = h &* 31 &+ viewModel.backgroundColor.hashValue
+        return h
+    }
+
+    @ViewBuilder
+    private var canvasZoomResetButton: some View {
+        if viewModel.isCanvasZoomed {
+            Button {
+                withAnimation(.spring(response: 0.3)) {
+                    viewModel.resetCanvasZoom()
+                }
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(.black.opacity(0.5)))
+            }
+            .padding(.top, showTopBar ? 70 : 16)
+            .padding(.trailing, 12)
+            .transition(.scale.combined(with: .opacity))
+            .animation(.spring(response: 0.3), value: showTopBar)
+        }
+    }
+
     // MARK: - Timeline Section
 
     @ViewBuilder
@@ -1067,7 +1121,7 @@ public struct StoryComposerView: View {
 
     @ViewBuilder
     private func textElementList() -> some View {
-        let items = viewModel.currentEffects.textObjects ?? []
+        let items = viewModel.currentEffects.textObjects
         if !items.isEmpty {
             VStack(spacing: 4) {
                 ForEach(items, id: \.id) { obj in
@@ -1081,9 +1135,9 @@ public struct StoryComposerView: View {
 
     private func textElementRow(obj: StoryTextObject) -> some View {
         let isSelected = viewModel.selectedElementId == obj.id
-        let preview = obj.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        let preview = obj.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             ? String(localized: "story.composer.emptyText", defaultValue: "Texte vide", bundle: .module)
-            : obj.content
+            : obj.text
         return HStack(spacing: 8) {
             Image(systemName: "textformat")
                 .font(.system(size: 12, weight: .medium))
@@ -1306,16 +1360,16 @@ public struct StoryComposerView: View {
     }
 
     private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
-        guard viewModel.currentEffects.textObjects?.contains(where: { $0.id == id }) == true else { return nil }
+        guard viewModel.currentEffects.textObjects.contains(where: { $0.id == id }) else { return nil }
         return Binding(
             get: {
-                viewModel.currentEffects.textObjects?.first(where: { $0.id == id })
-                    ?? StoryTextObject(content: "")
+                viewModel.currentEffects.textObjects.first(where: { $0.id == id })
+                    ?? StoryTextObject(text: "")
             },
             set: { newObj in
                 var effects = viewModel.currentEffects
-                if let i = effects.textObjects?.firstIndex(where: { $0.id == id }) {
-                    effects.textObjects?[i] = newObj
+                if let i = effects.textObjects.firstIndex(where: { $0.id == id }) {
+                    effects.textObjects[i] = newObj
                     viewModel.currentEffects = effects
                 }
             }
@@ -1586,7 +1640,7 @@ public struct StoryComposerView: View {
             slide.content != nil
                 || viewModel.slideImages[slide.id] != nil
                 || slide.effects.background != nil
-                || !(slide.effects.textObjects ?? []).isEmpty
+                || !slide.effects.textObjects.isEmpty
                 || !(slide.effects.mediaObjects ?? []).isEmpty
         } || !stickerObjects.isEmpty || viewModel.drawingData != nil
 

@@ -9,6 +9,7 @@ final class StoryCanvasReaderKeyframeTests: XCTestCase {
         let media = StoryMediaObject(
             id: "m1", postMediaId: "pm1",
             mediaType: "image", placement: "media",
+            aspectRatio: 1.0,
             x: 0.5, y: 0.5,
             startTime: 0, duration: 5
         )
@@ -20,6 +21,7 @@ final class StoryCanvasReaderKeyframeTests: XCTestCase {
         let media = StoryMediaObject(
             id: "m1", postMediaId: "pm1",
             mediaType: "image", placement: "media",
+            aspectRatio: 1.0,
             x: 0.5, y: 0.5,
             startTime: 0, duration: 5
         )
@@ -33,6 +35,7 @@ final class StoryCanvasReaderKeyframeTests: XCTestCase {
         let media = StoryMediaObject(
             id: "m1", postMediaId: "pm1",
             mediaType: "image", placement: "media",
+            aspectRatio: 1.0,
             x: 0.5, y: 0.5,
             startTime: 0, duration: 5
         )
@@ -61,6 +64,7 @@ final class StoryCanvasReaderKeyframeTests: XCTestCase {
         let k1 = StoryKeyframe(time: 2, x: 1, y: 1)
         let media = StoryMediaObject(
             id: "m", postMediaId: "p", mediaType: "image", placement: "media",
+            aspectRatio: 1.0,
             x: 0, y: 0, startTime: 0, duration: 5
         )
         let pos = ReaderKeyframeResolver.resolvedPosition(for: media, keyframes: [k0, k1], currentTime: 4)
@@ -70,6 +74,7 @@ final class StoryCanvasReaderKeyframeTests: XCTestCase {
     func test_keyframeResolverWiring_overridesStaticPosition() {
         let media = StoryMediaObject(
             id: "m", postMediaId: "p", mediaType: "image", placement: "media",
+            aspectRatio: 1.0,
             x: 0.1, y: 0.1, startTime: 0, duration: 5
         )
         let kfs: [StoryKeyframe] = [

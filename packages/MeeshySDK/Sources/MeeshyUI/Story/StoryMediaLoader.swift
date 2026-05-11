@@ -93,11 +93,10 @@ public final class StoryMediaLoader {
             return cached
         }
 
-        let localURL = url
-        let dim = maxDimension
-        let thumbnail = await Task.detached(priority: .userInitiated) {
-            StoryMediaLoader.extractThumbnail(url: localURL, maxDimension: dim)
-        }.value
+        // VideoToolbox HW decode via StoryMediaDecoder (Phase 3 Task 3.3) —
+        // async + iOS 16+ image(at:) API. `maxDimension` is preserved so 4K
+        // sources don't blow the memory budget.
+        let thumbnail = try? await StoryMediaDecoder.firstFrame(of: url, maxDimension: maxDimension)
 
         if let thumbnail {
             thumbnailCache.setObject(thumbnail, forKey: cacheKey)
@@ -108,19 +107,6 @@ public final class StoryMediaLoader {
             }
         }
         return thumbnail
-    }
-
-    /// Synchronous thumbnail extraction (runs on background thread via Task.detached).
-    nonisolated private static func extractThumbnail(url: URL, maxDimension: CGFloat) -> UIImage? {
-        let asset = AVURLAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: maxDimension, height: maxDimension)
-
-        guard let cgImage = try? generator.copyCGImage(at: .zero, actualTime: nil) else {
-            return nil
-        }
-        return UIImage(cgImage: cgImage)
     }
 
     // MARK: - Preload Video Player

@@ -52,10 +52,10 @@ public struct UnifiedPostComposer: View {
     ///
     /// - Parameters:
     ///   - story: The source `StoryItem` being reposted. Rendered inside the composer
-    ///     via `StoryCanvasReaderView` so the user sees exactly what they are sharing.
+    ///     via `StoryReaderRepresentable` so the user sees exactly what they are sharing.
     ///   - authorHandle: The original author's handle (accepted for symmetry with the
     ///     `StoryComposerViewModel` init introduced in B.6 — not displayed here because
-    ///     the embedded `StoryCanvasReaderView` already shows the original story with
+    ///     the embedded `StoryReaderRepresentable` already shows the original story with
     ///     its locked badge and metadata).
     ///   - onPublishRepost: Called when the user taps Publish. Receives the typed
     ///     commentary plus the source story.
@@ -222,7 +222,7 @@ public struct UnifiedPostComposer: View {
                 // Repost mode: embed the source story canvas instead of the
                 // image-attachment slot. The composer is interactive, so audio
                 // is desired (mute=false).
-                StoryCanvasReaderView(story: story, mute: false)
+                StoryReaderRepresentable(story: story, mute: false)
                     .aspectRatio(9.0 / 16.0, contentMode: .fit)
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
@@ -474,5 +474,35 @@ public struct UnifiedPostComposer: View {
                 }
             }
         }
+    }
+}
+
+// MARK: - Story import (Phase 5 RepostPayload)
+
+extension UnifiedPostComposer {
+    /// Reprojects all canvas objects from `payload` to `targetSize` and returns
+    /// the list of clamping warnings (non-empty when any object was repositioned
+    /// to fit the target aspect ratio). Audio objects are pass-through (no spatial
+    /// position). Caller should surface warnings via a reprojection banner UI.
+    @discardableResult
+    public func importFromStory(_ payload: RepostPayload,
+                                targetSize: CGSize = CGSize(width: 1080, height: 1080))
+        -> [CanvasReprojector.ReprojectionWarning] {
+        let projector = CanvasReprojector(from: payload.sourceCanvasSize, to: targetSize)
+        var warnings: [CanvasReprojector.ReprojectionWarning] = []
+        for t in payload.textObjects {
+            if let w = projector.reproject(text: t).warning { warnings.append(w) }
+        }
+        for m in payload.mediaObjects {
+            if let w = projector.reproject(media: m).warning { warnings.append(w) }
+        }
+        for s in payload.stickers {
+            if let w = projector.reproject(sticker: s).warning { warnings.append(w) }
+        }
+        if let data = payload.drawingData {
+            if let w = projector.reproject(drawingData: data).warning { warnings.append(w) }
+        }
+        // audio reprojection is identity (no spatial position)
+        return warnings
     }
 }

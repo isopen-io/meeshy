@@ -192,8 +192,8 @@ public final class StoryTimelineEngine {
                     withMediaType: .video,
                     preferredTrackID: kCMPersistentTrackID_Invalid
                 )
-                let start = CMTime(seconds: Double(clip.startTime ?? 0), preferredTimescale: 600)
-                let duration = CMTime(seconds: Double(clip.duration ?? project.slideDuration), preferredTimescale: 600)
+                let start = CMTime(seconds: clip.startTime ?? 0, preferredTimescale: 600)
+                let duration = CMTime(seconds: clip.duration ?? Double(project.slideDuration), preferredTimescale: 600)
                 let assetRange = CMTimeRange(start: .zero, duration: duration)
                 try compositionTrack?.insertTimeRange(assetRange, of: assetTrack, at: start)
             } catch {

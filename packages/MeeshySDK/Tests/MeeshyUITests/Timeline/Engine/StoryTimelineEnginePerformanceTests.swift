@@ -11,7 +11,8 @@ final class StoryTimelineEnginePerformanceTests: XCTestCase {
             StoryMediaObject(
                 id: "v\(i)", postMediaId: "pm\(i)",
                 mediaType: "image", placement: "media",
-                startTime: Float(i), duration: 1.0
+                aspectRatio: 1.0,
+                startTime: Double(i), duration: 1.0
             )
         }
         let audios = (0..<5).map { i in

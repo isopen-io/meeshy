@@ -37,6 +37,10 @@ public final class ReaderAudioMixer {
     /// used to derive the sample-accurate host-time targets for each clip.
     private var playbackStartHostTime: UInt64?
     private var didShutdown: Bool = false
+    /// Stored background audio entry (at most one per slide).
+    private var backgroundEntry: BackgroundEntry?
+    private var _duckingEnabled: Bool = false
+    private var _duckedBackgroundVolume: Float = 0.5
 
     public init() {}
 
@@ -292,5 +296,74 @@ public final class ReaderAudioMixer {
         let loop: Bool
         var fadeTimers: [Timer] = []
         var fadeTasks: [Task<Void, Never>] = []
+    }
+
+    /// Internal helper for the single background audio slot.
+    private struct BackgroundEntry {
+        let player: AVAudioPlayerNode
+        let file: AVAudioFile
+        let looping: Bool
+        let audioId: String
+    }
+}
+
+// MARK: - Background audio
+
+extension ReaderAudioMixer {
+    /// Number of configured background entries (0 or 1).
+    public var backgroundClipCount: Int { backgroundEntry == nil ? 0 : 1 }
+
+    /// Configures a single background audio source. Replaces any prior bg entry.
+    /// `looping=true` schedules the buffer to repeat sample-accurately.
+    public func configureBackground(audio: StoryAudioPlayerObject,
+                                    url: URL,
+                                    looping: Bool) throws {
+        // Tear down any prior background node before re-attaching.
+        if let prior = backgroundEntry {
+            prior.player.stop()
+            engine.detach(prior.player)
+        }
+        let file = try AVAudioFile(forReading: url)
+        let player = AVAudioPlayerNode()
+        engine.attach(player)
+        engine.connect(player, to: engine.mainMixerNode, format: file.processingFormat)
+        backgroundEntry = BackgroundEntry(player: player, file: file,
+                                         looping: looping, audioId: audio.id)
+    }
+}
+
+// MARK: - Ducking + fade-out
+
+extension ReaderAudioMixer {
+    /// When `true`, foreground entry start/end events automatically schedule
+    /// volume ramps on the background entry to duck and restore.
+    public var duckingEnabled: Bool {
+        get { _duckingEnabled }
+        set { _duckingEnabled = newValue }
+    }
+
+    /// Volume the background drops to when ducking is active. Default 0.5.
+    public var duckedBackgroundVolume: Float {
+        get { _duckedBackgroundVolume }
+        set { _duckedBackgroundVolume = newValue }
+    }
+
+    /// Globally fades all entries (foreground + background) to silence
+    /// over `duration` seconds, then stops the engine. Idempotent.
+    public func fadeOutAndStop(duration: TimeInterval = 0.5) async {
+        guard isPlaying else { stop(); return }
+        let steps = max(1, Int(duration * 50))   // 50 Hz ramp
+        let stepDuration = duration / Double(steps)
+        for s in 0..<steps {
+            let factor = 1.0 - (Float(s + 1) / Float(steps))
+            for (_, entry) in entries {
+                entry.node.volume = entry.targetVolume * factor
+            }
+            if let bg = backgroundEntry {
+                bg.player.volume = bg.player.volume * factor
+            }
+            try? await Task.sleep(nanoseconds: UInt64(stepDuration * 1_000_000_000))
+        }
+        stop()
     }
 }

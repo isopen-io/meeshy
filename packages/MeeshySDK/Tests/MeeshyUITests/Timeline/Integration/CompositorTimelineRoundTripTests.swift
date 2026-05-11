@@ -21,6 +21,7 @@ final class CompositorTimelineRoundTripTests: XCTestCase {
         // Seed a video media object.
         let media = StoryMediaObject(id: "v1", postMediaId: "post-v1",
                                      kind: .video,
+                                     aspectRatio: 1.0,
                                      startTime: 0, duration: 5)
         slide.effects.mediaObjects = [media]
         composer.currentSlide = slide
@@ -64,6 +65,7 @@ final class CompositorTimelineRoundTripTests: XCTestCase {
 
         let media = StoryMediaObject(id: "v2", postMediaId: "post-v2-uncached",
                                      kind: .video,
+                                     aspectRatio: 1.0,
                                      startTime: 0, duration: 4)
         slide.effects.mediaObjects = [media]
         composer.currentSlide = slide
@@ -83,9 +85,9 @@ final class CompositorTimelineRoundTripTests: XCTestCase {
         var slide = composer.currentSlide
 
         var a = StoryMediaObject(id: "clip-a", postMediaId: "pa",
-                                 kind: .video, startTime: 0, duration: 4)
+                                 kind: .video, aspectRatio: 1.0, startTime: 0, duration: 4)
         var b = StoryMediaObject(id: "clip-b", postMediaId: "pb",
-                                 kind: .video, startTime: 4, duration: 4)
+                                 kind: .video, aspectRatio: 1.0, startTime: 4, duration: 4)
         slide.effects.mediaObjects = [a, b]
         slide.duration = 8
         composer.currentSlide = slide
@@ -114,7 +116,7 @@ final class CompositorTimelineRoundTripTests: XCTestCase {
         var slide = composer.currentSlide
 
         let media = StoryMediaObject(id: "solo", postMediaId: "ps",
-                                     kind: .video, startTime: 0, duration: 5)
+                                     kind: .video, aspectRatio: 1.0, startTime: 0, duration: 5)
         slide.effects.mediaObjects = [media]
         slide.duration = 5
         composer.currentSlide = slide
@@ -135,7 +137,7 @@ final class CompositorTimelineRoundTripTests: XCTestCase {
         var slide = composer.currentSlide
 
         let media = StoryMediaObject(id: "m1", postMediaId: "pm1",
-                                     kind: .image, startTime: 0, duration: 3)
+                                     kind: .image, aspectRatio: 1.0, startTime: 0, duration: 3)
         slide.effects.mediaObjects = [media]
         slide.duration = 3
         composer.currentSlide = slide

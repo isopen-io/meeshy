@@ -56,6 +56,7 @@ final class VideoCompositorTests: XCTestCase {
         let media = StoryMediaObject(
             id: "v1", postMediaId: "pm1",
             mediaType: "video", placement: "media",
+            aspectRatio: 1.0,
             startTime: 2, duration: 4
         )
         let project = makeProject(slideDuration: 10, media: [media])
@@ -74,6 +75,7 @@ final class VideoCompositorTests: XCTestCase {
         let media = StoryMediaObject(
             id: "v1", postMediaId: "pm1",
             mediaType: "video", placement: "media",
+            aspectRatio: 1.0,
             startTime: 0, duration: 5
         )
         let project = makeProject(slideDuration: 10, media: [media])
@@ -89,6 +91,7 @@ final class VideoCompositorTests: XCTestCase {
         let media = StoryMediaObject(
             id: "v1", postMediaId: "pm1",
             mediaType: "video", placement: "media",
+            aspectRatio: 1.0,
             startTime: 0, duration: 10
         )
         let project = makeProject(slideDuration: 10, media: [media])
@@ -198,8 +201,8 @@ final class VideoCompositorTests: XCTestCase {
     // MARK: - B6: GPU dissolve
 
     func test_dissolveCustomCompositor_isAttached_whenAnyDissolveTransitionExists() {
-        let m1 = StoryMediaObject(id: "a", postMediaId: "pa", mediaType: "video", placement: "media", startTime: 0, duration: 5)
-        let m2 = StoryMediaObject(id: "b", postMediaId: "pb", mediaType: "video", placement: "media", startTime: 5, duration: 5)
+        let m1 = StoryMediaObject(id: "a", postMediaId: "pa", mediaType: "video", placement: "media", aspectRatio: 1.0, startTime: 0, duration: 5)
+        let m2 = StoryMediaObject(id: "b", postMediaId: "pb", mediaType: "video", placement: "media", aspectRatio: 1.0, startTime: 5, duration: 5)
         let trans = StoryClipTransition(fromClipId: "a", toClipId: "b", kind: .dissolve, duration: 0.5)
         let project = makeProject(slideDuration: 10, media: [m1, m2], transitions: [trans])
         let composition = AVMutableComposition()
@@ -208,8 +211,8 @@ final class VideoCompositorTests: XCTestCase {
     }
 
     func test_dissolveCustomCompositor_isNil_whenOnlyCrossfadeTransitions() {
-        let m1 = StoryMediaObject(id: "a", postMediaId: "pa", mediaType: "video", placement: "media", startTime: 0, duration: 5)
-        let m2 = StoryMediaObject(id: "b", postMediaId: "pb", mediaType: "video", placement: "media", startTime: 5, duration: 5)
+        let m1 = StoryMediaObject(id: "a", postMediaId: "pa", mediaType: "video", placement: "media", aspectRatio: 1.0, startTime: 0, duration: 5)
+        let m2 = StoryMediaObject(id: "b", postMediaId: "pb", mediaType: "video", placement: "media", aspectRatio: 1.0, startTime: 5, duration: 5)
         let trans = StoryClipTransition(fromClipId: "a", toClipId: "b", kind: .crossfade, duration: 0.5)
         let project = makeProject(slideDuration: 10, media: [m1, m2], transitions: [trans])
         let composition = AVMutableComposition()

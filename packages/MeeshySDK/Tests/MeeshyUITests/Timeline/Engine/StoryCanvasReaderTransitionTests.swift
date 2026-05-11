@@ -8,7 +8,8 @@ final class StoryCanvasReaderTransitionTests: XCTestCase {
         StoryMediaObject(
             id: id, postMediaId: "pm-\(id)",
             mediaType: "video", placement: "media",
-            startTime: start, duration: duration
+            aspectRatio: 1.0,
+            startTime: Double(start), duration: Double(duration)
         )
     }
 

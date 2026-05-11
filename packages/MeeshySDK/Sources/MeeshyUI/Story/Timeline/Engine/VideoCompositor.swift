@@ -110,20 +110,21 @@ public struct VideoCompositor: Sendable {
         clips: [StoryMediaObject],
         slideDuration: Float
     ) -> [CompositionSegment] {
-        var boundaries = Set<Float>()
+        let slideDurationD = Double(slideDuration)
+        var boundaries = Set<Double>()
         boundaries.insert(0)
-        boundaries.insert(slideDuration)
+        boundaries.insert(slideDurationD)
         for clip in clips {
             let start = clip.startTime ?? 0
-            let duration = clip.duration ?? slideDuration
+            let duration = clip.duration ?? slideDurationD
             boundaries.insert(max(0, start))
-            boundaries.insert(min(slideDuration, start + duration))
+            boundaries.insert(min(slideDurationD, start + duration))
         }
         let sorted = boundaries.sorted()
         guard sorted.count >= 2 else {
             let full = CMTimeRange(
                 start: .zero,
-                duration: CMTime(seconds: Double(slideDuration), preferredTimescale: 600)
+                duration: CMTime(seconds: slideDurationD, preferredTimescale: 600)
             )
             return [CompositionSegment(timeRange: full, activeClipIds: [])]
         }
@@ -134,13 +135,13 @@ public struct VideoCompositor: Sendable {
             guard to > from else { continue }
             let active = clips.compactMap { clip -> String? in
                 let s = clip.startTime ?? 0
-                let d = clip.duration ?? slideDuration
+                let d = clip.duration ?? slideDurationD
                 let e = s + d
                 return (s <= from + 0.0001 && e >= to - 0.0001) ? clip.id : nil
             }
             let range = CMTimeRange(
-                start: CMTime(seconds: Double(from), preferredTimescale: 600),
-                duration: CMTime(seconds: Double(to - from), preferredTimescale: 600)
+                start: CMTime(seconds: from, preferredTimescale: 600),
+                duration: CMTime(seconds: to - from, preferredTimescale: 600)
             )
             segments.append(CompositionSegment(timeRange: range, activeClipIds: active))
         }

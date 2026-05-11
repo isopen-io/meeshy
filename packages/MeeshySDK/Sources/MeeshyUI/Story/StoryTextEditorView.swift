@@ -294,27 +294,27 @@ public struct StoryTextEditorView: View {
     // MARK: - Bindings
 
     private var contentBinding: Binding<String> {
-        Binding(get: { textObject.content }, set: { textObject.content = $0 })
+        Binding(get: { textObject.text }, set: { textObject.text = $0 })
     }
 
     private var sizeBinding: Binding<CGFloat> {
-        Binding(get: { textObject.resolvedSize }, set: { textObject.textSize = $0 })
+        Binding(get: { CGFloat(textObject.resolvedSize) }, set: { textObject.fontSize = Double($0) })
     }
 
     private var startTimeBinding: Binding<Float> {
-        Binding(get: { textObject.startTime ?? 0 }, set: { textObject.startTime = $0 > 0 ? $0 : nil })
+        Binding(get: { Float(textObject.startTime ?? 0) }, set: { textObject.startTime = $0 > 0 ? Double($0) : nil })
     }
 
     private var durationBinding: Binding<Float> {
-        Binding(get: { textObject.displayDuration ?? 0 }, set: { textObject.displayDuration = $0 > 0 ? $0 : nil })
+        Binding(get: { Float(textObject.duration ?? 0) }, set: { textObject.duration = $0 > 0 ? Double($0) : nil })
     }
 
     private var fadeInBinding: Binding<Float> {
-        Binding(get: { textObject.fadeIn ?? 0 }, set: { textObject.fadeIn = $0 > 0 ? $0 : nil })
+        Binding(get: { Float(textObject.fadeIn ?? 0) }, set: { textObject.fadeIn = $0 > 0 ? Double($0) : nil })
     }
 
     private var fadeOutBinding: Binding<Float> {
-        Binding(get: { textObject.fadeOut ?? 0 }, set: { textObject.fadeOut = $0 > 0 ? $0 : nil })
+        Binding(get: { Float(textObject.fadeOut ?? 0) }, set: { textObject.fadeOut = $0 > 0 ? Double($0) : nil })
     }
 
     // MARK: - Helpers

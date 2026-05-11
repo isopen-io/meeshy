@@ -228,12 +228,12 @@ final class StoryModelsExtensionsTests: XCTestCase {
     // MARK: - StoryMediaObject.keyframes extension
 
     func test_storyMediaObject_keyframes_defaultsToNil() {
-        let media = StoryMediaObject()
+        let media = StoryMediaObject(aspectRatio: 1.0)
         XCTAssertNil(media.keyframes)
     }
 
     func test_storyMediaObject_keyframes_canBeAssignedAndPersisted() throws {
-        var media = StoryMediaObject(postMediaId: "pm-1", mediaType: "video")
+        var media = StoryMediaObject(postMediaId: "pm-1", mediaType: "video", aspectRatio: 1.0)
         media.keyframes = [
             StoryKeyframe(time: 0.0, x: 0.0, y: 0.0, scale: 1.0, opacity: 0.0),
             StoryKeyframe(time: 1.0, x: 0.5, y: 0.5, scale: 1.5, opacity: 1.0,
@@ -255,12 +255,12 @@ final class StoryModelsExtensionsTests: XCTestCase {
     // MARK: - StoryTextObject.keyframes extension
 
     func test_storyTextObject_keyframes_defaultsToNil() {
-        let text = StoryTextObject(content: "hello")
+        let text = StoryTextObject(text: "hello")
         XCTAssertNil(text.keyframes)
     }
 
     func test_storyTextObject_keyframes_canBeAssignedAndPersisted() throws {
-        var text = StoryTextObject(content: "hi")
+        var text = StoryTextObject(text: "hi")
         text.keyframes = [
             StoryKeyframe(time: 0.5, opacity: 0.0),
             StoryKeyframe(time: 1.5, opacity: 1.0, easing: .easeIn)
@@ -276,7 +276,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         let json = #"{"id":"t1","content":"hello","x":0.5,"y":0.5,"scale":1.0,"rotation":0}"#.data(using: .utf8)!
         let decoded = try JSONDecoder().decode(StoryTextObject.self, from: json)
         XCTAssertNil(decoded.keyframes)
-        XCTAssertEqual(decoded.content, "hello")
+        XCTAssertEqual(decoded.text, "hello")
     }
 
     // MARK: - Retro-compat: V1 slide JSON decodes into V2
@@ -304,14 +304,15 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertEqual(decoded.id, "s1")
         XCTAssertNil(decoded.effects.clipTransitions)
         XCTAssertNil(decoded.effects.mediaObjects?.first?.keyframes)
-        XCTAssertNil(decoded.effects.textObjects?.first?.keyframes)
+        XCTAssertNil(decoded.effects.textObjects.first?.keyframes)
     }
 
     func test_storySlide_encodeV2_thenDecode_preservesTimelineFields() throws {
         var effects = StoryEffects()
         effects.mediaObjects = [
             StoryMediaObject(id: "m1", postMediaId: "pm",
-                             mediaType: "image", placement: "media")
+                             mediaType: "image", placement: "media",
+                             aspectRatio: 1.0)
         ]
         effects.mediaObjects?[0].keyframes = [
             StoryKeyframe(time: 0.0, x: 0.0, y: 0.0),
@@ -336,6 +337,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         effects.mediaObjects = [
             StoryMediaObject(id: "m1", postMediaId: "pm-1",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 0, duration: 3.0)
         ]
         effects.audioPlayerObjects = [
@@ -344,8 +346,8 @@ final class StoryModelsExtensionsTests: XCTestCase {
                                    volume: 0.8, waveformSamples: [0.1, 0.2])
         ]
         effects.textObjects = [
-            StoryTextObject(id: "t1", content: "Hello",
-                            startTime: 0, displayDuration: 2.0)
+            StoryTextObject(id: "t1", text: "Hello",
+                            startTime: 0, duration: 2.0)
         ]
         effects.clipTransitions = [
             StoryClipTransition(id: "tr1",
@@ -385,7 +387,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         XCTAssertEqual(blank.duration, 8.0)
         XCTAssertEqual(blank.effects.mediaObjects?.count, 1)
         XCTAssertEqual(blank.effects.audioPlayerObjects?.count, 1)
-        XCTAssertEqual(blank.effects.textObjects?.count, 1)
+        XCTAssertEqual(blank.effects.textObjects.count, 1)
         XCTAssertEqual(blank.effects.clipTransitions?.count, 1)
     }
 
@@ -393,8 +395,12 @@ final class StoryModelsExtensionsTests: XCTestCase {
         var slide = makeSlideForProject()
         let project = TimelineProject(from: slide)
         project.apply(to: &slide)
-        let json1 = try JSONEncoder().encode(slide.effects.mediaObjects)
-        let json2 = try JSONEncoder().encode(project.mediaObjects)
+        // Use .sortedKeys: JSONEncoder in iOS 26 SDK does NOT preserve
+        // insertion order across calls, so byte-equality requires sorted keys.
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = .sortedKeys
+        let json1 = try encoder.encode(slide.effects.mediaObjects)
+        let json2 = try encoder.encode(project.mediaObjects)
         XCTAssertEqual(json1, json2)
         XCTAssertEqual(slide.effects.clipTransitions?.count, 1)
     }
@@ -483,8 +489,8 @@ final class StoryModelsExtensionsTests: XCTestCase {
         )
         try cmd.apply(to: &project)
         XCTAssertEqual(project.textObjects.count, 1)
-        XCTAssertEqual(project.textObjects.first?.content, "Hi")
-        XCTAssertEqual(project.textObjects.first?.displayDuration, 2.0)
+        XCTAssertEqual(project.textObjects.first?.text, "Hi")
+        XCTAssertEqual(project.textObjects.first?.duration, 2.0)
     }
 
     func test_addClipCommand_revert_isInverseOfApply_idempotentRoundTrip() throws {
@@ -516,6 +522,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         var project = makeEmptyProject()
         let media = StoryMediaObject(id: "v1", postMediaId: "pm",
                                      mediaType: "video", placement: "media",
+                                     aspectRatio: 1.0,
                                      startTime: 0, duration: 2)
         project.mediaObjects = [media]
         let cmd = DeleteClipCommand(clipId: "v1", kind: .video,
@@ -530,11 +537,11 @@ final class StoryModelsExtensionsTests: XCTestCase {
     func test_deleteClipCommand_revert_restoresClipAtOriginalIndex() throws {
         var project = makeEmptyProject()
         let m1 = StoryMediaObject(id: "v1", postMediaId: "pm1",
-                                  mediaType: "video", placement: "media")
+                                  mediaType: "video", placement: "media", aspectRatio: 1.0)
         let m2 = StoryMediaObject(id: "v2", postMediaId: "pm2",
-                                  mediaType: "video", placement: "media")
+                                  mediaType: "video", placement: "media", aspectRatio: 1.0)
         let m3 = StoryMediaObject(id: "v3", postMediaId: "pm3",
-                                  mediaType: "video", placement: "media")
+                                  mediaType: "video", placement: "media", aspectRatio: 1.0)
         project.mediaObjects = [m1, m2, m3]
         let cmd = DeleteClipCommand(clipId: "v2", kind: .video,
                                     snapshotMedia: m2, snapshotAudio: nil,
@@ -558,7 +565,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
 
     func test_deleteClipCommand_codableRoundTrip() throws {
         let media = StoryMediaObject(id: "v1", postMediaId: "pm",
-                                     mediaType: "video", placement: "media")
+                                     mediaType: "video", placement: "media", aspectRatio: 1.0)
         let cmd = DeleteClipCommand(clipId: "v1", kind: .video,
                                     snapshotMedia: media, snapshotAudio: nil,
                                     snapshotText: nil, insertionIndex: 0)
@@ -575,6 +582,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 1.0, duration: 2.0)
         ]
         let cmd = MoveClipCommand(clipId: "v1", kind: .video,
@@ -624,6 +632,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 0, duration: 5.0)
         ]
         let cmd = TrimClipCommand(clipId: "v1", kind: .video,
@@ -637,15 +646,15 @@ final class StoryModelsExtensionsTests: XCTestCase {
     func test_trimClipCommand_apply_textUsesDisplayDuration() throws {
         var project = makeEmptyProject()
         project.textObjects = [
-            StoryTextObject(id: "t1", content: "hi",
-                            startTime: 0, displayDuration: 5.0)
+            StoryTextObject(id: "t1", text: "hi",
+                            startTime: 0, duration: 5.0)
         ]
         let cmd = TrimClipCommand(clipId: "t1", kind: .text,
                                   oldStartTime: 0, oldDuration: 5.0,
                                   newStartTime: 0.5, newDuration: 4.0)
         try cmd.apply(to: &project)
         XCTAssertEqual(project.textObjects[0].startTime, 0.5)
-        XCTAssertEqual(project.textObjects[0].displayDuration, 4.0)
+        XCTAssertEqual(project.textObjects[0].duration, 4.0)
     }
 
     func test_trimClipCommand_revert_restoresOldValues() throws {
@@ -681,6 +690,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 0, duration: 5.0)
         ]
         let cmd = SplitClipCommand(clipId: "v1", kind: .video,
@@ -699,6 +709,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         var project = makeEmptyProject()
         let original = StoryMediaObject(id: "v1", postMediaId: "pm",
                                         mediaType: "video", placement: "media",
+                                        aspectRatio: 1.0,
                                         startTime: 0, duration: 5.0)
         project.mediaObjects = [original]
         let cmd = SplitClipCommand(clipId: "v1", kind: .video,
@@ -871,6 +882,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 0, duration: 5)
         ]
         return project
@@ -1020,7 +1032,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         var project = makeEmptyProject()
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
-                             mediaType: "video", placement: "media")
+                             mediaType: "video", placement: "media", aspectRatio: 1.0)
         ]
         let cmd = SetClipPropertyCommand(clipId: "v1", kind: .video,
                                          property: .fadeIn(old: nil, new: 0.5))
@@ -1032,7 +1044,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
         var project = makeEmptyProject()
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm",
-                             mediaType: "video", placement: "media")
+                             mediaType: "video", placement: "media", aspectRatio: 1.0)
         ]
         let cmd = SetClipPropertyCommand(clipId: "v1", kind: .video,
                                          property: .loop(old: nil, new: true))
@@ -1055,7 +1067,7 @@ final class StoryModelsExtensionsTests: XCTestCase {
 
     func test_setClipPropertyCommand_apply_setsIsLockedOnText() throws {
         var project = makeEmptyProject()
-        project.textObjects = [StoryTextObject(id: "t1", content: "x")]
+        project.textObjects = [StoryTextObject(id: "t1", text: "x")]
         let cmd = SetClipPropertyCommand(clipId: "t1", kind: .text,
                                          property: .isLocked(old: nil, new: true))
         try cmd.apply(to: &project)
@@ -1094,11 +1106,11 @@ final class StoryModelsExtensionsTests: XCTestCase {
 
     private func makeAllCommandCases() -> [AnyEditCommand] {
         let media = StoryMediaObject(id: "v1", postMediaId: "pm",
-                                     mediaType: "video", placement: "media")
+                                     mediaType: "video", placement: "media", aspectRatio: 1.0)
         let audio = StoryAudioPlayerObject(id: "a1", postMediaId: "pm",
                                            placement: "overlay",
                                            waveformSamples: [])
-        let text = StoryTextObject(id: "t1", content: "hi")
+        let text = StoryTextObject(id: "t1", text: "hi")
         let transition = StoryClipTransition(id: "tr1", fromClipId: "v1",
                                              toClipId: "v2", kind: .crossfade,
                                              duration: 0.4)
@@ -1194,9 +1206,11 @@ final class StoryModelsExtensionsTests: XCTestCase {
         project.mediaObjects = [
             StoryMediaObject(id: "v1", postMediaId: "pm1",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 0, duration: 5),
             StoryMediaObject(id: "v2", postMediaId: "pm2",
                              mediaType: "video", placement: "media",
+                             aspectRatio: 1.0,
                              startTime: 5, duration: 3),
         ]
         project.mediaObjects[0].keyframes = [
@@ -1208,8 +1222,8 @@ final class StoryModelsExtensionsTests: XCTestCase {
                                    waveformSamples: [], startTime: 0, duration: 8)
         ]
         project.textObjects = [
-            StoryTextObject(id: "t1", content: "Title",
-                            startTime: 0, displayDuration: 4)
+            StoryTextObject(id: "t1", text: "Title",
+                            startTime: 0, duration: 4)
         ]
         project.clipTransitions = [
             StoryClipTransition(id: "tr-existing", fromClipId: "v1",
@@ -1227,14 +1241,15 @@ final class StoryModelsExtensionsTests: XCTestCase {
     func test_allEditCommands_applyThenRevert_isIdempotentOnRichProject() throws {
         let media = StoryMediaObject(id: "v1", postMediaId: "pm1",
                                      mediaType: "video", placement: "media",
+                                     aspectRatio: 1.0,
                                      startTime: 0, duration: 5,
                                      keyframes: [StoryKeyframe(id: "kf-existing", time: 1, opacity: 0.5)])
         let audio = StoryAudioPlayerObject(id: "a1", postMediaId: "pmA",
                                            placement: "overlay", volume: 1.0,
                                            waveformSamples: [],
                                            startTime: 0, duration: 8)
-        let text = StoryTextObject(id: "t1", content: "Title",
-                                   startTime: 0, displayDuration: 4)
+        let text = StoryTextObject(id: "t1", text: "Title",
+                                   startTime: 0, duration: 4)
         let existingTransition = StoryClipTransition(
             id: "tr-existing", fromClipId: "v1", toClipId: "v2",
             kind: .crossfade, duration: 0.5

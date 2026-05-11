@@ -669,13 +669,11 @@ extension StoryViewerView {
             }
         }
 
-        // Durées des text objects — startTime + displayDuration
-        if let textObjects = effects?.textObjects {
-            for obj in textObjects {
-                let startOffset = Double(obj.startTime ?? 0)
-                if let displayDur = obj.displayDuration {
-                    maxDuration = max(maxDuration, startOffset + Double(displayDur))
-                }
+        // Durées des text objects — startTime + duration
+        for obj in effects?.textObjects ?? [] {
+            let startOffset = obj.startTime ?? 0
+            if let dur = obj.duration {
+                maxDuration = max(maxDuration, startOffset + dur)
             }
         }
 

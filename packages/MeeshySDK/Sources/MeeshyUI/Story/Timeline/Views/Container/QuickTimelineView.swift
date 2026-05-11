@@ -345,10 +345,10 @@ public struct QuickTimelineView: View {
             VideoClipBar(
                 clipId: media.id,
                 title: Self.clipTitle(for: media, isSynthetic: isSynthetic),
-                startTime: media.startTime ?? 0,
-                duration: media.duration ?? 0,
-                fadeIn: media.fadeIn ?? 0,
-                fadeOut: media.fadeOut ?? 0,
+                startTime: Float(media.startTime ?? 0),
+                duration: Float(media.duration ?? 0),
+                fadeIn: Float(media.fadeIn ?? 0),
+                fadeOut: Float(media.fadeOut ?? 0),
                 isSelected: viewModel.selection.selectedClipId == media.id,
                 isLocked: isSynthetic,
                 isDark: colorScheme == .dark,
@@ -420,9 +420,9 @@ public struct QuickTimelineView: View {
         } else if let text = viewModel.project.textObjects.first(where: { $0.id == clipId }) {
             TextClipBar(
                 clipId: text.id,
-                content: text.content,
-                startTime: text.startTime ?? 0,
-                duration: text.displayDuration ?? 0,
+                content: text.text,
+                startTime: Float(text.startTime ?? 0),
+                duration: Float(text.duration ?? 0),
                 isSelected: viewModel.selection.selectedClipId == text.id,
                 isLocked: false,
                 isDark: colorScheme == .dark,
@@ -433,7 +433,7 @@ public struct QuickTimelineView: View {
                 onLongPress: { viewModel.selectClip(id: text.id) },
                 onMoveDelta: { delta in
                     let textId = text.id
-                    let originalStart = text.startTime ?? 0
+                    let originalStart = Float(text.startTime ?? 0)
                     viewModel.beginClipDrag(clipId: textId)
                     viewModel.dragClipMoved(
                         rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
