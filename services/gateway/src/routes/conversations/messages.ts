@@ -23,7 +23,7 @@ import type {
   SendMessageBody,
   MessagesQuery
 } from './types';
-import { enhancedLogger } from '../../utils/logger-enhanced';
+import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
@@ -1313,6 +1313,17 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Participant identification failed');
       }
 
+      const corr: Record<string, any> = {
+        clientMessageId,
+        conversationId: id,
+        participantId,
+        route: 'POST /conversations/:id/messages'
+      };
+      const routeStart = Date.now();
+      logger.info('perf:http.message.post', {
+        ...corr, step: 'http.message.post', phase: 'start'
+      });
+
       // Utiliser le MessagingService unifié
       const { MessagingService } = await import('../../services/messaging/MessagingService');
       const messagingService = new MessagingService(
@@ -1349,6 +1360,11 @@ export function registerMessagesRoutes(
       const result = await messagingService.handleMessage(messageRequest, participantId);
 
       if (!result.success) {
+        logger.info('perf:http.message.post', {
+          ...corr, step: 'http.message.post', phase: 'end',
+          durationMs: Date.now() - routeStart, success: false,
+          error: result.error
+        });
         return sendBadRequest(reply, result.error || 'Invalid message request');
       }
 
@@ -1361,6 +1377,12 @@ export function registerMessagesRoutes(
           });
         });
       }
+
+      logger.info('perf:http.message.post', {
+        ...corr, step: 'http.message.post', phase: 'end',
+        durationMs: Date.now() - routeStart, success: true,
+        messageId: result.data?.id
+      });
 
       return reply.send(result);
 
