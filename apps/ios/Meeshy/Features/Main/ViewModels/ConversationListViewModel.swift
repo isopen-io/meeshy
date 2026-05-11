@@ -1007,9 +1007,37 @@ class ConversationListViewModel: ObservableObject {
     /// home. Sépare l'orchestration de cache du fetch reseau qui suit
     /// (forceRefresh), pour que les tests unitaires puissent vérifier
     /// la liste exacte des stores touchés.
+    ///
+    /// Couvre 11 caches pertinents pour la home :
+    /// - Listing + pagination (re-fetché immédiatement par forceRefresh)
+    /// - Stories (re-fetché actif par StoryViewModel.loadStories forceNetwork)
+    /// - Messages cached par conversation (l'ouverture d'une conv après
+    ///   refresh re-fetchera depuis le serveur)
+    /// - Préférences user/conversation, catégories, tags
+    /// - Profils (mood, presence, last seen)
+    /// - Assets visuels (avatars, bannières, thumbs)
+    /// - Caches mémoire de traduction/transcription : re-traduction
+    ///   garantie après refresh (utile si modèle NLLB côté serveur a
+    ///   été mis à jour ou si l'utilisateur a changé sa langue préférée)
+    ///
+    /// Stores intentionnellement laissés intacts (autres écrans ou
+    /// coût bande passante prohibitif) : feed, comments, stats,
+    /// notifications, friends, friendRequests, blockedUsers, userSearch,
+    /// timeline, audio, video, affiliateTokens, shareLinks,
+    /// trackingLinks, communityLinks.
     private func invalidatePullRefreshScope() async {
         // Listing + pagination (re-fetché immédiatement par forceRefresh)
         await CacheCoordinator.shared.conversations.invalidateAll()
+        // Messages cached par conversation. Les previews dans la listing
+        // viennent de l'API (forceRefresh), mais l'historique cached est
+        // re-fetché à l'ouverture de la conv pour avoir le dernier état.
+        await CacheCoordinator.shared.messages.invalidateAll()
+        // Participants / membres des conversations (groupes, communautés)
+        await CacheCoordinator.shared.participants.invalidateAll()
+        // Stories : redondant avec StoryViewModel.loadStories(forceNetwork:)
+        // qui écrase via .save, mais explicite garantit que si le fetch
+        // échoue le cache stale ne persiste pas.
+        await CacheCoordinator.shared.stories.invalidateAll()
         // Préférences (re-fetch lazy au prochain accès paramètres conv)
         await CacheCoordinator.shared.conversationPreferences.invalidateAll()
         await CacheCoordinator.shared.userPreferences.invalidateAll()
@@ -1023,6 +1051,10 @@ class ConversationListViewModel: ObservableObject {
         // prochain rendu des AsyncImage.
         await CacheCoordinator.shared.images.invalidateAll()
         await CacheCoordinator.shared.thumbnails.invalidateAll()
+        // Caches in-memory de traduction/transcription/audio + DB. Force
+        // une retraduction si le serveur a publié de nouvelles versions
+        // ou si l'utilisateur a changé sa langue préférée entre temps.
+        await CacheCoordinator.shared.invalidateTranslationCaches()
     }
 
     // MARK: - Persist Category Expansion

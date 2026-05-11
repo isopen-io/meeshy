@@ -572,4 +572,24 @@ public actor CacheCoordinator {
     private nonisolated func clearTranslationCacheDB() {
         try? db.write { db in try TranslationCacheRecord.deleteAll(db) }
     }
+
+    /// Purge ciblée des 3 caches in-memory de traduction/transcription +
+    /// la table GRDB `TranslationCacheRecord`. Exposé publiquement pour
+    /// que le pull-to-refresh (ou tout autre flow voulant re-traduire)
+    /// puisse forcer un re-fetch des traductions sans toucher aux
+    /// stores principaux (conversations, messages, etc.).
+    ///
+    /// Cas d'usage : l'utilisateur tire-pour-rafraîchir et veut
+    /// récupérer les éventuelles re-traductions côté serveur (modèle
+    /// NLLB mis à jour, contenu édité, langue préférée changée).
+    public func invalidateTranslationCaches() {
+        translationCache.removeAll()
+        translationInsertionOrder.removeAll()
+        translationTimestamps.removeAll()
+        transcriptionCache.removeAll()
+        transcriptionInsertionOrder.removeAll()
+        audioTranslationCache.removeAll()
+        audioTranslationInsertionOrder.removeAll()
+        clearTranslationCacheDB()
+    }
 }

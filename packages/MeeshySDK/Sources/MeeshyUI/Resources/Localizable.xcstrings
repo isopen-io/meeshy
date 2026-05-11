@@ -12821,6 +12821,39 @@
     "Promouvoir Moderateur" : {
 
     },
+    "pull_refresh.armed" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Relâcher pour rafraîchir"
+          }
+        }
+      }
+    },
+    "pull_refresh.done" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rafraîchi"
+          }
+        }
+      }
+    },
+    "pull_refresh.refreshing" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rafraîchissement en cours"
+          }
+        }
+      }
+    },
     "Read" : {
 
     },
