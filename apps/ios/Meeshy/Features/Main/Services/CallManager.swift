@@ -269,9 +269,26 @@ final class CallManager: ObservableObject {
         callState = .ringing(isOutgoing: true)
         lastCallWasOutgoing = true
 
-        // Phase 1.5 — start ringback tone immediately when caller initiates.
-        // The tone plays until state transitions to .connected or .ended.
-        ringbackPlayer.start()
+        // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT (root-cause test) —
+        // RingbackTonePlayer relies on AVAudioPlayer, which silently auto-
+        // activates the AVAudioSession with a default category the FIRST
+        // time `play()` succeeds. On a fresh outgoing call this fires
+        // BEFORE `configureAudioSession()` (which is inside an async Task
+        // waiting on the gateway ACK) AND before CallKit's own
+        // `provider:didActivate:audioSession:` callback — leaving the
+        // session in an "already active but with the wrong owner" state
+        // that prevents CallKit from taking control. The user-visible
+        // symptom matches exactly: CallKit fires an autonomous
+        // `CXEndCallAction` 2-3 s in with state=`.ringing(isOutgoing: true)`
+        // and `didActivate` is never observed. Skipping the ringback start
+        // here isolates this hypothesis — if outgoing calls now survive
+        // past the 3-second mark, the ringback start path is the offender
+        // and we need to defer it until after CallKit's `didActivate`
+        // (or migrate it off AVAudioPlayer entirely).
+        // The downstream stop() in transitionToConnected/endCallInternal
+        // remains a no-op when no player is allocated, so this is safe.
+        // ringbackPlayer.start()
+        Logger.calls.info("[CALLKIT_DIAG] ringback start INTENTIONALLY SKIPPED (root-cause test)")
         startOutgoingRingTimeout()
 
         let uuid = UUID()
