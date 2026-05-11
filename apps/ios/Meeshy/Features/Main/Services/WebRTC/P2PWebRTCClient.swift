@@ -139,7 +139,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     func startLocalMedia(type: CallMediaType) async throws {
         Logger.webrtc.info("[WEBRTC] startLocalMedia begin type=\(String(describing: type))")
-        guard peerConnection != nil else { throw WebRTCError.noPeerConnection }
+        guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
 
         let audioConstraints = RTCMediaConstraints(
             mandatoryConstraints: [
@@ -165,8 +165,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let audioInit = RTCRtpTransceiverInit()
         audioInit.direction = .sendRecv
         audioInit.streamIds = ["meeshy-stream-0"]
-        guard let pc = peerConnection,
-              let audioTransceiver = pc.addTransceiver(of: .audio, init: audioInit) else {
+        guard let audioTransceiver = pc.addTransceiver(of: .audio, init: audioInit) else {
             throw WebRTCError.failedToCreatePeerConnection
         }
         audioTransceiver.sender.track = audioTrack
@@ -198,8 +197,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let videoInit = RTCRtpTransceiverInit()
         videoInit.direction = .sendRecv
         videoInit.streamIds = ["meeshy-stream-0"]
-        guard let pc = peerConnection,
-              let videoTransceiver = pc.addTransceiver(of: .video, init: videoInit) else {
+        guard let videoTransceiver = pc.addTransceiver(of: .video, init: videoInit) else {
             throw WebRTCError.failedToCreatePeerConnection
         }
         videoTransceiver.sender.track = videoTrack
@@ -261,12 +259,18 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
 
+        // Force selection of the throwing `setCodecPreferences:error:` overload
+        // via an explicit typed function reference. Without it, Swift overload
+        // resolution silently picks the deprecated void variant (compiler warns
+        // "no calls to throwing functions occur within 'try' expression" and
+        // 'catch' block is unreachable).
         do {
-            try audioTransceiver.setCodecPreferences(preferred)
+            let setCodecs: ([RTCRtpCodecCapability]) throws -> Void = audioTransceiver.setCodecPreferences
+            try setCodecs(preferred)
             let names = preferred.map { $0.name }.joined(separator: ", ")
             Logger.webrtc.info("[WEBRTC] audio codec preferences applied: \(names, privacy: .public)")
         } catch {
-            Logger.webrtc.warning("[WEBRTC] setCodecPreferences failed: \(error.localizedDescription, privacy: .public)")
+            Logger.webrtc.warning("[WEBRTC] setCodecPreferences (audio) threw: \(error.localizedDescription, privacy: .public)")
         }
 
         // Phase 2 — apply Opus bitrate range via RTCRtpEncodingParameters.
@@ -315,12 +319,15 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
 
+        // See applyAudioCodecPreferences for the typed-function-reference
+        // rationale (forces the throwing overload over the deprecated void one).
         do {
-            try videoTransceiver.setCodecPreferences(preferred)
+            let setCodecs: ([RTCRtpCodecCapability]) throws -> Void = videoTransceiver.setCodecPreferences
+            try setCodecs(preferred)
             let names = preferred.map { $0.name }.joined(separator: ", ")
             Logger.webrtc.info("[WEBRTC] video codec preferences applied: \(names, privacy: .public)")
         } catch {
-            Logger.webrtc.warning("[WEBRTC] setCodecPreferences (video) failed: \(error.localizedDescription, privacy: .public)")
+            Logger.webrtc.warning("[WEBRTC] setCodecPreferences (video) threw: \(error.localizedDescription, privacy: .public)")
         }
     }
 
@@ -569,6 +576,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         localVideoTrack_ = nil
         remoteVideoTrack_ = nil
         remoteAudioTrack_ = nil
+        audioTransceiver = nil
+        videoTransceiver = nil
         videoCapturer = nil
         Logger.webrtc.info("Peer connection disconnected and cleaned up")
     }
@@ -646,7 +655,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         // 9e663039 — the PT/PT bug was the real cause, not DTX.
         // Reference §3.8 + ADR-4.
         let opusParams = [
-            "maxaveragebitrate=128000",
+            "maxaveragebitrate=64000",
             "stereo=1",
             "useinbandfec=1",
             "usedtx=1",
