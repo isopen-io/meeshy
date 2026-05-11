@@ -340,7 +340,13 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 let decodeMs = (CFAbsoluteTimeGetCurrent() - decodeStart) * 1000
                 let totalMs = networkMs + decodeMs
                 if totalMs > 1000 {
-                    logger.warning("Slow request: \(method) \(endpoint) → \(statusCode) network=\(Int(networkMs))ms decode=\(Int(decodeMs))ms total=\(Int(totalMs))ms size=\(data.count)B")
+                    // Append the query string so a "slow request" line is
+                    // enough to disambiguate `/conversations?offset=0` from
+                    // `/conversations?updatedSince=...` from `/conversations?before=...`.
+                    // Without it, a runaway pagination loop is invisible —
+                    // every line looks like the same endpoint.
+                    let qs = url.query.map { "?\($0)" } ?? ""
+                    logger.warning("Slow request: \(method) \(endpoint)\(qs) → \(statusCode) network=\(Int(networkMs))ms decode=\(Int(decodeMs))ms total=\(Int(totalMs))ms size=\(data.count)B")
                 }
                 return result
             }

@@ -18,6 +18,16 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     @Published public var pendingNotificationPayload: NotificationPayload?
 
     private static let persistedTokenKey = "com.meeshy.push.deviceToken"
+    private static let lastRegisteredTokenKey = "com.meeshy.push.lastRegisteredToken"
+    private static let lastRegisteredAtKey = "com.meeshy.push.lastRegisteredAt"
+
+    /// Cooldown applique a l'enregistrement APNs sur le backend. Sans ce
+    /// throttle, un cold start declenche typiquement DEUX POSTs successifs
+    /// (re-register du token persiste + register du token natif fraichement
+    /// recu par iOS), qui sont strictement identiques. Au-dela du cooldown
+    /// on accepte de re-poster, car le serveur peut avoir perdu l'association
+    /// (changement de compte sur le meme device, p.ex.).
+    private static let registrationCooldown: TimeInterval = 300
 
     private override init() {
         super.init()
@@ -168,6 +178,21 @@ public final class PushNotificationManager: NSObject, ObservableObject {
             return
         }
 
+        // Idempotence: skip if the EXACT same token was registered in the
+        // recent past. Cold start typically chains `reRegisterTokenIfNeeded`
+        // (persisted token from previous session) with `registerDeviceToken`
+        // (native callback firing right after) — both posted the same token
+        // back-to-back, generating duplicate 10s+ POSTs in the slow-request log.
+        let now = Date()
+        let lastToken = UserDefaults.standard.string(forKey: Self.lastRegisteredTokenKey)
+        let lastAt = UserDefaults.standard.object(forKey: Self.lastRegisteredAtKey) as? Date
+        if lastToken == token,
+           let lastAt,
+           now.timeIntervalSince(lastAt) < Self.registrationCooldown {
+            logger.debug("Skipping token registration: same token registered \(Int(now.timeIntervalSince(lastAt)))s ago")
+            return
+        }
+
         let request = RegisterDeviceTokenRequest(
             token: token,
             platform: "ios",
@@ -180,6 +205,8 @@ public final class PushNotificationManager: NSObject, ObservableObject {
                 endpoint: "/users/register-device-token",
                 body: request
             )
+            UserDefaults.standard.set(token, forKey: Self.lastRegisteredTokenKey)
+            UserDefaults.standard.set(now, forKey: Self.lastRegisteredAtKey)
             logger.info("Device token registered with backend (env=\(Self.apnsEnvironment))")
         } catch {
             logger.error("Failed to register device token: \(error.localizedDescription)")

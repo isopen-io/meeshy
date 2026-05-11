@@ -45,6 +45,21 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
     private var socketSubscriptions = Set<AnyCancellable>()
 
+    // Cooldown between successive delta syncs. The gateway delta endpoint
+    // is cheap (~10-50 ms) but a chatty socket that flaps reconnect every
+    // 200 ms used to spam `/conversations?updatedSince=...` once per flap
+    // — multiplied by N listeners (we historically had two for the same
+    // `didReconnect` signal). Cooldown is a small wall-clock window: if
+    // a delta sync just ran, skip until the window elapses. Cold-start
+    // `fullSync` is unaffected because it runs through the `isSyncing`
+    // path, not this guard.
+    private var _lastDeltaSyncAt: Date = .distantPast
+    private var lastDeltaSyncAt: Date {
+        get { stateQueue.sync { _lastDeltaSyncAt } }
+        set { stateQueue.sync { _lastDeltaSyncAt = newValue } }
+    }
+    private let deltaSyncCooldown: TimeInterval = 3
+
     // Dependencies
     private let cache: CacheCoordinator
     private let conversationService: ConversationServiceProviding
@@ -268,7 +283,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         var hasMore = totalCount == nil
             ? firstPageReturnedCount > 0
             : (offset < (totalCount ?? 0))
-        while hasMore {
+        // Hard ceiling on tail iterations as a last-resort safety belt.
+        // The progress guards below should always trip first; this keeps
+        // a misbehaving gateway from spamming the network indefinitely
+        // even if those guards were ever bypassed by a future refactor.
+        var tailIterations = 0
+        let maxTailIterations = 50
+        while hasMore && tailIterations < maxTailIterations {
+            tailIterations += 1
             do {
                 let response = try await Self.fetchPageWithRetry(via: service, offset: offset, limit: pageSize)
                 let page = response.data.map { $0.toConversation(currentUserId: userId) }
@@ -283,21 +305,37 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 // Trust the backend's `hasMore` if present; otherwise
                 // assume "full page = more might follow" so we keep
                 // probing instead of stopping at a backend-capped page.
+                //
+                // We removed the older `data.count == firstPageReturnedCount`
+                // heuristic because it created an infinite loop when the
+                // gateway consistently returned the same page size (offset
+                // was stagnating but the heuristic kept claiming "more
+                // might follow"). The `newItems.isEmpty` guard below is the
+                // correct stop signal: zero new ids = zero progress.
                 let backendHasMore = response.pagination?.hasMore
                 if let backendHasMore {
                     hasMore = backendHasMore
                 } else {
-                    hasMore = response.data.count >= pageSize || response.data.count == firstPageReturnedCount
+                    hasMore = response.data.count >= pageSize
                 }
                 offset += response.data.count
-                // Safety belt: if the server returned 0 items, abort —
-                // otherwise we'd loop forever on a misconfigured endpoint.
-                if response.data.isEmpty { hasMore = false }
+                // Progress guards. STOP when:
+                //   - the server returned an empty page (canonical EOF), or
+                //   - the page contained ZERO new ids (offset stagnation —
+                //     the gateway is replaying the same window). Without
+                //     this we hammered `/conversations` forever on a
+                //     misconfigured pagination response.
+                if response.data.isEmpty || newItems.isEmpty {
+                    hasMore = false
+                }
             } catch {
                 Self.logger.error("[SyncEngine] fullSync tail error: \(error.localizedDescription)")
                 succeeded = false
                 break
             }
+        }
+        if tailIterations >= maxTailIterations {
+            Self.logger.error("[SyncEngine] fullSync tail aborted after \(maxTailIterations) iterations — pagination likely stuck (offset=\(offset), merged=\(merged.count))")
         }
 
         if succeeded {
@@ -311,6 +349,16 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     @discardableResult
     public func syncSinceLastCheckpoint() async -> Bool {
         guard !isSyncing else { return true }
+        // Throttle bursts: when several signals (socket reconnect,
+        // foreground return, cache-stale revalidate) fire within the
+        // same window, only the first one hits the network. Returning
+        // `true` is intentional — from the caller's perspective the
+        // delta is "fresh enough" since a recent one just landed.
+        let now = Date()
+        if now.timeIntervalSince(lastDeltaSyncAt) < deltaSyncCooldown {
+            return true
+        }
+        lastDeltaSyncAt = now
         isSyncing = true
         defer { isSyncing = false }
 
