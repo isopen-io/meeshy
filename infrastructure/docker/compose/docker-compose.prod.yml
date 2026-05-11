@@ -438,17 +438,48 @@ services:
     network_mode: host
     volumes:
       - ../config/turnserver.prod.conf:/etc/turnserver.template.conf:ro
-      - /etc/letsencrypt:/etc/letsencrypt:ro
+      - traefik_dumped_certs:/etc/coturn/dumped:ro
     environment:
       - TURN_SECRET=${TURN_SECRET}
     entrypoint:
       - /bin/sh
       - -c
       - |
+        set -e
         if [ -z "$$TURN_SECRET" ] || [ "$$TURN_SECRET" = "__TURN_SECRET__" ] || [ "$$TURN_SECRET" = "meeshy-turn-secret-CHANGE-IN-PRODUCTION" ]; then
           echo "[FATAL] TURN_SECRET env var must be set to a strong, non-default value before starting coturn." >&2
           exit 1
         fi
+
+        CERT_FILE=/etc/coturn/dumped/certs/turn.meeshy.me.crt
+        KEY_FILE=/etc/coturn/dumped/private/turn.meeshy.me.key
+
+        # 1) Attendre que le dumper ait extrait les certs (bornage : 5 min)
+        retry=0
+        while [ ! -f "$$CERT_FILE" ] || [ ! -f "$$KEY_FILE" ]; do
+          retry=$$((retry + 1))
+          if [ $$retry -gt 30 ]; then
+            echo "[FATAL] coturn cert files not present after 5min - dumper failure or first-issuance pending" >&2
+            exit 1
+          fi
+          echo "[coturn] waiting for cert files in /etc/coturn/dumped (try $$retry/30)"
+          sleep 10
+        done
+
+        # 2) Installer inotify-tools (image coturn officielle = alpine)
+        apk add --no-cache inotify-tools >/dev/null 2>&1 || {
+          echo "[WARN] apk add inotify-tools failed - auto-reload desactive, un restart manuel sera necessaire au prochain renewal" >&2
+        }
+
+        # 3) Watcher en arriere-plan : SIGUSR2 self quand le .crt change
+        if command -v inotifywait >/dev/null 2>&1; then
+          (
+            while inotifywait -q -e close_write,move -- "$$CERT_FILE" >/dev/null; do
+              pkill -USR2 turnserver && echo "[coturn] cert changed, SIGUSR2 sent"
+            done
+          ) &
+        fi
+
         sed "s|__TURN_SECRET__|$$TURN_SECRET|g" /etc/turnserver.template.conf > /tmp/turnserver.conf
         exec turnserver -c /tmp/turnserver.conf
     restart: unless-stopped
@@ -458,6 +489,57 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+    depends_on:
+      certs-dumper:
+        condition: service_started
+
+  # ===========================================================================
+  # TURN CERT STUB - Router Traefik factice pour declencher l emission ACME
+  # ===========================================================================
+  # Ce service ne sert AUCUNE fonctionnalite produit. Il existe uniquement pour
+  # que Traefik ait un router avec Host(`turn.meeshy.me`), ce qui declenche
+  # l emission d un certificat Let s Encrypt via le challenge TLS-ALPN-01.
+  # Le certificat est ensuite extrait par `certs-dumper` et consomme par coturn.
+  turn-cert-stub:
+    image: nginx:alpine
+    container_name: meeshy-turn-cert-stub
+    restart: unless-stopped
+    networks:
+      - meeshy-network
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.turn-cert-stub.rule=Host(`turn.${DOMAIN:-meeshy.me}`)"
+      - "traefik.http.routers.turn-cert-stub.entrypoints=websecure"
+      - "traefik.http.routers.turn-cert-stub.tls.certresolver=letsencrypt"
+      - "traefik.http.services.turn-cert-stub.loadbalancer.server.port=80"
+
+  # ===========================================================================
+  # CERTS DUMPER - Extrait acme.json en PEM (consomme par coturn)
+  # ===========================================================================
+  # Surveille /letsencrypt/acme.json via inotify et ecrit chaque certificat
+  # extrait dans /dumped/certs/<domain>.crt + /dumped/private/<domain>.key
+  # (structure de sortie par defaut de ldez/traefik-certs-dumper v2).
+  # Pas de --post-hook : le reload coturn est pilote cote coturn via
+  # inotifywait, ce qui evite tout mount de docker.sock.
+  certs-dumper:
+    image: ldez/traefik-certs-dumper:v2.8.6
+    container_name: meeshy-certs-dumper
+    restart: unless-stopped
+    entrypoint:
+      - traefik-certs-dumper
+      - file
+      - --version=v2
+      - --watch
+      - --source=/letsencrypt/acme.json
+      - --dest=/dumped
+    volumes:
+      - traefik_certs:/letsencrypt:ro
+      - traefik_dumped_certs:/dumped
+    networks:
+      - meeshy-network
+    depends_on:
+      traefik:
+        condition: service_started
 
 # =============================================================================
 # VOLUMES
@@ -473,6 +555,8 @@ volumes:
     name: meeshy-redis-ui-data
   traefik_certs:
     name: meeshy-traefik-certs
+  traefik_dumped_certs:
+    name: meeshy-traefik-dumped-certs
   models_data:
     name: meeshy-models-data
   gateway_uploads:
