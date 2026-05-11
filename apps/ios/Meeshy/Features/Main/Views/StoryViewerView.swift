@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -351,6 +352,16 @@ struct StoryViewerView: View {
                             }
                         }
                     }
+                },
+                onStoryImported: { result in
+                    // UnifiedPostComposer has no canvas-overlay state of its own
+                    // (constraint D-8), so the reprojected items aren't placed
+                    // visually. We log the structured RepostImportResult so the
+                    // signal isn't silently lost — useful for diagnostics when
+                    // an aspect-ratio mismatch produced unexpected clamping.
+                    Logger.stories.info(
+                        "repost.import slide=\(result.targetSize.width, privacy: .public)x\(result.targetSize.height, privacy: .public) texts=\(result.texts.count, privacy: .public) media=\(result.media.count, privacy: .public) stickers=\(result.stickers.count, privacy: .public) drawing=\(result.drawingData != nil, privacy: .public) audios=\(result.audios.count, privacy: .public) clamped=\(result.warnings.count, privacy: .public)"
+                    )
                 },
                 onDismiss: { editAndRepostAsPostSource = nil }
             )
