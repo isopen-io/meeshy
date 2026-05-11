@@ -294,6 +294,21 @@ final class CallManager: ObservableObject {
                 update.localizedCallerName = displayName
                 update.hasVideo = isVideo
                 provider.reportCall(with: uuid, updated: update)
+
+                // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT —
+                // CallKit autonomously fires `CXEndCallAction` (~4-5 seconds
+                // after `CXStartCallAction.fulfill()`) on outgoing calls that
+                // never report progress, which surfaced in production as
+                // "calls drop after 2-4 seconds" before the SDP answer round-
+                // trip completes. Reporting `startedConnectingAt` here as
+                // soon as the transaction is accepted signals to CallKit
+                // that the call is making progress, so it waits for our
+                // explicit `outgoingRingTimeoutSeconds` budget (45 s) instead
+                // of killing the call out from under us. The later call from
+                // `handleRemoteAnswer` (P1-12) still fires once the real
+                // answer lands — CallKit accepts that as a refresh of the
+                // connecting timestamp and uses it to drive the system UI.
+                provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
             }
         }
 
@@ -1725,13 +1740,27 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
-        // Audit P1-11 — fulfill AFTER endCall completes. With sync fulfill
-        // before the Task ran, CallKit could fire provider:didDeactivate:
-        // (which sets RTCAudioSession.isAudioEnabled = false) before
-        // webRTCService.close() had a chance to tear down — leaving the
-        // ordering hazard that produced spurious CXErrorCodeRequestTransactionError
-        // logs on rapid hangup.
+        // Diagnostic — `CXEndCallAction` is the only path through which the
+        // system asks us to hang up. It fires from:
+        //   1. Lock-screen / in-call "End" button taps (user action),
+        //   2. our own `callController.request(CXEndCallAction)` call from
+        //      `endCall()` (loop-back: we asked CallKit to end the call,
+        //      not the other way around),
+        //   3. CallKit autonomously deciding an outgoing call is stuck
+        //      (e.g. no `reportOutgoingCall(_:startedConnectingAt:)` within
+        //      its internal grace window) — this is the case we suspect for
+        //      the "calls drop after 2-4 seconds" symptom.
+        // Logging the call's UUID and current state here distinguishes (1)/(3)
+        // from the in-app loop-back: in (2), `callState` is already `.ended`
+        // by the time this delegate fires because `endCall()` calls
+        // `endCallInternal` BEFORE requesting the transaction, so the log
+        // will show `state=ended(.local)`. In (1)/(3), state is still
+        // `.ringing` / `.offering` / `.connecting` / `.connected`.
         Task { @MainActor [weak self] in
+            let stateAtEntry = self?.manager?.callState
+            Logger.calls.info(
+                "CallKit -> CXEndCallAction received (callUUID=\(action.callUUID), state=\(String(describing: stateAtEntry)))"
+            )
             self?.manager?.endCall()
             action.fulfill()
         }
