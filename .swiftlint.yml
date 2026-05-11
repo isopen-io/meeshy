@@ -14,6 +14,8 @@ excluded:
   - "**/.build"
   - "**/DerivedData"
   - "**/Pods"
+  - "**/SourcePackages"
+  - apps/ios/SourcePackages
 
 # Disable all built-in rules — Phase 4 only ships the custom freshness rule.
 # Style/formatting rules will be enabled progressively in follow-up passes.
