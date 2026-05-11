@@ -104,4 +104,41 @@ final class CacheResultTests: XCTestCase {
         let result = CacheResult<String>.empty
         XCTAssertNil(result.value, "Empty result should not be usable")
     }
+
+    // MARK: - snapshot() — internal cache aggregation seam (Phase 4)
+
+    func test_snapshot_fresh_returnsUnderlyingValue() {
+        let result = CacheResult<[String]>.fresh(["a", "b"], age: 5)
+        XCTAssertEqual(result.snapshot(), ["a", "b"])
+    }
+
+    func test_snapshot_stale_returnsUnderlyingValue() {
+        let result = CacheResult<[String]>.stale(["x"], age: 600)
+        XCTAssertEqual(result.snapshot(), ["x"])
+    }
+
+    func test_snapshot_expired_returnsNil() {
+        let result = CacheResult<[String]>.expired
+        XCTAssertNil(result.snapshot())
+    }
+
+    func test_snapshot_empty_returnsNil() {
+        let result = CacheResult<[String]>.empty
+        XCTAssertNil(result.snapshot())
+    }
+
+    func test_snapshot_matchesValueAcrossAllCases() {
+        // snapshot() is the explicit-intent alias the SwiftLint rule
+        // permits. It MUST behave identically to .value so existing
+        // internal-cache call sites can migrate without semantic drift.
+        let cases: [CacheResult<Int>] = [
+            .fresh(1, age: 0),
+            .stale(2, age: 300),
+            .expired,
+            .empty
+        ]
+        for result in cases {
+            XCTAssertEqual(result.snapshot(), result.value)
+        }
+    }
 }

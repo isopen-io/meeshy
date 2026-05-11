@@ -34,9 +34,16 @@ actor ParticipantService {
 
     func loadFirstPage(for conversationId: String, forceRefresh: Bool = false) async throws -> [PaginatedParticipant] {
         if !forceRefresh {
+            // SWR: any in-cache page (fresh or stale) satisfies the
+            // first-page request. The caller (`ConversationViewModel`) reads
+            // the participants store again later for downstream operations,
+            // so a separate refresh kick here would be redundant.
             let result = await CacheCoordinator.shared.participants.load(for: conversationId)
-            if let items = result.value, !items.isEmpty {
-                return items
+            switch result {
+            case .fresh(let items, _), .stale(let items, _):
+                if !items.isEmpty { return items }
+            case .expired, .empty:
+                break
             }
         }
 
@@ -48,8 +55,10 @@ actor ParticipantService {
     func loadNextPage(for conversationId: String) async throws -> [PaginatedParticipant] {
         let state = paginationState[conversationId]
         guard state?.hasMore ?? true else {
+            // Pagination exhausted — return whatever the cache currently
+            // holds (snapshot semantics, no SWR signal needed).
             let result = await CacheCoordinator.shared.participants.load(for: conversationId)
-            return result.value ?? []
+            return result.snapshot() ?? []
         }
 
         return try await fetchNextPage(for: conversationId)
@@ -95,12 +104,16 @@ actor ParticipantService {
             endpoint: endpoint, method: "GET", body: nil, queryItems: nil
         )
         guard response.success else {
+            // Server reported a failure: surface the current cached page
+            // (snapshot semantics — no freshness signal applicable here).
             let result = await CacheCoordinator.shared.participants.load(for: conversationId)
-            return result.value ?? []
+            return result.snapshot() ?? []
         }
 
+        // Page-merge: we just fetched the next page, so we want to append to
+        // whatever is currently cached regardless of freshness.
         let existingResult = await CacheCoordinator.shared.participants.load(for: conversationId)
-        let existingItems = existingResult.value ?? []
+        let existingItems = existingResult.snapshot() ?? []
         let merged = existingItems + response.data
 
         try? await CacheCoordinator.shared.participants.save(merged, for: conversationId)

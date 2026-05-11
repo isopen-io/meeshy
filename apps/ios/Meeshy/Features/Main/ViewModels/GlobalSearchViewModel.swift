@@ -249,7 +249,19 @@ final class GlobalSearchViewModel: ObservableObject {
         let ids = (try? await SearchIndex.shared.searchConversations(query: query, limit: 50)) ?? []
         guard !ids.isEmpty else { return [] }
 
-        let cached = await CacheCoordinator.shared.conversations.load(for: "list").value ?? []
+        // SWR: FTS5 gave us the IDs to hydrate, so any cached row (fresh or
+        // stale) is usable. The conversation list is already revalidated by
+        // `ConversationListViewModel` on screen-resume, so we do NOT kick a
+        // second revalidate here. `.expired` / `.empty` simply yield no
+        // local hits — the remote leg of `searchConversations` will cover.
+        let result = await CacheCoordinator.shared.conversations.load(for: "list")
+        let cached: [Conversation]
+        switch result {
+        case .fresh(let v, _), .stale(let v, _):
+            cached = v
+        case .expired, .empty:
+            cached = []
+        }
         let byId = Dictionary(uniqueKeysWithValues: cached.map { ($0.id, $0) })
 
         return ids.compactMap { id -> GlobalSearchConversationResult? in
@@ -325,13 +337,20 @@ final class GlobalSearchViewModel: ObservableObject {
         let ids = (try? await SearchIndex.shared.searchUsers(query: query, limit: 50)) ?? []
         guard !ids.isEmpty else { return [] }
 
-        // Resolve each id via the per-key profile cache. Misses are dropped
-        // (profile evicted from LRU since last index write — falls back to
-        // remote results once they arrive).
+        // SWR: resolve each id via the per-key profile cache. We accept both
+        // `.fresh` and `.stale` payloads — the remote leg of `searchUsers`
+        // races us with fresh server-side hits anyway, so kicking a per-id
+        // revalidate here would be wasted work. Misses (`.expired` /
+        // `.empty`) are simply dropped — the row will arrive via the remote
+        // results.
         var users: [MeeshyUser] = []
         for id in ids {
-            if let cached = await CacheCoordinator.shared.profiles.load(for: id).value?.first {
-                users.append(cached)
+            let result = await CacheCoordinator.shared.profiles.load(for: id)
+            switch result {
+            case .fresh(let payload, _), .stale(let payload, _):
+                if let cached = payload.first { users.append(cached) }
+            case .expired, .empty:
+                continue
             }
         }
 

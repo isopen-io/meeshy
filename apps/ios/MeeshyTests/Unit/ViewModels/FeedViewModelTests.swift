@@ -840,6 +840,83 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertTrue(api.requestEndpoints.contains("/posts/bm-post/bookmark"))
     }
 
+    // MARK: - bookmarkPost — SWR cache shape (Phase 4)
+
+    /// Phase 4 migration: the bookmarks cache read used to call
+    /// `.value` on `CacheResult`, collapsing `.fresh` / `.stale` and missing
+    /// the freshness signal. The new switch arms accept both `.fresh` and
+    /// `.stale` payloads as the optimistic rollback snapshot. This test
+    /// seeds the bookmarks cache with a "stale-style" save (the actor
+    /// transitions to stale once the TTL elapses, but the optimistic-write
+    /// contract is observable independent of freshness) and verifies that
+    /// `bookmarkPost` prepends the post to the existing list.
+    func test_bookmarkPost_withCachedBookmarks_prependsOptimistically() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
+        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "bookmarks") } }
+
+        let existing = Self.makeFeedPost(id: "old-bm", content: "previously bookmarked")
+        try? await CacheCoordinator.shared.feed.save([existing], for: "bookmarks")
+
+        let (sut, api, _, _) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "new-bm", content: "Bookmark target")]
+        let bookmarkResponse: APIResponse<[String: Bool]> = JSONStub.decode("""
+        {"success":true,"data":{"bookmarked":true},"error":null}
+        """)
+        api.stub("/posts/new-bm/bookmark", result: bookmarkResponse)
+
+        await sut.bookmarkPost("new-bm")
+
+        let result = await CacheCoordinator.shared.feed.load(for: "bookmarks")
+        let cached = result.snapshot() ?? []
+        XCTAssertEqual(cached.count, 2, "Optimistic write must keep existing bookmarks and prepend the new one")
+        XCTAssertEqual(cached.first?.id, "new-bm", "Newest bookmark goes to the head of the list")
+        XCTAssertTrue(cached.contains(where: { $0.id == "old-bm" }), "Existing bookmark must be preserved")
+    }
+
+    /// `.expired` / `.empty` arms must seed a fresh bookmarks list with the
+    /// single optimistic post — without crashing on the missing payload.
+    func test_bookmarkPost_withEmptyCache_seedsBookmarksList() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
+        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "bookmarks") } }
+
+        let (sut, api, _, _) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "first-bm", content: "First bookmark ever")]
+        let bookmarkResponse: APIResponse<[String: Bool]> = JSONStub.decode("""
+        {"success":true,"data":{"bookmarked":true},"error":null}
+        """)
+        api.stub("/posts/first-bm/bookmark", result: bookmarkResponse)
+
+        await sut.bookmarkPost("first-bm")
+
+        let result = await CacheCoordinator.shared.feed.load(for: "bookmarks")
+        let cached = result.snapshot() ?? []
+        XCTAssertEqual(cached.count, 1)
+        XCTAssertEqual(cached.first?.id, "first-bm")
+    }
+
+    /// On API failure, the optimistic write must be rolled back to the
+    /// pre-call snapshot (the cached bookmarks list before the user tapped
+    /// the bookmark button).
+    func test_bookmarkPost_apiFailure_rollsBackToSnapshot() async {
+        await CacheCoordinator.shared.feed.invalidate(for: "bookmarks")
+        defer { Task { await CacheCoordinator.shared.feed.invalidate(for: "bookmarks") } }
+
+        let existing = Self.makeFeedPost(id: "kept-bm", content: "should survive rollback")
+        try? await CacheCoordinator.shared.feed.save([existing], for: "bookmarks")
+
+        let (sut, api, _, _) = makeSUT()
+        sut.posts = [Self.makeFeedPost(id: "doomed-bm", content: "Will fail")]
+        api.errorToThrow = APIError.networkError(URLError(.notConnectedToInternet))
+
+        await sut.bookmarkPost("doomed-bm")
+
+        let result = await CacheCoordinator.shared.feed.load(for: "bookmarks")
+        let cached = result.snapshot() ?? []
+        XCTAssertEqual(cached.count, 1, "Rollback must restore the pre-call snapshot")
+        XCTAssertEqual(cached.first?.id, "kept-bm")
+        XCTAssertFalse(cached.contains(where: { $0.id == "doomed-bm" }), "Failed bookmark must NOT remain in cache")
+    }
+
     // MARK: - pinPost()
 
     func test_pinPost_callsPostService() async {

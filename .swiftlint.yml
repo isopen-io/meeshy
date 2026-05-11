@@ -1,0 +1,108 @@
+# SwiftLint configuration — Phase 4 SWR enforcement
+#
+# This config focuses on the cache freshness contract; other style rules
+# are deliberately not introduced here to keep CI noise low. We can layer
+# additional rules in later passes.
+
+# Limit linting to Swift source directories; everything else is excluded.
+included:
+  - apps/ios
+  - packages/MeeshySDK/Sources
+
+excluded:
+  - apps/ios/Build
+  - "**/.build"
+  - "**/DerivedData"
+  - "**/Pods"
+
+# Disable all built-in rules — Phase 4 only ships the custom freshness rule.
+# Style/formatting rules will be enabled progressively in follow-up passes.
+disabled_rules:
+  - line_length
+  - trailing_whitespace
+  - identifier_name
+  - type_name
+  - todo
+  - file_length
+  - type_body_length
+  - function_body_length
+  - function_parameter_count
+  - cyclomatic_complexity
+  - large_tuple
+  - nesting
+  - force_cast
+  - force_try
+  - force_unwrapping
+  - opening_brace
+  - colon
+  - comma
+  - control_statement
+  - return_arrow_whitespace
+  - statement_position
+  - trailing_comma
+  - trailing_newline
+  - vertical_whitespace
+  - leading_whitespace
+  - mark
+  - operator_whitespace
+  - shorthand_operator
+  - syntactic_sugar
+  - unused_closure_parameter
+  - unused_optional_binding
+  - void_return
+  - empty_enum_arguments
+  - notification_center_detachment
+  - private_over_fileprivate
+  - reduce_boolean
+  - empty_parameters
+  - implicit_getter
+  - redundant_optional_initialization
+  - redundant_string_enum_value
+  - redundant_void_return
+  - is_disjoint
+  - duplicate_imports
+  - protocol_property_accessors_order
+  - unused_capture_list
+  - blanket_disable_command
+  - non_optional_string_data_conversion
+  - prefer_type_checking
+  - self_in_property_initialization
+  - switch_case_alignment
+  - multiple_closures_with_trailing_closure
+  - inclusive_language
+  - for_where
+  - no_fallthrough_only
+  - xctfail_message
+  - legacy_hashing
+  - discouraged_direct_init
+  - empty_count
+  - empty_string
+  - closure_parameter_position
+  - closure_end_indentation
+  - closure_spacing
+  - vertical_parameter_alignment
+  - vertical_parameter_alignment_on_call
+  - generic_type_name
+  - prefer_zero_over_explicit_init
+  - private_unit_test
+  - weak_delegate
+  - redundant_discardable_let
+  - unneeded_synthesized_initializer
+  - orphaned_doc_comment
+  - void_function_in_ternary
+
+custom_rules:
+  cacheresult_no_value:
+    name: "CacheResult.value (UI code must use SWR switch)"
+    regex: '\.load\([^)]*\)\.value(?![A-Za-z_(])'
+    message: >-
+      Do not call `.value` on a CacheResult — it collapses .fresh/.stale into
+      a single optional and breaks Stale-While-Revalidate. UI / ViewModel code
+      MUST switch on .fresh / .stale / .expired / .empty so .stale can trigger
+      a silent background refresh. Internal cache aggregation / sync-engine
+      reads should use `.snapshot()` instead.
+    severity: error
+    excluded:
+      - ".*/Tests/.*"
+      - ".*Tests/.*"
+      - ".*/CacheResult\\.swift"

@@ -835,8 +835,11 @@ class ConversationListViewModel: ObservableObject {
             loadFailed = false
             loadState = .loading
             let succeeded = await syncEngine.fullSync()
+            // Post-sync snapshot: the sync engine just wrote the canonical
+            // list to cache, so a freshness-aware switch would add no signal.
+            // `snapshot()` is the explicit-intent read for this pattern.
             let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
-            if let data = reloaded.value {
+            if let data = reloaded.snapshot() {
                 setConversations(data)
                 // Full sync just completed: snapshot is authoritative, so reconcile
                 // overrides anything the coordinator tracked from earlier socket events.
@@ -871,8 +874,10 @@ class ConversationListViewModel: ObservableObject {
         loadFailed = false
         loadState = .loading
         let succeeded = await syncEngine.fullSync()
+        // Pull-to-refresh: the sync engine just wrote the canonical list to
+        // cache; `snapshot()` is the explicit-intent read for that.
         let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
-        if let data = reloaded.value {
+        if let data = reloaded.snapshot() {
             setConversations(data)
             // User-triggered full sync: snapshot is authoritative, reconcile counts.
             NotificationCoordinator.shared.reconcileConversationUnreads(data)
@@ -1314,8 +1319,19 @@ class ConversationListViewModel: ObservableObject {
             await withTaskGroup(of: Void.self) { group in
                 for conversation in topConversations {
                     let conversationId = conversation.id
-                    let cached = await CacheCoordinator.shared.messages.load(for: conversationId).value ?? []
-                    if !cached.isEmpty { continue }
+                    // SWR: prefetch only when the cache cannot already serve a
+                    // preview. `.fresh` / `.stale` both surface usable data
+                    // (the row's preview path reads them directly), so we
+                    // skip the network round-trip. `.expired` / `.empty`
+                    // mean the row would render an empty preview — fetch.
+                    let result = await CacheCoordinator.shared.messages.load(for: conversationId)
+                    switch result {
+                    case .fresh(let cached, _) where !cached.isEmpty,
+                         .stale(let cached, _) where !cached.isEmpty:
+                        continue
+                    case .fresh, .stale, .expired, .empty:
+                        break
+                    }
 
                     group.addTask {
                         do {

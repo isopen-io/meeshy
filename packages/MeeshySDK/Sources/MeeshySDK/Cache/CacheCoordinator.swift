@@ -222,7 +222,7 @@ public actor CacheCoordinator {
         let key = "meeshy.searchindex.backfillDone.v1"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
 
-        if let cachedConversations = await conversations.load(for: "list").value,
+        if let cachedConversations = await conversations.load(for: "list").snapshot(),
            !cachedConversations.isEmpty {
             await SearchIndex.shared.indexConversations(cachedConversations)
         }
