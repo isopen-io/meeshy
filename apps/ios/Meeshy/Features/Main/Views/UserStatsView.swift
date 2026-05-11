@@ -214,8 +214,8 @@ final class UserStatsViewModel: ObservableObject {
             let (s, t) = try await (statsTask, timelineTask)
             stats = s
             timeline = t
-            await CacheCoordinator.shared.stats.save([s], for: userId)
-            await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)")
+            try? await CacheCoordinator.shared.stats.save([s], for: userId)
+            try? await CacheCoordinator.shared.timeline.save(t, for: "timeline_\(userId)")
         } catch {}
         isLoading = false
     }

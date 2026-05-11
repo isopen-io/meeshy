@@ -554,7 +554,7 @@ struct ParticipantsView: View {
             )
             participants = fetched
             hasMore = await ParticipantService.shared.hasMore(for: conversationId)
-            await CacheCoordinator.shared.participants.save(fetched, for: conversationId)
+            try? await CacheCoordinator.shared.participants.save(fetched, for: conversationId)
             UserDisplayNameCache.shared.trackFromParticipants(fetched)
         } catch {
             Logger.participants.error("Failed to load participants: \(error.localizedDescription)")

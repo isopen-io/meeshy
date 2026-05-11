@@ -280,7 +280,7 @@ class ConversationViewModel: ObservableObject {
                 readCount: msg.readCount
             )
         }
-        await CacheCoordinator.shared.messages.save(rewritten, for: convId)
+        try? await CacheCoordinator.shared.messages.save(rewritten, for: convId)
     }
 
     // MARK: - O(1) Message Index

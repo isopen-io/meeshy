@@ -103,7 +103,7 @@ actor ParticipantService {
         let existingItems = existingResult.value ?? []
         let merged = existingItems + response.data
 
-        await CacheCoordinator.shared.participants.save(merged, for: conversationId)
+        try? await CacheCoordinator.shared.participants.save(merged, for: conversationId)
         UserDisplayNameCache.shared.trackFromParticipants(response.data)
 
         paginationState[conversationId] = PaginationState(

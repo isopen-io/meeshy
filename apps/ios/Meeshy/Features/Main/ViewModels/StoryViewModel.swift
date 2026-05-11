@@ -257,7 +257,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 }
 
                 storyGroups = groups
-                await CacheCoordinator.shared.stories.save(groups, for: "recent_tray")
+                try? await CacheCoordinator.shared.stories.save(groups, for: "recent_tray")
                 prefetchAllStoryMedia(groups)
             }
         } catch {
@@ -1064,6 +1064,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
     private func persistStoryCache() {
         let snapshot = storyGroups
-        Task { await CacheCoordinator.shared.stories.save(snapshot, for: "recent_tray") }
+        Task { try? await CacheCoordinator.shared.stories.save(snapshot, for: "recent_tray") }
     }
 }

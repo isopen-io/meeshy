@@ -58,7 +58,7 @@ class BookmarksViewModel: ObservableObject {
             hasMore = response.pagination?.hasMore ?? false
 
             if nextCursor == nil || posts.count == unique.count {
-                await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+                try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
             }
         } catch {
             ToastManager.shared.showError("Erreur lors du chargement des favoris")
@@ -70,7 +70,7 @@ class BookmarksViewModel: ObservableObject {
         posts.removeAll { $0.id == postId }
         do {
             try await postService.removeBookmark(postId: postId)
-            await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+            try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
         } catch {
             posts = snapshot
             ToastManager.shared.showError("Erreur lors de la suppression du favori")

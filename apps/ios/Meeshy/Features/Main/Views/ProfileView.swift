@@ -91,12 +91,12 @@ struct ProfileView: View {
                 stats = cached.first
                 if let fresh = try? await StatsService.shared.fetchStats() {
                     stats = fresh
-                    await CacheCoordinator.shared.stats.save([fresh], for: userId)
+                    try? await CacheCoordinator.shared.stats.save([fresh], for: userId)
                 }
             case .expired, .empty:
                 if let fresh = try? await StatsService.shared.fetchStats() {
                     stats = fresh
-                    await CacheCoordinator.shared.stats.save([fresh], for: userId)
+                    try? await CacheCoordinator.shared.stats.save([fresh], for: userId)
                 }
             }
             pendingRequestCount = FriendshipCache.shared.pendingReceivedCount

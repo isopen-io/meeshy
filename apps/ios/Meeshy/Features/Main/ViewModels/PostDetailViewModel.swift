@@ -80,7 +80,7 @@ class PostDetailViewModel: ObservableObject {
             let apiPost = try await postService.getPost(postId: postId)
             let feedPost = apiPost.toFeedPost(preferredLanguages: preferredLanguages)
             post = feedPost
-            await CacheCoordinator.shared.feed.save([feedPost], for: postId)
+            try? await CacheCoordinator.shared.feed.save([feedPost], for: postId)
 
             // Persist to GRDB
             if let persistence = feedPersistence, let record = PostRecord(from: apiPost) {
@@ -141,7 +141,7 @@ class PostDetailViewModel: ObservableObject {
             comments.append(contentsOf: unique)
             commentCursor = response.pagination?.nextCursor
             hasMoreComments = response.pagination?.hasMore ?? false
-            await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+            try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
 
             // Persist fetched comments to GRDB
             if let persistence = feedPersistence {
@@ -246,7 +246,7 @@ class PostDetailViewModel: ObservableObject {
             )
             comments.insert(comment, at: 0)
             self.post?.commentCount += 1
-            await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
 
             // Persist to GRDB
             if let persistence = feedPersistence,
@@ -284,7 +284,7 @@ class PostDetailViewModel: ObservableObject {
                 comments[idx].replies += 1
             }
             self.post?.commentCount += 1
-            await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
+            try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
 
             // Persist reply to GRDB
             if let persistence = feedPersistence,

@@ -124,7 +124,7 @@ class FeedViewModel: ObservableObject {
                 prefetchMedia(around: 0)
 
                 Task.detached(priority: .utility) { [fetched] in
-                    await CacheCoordinator.shared.feed.save(fetched, for: "main-feed")
+                    try? await CacheCoordinator.shared.feed.save(fetched, for: "main-feed")
                 }
 
                 // Persist to GRDB alongside cache
@@ -249,7 +249,7 @@ class FeedViewModel: ObservableObject {
                         originalLanguage: c.originalLanguage, translatedContent: translatedContent
                     )
                 }
-                await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+                try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
             } catch {
                 // Silent fail on prefetch — user-triggered open will retry the network.
             }
@@ -315,7 +315,7 @@ class FeedViewModel: ObservableObject {
         if !cachedBookmarks.contains(where: { $0.id == postId }) {
             var updated = cachedBookmarks
             updated.insert(post, at: 0)
-            await CacheCoordinator.shared.feed.save(updated, for: bookmarksKey)
+            try? await CacheCoordinator.shared.feed.save(updated, for: bookmarksKey)
         }
         ToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
 
@@ -326,7 +326,7 @@ class FeedViewModel: ObservableObject {
             )
         } catch {
             // Rollback the optimistic cache insertion.
-            await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
+            try? await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
             ToastManager.shared.showError("Erreur lors de l'enregistrement")
         }
     }
@@ -752,7 +752,7 @@ class FeedViewModel: ObservableObject {
         cacheSaveTask = Task {
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
-            await CacheCoordinator.shared.feed.save(snapshot, for: "main-feed")
+            try? await CacheCoordinator.shared.feed.save(snapshot, for: "main-feed")
         }
     }
 }

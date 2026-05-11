@@ -279,7 +279,7 @@ final class AffiliateViewModel: ObservableObject {
     private func refreshFromAPI() async {
         do {
             tokens = try await AffiliateService.shared.listTokens()
-            await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list")
+            try? await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list")
         } catch {}
         isLoading = false
     }
@@ -287,13 +287,13 @@ final class AffiliateViewModel: ObservableObject {
     func deleteToken(_ token: AffiliateToken) async {
         let snapshot = tokens
         tokens.removeAll { $0.id == token.id }
-        await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list")
+        try? await CacheCoordinator.shared.affiliateTokens.save(tokens, for: "list")
         HapticFeedback.success()
         do {
             try await AffiliateService.shared.deleteToken(id: token.id)
         } catch {
             tokens = snapshot
-            await CacheCoordinator.shared.affiliateTokens.save(snapshot, for: "list")
+            try? await CacheCoordinator.shared.affiliateTokens.save(snapshot, for: "list")
             HapticFeedback.error()
         }
     }

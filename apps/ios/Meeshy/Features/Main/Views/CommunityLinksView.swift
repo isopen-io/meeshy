@@ -178,7 +178,7 @@ class CommunityLinksViewModel: ObservableObject {
 
     private func refreshFromAPI() async {
         links = (try? await CommunityLinkService.shared.listCommunityLinks()) ?? []
-        await CacheCoordinator.shared.communityLinks.save(links, for: "list")
+        try? await CacheCoordinator.shared.communityLinks.save(links, for: "list")
         isLoading = false
     }
 }

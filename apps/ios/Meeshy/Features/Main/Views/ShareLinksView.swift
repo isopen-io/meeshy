@@ -244,7 +244,7 @@ class ShareLinksViewModel: ObservableObject {
         async let s = ShareLinkService.shared.fetchMyStats()
         links = (try? await l) ?? []
         stats = try? await s
-        await CacheCoordinator.shared.shareLinks.save(links, for: "list")
+        try? await CacheCoordinator.shared.shareLinks.save(links, for: "list")
         isLoading = false
     }
 
