@@ -10,6 +10,7 @@ public struct StoryFilterPicker: View {
     private let previewImage: UIImage?
 
     @State private var thumbnails: [StoryFilter: UIImage] = [:]
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(selectedFilter: Binding<StoryFilter?>, previewImage: UIImage? = nil) {
         self._selectedFilter = selectedFilter
@@ -17,16 +18,32 @@ public struct StoryFilterPicker: View {
     }
 
     public var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                noFilterButton
-
-                ForEach(StoryFilter.allCases, id: \.self) { filter in
-                    filterButton(filter)
-                }
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "camera.filters")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandGradient)
+                Text(String(localized: "story.filter.pickerTitle", defaultValue: "Filtres", bundle: .module))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                Spacer()
             }
-            .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    noFilterButton
+
+                    ForEach(StoryFilter.allCases, id: \.self) { filter in
+                        filterButton(filter)
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
         }
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
         .task(id: previewImage) {
             await generateThumbnails()
         }

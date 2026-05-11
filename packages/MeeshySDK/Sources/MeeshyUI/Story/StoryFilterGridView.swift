@@ -7,8 +7,20 @@ struct StoryFilterGridView: View {
     @Bindable var viewModel: StoryComposerViewModel
     var previewImage: UIImage?
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "camera.filters")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandGradient)
+                Text(String(localized: "story.filters.title", defaultValue: "Filtres", bundle: .module))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                Spacer()
+            }
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 10) {
                     // "Original" = no filter
@@ -17,14 +29,17 @@ struct StoryFilterGridView: View {
                         filterThumbnail(filter: filter, label: filter.displayName)
                     }
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 4)
             }
 
             if viewModel.selectedFilter != nil {
                 intensitySlider
             }
         }
-        .padding(.vertical, 12)
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
     }
 
     @ViewBuilder

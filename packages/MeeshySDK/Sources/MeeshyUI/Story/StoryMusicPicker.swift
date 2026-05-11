@@ -59,8 +59,14 @@ public struct StoryMusicPicker: View {
         }
     }
 
+    @Environment(\.colorScheme) private var colorScheme
+
     public var body: some View {
         VStack(spacing: 0) {
+            pickerHeader
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 4)
             searchBar
             trackList
 
@@ -68,8 +74,24 @@ public struct StoryMusicPicker: View {
                 trimControl
             }
         }
-        .background(Color.black.opacity(0.5))
-        .cornerRadius(20, corners: [.topLeft, .topRight])
+        .padding(.bottom, 8)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: - Picker Header
+
+    private var pickerHeader: some View {
+        HStack {
+            Image(systemName: "music.note")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(MeeshyColors.brandGradient)
+            Text(String(localized: "story.music.title", defaultValue: "Musique", bundle: .module))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+            Spacer()
+        }
     }
 
     // MARK: - Search Bar
@@ -138,7 +160,7 @@ public struct StoryMusicPicker: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(track.title)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(isSelected ? Color(hex: "FF2E63") : .white)
+                        .foregroundColor(isSelected ? MeeshyColors.brandPrimary : .white)
                         .lineLimit(1)
                     Text(track.artist)
                         .font(.system(size: 12, weight: .medium))
@@ -156,7 +178,7 @@ public struct StoryMusicPicker: View {
             .padding(.vertical, 8)
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color(hex: "FF2E63").opacity(0.12) : Color.clear)
+                    .fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.12) : Color.clear)
             )
         }
     }
@@ -172,7 +194,7 @@ public struct StoryMusicPicker: View {
                 Spacer()
                 Text("\(formatDuration(trimStart)) - \(formatDuration(trimEnd))")
                     .font(.system(size: 12, weight: .medium, design: .monospaced))
-                    .foregroundColor(Color(hex: "08D9D6"))
+                    .foregroundColor(MeeshyColors.indigo300)
             }
 
             GeometryReader { geo in
@@ -188,7 +210,7 @@ public struct StoryMusicPicker: View {
                     let width = max(0, (endFraction - startFraction) * geo.size.width)
 
                     RoundedRectangle(cornerRadius: 3)
-                        .fill(Color(hex: "FF2E63"))
+                        .fill(MeeshyColors.brandPrimary)
                         .frame(width: width, height: 6)
                         .offset(x: startX)
                 }

@@ -11,6 +11,7 @@ public struct StoryTextEditorView: View {
 
     @FocusState private var isFocused: Bool
     @State private var expandedSection: TextEditorSection?
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(textObject: Binding<StoryTextObject>, onDelete: (() -> Void)? = nil) {
         self._textObject = textObject
@@ -19,10 +20,32 @@ public struct StoryTextEditorView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            editorHeader
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
             textInputRow
             quickActions
             sectionPicker
             expandedSectionContent
+        }
+        .padding(.bottom, 4)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: - Editor Header
+
+    private var editorHeader: some View {
+        HStack {
+            Image(systemName: "textformat")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(MeeshyColors.brandGradient)
+            Text(String(localized: "story.textEditor.title", defaultValue: "Texte", bundle: .module))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+            Spacer()
         }
     }
 

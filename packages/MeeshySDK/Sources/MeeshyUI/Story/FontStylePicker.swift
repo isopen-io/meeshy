@@ -8,20 +8,37 @@ public struct FontStylePicker: View {
     @Binding public var selectedStyle: StoryTextStyle
 
     @ObservedObject private var theme = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(selectedStyle: Binding<StoryTextStyle>) {
         self._selectedStyle = selectedStyle
     }
 
     public var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(StoryTextStyle.allCases, id: \.self) { style in
-                    fontStyleButton(style)
-                }
+        VStack(spacing: 12) {
+            HStack {
+                Image(systemName: "textformat")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandGradient)
+                Text(String(localized: "story.fontPicker.title", defaultValue: "Style de texte", bundle: .module))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                Spacer()
             }
-            .padding(.horizontal, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(StoryTextStyle.allCases, id: \.self) { style in
+                        fontStyleButton(style)
+                    }
+                }
+                .padding(.horizontal, 4)
+            }
         }
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
     }
 
     private func fontStyleButton(_ style: StoryTextStyle) -> some View {
@@ -38,11 +55,11 @@ public struct FontStylePicker: View {
                 .frame(width: 50, height: 40)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(isSelected ? Color(hex: "FF2E63") : Color.white.opacity(0.12))
+                        .fill(isSelected ? MeeshyColors.brandPrimary : Color.white.opacity(0.12))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(isSelected ? Color(hex: "FF2E63").opacity(0.5) : Color.clear, lineWidth: 1.5)
+                        .stroke(isSelected ? MeeshyColors.indigo400.opacity(0.5) : Color.clear, lineWidth: 1.5)
                 )
         }
         .accessibilityLabel(style.displayName)

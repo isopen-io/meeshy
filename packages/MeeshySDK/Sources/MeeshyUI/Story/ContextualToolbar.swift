@@ -4,6 +4,7 @@ import MeeshySDK
 struct ContextualToolbar: View {
     @Bindable var viewModel: StoryComposerViewModel
     @Environment(\.theme) private var theme
+    @Environment(\.colorScheme) private var colorScheme
     @State private var selectedTab: StoryTab = .contenu
 
     var body: some View {
@@ -14,6 +15,9 @@ struct ContextualToolbar: View {
         .padding(.horizontal, 12)
         .padding(.top, 8)
         .padding(.bottom, 4)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
         .onChange(of: viewModel.activeTool) { _, newTool in
             guard let tool = newTool else { return }
             if selectedTab != tool.tab {

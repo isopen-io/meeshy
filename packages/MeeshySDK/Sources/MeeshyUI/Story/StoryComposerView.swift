@@ -472,9 +472,9 @@ public struct StoryComposerView: View {
             .padding(.trailing, 16)
         }
         .frame(height: 60)
-        .background(
-            Color.black.opacity(0.45)
-                .background(.ultraThinMaterial.opacity(0.6))
+        .background(.ultraThinMaterial)
+        .clipShape(
+            RoundedRectangle(cornerRadius: 0)
         )
     }
 
