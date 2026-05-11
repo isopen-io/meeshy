@@ -404,7 +404,14 @@ export class MessagingService {
             canSendLinks: memberDoc.canSendLinks ?? false
           },
           isActive: true,
-          joinedAt: memberDoc.joinedAt ? new Date(memberDoc.joinedAt) : new Date()
+          joinedAt: memberDoc.joinedAt ? new Date(memberDoc.joinedAt) : new Date(),
+          // Materialise deletedForMe = null explicitement. Sans cela, Prisma
+          // n'ecrit PAS le champ dans MongoDB pour les fields optional non
+          // initialises. Les filters de listing (`deletedForMe: null`) peuvent
+          // ne pas matcher les docs ou le champ est absent — bug observe le
+          // 2026-05-11 (10 Participants invisibles, conversations DM
+          // disparues de la liste).
+          deletedForMe: null
         },
         select: { id: true, conversationId: true, isActive: true }
       });

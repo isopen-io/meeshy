@@ -155,15 +155,22 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
     }
 
     public func markRead(conversationId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-read", method: "POST")
+        // Le gateway renvoie `data: { markedCount: number }` (Int, pas String).
+        // Decoder en `[String: String]` declenchait `Type mismatch for type
+        // String at path data.markedCount` a chaque mark-read — visible dans
+        // le log du 2026-05-11 quand l'utilisateur ouvrait une conversation.
+        // Conversion vers `[String: Int]` qui matche les 3 endpoints
+        // (mark-read, mark-as-received, mark-unread) dont les handlers
+        // retournent tous `{ markedCount: number }` ou `{ markedAs: number }`.
+        let _: APIResponse<[String: Int]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-read", method: "POST")
     }
 
     public func markAsReceived(conversationId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-as-received", method: "POST")
+        let _: APIResponse<[String: Int]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-as-received", method: "POST")
     }
 
     public func markUnread(conversationId: String) async throws {
-        let _: APIResponse<[String: String]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-unread", method: "POST")
+        let _: APIResponse<[String: Int]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-unread", method: "POST")
     }
 
     public func getParticipants(conversationId: String, limit: Int = 100, cursor: String? = nil) async throws -> PaginatedAPIResponse<[APIParticipant]> {
