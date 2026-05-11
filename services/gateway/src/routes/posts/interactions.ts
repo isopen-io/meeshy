@@ -10,6 +10,7 @@ import { LikeSchema, RepostSchema, PostParams } from './types';
 import { sendSuccess, sendForbidden } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { withMutationLog } from '../../utils/withMutationLog';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -38,7 +39,28 @@ export function registerInteractionRoutes(
       const parsed = LikeSchema.safeParse(request.body ?? {});
       const emoji = parsed.success ? parsed.data.emoji : '❤️';
 
-      const post = await postService.likePost(postId, authContext.registeredUser.id, emoji);
+      // Idempotent via clientMutationId. `likePost` is naturally
+      // idempotent at the storage layer (the reaction set keeps a
+      // single entry per (userId, postId)), but we still record the
+      // mutation so replays don't double-fire notifications.
+      const post = await withMutationLog({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'toggleLikePost',
+        op: async () => {
+          const res = await postService.likePost(postId, authContext.registeredUser.id, emoji);
+          if (!res) throw new Error('POST_NOT_FOUND');
+          return res as typeof res & { id: string };
+        },
+        onDuplicate: async (_resultId) => {
+          const res = await postService.getPostById(postId, authContext.registeredUser.id);
+          return res as (typeof res & { id: string }) | null;
+        },
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
+        throw err;
+      });
       if (!post) {
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }
@@ -96,7 +118,28 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      const post = await postService.unlikePost(postId, authContext.registeredUser.id);
+      // Idempotent via clientMutationId. Unlike is also naturally
+      // idempotent — re-running over an already-unliked post is a
+      // no-op — but recording the mutation prevents the broadcast
+      // path from firing twice on replay.
+      const post = await withMutationLog({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'toggleLikePost',
+        op: async () => {
+          const res = await postService.unlikePost(postId, authContext.registeredUser.id);
+          if (!res) throw new Error('POST_NOT_FOUND');
+          return res as typeof res & { id: string };
+        },
+        onDuplicate: async (_resultId) => {
+          const res = await postService.getPostById(postId, authContext.registeredUser.id);
+          return res as (typeof res & { id: string }) | null;
+        },
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
+        throw err;
+      });
       if (!post) {
         return reply.status(404).send({ success: false, error: 'Post not found' });
       }

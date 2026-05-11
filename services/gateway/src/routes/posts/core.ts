@@ -8,6 +8,7 @@ import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } f
 import { sendSuccess } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { withMutationLog } from '../../utils/withMutationLog';
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,
@@ -32,11 +33,22 @@ export function registerCoreRoutes(
         return reply.status(400).send({ success: false, error: 'Invalid request', details: parsed.error.issues });
       }
 
-      const post = await postService.createPost({
-        ...parsed.data,
-        type: parsed.data.type ?? 'POST',
-        visibility: parsed.data.visibility ?? 'PUBLIC',
-      }, authContext.registeredUser.id);
+      type CreatedPost = Awaited<ReturnType<typeof postService.createPost>>;
+      const post = await withMutationLog<CreatedPost>({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'createPost',
+        op: () => postService.createPost({
+          ...parsed.data,
+          type: parsed.data.type ?? 'POST',
+          visibility: parsed.data.visibility ?? 'PUBLIC',
+        }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>,
+        onDuplicate: async (resultId) => {
+          const replayed = await postService.getPostById(resultId, authContext.registeredUser.id);
+          return replayed ? (replayed as unknown as CreatedPost & { id: string }) : null;
+        },
+      });
 
       // Broadcast via Socket.IO
       const socialEvents = fastify.socialEvents;

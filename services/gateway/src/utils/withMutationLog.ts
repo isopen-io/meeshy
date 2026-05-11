@@ -58,7 +58,7 @@ export interface WithMutationLogArgs<T> {
   readonly onDuplicate: (resultId: string) => Promise<(T & { id: string }) | null | undefined>;
 }
 
-export async function withMutationLog<T extends Record<string, unknown>>(
+export async function withMutationLog<T>(
   args: WithMutationLogArgs<T>
 ): Promise<T & { id: string }> {
   const { request, fastify, userId, kind, op, onDuplicate } = args;

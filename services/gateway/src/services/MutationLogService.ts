@@ -82,7 +82,7 @@ export class MutationLogService {
    * fails, we deliberately do NOT persist a `MutationLog` row, so a
    * client retry with the same cmid will re-attempt the operation.
    */
-  async recordOrReturn<T extends Record<string, unknown>>(
+  async recordOrReturn<T>(
     args: RecordOrReturnArgs<T>
   ): Promise<T & { id: string }> {
     const { userId, clientMutationId, kind, op } = args;

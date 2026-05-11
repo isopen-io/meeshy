@@ -111,39 +111,51 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Creer la demande d'ami
-      const friendRequest = await fastify.prisma.friendRequest.create({
-        data: {
-          senderId: userId,
-          receiverId: body.receiverId,
-          message: body.message
+      // Creer la demande d'ami (idempotent via clientMutationId when present)
+      const friendRequestInclude = {
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true,
+            isOnline: true,
+            lastActiveAt: true
+          }
         },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true,
-              lastActiveAt: true
-            }
-          },
-          receiver: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true,
-              lastActiveAt: true
-            }
+        receiver: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true,
+            isOnline: true,
+            lastActiveAt: true
           }
         }
+      } as const;
+
+      const friendRequest = await withMutationLog({
+        request,
+        fastify,
+        userId,
+        kind: 'sendFriendRequest',
+        op: () => fastify.prisma.friendRequest.create({
+          data: {
+            senderId: userId,
+            receiverId: body.receiverId,
+            message: body.message
+          },
+          include: friendRequestInclude
+        }),
+        onDuplicate: (resultId) => fastify.prisma.friendRequest.findUnique({
+          where: { id: resultId },
+          include: friendRequestInclude
+        }),
       });
 
       // Creer une notification pour le destinataire avec actions
@@ -472,36 +484,48 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         });
       }
 
-      // Mettre a jour le statut
-      const updatedRequest = await fastify.prisma.friendRequest.update({
-        where: { id },
-        data: { status: body.status },
-        include: {
-          sender: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true,
-              lastActiveAt: true
-            }
-          },
-          receiver: {
-            select: {
-              id: true,
-              username: true,
-              firstName: true,
-              lastName: true,
-              displayName: true,
-              avatar: true,
-              isOnline: true,
-              lastActiveAt: true
-            }
+      // Mettre a jour le statut (idempotent via clientMutationId when present)
+      const respondInclude = {
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true,
+            isOnline: true,
+            lastActiveAt: true
+          }
+        },
+        receiver: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true,
+            isOnline: true,
+            lastActiveAt: true
           }
         }
+      } as const;
+
+      const updatedRequest = await withMutationLog({
+        request,
+        fastify,
+        userId,
+        kind: 'respondFriendRequest',
+        op: () => fastify.prisma.friendRequest.update({
+          where: { id },
+          data: { status: body.status },
+          include: respondInclude
+        }),
+        onDuplicate: (resultId) => fastify.prisma.friendRequest.findUnique({
+          where: { id: resultId },
+          include: respondInclude
+        }),
       });
 
       // Marquer les notifications de requete d'amitie comme lues

@@ -7,6 +7,7 @@ import { CreateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentPa
 import { sendSuccess } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { withMutationLog } from '../../utils/withMutationLog';
 
 export function registerCommentRoutes(
   fastify: FastifyInstance,
@@ -88,14 +89,33 @@ export function registerCommentRoutes(
         return reply.status(400).send({ success: false, error: 'Invalid request', details: parsed.error.issues });
       }
 
-      const comment = await commentService.addComment(
-        postId,
-        authContext.registeredUser.id,
-        parsed.data.content,
-        parsed.data.parentId,
-        parsed.data.effectFlags,
-        parsed.data.originalLanguage,
-      );
+      // Idempotent via clientMutationId — replays return the same comment.
+      type CommentResult = NonNullable<Awaited<ReturnType<typeof commentService.addComment>>>;
+      const comment = await withMutationLog<CommentResult>({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'createComment',
+        op: async () => {
+          const c = await commentService.addComment(
+            postId,
+            authContext.registeredUser.id,
+            parsed.data.content,
+            parsed.data.parentId,
+            parsed.data.effectFlags,
+            parsed.data.originalLanguage,
+          );
+          if (!c) throw new Error('POST_NOT_FOUND');
+          return c as CommentResult & { id: string };
+        },
+        onDuplicate: async (resultId) => {
+          const existing = await prisma.postComment.findUnique({ where: { id: resultId } });
+          return existing ? (existing as unknown as CommentResult & { id: string }) : null;
+        },
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
+        throw err;
+      });
 
       if (!comment) {
         return reply.status(404).send({ success: false, error: 'Post not found' });
@@ -262,7 +282,24 @@ export function registerCommentRoutes(
 
       const { commentId } = request.params;
       const { postId } = request.params;
-      const result = await commentService.deleteComment(commentId, authContext.registeredUser.id);
+      // Idempotent via clientMutationId. The MutationLog row records
+      // the deleted comment id so replays are observably consistent
+      // (broadcast side-effect fires exactly once).
+      const result = await withMutationLog({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'deleteComment',
+        op: async () => {
+          const res = await commentService.deleteComment(commentId, authContext.registeredUser.id);
+          if (!res) throw new Error('COMMENT_NOT_FOUND');
+          return { id: commentId, ...res } as { id: string } & typeof res;
+        },
+        onDuplicate: async () => ({ id: commentId }) as any,
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'COMMENT_NOT_FOUND') return null;
+        throw err;
+      });
       if (!result) {
         return reply.status(404).send({ success: false, error: 'Comment not found' });
       }

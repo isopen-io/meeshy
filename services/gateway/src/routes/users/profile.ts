@@ -22,6 +22,7 @@ import { formatUserResponse } from '../auth/types';
 import { UserRoleEnum } from '@meeshy/shared/types';
 import { authUserCacheKey } from '../../middleware/auth';
 import { getCacheStore } from '../../services/CacheStore';
+import { withMutationLog } from '../../utils/withMutationLog';
 
 /**
  * Validate and sanitize pagination parameters
@@ -207,9 +208,18 @@ export async function updateUserProfile(fastify: FastifyInstance) {
         }
       }
 
-      const updatedUser = await fastify.prisma.user.update({
-        where: { id: userId },
-        data: updateData,
+      const updatedUser = await withMutationLog({
+        request,
+        fastify,
+        userId: userId!,
+        kind: 'updateProfile',
+        op: () => fastify.prisma.user.update({
+          where: { id: userId },
+          data: updateData,
+        }),
+        onDuplicate: (resultId) => fastify.prisma.user.findUnique({
+          where: { id: resultId },
+        }),
       });
 
       try { await getCacheStore().del(authUserCacheKey(userId!)); } catch { /* best-effort */ }
