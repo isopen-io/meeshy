@@ -536,7 +536,7 @@ services:
   # Pas de --post-hook : le reload coturn est pilote cote coturn via
   # inotifywait, ce qui evite tout mount de docker.sock.
   certs-dumper:
-    image: ldez/traefik-certs-dumper:v2.8.6
+    image: ldez/traefik-certs-dumper:v2.11.2
     container_name: meeshy-certs-dumper
     restart: unless-stopped
     entrypoint:
