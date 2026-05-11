@@ -1424,6 +1424,23 @@ final class CallManager: ObservableObject {
                 MessageSocketManager.shared.emitCallJoin(callId: callId)
             }
             .store(in: &cancellables)
+
+        // Audit P1-27 — fired when another device of the same user answered.
+        // Dismiss the local ringing UI with .answeredElsewhere so CallKit
+        // displays "Answered on another device" in Recents.
+        socket.callAlreadyAnswered
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                guard self.currentCallId == event.callId,
+                      case .ringing = self.callState else { return }
+                Logger.calls.info("call:already-answered received — dismissing local ring (callId=\(event.callId))")
+                if let uuid = self.activeCallUUID {
+                    self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .answeredElsewhere)
+                }
+                self.endCallInternal(reason: .remote)
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Participant Joined (Outgoing Call)

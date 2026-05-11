@@ -309,20 +309,25 @@ export class CallEventsHandler {
           memberUserIds
         });
 
-        // Send call:initiated to each member socket ONCE (excluding initiator
-        // to avoid the initiator treating their own call as an incoming call)
-        const allSockets = await io.fetchSockets();
+        // Audit P2-GW-1 — was `io.fetchSockets()` which scans EVERY connected
+        // socket on the server (O(N), prohibitive at 10k+ connections). Each
+        // callee user auto-joins `ROOMS.user(userId)` at auth (AuthHandler
+        // L121/L181), so a per-user `io.in(ROOMS.user(memberId)).fetchSockets()`
+        // is O(M) where M = the callee's online device count (typically 1–3).
         let notifiedSocketsCount = 0;
-
-        for (const memberSocket of allSockets) {
-          const socketUserId = getUserId(memberSocket.id);
-          if (socketUserId && socketUserId !== userId && memberUserIds.includes(socketUserId)) {
-            const memberIceServers = this.callService.generateIceServers(socketUserId);
+        const notifiedUserIds = new Set<string>();
+        for (const memberId of memberUserIds) {
+          if (memberId === userId) continue; // skip initiator
+          const memberSockets = await io.in(ROOMS.user(memberId)).fetchSockets();
+          if (memberSockets.length === 0) continue;
+          notifiedUserIds.add(memberId);
+          const memberIceServers = this.callService.generateIceServers(memberId);
+          for (const memberSocket of memberSockets) {
             memberSocket.emit(CALL_EVENTS.INITIATED, { ...initiatedEvent, iceServers: memberIceServers });
             notifiedSocketsCount++;
             logger.debug('📤 Sent call:initiated to member socket', {
               socketId: memberSocket.id,
-              userId: socketUserId
+              userId: memberId
             });
           }
         }
@@ -413,14 +418,13 @@ export class CallEventsHandler {
           });
           const callerName = initiatorUser?.displayName || initiatorUser?.username || 'Unknown';
           const callerAvatar = initiatorUser?.avatar || undefined;
-          const notifiedSocketUserIds = new Set<string>();
-          for (const memberSocket of allSockets) {
-            const sid = getUserId(memberSocket.id);
-            if (sid) notifiedSocketUserIds.add(sid);
-          }
 
+          // Audit P2-GW-1 — reuse the `notifiedUserIds` set built above
+          // (filled during the per-user fanout); offline users are the
+          // conversation members for whom no socket was found in their
+          // user room.
           const offlineUserIds = memberUserIds.filter(
-            uid => uid !== userId && !notifiedSocketUserIds.has(uid)
+            uid => uid !== userId && !notifiedUserIds.has(uid)
           );
 
           for (const offlineUserId of offlineUserIds) {
@@ -619,6 +623,14 @@ export class CallEventsHandler {
             iceServers: remoteIceServers
           });
         }
+
+        // Audit P1-27 — notify the joining user's OTHER devices that the
+        // call was answered elsewhere, so they dismiss their ringing UI /
+        // CallKit incoming card. `socket.to(...)` excludes the answering
+        // socket automatically.
+        socket.to(ROOMS.user(userId)).emit(CALL_EVENTS.ALREADY_ANSWERED, {
+          callId: data.callId
+        });
 
         logger.info('✅ Socket: User joined call', {
           callId: data.callId,

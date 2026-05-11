@@ -212,7 +212,9 @@ extension VoIPPushManager: PKPushRegistryDelegate {
     /// Decode the JSON-encoded `iceServers` field carried by VoIP pushes.
     /// Returns nil when the field is missing, empty, or unparsable — callers
     /// fall back to default STUN servers in that case.
-    nonisolated private static func parseIceServers(_ rawJSON: Any?) -> [IceServer]? {
+    // Audit P1-15 — `internal` (was `private`) so the unit test bundle can
+    // exercise the JSON parsing logic directly without spinning up PushKit.
+    nonisolated static func parseIceServers(_ rawJSON: Any?) -> [IceServer]? {
         guard let str = rawJSON as? String, !str.isEmpty,
               let data = str.data(using: .utf8) else { return nil }
         guard let decoded = try? JSONDecoder().decode([SocketIceServer].self, from: data) else {
@@ -227,7 +229,8 @@ extension VoIPPushManager: PKPushRegistryDelegate {
 
     /// Resolve caller name synchronously from payload fields.
     /// Priority: callerName > callerUsername > "Appel entrant"
-    nonisolated private static func resolveCallerName(callerName: String?, callerUsername: String?) -> String {
+    /// Audit P1-15 — `internal` (was `private`) for unit-test access.
+    nonisolated static func resolveCallerName(callerName: String?, callerUsername: String?) -> String {
         if let name = callerName, !name.isEmpty {
             return name
         }

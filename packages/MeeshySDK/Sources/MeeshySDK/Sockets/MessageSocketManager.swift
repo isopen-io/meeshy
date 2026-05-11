@@ -475,6 +475,13 @@ public struct CallMissedData: Decodable, Sendable {
     public let callerName: String?
 }
 
+/// Audit P1-27 — `call:already-answered` event payload. Emitted by the
+/// gateway to the joining user's OTHER sockets when one of their devices
+/// answers a call, so the rest can dismiss CallKit + ringing UI.
+public struct CallAlreadyAnsweredData: Decodable, Sendable {
+    public let callId: String
+}
+
 public struct CallParticipantData: Decodable, Sendable {
     public let callId: String
     public let participantId: String?
@@ -728,6 +735,9 @@ public protocol MessageSocketProviding: Sendable {
     /// Audit P1-25 — dedicated `call:missed` event publisher (in addition to
     /// `callEnded` which is emitted in parallel for backwards-compat).
     var callMissed: PassthroughSubject<CallMissedData, Never> { get }
+    /// Audit P1-27 — `call:already-answered` publisher used by the user's
+    /// other devices to dismiss their ringing UI when one device answers.
+    var callAlreadyAnswered: PassthroughSubject<CallAlreadyAnsweredData, Never> { get }
     var callParticipantJoined: PassthroughSubject<CallParticipantData, Never> { get }
     var callParticipantLeft: PassthroughSubject<CallParticipantData, Never> { get }
     var callMediaToggled: PassthroughSubject<CallMediaToggleData, Never> { get }
@@ -880,6 +890,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
     public let callEnded = PassthroughSubject<CallEndData, Never>()
     public let callMissed = PassthroughSubject<CallMissedData, Never>()
+    public let callAlreadyAnswered = PassthroughSubject<CallAlreadyAnsweredData, Never>()
     public let callParticipantJoined = PassthroughSubject<CallParticipantData, Never>()
     public let callParticipantLeft = PassthroughSubject<CallParticipantData, Never>()
     public let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()
@@ -1772,6 +1783,17 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallMissedData.self, from: data) { [weak self] event in
                 self?.callMissed.send(event)
+            }
+        }
+
+        // Audit P1-27 — `call:already-answered` fires on the user's OTHER
+        // sockets when one of their devices joins the call. We surface this
+        // so the receiving devices can dismiss their ringing CallKit card
+        // with .answeredElsewhere instead of staying frozen indefinitely.
+        socket.on("call:already-answered") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallAlreadyAnsweredData.self, from: data) { [weak self] event in
+                self?.callAlreadyAnswered.send(event)
             }
         }
 

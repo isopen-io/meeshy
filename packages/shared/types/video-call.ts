@@ -779,6 +779,9 @@ export const CALL_EVENTS = {
   ENDED: 'call:ended',
   ERROR: 'call:error',
   MISSED: 'call:missed',
+  /// Audit P1-27 — emitted to the joining user's OTHER sockets when one of
+  /// their devices answers a call, so the rest dismiss their ringing UI.
+  ALREADY_ANSWERED: 'call:already-answered',
   QUALITY_ALERT: 'call:quality-alert',
 
   // Transcription & Translation (Phase 2/3)
