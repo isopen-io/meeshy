@@ -13,6 +13,9 @@ import {
   NOTIFICATION_PREFERENCE_DEFAULTS,
   type NotificationPreference as NotifPrefs,
 } from '@meeshy/shared/types/preferences';
+import { enhancedLogger, performanceLogger } from '../utils/logger-enhanced';
+
+const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
 // ============================================
 // TYPES
@@ -428,11 +431,29 @@ export class PushNotificationService {
         }
       }
 
-      await this.firebaseAdmin.messaging().send(message);
+      const fcmCorr = {
+        tokenId: tokenRecord.id,
+        platform: tokenRecord.platform,
+        collapseId: payload.collapseId ?? undefined
+      };
+      await performanceLogger.withTiming(
+        'push.sendViaFCM',
+        () => this.firebaseAdmin!.messaging().send(message),
+        fcmCorr
+      );
+      pushLogger.info('push.sendViaFCM.success', fcmCorr);
       return { success: true, tokenId: tokenRecord.id };
     } catch (error: any) {
       // Handle specific FCM errors
       const errorCode = error?.code || error?.errorInfo?.code;
+
+      pushLogger.warn('push.sendViaFCM.failure', {
+        tokenId: tokenRecord.id,
+        platform: tokenRecord.platform,
+        collapseId: payload.collapseId ?? undefined,
+        errorCode,
+        errorMessage: error?.message
+      });
 
       if (errorCode === 'messaging/registration-token-not-registered' ||
           errorCode === 'messaging/invalid-registration-token') {
@@ -529,19 +550,44 @@ export class PushNotificationService {
         if (payload.callerAvatar) notification.payload.callerAvatar = payload.callerAvatar;
       }
 
-      const result = await client.send(notification, tokenRecord.token);
+      const apnsCorr = {
+        tokenId: tokenRecord.id,
+        apnsEnv: env,
+        topic: notification.topic,
+        isVoIP,
+        bundleId: tokenRecord.bundleId ?? undefined,
+        collapseId: payload.collapseId ?? undefined
+      };
+      const result = await performanceLogger.withTiming(
+        'push.sendViaAPNS',
+        () => client.send(notification, tokenRecord.token) as Promise<{ failed: Array<{ response?: { reason?: string }; status?: number | string }>; sent: unknown[] }>,
+        apnsCorr
+      );
 
       if (result.failed.length > 0) {
         const failure = result.failed[0];
+        const reason = failure.response?.reason || 'APNS delivery failed';
+        pushLogger.warn('push.sendViaAPNS.failure', {
+          ...apnsCorr,
+          reason,
+          statusCode: failure.status
+        });
         return {
           success: false,
           tokenId: tokenRecord.id,
-          error: failure.response?.reason || 'APNS delivery failed',
+          error: reason,
         };
       }
 
+      pushLogger.info('push.sendViaAPNS.success', apnsCorr);
       return { success: true, tokenId: tokenRecord.id };
     } catch (error: any) {
+      pushLogger.warn('push.sendViaAPNS.failure', {
+        tokenId: tokenRecord.id,
+        apnsEnv: env,
+        isVoIP,
+        errorMessage: error?.message
+      });
       return { success: false, tokenId: tokenRecord.id, error: error.message || 'APNS error' };
     }
   }
@@ -575,6 +621,13 @@ export class PushNotificationService {
     });
 
     if (shouldDeactivate) {
+      pushLogger.warn('push.token.deactivated', {
+        tokenId,
+        failedAttempts: newFailedAttempts,
+        reason: error
+      });
+      // console.log preserved for backward compat with existing unit tests
+      // that capture console output around token deactivation.
       console.log(`[PUSH] Deactivated token ${tokenId} after ${newFailedAttempts} failures: ${error}`);
     }
   }
