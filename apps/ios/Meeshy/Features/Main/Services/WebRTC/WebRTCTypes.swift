@@ -190,6 +190,16 @@ enum QualityThresholds {
     static let rtpGatePollIntervalSeconds: TimeInterval = 2.0
     static let rtpGateMaxAttempts: Int = 5
     static let rtpGateRequiredPackets: Int = 5
+
+    /// Caller-side ringing timeout. The gateway has its own 60s server-side
+    /// timeout (CallEventsHandler.ts §scheduleRingingTimeout) but a snappier
+    /// 45s client-side cutoff gives the user a faster fail path when:
+    ///   - the recipient is unreachable yet the gateway delays the no_answer
+    ///   - the network drops the call:ended event before we receive it
+    ///   - the server timeout misfires
+    /// Picked at 45s to align with WhatsApp/FaceTime UX while leaving 15s
+    /// headroom under the gateway's hard cap.
+    static let outgoingRingTimeoutSeconds: TimeInterval = 45.0
 }
 
 // MARK: - Video Quality Level (§4.8)

@@ -1240,6 +1240,15 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       logger.info('🎉 Server started successfully and ready to accept connections');
 
       // Start automatic call cleanup service
+      // Attach the Socket.IO server FIRST so that force-end events emit
+      // `call:ended` to the affected clients — otherwise the cleanup just
+      // updates the DB and the caller stays in `.ringing` forever.
+      const cleanupManager = this.socketIOHandler.getManager();
+      if (cleanupManager) {
+        this.callCleanupService.attachSocketServer(cleanupManager.getIO());
+      } else {
+        logger.warn('[GWY] CallCleanupService starting without Socket.IO server — clients will not receive force-end broadcasts');
+      }
       this.callCleanupService.start();
       logger.info('✓ Call cleanup service started');
 

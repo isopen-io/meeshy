@@ -76,6 +76,19 @@ final class CallManager: ObservableObject {
     private var durationTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
     private var rtpGateTask: Task<Void, Never>?
+    /// Phase 2 fix — Bug 2 (caller stays ringing while callee shows Connecting).
+    /// Tracks the startLocalMedia Task so that:
+    ///   1. `emitCallJoin` can be sent IMMEDIATELY (decoupled from media init)
+    ///      → the caller receives PARTICIPANT_JOINED in <100ms instead of after
+    ///      the callee's camera/mic warmup (0.5–3s on real devices).
+    ///   2. `answerCall`, `answerCallReady`, and `handleSignalOffer(.connecting)`
+    ///      can `await` this task before invoking `createAnswer` — guaranteeing
+    ///      the audio/video transceivers exist before SDP answer negotiation.
+    private var localMediaTask: Task<Void, Never>?
+    /// Caller-side ringing timeout — ends the call as `.missed` if the recipient
+    /// hasn't joined within `outgoingRingTimeoutSeconds`. Cancelled when the
+    /// state leaves `.ringing(isOutgoing: true)` (offering / connecting / ended).
+    private var outgoingRingTimeoutTask: Task<Void, Never>?
     private var callStartDate: Date?
     private var reconnectAttempt = 0
     private var participantJoinedCancellable: AnyCancellable?
@@ -179,6 +192,7 @@ final class CallManager: ObservableObject {
         // Phase 1.5 — start ringback tone immediately when caller initiates.
         // The tone plays until state transitions to .connected or .ended.
         ringbackPlayer.start()
+        startOutgoingRingTimeout()
 
         let uuid = UUID()
         activeCallUUID = uuid
@@ -298,7 +312,17 @@ final class CallManager: ObservableObject {
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
         Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
         configureAudioSession()
-        Task { [weak self] in
+
+        // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY (before awaiting
+        // startLocalMedia) so the caller receives PARTICIPANT_JOINED without
+        // waiting for our camera/mic warmup. Media init runs in parallel; the
+        // answer creation paths (answerCall*, handleSignalOffer .connecting)
+        // await `localMediaTask` before invoking createAnswer.
+        MessageSocketManager.shared.emitCallJoin(callId: callId)
+        Logger.calls.info("VoIP push — emitted call:join early; starting media in parallel: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
+
+        localMediaTask?.cancel()
+        localMediaTask = Task { [weak self] in
             guard let self else { return }
             Logger.calls.info("[CALL_SETUP] incoming 3/4 startLocalMedia begin (isVideo=\(isVideo))")
             do {
@@ -315,8 +339,6 @@ final class CallManager: ObservableObject {
                 return
             }
             Logger.calls.info("[CALL_SETUP] incoming 4/4 startLocalMedia done")
-            MessageSocketManager.shared.emitCallJoin(callId: callId)
-            Logger.calls.info("VoIP push — auto-joined room, awaiting SDP offer: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
         }
 
         Logger.calls.info("VoIP push incoming call reported: \(callId) from \(callerName)")
@@ -386,7 +408,15 @@ final class CallManager: ObservableObject {
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
         configureAudioSession()
-        Task { [weak self] in
+
+        // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY so the caller receives
+        // PARTICIPANT_JOINED while we initialize media in parallel. See
+        // `localMediaTask` property doc for rationale and downstream contract.
+        MessageSocketManager.shared.emitCallJoin(callId: callId)
+        Logger.calls.info("Incoming call — emitted call:join early; starting media in parallel: \(callId)")
+
+        localMediaTask?.cancel()
+        localMediaTask = Task { [weak self] in
             guard let self else { return }
             do {
                 try await self.webRTCService.startLocalMedia(isVideo: isVideo)
@@ -401,8 +431,7 @@ final class CallManager: ObservableObject {
                 self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
                 return
             }
-            MessageSocketManager.shared.emitCallJoin(callId: callId)
-            Logger.calls.info("Incoming call — auto-joined room, awaiting SDP offer: \(callId)")
+            Logger.calls.info("Incoming call — local media ready: \(callId)")
         }
 
         Logger.calls.info("Incoming call notification from \(fromUsername): \(callId)")
@@ -428,6 +457,9 @@ final class CallManager: ObservableObject {
             // User already accepted but SDP arrived late — create answer immediately
             Task { [weak self] in
                 guard let self else { return }
+                // Phase 2 fix — Bug 2: wait for local media transceivers before
+                // createAnswer (called concurrently with emitCallJoin).
+                await self.localMediaTask?.value
                 guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                     return
@@ -467,6 +499,9 @@ final class CallManager: ObservableObject {
             // SDP offer already received while ringing — create answer immediately
             Task { [weak self] in
                 guard let self else { return }
+                // Phase 2 fix — Bug 2: wait for local media transceivers
+                // (emitCallJoin is now decoupled from startLocalMedia).
+                await self.localMediaTask?.value
                 guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                     return
@@ -502,6 +537,10 @@ final class CallManager: ObservableObject {
 
         if let remoteOffer = pendingRemoteOffer {
             self.pendingRemoteOffer = nil
+            // Phase 2 fix — Bug 2: wait for local media transceivers before
+            // createAnswer. CallKit gives ample time for CXAnswerCallAction
+            // (10s+), so awaiting camera/mic warmup here is safe.
+            await self.localMediaTask?.value
             guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
                 self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                 return
@@ -710,6 +749,35 @@ final class CallManager: ObservableObject {
         endCallInternal(reason: .remote)
         playNotificationHaptic(.warning)
         Logger.calls.info("Call ended by remote: \(callId)")
+    }
+
+    // MARK: - Private: Outgoing Ring Timeout
+
+    /// Schedules a defensive `outgoingRingTimeoutSeconds` cutoff for the caller.
+    /// If the recipient hasn't joined within the window, ends the call as
+    /// `.missed`. The gateway has its own 60s timeout but this guards against
+    /// dropped `call:ended` events and gives the user a snappier failure path.
+    @MainActor
+    private func startOutgoingRingTimeout() {
+        outgoingRingTimeoutTask?.cancel()
+        let timeout = QualityThresholds.outgoingRingTimeoutSeconds
+        outgoingRingTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(timeout))
+            guard let self else { return }
+            guard !Task.isCancelled else { return }
+            guard case .ringing(isOutgoing: true) = self.callState else { return }
+            Logger.calls.warning("Outgoing call ring timeout after \(timeout)s — no answer; ending call")
+            if let uuid = self.activeCallUUID {
+                self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+            }
+            self.endCallInternal(reason: .missed)
+        }
+    }
+
+    @MainActor
+    private func cancelOutgoingRingTimeout() {
+        outgoingRingTimeoutTask?.cancel()
+        outgoingRingTimeoutTask = nil
     }
 
     // MARK: - Private: State Transitions
@@ -937,6 +1005,10 @@ final class CallManager: ObservableObject {
         durationTask = nil
         rtpGateTask?.cancel()
         rtpGateTask = nil
+        localMediaTask?.cancel()
+        localMediaTask = nil
+        outgoingRingTimeoutTask?.cancel()
+        outgoingRingTimeoutTask = nil
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
@@ -1171,6 +1243,7 @@ final class CallManager: ObservableObject {
                 // Phase 1 fix E5: distinct .offering state. We're no longer ringing
                 // (peer joined) but not yet connecting (no answer received). This
                 // makes the FSM observable and matches the SOTA spec §2.2.
+                self.cancelOutgoingRingTimeout()
                 self.callState = .offering
                 Task { [weak self] in
                     guard let self else { return }

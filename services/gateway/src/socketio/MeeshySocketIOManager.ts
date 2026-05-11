@@ -72,6 +72,14 @@ export interface TranslationNotification {
 
 export class MeeshySocketIOManager {
   private io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>;
+
+  /// Exposes the underlying Socket.IO server. Used by background services
+  /// (e.g. CallCleanupService) that need to broadcast events without going
+  /// through the per-socket handler path.
+  getIO(): SocketIOServer<ClientToServerEvents, ServerToClientEvents> {
+    return this.io;
+  }
+
   private prisma: PrismaClient;
   private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
