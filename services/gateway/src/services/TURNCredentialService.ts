@@ -19,6 +19,8 @@ export interface TURNServerConfig {
   port?: number;
 }
 
+const DEFAULT_INSECURE_TURN_SECRET = 'meeshy-turn-secret-CHANGE-IN-PRODUCTION';
+
 export class TURNCredentialService {
   private readonly turnSecret: string;
   private readonly turnServers: TURNServerConfig[];
@@ -27,7 +29,32 @@ export class TURNCredentialService {
 
   constructor() {
     // Load TURN secret from environment (CRITICAL: must be set in production)
-    this.turnSecret = process.env.TURN_SECRET || 'meeshy-turn-secret-CHANGE-IN-PRODUCTION';
+    const envSecret = process.env.TURN_SECRET;
+    const nodeEnv = process.env.NODE_ENV ?? 'development';
+    const isProductionOrStaging = nodeEnv === 'production' || nodeEnv === 'staging';
+
+    if (isProductionOrStaging) {
+      // In production / staging the default secret is committed to the repo —
+      // anyone with read access can forge HMAC credentials and abuse the TURN
+      // relay (bandwidth theft, amplification, internal-network pivot via
+      // host-mode networking). Refuse to start instead of warning silently.
+      if (!envSecret || envSecret === DEFAULT_INSECURE_TURN_SECRET) {
+        throw new Error(
+          '[SECURITY] TURN_SECRET environment variable must be set to a strong, ' +
+          'non-default value in production/staging. The committed default secret ' +
+          'cannot be used because it is public.'
+        );
+      }
+      this.turnSecret = envSecret;
+    } else {
+      // dev / local / test: tolerate the committed default (it is only used
+      // against the local coturn container) but still log a warning so it is
+      // never silently inherited.
+      this.turnSecret = envSecret || DEFAULT_INSECURE_TURN_SECRET;
+      if (this.turnSecret === DEFAULT_INSECURE_TURN_SECRET) {
+        logger.warn('⚠️ [SECURITY] Using committed default TURN secret — DEV/LOCAL ONLY.');
+      }
+    }
 
     // Parse TURN servers from environment
     // Format: TURN_SERVERS=turn1.example.com:3478,turn2.example.com:3478
@@ -44,15 +71,10 @@ export class TURNCredentialService {
       { urls: 'stun:stun2.l.google.com:19302' }
     ];
 
-    // Warn if using default secret in production
-    if (this.turnSecret === 'meeshy-turn-secret-CHANGE-IN-PRODUCTION' && process.env.NODE_ENV === 'production') {
-      logger.warn('⚠️ [SECURITY] Using default TURN secret in production! Set TURN_SECRET environment variable.');
-    }
-
     logger.info('🔐 TURNCredentialService initialized', {
       turnServersCount: this.turnServers.length,
       credentialTTL: this.credentialTTL,
-      hasCustomSecret: this.turnSecret !== 'meeshy-turn-secret-CHANGE-IN-PRODUCTION'
+      hasCustomSecret: this.turnSecret !== DEFAULT_INSECURE_TURN_SECRET
     });
   }
 
@@ -143,7 +165,7 @@ export class TURNCredentialService {
    * Used for health checks and monitoring
    */
   isConfigured(): boolean {
-    return this.turnServers.length > 0 && this.turnSecret !== 'meeshy-turn-secret-CHANGE-IN-PRODUCTION';
+    return this.turnServers.length > 0 && this.turnSecret !== DEFAULT_INSECURE_TURN_SECRET;
   }
 
   /**
@@ -161,7 +183,7 @@ export class TURNCredentialService {
       turnServersCount: this.turnServers.length,
       stunServersCount: this.stunServers.length,
       credentialTTL: this.credentialTTL,
-      hasCustomSecret: this.turnSecret !== 'meeshy-turn-secret-CHANGE-IN-PRODUCTION'
+      hasCustomSecret: this.turnSecret !== DEFAULT_INSECURE_TURN_SECRET
     };
   }
 }

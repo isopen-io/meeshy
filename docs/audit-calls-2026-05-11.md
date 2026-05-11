@@ -1,0 +1,293 @@
+# Audit 360° — Sous-systeme Appels Audio/Video Meeshy
+
+**Date** : 2026-05-11
+**Branche auditee** : `fix/audit-2026-05-11-hotfixes`
+**Methode** : 12 agents specialises en parallele (read-only) — iOS lifecycle, WebRTC, audio session, CallKit, NSE/VoIP push, UI, Gateway signaling, Gateway security, Web calls, Performance, Edge cases, Type alignment
+**Perimetre** : iOS (apps/ios + MeeshySDK), Gateway (services/gateway), Web (apps/web), NSE (MeeshyNotificationExtension), Infrastructure (TURN/coturn)
+
+---
+
+## TL;DR
+
+Le systeme d'appels Meeshy est **fonctionnellement operationnel** et a recu des fixes substantiels en mai 2026 (PR #226 anti-faux-appels, PR #227 e2e real calls + TURN, PR #228 perf -12% battery). Cet audit 360° revele cependant **5 P0 (bloquants/critiques) et 18 P1 (majeurs)** principalement concentres sur :
+
+1. **Securite TURN** : secret hardcode dans le repo (vol de bande passante / amplification possible)
+2. **Bridging NSE ⇄ App** : fuites silencieuses (App Group + Keychain mal configures) qui rendent le pre-fetch NSE inoperant
+3. **Authz Socket calls** : utilisateurs anonymes peuvent initier des appels, `call:reconnecting`/`force-leave` non rate-limites et sans verification de membership
+4. **Performance / Apple guidelines** : video continue d'encoder en background, idle timer jamais desactive, capturer non stoppe sur toggle off
+5. **Multi-device** : aucun event `answered-elsewhere` cote iOS ⇒ second device ringe indefiniment
+
+| Severite | iOS | Gateway | Web | Cross-cutting | **Total** |
+|---|---|---|---|---|---|
+| **P0** | 2 | 3 | 0 | 0 | **5** |
+| **P1** | 9 | 4 | 0 | 5 | **18** |
+| **P2** | 12 | 6 | 0 | 4 | **22** |
+| **P3** | 8 | 3 | 0 | 2 | **13** |
+| **Total** | **31** | **16** | **0** | **11** | **58** |
+
+---
+
+## 1. P0 — Hotfixes immediats
+
+### P0-1 — TURN secret hardcode dans le repo (SECURITE)
+
+- **Fichiers** :
+  - `infrastructure/config/turnserver.conf:10` → `static-auth-secret=meeshy-turn-secret-CHANGE-IN-PRODUCTION`
+  - `services/gateway/src/services/TURNCredentialService.ts:30` → fallback identique
+  - `infrastructure/config/turnserver.prod.conf:10` → `__TURN_SECRET__` placeholder mais **aucun script de substitution dans `docker-compose.prod.yml`** ⇒ la prod tourne potentiellement avec le placeholder litteral
+- **Impact** : tout attaquant ayant lu le repo peut forger des credentials HMAC valides (`HMAC-SHA1(secret, "<expiry>:<any>")`), relayer du trafic via le serveur TURN (vol de bande passante, amplification, pivot loopback `127.0.0.1:3000` car `network_mode: host` en prod).
+- **Repro** : disponible dans le rapport agent 8 (script Python 6 lignes).
+- **Fix** :
+  1. Rotation immediate du secret en prod
+  2. `TURNCredentialService.ts:28-31` → `throw new Error('[SECURITY] TURN_SECRET must be set')` si manquant ou `=== 'meeshy-turn-secret-CHANGE-IN-PRODUCTION'`
+  3. Ajouter un entrypoint `sed` dans le service coturn de `docker-compose.prod.yml` qui substitue `__TURN_SECRET__` depuis `${TURN_SECRET}` env var
+  4. Ajouter au `turnserver.conf` les denied-peer-ip pour `127.0.0.0/8`, `169.254.0.0/16` (metadata cloud), `::1`, `fc00::/7`
+
+### P0-2 — NSE App Group ID mismatch (orthographe `apps` vs `app`)
+
+- **Fichiers** :
+  - `apps/ios/MeeshyNotificationExtension/NSEDataSync.swift:17` → `appGroupId = "group.me.meeshy.apps"` (avec `s`)
+  - `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift:78` → ecrit `meeshy_active_user_id` dans `UserDefaults(suiteName: "group.me.meeshy.app")` (**sans `s`**)
+- **Impact** : `NSEDataSync.readAuthToken()` retourne toujours `nil` ⇒ tout le pre-fetch NSE (sync silencieux du message en cache local) est mort. Le fix SSRF audite le 2026-05-11 dans NSEDataSync est correct mais inatteignable.
+- **Verification** : confirme par `grep` (cf. ci-dessous).
+- **Fix** : aligner sur `"group.me.meeshy.apps"` partout (correspondance avec entitlements). Ecrire le `meeshy_active_user_id` dans le bon App Group au login.
+
+### P0-3 — Keychain query NSE manque `kSecAttrAccessGroup`
+
+- **Fichier** : `apps/ios/MeeshyNotificationExtension/NSEDataSync.swift:172-185`
+- **Impact** : la NSE tourne dans son propre process avec son propre keychain access group par defaut. Sans `kSecAttrAccessGroup` explicite, `SecItemCopyMatching` cherche dans le mauvais groupe et retourne `errSecItemNotFound`.
+- **Fix** : ajouter `kSecAttrAccessGroup as String: "$(AppIdentifierPrefix)me.meeshy.app"` dans la query (l'entitlement est correct, c'est juste la query qui doit le nommer explicitement).
+
+### P0-4 — Gateway : `joinCall` accepte les appels en etat `missed`/`rejected`/`failed`
+
+- **Fichier** : `services/gateway/src/services/CallService.ts:428`
+- **Detail** : la garde verifie uniquement `CallStatus.ended`. La constante `TERMINAL_STATUSES` (lignes 18-23) liste correctement `ended/missed/rejected/failed` mais n'est jamais consultee ici.
+- **Impact** : un callee qui recoit un push pour un appel deja timeout `missed` peut joindre — l'appel passe a `connecting` mais sans initiator en ligne, sans timeout ringing, sans path vers `ended`. Etat zombie permanent.
+- **Fix** : remplacer le check par `if (TERMINAL_STATUSES.includes(call.status))`.
+
+### P0-5 — Gateway : `'active' as any` / `'reconnecting' as any` dans 3 sites
+
+- **Fichier** : `services/gateway/src/socketio/CallEventsHandler.ts:990, 1329, 1352`
+- **Detail** : `updateCallStatus(data.callId, 'active' as any)` — le `.catch(() => {})` swallow les rejections silencieusement. Marche en dev avec un driver Prisma permissif, mais en prod strict ou apres une migration de schema, la transition `connecting → active` reste indefiniment dans l'etat precedent jusqu'au GC sweep (30s).
+- **Fix** : remplacer par `CallStatus.active` / `CallStatus.reconnecting` (l'enum est deja importe ligne 13).
+
+---
+
+## 2. P1 — Bugs majeurs / misalignments
+
+### iOS — Lifecycle & Concurrence
+
+| # | Titre | Fichier | Resume |
+|---|---|---|---|
+| P1-1 | `startCall` ignore l'ACK sur appel stale | `CallManager.swift:223-258` | Si user tape end <500ms avant ACK, le Task ressuscite l'appel apres `endCall` (re-arme mic + audio session sur appel deja annule) |
+| P1-2 | `providerDidReset` race avec timer 1.5s settle | `CallManager.swift:1476` + `588-603` | Timer settle peut wiper `currentCallId/remoteUserId` mid-ring d'un nouvel appel arrivant <1.5s apres la fin du precedent |
+| P1-3 | `WebRTCService.connectionState` mute off-actor | `WebRTCService.swift:32, 297-298` | Class `@unchecked Sendable` sans lock, mutee depuis `DispatchQueue.main.async`. Data race garanti TSAN |
+| P1-4 | `qualityMonitorTimer` utilise encore `Timer.scheduledTimer` | `WebRTCService.swift:160` | PERF-011 (Tasks) a oublie ce timer. Inconsistant avec heartbeat/duration migrees |
+
+### iOS — WebRTC & Codecs
+
+| # | Titre | Fichier | Resume |
+|---|---|---|---|
+| P1-5 | `setCodecPreferences` lit `rtpReceiverCapabilities` au lieu de sender | `P2PWebRTCClient.swift:250-253, 311` | Spec W3C : doit valider contre `RTCRtpSender.getCapabilities()`. RED a une negociation asymetrique → `setCodecPreferences` peut throw "Invalid codec" |
+| P1-6 | `addTransportCC` insertion-point bug + collision extID | `P2PWebRTCClient.swift:746-775` | Insere extmap line **avant** les `a=rtcp-fb:` au lieu d'apres tous les extmap. Strict SDP parser distant rejette l'offer |
+| P1-7 | Toggle video OFF n'arrete pas le capturer | `P2PWebRTCClient.swift:444-447` | Camera LED reste allumee, AVCaptureSession continue ~44 MB/s NV12 frames. Encoder recoit black frames mais capturer tourne → 80-150mA gaspilles |
+
+### iOS — Audio Session
+
+| # | Titre | Fichier | Resume |
+|---|---|---|---|
+| P1-8 | `AudioPlayerManager.play()` ecrase la category `.playAndRecord` du call | `AudioPlayerManager.swift:59-61` | Ecouter un message vocal pendant un appel coupe completement le micro WebRTC (peer entend silence) |
+| P1-9 | `AudioPlayerManager.stop()` `setActive(false)` sans check call active | `AudioPlayerManager.swift:131` | Tear down de la session pendant un appel ⇒ perte audio call jusqu'au prochain route change |
+| P1-10 | `AudioRecorderManager` mode `.default` + `.allowBluetoothA2DP` | `AudioRecorderManager.swift:29` | Mauvais mode (pas d'EC/AGC sur les voice messages) + flap A2DP/HFP cause les ~200ms glitches deja audites |
+
+### iOS — CallKit
+
+| # | Titre | Fichier | Resume |
+|---|---|---|---|
+| P1-11 | `CXEndCallAction.fulfill()` sync avant le Task d'endCall | `CallManager.swift:1490-1495` | CallKit considere l'appel termine et `didDeactivate` la session AVANT que `webRTCService.close()` ait tourne. Risque de `CXErrorCodeRequestTransactionError` |
+| P1-12 | `reportOutgoingCall(connectedAt)` utilise pour incoming aussi | `CallManager.swift:840` | Sur le path callee (apres `CXAnswerCallAction`), CallKit ignore silencieusement → le timer Recents ne demarre jamais. Manque aussi `startedConnectingAt` pour outgoing |
+| P1-13 | `toggleMute()` flip `isMuted` AVANT le `CXSetMutedCallAction` | `CallManager.swift:607-618` | Si `callController.request` echoue, etat app et UI systeme divergent permanentement |
+
+### iOS — VoIP Push
+
+| # | Titre | Fichier | Resume |
+|---|---|---|---|
+| P1-14 | `sendVoIPPush` (gateway) omet `callerUserId` et `isVideo` | `services/gateway/src/services/PushNotificationService.ts:312-339` | Si ce code path est emprunte (recovery missed-call), tous les appels apparaissent comme audio-only, caller anonyme |
+| P1-15 | `VoIPPushManagerTests` tautologique | `MeeshyTests/Unit/Services/VoIPPushManagerTests.swift:16` | `assert(token == nil || token != nil)` — false assurance de couverture. Le test ne couvre rien |
+
+### iOS — UI
+
+| # | Titre | Fichier | Resume |
+|---|---|---|---|
+| P1-16 | `@ObservedObject = CallManager.shared` instantiation au declaration | `CallView.swift:10`, `IncomingCallView.swift:9` | Viole regle CLAUDE.md "@ObservedObject when RECEIVED, NEVER for instantiation" — subscription churn pendant ringing |
+| P1-17 | Couleurs hex hardcodees (purple/teal/coral deprecated) | `CallView.swift:84,91,98,163,235,240,472,499,522`, `IncomingCallView.swift:59,112` | Doit utiliser `MeeshyColors.indigo*` + `conversation.accentColor`. Background `A855F7`/`08D9D6`/`FF2E63` = palette retiree |
+| P1-18 | `UIScreen.main.bounds` pour position drag video preview | `CallView.swift:20, 312-313` | Deprecated iOS 16+, donne valeurs incorrectes en Stage Manager / iPad split view → preview offscreen |
+
+### Gateway — Securite & Authz
+
+| # | Titre | Fichier | Resume |
+|---|---|---|---|
+| P1-19 | TURN coturn config ne deny pas loopback / link-local | `infrastructure/config/turnserver.{conf,prod.conf}:13-15` | Avec `network_mode: host`, attaquant valide credentials peut relayer vers `127.0.0.1:3000` (gateway) ou `169.254.169.254` (metadata cloud) |
+| P1-20 | Anonymous users peuvent initier des appels via socket | `services/gateway/src/socketio/CallEventsHandler.ts:151-453` | REST `POST /api/calls` a `allowAnonymous: false` mais le handler socket `call:initiate` ne verifie pas `isAnonymous` (verifie seulement `userId != null`) |
+| P1-21 | `call:reconnecting`/`reconnected` sans authz check | `CallEventsHandler.ts:1321-1361` | N'importe quel auth user peut flipper le status d'un callId arbitraire vers `reconnecting`/`active` (perturbe les appels en cours, bypass ringing) |
+| P1-22 | `call:force-leave` sans rate limit, sans validation, sans membership check | `CallEventsHandler.ts:764-861` | Pas de Zod schema, pas de rate limit, pas de check membership conversation → user authentifie peut terminer tous les appels actifs de toutes les conversations dont il devine l'ID |
+
+### Cross-cutting — Multi-device, Network, Type alignment
+
+| # | Titre | Fichier | Resume |
+|---|---|---|---|
+| P1-23 | iOS `emitCallJoin` est fire-and-forget — drops TURN credentials ACK | `MessageSocketManager.swift:1241` | Path "callee qui rejoint via socket" construit `RTCPeerConnection` avec **STUN seulement**. Appels via NAT symetrique echouent silencieusement |
+| P1-24 | `call:ended` payload drop le champ `reason` cote iOS | `MessageSocketManager.swift:438` | iOS `CallEndData` n'a pas `reason` → tous les remote ends sont indifferenciables (pas de UX distinct missed/rejected/connectionLost) |
+| P1-25 | `call:missed` event sans listener iOS | gateway emet, SDK n'enregistre rien | Banner missed-call ne s'affiche jamais pour les utilisateurs en ligne |
+| P1-26 | `call:initiated` iOS struct sans `participants[]` | `MessageSocketManager.swift:398` | Liste participants vide pendant ringing — UI affiche un participant blank jusqu'au premier `participant-joined` |
+| P1-27 | Multi-device : second device ring indefiniment | `CallEventsHandler.ts:288-309` | Aucun emit/listen `call:already-answered` ou `answeredElsewhere`. iPad + iPhone du meme user → second device bloque sur ringing UI |
+| P1-28 | Disconnect handler resout `userId` apres possible cleanup MeeshySocketIOManager | `CallEventsHandler.ts:1434-1437` | Si manager handler delete `socketToUser` en premier, `getUserId()` retourne `undefined` → auto-leave silently skip → calls jamais nettoyes en cas de disconnect abrupt |
+| P1-29 | Callee qui leave en ringing → `ended` au lieu de `rejected` | `CallEventsHandler.ts:688-689` | Pas de missed-call push, pas de UX rejection sur l'initiator |
+| P1-30 | Socket room `call:${callId}` perdu apres reconnect Socket.IO | `MessageSocketManager` reconnect handler | Audio peut continuer (ICE survit via NWPathMonitor) mais tous les events relayes par gateway (ICE candidates, re-offer, call:ended) sont silently drop |
+| P1-31 | Pas d'observer `AVAudioSession.interruptionNotification` | `CallManager` | Apres interruption (appel cellulaire), iOS ne rappelle pas `didActivate`. `RTCAudioSession.isAudioEnabled` reste `false` indefiniment → silence permanent |
+
+---
+
+## 3. P0/P1 absents (verifications positives)
+
+- ✅ **RTCCleanupSSL fix (commit `342c03a6`)** est solide : `RTCInitializeSSL()` une seule fois dans le `WebRTCSharedFactory.factory` static lazy, `P2PWebRTCClient.deinit` vide. Second-call-in-session OK.
+- ✅ **iceCandidateBuffer** + `hasRemoteDescription` gate (`WebRTCService.swift:102-114`) : ICE candidates avant remote description correctement queued.
+- ✅ **PR #228 verifie merged** dans la branche : PERF-001 (cached factory), PERF-002 (H264 pinned), PERF-003 (iceCandidatePoolSize=4), PERF-004 (ACK-aware answer), PERF-005 (transcription gating), PERF-010 (drop A2DP), PERF-011 (Tasks vs Timers, sauf qualityMonitorTimer), PERF-013/014/015 (video filter) tous presents.
+- ✅ **Translator service (NLLB) bypassed pendant les calls** : `grep` confirme zero invocation.
+- ✅ **Async EventEmitter handlers** wrapped en `try/catch` partout cote gateway (regle CLAUDE.md respectee).
+- ✅ **Atomic `updateMany` pour ringing timeout** (audit 2026-05-11 fix) supprime le TOCTOU race.
+- ✅ **Web calls implementation existante et complete** (`apps/web/components/video-calls/` + `video-call/` + `stores/call-store.ts` + `hooks/use-call-quality.ts`). Architecture Zustand + native RTCPeerConnection (P2P mesh). Heartbeat + beforeunload sendBeacon empechent les ghost calls.
+
+---
+
+## 4. P2 — A traiter (backlog)
+
+### iOS
+
+- **P2-iOS-1** `pendingIncomingCall` jamais clear dans `endCallInternal` (`CallManager.swift:1002-1059`) → banner pointe sur callId mort apres busy
+- **P2-iOS-2** `applySpeakerRoute()` appelee avant que l'audio engine WebRTC soit pret (`CallManager.swift:1527`) → bouton speaker peut paraitre toggled mais audio reste sur earpiece
+- **P2-iOS-3** `MediaSessionCoordinator` utilise `.allowBluetooth` deprecated au lieu de `.allowBluetoothHFP` (`MediaSessionCoordinator.swift:60`)
+- **P2-iOS-4** `cancelRecording` ne deactive pas la session (`AudioRecorderManager.swift:79-91`) → micro indicator reste allume
+- **P2-iOS-5** `maximumCallGroups = 2` mais `supportsHolding = false` partout (`CallManager.swift:121-123, 275-276`) → contradictoire, mettre `maximumCallGroups = 1`
+- **P2-iOS-6** `handleRemoteReject` utilise `.remoteEnded` au lieu de `.declinedElsewhere` (`CallManager.swift:732`) → Recents iOS affiche "Ended" au lieu de "Declined"
+- **P2-iOS-7** Mute button VoiceOver label statique (`CallView.swift:558`) → pas d'`accessibilityValue`, user VO ne sait pas l'etat
+- **P2-iOS-8** Camera-flip button label "Camera" ambigu (`CallView.swift:434-441`)
+- **P2-iOS-9** Animations pulse/ring sans check `accessibilityReduceMotion` (`CallView.swift:465-491`, `IncomingCallView.swift:51-95`)
+- **P2-iOS-10** `connectionQuality` track par CallManager mais jamais expose dans la UI (`CallManager.swift:56` vs absence dans `CallView.connectedView`)
+- **P2-iOS-11** `CallWaitingBannerView.show()` mute `@State` via struct copy (pattern fragile, autoDismissSeconds non utilise)
+- **P2-iOS-12** Stats interval 3s aggressif (`WebRTCTypes.swift:164`) → bumper a 5s steady-state, 2s seulement en `.reconnecting`
+
+### Gateway
+
+- **P2-GW-1** `io.fetchSockets()` O(N) sur tous les sockets a chaque `call:initiate` (`CallEventsHandler.ts:288`) → utiliser `io.in(ROOMS.user(userId)).fetchSockets()`
+- **P2-GW-2** `callType` hardcode `'video'` dans missed-call push (`CallEventsHandler.ts:1620` TODO)
+- **P2-GW-3** `markCallAsMissed` non-atomic avec ringing timeout (`CallService.ts:789-823`) — peut overwrite `endedAt`/`duration`
+- **P2-GW-4** TTL TURN credentials 3600s = fenetre d'abus large (10 min serait plus serre)
+- **P2-GW-5** `updateParticipantMedia` recoit `userId` mais Prisma query sur `participantId` (`CallEventsHandler.ts:1057-1061` + `CallService.ts:753-762`) → match jamais → audio/video toggle silently fail
+- **P2-GW-6** `call:force-leave` sans membership check (`CallEventsHandler.ts:781-800`)
+
+### Cross-cutting
+
+- **P2-CC-1** Pas de queue d'enregistrement VoIP token si pas encore loggue (`VoIPPushManager.registerTokenWithBackend`)
+- **P2-CC-2** Phone-call interruption non geree → ses 5s+ post-cellular silence (P1-31 detaille)
+- **P2-CC-3** `AudioRecorderManager.startRecording()` sans interlock avec `CallManager.shared.callState.isActive` → conflit session
+- **P2-CC-4** Pas de `seenCallIds` dedup dans `VoIPPushManager` → push duplique = 2 entries CallKit avec UUID differentes
+
+---
+
+## 5. P3 — Polish, code quality
+
+- iOS : `signalOfferCancellable` declare jamais assigne (`CallManager.swift:95`) ; 30s SDP-offer timeout Tasks non stockes (mini-leak) ; logs `Logger.webrtc.info` dans `startLocalMedia` (11 calls par setup, devrait etre `.debug`) ; getStats logs every 3s en release ; H264 codec ordering ne discrimine pas Baseline vs High profile ; `endReasonText` String localized keys non verifiees ; `IncomingCallView` redondant avec CallView background.
+- Gateway : `socket.on.bind(socket)` alias inutile et trompeur (`CallEventsHandler.ts:1434`) ; `markCallAsMissed` redondant avec timeout `updateMany` ; `CallCleanupService` GC peut emit duplicate `call:ended`.
+- Type alignment : `call:force-leave` non present dans `CALL_EVENTS` constant map.
+
+---
+
+## 6. Matrice d'alignement type SDK ↔ Gateway ↔ iOS
+
+| Event / Type | Gateway | iOS | Statut | Severite |
+|---|---|---|---|---|
+| `call:initiate` (C→S) | `CALL_EVENTS.INITIATE` | `emitWithAck` ✅ | Aligne | OK |
+| `call:initiated` (S→C) | inclut `participants[]` | `CallOfferData` sans `participants` | **Mismatch** | P1-26 |
+| `call:join` (C→S) | attend ACK avec `iceServers` | fire-and-forget | **Mismatch** | P1-23 |
+| `call:participant-joined` | participant + mode + iceServers | `CallParticipantData` flexible | OK | — |
+| `call:participant-left` | event dedie | meme struct reutilisee | OK | — |
+| `call:signal` | `CallSignalEvent` | dict manuel decode | OK (opaque pass-through) | — |
+| `call:ended` | inclut `reason: CallEndReason` | `CallEndData` SANS `reason` | **Mismatch** | P1-24 |
+| `call:missed` | emit | **pas de listener iOS** | **Missing** | P1-25 |
+| `call:already-answered` | declare | **pas de listener iOS** | **Missing** | P2-CC-multi |
+| `call:media-toggled` | event dedie | aligne | OK | — |
+| `call:error` | `CallError` typed | `CallErrorData` widened | OK | — |
+| `call:force-leave` | string literal | non present `CALL_EVENTS` | **Constant manquant** | P3 |
+| `call:initiate` ACK | `CallInitiateAck` | aligned via sub-decode | OK | — |
+| `call:join` ACK | `CallJoinAck` avec iceServers | non await | **Drop ACK** | P1-23 |
+| TURN ICE format | `urls: string` | `IceServerURLs` flexible | OK (iOS gere les 2) | — |
+| VoIP push payload | `{ type, callId, callerName, callerUserId, callerAvatar, isVideo, iceServers }` | aligned | OK (sauf P1-14) | P1-14 |
+
+---
+
+## 7. Couverture / Gaps de tests
+
+- ❌ `CallManagerTests` couvre 0 tests behavioraux du flow 2nd-call-in-session, 0 pour la P1-1/P1-2 race (settle window, late ACK)
+- ❌ `VoIPPushManagerTests` 100% tautologique
+- ❌ Aucun test sur `addTransportCC`/`addVideoBitrateHints` SDP parse
+- ❌ Aucune verification BG/FG transition (PERF reactive)
+- ❌ `CallEventQueue.swift` est un scaffold Phase 0 — actor non wire, donc tous les transitions FSM restent sur `@MainActor` direct sans barriere d'arbitrage
+- ❌ Pas d'audit trail persistant pour les call events (logs Pino ephemeral en Docker — GDPR Art. 30)
+- ❌ Pas de measurement Energy Log Instruments verifiant la claim PR #228 -12% battery
+- ❌ Pas d'adaptation bitrate par network type (cellular vs Wi-Fi — `isExpensive`)
+
+---
+
+## 8. Ordre de remediation recommande
+
+### Sprint immediat (1-2 jours)
+
+1. **P0-1** TURN secret rotation + `throw on default` + ajouter denied-peer-ip loopback/metadata (`infrastructure/config/turnserver.conf`, `TURNCredentialService.ts`, `docker-compose.prod.yml`)
+2. **P0-4 + P0-5** Fixes Gateway : `joinCall` guard sur `TERMINAL_STATUSES`, remplacer `'X' as any` par enum (`CallService.ts`, `CallEventsHandler.ts`)
+3. **P0-2 + P0-3** Aligner App Group ID a `group.me.meeshy.apps` partout + ajouter `kSecAttrAccessGroup` au keychain query NSE
+4. **P1-20 + P1-22** Bloquer anonymous sur `call:initiate`/`call:join` socket + ajouter rate limit + Zod + membership check sur `call:force-leave`
+
+### Sprint S+1 (3-5 jours)
+
+5. **P1-23** Convertir `emitCallJoin` en `emitWithAck`, recuperer iceServers TURN
+6. **P1-24 + P1-25 + P1-27** Ajouter `reason` dans `CallEndData`, ecouter `call:missed`, ecouter `call:already-answered` cote iOS + emit cote gateway sur `call:join` multi-device
+7. **P1-7** Stopper le capturer dans `toggleVideo(false)` + redemarrer dans `toggleVideo(true)`
+8. **P1-8 + P1-9 + P1-10** Interlock `AudioPlayerManager`/`AudioRecorderManager` avec `CallManager.callState.isActive`
+9. **P1-11 + P1-13** Reorganiser les `action.fulfill()` apres l'async work + `toggleMute` ne mute qu'apres ack CallKit
+10. **P1-30** `MessageSocketManager` reconnect handler doit re-emit `call:join` si `callState.isActive`
+11. **P1-31** Observer `AVAudioSession.interruptionNotification` + replay `isAudioEnabled = true` sur shouldResume
+
+### Sprint S+2 (perf + UX)
+
+12. Idle timer disable pendant l'appel (gap quantique : pas de P0/P1 ID assigne mais critique UX)
+13. Stop video on background (Apple guideline)
+14. Bitrate adaptatif cellular vs Wi-Fi (P1-bitrate-cap : 2.5 Mbps → 800-1200 kbps cellular)
+15. Migrer `qualityMonitorTimer` en Task (P1-4)
+16. Fixer `setCodecPreferences` sender (P1-5) + `addTransportCC` insertion-point (P1-6) + Opus stereo=0 (P2)
+17. Ajouter connectionQuality indicator dans la UI (P2-iOS-10)
+18. Couleurs : remplacer hex deprecated par `MeeshyColors.indigo*` + `conversation.accentColor` (P1-17)
+19. Accessibility : VoiceOver labels dynamiques + `reduceMotion` checks (P2-iOS-7/8/9)
+
+### Backlog post-launch
+
+- Tous les P3, polish UX (PiP system avec `AVPictureInPictureController`, group calls future, simulcast pour SFU futur)
+- Audit trail persistant call events (GDPR)
+- Measurement Energy Log Instruments verifiant -12% battery
+- Tests complets : VoIPPushManager non-tautologique, CallManager scenarios reels (2nd call, settle race, late ACK)
+
+---
+
+## 9. Notes pour les developpeurs
+
+- **Le sous-systeme calls est globalement solide** apres PR #226/#227/#228. Les hotfixes critiques sont concentres sur la securite TURN et les ponts NSE/App ; le reste du systeme tient bien en charge.
+- **Multi-device est le plus gros trou produit** : les utilisateurs avec iPad+iPhone vont avoir une mauvaise experience (second device ringe permanent). Doit etre adresse avant tout marketing visant les power users.
+- **Les misalignments d'event types** sont historiques (le SDK a evolue moins vite que le gateway). Une session de cleanup gateway↔SDK alignment est recommandee.
+- **La performance** est honnete (PR #228 merged) mais des optimisations evidentes manquent (idle timer, stop capturer en BG, bitrate cellular adaptatif). Ces 3 items meritent un sprint perf dedie.
+- **L'absence totale de tests behavioraux solides** est inquietante pour un sous-systeme aussi sensible. Un test `test_secondCall_inSameAppSession_succeeds` aurait detecte le bug de `342c03a6` avant le shipping.
+
+---
+
+**Auditeurs** : 12 agents Claude (ios-architect-expert, feature-dev:code-reviewer, microservice-code-reviewer, security-reviewer, performance-benchmarker, Explore)
+**Lecture des fichiers** : ~62 fichiers iOS/Swift, ~14 fichiers gateway TS, ~8 fichiers infrastructure, ~12 fichiers SDK Swift, packages/shared/types/* relevant
+**Total tokens consommes** : ~1.07 M (12 agents en parallele)

@@ -424,9 +424,9 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
     }
 
-    // Validate call is not ended
-    if (call.status === CallStatus.ended) {
-      logger.error('❌ Call has ended', { callId });
+    // Validate call is not in a terminal state (ended/missed/rejected/failed)
+    if (TERMINAL_STATUSES.includes(call.status)) {
+      logger.error('❌ Call is in terminal state', { callId, status: call.status });
       throw new Error(`${CALL_ERROR_CODES.CALL_ENDED}: This call has already ended`);
     }
 

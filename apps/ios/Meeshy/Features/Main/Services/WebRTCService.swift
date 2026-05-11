@@ -33,7 +33,11 @@ final class WebRTCService: @unchecked Sendable {
 
     private(set) var currentBitrate: Int = QualityThresholds.defaultBitrate
     private(set) var currentQualityLevel: VideoQualityLevel = .excellent
-    private var qualityMonitorTimer: Timer?
+    // Audit P1-4 — replace Timer.scheduledTimer with cancellable Task to
+    // align with PERF-011 (heartbeat / duration migrated; this monitor was
+    // missed). Timers run on RunLoop.main, are App-Nap-unfriendly, and have
+    // no structured cancellation hand-off.
+    private var qualityMonitorTask: Task<Void, Never>?
     private var lastStats: CallStats?
     private var comfortNoiseEnabled = true
     private var qualityLevelDebounceDate: Date?
@@ -157,24 +161,26 @@ final class WebRTCService: @unchecked Sendable {
 
     func startQualityMonitor() {
         stopQualityMonitor()
-        qualityMonitorTimer = Timer.scheduledTimer(
-            withTimeInterval: QualityThresholds.statsIntervalSeconds,
-            repeats: true
-        ) { [weak self] _ in
-            guard self != nil else { return }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard let stats = await self.client.getStats() else { return }
-                self.lastStats = stats
-                self.adjustBitrate(basedOn: stats)
+        let interval = QualityThresholds.statsIntervalSeconds
+        qualityMonitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let nanos = UInt64(interval * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: nanos)
+                if Task.isCancelled { break }
+                await Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    guard let stats = await self.client.getStats() else { return }
+                    self.lastStats = stats
+                    self.adjustBitrate(basedOn: stats)
+                }.value
             }
         }
-        Logger.webrtc.info("Quality monitor started (interval: \(QualityThresholds.statsIntervalSeconds)s)")
+        Logger.webrtc.info("Quality monitor started (interval: \(interval)s, task-based)")
     }
 
     func stopQualityMonitor() {
-        qualityMonitorTimer?.invalidate()
-        qualityMonitorTimer = nil
+        qualityMonitorTask?.cancel()
+        qualityMonitorTask = nil
     }
 
     private func adjustBitrate(basedOn stats: CallStats) {

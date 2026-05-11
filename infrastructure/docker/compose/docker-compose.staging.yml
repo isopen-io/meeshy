@@ -403,8 +403,20 @@ services:
     container_name: meeshy-staging-coturn
     network_mode: host
     volumes:
-      - ../config/turnserver.prod.conf:/etc/turnserver.conf:ro
+      - ../config/turnserver.prod.conf:/etc/turnserver.template.conf:ro
       - /etc/letsencrypt:/etc/letsencrypt:ro
+    environment:
+      - TURN_SECRET=${TURN_SECRET}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        if [ -z "$$TURN_SECRET" ] || [ "$$TURN_SECRET" = "__TURN_SECRET__" ] || [ "$$TURN_SECRET" = "meeshy-turn-secret-CHANGE-IN-PRODUCTION" ]; then
+          echo "[FATAL] TURN_SECRET env var must be set to a strong, non-default value before starting coturn." >&2
+          exit 1
+        fi
+        sed "s|__TURN_SECRET__|$$TURN_SECRET|g" /etc/turnserver.template.conf > /tmp/turnserver.conf
+        exec turnserver -c /tmp/turnserver.conf
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "turnutils_stunclient", "-p", "3478", "localhost"]

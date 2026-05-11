@@ -439,6 +439,24 @@ public struct CallEndData: Decodable, Sendable {
     public let callId: String
     public let duration: Int?
     public let endedBy: String?
+    /// Audit P1-24 — gateway emits `reason: CallEndReason` (`"missed"`,
+    /// `"rejected"`, `"completed"`, `"connectionLost"`, `"failed"`,
+    /// `"declined"`, `"answeredElsewhere"`). Without surfacing it on iOS,
+    /// every remote-end was indistinguishable and CallKit reported every
+    /// case as `.remoteEnded` — wrong for missed/declined/answeredElsewhere
+    /// (Recents UX) and for analytics.
+    public let reason: String?
+}
+
+/// Audit P1-25 — `call:missed` event payload. Gateway emits this on
+/// ringing-timeout to the callee's user-room sockets (in addition to
+/// `call:ended`). The dedicated event lets the iOS UI raise a missed-call
+/// banner without inferring it from `endedBy != self`.
+public struct CallMissedData: Decodable, Sendable {
+    public let callId: String
+    public let conversationId: String
+    public let callerId: String
+    public let callerName: String?
 }
 
 public struct CallParticipantData: Decodable, Sendable {
@@ -691,6 +709,9 @@ public protocol MessageSocketProviding: Sendable {
     var callAnswerReceived: PassthroughSubject<CallAnswerData, Never> { get }
     var callICECandidateReceived: PassthroughSubject<CallICECandidateData, Never> { get }
     var callEnded: PassthroughSubject<CallEndData, Never> { get }
+    /// Audit P1-25 — dedicated `call:missed` event publisher (in addition to
+    /// `callEnded` which is emitted in parallel for backwards-compat).
+    var callMissed: PassthroughSubject<CallMissedData, Never> { get }
     var callParticipantJoined: PassthroughSubject<CallParticipantData, Never> { get }
     var callParticipantLeft: PassthroughSubject<CallParticipantData, Never> { get }
     var callMediaToggled: PassthroughSubject<CallMediaToggleData, Never> { get }
@@ -842,6 +863,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
     public let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
     public let callEnded = PassthroughSubject<CallEndData, Never>()
+    public let callMissed = PassthroughSubject<CallMissedData, Never>()
     public let callParticipantJoined = PassthroughSubject<CallParticipantData, Never>()
     public let callParticipantLeft = PassthroughSubject<CallParticipantData, Never>()
     public let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()
@@ -1722,6 +1744,18 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallEndData.self, from: data) { [weak self] event in
                 self?.callEnded.send(event)
+            }
+        }
+
+        // Audit P1-25 — register the dedicated `call:missed` listener.
+        // Gateway emits this event in addition to `call:ended` when the
+        // ringing timeout fires and the callee never answered, so the iOS
+        // UI can surface a missed-call state explicitly instead of having
+        // to infer it from `endedBy != self`.
+        socket.on("call:missed") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallMissedData.self, from: data) { [weak self] event in
+                self?.callMissed.send(event)
             }
         }
 

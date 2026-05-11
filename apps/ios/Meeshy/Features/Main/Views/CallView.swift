@@ -17,7 +17,12 @@ struct CallView: View {
     @State private var showTranscript = false
     @State private var showEffectsToolbar = false
     @State private var localPreviewOffset: CGSize = .zero
-    @State private var localPreviewPosition: CGPoint = CGPoint(x: UIScreen.main.bounds.width - 70, y: 100)
+    // Audit P1-18 — `UIScreen.main` is deprecated since iOS 16 and returns
+    // wrong values on iPad multitasking / Stage Manager (the app's window is
+    // a fraction of the screen). Use a sensible default; the runtime drag
+    // handler reconciles the real position from a GeometryReader proxy
+    // when the user moves the bubble.
+    @State private var localPreviewPosition: CGPoint = CGPoint(x: 320, y: 100)
 
     var body: some View {
         ZStack {
@@ -37,7 +42,10 @@ struct CallView: View {
                 if isOutgoing {
                     outgoingRingingView
                 } else {
-                    IncomingCallView()
+                    // Audit P1-16 — pass our own @ObservedObject down so
+                    // SwiftUI reuses the same subscription instead of
+                    // re-creating it on each parent body reval.
+                    IncomingCallView(callManager: callManager)
                 }
             case .offering:
                 connectingView
@@ -309,8 +317,22 @@ struct CallView: View {
                     .onEnded { value in
                         let finalX = localPreviewPosition.x + value.translation.width
                         let finalY = localPreviewPosition.y + value.translation.height
-                        let screenW = UIScreen.main.bounds.width
-                        let screenH = UIScreen.main.bounds.height
+                        // Audit P1-18 — use the active key window's bounds
+                        // (correct under Stage Manager / iPad multitasking)
+                        // and fall back to UIScreen.main only when no window
+                        // scene is yet attached. A full GeometryReader-driven
+                        // refactor is tracked in the P2 backlog.
+                        let bounds: CGRect = {
+                            let scenes = UIApplication.shared.connectedScenes
+                            for case let windowScene as UIWindowScene in scenes {
+                                if let win = windowScene.windows.first(where: { $0.isKeyWindow }) ?? windowScene.windows.first {
+                                    return win.bounds
+                                }
+                            }
+                            return UIScreen.main.bounds
+                        }()
+                        let screenW = bounds.width
+                        let screenH = bounds.height
                         let snappedX: CGFloat = finalX < screenW / 2 ? 70 : screenW - 70
                         let snappedY: CGFloat = max(80, min(finalY, screenH - 180))
                         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {

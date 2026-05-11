@@ -75,7 +75,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         get { UserDefaults.standard.string(forKey: activeUserIdUDKey) }
         set {
             UserDefaults.standard.set(newValue, forKey: activeUserIdUDKey)
-            UserDefaults(suiteName: "group.me.meeshy.app")?.set(newValue, forKey: activeUserIdUDKey)
+            UserDefaults(suiteName: "group.me.meeshy.apps")?.set(newValue, forKey: activeUserIdUDKey)
         }
     }
 

@@ -29,6 +29,7 @@ import {
   socketQualityReportSchema,
   socketReconnectingSchema,
   socketReconnectedSchema,
+  socketForceLeaveSchema,
   socketTranscriptionSegmentSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
@@ -143,6 +144,29 @@ export class CallEventsHandler {
     getUserId: (socketId: string) => string | undefined,
     getUserInfo?: (socketId: string) => { id: string; isAnonymous: boolean } | undefined
   ): void {
+    // Audit P1-28 — Cache the userId at the moment we observe an authenticated
+    // call event so the disconnect handler can still recover it even if the
+    // upstream MeeshySocketIOManager has already deleted its socketToUser
+    // entry by the time our async cleanup runs.
+    let cachedUserId: string | undefined;
+    const rememberAuth = (uid: string) => { cachedUserId = uid; };
+    const recoverUserId = (): string | undefined => getUserId(socket.id) ?? cachedUserId;
+
+    // Audit P1-20 — Anonymous (X-Session-Token) users must NOT be able to
+    // initiate or join calls. The REST routes already enforce this with
+    // `allowAnonymous: false`; this socket gate aligns the WS surface.
+    const denyAnonymous = (): boolean => {
+      const info = getUserInfo?.(socket.id);
+      if (info?.isAnonymous) {
+        socket.emit(CALL_EVENTS.ERROR, {
+          code: CALL_ERROR_CODES.PERMISSION_DENIED,
+          message: 'Anonymous users cannot initiate or join calls'
+        } as CallError);
+        return true;
+      }
+      return false;
+    };
+
     /**
      * call:initiate - Client initiates a new call
      * CVE-002: Added rate limiting (5 req/min)
@@ -158,6 +182,8 @@ export class CallEventsHandler {
           } as CallError);
           return;
         }
+        if (denyAnonymous()) return;
+        rememberAuth(userId);
 
         // CVE-002: Rate limiting check
         const rateLimitPassed = await checkSocketRateLimit(
@@ -467,6 +493,8 @@ export class CallEventsHandler {
           } as CallError);
           return;
         }
+        if (denyAnonymous()) return;
+        rememberAuth(userId);
 
         // CVE-002: Rate limiting check
         const rateLimitPassed = await checkSocketRateLimit(
@@ -771,6 +799,49 @@ export class CallEventsHandler {
           } as CallError);
           return;
         }
+        rememberAuth(userId);
+
+        // Audit P1-22 — Rate limit (reuse CALL_LEAVE budget — same intent).
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket,
+          userId,
+          SOCKET_RATE_LIMITS.CALL_LEAVE,
+          this.rateLimiter,
+          CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
+
+        // Audit P1-22 — Validate conversationId is a valid ObjectId before
+        // running an unbounded `findMany` against the conversation_id index.
+        const validation = validateSocketEvent(socketForceLeaveSchema, data);
+        if (!validation.success) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: (validation as any).error,
+            details: (validation as any).details
+          } as any);
+          return;
+        }
+
+        // Audit P1-22 — Membership check: a user must belong to the
+        // conversation before they can list / terminate its active calls.
+        // Without this gate any authenticated user could iterate over guessed
+        // conversation IDs and force-end every active call on the platform.
+        const membership = await this.prisma.participant.findFirst({
+          where: {
+            conversationId: data.conversationId,
+            userId,
+            isActive: true
+          },
+          select: { id: true }
+        });
+        if (!membership) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this conversation'
+          } as CallError);
+          return;
+        }
 
         logger.info('📞 Socket: call:force-leave', {
           socketId: socket.id,
@@ -987,7 +1058,7 @@ export class CallEventsHandler {
         if (data.signal.type === 'answer') {
           // Phase 1 fix P2 — answer signal transitions ringing → active
           this.callService.clearRingingTimeout(data.callId);
-          await this.callService.updateCallStatus(data.callId, 'active' as any).catch(() => {});
+          await this.callService.updateCallStatus(data.callId, CallStatus.active).catch(() => {});
         }
 
         ack?.({ success: true });
@@ -1322,11 +1393,18 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
+        rememberAuth(userId);
 
         const validation = validateSocketEvent(socketReconnectingSchema, data);
         if (!validation.success) return;
 
-        await this.callService.updateCallStatus(data.callId, 'reconnecting' as any).catch(() => {});
+        // Audit P1-21 — Authorization: only an active participant in this
+        // call can flip its status. Otherwise any authenticated user could
+        // toggle reconnecting/active on arbitrary callIds.
+        const membership = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!membership) return;
+
+        await this.callService.updateCallStatus(data.callId, CallStatus.reconnecting).catch(() => {});
 
         logger.info('Call reconnecting', {
           callId: data.callId,
@@ -1345,11 +1423,16 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
+        rememberAuth(userId);
 
         const validation = validateSocketEvent(socketReconnectedSchema, data);
         if (!validation.success) return;
 
-        await this.callService.updateCallStatus(data.callId, 'active' as any).catch(() => {});
+        // Audit P1-21 — Authorization: see RECONNECTING handler above.
+        const membership = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!membership) return;
+
+        await this.callService.updateCallStatus(data.callId, CallStatus.active).catch(() => {});
 
         logger.info('Call reconnected', {
           callId: data.callId,
@@ -1430,11 +1513,15 @@ export class CallEventsHandler {
 
     /**
      * Handle disconnect - auto-leave any active calls
+     *
+     * Audit P1-28 — `getUserId(socket.id)` may already return undefined here
+     * if MeeshySocketIOManager's own disconnect listener ran first and purged
+     * its socketToUser map. Fall back to the cached userId we captured during
+     * the last authenticated event handled by this socket.
      */
-    const originalDisconnect = socket.on.bind(socket);
-    originalDisconnect('disconnect', async () => {
+    socket.on('disconnect', async () => {
       try {
-        const userId = getUserId(socket.id);
+        const userId = recoverUserId();
         if (!userId) return;
 
         logger.info('📞 Socket: disconnect - checking for active calls', {

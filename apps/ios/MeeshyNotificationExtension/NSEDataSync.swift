@@ -160,23 +160,57 @@ nonisolated enum NSEDataSync {
 
     // MARK: - Auth token from shared Keychain
 
+    /// Resolves the keychain access group at runtime by querying iOS for the
+    /// access group it assigns to a discovery item. Returns
+    /// `<TEAMID>.me.meeshy.app` — the shared group declared in both the main
+    /// app's and the NSE's `keychain-access-groups` entitlement.
+    ///
+    /// We must specify `kSecAttrAccessGroup` explicitly because the NSE runs
+    /// in its own process and iOS may default to the extension's own bundle
+    /// access group (`<TEAMID>.me.meeshy.app.MeeshyNotificationExtension`)
+    /// instead of the shared one — at which point `SecItemCopyMatching`
+    /// silently returns `errSecItemNotFound`.
+    private static let sharedKeychainAccessGroup: String? = {
+        let discoveryQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: "_meeshy_nse_seed_discovery",
+            kSecAttrService as String: "_meeshy_nse_seed_discovery",
+            kSecReturnAttributes as String: true
+        ]
+        var result: AnyObject?
+        var status = SecItemCopyMatching(discoveryQuery as CFDictionary, &result)
+        if status == errSecItemNotFound {
+            status = SecItemAdd(discoveryQuery as CFDictionary, &result)
+        }
+        guard status == errSecSuccess,
+              let attributes = result as? [String: Any],
+              let assignedGroup = attributes[kSecAttrAccessGroup as String] as? String,
+              let teamPrefix = assignedGroup.components(separatedBy: ".").first,
+              !teamPrefix.isEmpty else {
+            return nil
+        }
+        return "\(teamPrefix).me.meeshy.app"
+    }()
+
     private static func readAuthToken() -> String? {
         // Read active user ID from shared UserDefaults
         guard let defaults = UserDefaults(suiteName: appGroupId),
               let userId = defaults.string(forKey: "meeshy_active_user_id") else {
-            // Fallback: try reading from standard UserDefaults shared key
             return nil
         }
 
         // Read token from Keychain (shared access group)
         let key = "meeshy_token_\(userId)"
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "me.meeshy.app",
             kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+        if let group = sharedKeychainAccessGroup {
+            query[kSecAttrAccessGroup as String] = group
+        }
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)

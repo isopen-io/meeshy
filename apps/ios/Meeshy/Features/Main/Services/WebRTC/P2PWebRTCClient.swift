@@ -247,7 +247,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // API correctly.
     private func applyAudioCodecPreferences(audioTransceiver: RTCRtpTransceiver) {
         let factory = WebRTCSharedFactory.factory
-        let capabilities = factory.rtpReceiverCapabilities(forKind: kRTCMediaStreamTrackKindAudio)
+        // Audit P1-5 — `setCodecPreferences` is validated against
+        // `RTCRtpSender.getCapabilities()` per the W3C WebRTC spec (and
+        // libwebrtc's internal RTPMediaSection::CreateMediaContent). For
+        // sendRecv transceivers we want the SENDER caps; using receiver caps
+        // matches in the common case but can leak codecs (notably RED) with
+        // asymmetric sender/receiver definitions, causing setCodecPreferences
+        // to throw "Invalid codec".
+        let capabilities = factory.rtpSenderCapabilities(forKind: kRTCMediaStreamTrackKindAudio)
 
         let opusCodecs = capabilities.codecs.filter { $0.name.lowercased() == "opus" }
         let redCodecs = capabilities.codecs.filter { $0.name.lowercased() == "red" }
@@ -311,7 +318,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     // - VP9: better compression, software-only on most iOS, optional fallback
     private func applyVideoCodecPreferences(videoTransceiver: RTCRtpTransceiver) {
         let factory = WebRTCSharedFactory.factory
-        let capabilities = factory.rtpReceiverCapabilities(forKind: kRTCMediaStreamTrackKindVideo)
+        // Audit P1-5 — see applyAudioCodecPreferences for rationale.
+        let capabilities = factory.rtpSenderCapabilities(forKind: kRTCMediaStreamTrackKindVideo)
 
         let priorityOrder = ["H264", "VP8", "VP9"]
         let preferred = priorityOrder.flatMap { name in
@@ -485,6 +493,41 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     func toggleVideo(_ enabled: Bool) {
         localVideoTrack_?.isEnabled = enabled
         Logger.webrtc.info("Video \(enabled ? "enabled" : "disabled")")
+
+        // Audit P1-7 — also stop the capturer when video is disabled.
+        // Without this, AVCaptureSession keeps the camera LED on and delivers
+        // ~30fps frames at 720p (~44 MB/s NV12) through the filter pipeline
+        // even though the encoder is fed disabled frames. Stopping the
+        // capturer frees ~80–150 mA on iPhone 13. On re-enable we restart
+        // the capturer with the same camera/format/fps as the initial start.
+        Task { [weak self] in
+            guard let self else { return }
+            if enabled {
+                await self.restartCapturerIfStopped()
+            } else {
+                await self.videoCapturer?.stopCapture()
+            }
+        }
+    }
+
+    /// Restarts the existing capturer using the current camera selection
+    /// (front vs back) and the same format-selection logic as the initial
+    /// start. No-op if there is no capturer (audio-only call).
+    private func restartCapturerIfStopped() async {
+        guard let capturer = videoCapturer else { return }
+        let position: AVCaptureDevice.Position = usingFrontCamera ? .front : .back
+        guard let camera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.position == position }),
+              let format = selectFormat(for: camera) else {
+            Logger.webrtc.warning("[WEBRTC] toggleVideo on — no camera/format available, skipping capturer restart")
+            return
+        }
+        let fps = targetFrameRate(for: format)
+        do {
+            try await capturer.startCapture(with: camera, format: format, fps: fps)
+            Logger.webrtc.info("[WEBRTC] capturer restarted on toggleVideo(true) (\(fps)fps)")
+        } catch {
+            Logger.webrtc.error("[WEBRTC] capturer restart failed: \(error.localizedDescription)")
+        }
     }
 
     func switchCamera() async throws {

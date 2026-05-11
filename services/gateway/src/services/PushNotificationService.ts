@@ -314,11 +314,19 @@ export class PushNotificationService {
     callerName: string;
     callerAvatar?: string;
     conversationId?: string;
+    callerUserId?: string;
+    isVideo?: boolean;
   }): Promise<PushResult[]> {
     if (!config.voipEnabled) {
       return [];
     }
 
+    // Audit P1-14 — include `callerUserId` and `isVideo` in the data
+    // payload. Without these the iOS PKPushRegistry handler defaulted to
+    // `callerUserId = ""` (anonymous CXHandle) and `isVideo = false` for
+    // every call routed through this code path (recovery / fallback path),
+    // causing every call to be reported to CallKit as audio-only with no
+    // identifiable caller.
     return this.sendToUser({
       userId,
       payload: {
@@ -331,6 +339,8 @@ export class PushNotificationService {
           type: 'voip_call',
           callId: callData.callId,
           callerName: callData.callerName,
+          callerUserId: callData.callerUserId || '',
+          isVideo: String(callData.isVideo ?? false),
           conversationId: callData.conversationId || '',
         },
       },

@@ -6,7 +6,12 @@ import MeeshyUI
 // MARK: - Incoming Call View
 
 struct IncomingCallView: View {
-    @ObservedObject var callManager = CallManager.shared
+    // Audit P1-16 — `@ObservedObject var x = CallManager.shared` would
+    // re-create the subscription every time the parent CallView re-evaluates
+    // its body (which happens often during the ringing pulse animation).
+    // Receive the manager from the parent so SwiftUI keeps the same
+    // subscription throughout the view's lifetime.
+    @ObservedObject var callManager: CallManager
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
