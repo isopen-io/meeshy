@@ -284,11 +284,13 @@ final class CallManager: ObservableObject {
         startAction.contactIdentifier = displayName
         let transaction = CXTransaction(action: startAction)
         let provider = callProvider
+        Logger.calls.info("[CALLKIT_DIAG] callController.request(CXStartCallAction) submitted (uuid=\(uuid))")
         callController.request(transaction) { [weak self] error in
             if let error {
-                Logger.calls.error("CallKit start call failed: \(error.localizedDescription)")
+                Logger.calls.error("[CALLKIT_DIAG] CXStartCallAction request FAILED: \(error.localizedDescription)")
                 Task { @MainActor in self?.endCallInternal(reason: .failed("CallKit error")) }
             } else {
+                Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction request ACCEPTED — reporting update + startedConnectingAt (uuid=\(uuid))")
                 let update = CXCallUpdate()
                 update.remoteHandle = CXHandle(type: .generic, value: userId)
                 update.localizedCallerName = displayName
@@ -309,6 +311,7 @@ final class CallManager: ObservableObject {
                 // answer lands — CallKit accepts that as a refresh of the
                 // connecting timestamp and uses it to drive the system UI.
                 provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+                Logger.calls.info("[CALLKIT_DIAG] reportOutgoingCall(_:startedConnectingAt:) called (uuid=\(uuid))")
             }
         }
 
@@ -1794,7 +1797,9 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // The outgoing call path is initiated by the user's UI tap; CallManager
         // builds the WebRTC stack asynchronously. Fulfilling immediately here is
         // safe because we don't await any media setup from this delegate.
+        Logger.calls.info("[CALLKIT_DIAG] provider:perform:CXStartCallAction RECEIVED (callUUID=\(action.callUUID)) — fulfilling")
         action.fulfill()
+        Logger.calls.info("[CALLKIT_DIAG] CXStartCallAction.fulfill() RETURNED")
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
@@ -1803,6 +1808,7 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         // Forcing it again creates desync between AVAudioSession and RTCAudioSession,
         // visible as alternating routes (Receiver/Speaker) in logs and silent calls.
         // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.2
+        Logger.calls.info("[CALLKIT_DIAG] provider:didActivate:audioSession RECEIVED — CallKit considers the call active")
         let rtc = RTCAudioSession.sharedInstance()
         rtc.lockForConfiguration()
         rtc.audioSessionDidActivate(audioSession)
