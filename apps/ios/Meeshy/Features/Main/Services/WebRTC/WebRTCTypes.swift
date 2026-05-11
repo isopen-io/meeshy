@@ -125,8 +125,12 @@ struct DataChannelTranscriptionMessage: Codable, Sendable {
 protocol WebRTCClientDelegate: AnyObject {
     func webRTCClient(_ client: any WebRTCClientProviding, didGenerateCandidate candidate: IceCandidate)
     func webRTCClient(_ client: any WebRTCClientProviding, didChangeConnectionState state: PeerConnectionState)
-    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: Any)
-    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: Any)
+    // `sending` lets the non-Sendable RTC track cross from the WebRTC framework's
+    // own thread into our `@MainActor` Task without a Swift 6 strict-concurrency
+    // diagnostic. The framework hands us a unique reference and never reads it
+    // again after the delegate fires, so exclusive transfer is sound.
+    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: sending Any)
+    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: sending Any)
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveDataChannelMessage data: Data)
 }
 

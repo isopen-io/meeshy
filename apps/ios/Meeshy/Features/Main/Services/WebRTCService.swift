@@ -336,7 +336,7 @@ extension WebRTCService: WebRTCClientDelegate {
         }
     }
 
-    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: Any) {
+    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: sending Any) {
         Logger.webrtc.info("Remote video track received")
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -344,7 +344,7 @@ extension WebRTCService: WebRTCClientDelegate {
         }
     }
 
-    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: Any) {
+    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: sending Any) {
         Logger.webrtc.info("Remote audio track received")
     }
 
