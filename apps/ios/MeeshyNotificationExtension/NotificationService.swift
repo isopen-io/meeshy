@@ -74,39 +74,65 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
             userInfo["type"] as? String ?? ""
         )
 
-        if let imageURLString = userInfo["imageURL"] as? String,
-           let imageURL = URL(string: imageURLString) {
-            downloadAvatarData(from: imageURL) { [weak self] avatarData in
-                guard let self else {
-                    contentHandler(bestAttemptContent)
-                    return
-                }
+        // Phase A — separate concerns:
+        //   1. `imageURL`  → sender's avatar — ONLY fed to INPerson.image so the
+        //      Communication Notification renders it on the left of the banner
+        //      with the app icon as a badge bottom-right (WhatsApp/Telegram style).
+        //      NEVER attached as UNNotificationAttachment — that slot is for
+        //      message media, and feeding the avatar there made iOS render it as
+        //      the message preview while the banner kept showing the default
+        //      app icon on the left.
+        //   2. `attachmentUrl` + `attachmentMimeType` → media of the message
+        //      itself (audio/image/video). Downloaded and attached with a UTI
+        //      typeHint so iOS picks the native inline renderer (audio waveform
+        //      with play button, image preview, video thumbnail with tap-to-play).
+        let group = DispatchGroup()
+        var avatarData: Data?
+        nonisolated(unsafe) var messageAttachment: UNNotificationAttachment?
 
-                if let avatarData {
-                    let attachment = self.createAttachment(from: avatarData, fileExtension: imageURL.pathExtension)
-                    if let attachment {
-                        bestAttemptContent.attachments = [attachment]
-                    }
-                }
-
-                if isCommunicationType {
-                    let finalContent = self.applyCommunicationIntent(
-                        to: bestAttemptContent,
-                        avatarData: avatarData
-                    )
-                    contentHandler(finalContent)
-                } else {
-                    contentHandler(bestAttemptContent)
-                }
+        if let avatarURLString = userInfo["imageURL"] as? String,
+           !avatarURLString.isEmpty,
+           let avatarURL = URL(string: avatarURLString) {
+            group.enter()
+            downloadData(from: avatarURL) { data in
+                avatarData = data
+                group.leave()
             }
-            return
         }
 
-        if isCommunicationType {
-            let finalContent = applyCommunicationIntent(to: bestAttemptContent, avatarData: nil)
-            contentHandler(finalContent)
-        } else {
-            contentHandler(bestAttemptContent)
+        if let attachmentURLString = userInfo["attachmentUrl"] as? String,
+           !attachmentURLString.isEmpty,
+           let attachmentURL = URL(string: attachmentURLString) {
+            let mime = userInfo["attachmentMimeType"] as? String ?? ""
+            group.enter()
+            downloadData(from: attachmentURL) { [weak self] data in
+                defer { group.leave() }
+                guard let self, let data else { return }
+                messageAttachment = self.createMessageAttachment(
+                    from: data,
+                    originalURL: attachmentURL,
+                    mimeType: mime
+                )
+            }
+        }
+
+        group.notify(queue: .global(qos: .userInitiated)) { [weak self] in
+            guard let self else {
+                contentHandler(bestAttemptContent)
+                return
+            }
+            if let messageAttachment {
+                bestAttemptContent.attachments = [messageAttachment]
+            }
+            if isCommunicationType {
+                let finalContent = self.applyCommunicationIntent(
+                    to: bestAttemptContent,
+                    avatarData: avatarData
+                )
+                contentHandler(finalContent)
+            } else {
+                contentHandler(bestAttemptContent)
+            }
         }
     }
 
@@ -413,8 +439,9 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
     // MARK: - Attachments
 
-    /// Downloads image data (raw bytes) for use as both attachment and INImage.
-    private func downloadAvatarData(
+    /// Generic data download for any push payload URL (avatar or message media).
+    /// Fire-and-forget — completion is invoked exactly once, with nil on any failure.
+    private func downloadData(
         from url: URL,
         completion: @escaping (Data?) -> Void
     ) {
@@ -429,21 +456,74 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         task.resume()
     }
 
-    /// Creates a `UNNotificationAttachment` from raw image data.
-    private func createAttachment(from data: Data, fileExtension: String) -> UNNotificationAttachment? {
-        let tempDir = FileManager.default.temporaryDirectory
-        let ext = fileExtension.isEmpty ? "jpg" : fileExtension
-        let tempFile = tempDir.appendingPathComponent(UUID().uuidString + "." + ext)
-
+    /// Creates a UNNotificationAttachment from raw bytes for a message media.
+    /// Picks the right file extension + UTI typeHint so iOS renders the attachment
+    /// in its native style (image preview, audio waveform with play button, video
+    /// thumbnail with tap-to-play).
+    private func createMessageAttachment(
+        from data: Data,
+        originalURL: URL,
+        mimeType: String
+    ) -> UNNotificationAttachment? {
+        let (ext, typeHint) = Self.fileHints(
+            mimeType: mimeType,
+            fallbackPathExtension: originalURL.pathExtension
+        )
+        let tempFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + "." + ext)
         do {
             try data.write(to: tempFile)
+            var options: [String: Any] = [:]
+            if let typeHint {
+                options[UNNotificationAttachmentOptionsTypeHintKey] = typeHint
+            }
             return try UNNotificationAttachment(
                 identifier: UUID().uuidString,
                 url: tempFile,
-                options: nil
+                options: options.isEmpty ? nil : options
             )
         } catch {
             return nil
         }
+    }
+
+    /// Maps a payload mime type (or a URL path extension fallback) to a UTI typeHint
+    /// and a sensible file extension. Returns ("m4a", "public.audio") for unknown
+    /// audio etc. so iOS still treats the attachment as a media of the right family.
+    private static func fileHints(
+        mimeType: String,
+        fallbackPathExtension: String
+    ) -> (ext: String, typeHint: String?) {
+        let normalized = mimeType.lowercased()
+        if normalized.hasPrefix("image/") {
+            if normalized.contains("png") { return ("png", "public.png") }
+            if normalized.contains("gif") { return ("gif", "com.compuserve.gif") }
+            if normalized.contains("webp") { return ("webp", "org.webmproject.webp") }
+            if normalized.contains("heic") { return ("heic", "public.heic") }
+            return ("jpg", "public.jpeg")
+        }
+        if normalized.hasPrefix("audio/") {
+            if normalized.contains("m4a") || normalized.contains("mp4a") || normalized.contains("aac") {
+                return ("m4a", "com.apple.m4a-audio")
+            }
+            if normalized.contains("mp3") || normalized.contains("mpeg") {
+                return ("mp3", "public.mp3")
+            }
+            if normalized.contains("wav") {
+                return ("wav", "com.microsoft.waveform-audio")
+            }
+            if normalized.contains("ogg") {
+                return ("ogg", "public.audio")
+            }
+            return ("m4a", "public.audio")
+        }
+        if normalized.hasPrefix("video/") {
+            if normalized.contains("quicktime") || normalized.contains("mov") {
+                return ("mov", "com.apple.quicktime-movie")
+            }
+            return ("mp4", "public.mpeg-4")
+        }
+        let ext = fallbackPathExtension.isEmpty ? "bin" : fallbackPathExtension
+        return (ext, nil)
     }
 }

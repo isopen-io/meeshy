@@ -950,9 +950,12 @@ export class MessageProcessor {
       }
 
       // 4. Préparer les infos d'attachments
+      // Phase A — fileUrl + transcription added to the select so iOS rich-push
+      // can attach the media inline (audio waveform, image preview, video thumb)
+      // and use the transcription as the body for audio messages when available.
       const attachments = await this.prisma.messageAttachment.findMany({
         where: { messageId: message.id },
-        select: { mimeType: true, fileName: true, fileSize: true, duration: true, width: true, height: true }
+        select: { mimeType: true, fileName: true, fileSize: true, duration: true, width: true, height: true, fileUrl: true, transcription: true }
       });
 
       const first = attachments[0];
@@ -967,7 +970,21 @@ export class MessageProcessor {
         firstAttachmentDuration: first?.duration,
         firstAttachmentWidth: first?.width,
         firstAttachmentHeight: first?.height,
+        // Phase A — rich-push fields propagated to APN payload via NotificationService.
+        firstAttachmentUrl: first?.fileUrl || undefined,
+        firstAttachmentMimeType: first?.mimeType || undefined,
       };
+
+      // Phase A — if the first attachment is audio and already has a transcription
+      // (pre-transcribed upload path, or transcription already completed by the
+      // time the notification fan-out runs), use the transcript text as the
+      // push body so the recipient sees the content immediately on the lock
+      // screen — the audio file is still attached for inline playback.
+      const firstAttachmentTranscript =
+        first?.mimeType?.startsWith('audio/')
+          ? extractTranscriptionText(first as { transcription?: unknown })
+          : undefined;
+      const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
 
       // 5. Notification de RÉPONSE (prioritaire sur message régulier)
       if (originalMessageAuthorUserId &&
@@ -1028,7 +1045,7 @@ export class MessageProcessor {
             senderId: senderUserId,
             messageId: message.id,
             conversationId: data.conversationId,
-            messagePreview: notificationPreview,
+            messagePreview: notificationPreviewForPush,
             encryptedContent: message.encryptedContent || undefined,
             notificationLocKey: notificationLocKey,
             ...attachmentInfo as any
@@ -1086,4 +1103,26 @@ export class MessageProcessor {
       return [];
     }
   }
+}
+
+/**
+ * Best-effort plain-text extraction from an AttachmentTranscription blob.
+ * Returns undefined if the structure isn't recognized — caller falls back
+ * to the original preview. Used to inline voice-message transcripts in the
+ * push body for Phase A rich notifications (Communication Notifications iOS).
+ */
+function extractTranscriptionText(att: { transcription?: unknown } | null | undefined): string | undefined {
+  if (!att?.transcription || typeof att.transcription !== 'object') return undefined;
+  const t = att.transcription as Record<string, unknown>;
+  if (typeof t.text === 'string' && t.text.trim().length > 0) return t.text.trim();
+  if (Array.isArray(t.segments)) {
+    const joined = t.segments
+      .map(seg => (typeof seg === 'object' && seg && typeof (seg as Record<string, unknown>).text === 'string'
+        ? (seg as Record<string, unknown>).text as string
+        : ''))
+      .join(' ')
+      .trim();
+    if (joined.length > 0) return joined;
+  }
+  return undefined;
 }

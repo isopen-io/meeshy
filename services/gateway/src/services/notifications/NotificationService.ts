@@ -389,6 +389,14 @@ export class NotificationService {
                 senderDisplayName: params.actor?.displayName || '',
                 senderAvatar: params.actor?.avatar || '',
                 imageURL: params.actor?.avatar || '',
+                // Phase A — message media inline (audio waveform, image preview, video thumb).
+                // L'extension iOS lit ces champs pour télécharger le fichier et l'attacher
+                // comme UNNotificationAttachment avec le bon UTI typeHint.
+                attachmentUrl: params.context.firstAttachmentUrl || '',
+                attachmentMimeType: params.context.firstAttachmentMimeType || '',
+                attachmentDurationMs: params.context.firstAttachmentDurationMs != null
+                  ? String(params.context.firstAttachmentDurationMs)
+                  : '',
                 encryptedContent: params.context.encryptedContent || '',
                 notificationLocKey: params.context.notificationLocKey || '',
               },
@@ -567,6 +575,13 @@ export class NotificationService {
     firstAttachmentDuration?: number | null;
     firstAttachmentWidth?: number | null;
     firstAttachmentHeight?: number | null;
+    /** URL accessible publiquement pour le 1er attachment (image/audio/video).
+     *  L'extension iOS télécharge ce fichier et le rend en UNNotificationAttachment
+     *  natif (waveform pour audio, preview pour image, thumbnail pour video). */
+    firstAttachmentUrl?: string;
+    /** MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`, `video/mp4`.
+     *  Utilisé par l'extension pour choisir le UTI typeHint correct. */
+    firstAttachmentMimeType?: string;
     encryptedContent?: string;
     notificationLocKey?: string;
   }): Promise<Notification | null> {
@@ -612,6 +627,12 @@ export class NotificationService {
         conversationTitle: conversation?.title,
         conversationType: conversation?.type as any,
         messageId: params.messageId,
+        // Phase A — propagation au payload APN pour rendu media inline iOS.
+        firstAttachmentUrl: params.firstAttachmentUrl,
+        firstAttachmentMimeType: params.firstAttachmentMimeType,
+        firstAttachmentDurationMs: params.firstAttachmentDuration != null
+          ? Math.round(params.firstAttachmentDuration * 1000)
+          : undefined,
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
       },
