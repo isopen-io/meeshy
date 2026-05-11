@@ -10,7 +10,7 @@
  */
 
 import { Socket } from 'socket.io';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import { CallService } from '../services/CallService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PushNotificationService } from '../services/PushNotificationService';
@@ -48,7 +48,9 @@ import type {
   CallReconnectedEvent,
   CallInitiateAck,
   CallJoinAck,
-  CallEndReason,
+  // CallEndReason imported as value from @meeshy/shared/prisma/client above
+  // (the Prisma generated enum is both a value AND a type, so we don't
+  // need the type-only re-export from video-call.ts which duplicates it).
   CallTranscriptionSegmentEvent,
 } from '@meeshy/shared/types/video-call';
 
@@ -307,38 +309,71 @@ export class CallEventsHandler {
         });
 
         // Phase 1 fix P2 — schedule 60s ringing timeout. If no answer arrives,
-        // force transition to 'missed' and broadcast call:ended.
+        // force transition to 'missed' and broadcast call:ended + call:missed.
         // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.5
+        // Audit 2026-05-11 — multiple fixes applied:
+        //   - Use real CallStatus / CallEndReason enums (was 'no_answer' as
+        //     any which Prisma rejected at runtime, swallowed by .catch,
+        //     leaving the call in 'ringing' forever in the DB).
+        //   - Replace findUnique + updateCallStatus with atomic updateMany
+        //     scoped to the eligible source statuses, eliminating a TOCTOU
+        //     race where a concurrent call:join could promote the call to
+        //     'connecting' between read and write.
+        //   - Trigger handleMissedCall so offline callees actually receive
+        //     a missed-call push notification (the entire infrastructure
+        //     was already wired but never invoked from this path).
+        //   - Emit CALL_EVENTS.MISSED in addition to CALL_EVENTS.ENDED so
+        //     online clients can render an in-app missed-call banner
+        //     without round-tripping through push.
         this.callService.scheduleRingingTimeout(callSession.id, async () => {
           try {
-            const current = await this.prisma.callSession.findUnique({
-              where: { id: callSession.id },
-              select: { status: true, conversationId: true },
-            });
-            // Only force missed if still in initiated/ringing (not connecting/active/ended)
-            if (current && (current.status === 'initiated' || current.status === 'ringing')) {
-              const ended = await this.callService.updateCallStatus(
-                callSession.id,
-                'missed' as any,
-                'no_answer' as any
-              ).catch((err: any) => {
-                logger.warn('Ringing timeout: updateCallStatus failed', { callId: callSession.id, err: err?.message });
-                return null;
-              });
-              if (ended) {
-                const endedEvent = {
-                  callId: callSession.id,
-                  duration: 0,
-                  endedBy: undefined,
-                  reason: 'no_answer',
-                };
-                io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.ENDED, endedEvent);
-                io.to(ROOMS.conversation(current.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
-                logger.info('Ringing timeout fired — call marked as missed', {
-                  callId: callSession.id,
-                });
+            // Atomic conditional transition — count > 0 means we won the
+            // race; count === 0 means another path (call:join, call:end,
+            // call:leave) already moved the status off ringing/initiated.
+            const result = await this.prisma.callSession.updateMany({
+              where: {
+                id: callSession.id,
+                status: { in: [CallStatus.initiated, CallStatus.ringing] }
+              },
+              data: {
+                status: CallStatus.missed,
+                endReason: CallEndReason.missed,
+                endedAt: new Date()
               }
+            });
+            if (result.count === 0) {
+              return; // already transitioned
             }
+            const conversationId = (await this.prisma.callSession.findUnique({
+              where: { id: callSession.id },
+              select: { conversationId: true }
+            }))?.conversationId;
+            const endedEvent = {
+              callId: callSession.id,
+              duration: 0,
+              endedBy: undefined,
+              reason: 'missed',
+            };
+            io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.ENDED, endedEvent);
+            if (conversationId) {
+              io.to(ROOMS.conversation(conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+            }
+            io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.MISSED, {
+              callId: callSession.id
+            });
+
+            // Push notification for offline callees. The whole pipeline
+            // (createMissedCallNotifications) was already wired but never
+            // called from this path before audit 2026-05-11.
+            await this.handleMissedCall(callSession.id).catch((err: any) => {
+              logger.error('handleMissedCall failed for ringing timeout', {
+                callId: callSession.id, err: err?.message
+              });
+            });
+
+            logger.info('Ringing timeout fired — call marked as missed', {
+              callId: callSession.id,
+            });
           } catch (err) {
             logger.error('Ringing timeout handler error', err);
           }
@@ -470,7 +505,21 @@ export class CallEventsHandler {
           return;
         }
 
-        // CVE-005: Join call via service (returns dynamic ICE servers)
+        // CVE-005: Join call via service (returns dynamic ICE servers).
+        //
+        // Audit 2026-05-11 — race fix: joinCall transitions DB status to
+        // 'connecting' inside its Prisma transaction, then runs auxiliary
+        // work (TURN credential generation, participant enrichment) OUTSIDE
+        // that transaction. If anything in the auxiliary block throws, the
+        // outer catch fires and the previous explicit `clearRingingTimeout`
+        // at this site is skipped — leaving the 60s timer live against a
+        // call already in 'connecting'. With Phase 2's fixed timeout
+        // callback (atomic updateMany scoped to ringing/initiated only)
+        // the leaked timer is now harmless to the call state, but it would
+        // still spuriously emit call:ended/call:missed once the timeout
+        // window expires. Guarantee cleanup via try/finally below — the
+        // explicit call here is redundant once the finally block runs, so
+        // it's removed in favour of the single canonical cleanup site.
         const joinResult = await this.callService.joinCall({
           callId: data.callId,
           userId,
@@ -479,9 +528,6 @@ export class CallEventsHandler {
         });
 
         const { callSession, iceServers } = joinResult;
-
-        // Phase 1 fix P2 — callee answered, clear the 60s ringing timeout
-        this.callService.clearRingingTimeout(data.callId);
 
         // Join call room
         socket.join(ROOMS.call(data.callId));
@@ -564,6 +610,14 @@ export class CallEventsHandler {
           code: errorCode,
           message
         } as CallError);
+      } finally {
+        // Audit 2026-05-11 — guarantee timer cleanup even if joinCall (or
+        // any of the post-transaction work above) throws. clearRingingTimeout
+        // is idempotent — safe to call when the timer was never scheduled
+        // (e.g. early auth/rate-limit/validation rejection above).
+        if (data?.callId) {
+          this.callService.clearRingingTimeout(data.callId);
+        }
       }
     });
 
