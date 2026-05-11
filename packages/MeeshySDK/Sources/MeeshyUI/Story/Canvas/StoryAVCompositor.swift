@@ -24,6 +24,18 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     private nonisolated(unsafe) var _renderContext: AVVideoCompositionRenderContext?
     private nonisolated(unsafe) var _shouldCancelAllRequests = false
 
+    /// Layer-tree cache reused across the export's frames. AVFoundation
+    /// instantiates one `StoryAVCompositor` per export session via
+    /// `customVideoCompositorClass`, so the cache lifetime matches the export
+    /// session — no manual reset needed between exports. The cache itself
+    /// guards against scope drift (slide/language/mode changes) via
+    /// `invalidateIfNeeded` at the top of `renderFrame`.
+    ///
+    /// Exposed `internal` so unit tests in the same module can observe
+    /// `cacheHitCount` / `cacheMissCount` after driving frames through
+    /// `startRequest`.
+    internal nonisolated let layerCache = StoryRendererCache()
+
     public override nonisolated init() {
         super.init()
     }
@@ -71,13 +83,15 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         // StoryRenderer.render runs) — finishing the request from inside the
         // bridged main-actor block keeps `buffer` from crossing isolation
         // boundaries (CVPixelBuffer is not Sendable in Swift 6).
+        let cache = layerCache
         DispatchQueue.main.sync {
             MainActor.assumeIsolated {
                 do {
                     try Self.renderFrame(slide: instruction.slide,
                                          at: request.compositionTime,
                                          renderSize: renderContext.size,
-                                         into: buffer)
+                                         into: buffer,
+                                         cache: cache)
                     request.finish(withComposedVideoFrame: buffer)
                 } catch {
                     request.finish(with: error)
@@ -90,12 +104,21 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     private static func renderFrame(slide: StorySlide,
                                     at time: CMTime,
                                     renderSize: CGSize,
-                                    into buffer: CVPixelBuffer) throws {
+                                    into buffer: CVPixelBuffer,
+                                    cache: StoryRendererCache) throws {
+        // Scope check: flush the cache if the slide / languages / mode this
+        // compositor is now processing differs from the previous frame's
+        // scope. For a single export session this is true only on the first
+        // frame, so the cache is a no-op miss-then-hit-forever steady state.
+        cache.invalidateIfNeeded(slideId: slide.id, languages: [], mode: .play)
+
         let geometry = CanvasGeometry(renderSize: renderSize)
         let layer = StoryRenderer.render(slide: slide,
                                           into: geometry,
                                           at: time,
-                                          mode: .play)
+                                          mode: .play,
+                                          languages: [],
+                                          cache: cache)
 
         CVPixelBufferLockBaseAddress(buffer, [])
         defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
