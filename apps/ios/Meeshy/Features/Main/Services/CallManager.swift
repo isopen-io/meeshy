@@ -135,10 +135,14 @@ final class CallManager: ObservableObject {
         let config = CXProviderConfiguration()
         config.supportsVideo = true
         config.maximumCallsPerCallGroup = 1
-        // Audit P2-iOS-5 — was 2 but the app declares supportsHolding=false
-        // on every CXCallUpdate. Contradictory pair confused some iOS
-        // versions into showing a hold button on the lock screen.
-        config.maximumCallGroups = 1
+        // Restore the pre-regression value (commit 4dbb387e). The
+        // P2-iOS-5 audit lowered this to 1 on the theory that an iOS bug
+        // surfaced a hold button on the lock screen — but production has
+        // since shown CallKit autonomously tearing outgoing calls down
+        // after ~3 s, which matches a number of community reports of
+        // CallKit being picky about outgoing-call configuration on iOS
+        // 18. Going back to 2 matches the last known working state.
+        config.maximumCallGroups = 2
         config.supportedHandleTypes = [.generic]
         config.includesCallsInRecents = true
         // Custom CallKit icon: bundle a 40x40 PNG named "CallKitIcon" in Assets
@@ -147,14 +151,23 @@ final class CallManager: ObservableObject {
         if let icon = UIImage(named: "CallKitIcon") {
             config.iconTemplateImageData = icon.pngData()
         }
-        // Phase 1.5 fix — explicit ringtone for incoming calls.
-        // CallKit's default `ringtoneSound = nil` falls back to system ringtone,
-        // but iOS 17+ has been reporting unreliable behavior (UI shows but no
-        // audio) on real devices. Apple's SOTA pattern (FaceTime, WhatsApp) is
-        // to bundle a custom .caf and set it explicitly. The file must be in
-        // the main app bundle, ≤30s, CAF format.
-        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.3
-        config.ringtoneSound = "Ringtone.caf"
+        // ROOT-CAUSE HYPOTHESIS — `config.ringtoneSound = "Ringtone.caf"`
+        // was added in commit 5a1248c0 (Phase 1.5). It is one of only two
+        // CXProviderConfiguration differences vs the last known working
+        // state at 4dbb387e (the other being maximumCallGroups, also
+        // reverted above). Ringtone.caf in the bundle is 1.3 MB —
+        // suspicious, since CallKit requires <= 30 s and most well-formed
+        // ringtones are ~20-100 KB. Bundling an oversized / wrong-format
+        // ringtone makes iOS reject the call configuration silently on
+        // outgoing setup and tear the call down within a few seconds.
+        // Falling back to `nil` (system default ringtone, no custom file)
+        // brings the config back to the working shape.
+        // The previous spec reference (2026-05-10 SOTA §3.3) flagged
+        // unreliable system-default behavior on iOS 17 — if we still
+        // observe a silent incoming-call ring after this revert, the right
+        // fix is to ship a sane CAF (mono 16-bit 44.1 kHz, < 30 s, ~50 KB)
+        // rather than the current oversized blob.
+        // config.ringtoneSound = "Ringtone.caf"
         callProvider = CXProvider(configuration: config)
 
         let delegateProxy = CallKitDelegateProxy()
