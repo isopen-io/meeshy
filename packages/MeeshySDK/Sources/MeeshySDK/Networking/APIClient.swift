@@ -120,6 +120,11 @@ public protocol APIClientProviding: Sendable {
     var authToken: String? { get set }
     var anonymousSessionToken: String? { get set }
     func request<T: Decodable>(endpoint: String, method: String, body: Data?, queryItems: [URLQueryItem]?) async throws -> T
+    /// Wave 1 Task 3.x — variant that lets callers (the offline outbox dispatcher)
+    /// inject extra request headers such as `X-Client-Mutation-Id`. Default
+    /// implementation falls through to the headerless `request` so existing
+    /// mocks/conformers stay binary-compatible without code changes.
+    func requestWithHeaders<T: Decodable>(endpoint: String, method: String, body: Data?, queryItems: [URLQueryItem]?, headers: [String: String]?) async throws -> T
     func paginatedRequest<T: Decodable>(endpoint: String, cursor: String?, limit: Int) async throws -> PaginatedAPIResponse<[T]>
     func offsetPaginatedRequest<T: Decodable>(endpoint: String, offset: Int, limit: Int) async throws -> OffsetPaginatedAPIResponse<[T]>
     func post<T: Decodable, U: Encodable>(endpoint: String, body: U) async throws -> APIResponse<T>
@@ -130,6 +135,21 @@ public protocol APIClientProviding: Sendable {
 }
 
 extension APIClientProviding {
+    /// Default implementation drops `headers` and falls through to the
+    /// headerless `request`. Real `APIClient` overrides this to forward
+    /// the headers onto the underlying `URLRequest`. Test mocks can
+    /// either rely on this default (and skip header verification) or
+    /// override locally if they want to assert header presence.
+    public func requestWithHeaders<T: Decodable>(
+        endpoint: String,
+        method: String,
+        body: Data?,
+        queryItems: [URLQueryItem]?,
+        headers: [String: String]?
+    ) async throws -> T {
+        try await request(endpoint: endpoint, method: method, body: body, queryItems: queryItems)
+    }
+
     public func request<T: Decodable>(endpoint: String) async throws -> T {
         try await request(endpoint: endpoint, method: "GET", body: nil, queryItems: nil)
     }
@@ -236,6 +256,27 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         body: Data? = nil,
         queryItems: [URLQueryItem]? = nil
     ) async throws -> T {
+        try await requestWithHeaders(
+            endpoint: endpoint,
+            method: method,
+            body: body,
+            queryItems: queryItems,
+            headers: nil
+        )
+    }
+
+    /// Header-aware variant — see `APIClientProviding.requestWithHeaders`.
+    /// Used by the offline outbox dispatcher to inject `X-Client-Mutation-Id`
+    /// so the gateway `MutationLog` can dedup replayed mutations. Caller-
+    /// provided headers OVERRIDE auth/content-type headers if the keys collide,
+    /// so the dispatcher should not set `Authorization` or `Content-Type`.
+    public func requestWithHeaders<T: Decodable>(
+        endpoint: String,
+        method: String,
+        body: Data?,
+        queryItems: [URLQueryItem]?,
+        headers: [String: String]?
+    ) async throws -> T {
         guard var components = URLComponents(string: "\(baseURL)\(endpoint)") else {
             throw MeeshyError.server(statusCode: 0, message: "URL invalide")
         }
@@ -269,6 +310,14 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         if let body {
             urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
             urlRequest.httpBody = body
+        }
+
+        // Caller-provided headers are applied last so they win over defaults
+        // (relevant for `X-Client-Mutation-Id` which has no built-in setter).
+        if let headers {
+            for (key, value) in headers {
+                urlRequest.setValue(value, forHTTPHeaderField: key)
+            }
         }
 
         do {

@@ -35,27 +35,164 @@ struct OutboxDispatcher: OutboxDispatching {
         case .sendReaction:
             try await dispatchSendReaction(record)
 
-        // Wave 1 Task 3.2 — 14 new OutboxKind cases were added for the
-        // upcoming non-message mutation outbox. Their dispatch handlers
-        // land in Tier B (gateway wiring) ; until then, no caller should
-        // be inserting these rows through paths that reach this dispatcher.
-        // Throw rather than silently no-op so a stray insertion surfaces
-        // immediately in CI rather than being swallowed.
-        case .markAsRead, .sendFriendRequest, .respondFriendRequest,
-             .blockUser, .unblockUser, .createConversation,
-             .updateConversation, .updateProfile, .updateSettings,
-             .publishStory, .repostStory, .createPost,
+        // Wave 1 Phase B — 5 of the 14 new mutation kinds are now wired
+        // through to their REST endpoints with X-Client-Mutation-Id header
+        // for gateway-side MutationLog dedup.
+        case .blockUser:
+            try await dispatchBlockUser(record)
+
+        case .unblockUser:
+            try await dispatchUnblockUser(record)
+
+        case .sendFriendRequest:
+            try await dispatchSendFriendRequest(record)
+
+        case .respondFriendRequest:
+            try await dispatchRespondFriendRequest(record)
+
+        case .updateProfile:
+            try await dispatchUpdateProfile(record)
+
+        // Wave 1 Phase C — remaining kinds land in a later wave. Throw so
+        // a stray insertion surfaces in CI instead of being swallowed.
+        case .markAsRead, .createConversation, .updateConversation,
+             .updateSettings, .publishStory, .repostStory, .createPost,
              .toggleLikePost, .createComment, .deleteComment,
              .toggleLikeComment:
-            logger.error("OutboxDispatcher received \(record.kind.rawValue, privacy: .public) but Tier B handler is not wired yet (record \(record.id, privacy: .public))")
+            logger.error("OutboxDispatcher received \(record.kind.rawValue, privacy: .public) but Phase C handler is not wired yet (record \(record.id, privacy: .public))")
             throw NSError(
                 domain: "OutboxDispatcher",
                 code: 501,
                 userInfo: [
-                    NSLocalizedDescriptionKey: "Outbox kind '\(record.kind.rawValue)' not implemented yet (Wave 1 Tier B pending)"
+                    NSLocalizedDescriptionKey: "Outbox kind '\(record.kind.rawValue)' not implemented yet (Wave 1 Phase C pending)"
                 ]
             )
         }
+    }
+
+    // MARK: - Non-message mutation dispatch (Wave 1 Phase B)
+
+    /// Decoded the typed payload from `record.payload`. Treats a decode
+    /// failure as permanent so the flusher escalates to `.exhausted` after
+    /// the next attempt instead of looping forever on a corrupt row.
+    private func decodePayload<P: Decodable>(_ record: OutboxRecord, as type: P.Type) throws -> P {
+        do {
+            return try decoder.decode(P.self, from: record.payload)
+        } catch {
+            logger.error("Failed to decode \(String(describing: P.self), privacy: .public) for outbox \(record.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw NSError(
+                domain: "OutboxDispatcher",
+                code: 400,
+                userInfo: [
+                    NSLocalizedDescriptionKey: "Corrupt \(record.kind.rawValue) payload for \(record.id)"
+                ]
+            )
+        }
+    }
+
+    /// 4xx responses from the gateway are NOT transient — replaying the
+    /// same request will produce the same error. We rethrow as-is so the
+    /// flusher escalates to `.exhausted` once `maxAttempts` is reached.
+    /// 5xx and network errors are also rethrown but those are inherently
+    /// transient and the flusher's exponential backoff will retry.
+    private func dispatchBlockUser(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: BlockUserPayload.self)
+        let _: APIResponse<BlockActionResponse> = try await APIClient.shared.requestWithHeaders(
+            endpoint: "/users/\(payload.targetUserId)/block",
+            method: "POST",
+            body: try JSONEncoder().encode([String: String]()),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+        )
+        logger.info("blockUser dispatched for \(payload.targetUserId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+    }
+
+    private func dispatchUnblockUser(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: UnblockUserPayload.self)
+        let _: APIResponse<[String: Bool]> = try await APIClient.shared.requestWithHeaders(
+            endpoint: "/users/\(payload.targetUserId)/block",
+            method: "DELETE",
+            body: nil,
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+        )
+        logger.info("unblockUser dispatched for \(payload.targetUserId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+    }
+
+    /// POST /friend-requests — gateway expects `{ receiverId, message? }`.
+    /// The iOS payload uses `targetUserId` to match the consumer-facing
+    /// naming ; we translate at the wire boundary.
+    private func dispatchSendFriendRequest(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: SendFriendRequestPayload.self)
+        struct SendFriendRequestBody: Encodable {
+            let receiverId: String
+        }
+        let body = SendFriendRequestBody(receiverId: payload.targetUserId)
+        let _: APIResponse<FriendRequest> = try await APIClient.shared.requestWithHeaders(
+            endpoint: "/friend-requests",
+            method: "POST",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+        )
+        logger.info("sendFriendRequest dispatched for \(payload.targetUserId, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+    }
+
+    /// PATCH /friend-requests/:id — gateway expects `{ status: "accepted"|"rejected" }`.
+    /// Translate `accept|reject` → `accepted|rejected`.
+    private func dispatchRespondFriendRequest(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: RespondFriendRequestPayload.self)
+        struct RespondBody: Encodable {
+            let status: String
+        }
+        let status = payload.action == .accept ? "accepted" : "rejected"
+        let body = RespondBody(status: status)
+        let _: APIResponse<FriendRequest> = try await APIClient.shared.requestWithHeaders(
+            endpoint: "/friend-requests/\(payload.friendRequestId)",
+            method: "PATCH",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+        )
+        logger.info("respondFriendRequest dispatched for \(payload.friendRequestId, privacy: .public) status=\(status, privacy: .public) cmid=\(payload.clientMutationId, privacy: .public)")
+    }
+
+    /// PATCH /users/me — only sends fields that are non-nil. The gateway
+    /// schema accepts displayName, bio, avatarUrl among others ; we
+    /// forward exactly what the payload carries.
+    private func dispatchUpdateProfile(_ record: OutboxRecord) async throws {
+        let payload = try decodePayload(record, as: UpdateProfilePayload.self)
+        struct UpdateProfileBody: Encodable {
+            let displayName: String?
+            let bio: String?
+            let avatar: String?
+
+            enum CodingKeys: String, CodingKey { case displayName, bio, avatar }
+
+            func encode(to encoder: Encoder) throws {
+                var container = encoder.container(keyedBy: CodingKeys.self)
+                if let displayName { try container.encode(displayName, forKey: .displayName) }
+                if let bio { try container.encode(bio, forKey: .bio) }
+                if let avatar { try container.encode(avatar, forKey: .avatar) }
+            }
+        }
+        let body = UpdateProfileBody(
+            displayName: payload.displayName,
+            bio: payload.bio,
+            avatar: payload.avatarUrl
+        )
+        // The /users/me response wraps the updated user under `data.user`,
+        // which doesn't match `APIResponse<MeeshyUser>`. We don't need the
+        // result (caller refreshes via AuthManager.checkExistingSession()
+        // after enqueue), so decode the envelope shape loosely as a dictionary.
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.requestWithHeaders(
+            endpoint: "/users/me",
+            method: "PATCH",
+            body: try JSONEncoder().encode(body),
+            queryItems: nil,
+            headers: ["X-Client-Mutation-Id": payload.clientMutationId]
+        )
+        logger.info("updateProfile dispatched cmid=\(payload.clientMutationId, privacy: .public)")
     }
 
     // MARK: - Send Message

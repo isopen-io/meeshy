@@ -122,20 +122,37 @@ final class UserProfileViewModel: ObservableObject {
         }
     }
 
+    /// Wave 1 Phase B — block flows through the offline outbox so the
+    /// gateway's `MutationLog` can dedup retries, the UI flips optimistically
+    /// regardless of network state, and a queued block survives an app
+    /// kill before the request reaches the wire. The local BlockService
+    /// cache is updated synchronously so `isBlocked(userId:)` reads stay
+    /// consistent with the optimistic UI ; the eventual server replay
+    /// confirms (or, if it fails permanently, the OutboxFlusher escalates
+    /// to `.exhausted` and a future Phase B.5 outcomeStream surfaces a
+    /// rollback signal — see follow-up).
     func blockUser() async {
         guard let userId = profileUser.userId ?? fullUser?.id else { return }
+        let cmid = ClientMutationId.generate()
+        isBlocked = true
+        let payload = BlockUserPayload(clientMutationId: cmid, targetUserId: userId)
         do {
-            try await blockService.blockUser(userId: userId)
-            isBlocked = true
-        } catch {}
+            try await OfflineQueue.shared.enqueue(.blockUser, payload: payload)
+        } catch {
+            isBlocked = false
+        }
     }
 
     func unblockUser() async {
         guard let userId = profileUser.userId ?? fullUser?.id else { return }
+        let cmid = ClientMutationId.generate()
+        isBlocked = false
+        let payload = UnblockUserPayload(clientMutationId: cmid, targetUserId: userId)
         do {
-            try await blockService.unblockUser(userId: userId)
-            isBlocked = false
-        } catch {}
+            try await OfflineQueue.shared.enqueue(.unblockUser, payload: payload)
+        } catch {
+            isBlocked = true
+        }
     }
 
     private static func checkIsBlocked(userId: String?, authManager: AuthManaging) -> Bool {

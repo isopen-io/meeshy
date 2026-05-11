@@ -333,6 +333,108 @@ public actor OfflineQueue {
         logger.info("Enqueued offline message for conversation \(item.conversationId, privacy: .public), queue size: \(self.items.count)")
     }
 
+    // MARK: - Non-message mutation enqueue (Wave 1 Task 3.x)
+
+    /// Sentinel `conversationId` used for outbox rows that don't belong to a
+    /// specific conversation (profile updates, block/unblock, friend requests,
+    /// settings, etc.). The schema requires a non-null value ; a stable
+    /// sentinel keeps queries that filter by conversation from accidentally
+    /// matching these rows.
+    public static let globalConversationSentinel = "_global"
+
+    /// Generic enqueue path for non-message outbox kinds (block, friend
+    /// request, profile update, settings, etc.). Encodes the typed payload
+    /// once, writes a single `OutboxRecord` to the outbox table, and returns
+    /// immediately — the `OutboxFlusher` picks the record up on its next
+    /// drain pass and routes it to the corresponding `OutboxDispatcher` arm.
+    ///
+    /// Unlike `enqueue(_:)` (sendMessage path) this method does NOT apply
+    /// the message-coalescing state machine. Each call inserts a fresh row ;
+    /// dedup is the gateway's job via `clientMutationId` + `MutationLog`.
+    ///
+    /// `clientMutationId` is extracted from the payload by encoding-then-
+    /// decoding through a minimal envelope. This keeps the call site simple
+    /// (`enqueue(.blockUser, payload: BlockUserPayload(...))`) without
+    /// requiring a new protocol on every payload struct.
+    ///
+    /// - Parameters:
+    ///   - kind: the outbox kind ; MUST be one of the non-message kinds.
+    ///     Calling with `.sendMessage`/`.editMessage`/etc. is a programming
+    ///     error and asserts in debug builds.
+    ///   - payload: any `Codable & Sendable` mutation payload that carries
+    ///     a `clientMutationId` field.
+    ///   - conversationId: optional anchor conversation. Pass `nil` (the
+    ///     default) to use the `_global` sentinel.
+    /// - Returns: the outbox record id, so callers can correlate with
+    ///   downstream events.
+    @discardableResult
+    public func enqueue<P: Codable & Sendable>(
+        _ kind: OutboxKind,
+        payload: P,
+        conversationId: String? = nil
+    ) async throws -> String {
+        switch kind {
+        case .sendMessage, .editMessage, .deleteMessage, .sendReaction:
+            assertionFailure("enqueue(kind:payload:) is for non-message outbox kinds. Use the dedicated enqueue/enqueueEdit/enqueueDelete paths for \(kind).")
+        default:
+            break
+        }
+
+        guard let pool = outboxPool else {
+            logger.error("enqueue(kind:payload:) called before configure(pool:) — refusing to drop the mutation silently")
+            throw OfflineQueueError.poolNotConfigured
+        }
+
+        let encoded: Data
+        do {
+            encoded = try encoder.encode(payload)
+        } catch {
+            logger.error("Failed to encode payload for \(kind.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw OfflineQueueError.payloadCodingFailed(underlying: error)
+        }
+
+        // Extract clientMutationId from the encoded payload — every non-message
+        // mutation payload carries one (see `MutationPayloads.swift`). We avoid
+        // a new protocol by reading the JSON object directly. If extraction
+        // fails or the value is malformed, we still write the row but with a
+        // freshly minted cmid so the row remains observable in the outbox.
+        let cmid = Self.extractClientMutationId(from: encoded) ?? ClientMutationId.generate()
+        let outboxId = "ofqm_\(cmid)"
+        let anchor = conversationId ?? Self.globalConversationSentinel
+        let now = Date()
+
+        do {
+            try await pool.write { db in
+                try OutboxRecord(
+                    id: outboxId,
+                    kind: kind,
+                    conversationId: anchor,
+                    messageLocalId: nil,
+                    clientMessageId: cmid,
+                    payload: encoded,
+                    status: .pending,
+                    createdAt: now
+                ).insert(db)
+            }
+        } catch {
+            logger.error("Outbox write failed for \(kind.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw OfflineQueueError.writeFailed(underlying: error)
+        }
+
+        logger.info("Enqueued \(kind.rawValue, privacy: .public) outbox row \(outboxId, privacy: .public)")
+        return outboxId
+    }
+
+    /// Reads the top-level `clientMutationId` field from a JSON-encoded
+    /// payload without requiring the payload type to expose a protocol.
+    private static func extractClientMutationId(from payload: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+              let cmid = object["clientMutationId"] as? String else {
+            return nil
+        }
+        return ClientMutationId.isValid(cmid) ? cmid : nil
+    }
+
     // MARK: - Audio offline (write-ahead 2-step)
 
     public enum EnqueueAudioError: Error, Sendable {

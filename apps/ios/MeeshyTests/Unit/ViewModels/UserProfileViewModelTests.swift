@@ -157,8 +157,17 @@ final class UserProfileViewModelTests: XCTestCase {
     }
 
     // MARK: - blockUser Tests
+    //
+    // Wave 1 Phase B — `blockUser` / `unblockUser` no longer call the
+    // BlockService directly. They flip `isBlocked` optimistically and
+    // enqueue a `.blockUser` / `.unblockUser` record on `OfflineQueue`
+    // so the OutboxFlusher drives the HTTP call with the
+    // `X-Client-Mutation-Id` header for gateway-side dedup. The
+    // mockBlockService assertions of the previous tests are therefore
+    // obsolete ; this version only asserts the optimistic state flip,
+    // which is the user-visible contract.
 
-    func test_blockUser_success_setsIsBlockedTrue() async {
+    func test_blockUser_flipsIsBlockedOptimistically() async {
         mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
         let sut = makeSUT()
         XCTAssertFalse(sut.isBlocked)
@@ -166,18 +175,6 @@ final class UserProfileViewModelTests: XCTestCase {
         await sut.blockUser()
 
         XCTAssertTrue(sut.isBlocked)
-        XCTAssertEqual(mockBlockService.blockUserCallCount, 1)
-        XCTAssertEqual(mockBlockService.lastBlockUserId, "target-user-001")
-    }
-
-    func test_blockUser_failure_doesNotChangeIsBlocked() async {
-        mockAuthManager.simulateLoggedIn(user: makeCurrentUser())
-        mockBlockService.blockUserResult = .failure(NSError(domain: "test", code: 500))
-        let sut = makeSUT()
-
-        await sut.blockUser()
-
-        XCTAssertFalse(sut.isBlocked)
     }
 
     func test_blockUser_skipsWhenUserIdIsNil() async {
@@ -186,12 +183,13 @@ final class UserProfileViewModelTests: XCTestCase {
 
         await sut.blockUser()
 
-        XCTAssertEqual(mockBlockService.blockUserCallCount, 0)
+        // No user id → no mutation enqueued. The local state stays put.
+        XCTAssertFalse(sut.isBlocked)
     }
 
     // MARK: - unblockUser Tests
 
-    func test_unblockUser_success_setsIsBlockedFalse() async {
+    func test_unblockUser_flipsIsBlockedOptimistically() async {
         let currentUser = makeCurrentUser(blockedUserIds: ["target-user-001"])
         mockAuthManager.simulateLoggedIn(user: currentUser)
         let sut = makeSUT()
@@ -200,20 +198,6 @@ final class UserProfileViewModelTests: XCTestCase {
         await sut.unblockUser()
 
         XCTAssertFalse(sut.isBlocked)
-        XCTAssertEqual(mockBlockService.unblockUserCallCount, 1)
-        XCTAssertEqual(mockBlockService.lastUnblockUserId, "target-user-001")
-    }
-
-    func test_unblockUser_failure_doesNotChangeIsBlocked() async {
-        let currentUser = makeCurrentUser(blockedUserIds: ["target-user-001"])
-        mockAuthManager.simulateLoggedIn(user: currentUser)
-        mockBlockService.unblockUserResult = .failure(NSError(domain: "test", code: 500))
-        let sut = makeSUT()
-        XCTAssertTrue(sut.isBlocked)
-
-        await sut.unblockUser()
-
-        XCTAssertTrue(sut.isBlocked)
     }
 
     // MARK: - findSharedConversations Tests
