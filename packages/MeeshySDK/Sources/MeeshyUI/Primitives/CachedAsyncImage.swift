@@ -155,11 +155,16 @@ public struct CachedAvatarImage: View {
         }
     }
 
+    @MainActor private static func pixelSize(for points: CGFloat) -> CGFloat {
+        points * UIScreen.main.scale
+    }
+
     private func loadAvatar(for currentUrlString: String?) async {
         guard let currentUrlString, !currentUrlString.isEmpty else { return }
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
         if image != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
-        if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
+        let maxPixel = await Self.pixelSize(for: size)
+        if let loaded = await CacheCoordinator.shared.images.image(for: resolved, maxPixelSize: maxPixel) {
             if self.urlString == currentUrlString {
                 withAnimation(.easeIn(duration: 0.15)) { self.image = loaded }
             }

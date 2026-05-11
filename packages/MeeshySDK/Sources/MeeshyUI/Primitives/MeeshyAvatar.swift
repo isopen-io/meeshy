@@ -99,6 +99,33 @@ public enum AvatarContext: Sendable {
         }
     }
 
+    /// Si vrai, l'anneau "story unread" tourne en continu (linear repeatForever).
+    /// Faux pour les contextes list/feed où 30+ avatars visibles simultanément
+    /// rendraient le scroll saccadé : on garde le dégradé statique (toujours
+    /// reconnaissable comme story non lue) sans animation GPU continue.
+    public var animatesStoryRing: Bool {
+        switch self {
+        case .storyTray, .storyViewer, .feedComposer, .postAuthor,
+             .profileBanner, .profileSheet, .profileEdit,
+             .conversationHeaderExpanded:
+            return true
+        default: return false
+        }
+    }
+
+    /// Si vrai, le badge mood pulse en continu (spring repeatForever).
+    /// Idem : exclu des contextes list pour éviter N animations simultanées
+    /// pendant le scroll.
+    public var animatesMoodBadge: Bool {
+        switch self {
+        case .storyTray, .feedComposer, .postAuthor,
+             .profileBanner, .profileSheet,
+             .conversationHeaderExpanded, .conversationHeaderCollapsed:
+            return true
+        default: return false
+        }
+    }
+
     public var shadowRadius: CGFloat {
         switch self {
         case .postReaction, .typingIndicator, .recentParticipant: return 0
@@ -279,7 +306,7 @@ public struct MeeshyAvatar: View {
         }
         .scaleEffect(tapScale)
         .onAppear {
-            if effectiveStoryState == .unread {
+            if effectiveStoryState == .unread && context.animatesStoryRing {
                 withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
                     ringRotation = 360
                 }
@@ -398,6 +425,7 @@ public struct MeeshyAvatar: View {
                     onMoodTap?(CGPoint(x: f.midX, y: f.midY))
                 }
                 .onAppear {
+                    guard context.animatesMoodBadge else { return }
                     withAnimation(
                         .spring(response: 0.5, dampingFraction: 0.4)
                         .repeatForever(autoreverses: true)
