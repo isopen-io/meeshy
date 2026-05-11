@@ -958,6 +958,24 @@ class ConversationListViewModel: ObservableObject {
                 nextCursor = page.nextCursor
                 hasMore = false
                 paginationState = .exhausted
+                // PERSIST the exhausted state. Without this, every
+                // `reloadFromCache()` triggered by a socket event
+                // (`syncEngine.conversationsDidChange` fires on each
+                // message/preference update) reads the cached cursor
+                // back as `hasMore=true`, flips `paginationState = .idle`,
+                // and the pagination footer sentinel re-fires `loadMore`.
+                // That re-loop was visible as 3-4 consecutive
+                // `forcing exhausted` lines in the May 2026 device log
+                // even though the in-memory guard was working correctly.
+                let exhaustedSnapshot = conversations
+                Task {
+                    await CacheCoordinator.shared.conversations.saveCursor(
+                        nextCursor: nil,
+                        hasMore: false,
+                        for: "list"
+                    )
+                    try? await CacheCoordinator.shared.conversations.save(exhaustedSnapshot, for: "list")
+                }
                 return
             }
 
