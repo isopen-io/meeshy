@@ -1419,6 +1419,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on("message:new") { [weak self] data, _ in
             guard let self else { return }
+            // Phase A real-time instrumentation — log the socket arrival
+            // BEFORE decoding so we capture the gateway → device delivery
+            // latency cleanly (decoding is observable separately if needed).
+            let recvAt = Date()
+            let firstId = (data.first as? [String: Any])?["id"] as? String
+            let firstCmid = (data.first as? [String: Any])?["clientMessageId"] as? String
+            Logger.socket.info("perf:ios.notif.socket.message-new receivedAt=\(recvAt.timeIntervalSince1970, privacy: .public) serverId=\(firstId ?? "nil", privacy: .public) clientMessageId=\(firstCmid ?? "nil", privacy: .public)")
             self.decode(APIMessage.self, from: data) { [weak self] msg in
                 self?.messageReceived.send(msg)
             }
@@ -1442,6 +1449,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on("reaction:added") { [weak self] data, _ in
             guard let self else { return }
+            let recvAt = Date()
+            let firstMsgId = (data.first as? [String: Any])?["messageId"] as? String
+            let firstEmoji = (data.first as? [String: Any])?["emoji"] as? String
+            Logger.socket.info("perf:ios.notif.socket.reaction-added receivedAt=\(recvAt.timeIntervalSince1970, privacy: .public) messageId=\(firstMsgId ?? "nil", privacy: .public) emoji=\(firstEmoji ?? "nil", privacy: .public)")
             self.decode(ReactionUpdateEvent.self, from: data) { [weak self] event in
                 self?.reactionAdded.send(event)
             }
@@ -1449,6 +1460,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on("reaction:removed") { [weak self] data, _ in
             guard let self else { return }
+            let recvAt = Date()
+            let firstMsgId = (data.first as? [String: Any])?["messageId"] as? String
+            Logger.socket.info("perf:ios.notif.socket.reaction-removed receivedAt=\(recvAt.timeIntervalSince1970, privacy: .public) messageId=\(firstMsgId ?? "nil", privacy: .public)")
             self.decode(ReactionUpdateEvent.self, from: data) { [weak self] event in
                 self?.reactionRemoved.send(event)
             }

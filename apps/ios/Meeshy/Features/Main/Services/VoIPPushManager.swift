@@ -5,6 +5,7 @@ import MeeshySDK
 import os
 
 nonisolated private let logger = Logger(subsystem: "me.meeshy.app", category: "voip-push")
+nonisolated private let perfLogger = Logger(subsystem: "me.meeshy.app", category: "calls")
 
 @MainActor
 final class VoIPPushManager: NSObject, ObservableObject {
@@ -96,6 +97,14 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         }
 
         let data = payload.dictionaryPayload
+        // Phase A real-time instrumentation — log the VoIP push arrival
+        // BEFORE any validation so we capture even malformed/phantom pushes
+        // (the ones that hide bugs in CallKit reporting). Correlate with the
+        // gateway-side `perf:push.sendViaAPNS` for VoIP topics.
+        let voipReceivedAt = Date()
+        let dbgCallId = (data["callId"] as? String) ?? "nil"
+        let dbgType = (data["type"] as? String) ?? "nil"
+        perfLogger.info("perf:ios.notif.voip-push receivedAt=\(voipReceivedAt.timeIntervalSince1970, privacy: .public) callId=\(dbgCallId, privacy: .public) type=\(dbgType, privacy: .public) payloadKeys=\(data.keys.count, privacy: .public)")
 
         // Defense-in-depth: validate the payload BEFORE waking the call UI.
         // PushKit requires that we report a call for every received push;

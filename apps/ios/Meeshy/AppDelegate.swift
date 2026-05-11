@@ -107,6 +107,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         let convId = userInfo["conversationId"] as? String
         let convUnread = userInfo["conversationUnread"] as? Int
         let messageId = userInfo["messageId"] as? String
+        // Phase A real-time instrumentation — log the silent-push arrival
+        // so we can correlate `perf:push.sendViaAPNS` (gateway side) with
+        // the actual moment APN delivers it to the device, and measure the
+        // background-task completion delta separately.
+        let notifReceivedAt = Date()
+        Logger.network.info("perf:ios.notif.silent-push messageId=\(messageId ?? "nil", privacy: .public) conversationId=\(convId ?? "nil", privacy: .public) unreadTotal=\(unreadTotal ?? -1, privacy: .public) appState=\(application.applicationState.rawValue, privacy: .public)")
 
         // Guard the entire async chain with a background task so iOS gives us
         // the full ~25s budget instead of suspending the process the moment
@@ -147,6 +153,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 }
             }
 
+            let handledMs = Int(Date().timeIntervalSince(notifReceivedAt) * 1000)
+            Logger.network.info("perf:ios.notif.silent-push.handled messageId=\(messageId ?? "nil", privacy: .public) conversationId=\(convId ?? "nil", privacy: .public) durationMs=\(handledMs, privacy: .public)")
             state.finish()
         }
     }
