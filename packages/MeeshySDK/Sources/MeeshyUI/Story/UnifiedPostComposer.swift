@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import PhotosUI
+import PencilKit
 import MeeshySDK
 
 // MARK: - Unified Post Composer
@@ -21,6 +22,14 @@ public struct UnifiedPostComposer: View {
     /// Source story when in repost mode (nil for normal compose).
     @State private var repostSourceStory: StoryItem? = nil
 
+    /// Warnings raised by the most recent reprojection from a repost source.
+    /// Surfaced via `reprojectionBannerView` in the body when non-empty.
+    @State private var reprojectionWarnings: [CanvasReprojector.ReprojectionWarning] = []
+
+    /// Tracks whether the auto-import has already fired for the current
+    /// repost source — prevents repeated execution on body re-evaluation.
+    @State private var hasImportedRepostSource = false
+
     /// When non-nil, the type selector is locked to this value (B.7 = `.post`).
     private let lockedType: PostType?
 
@@ -38,6 +47,13 @@ public struct UnifiedPostComposer: View {
     /// Repost-mode publish callback: `(content, sourceStory)`.
     /// Set by the repost-mode init; nil for normal compose flow.
     public var onPublishRepost: ((String, StoryItem) -> Void)?
+
+    /// Repost-mode import callback: fires once when the source story is shown
+    /// inside the composer, after reprojecting its canvas items to the target
+    /// post aspect ratio. Callers wire the result into their own post-canvas
+    /// destination (since `UnifiedPostComposer` currently has no canvas-overlay
+    /// state of its own — only the embedded reader). Nil = no-op.
+    public var onStoryImported: ((RepostImportResult) -> Void)?
 
     public init(onPublish: @escaping (PostType, String, String?, StoryEffects?, UIImage?) -> Void,
                 onDismiss: @escaping () -> Void) {
@@ -59,11 +75,16 @@ public struct UnifiedPostComposer: View {
     ///     its locked badge and metadata).
     ///   - onPublishRepost: Called when the user taps Publish. Receives the typed
     ///     commentary plus the source story.
+    ///   - onStoryImported: Optional callback fired once after the source story's
+    ///     canvas items are reprojected to the target post aspect ratio. Use this to
+    ///     forward the structured `RepostImportResult` to whatever destination the
+    ///     caller manages (post canvas, draft store, analytics).
     ///   - onDismiss: Called when the user cancels.
     public init(
         repostingStory story: StoryItem,
         authorHandle: String,
         onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem) -> Void,
+        onStoryImported: ((RepostImportResult) -> Void)? = nil,
         onDismiss: @escaping () -> Void
     ) {
         self._selectedType = State(initialValue: .post)
@@ -71,6 +92,7 @@ public struct UnifiedPostComposer: View {
         self._repostSourceStory = State(initialValue: story)
         self.repostSourceForTests = story
         self.onPublishRepost = onPublishRepost
+        self.onStoryImported = onStoryImported
         self.onDismiss = onDismiss
         // Default no-op for the non-repost callback so existing call sites keep working.
         self.onPublish = { _, _, _, _, _ in }
@@ -227,6 +249,11 @@ public struct UnifiedPostComposer: View {
                     .frame(maxWidth: .infinity)
                     .clipShape(RoundedRectangle(cornerRadius: 12))
                     .padding(.horizontal, 16)
+                    .onAppear {
+                        autoImportFromRepostSource(story)
+                    }
+
+                reprojectionBannerView
 
                 HStack(spacing: 16) {
                     visibilityPicker
@@ -253,6 +280,47 @@ public struct UnifiedPostComposer: View {
                 .padding(.horizontal, 16)
             }
         }
+    }
+
+    // MARK: - Repost reprojection banner
+
+    @ViewBuilder
+    private var reprojectionBannerView: some View {
+        if !reprojectionWarnings.isEmpty {
+            HStack(spacing: 8) {
+                Image(systemName: "rectangle.and.text.magnifyingglass")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(MeeshyColors.warning)
+                Text(String(format: String(localized: "story.repost.reprojected",
+                                           defaultValue: "%d item(s) repositioned for the new aspect ratio",
+                                           bundle: .module),
+                           reprojectionWarnings.count))
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textSecondary)
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(MeeshyColors.warning.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 8))
+            .padding(.horizontal, 16)
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    /// Auto-imports the repost source story's canvas items into the composer
+    /// the first time the embedded reader appears. Drops out early on
+    /// subsequent invocations to avoid re-firing the callback. The composer
+    /// itself has no canvas-overlay state — the structured `RepostImportResult`
+    /// is forwarded to `onStoryImported` so callers can wire it into their own
+    /// destination (post canvas, draft store, analytics).
+    private func autoImportFromRepostSource(_ story: StoryItem) {
+        guard !hasImportedRepostSource else { return }
+        hasImportedRepostSource = true
+        let payload = story.extractRepostPayload()
+        let result = importFromStory(payload)
+        reprojectionWarnings = result.warnings
+        onStoryImported?(result)
     }
 
     private var statusComposer: some View {
@@ -479,30 +547,74 @@ public struct UnifiedPostComposer: View {
 
 // MARK: - Story import (Phase 5 RepostPayload)
 
+/// Structured result of reprojecting a RepostPayload to a target canvas size.
+/// All collections are already reprojected to the target's [0,1] normalized
+/// coordinate space (with center-anchored scale) and clamped into bounds when
+/// necessary. `warnings` lists each item that was clamped so the composer can
+/// surface a discreet banner inviting the user to fine-tune positioning.
+public struct RepostImportResult: Sendable {
+    public let texts: [StoryTextObject]
+    public let media: [StoryMediaObject]
+    public let stickers: [StorySticker]
+    public let drawingData: Data?
+    public let audios: [StoryAudioPlayerObject]
+    public let warnings: [CanvasReprojector.ReprojectionWarning]
+    public let targetSize: CGSize
+
+    public var hasClampedItems: Bool { !warnings.isEmpty }
+}
+
 extension UnifiedPostComposer {
-    /// Reprojects all canvas objects from `payload` to `targetSize` and returns
-    /// the list of clamping warnings (non-empty when any object was repositioned
-    /// to fit the target aspect ratio). Audio objects are pass-through (no spatial
-    /// position). Caller should surface warnings via a reprojection banner UI.
-    @discardableResult
+    /// Reprojects all canvas objects from `payload` to `targetSize`.
+    /// Returns the full reprojected items plus the list of clamping warnings.
+    /// Audio objects are pass-through (no spatial position).
+    /// The composer's body uses this via `.onAppear` in repost mode to populate
+    /// the `reprojectionWarnings` banner state and invoke `onStoryImported` so
+    /// the caller can wire the imported items into its own destination.
     public func importFromStory(_ payload: RepostPayload,
                                 targetSize: CGSize = CGSize(width: 1080, height: 1080))
-        -> [CanvasReprojector.ReprojectionWarning] {
+        -> RepostImportResult {
         let projector = CanvasReprojector(from: payload.sourceCanvasSize, to: targetSize)
         var warnings: [CanvasReprojector.ReprojectionWarning] = []
+        var texts: [StoryTextObject] = []
+        var media: [StoryMediaObject] = []
+        var stickers: [StorySticker] = []
+        var drawingData: Data? = nil
+        var audios: [StoryAudioPlayerObject] = []
+
         for t in payload.textObjects {
-            if let w = projector.reproject(text: t).warning { warnings.append(w) }
+            let r = projector.reproject(text: t)
+            texts.append(r.value)
+            if let w = r.warning { warnings.append(w) }
         }
         for m in payload.mediaObjects {
-            if let w = projector.reproject(media: m).warning { warnings.append(w) }
+            let r = projector.reproject(media: m)
+            media.append(r.value)
+            if let w = r.warning { warnings.append(w) }
         }
         for s in payload.stickers {
-            if let w = projector.reproject(sticker: s).warning { warnings.append(w) }
+            let r = projector.reproject(sticker: s)
+            stickers.append(r.value)
+            if let w = r.warning { warnings.append(w) }
         }
         if let data = payload.drawingData {
-            if let w = projector.reproject(drawingData: data).warning { warnings.append(w) }
+            let r = projector.reproject(drawingData: data)
+            drawingData = r.value?.dataRepresentation()
+            if let w = r.warning { warnings.append(w) }
         }
-        // audio reprojection is identity (no spatial position)
-        return warnings
+        for a in payload.audioPlayerObjects {
+            // audio reprojection is identity (no spatial position)
+            audios.append(projector.reproject(audio: a).value)
+        }
+
+        return RepostImportResult(
+            texts: texts,
+            media: media,
+            stickers: stickers,
+            drawingData: drawingData,
+            audios: audios,
+            warnings: warnings,
+            targetSize: targetSize
+        )
     }
 }

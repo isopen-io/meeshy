@@ -45,3 +45,21 @@ extension StorySlide {
         )
     }
 }
+
+extension StoryItem {
+    /// Extracts a RepostPayload directly from a StoryItem (single-effects model
+    /// used at feed/repost level). `sourceSlideId` and `sourceStoryItemId` both
+    /// resolve to the StoryItem id since this model has no per-slide identity.
+    public func extractRepostPayload() -> RepostPayload {
+        RepostPayload(
+            textObjects: storyEffects?.textObjects ?? [],
+            mediaObjects: storyEffects?.mediaObjects ?? [],
+            stickers: storyEffects?.stickerObjects ?? [],
+            drawingData: storyEffects?.drawingData,
+            audioPlayerObjects: storyEffects?.audioPlayerObjects ?? [],
+            sourceCanvasSize: CanvasGeometry.designSize,
+            sourceSlideId: id,
+            sourceStoryItemId: id
+        )
+    }
+}
