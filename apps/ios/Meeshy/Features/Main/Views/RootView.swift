@@ -383,11 +383,28 @@ struct RootView: View {
             .environmentObject(statusViewModel)
             .environmentObject(conversationViewModel)
         }
+        // Call presentation is split between fullScreen and PiP modes so the
+        // user can keep using the rest of the app during an active call:
+        //   - `displayMode == .fullScreen` → present `CallView` via
+        //     `.fullScreenCover` like before.
+        //   - `displayMode == .pip` → the cover dismisses and
+        //     `FloatingCallPillView` (mounted as an overlay below) takes
+        //     over. Tapping the pill or pressing its expand button bumps
+        //     `displayMode` back to `.fullScreen`, which re-presents the
+        //     cover.
+        // The Binding's `set: false` branch is now a "minimize" instead of
+        // an "end call" — swiping down on the cover should NOT terminate
+        // the call. The hangup button on either UI still routes through
+        // `callManager.endCall()` explicitly.
         .fullScreenCover(isPresented: Binding(
-            get: { isCallActive },
-            set: { if !$0 { callManager.endCall() } }
+            get: { isCallActive && callManager.displayMode == .fullScreen },
+            set: { if !$0 { callManager.displayMode = .pip } }
         )) {
             CallView()
+        }
+        .overlay(alignment: .top) {
+            FloatingCallPillView()
+                .padding(.top, 8)
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: showFeed)
         .animation(.spring(), value: showMenu)

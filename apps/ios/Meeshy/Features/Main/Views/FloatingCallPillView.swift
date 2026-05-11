@@ -82,6 +82,7 @@ struct FloatingCallPillView: View {
     private var controlButtons: some View {
         HStack(spacing: 8) {
             muteButton
+            speakerButton
             expandButton
             hangupButton
         }
@@ -103,6 +104,24 @@ struct FloatingCallPillView: View {
         }
         .pressable()
         .accessibilityLabel(callManager.isMuted ? "Reactiver le micro" : "Couper le micro")
+    }
+
+    private var speakerButton: some View {
+        Button {
+            callManager.toggleSpeaker()
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(callManager.isSpeaker ? MeeshyColors.indigo400 : .white)
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(0.2) : Color.white.opacity(0.1))
+                )
+        }
+        .pressable()
+        .accessibilityLabel(callManager.isSpeaker ? "Désactiver le haut-parleur" : "Activer le haut-parleur")
     }
 
     private var expandButton: some View {

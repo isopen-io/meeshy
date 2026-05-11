@@ -73,6 +73,40 @@ struct CallView: View {
                 )
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+
+            // Minimize-to-PiP affordance. The drag-down gesture on the call
+            // view already minimizes video calls (see audio/video layouts),
+            // but audio calls had no equivalent and users were forced to end
+            // the call to get back to the rest of the app. This explicit
+            // top-leading chevron covers both modes and is reachable with one
+            // hand on any device size.
+            if callManager.callState.isActive {
+                VStack {
+                    HStack {
+                        Button {
+                            withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
+                                callManager.displayMode = .pip
+                            }
+                            HapticFeedback.medium()
+                        } label: {
+                            Image(systemName: "chevron.down")
+                                .font(.system(size: 16, weight: .semibold))
+                                .foregroundColor(.white)
+                                .frame(width: 40, height: 40)
+                                .background(
+                                    Circle()
+                                        .fill(.ultraThinMaterial)
+                                )
+                        }
+                        .accessibilityLabel("Reduire l'appel")
+                        .accessibilityHint("Garde l'appel en cours dans une banniere flottante")
+                        Spacer()
+                    }
+                    Spacer()
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 50)
+            }
         }
         .ignoresSafeArea()
         .statusBarHidden(true)

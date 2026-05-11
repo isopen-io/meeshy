@@ -92,11 +92,18 @@ extension iPadRootView {
                 .environmentObject(statusViewModel)
                 .environmentObject(conversationViewModel)
             }
+            // Mirror RootView's split call presentation: `.fullScreen`
+            // mode → cover; `.pip` mode → overlay pill. Swiping the cover
+            // down minimizes instead of ending the call.
             .fullScreenCover(isPresented: Binding(
-                get: { callManager.callState.isActive },
-                set: { if !$0 { callManager.endCall() } }
+                get: { callManager.callState.isActive && callManager.displayMode == .fullScreen },
+                set: { if !$0 { callManager.displayMode = .pip } }
             )) {
                 CallView()
+            }
+            .overlay(alignment: .top) {
+                FloatingCallPillView()
+                    .padding(.top, 8)
             }
     }
 }
