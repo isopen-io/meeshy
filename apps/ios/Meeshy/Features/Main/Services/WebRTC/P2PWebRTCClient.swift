@@ -259,14 +259,17 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
 
-        // Force selection of the throwing `setCodecPreferences:error:` overload
-        // via an explicit typed function reference. Without it, Swift overload
-        // resolution silently picks the deprecated void variant (compiler warns
-        // "no calls to throwing functions occur within 'try' expression" and
-        // 'catch' block is unreachable).
+        // Audit 2026-05-11 — the previous typed-function-reference trick
+        // (`let setCodecs: ([X]) throws -> Void = transceiver.setCodecPreferences`)
+        // still selected the deprecated void overload at compile time —
+        // confirmed by the persistent deprecation warning emitted at the
+        // assignment site. With the deprecated variant, the catch block was
+        // unreachable and any setCodecPreferences error (codec list empty,
+        // transceiver stopped, peer rejected the preference) was silently
+        // swallowed. Force the throwing `setCodecPreferences:error:` selector
+        // via a dynamic ObjC dispatch that bypasses Swift's overload picker.
         do {
-            let setCodecs: ([RTCRtpCodecCapability]) throws -> Void = audioTransceiver.setCodecPreferences
-            try setCodecs(preferred)
+            try Self.invokeSetCodecPreferences(on: audioTransceiver, codecs: preferred)
             let names = preferred.map { $0.name }.joined(separator: ", ")
             Logger.webrtc.info("[WEBRTC] audio codec preferences applied: \(names, privacy: .public)")
         } catch {
@@ -319,15 +322,53 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
             return
         }
 
-        // See applyAudioCodecPreferences for the typed-function-reference
-        // rationale (forces the throwing overload over the deprecated void one).
+        // Same dynamic ObjC dispatch rationale as applyAudioCodecPreferences.
         do {
-            let setCodecs: ([RTCRtpCodecCapability]) throws -> Void = videoTransceiver.setCodecPreferences
-            try setCodecs(preferred)
+            try Self.invokeSetCodecPreferences(on: videoTransceiver, codecs: preferred)
             let names = preferred.map { $0.name }.joined(separator: ", ")
             Logger.webrtc.info("[WEBRTC] video codec preferences applied: \(names, privacy: .public)")
         } catch {
             Logger.webrtc.warning("[WEBRTC] setCodecPreferences (video) threw: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Calls the throwing `setCodecPreferences:error:` selector on the given
+    /// transceiver via the ObjC runtime, bypassing Swift's overload resolution
+    /// which silently prefers the deprecated void overload (see audit
+    /// 2026-05-11 §B-Claim-1). The function-pointer cast matches the real
+    /// ObjC method signature: `BOOL (*)(NSObject, Selector, NSArray, NSError**)`.
+    private static func invokeSetCodecPreferences(
+        on transceiver: RTCRtpTransceiver,
+        codecs: [RTCRtpCodecCapability]
+    ) throws {
+        typealias SetCodecsIMP = @convention(c) (
+            NSObject, Selector, NSArray, AutoreleasingUnsafeMutablePointer<NSError?>
+        ) -> Bool
+        // Use #selector with the typed protocol reference so the compiler
+        // verifies the selector exists at build time (Swift's recommendation
+        // over string-literal Selector). The Protocol-suffixed name is
+        // libwebrtc's auto-generated Swift name for the ObjC protocol.
+        let selector = #selector(RTCRtpTransceiverProtocol.setCodecPreferences(_:error:))
+        guard transceiver.responds(to: selector) else {
+            throw NSError(
+                domain: "MeeshyWebRTC", code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "setCodecPreferences:error: selector not exposed by libwebrtc binding"]
+            )
+        }
+        guard let imp = transceiver.method(for: selector) else {
+            throw NSError(
+                domain: "MeeshyWebRTC", code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "setCodecPreferences:error: IMP unavailable"]
+            )
+        }
+        let fn = unsafeBitCast(imp, to: SetCodecsIMP.self)
+        var nsError: NSError?
+        let ok = fn(transceiver, selector, codecs as NSArray, &nsError)
+        if !ok {
+            throw nsError ?? NSError(
+                domain: "MeeshyWebRTC", code: -3,
+                userInfo: [NSLocalizedDescriptionKey: "setCodecPreferences returned false with no error"]
+            )
         }
     }
 
