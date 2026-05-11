@@ -903,6 +903,46 @@ export function registerCoreRoutes(
                 userId
               ));
 
+      // Diffuser le nouvel event typé CONVERSATION_NEW à TOUS les participants
+      // — y compris le créateur — dans leurs user-rooms respectives. Avant ce
+      // change, le créateur n'avait AUCUN signal socket (la boucle de
+      // notifications ci-dessous itère uniquement sur `uniqueParticipantIds`
+      // qui exclut `userId`), ce qui forçait les clients iOS et web à
+      // implémenter un workaround local (ConversationCreatedBroadcaster sur
+      // iOS) pour faire apparaître la nouvelle conversation immédiatement.
+      // Avec CONVERSATION_NEW, la source de vérité reste sur le gateway et
+      // tous les clients (web, iOS, future plateformes) reçoivent le même
+      // payload typé. La notification:new legacy reste émise en parallèle
+      // pour compat avec les anciens clients pendant ~3 mois.
+      try {
+        const socketIOHandler = (fastify as any).socketIOHandler;
+        const socketIOManager = socketIOHandler?.getManager?.();
+        const io = socketIOManager?.io || (socketIOHandler as any)?.io;
+        if (io) {
+          const allParticipantIds = [userId, ...uniqueParticipantIds];
+          const conversationNewPayload = {
+            conversationId: conversation.id,
+            conversationType: type,
+            title: displayTitle,
+            creatorId: userId,
+            participantIds: allParticipantIds,
+            createdAt: conversation.createdAt instanceof Date
+              ? conversation.createdAt.toISOString()
+              : String(conversation.createdAt)
+          };
+          for (const participantId of allParticipantIds) {
+            io.to(ROOMS.user(participantId)).emit(
+              SERVER_EVENTS.CONVERSATION_NEW,
+              conversationNewPayload
+            );
+          }
+        }
+      } catch (broadcastError) {
+        console.error('Erreur lors de la diffusion CONVERSATION_NEW:', broadcastError);
+        // Non bloquant : la conversation est créée, les clients la verront
+        // au prochain delta sync ou via la notification legacy ci-dessous.
+      }
+
       // Envoyer des notifications aux participants invités
       const notificationService = (fastify as any).notificationService;
       if (notificationService && uniqueParticipantIds.length > 0) {

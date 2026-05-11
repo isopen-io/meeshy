@@ -129,6 +129,17 @@ export const SERVER_EVENTS = {
   MESSAGE_CONSUMED: 'message:consumed',
   PARTICIPANT_ROLE_UPDATED: 'participant:role-updated',
   CONVERSATION_UPDATED: 'conversation:updated',
+  /**
+   * Emitted to the user-rooms of EVERY participant of a freshly-created
+   * conversation — INCLUDING the creator. Replaces the previous overload
+   * of `NOTIFICATION_NEW` (which was only sent to invitees, leaving the
+   * creator without any socket signal). Carries the canonical conversation
+   * payload so clients can prepend the row without an extra GET. Both web
+   * and iOS subscribe to this directly; the legacy `notification:new` with
+   * `type=new_conversation_*` is kept emitted in parallel for ~3 months
+   * so older clients keep working during rollout.
+   */
+  CONVERSATION_NEW: 'conversation:new',
   CONVERSATION_PARTICIPANT_LEFT: 'conversation:participant-left',
   CONVERSATION_PARTICIPANT_BANNED: 'conversation:participant-banned',
   CONVERSATION_CLOSED: 'conversation:closed',
@@ -319,6 +330,23 @@ export interface NotificationEventData {
     readonly emailSent: boolean;
     readonly pushSent: boolean;
   };
+}
+
+/**
+ * Payload de `CONVERSATION_NEW` — émis aux user-rooms de TOUS les
+ * participants (créateur inclus) lors de la création d'une conversation.
+ * Champs minimaux pour permettre au client de prepend la row sans GET
+ * supplémentaire ; les détails enrichis (participants complets, tags,
+ * preferences user-scoped) restent fetchables via `/conversations/:id`
+ * et seront mergés au moment où le client en a besoin.
+ */
+export interface ConversationNewEventData {
+  readonly conversationId: string;
+  readonly conversationType: string;          // 'direct' | 'group' | 'public' | 'community' | 'global' | 'broadcast'
+  readonly title: string | null;
+  readonly creatorId: string;
+  readonly participantIds: readonly string[]; // tous les participants y compris le créateur
+  readonly createdAt: string;                 // ISO8601
 }
 
 /**
@@ -713,6 +741,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.CALL_TRANSCRIPTION_RESULT]: (data: CallTranscriptionResultEvent) => void;
   [SERVER_EVENTS.CALL_ALREADY_ANSWERED]: (data: CallAlreadyAnsweredEvent) => void;
   [SERVER_EVENTS.CALL_SCREEN_CAPTURE_ALERT]: (data: CallScreenCaptureEvent) => void;
+  [SERVER_EVENTS.CONVERSATION_NEW]: (data: ConversationNewEventData) => void;
   [SERVER_EVENTS.READ_STATUS_UPDATED]: (data: ReadStatusUpdatedEventData) => void;
   [SERVER_EVENTS.MESSAGE_CONSUMED]: (data: MessageConsumedEventData) => void;
   [SERVER_EVENTS.PARTICIPANT_ROLE_UPDATED]: (data: ParticipantRoleUpdatedEventData) => void;

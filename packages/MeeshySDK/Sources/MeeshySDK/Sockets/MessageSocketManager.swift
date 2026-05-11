@@ -575,6 +575,15 @@ public struct SocketNotificationAttachments: Decodable, Sendable {
     public let firstFilename: String?
 }
 
+public struct ConversationNewEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let conversationType: String
+    public let title: String?
+    public let creatorId: String
+    public let participantIds: [String]
+    public let createdAt: String
+}
+
 public struct NotificationReadEvent: Decodable, Sendable {
     public let notificationId: String
 }
@@ -648,6 +657,15 @@ public protocol MessageSocketProviding: Sendable {
     var audioTranslationCompleted: PassthroughSubject<AudioTranslationEvent, Never> { get }
     var didReconnect: PassthroughSubject<Void, Never> { get }
     var notificationReceived: PassthroughSubject<SocketNotificationEvent, Never> { get }
+    /// Fired when the gateway emits SERVER_EVENTS.CONVERSATION_NEW (a fresh
+    /// conversation was created — the user is now a participant). Replaces
+    /// the previous overload of `notification:new` with type-string
+    /// discrimination. Carries the canonical conversation id so the list
+    /// view-model can fetch the enriched payload via getById and prepend
+    /// the row in real time. The legacy `notification:new` event is still
+    /// emitted in parallel by the gateway for ~3 months to support older
+    /// clients during rollout.
+    var conversationNew: PassthroughSubject<ConversationNewEvent, Never> { get }
     var notificationRead: PassthroughSubject<NotificationReadEvent, Never> { get }
     var notificationDeleted: PassthroughSubject<NotificationDeletedEvent, Never> { get }
     var notificationCounts: PassthroughSubject<NotificationCountsEvent, Never> { get }
@@ -794,6 +812,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — notifications
     public let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
+    public let conversationNew = PassthroughSubject<ConversationNewEvent, Never>()
     public let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
     public let notificationDeleted = PassthroughSubject<NotificationDeletedEvent, Never>()
     public let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
@@ -1583,6 +1602,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(LiveLocationStoppedEvent.self, from: data) { [weak self] event in
                 self?.liveLocationStopped.send(event)
+            }
+        }
+
+        // --- Conversation discovery events ---
+
+        socket.on("conversation:new") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationNewEvent.self, from: data) { [weak self] event in
+                self?.conversationNew.send(event)
             }
         }
 

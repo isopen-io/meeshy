@@ -101,12 +101,92 @@ class ConversationListViewModel: ObservableObject {
     // narrow case of mutating a SINGLE row's property (unread count,
     // pin, mute, etc.) where the order doesn't change.
 
-    /// Replace the entire list with `items` re-sorted by lastMessageAt DESC.
-    /// Use this when you've fetched a fresh snapshot (cache reload, REST
-    /// page, full sync result). Internal so unit tests can drive it without
-    /// reflection while keeping the surface invisible to view layers.
+    /// Replace the entire list with `items` re-sorted by lastMessageAt DESC,
+    /// preserving any entry created locally within `recentlyCreatedTTL` that
+    /// the incoming snapshot doesn't yet contain. Without this protection,
+    /// a foreground delta sync that races a fresh creation can clobber the
+    /// new row because the gateway aggregate has eventual-consistency lag
+    /// (the conv was inserted server-side a few hundred ms ago but the
+    /// `/conversations` aggregate hasn't caught up yet). The TTL bounds the
+    /// "force-keep" window so a legitimate cross-device delete still applies
+    /// after 30 s.
     func setConversations(_ items: [Conversation]) {
-        conversations = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
+        let merged = mergePreservingRecentlyCreated(incoming: items, current: conversations, now: dateProvider())
+        conversations = merged.sorted { $0.lastMessageAt > $1.lastMessageAt }
+    }
+
+    /// Local-creation registry: maps conversationId → insertion timestamp.
+    /// Populated by `fetchAndPrependMissingConversation` whenever a fresh
+    /// row lands locally (any discovery source — `conversation:new`,
+    /// `notification:new` legacy, or `conversation:updated` for unknown id).
+    /// Read by `setConversations` to defend the row against same-window
+    /// destructive snapshots that race the gateway aggregate's eventual
+    /// consistency. `internal` so tests can inspect / drive directly.
+    var recentlyCreatedAt: [String: Date] = [:]
+    /// Window during which a freshly-inserted row is force-preserved across
+    /// destructive snapshots. Sized to comfortably cover the worst-case
+    /// gateway aggregate-replication lag we've observed (~3 s) plus the
+    /// debounced cache persist (~200 ms) plus a safety margin.
+    let recentlyCreatedTTL: TimeInterval = 30
+    /// Injectable `now()` for deterministic TTL tests. Production code uses
+    /// the system clock; tests stub it to advance time synthetically.
+    var dateProvider: () -> Date = { Date() }
+
+    /// Pure helper: returns the merged set of `incoming` plus any `current`
+    /// row whose id is in `recentlyCreatedAt` (after pruning expired
+    /// entries) and absent from `incoming`. Order/sort handled by the
+    /// caller.
+    /// - Note: mutates `recentlyCreatedAt` to drop expired entries — done
+    ///   here so we get a single pass over the map instead of one per
+    ///   `setConversations` call.
+    private func mergePreservingRecentlyCreated(
+        incoming: [Conversation],
+        current: [Conversation],
+        now: Date
+    ) -> [Conversation] {
+        recentlyCreatedAt = recentlyCreatedAt.filter { now.timeIntervalSince($0.value) < recentlyCreatedTTL }
+        let incomingIds = Set(incoming.map(\.id))
+        let preserved = current.filter { conv in
+            recentlyCreatedAt[conv.id] != nil && !incomingIds.contains(conv.id)
+        }
+        return incoming + preserved
+    }
+
+    /// Test-only counter: incremented every time `schedulePersist`'s task
+    /// actually completes a save (i.e. survived the debounce window). Used
+    /// by unit tests to assert coalescing without mocking the GRDB-backed
+    /// `CacheCoordinator` actor. Production code never reads this.
+    #if DEBUG
+    var persistCallCount = 0
+    #endif
+
+    /// Coalesced persistence: saves the current `conversations` snapshot
+    /// + pagination cursor + hasMore flag to the L2 cache after a short
+    /// debounce so a burst of mutations (a `fetchAndPrependMissingConversation`
+    /// followed immediately by a `bumpToTop`, or N rapid socket events on
+    /// the same conversation) produces ONE GRDB write rather than N.
+    ///
+    /// Cancels any prior in-flight persist task so the latest snapshot
+    /// always wins — same discipline as `loadMore`'s inline persist
+    /// (line 841) and `pullToRefresh`'s pre-invalidate cancel (line 873).
+    /// Callers MUST be on the MainActor (snapshot is read here, before
+    /// the detached Task captures it).
+    func schedulePersist(debounce: TimeInterval = 0.2) {
+        persistTask?.cancel()
+        let snapshot = conversations
+        let cursor = nextCursor
+        let more = hasMore
+        persistTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(debounce * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
+            await CacheCoordinator.shared.conversations.saveCursor(
+                nextCursor: cursor, hasMore: more, for: "list"
+            )
+            #if DEBUG
+            await MainActor.run { self?.persistCallCount += 1 }
+            #endif
+        }
     }
 
     /// Append paginated rows to the existing list, deduplicating by id and
@@ -135,6 +215,7 @@ class ConversationListViewModel: ObservableObject {
         updated.lastMessageAt = newLastMessageAt
         conversations.remove(at: idx)
         conversations.insert(updated, at: 0)
+        schedulePersist()
     }
 
     /// Track in-flight `getById` fetches launched by `conversationUpdated` so
@@ -143,15 +224,34 @@ class ConversationListViewModel: ObservableObject {
     /// `fetchAndPrependMissingConversation`.
     private var pendingMissingFetches: Set<String> = []
 
+    /// Where a conversation discovery signal originated. Used purely for
+    /// structured logging so a production support ticket "I created a DM
+    /// and don't see it" can be traced to the path that should have
+    /// surfaced it (or proven that none did). The categories mirror the
+    /// real wire-up sites — ADD a case rather than reusing one if a new
+    /// surface starts firing prepends.
+    enum ConversationDiscoverySource: String {
+        case socketNew              // conversation:new (typed event, primary path)
+        case socketNotification     // notification:new legacy fallback (~3-month deprecation window)
+        case socketUpdated          // CONVERSATION_UPDATED (first activity on unknown id)
+        case syncDelta              // syncSinceLastCheckpoint (foreground / reconnect)
+        case pullRefresh            // user pulled to refresh
+        case coldCache              // initial cache load on app start
+    }
+
     /// Fetch a conversation that the gateway just told us about via
     /// `CONVERSATION_UPDATED` but that we don't have locally — typically a
     /// brand-new direct message where the user hasn't joined
     /// `ROOMS.conversation(id)` yet (so they never received `MESSAGE_NEW`).
     /// Mirrors the SyncEngine pattern for missing-conversation prepends so
     /// the row appears in real time without forcing a pull-to-refresh.
-    func fetchAndPrependMissingConversation(id: String) {
-        guard !pendingMissingFetches.contains(id) else { return }
+    func fetchAndPrependMissingConversation(id: String, source: ConversationDiscoverySource = .socketUpdated) {
+        guard !pendingMissingFetches.contains(id) else {
+            Logger.messages.info("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=skip-dedup")
+            return
+        }
         pendingMissingFetches.insert(id)
+        Logger.messages.info("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=fetch-start")
         let userId = currentUserId
         let service = conversationService
         Task { [weak self] in
@@ -168,9 +268,16 @@ class ConversationListViewModel: ObservableObject {
                         self.conversations.remove(at: existing)
                     }
                     self.conversations.insert(domain, at: 0)
+                    // Mark this id as recently-created so the next destructive
+                    // snapshot (foreground delta sync, cache reload after
+                    // fullSync, etc.) doesn't clobber it during the gateway
+                    // aggregate's eventual-consistency window.
+                    self.recentlyCreatedAt[domain.id] = self.dateProvider()
+                    self.schedulePersist()
+                    Logger.messages.info("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=insert")
                 }
             } catch {
-                Logger.messages.error("[ConversationListVM] Failed to fetch missing conversation \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                Logger.messages.error("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=fetch-error error=\(error.localizedDescription, privacy: .public)")
             }
         }
     }
@@ -381,12 +488,10 @@ class ConversationListViewModel: ObservableObject {
 
         conversations[idx] = conv
 
-        // Persist the in-memory mutation to the list snapshot so a fresh
-        // launch (cold cache load) reflects the up-to-date prefs.
-        let snapshot = conversations
-        Task.detached {
-            await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
-        }
+        // Persist the in-memory mutation through the unified coalescing
+        // path so a burst of preference toggles (pin + mute + tag in
+        // quick succession) collapses to one GRDB write rather than three.
+        schedulePersist()
     }
 
     private func reloadFromCache() async {
@@ -448,6 +553,7 @@ class ConversationListViewModel: ObservableObject {
                         }
                     }
                     conversations[idx] = conv
+                    schedulePersist()
                 }
             }
             .store(in: &cancellables)
@@ -465,7 +571,7 @@ class ConversationListViewModel: ObservableObject {
                     // ROOMS.conversation(id) avant ce moment). Sans fetch
                     // d'appoint la conversation reste invisible jusqu'à un
                     // pull-to-refresh manuel.
-                    self.fetchAndPrependMissingConversation(id: event.conversationId)
+                    self.fetchAndPrependMissingConversation(id: event.conversationId, source: .socketUpdated)
                     return
                 }
                 // Apply the in-place metadata updates first; the gateway
@@ -490,18 +596,46 @@ class ConversationListViewModel: ObservableObject {
                 if let newLastAt = event.lastMessageAt,
                    newLastAt > self.conversations[index].lastMessageAt {
                     self.bumpToTop(conversationId: event.conversationId, newLastMessageAt: newLastAt)
+                } else {
+                    // Metadata-only mutation (rename, avatar swap, broadcast
+                    // toggle) still needs to land in L2 so a cold restart
+                    // doesn't show the pre-event title for a frame. bumpToTop
+                    // already calls schedulePersist when it runs.
+                    self.schedulePersist()
                 }
             }
             .store(in: &cancellables)
 
-        // A new conversation (DM or group) appears in the user's list as soon
-        // as the gateway emits NOTIFICATION_NEW for it — without this hook,
-        // the list stays stale until the FIRST message lands (which is what
-        // currently triggers CONVERSATION_UPDATED → fetchAndPrepend) or until
-        // the user pulls to refresh. The gateway already creates these
-        // notifications in NotificationService.createConversationInviteNotification
-        // and pushes them via SERVER_EVENTS.NOTIFICATION_NEW, so we just have
-        // to forward them to the same prepend path.
+        // Primary discovery path for newly-created conversations.
+        //
+        // Per the 2026-05-11 socket-event audit (see
+        // tasks/socketio-events-cleanup.md), the gateway now emits a typed
+        // `conversation:new` event to the user-rooms of EVERY participant —
+        // creator included — when a conversation is created. Before this,
+        // the creator received no socket signal at all (the legacy
+        // notification:new loop in core.ts:922 only iterated over
+        // `uniqueParticipantIds`, excluding `userId`), and invitees relied
+        // on a string-discriminated `notification:new` with type
+        // `new_conversation_*`. The typed event removes both quirks.
+        //
+        // We still subscribe to the legacy `notification:new` block below
+        // as a fallback for ~3 months while older clients/server versions
+        // are in production. `pendingMissingFetches` dedups the two paths
+        // when both fire for the same id within a few hundred ms.
+        messageSocket.conversationNew
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self,
+                      self.convIndex(for: event.conversationId) == nil else { return }
+                self.fetchAndPrependMissingConversation(id: event.conversationId, source: .socketNew)
+            }
+            .store(in: &cancellables)
+
+        // Legacy path: pre-CONVERSATION_NEW gateway sends a generic
+        // `notification:new` with `type=new_conversation_direct|group|added_to_conversation`.
+        // Kept active during the ~3-month rollout window so older gateways
+        // still surface fresh conversations. Once min-deployed-server-version
+        // ships CONVERSATION_NEW everywhere, this branch can be removed.
         messageSocket.notificationReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -512,7 +646,7 @@ class ConversationListViewModel: ObservableObject {
                      "added_to_conversation":
                     guard let convId = event.context?.conversationId,
                           self.convIndex(for: convId) == nil else { return }
-                    self.fetchAndPrependMissingConversation(id: convId)
+                    self.fetchAndPrependMissingConversation(id: convId, source: .socketNotification)
                 default:
                     break
                 }
@@ -524,6 +658,7 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
                 self.conversations[index].memberCount -= 1
+                self.schedulePersist()
             }
             .store(in: &cancellables)
 
@@ -532,6 +667,7 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
                 self.conversations[index].memberCount -= 1
+                self.schedulePersist()
             }
             .store(in: &cancellables)
 
@@ -540,6 +676,7 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
                 self.conversations[index].memberCount += 1
+                self.schedulePersist()
             }
             .store(in: &cancellables)
 
