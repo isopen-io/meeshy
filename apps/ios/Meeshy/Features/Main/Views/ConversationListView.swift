@@ -736,10 +736,17 @@ struct ConversationListView: View {
                         showStatusComposer = true
                     })
 
-                    // Sectioned conversation list (skeleton -> content -> empty/error)
-                    if conversationViewModel.isLoading && conversationViewModel.groupedConversations.isEmpty {
+                    // Sectioned conversation list (skeleton -> content -> empty/error).
+                    // Skeleton ONLY when cold-start with no cached groups —
+                    // cache-first principle: any cached/stale data must
+                    // render immediately, no skeleton on top of it.
+                    // Drive the gate from `loadState == .loading` (not the
+                    // legacy `isLoading` flag) so cachedStale/cachedFresh
+                    // paths bypass the placeholder even on first paint.
+                    if conversationViewModel.loadState == .loading
+                        && conversationViewModel.groupedConversations.isEmpty {
                         LazyVStack(spacing: 8) {
-                            ForEach(0..<8, id: \.self) { index in
+                            ForEach(0..<6, id: \.self) { index in
                                 SkeletonConversationRow()
                                     .staggeredAppear(index: index, baseDelay: 0.04)
                             }
