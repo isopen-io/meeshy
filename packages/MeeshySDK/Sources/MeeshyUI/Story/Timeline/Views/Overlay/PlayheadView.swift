@@ -45,6 +45,16 @@ public struct PlayheadView: View, Equatable {
     /// current drag — DragGesture has no `.onBegan`, so we synthesize it.
     @State private var dragInFlight: Bool = false
 
+    /// P2 fix — anchor X captured once at drag start. During the drag we
+    /// derive the playhead position from `dragStartX + translation.width`
+    /// instead of `computedX + translation.width`. This prevents jitter when
+    /// `currentTime` is updated asynchronously by the engine (`onTimeUpdate`)
+    /// while a scrub is in flight: a fresh `currentTime` would otherwise
+    /// shift `computedX` and double-apply the translation.
+    ///
+    /// Mirrors `ClipSelectionState.ActiveDrag.originalStartTime` (P0-#5).
+    @State private var dragStartX: CGFloat = 0
+
     public var body: some View {
         ZStack(alignment: .top) {
             Triangle()
@@ -64,15 +74,21 @@ public struct PlayheadView: View, Equatable {
                 .onChanged { v in
                     if !dragInFlight {
                         dragInFlight = true
+                        dragStartX = computedX
                         onScrubBegan()
                     }
-                    let raw = geometry.time(forX: max(0, computedX + v.translation.width))
-                    let clamped = max(0, min(raw, totalDuration))
+                    let clamped = Self.scrubTime(
+                        dragStartX: dragStartX,
+                        translationX: v.translation.width,
+                        geometry: geometry,
+                        totalDuration: totalDuration
+                    )
                     onScrub(clamped)
                 }
                 .onEnded { _ in
                     if dragInFlight {
                         dragInFlight = false
+                        dragStartX = 0
                         onScrubEnded()
                     }
                 }
@@ -90,6 +106,19 @@ public struct PlayheadView: View, Equatable {
             @unknown default: break
             }
         }
+    }
+
+    /// Pure projection of a drag translation into a clamped scrub time.
+    /// Exposed as a `nonisolated` static so unit tests can validate the math
+    /// without driving a SwiftUI `DragGesture`.
+    nonisolated public static func scrubTime(
+        dragStartX: CGFloat,
+        translationX: CGFloat,
+        geometry: TimelineGeometry,
+        totalDuration: Float
+    ) -> Float {
+        let raw = geometry.time(forX: max(0, dragStartX + translationX))
+        return max(0, min(raw, totalDuration))
     }
 }
 
