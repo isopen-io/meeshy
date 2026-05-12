@@ -205,6 +205,8 @@ export class MeeshySocketIOManager {
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
       userSockets: this.userSockets,
+      emitPresenceSnapshot: (socket, userId, isAnonymous) =>
+        this._emitPresenceSnapshot(socket, userId, isAnonymous),
     });
 
     const reactionService = new ReactionService(prisma);
@@ -315,6 +317,109 @@ export class MeeshySocketIOManager {
     return (userId: string, isOnline: boolean, isAnonymous: boolean) => {
       this._broadcastUserStatus(userId, isOnline, isAnonymous);
     };
+  }
+
+  /**
+   * Source de vérité runtime pour la présence : true si l'id (userId pour registered,
+   * participantId pour anonyme) est actuellement dans `connectedUsers` Map. Utilisé par
+   * les routes REST pour overrider le `isOnline` de la DB (potentiellement obsolète).
+   */
+  public isPresenceOnline(idOrUserId: string): boolean {
+    return this.connectedUsers.has(idOrUserId);
+  }
+
+  /**
+   * Émet `presence:snapshot` au socket fraîchement authentifié : liste les userIds
+   * (ou participantIds anonymes) actuellement online parmi les contacts du nouvel
+   * arrivant — c'est-à-dire les autres participants des conversations qu'il rejoint.
+   * Permet au client de seed son store sans attendre qu'un changement d'état arrive
+   * (closes la faille "ne se met jamais à jour" sur les contacts déjà connectés).
+   */
+  private async _emitPresenceSnapshot(socket: any, userId: string, isAnonymous: boolean): Promise<void> {
+    try {
+      // Trouver toutes les conversations du user/participant
+      const participantRows = isAnonymous
+        ? await this.prisma.participant.findMany({
+            where: { id: userId, isActive: true },
+            select: { conversationId: true }
+          })
+        : await this.prisma.participant.findMany({
+            where: { userId: userId, isActive: true },
+            select: { conversationId: true }
+          });
+
+      if (participantRows.length === 0) {
+        return;
+      }
+
+      const conversationIds = participantRows.map(p => p.conversationId);
+
+      // Lister tous les autres participants (registered + anonymes) de ces conversations
+      const contacts = await this.prisma.participant.findMany({
+        where: {
+          conversationId: { in: conversationIds },
+          isActive: true,
+          NOT: isAnonymous
+            ? { id: userId }
+            : { userId: userId }
+        },
+        select: {
+          id: true,
+          userId: true,
+          displayName: true,
+          type: true,
+          lastActiveAt: true,
+          user: { select: { id: true, username: true, displayName: true, lastActiveAt: true } }
+        }
+      });
+
+      // Dédupliquer par userId (un même user peut être dans plusieurs conversations)
+      const seen = new Set<string>();
+      const users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[] = [];
+
+      for (const c of contacts) {
+        const presenceKey = c.userId ?? c.id; // userId pour registered, id pour anonyme
+        if (seen.has(presenceKey)) continue;
+        seen.add(presenceKey);
+
+        const isOnline = this.connectedUsers.has(presenceKey);
+        const username = c.user?.username ?? c.user?.displayName ?? c.displayName ?? presenceKey;
+        const lastActiveAt = c.user?.lastActiveAt ?? c.lastActiveAt ?? null;
+
+        users.push({
+          userId: presenceKey,
+          username,
+          isOnline,
+          lastActiveAt
+        });
+      }
+
+      socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
+      logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
+    } catch (error) {
+      logger.error('❌ [PRESENCE_SNAPSHOT] Failed to build snapshot', error);
+    }
+  }
+
+  /**
+   * Variante bulk pour minimiser les appels : retourne un Map<id, isOnline> pour les
+   * ids fournis. Utile lors du formatting de listes (conversations, participants).
+   */
+  public getPresenceForIds(ids: readonly string[]): Map<string, boolean> {
+    const out = new Map<string, boolean>();
+    for (const id of ids) {
+      out.set(id, this.connectedUsers.has(id));
+    }
+    return out;
+  }
+
+  /**
+   * Liste les userIds actuellement online parmi un ensemble candidat (généralement
+   * les participants des conversations de l'utilisateur authentifié). Utilisé pour
+   * construire le snapshot `presence:snapshot` émis à l'auth.
+   */
+  public listOnlineAmong(candidateIds: readonly string[]): string[] {
+    return candidateIds.filter(id => this.connectedUsers.has(id));
   }
 
   async initialize(): Promise<void> {

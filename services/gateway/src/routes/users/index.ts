@@ -49,6 +49,9 @@ import {
   getBlockedUsers
 } from './blocking';
 
+// Presence routes (runtime online status)
+import { getUsersPresence } from './presence';
+
 /**
  * Main user routes registration
  * Aggregates all user-related routes from modular files
@@ -92,6 +95,9 @@ export async function userRoutes(fastify: FastifyInstance) {
   await blockUser(fastify);
   await unblockUser(fastify);
   await getBlockedUsers(fastify);
+
+  // Presence routes
+  await getUsersPresence(fastify);
 
   // Stub routes
   await getAllUsers(fastify);

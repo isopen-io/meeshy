@@ -18,6 +18,13 @@ export interface AuthHandlerDependencies {
   connectedUsers: Map<string, SocketUser>;
   socketToUser: Map<string, string>;
   userSockets: Map<string, Set<string>>;
+  /**
+   * Callback fourni par MeeshySocketIOManager pour émettre le snapshot de présence
+   * juste après que l'utilisateur a joint ses conversations. Reçoit le socket + le userId
+   * du nouvel arrivant. Si null/undefined, le snapshot est silencieusement skippé
+   * (rétrocompat).
+   */
+  emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
 }
 
 export class AuthHandler {
@@ -28,6 +35,7 @@ export class AuthHandler {
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
   private userSockets: Map<string, Set<string>>;
+  private emitPresenceSnapshot?: (socket: Socket, userId: string, isAnonymous: boolean) => Promise<void>;
 
   constructor(deps: AuthHandlerDependencies) {
     this.prisma = deps.prisma;
@@ -37,6 +45,7 @@ export class AuthHandler {
     this.connectedUsers = deps.connectedUsers;
     this.socketToUser = deps.socketToUser;
     this.userSockets = deps.userSockets;
+    this.emitPresenceSnapshot = deps.emitPresenceSnapshot;
   }
 
   async handleTokenAuthentication(socket: Socket): Promise<void> {
@@ -139,6 +148,15 @@ export class AuthHandler {
           user: { id: user.id, language: socketUser.language, isAnonymous: false },
           version: process.env.APP_VERSION || '1.1.0'
         });
+
+        // Snapshot de présence: liste les contacts (participants des conversations
+        // partagées) actuellement online pour que le client seed son store sans attendre
+        // qu'un changement d'état arrive. Best-effort, on swallow les erreurs.
+        if (this.emitPresenceSnapshot) {
+          this.emitPresenceSnapshot(socket, user.id, false).catch(error => {
+            console.error(`[AUTH] Failed to emit presence snapshot for ${user.id}:`, error);
+          });
+        }
       }
     } catch (error) {
       console.error('[AUTH] ❌ Erreur authentification manuelle:', error);
@@ -257,6 +275,13 @@ export class AuthHandler {
       user: { id: socketUser.id, language: socketUser.language, isAnonymous: true },
       version: process.env.APP_VERSION || '1.1.0'
     });
+
+    // Snapshot de présence pour les anonymes aussi (autres participants de la conversation)
+    if (this.emitPresenceSnapshot) {
+      this.emitPresenceSnapshot(socket, socketUser.id, true).catch(error => {
+        console.error(`[AUTH] Failed to emit presence snapshot for anonymous ${socketUser.id}:`, error);
+      });
+    }
   }
 
   private _registerUser(key: string, user: SocketUser, socket: Socket): void {

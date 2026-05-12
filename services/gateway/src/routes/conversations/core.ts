@@ -428,7 +428,17 @@ export function registerCoreRoutes(
         : new Map<string, number>();
 
       perfTimings.parallelQueries = performance.now() - t0;
-      const userMap = new Map(memberUsers.map(u => [u.id, u]));
+
+      // Override runtime de isOnline : la DB peut être obsolète (heartbeat manqué,
+      // crash gateway, déconnexion non détectée). La source de vérité est `connectedUsers`
+      // Map du SocketIOManager, exposée via le décorateur `presenceChecker`.
+      const presenceChecker = (fastify as any).presenceChecker as
+        | { isOnline: (id: string) => boolean; bulk: (ids: readonly string[]) => Map<string, boolean> }
+        | undefined;
+      const userMap = new Map(memberUsers.map(u => {
+        const liveOnline = presenceChecker?.isOnline(u.id);
+        return [u.id, liveOnline === undefined ? u : { ...u, isOnline: liveOnline }];
+      }));
 
       // Calculate hasMore. Two strategies:
       //   1. When we have a real `totalCount` (includeCount=true OR
@@ -454,11 +464,19 @@ export function registerCoreRoutes(
         // Merge user data for all participants (never filter out — SDK needs them for DM name resolution)
         const membersWithUser = conversation.participants
           .slice(0, 5)
-          .map((m: any) => ({
-            ...m,
-            avatar: m.avatar,
-            user: m.userId ? (userMap.get(m.userId) ? userMap.get(m.userId) : m.user ?? null) : null
-          }));
+          .map((m: any) => {
+            const mergedUser = m.userId
+              ? (userMap.get(m.userId) ? userMap.get(m.userId) : m.user ?? null)
+              : null;
+            // Override participant.isOnline aussi (pour les anonymes, on regarde l'id participant)
+            const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
+            return {
+              ...m,
+              avatar: m.avatar,
+              isOnline: liveOnline === undefined ? m.isOnline : liveOnline,
+              user: mergedUser
+            };
+          });
 
         // Pour les DMs, pas de titre obligatoire — le frontend résout le nom de l'interlocuteur
         // Pour les groupes/publics, s'assurer qu'un titre existe

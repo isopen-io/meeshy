@@ -786,6 +786,16 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         // Permet aux requêtes REST de marquer un utilisateur en ligne et broadcaster
         this.statusService.setPresenceCallback(manager.getPresenceBroadcastCallback());
         logger.info('[GWY] ✅ StatusService presence callback wired to SocketIO broadcast');
+
+        // Exposer la source de vérité runtime de présence aux routes REST.
+        // Utilisé par GET /conversations pour overrider isOnline (potentiellement
+        // obsolète en DB) et par GET /users/presence pour le snapshot à la demande.
+        this.server.decorate('presenceChecker', {
+          isOnline: (id: string) => manager.isPresenceOnline(id),
+          bulk: (ids: readonly string[]) => manager.getPresenceForIds(ids),
+          listOnlineAmong: (ids: readonly string[]) => manager.listOnlineAmong(ids)
+        });
+        logger.info('[GWY] ✅ Presence runtime checker exposed for REST routes');
       }
     } catch (error) {
       logger.error('[GWY] ❌ Failed to setup Socket.IO:', error);
