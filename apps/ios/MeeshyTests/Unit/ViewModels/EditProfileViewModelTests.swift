@@ -65,4 +65,24 @@ final class EditProfileViewModelTests: XCTestCase {
         let (sut, _) = makeSUT()
         XCTAssertFalse(sut.hasChanges)
     }
+
+    // MARK: - hasChanges
+
+    func test_hasChanges_trueAfterDisplayNameEdit() {
+        let (sut, _) = makeSUT(currentUser: makeUser(displayName: "Alice"))
+        sut.displayName = "Bob"
+        XCTAssertTrue(sut.hasChanges)
+    }
+
+    func test_hasChanges_trueAfterBioEdit() {
+        let (sut, _) = makeSUT(currentUser: makeUser(bio: "Hello"))
+        sut.bio = "World"
+        XCTAssertTrue(sut.hasChanges)
+    }
+
+    func test_hasChanges_trueAfterImageSelection() {
+        let (sut, _) = makeSUT()
+        sut.selectedImageData = Data([0x01, 0x02, 0x03])
+        XCTAssertTrue(sut.hasChanges)
+    }
 }

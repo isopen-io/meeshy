@@ -2,6 +2,9 @@ import Foundation
 import SwiftUI
 import PhotosUI
 import MeeshySDK
+#if canImport(UIKit)
+import UIKit
+#endif
 
 @MainActor
 final class EditProfileViewModel: ObservableObject {
@@ -75,4 +78,15 @@ final class EditProfileViewModel: ObservableObject {
 
     var isUploadingAvatar: Bool { saveState == .uploadingAvatar }
     var bioMaxLength: Int { 300 }
+
+    // MARK: - Photo loading
+
+    func loadSelectedPhoto(_ item: PhotosPickerItem?) async {
+        guard let item else { return }
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        selectedImageData = data
+        if let uiImage = UIImage(data: data) {
+            avatarPreviewImage = Image(uiImage: uiImage)
+        }
+    }
 }
