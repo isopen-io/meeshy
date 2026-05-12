@@ -11,6 +11,13 @@ import Metal
 ///
 /// `@unchecked Sendable` is required because `AVVideoCompositing` conformance requires NSObject, and
 /// AVFoundation calls compositor methods from arbitrary queues (not necessarily the main actor).
+///
+/// Thread-safety: `startRequest` is invoked concurrently from AVFoundation's internal decode/render
+/// pipeline. A single shared `CIContext` is NOT safe to use across simultaneous `render(_:to:)`
+/// calls — two concurrent renders into different output buffers may corrupt internal Metal command
+/// buffer state. This compositor therefore creates a per-call `CIContext` bound to a shared,
+/// immutable `MTLDevice` (Apple caches the default device process-wide, so the construction cost is
+/// dominated by `CIContext` setup, not Metal driver bring-up).
 public final class DissolveVideoCompositor: NSObject, AVVideoCompositing, @unchecked Sendable {
 
     // MARK: - Public
@@ -29,12 +36,11 @@ public final class DissolveVideoCompositor: NSObject, AVVideoCompositing, @unche
 
     // MARK: - Private
 
-    private let ciContext: CIContext = {
-        if let metalDevice = MTLCreateSystemDefaultDevice() {
-            return CIContext(mtlDevice: metalDevice)
-        }
-        return CIContext()
-    }()
+    /// Shared Metal device. `MTLCreateSystemDefaultDevice()` returns a cached, process-wide instance,
+    /// so storing it once is safe and avoids paying its (modest) cost per frame. The device itself is
+    /// thread-safe and immutable. `nil` only on Metal-less hosts (e.g. some CI runners) — in that
+    /// case `startRequest` falls back to a software `CIContext()`.
+    private let device: MTLDevice? = MTLCreateSystemDefaultDevice()
 
     // MARK: - AVVideoCompositing
 
@@ -48,6 +54,8 @@ public final class DissolveVideoCompositor: NSObject, AVVideoCompositing, @unche
             return
         }
 
+        let ciContext = makeCIContext()
+
         let trackIDs = asyncVideoCompositionRequest.sourceTrackIDs
         guard trackIDs.count >= 2,
               let fromBuffer = asyncVideoCompositionRequest.sourceFrame(byTrackID: trackIDs[0].int32Value),
@@ -56,7 +64,7 @@ public final class DissolveVideoCompositor: NSObject, AVVideoCompositing, @unche
             // Single track or missing buffers — pass through source frame as-is
             if let trackID = trackIDs.first,
                let sourceBuffer = asyncVideoCompositionRequest.sourceFrame(byTrackID: trackID.int32Value) {
-                copyPixelBuffer(sourceBuffer, to: outputBuffer)
+                copyPixelBuffer(sourceBuffer, to: outputBuffer, using: ciContext)
             }
             asyncVideoCompositionRequest.finish(withComposedVideoFrame: outputBuffer)
             return
@@ -100,7 +108,17 @@ public final class DissolveVideoCompositor: NSObject, AVVideoCompositing, @unche
 
     // MARK: - Private helpers
 
-    private func copyPixelBuffer(_ source: CVPixelBuffer, to destination: CVPixelBuffer) {
+    /// Builds a fresh `CIContext` per `startRequest` invocation. The underlying `MTLDevice` is shared
+    /// and immutable, so this is the minimal allocation needed to guarantee thread safety against
+    /// concurrent calls from AVFoundation's decode pipeline.
+    private func makeCIContext() -> CIContext {
+        if let device {
+            return CIContext(mtlDevice: device)
+        }
+        return CIContext()
+    }
+
+    private func copyPixelBuffer(_ source: CVPixelBuffer, to destination: CVPixelBuffer, using ciContext: CIContext) {
         let image = CIImage(cvPixelBuffer: source)
         ciContext.render(image, to: destination)
     }
