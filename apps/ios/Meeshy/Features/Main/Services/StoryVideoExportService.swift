@@ -160,12 +160,15 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
         // closure on its polling task (NOT main), and the public API
         // contract says callers receive on `@MainActor` — the inner
         // `Task { @MainActor in ... }` enforces that hop.
-        let progressTrampoline: (@Sendable (Double) -> Void)? = onProgress.map { sink in
-            { fraction in
+        let progressTrampoline: (@Sendable (Double) -> Void)?
+        if let sink = onProgress {
+            progressTrampoline = { @Sendable (fraction: Double) in
                 Task { @MainActor in
                     sink(fraction)
                 }
             }
+        } else {
+            progressTrampoline = nil
         }
 
         do {
