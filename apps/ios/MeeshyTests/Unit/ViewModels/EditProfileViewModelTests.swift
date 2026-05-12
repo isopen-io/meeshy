@@ -162,4 +162,95 @@ final class EditProfileViewModelTests: XCTestCase {
         let payload = doubles.queue.lastPayload as? UpdateProfilePayload
         XCTAssertEqual(payload?.avatarUrl, "https://cdn/new.jpg")
     }
+
+    // MARK: - Failure paths + outcome observer
+
+    func test_save_setsFailedState_whenAvatarUploadThrows_noLocalMutation() async {
+        let (sut, doubles) = makeSUT()
+        sut.displayName = "Bob"
+        sut.selectedImageData = Data([0x01])
+        doubles.uploader.uploadAvatarResult = .failure(APIError.serverError(500, "boom"))
+
+        await sut.saveProfile(onDismiss: {})
+
+        XCTAssertEqual(sut.saveState, .failed)
+        XCTAssertEqual(doubles.queue.enqueueCalls.count, 0)
+        XCTAssertEqual(doubles.auth.appliedProfileChanges.count, 0,
+                       "No local mutation when upload fails")
+        XCTAssertEqual(doubles.auth.restoredSnapshots.count, 0,
+                       "Nothing to rollback")
+        XCTAssertNotNil(sut.errorMessage)
+    }
+
+    func test_save_rollsBackSnapshot_whenEnqueueThrows() async {
+        let (sut, doubles) = makeSUT(currentUser: makeUser(displayName: "Alice"))
+        sut.displayName = "Bob"
+        doubles.queue.enqueueResult = .failure(APIError.serverError(500, "queue dead"))
+
+        await sut.saveProfile(onDismiss: {})
+
+        XCTAssertEqual(sut.saveState, .failed)
+        XCTAssertEqual(doubles.auth.appliedProfileChanges.count, 1)
+        XCTAssertEqual(doubles.auth.restoredSnapshots.count, 1)
+        XCTAssertEqual(doubles.auth.restoredSnapshots.first?.displayName, "Alice")
+    }
+
+    func test_save_rollsBackSnapshot_whenOutcomeStreamEmitsExhausted() async {
+        let (sut, doubles) = makeSUT(currentUser: makeUser(displayName: "Alice"))
+        sut.displayName = "Bob"
+
+        await sut.saveProfile(onDismiss: {})
+
+        guard let call = doubles.queue.enqueueCalls.first,
+              let payload = call.payload as? UpdateProfilePayload else {
+            return XCTFail("no enqueue call")
+        }
+
+        // Wait for the observer Task to register its continuation
+        // (fire-and-forget Task scheduled inside saveProfile).
+        try? await waitForContinuation(in: doubles.queue,
+                                        for: payload.clientMutationId)
+
+        doubles.queue.emitOutcome(.exhausted(cmid: payload.clientMutationId),
+                                   for: payload.clientMutationId)
+
+        // Give the observer Task a tick to run.
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertGreaterThanOrEqual(doubles.auth.restoredSnapshots.count, 1)
+        XCTAssertEqual(doubles.haptics.errorCount, 1)
+        XCTAssertEqual(doubles.toast.errorMessages.count, 1)
+    }
+
+    func test_save_doesNotRollback_whenOutcomeStreamEmitsApplied() async {
+        let (sut, doubles) = makeSUT()
+        sut.displayName = "Bob"
+
+        await sut.saveProfile(onDismiss: {})
+
+        guard let payload = doubles.queue.lastPayload as? UpdateProfilePayload else {
+            return XCTFail("no payload")
+        }
+        try? await waitForContinuation(in: doubles.queue,
+                                        for: payload.clientMutationId)
+        doubles.queue.emitOutcome(.applied(cmid: payload.clientMutationId),
+                                   for: payload.clientMutationId)
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(doubles.auth.restoredSnapshots.count, 0)
+        XCTAssertEqual(doubles.haptics.errorCount, 0)
+    }
+
+    /// Polls the mock's continuation dict until the observer has registered
+    /// its continuation for `cmid`. Times out after 500 ms (50 × 10 ms).
+    private func waitForContinuation(
+        in queue: MockOfflineQueue,
+        for cmid: String
+    ) async throws {
+        for _ in 0..<50 {
+            if queue.outcomeContinuations[cmid] != nil { return }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTFail("Observer continuation never registered for cmid=\(cmid)")
+    }
 }

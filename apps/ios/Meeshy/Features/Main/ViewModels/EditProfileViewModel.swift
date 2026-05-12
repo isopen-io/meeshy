@@ -130,8 +130,9 @@ final class EditProfileViewModel: ObservableObject {
             avatarUrl: payload.avatarUrl
         )
 
-        // 4. Observer (added in Task 17).
-        // observeOutcome(cmid: cmid, snapshot: snapshot)
+        // 4. Observer — attached BEFORE enqueue to avoid race where the
+        //    OutboxFlusher emits the outcome before the for-await is listed.
+        observeOutcome(cmid: cmid, snapshot: snapshot)
 
         // 5. Enqueue.
         saveState = .enqueueing
@@ -158,6 +159,27 @@ final class EditProfileViewModel: ObservableObject {
         showSuccess = true
         await sleeper.sleep(milliseconds: 1500)
         onDismiss()
+    }
+
+    // MARK: - Outcome observer
+
+    /// Subscribes to `OfflineQueue.outcomeStream(for: cmid)` and rolls back
+    /// the optimistic mutation when the stream emits `.exhausted`.
+    /// `.applied` is a no-op — the optimistic state is already correct.
+    /// Fire-and-forget Task; the stream completes after one event so the
+    /// for-await terminates and the Task ends.
+    private func observeOutcome(cmid: String, snapshot: ProfileSnapshot) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let stream = await self.offlineQueue.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    self.authManager.restoreLocalProfileSnapshot(snapshot)
+                    self.toast.showError("Mise a jour du profil echouee")
+                    self.haptics.error()
+                }
+            }
+        }
     }
 
     private func humanReadable(_ error: Error) -> String {
