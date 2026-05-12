@@ -49,12 +49,13 @@ Le pattern optimistic+rollback B5 livré pour `UserProfileViewModel.blockUser` e
 
 ## Topologie
 
-### Nouveaux fichiers (4)
+### Nouveaux fichiers (5)
 
 | Fichier | Rôle |
 |---------|------|
 | `apps/ios/Meeshy/Features/Main/ViewModels/EditProfileViewModel.swift` | VM ~250 lignes, `@MainActor` `ObservableObject`. |
 | `apps/ios/Meeshy/Features/Main/Services/AttachmentUploader.swift` | Wrapper du flow multipart, protocole `AttachmentUploading`. Extrait verbatim de `EditProfileView.uploadAvatar` + `compressImage`. |
+| `packages/MeeshySDK/Sources/MeeshySDK/Auth/MeeshyUser+ProfileMutation.swift` | Extension helper sur `MeeshyUser` : `withProfileChanges(displayName:bio:avatar:) -> MeeshyUser` qui reconstruit le struct via memberwise init en préservant les 25 autres champs. **Requis car `MeeshyUser` est un struct avec champs `let`.** |
 | `apps/ios/MeeshyTests/Unit/ViewModels/EditProfileViewModelTests.swift` | 16 tests `XCTestCase`, factory `makeSUT()`. |
 | `apps/ios/MeeshyTests/Mocks/MockAttachmentUploader.swift` | Mock `AttachmentUploading`. |
 
@@ -63,9 +64,9 @@ Le pattern optimistic+rollback B5 livré pour `UserProfileViewModel.blockUser` e
 | Fichier | Modification |
 |---------|--------------|
 | `apps/ios/Meeshy/Features/Main/Views/EditProfileView.swift` | Refactor 549 → ~280 lignes, View pure, `@StateObject var viewModel`. |
-| `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift` | + protocole `applyLocalProfileChanges(displayName:bio:avatarUrl:) → ProfileSnapshot` + `restoreLocalProfileSnapshot(_:)` + impl + struct `ProfileSnapshot`. |
+| `packages/MeeshySDK/Sources/MeeshySDK/Auth/AuthManager.swift` | + protocole `applyLocalProfileChanges(displayName:bio:avatarUrl:) → ProfileSnapshot` + `restoreLocalProfileSnapshot(_:)` + impl (utilise `withProfileChanges`) + struct `ProfileSnapshot`. |
 | `apps/ios/MeeshyTests/Mocks/MockAuthManager.swift` | + impl `applyLocalProfileChanges` + `restoreLocalProfileSnapshot` + tracking `lastApplyLocalProfileChanges` + `appliedSnapshots` array. |
-| `apps/ios/MeeshyTests/Integration/StoryRepostFlowTests.swift` | Fix L144 : `.content` → `.text` sur `StoryTextObject` (test bundle fix). |
+| `apps/ios/MeeshyTests/Integration/StoryRepostFlowTests.swift` | Fix L144 : `.content` → `.text` sur `StoryTextObject` (le champ a été renommé ; `content` reste uniquement comme legacy CodingKey du decoder JSON). |
 
 ### Adapters thin (à introduire si manquants)
 
@@ -74,12 +75,12 @@ Le VM dépend de 5 protocoles. Tous existants sont réutilisés ; ceux manquants
 | Protocole | Membres | Conformance prod |
 |-----------|---------|------------------|
 | `AuthManaging` | (existe déjà) + `applyLocalProfileChanges`, `restoreLocalProfileSnapshot` | `AuthManager.shared` |
-| `OfflineQueueing` | `enqueue<P: OutboxPayload>(_ kind:, payload:) async throws`, `outcomeStream(for: String) async -> AsyncStream<OutboxOutcome>` | `OfflineQueue.shared` (vérifier si protocole déjà extrait sinon créer) |
+| `OfflineQueueing` | `enqueue<P: Codable & Sendable>(_ kind: OutboxKind, payload: P) async throws`, `outcomeStream(for: String) async -> AsyncStream<OutboxOutcome>` | `OfflineQueue.shared` (actor, le protocole est à créer) |
 | `AttachmentUploading` | `uploadAvatar(_ data: Data) async throws -> URL` | `AttachmentUploader.shared` |
-| `CacheCoordinating` | `invalidateProfile(for userId: String) async` | `CacheCoordinator.shared` |
-| `Clock` | `sleep(for: Duration) async` | `SystemClock` (wrappe `Task.sleep`) |
-| `ToastSurfacing` | `showSuccess(_:)`, `showError(_:)` | `ToastManager.shared` |
-| `HapticSurfacing` | `success()`, `error()` | `HapticFeedbackBridge.shared` (wrappe `HapticFeedback`) |
+| `ProfileCacheWriting` | `saveProfile(_ user: MeeshyUser, for userId: String) async throws` | `CacheCoordinator.shared` via extension (route vers `profiles.save([user], for: userId)`). **Note : `CacheCoordinator.profiles.invalidate(for:)` n'existe pas ; seul `invalidateAll()` est dispo. On préfère `save([user], for:)` qui aligne le cache avec l'optimistic local — plus local-first.** |
+| `Sleeping` | `sleep(milliseconds: UInt64) async` | `SystemSleeper` (wrappe `Task.sleep`). **Le `Clock` standard Swift utilise un `associatedtype Duration` ; un protocole minimal Sleeping non-typed est plus simple à mocker.** |
+| `ToastSurfacing` | `showSuccess(_:)`, `showError(_:)` | `ToastManager.shared` (méthodes confirmées : `ToastManager.swift:35-42`) |
+| `HapticSurfacing` | `success()`, `error()` | Adapter thin qui appelle `HapticFeedback.success()` / `.error()` (statiques `@MainActor` dans `MeeshyUI/Utilities/HapticFeedback.swift:53-67`) |
 
 ## API publique
 
@@ -149,10 +150,10 @@ final class EditProfileViewModel: ObservableObject {
         authManager: AuthManaging = AuthManager.shared,
         offlineQueue: OfflineQueueing = OfflineQueue.shared,
         attachmentUploader: AttachmentUploading = AttachmentUploader.shared,
-        cacheCoordinator: CacheCoordinating = CacheCoordinator.shared,
-        clock: Clock = SystemClock(),
+        profileCache: ProfileCacheWriting = CacheCoordinator.shared,
+        sleeper: Sleeping = SystemSleeper(),
         toast: ToastSurfacing = ToastManager.shared,
-        haptics: HapticSurfacing = HapticFeedbackBridge.shared
+        haptics: HapticSurfacing = HapticBridge.shared
     )
 
     var hasChanges: Bool
@@ -196,7 +197,8 @@ offlineQueue.enqueue(.updateProfile, payload: payload) async throws
    ├─ throws ──> authManager.restoreLocalProfileSnapshot(snapshot)
    │             fail(.enqueue) [saveState=.failed, return]
    ▼ success
-cacheCoordinator.invalidateProfile(for: currentUser.id)
+profileCache.saveProfile(currentUser, for: currentUser.id)
+            ↳ persiste l'optimistic user dans CacheCoordinator.profiles (GRDBCacheStore)
    ▼
 haptics.success()
 toast.showSuccess("Profil mis a jour")
@@ -259,7 +261,7 @@ init(viewModel: EditProfileViewModel = EditProfileViewModel()) {
 |--------|-------|
 | **Initial state** | `test_init_seedsDisplayName_fromCurrentUser` · `test_init_seedsBio_fromCurrentUser` · `test_init_hasChangesFalse_whenNoEdits` |
 | **hasChanges** | `test_hasChanges_trueAfterDisplayNameEdit` · `test_hasChanges_trueAfterBioEdit` · `test_hasChanges_trueAfterImageSelection` |
-| **saveProfile happy path (no avatar)** | `test_save_appliesOptimisticLocally_beforeEnqueue` · `test_save_enqueuesUpdateProfilePayload_withCmid` · `test_save_invalidatesProfileCache_afterEnqueue` · `test_save_callsDismissCallback_afterSuccessDelay` |
+| **saveProfile happy path (no avatar)** | `test_save_appliesOptimisticLocally_beforeEnqueue` · `test_save_enqueuesUpdateProfilePayload_withCmid` · `test_save_persistsOptimisticUserInCache_afterEnqueue` · `test_save_callsDismissCallback_afterSuccessDelay` |
 | **saveProfile happy path (with avatar)** | `test_save_uploadsAvatarBeforeEnqueue_whenImageSelected` · `test_save_enqueuesPayloadWithUploadedUrl` |
 | **Failure paths** | `test_save_setsFailedState_whenAvatarUploadThrows_noLocalMutation` · `test_save_rollsBackSnapshot_whenEnqueueThrows` |
 | **Outcome observer** | `test_save_rollsBackSnapshot_whenOutcomeStreamEmitsExhausted` · `test_save_doesNotRollback_whenOutcomeStreamEmitsApplied` |
@@ -286,8 +288,8 @@ L'upload réseau n'est pas couvert en test unitaire (rôle des integration tests
 
 | # | Step |
 |---|------|
-| 1 | Fix `StoryRepostFlowTests.swift:144` : `.content` → `.text`. Build verif : `meeshy.sh test` compile. |
-| 2 | Grep + fix `*ViewModelTests` `async save()` sans `try?`. À localiser via `meeshy.sh test` au step 1 (lire l'erreur compile suivante). Build verif : `meeshy.sh test` exécute les tests existants. |
+| 1 | Fix `StoryRepostFlowTests.swift:144` : `.content` → `.text`. Le champ `content` n'est plus une stored property (renommé `text` dans `StoryTextObject`, voir `StoryModels.swift:206`) ; seul l'alias CodingKey legacy `content` reste pour décoder du JSON ancien. Build verif : `meeshy.sh test` compile (au moins ce fichier-là). |
+| 2 | **Diagnostic** : exécuter `meeshy.sh test` au pied du step 1, lire les erreurs compile suivantes, fixer chacune. La mémoire mentionne un `*ViewModelTests async save() sans try?` mais le grep direct ne le localise pas — l'erreur peut avoir muté ou être dans un fichier renommé. Le compile output xcodebuild est l'autorité ; corriger jusqu'à ce que `meeshy.sh test` lance effectivement les tests (pas nécessairement les fasse passer, juste compile). |
 
 ### SDK foundation (steps 3-4)
 
@@ -310,7 +312,7 @@ L'upload réseau n'est pas couvert en test unitaire (rôle des integration tests
 |---|-------|---------------------|
 | 8 | Initial state (3 tests) | `init(...)` + seeding `displayName/bio` |
 | 9 | hasChanges (3 tests) | computed `hasChanges` |
-| 10 | saveProfile happy path no-avatar (4 tests) | enqueue + applyLocalProfileChanges + cache invalidate + dismiss callback |
+| 10 | saveProfile happy path no-avatar (4 tests) | enqueue + applyLocalProfileChanges + cache `save([user], for:)` + dismiss callback |
 | 11 | saveProfile with avatar (2 tests) | branch upload avant enqueue |
 | 12 | Failure paths + outcome observer (4 tests) | rollback enqueue throw + rollback `.exhausted` + no-op `.applied` |
 
@@ -330,19 +332,23 @@ L'upload réseau n'est pas couvert en test unitaire (rôle des integration tests
 - ✅ 16 nouveaux tests `EditProfileViewModelTests` verts
 - ✅ 3 nouveaux tests `AuthManagerTests.applyLocalProfileChanges_*` verts (SDK)
 - ✅ 1 test `AttachmentUploaderTests.test_compress_*` vert
+- ✅ 2 nouveaux tests `MeeshyUserProfileMutationTests.test_withProfileChanges_*` verts (SDK, sur l'extension memberwise)
 - ✅ Refactor visuel zéro régression (sub-views identiques)
 - ✅ Smoke offline démontre la propagation live + rollback
 - ✅ SwiftLint 0 violation sur les nouveaux fichiers
 
-## Risques identifiés + mitigations
+## Risques identifiés + mitigations (post-audit cross-check)
 
-| Risque | Mitigation |
-|--------|------------|
-| `MeeshyUser` est une class ou ses champs sont `let` | Vérifier au step 3 ; si class, basculer `applyLocalProfileChanges` sur reconstruction d'un nouvel objet via initializer complet (memberwise) |
-| `OfflineQueueing` protocol n'existe pas | Adapter thin : créer le protocole avec les 2 méthodes consommées, `OfflineQueue.shared` y conforme par extension. Idem `CacheCoordinating`, `ToastSurfacing`, `HapticSurfacing` |
-| `Clock` protocol absent du codebase | Créer minimal : `protocol Clock { func sleep(for: Duration) async }`. `SystemClock` wrappe `Task.sleep`, `TestClock` no-op |
-| Le 2e bug test bundle (`*ViewModelTests async save()`) introuvable au grep | Exécuter `meeshy.sh test` après step 1 et lire l'erreur compile exacte avant de proposer le fix |
-| `@StateObject` + init custom + `@EnvironmentObject authManager` collision Swift 6 | Pattern déjà utilisé dans le projet (vérifier sur `ConversationListViewModel`/`StatusViewModel`). Si problème, `StateObject(wrappedValue: EditProfileViewModel())` capte `AuthManager.shared` directement sans environment |
+| Risque | Statut | Mitigation |
+|--------|--------|------------|
+| **`MeeshyUser` est un struct avec champs `let`** | ✅ CONFIRMÉ (`AuthModels.swift:189-277`, 28 champs `let`) | Extension `MeeshyUser+ProfileMutation.swift` ajoute `func withProfileChanges(displayName: String?, bio: String?, avatar: String?) -> MeeshyUser`. Sémantique : `nil` = inchangé (cohérent avec `UpdateProfilePayload` qui utilise `nil` = "ne pas toucher"). La méthode reconstruit un nouveau struct via l'init memberwise en passant tous les autres champs verbatim. `AuthManager.applyLocalProfileChanges` appelle l'extension et publie le nouveau struct via `currentUser = newUser`. **Note** : effacer un champ (mettre à `nil` côté serveur) n'est pas un cas couvert par cette UI ; à traiter dans une session future si requis. |
+| **`OfflineQueueing` protocol n'existe pas** | ✅ CONFIRMÉ (`OfflineQueue.swift:306` = `public actor OfflineQueue`, pas de protocole) | Créer protocole minimal avec `enqueue<P: Codable & Sendable>(_:payload:) async throws` + `outcomeStream(for:) async -> AsyncStream<OutboxOutcome>`. Conformance par extension sur l'actor. |
+| **`Clock` protocol absent** | ✅ CONFIRMÉ (grep zéro hit) | Créer protocole minimal `Sleeping { func sleep(milliseconds: UInt64) async }` (non-typed, plus simple que Swift `Clock` qui a un `associatedtype Duration`). `SystemSleeper` wrappe `try? await Task.sleep(nanoseconds:)`. `TestSleeper` no-op. |
+| **`CacheCoordinator.profiles.invalidate(for:)` n'existe pas** | ✅ CONFIRMÉ (seuls `load(for:)`, `save(_:for:)`, `invalidateAll()` exposés sur `profiles`) | Remplacer par `profileCache.saveProfile(user, for: userId)` qui route vers `CacheCoordinator.shared.profiles.save([user], for: userId)`. Aligne le cache avec l'optimistic local — plus local-first qu'invalider. |
+| **2e bug test bundle introuvable au grep** | ⚠️ NON LOCALISÉ (grep négatif sur `*ViewModelTests async save() sans try?`) | Step 2 = diagnostic dynamique : exécuter `meeshy.sh test`, lire les erreurs compile, fixer jusqu'à ce que les tests lancent. Peut nécessiter 1-N fixes. |
+| **`@StateObject` + init custom + `@EnvironmentObject authManager` collision Swift 6** | ✅ PATTERN VÉRIFIÉ (5 sites confirmés : `EmailVerificationView`, `StoryNotificationTargetScreen`, `ConversationPreferencesTab`, `ConversationView`, `TrackingLinkDetailView`) | Aucun risque, pattern bien établi dans le codebase. `_viewModel = StateObject(wrappedValue: EditProfileViewModel())` capte `AuthManager.shared` directement via le default param du VM init. |
+| **`HapticFeedback` static `@MainActor` accessible depuis MeeshyUI** | ✅ CONFIRMÉ (`MeeshyUI/Utilities/HapticFeedback.swift`, méthodes `success()`/`error()` aux lignes 53-67) | Adapter `HapticBridge.shared` thin qui forward `.success()/.error()` aux statiques. Pas d'isolation surprise. |
+| **`OutboxOutcome.exhausted(cmid: String)` shape** | ✅ CONFIRMÉ (enum public à `OfflineQueue.swift:290` avec `.applied(cmid:)/.exhausted(cmid:)`) | Pattern `if case .exhausted = event` compatible (aligné avec `UserProfileViewModel.swift:187`). |
 
 ## Estimation
 
