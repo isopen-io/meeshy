@@ -132,6 +132,15 @@ export class OrphanMediaCleanupService {
    * Returns the number of files actually deleted (excluding rows that
    * pointed at a non-existent file, which still count as a successful
    * cleanup since the outbox row is removed).
+   *
+   * Race-condition safety: each batch is processed by first claiming the
+   * outbox rows via `deleteMany` (atomic on the database side), then
+   * deleting only the storage objects for rows that were actually claimed.
+   * If a concurrent `untrack()` call removes a row between `findMany` and
+   * `deleteMany`, that row's id simply won't match in `deleteMany` and its
+   * storage object is left intact — the file is now owned by the caller
+   * that called `untrack()`. `MediaStorage.delete` remains idempotent, so
+   * any partial failure during storage cleanup is safe to retry.
    */
   async reapExpired(): Promise<number> {
     const now = new Date();
@@ -145,16 +154,32 @@ export class OrphanMediaCleanupService {
       });
       if (batch.length === 0) break;
 
-      // Delete the storage objects in parallel — `MediaStorage.delete` is
-      // idempotent so a no-op for already-purged files is harmless.
-      await Promise.all(batch.map((row) => this.storage.delete(row.fileUrl)));
+      const batchIds = batch.map((r) => r.id);
 
-      // Remove the outbox rows in one query.
-      await this.prisma.orphanMediaCleanup.deleteMany({
-        where: { id: { in: batch.map((r) => r.id) } },
+      // Atomically claim only the rows still present in the outbox.
+      // The transaction provides snapshot isolation: a concurrent `untrack()`
+      // either committed BEFORE this transaction starts (row absent from
+      // `findMany` result → not in batchIds → not touched here) or will
+      // execute AFTER this transaction commits (our `deleteMany` wins, the
+      // concurrent `untrack` silently no-ops on an already-absent row).
+      // Either way the worker never deletes a file that a concurrent caller
+      // has legitimately attached to a new record.
+      const claimedRows = await this.prisma.$transaction(async (tx) => {
+        const still = await tx.orphanMediaCleanup.findMany({
+          where: { id: { in: batchIds } },
+          select: { id: true, fileUrl: true },
+        });
+        if (still.length === 0) return still;
+        await tx.orphanMediaCleanup.deleteMany({
+          where: { id: { in: still.map((r) => r.id) } },
+        });
+        return still;
       });
 
-      totalReaped += batch.length;
+      if (claimedRows.length > 0) {
+        await Promise.all(claimedRows.map((r) => this.storage.delete(r.fileUrl)));
+        totalReaped += claimedRows.length;
+      }
 
       // If the batch was full, there may be more — keep looping.
       if (batch.length < OrphanMediaCleanupService.REAP_BATCH_SIZE) break;
