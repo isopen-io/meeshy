@@ -67,8 +67,19 @@ extension TimelineViewModel {
     ///
     /// In either case, `errorMessage` is NOT set — this is the OFFLINE-FIRST
     /// contract: the user sees confirmation, not failure.
+    ///
+    /// - Parameter originalLanguage: BCP-47 source language tag stamped onto
+    ///   the queued item. Required by the Prisme Linguistique pipeline so the
+    ///   gateway can route NLLB-200 translations correctly when the item
+    ///   flushes after reconnect. Defaults to `StoryComposerViewModel
+    ///   .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)`
+    ///   which honours the user's in-app `systemLanguage` / `regionalLanguage`
+    ///   preference (NEVER the device locale). Callers should pass an explicit
+    ///   value when the composer's source language is already known.
     public func handlePublishTap(
         visibility: StoryVisibility,
+        originalLanguage: String = StoryComposerViewModel
+            .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser),
         networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
         offlineQueue: OfflineQueueProviding = StoryOfflineQueue.shared,
         onlinePublisher: TimelineOnlinePublishing = StubOnlinePublisher()
@@ -77,7 +88,8 @@ extension TimelineViewModel {
             // Online path: hand off to the injected online publisher with the
             // serialised project payload. Fall back to offline queue if the
             // attempt fails so the user's work is never silently discarded.
-            let item = buildOfflineQueueItem(visibility: visibility)
+            let item = buildOfflineQueueItem(visibility: visibility,
+                                             originalLanguage: originalLanguage)
             do {
                 try await onlinePublisher.publishTimelineItem(item)
                 errorMessage = nil
@@ -92,7 +104,8 @@ extension TimelineViewModel {
         }
 
         // Offline path: enqueue silently, set confirmation flag.
-        let item = buildOfflineQueueItem(visibility: visibility)
+        let item = buildOfflineQueueItem(visibility: visibility,
+                                         originalLanguage: originalLanguage)
         await offlineQueue.enqueue(item)
         errorMessage = nil
         showOfflineQueuedConfirmation = true
@@ -117,7 +130,16 @@ extension TimelineViewModel {
         Set(project.audioPlayerObjects.map(\.id))
     }
 
-    private func buildOfflineQueueItem(visibility: StoryVisibility) -> StoryOfflineQueueItem {
+    /// Builds the offline queue snapshot. `originalLanguage` is stamped onto
+    /// the persisted item so the gateway can route NLLB-200 translations on
+    /// flush — passing `nil` would break the Prisme Linguistique pipeline
+    /// (P0 data-integrity regression). The caller is expected to resolve the
+    /// language up-front via `StoryComposerViewModel.resolveComposerSourceLanguage`
+    /// so that this helper stays a pure transformer of `project` + inputs.
+    internal func buildOfflineQueueItem(
+        visibility: StoryVisibility,
+        originalLanguage: String
+    ) -> StoryOfflineQueueItem {
         let slideIds = project.mediaObjects.map { $0.id }
             + project.audioPlayerObjects.map { $0.id }
             + project.textObjects.map { $0.id }
@@ -152,12 +174,20 @@ extension TimelineViewModel {
             return json
         }()
 
+        // Defensive invariant: an empty / whitespace-only language tag would
+        // break the gateway's NLLB-200 routing exactly the same way `nil` does.
+        // Fall back to the Prisme Linguistique default (`"fr"`) so an upstream
+        // bug never leaks into the persisted item.
+        let resolvedLanguage = originalLanguage
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let safeLanguage = resolvedLanguage.isEmpty ? "fr" : resolvedLanguage
+
         return StoryOfflineQueueItem(
             slideIds: slideIds,
             slidePayloadJSON: payloadJSON,
             mediaURLPaths: mediaPaths,
             audioURLPaths: audioPaths,
-            originalLanguage: nil,
+            originalLanguage: safeLanguage,
             visibility: visibility.rawValue
         )
     }
