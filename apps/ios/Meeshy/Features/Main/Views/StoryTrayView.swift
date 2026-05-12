@@ -306,6 +306,34 @@ private struct MyStoryButton: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .overlay(alignment: .topLeading) {
+                    // Composer entry badge — discoverable affordance for adding
+                    // a new story without going through long-press menu. Hidden
+                    // during an active upload (the upload overlay already
+                    // covers the avatar). The plus sign uses brand gradient
+                    // matching the published `MeeshyColors.brandGradient`.
+                    if viewModel.activeUpload == nil {
+                        Button {
+                            guard viewModel.activeUpload == nil else { return }
+                            viewModel.showStoryComposer = true
+                            HapticFeedback.medium()
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color.white)
+                                .frame(width: 20, height: 20)
+                                .background(
+                                    Circle()
+                                        .fill(MeeshyColors.brandGradient)
+                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "story.tray.addStory",
+                                                   defaultValue: "Ajouter une story"))
+                        .offset(x: -2, y: -2)
+                    }
+                }
                 .overlay {
                     if let upload = viewModel.activeUpload {
                         StoryUploadOverlay(
