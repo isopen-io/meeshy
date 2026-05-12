@@ -522,8 +522,8 @@ extension StoryRenderer {
     /// Returns `nil` when no fade envelope is configured (fadeIn == nil &&
     /// fadeOut == nil) so the caller can preserve `CALayer`'s default `1.0`
     /// without touching the property.
-    public nonisolated static func fadeOpacity(item: any RenderableItem,
-                                               at currentTime: Double) -> Double? {
+    @MainActor public static func fadeOpacity(item: any RenderableItem,
+                                              at currentTime: Double) -> Double? {
         let fadeIn = item.fadeIn ?? 0
         let fadeOut = item.fadeOut ?? 0
         guard fadeIn > 0 || fadeOut > 0 else { return nil }

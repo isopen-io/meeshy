@@ -629,16 +629,20 @@ public final class StoryCanvasUIView: UIView {
             // we still want to honor the contract: fire on the next runloop
             // tick when no observable transition is pending.
             if let layer = backgroundLayer.contentLayer {
-                imageContentsObserver = layer.observe(\.contents, options: [.new]) { [weak self] observed, _ in
+                imageContentsObserver = layer.observe(\.contents, options: [.new]) { [weak self] _, change in
+                    // Extract sendable AnyObject? snapshot SYNCHRONOUSLY in the
+                    // KVO callback (which runs on the layer's actor). Passing
+                    // the layer itself across the actor hop trips Swift 6's
+                    // sending-risks-data-races check.
+                    let snapshot: AnyObject? = change.newValue.flatMap { $0 } as AnyObject?
                     Task { @MainActor in
                         guard let self else { return }
                         let placeholder = self.thumbHashPlaceholderRef
-                        let current = observed.contents.map { $0 as AnyObject }
                         // Fire only once the new contents differ from the
                         // ThumbHash placeholder reference. A nil placeholder
                         // (no thumbHash on the slide) makes the first non-nil
                         // assignment the trigger.
-                        guard let current else { return }
+                        guard let current = snapshot else { return }
                         if let placeholder, current === placeholder { return }
                         self.fireContentReadyIfNeeded()
                     }
