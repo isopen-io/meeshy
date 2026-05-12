@@ -850,15 +850,15 @@ export default async function callRoutes(fastify: FastifyInstance) {
         200: {
           description: 'Active call retrieved successfully (may be null if no active call)',
           type: 'object',
+          // FIX 2026-05-12 — `oneOf: [callSessionSchema, { type: 'null' }]`
+          // déclenchait `TypeError: The value of '#/properties/data' does not
+          // match schema definition.` sur fast-json-stringify quand data===null
+          // (limitation connue de la lib pour oneOf+null). On retire la
+          // contrainte de schema sur `data` côté serializer (additionalProperties
+          // true), la doc OpenAPI reste correcte via description.
+          additionalProperties: true,
           properties: {
-            success: { type: 'boolean', example: true },
-            data: {
-              oneOf: [
-                callSessionSchema,
-                { type: 'null' }
-              ],
-              description: 'Active call session or null if no active call'
-            }
+            success: { type: 'boolean', example: true }
           }
         },
         400: {

@@ -878,21 +878,36 @@ export class CallEventsHandler {
           conversationId: data.conversationId
         });
 
-        // Find any active calls in this conversation
+        // Find any active calls in this conversation.
+        //
+        // CRITICAL FIX (2026-05-12) — Audit force-leave participantId mismatch :
+        // le query ne chargeait que `participants: true` (=== CallParticipant
+        // sans la relation `participant`). En conséquence le find() suivant
+        // comparait `p.participantId` (= Participant.id ObjectId) avec
+        // `userId` (= User.id ObjectId distinct) → la comparaison était
+        // TOUJOURS FALSE et le handler force-leave silently no-op-ait.
+        // Symptôme : zombie call jamais nettoyé, `CALL_ALREADY_ACTIVE`
+        // bloquant tous les call:initiate suivants dans la conversation.
+        // On charge maintenant la relation imbriquée pour pouvoir comparer
+        // sur le vrai userId.
+        // Aussi élargi le filtre statuses pour couvrir `connecting` et
+        // `reconnecting` (cohérent avec ACTIVE_STATUSES dans CallService).
         const activeCalls = await this.prisma.callSession.findMany({
           where: {
             conversationId: data.conversationId,
-            status: { in: ['initiated', 'ringing', 'active'] }
+            status: { in: ['initiated', 'ringing', 'connecting', 'active', 'reconnecting'] }
           },
           include: {
-            participants: true
+            participants: {
+              include: { participant: true }
+            }
           }
         });
 
         // Force leave each active call where user is a participant
         for (const call of activeCalls) {
           const participant = call.participants.find(
-            (p: any) => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
+            (p) => p.participant?.userId === userId && !p.leftAt
           );
 
           if (participant) {
