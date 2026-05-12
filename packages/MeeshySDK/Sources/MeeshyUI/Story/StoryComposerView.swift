@@ -857,15 +857,19 @@ public struct StoryComposerView: View {
                 pickerSelectedTool = tool
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
-                viewModel.selectTool(tool)
                 // For the Text tile, jump straight into the inline editor :
-                // spawn a fresh text object and select it so the textPanel's
-                // StoryTextEditorView opens with focus, instead of forcing
-                // the user through the extra "Ajouter du texte" tap.
+                // viewModel.addText() itself spawns a fresh text + sets
+                // selectedElementId + sets activeTool = .text, so calling
+                // selectTool(.text) before it would toggle activeTool off
+                // when addText then re-sets it back — and the @Observable
+                // re-render race could leave activeTool nil at the end.
+                // Adopt the simpler invariant : addText is the sole entry
+                // point for the .text tool when the slide has no text yet.
                 if tool == .text,
-                   viewModel.currentEffects.textObjects.isEmpty,
-                   let newText = viewModel.addText() {
-                    viewModel.selectedElementId = newText.id
+                   viewModel.currentEffects.textObjects.isEmpty {
+                    _ = viewModel.addText()
+                } else {
+                    viewModel.selectTool(tool)
                 }
                 pickerSelectedTool = nil
             }
