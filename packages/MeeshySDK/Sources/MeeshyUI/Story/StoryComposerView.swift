@@ -751,8 +751,14 @@ public struct StoryComposerView: View {
             .opacity(pickerSelectedTool == nil ? 1 : 0)
             .scaleEffect(pickerSelectedTool == nil ? 1 : 0.95)
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 14) {
+            ScrollView(.vertical, showsIndicators: false) {
+                LazyVGrid(
+                    columns: [
+                        GridItem(.flexible(), spacing: 14),
+                        GridItem(.flexible(), spacing: 14)
+                    ],
+                    spacing: 14
+                ) {
                     largeToolTile(
                         .media,
                         icon: "play.rectangle.fill",
@@ -795,8 +801,8 @@ public struct StoryComposerView: View {
                     )
                 }
                 .padding(.horizontal, 20)
+                .padding(.bottom, 8)
             }
-            .frame(height: 220)
         }
         .padding(.bottom, safeAreaBottomInset + 12)
         .frame(maxWidth: .infinity)
@@ -843,13 +849,13 @@ public struct StoryComposerView: View {
             VStack(spacing: 10) {
                 ZStack {
                     Circle()
-                        .fill(accent.opacity(isSelected ? 0.45 : 0.20))
+                        .fill(accent.opacity(isSelected ? 0.55 : 0.30))
                         .frame(width: 76, height: 76)
                     Image(systemName: icon)
                         .font(.system(size: 36, weight: .semibold))
                         .foregroundStyle(accent)
                 }
-                .padding(.top, 16)
+                .padding(.top, 18)
 
                 VStack(spacing: 4) {
                     Text(title)
@@ -864,18 +870,27 @@ public struct StoryComposerView: View {
                 }
                 Spacer(minLength: 0)
             }
-            .frame(width: 160, height: 200)
+            .frame(maxWidth: .infinity)
+            .frame(height: 188)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(.ultraThinMaterial)
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    // Uniform pastel tint matching the tile's accent — replaces
+                    // the previous .ultraThinMaterial gray fill so each tile
+                    // reads as its own color instead of a generic glass card.
+                    .fill(accent.opacity(0.18))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(accent.opacity(isSelected ? 0.65 : 0.30), lineWidth: isSelected ? 2 : 1)
+                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                            .stroke(accent.opacity(isSelected ? 0.75 : 0.40), lineWidth: isSelected ? 2 : 1)
                     )
             )
-            .shadow(color: accent.opacity(isSelected ? 0.35 : 0), radius: 18, y: 6)
+            .shadow(color: accent.opacity(isSelected ? 0.45 : 0), radius: 18, y: 6)
             .scaleEffect(isSelected ? 1.06 : 1.0)
-            .opacity(isOtherSelected ? 0.25 : 1.0)
+            .opacity(isOtherSelected ? 0.30 : 1.0)
+            // Outer padding gives the scale-up animation room to breathe
+            // without being clipped by the grid cell — without it, the
+            // selected tile's enlarged corners touch neighbouring tiles
+            // and shadow gets cropped.
+            .padding(8)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
