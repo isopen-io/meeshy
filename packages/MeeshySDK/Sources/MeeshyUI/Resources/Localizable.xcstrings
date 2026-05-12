@@ -15889,6 +15889,50 @@
         }
       }
     },
+    "story.textBackground.glass" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Verre"
+          }
+        }
+      }
+    },
+    "story.textBackground.none" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aucun"
+          }
+        }
+      }
+    },
+    "story.textBackground.solid" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couleur"
+          }
+        }
+      }
+    },
+    "story.textBackground.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fond du texte"
+          }
+        }
+      }
+    },
     "story.textEditor.color" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {

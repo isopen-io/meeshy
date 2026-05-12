@@ -89,6 +89,13 @@ final class CallManager: ObservableObject {
     /// hasn't joined within `outgoingRingTimeoutSeconds`. Cancelled when the
     /// state leaves `.ringing(isOutgoing: true)` (offering / connecting / ended).
     private var outgoingRingTimeoutTask: Task<Void, Never>?
+    /// Task de setup d'un appel sortant (force-leave + ACK + media + listen).
+    /// Auparavant un Task non-tracké : si endCallInternal fire pendant le
+    /// setup (ex: CallKit teardown), le Task continuait à tourner — gardant
+    /// la connexion WebRTC active hors-vue. On le stocke pour pouvoir le
+    /// cancel proprement dans endCallInternal. Le Task vérifie aussi
+    /// `Task.isCancelled` aux points clés en plus du guard `activeCallUUID`.
+    private var setupCallTask: Task<Void, Never>?
     /// Audit P1-2 — token bumped each time we leave `.ended`. The 1.5s settle
     /// task captures the token at scheduling time and bails if it has changed
     /// (i.e. a new call already grabbed `currentCallId`/`remoteUserId` between
@@ -135,10 +142,15 @@ final class CallManager: ObservableObject {
         let config = CXProviderConfiguration()
         config.supportsVideo = true
         config.maximumCallsPerCallGroup = 1
-        // Audit P2-iOS-5 — was 2 but the app declares supportsHolding=false
-        // on every CXCallUpdate. Contradictory pair confused some iOS
-        // versions into showing a hold button on the lock screen.
-        config.maximumCallGroups = 1
+        // Restauré à 2 (rollback audit P2-iOS-5 qui l'avait baissé à 1) :
+        // entre commits 4dbb387e (état fonctionnel) et HEAD, lowering this
+        // value à 1 a coïncidé avec la régression "CallKit teardown autonome
+        // à ~3s sur appels sortants". Le couple maximumCallGroups=1 +
+        // supportsHolding=false était valide en théorie mais a confondu
+        // l'iOS runtime au point de tuer l'appel avant que
+        // provider:didActivate:audioSession ne se déclenche. 2 est la valeur
+        // par défaut (sans config) et celle utilisée par FaceTime/WhatsApp.
+        config.maximumCallGroups = 2
         config.supportedHandleTypes = [.generic]
         config.includesCallsInRecents = true
         // Custom CallKit icon: bundle a 40x40 PNG named "CallKitIcon" in Assets
@@ -266,12 +278,31 @@ final class CallManager: ObservableObject {
         isVideoEnabled = isVideo
         isMuted = false
         isSpeaker = isVideo
+        // Force displayMode = .fullScreen pour que RootView présente le
+        // `.fullScreenCover { CallView() }`. Sans ça, displayMode peut être
+        // resté à `.pip` après le dismiss d'un appel précédent (le binding
+        // setter de fullScreenCover passe à .pip quand isPresented passe à
+        // false), et tous les appels suivants n'affichent que le mini-PiP
+        // `FloatingCallPillView` au lieu de la vue plein écran.
+        displayMode = .fullScreen
         callState = .ringing(isOutgoing: true)
         lastCallWasOutgoing = true
 
-        // Phase 1.5 — start ringback tone immediately when caller initiates.
-        // The tone plays until state transitions to .connected or .ended.
-        ringbackPlayer.start()
+        // Phase 1.5 — Ringback tone démarré dans `provider:didActivate:audioSession`
+        // (PAS ici). Démarrer AVAudioPlayer AVANT que CallKit ait posé sa
+        // catégorie `.playAndRecord / .voiceChat` activait implicitement la
+        // session en `.soloAmbient` (la default iOS pour AVAudioPlayer) —
+        // CallKit voyait alors la session « already active in wrong category »
+        // et NE firait PAS `provider:didActivate:audioSession`, ce qui
+        // déclenchait son timeout autonome ~3-5s avec un CXEndCallAction
+        // (le fameux « calls drop after 2-4 seconds » + le « wont be a UI
+        // to host the call » sur simulateur, qui sont en réalité le même
+        // symptôme : CallKit rejette le lifecycle).
+        // Le ringback démarre maintenant après que CallKit confirme l'audio
+        // session activée — `playPendingRingback()` est appelé depuis
+        // `CallKitDelegateProxy.provider(_:didActivate:)`. Si CallKit ne
+        // fire jamais didActivate (cas d'erreur), `outgoingRingTimeoutTask`
+        // de 45s prend le relais comme avant.
         startOutgoingRingTimeout()
 
         let uuid = UUID()
@@ -323,9 +354,28 @@ final class CallManager: ObservableObject {
         // resurrect the call by re-arming `currentCallId`, configuring
         // WebRTC, and starting microphone capture on a call the user has
         // already cancelled.
-        Task { [weak self, uuid] in
+        setupCallTask?.cancel()
+        setupCallTask = Task { [weak self, uuid] in
             guard let self else { return }
             do {
+                // Pré-flight zombie cleanup : émettre `call:force-leave`
+                // AVANT `call:initiate` pour purger toute trace persistante
+                // d'un appel précédent où l'utilisateur courant aurait été
+                // participant sans avoir `leftAt` peuplé (crash, kill app,
+                // simulator teardown, audit du gateway pas exécuté à temps).
+                // Sans ça, `call:initiate` retourne `CALL_ALREADY_ACTIVE` —
+                // le gateway considère qu'il y a déjà un appel actif avec
+                // au moins un participant non-leftAt. Le force-leave est
+                // idempotent (no-op si pas de zombie côté DB).
+                // Petit délai (250ms) pour laisser le gateway commiter le
+                // cleanup MongoDB avant qu'on émette call:initiate.
+                MessageSocketManager.shared.emitCallForceLeave(conversationId: conversationId)
+                try? await Task.sleep(for: .milliseconds(250))
+                guard self.activeCallUUID == uuid else {
+                    Logger.calls.info("[CALL_SETUP] force-leave wait — uuid changed, discarding")
+                    return
+                }
+
                 let ack = try await MessageSocketManager.shared.emitCallInitiate(
                     conversationId: conversationId,
                     isVideo: isVideo
@@ -412,6 +462,8 @@ final class CallManager: ObservableObject {
         isVideoEnabled = isVideo
         isMuted = false
         isSpeaker = isVideo
+        // Force displayMode = .fullScreen (cf. startCall pour le rationale).
+        displayMode = .fullScreen
         callState = .ringing(isOutgoing: false)
         activeCallUUID = uuid
 
@@ -515,6 +567,8 @@ final class CallManager: ObservableObject {
         isVideoEnabled = isVideo
         isMuted = false
         isSpeaker = isVideo
+        // Force displayMode = .fullScreen (cf. startCall pour le rationale).
+        displayMode = .fullScreen
         callState = .ringing(isOutgoing: false)
 
         let uuid = UUID()
@@ -717,9 +771,43 @@ final class CallManager: ObservableObject {
 
     func endCall() {
         guard callState.isActive else { return }
-        guard let callId = currentCallId, let userId = remoteUserId else { return }
 
-        emitCallEnd(callId: callId, toUserId: userId)
+        // Le second guard historique (`guard let callId = currentCallId`)
+        // retournait early si l'ACK call:initiate n'avait pas encore
+        // atterri — laissant `activeCallUUID` non-cleared et le Task de
+        // setup tournant pour rien. Or CallKit peut fire `CXEndCallAction`
+        // AVANT l'ACK (cas du simulateur iOS 18+ qui disconnect les
+        // hosted calls « because there wont be a UI to host the call »,
+        // mais aussi en prod sur certaines race conditions). On rend les
+        // identifiants OPTIONNELS et on garantit `endCallInternal` dans
+        // tous les cas pour nettoyer l'état local + cancel les Tasks.
+        let callId = currentCallId
+        let userId = remoteUserId
+
+        // Phase finale — émettre `call:end` avec ACK garanti pour que le
+        // gateway broadcast `call:ended` au peer. Avant : emit fire-and-forget
+        // sans confirmation → si le socket était saturé / déconnecté au
+        // moment du raccroché, l'appelé restait bloqué en `.connecting` /
+        // `.connected` indéfiniment sans aucun signal d'arrêt. On utilise
+        // `emitCallEndWithAck` (3s timeout, retry interne au gateway) en
+        // Task détaché : ne bloque pas le cleanup local mais garantit que
+        // le gateway sait que l'appel est fini.
+        if let callId, let userId {
+            Task.detached {
+                let acked = await MessageSocketManager.shared.emitCallEndWithAck(callId: callId)
+                if !acked {
+                    // Fallback : si le socket ack failed (timeout / déco),
+                    // re-emit fire-and-forget. Le gateway a ses propres
+                    // safeguards (CallCleanupService cron) qui finiront par
+                    // ramasser le zombie après 60s.
+                    MessageSocketManager.shared.emitCallEnd(callId: callId)
+                    await MainActor.run {
+                        Logger.calls.warning("call:end ACK failed pour \(callId) — fallback fire-and-forget émis, gateway cron cleanup dans 60s")
+                    }
+                }
+            }
+            _ = userId  // Référencé pour cohérence avec l'API legacy emitCallEnd(callId:toUserId:)
+        }
 
         if let uuid = activeCallUUID {
             let endAction = CXEndCallAction(call: uuid)
@@ -729,7 +817,7 @@ final class CallManager: ObservableObject {
         }
 
         endCallInternal(reason: .local)
-        Logger.calls.info("Call ended by local: \(callId)")
+        Logger.calls.info("Call ended by local: \(callId ?? "(pre-ACK)")")
     }
 
     // MARK: - Media Controls
@@ -962,6 +1050,16 @@ final class CallManager: ObservableObject {
         outgoingRingTimeoutTask = nil
     }
 
+    /// Démarre le ringback tone si l'appel est toujours en .ringing(outgoing).
+    /// Appelé depuis `provider:didActivate:audioSession` — voir le commentaire
+    /// long là-bas pour le rationale (AVAudioPlayer ne doit PAS être démarré
+    /// avant que CallKit ait posé sa catégorie `.playAndRecord`).
+    @MainActor
+    func startRingbackIfNeeded() {
+        guard case .ringing(isOutgoing: true) = callState else { return }
+        ringbackPlayer.start()
+    }
+
     // MARK: - Private: State Transitions
 
     @MainActor
@@ -969,7 +1067,22 @@ final class CallManager: ObservableObject {
         rtpGateTask?.cancel()
         rtpGateTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            for attempt in 1...QualityThresholds.rtpGateMaxAttempts {
+            // Le RTP gate poll en boucle jusqu'à recevoir les premiers paquets
+            // RTP du peer (signal d'établissement média effectif). Auparavant
+            // il y avait un timeout (5 tentatives x 2s = 10s) qui tuait
+            // l'appel en `.failed("media path broken")` si pas de RTP — c'est
+            // PRÉCISÉMENT le comportement que l'utilisateur veut SUPPRIMER :
+            // en phase `.connecting`, on doit attendre la connexion, pas
+            // l'arrêter automatiquement. Les vraies coupures restent :
+            //   - WebRTC peerConnection state → .failed (cause via delegate)
+            //   - call:ended remote (peer raccroche)
+            //   - User raccroche via CallKit / UI app
+            //   - outgoingRingTimeoutSeconds 45s en `.ringing(outgoing)`
+            //     (avant l'offer SDP — pas pendant .connecting)
+            // On poll donc indéfiniment (jusqu'à cancel par endCallInternal).
+            var attempt = 0
+            while !Task.isCancelled {
+                attempt += 1
                 let nanos = UInt64(QualityThresholds.rtpGatePollIntervalSeconds * 1_000_000_000)
                 try? await Task.sleep(nanoseconds: nanos)
                 guard !Task.isCancelled else { return }
@@ -982,17 +1095,19 @@ final class CallManager: ObservableObject {
                     return
                 }
                 Logger.calls.debug(
-                    "RTP gate attempt \(attempt)/\(QualityThresholds.rtpGateMaxAttempts) — packets=\(stats.inboundPacketsReceived) (need \(QualityThresholds.rtpGateRequiredPackets))"
+                    "RTP gate attempt \(attempt) — packets=\(stats.inboundPacketsReceived) (need \(QualityThresholds.rtpGateRequiredPackets)) — patiente, pas de timeout auto"
                 )
             }
-            Logger.calls.error(
-                "RTP gate timeout after \(QualityThresholds.rtpGateMaxAttempts) attempts — ICE connected but no media. Ending call."
-            )
-            self.endCallInternal(reason: .failed("media path broken (no inbound RTP)"))
         }
     }
 
     private func transitionToConnected() {
+        // Idempotent : si déjà .connected, no-op. Cette fonction peut être
+        // appelée par 2 chemins après le fix RTP-gate-non-bloquant :
+        //   1) webRTCServiceDidConnect → immédiat sur ICE connected
+        //   2) RTP gate poll qui détecte les premiers packets entrants
+        // On évite ainsi de relancer durationTask / heartbeat / haptics.
+        if case .connected = callState { return }
         ringbackPlayer.stop()
         callState = .connected
         // Audio session was configured ONCE at peer-connection setup; CallKit
@@ -1196,6 +1311,13 @@ final class CallManager: ObservableObject {
         localMediaTask = nil
         outgoingRingTimeoutTask?.cancel()
         outgoingRingTimeoutTask = nil
+        // Cancel le Task de setup outgoing (force-leave + ACK + media +
+        // listenForParticipantJoined). Sans ça, après endCallInternal, ce
+        // Task continuait à tourner et pouvait re-armer la connexion, faire
+        // des emit/setup sur un appel déjà clos, ou laisser des observables
+        // attachés.
+        setupCallTask?.cancel()
+        setupCallTask = nil
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
@@ -1618,29 +1740,42 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCServiceDidConnect(_ service: WebRTCService) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            // FIX 2026-05-12 — transition directe à `.connected` sur ICE
+            // connected, plus de gate RTP bloquant.
+            //
+            // Symptôme rapporté : "l'appelé se connecte mais pas l'appelant".
+            // Cause racine : le caller envoyait son RTP mais ne recevait pas
+            // celui du callee (NAT asymétrique, codec mismatch, ou simplement
+            // 1ère seconde après ICE négociée — pas encore de packets entrants).
+            // L'ancien RTP gate exigeait ≥5 inbound packets pour transitionner
+            // à .connected, ce qui pour le caller pouvait ne JAMAIS arriver
+            // → caller restait en .connecting indéfiniment pendant que le
+            // callee (qui recevait bien le RTP du caller) passait à .connected.
+            //
+            // Nouvelle politique :
+            // - ICE connected = call établi du point de vue signaling → on
+            //   transitionne à .connected immédiatement
+            // - Le RTP gate continue de tourner en parallèle MAIS uniquement
+            //   pour informer la qualité (log debug si pas de RTP). Il
+            //   n'affecte plus le state machine
+            // - Si vraiment aucun RTP n'arrive jamais, l'utilisateur entend
+            //   du silence — c'est un signal métier (mute, mic off, network)
+            //   pas une raison de couper l'appel.
             switch self.callState {
             case .connecting:
-                // Phase 1 fix E6: ICE connected does not guarantee media flows.
-                // Poll stats every 2s up to 5 attempts (10s budget). Require
-                // ≥5 inbound RTP packets before declaring .connected. If no
-                // RTP after 10s, end with .failed("media path broken").
+                Logger.calls.info("[CallFSM] ICE connected — transition à .connected (RTP gate informational)")
+                self.transitionToConnected()
                 self.startRTPGatePolling()
             case .reconnecting:
-                Logger.calls.info("Reconnection successful — running RTP gate")
+                Logger.calls.info("Reconnection successful — transition à .connected")
+                self.transitionToConnected()
                 self.startRTPGatePolling()
             case .offering:
-                // Audit 2026-05-11 §B-Claim-3 — defensive recovery path.
-                // Normally handleRemoteAnswer transitions .offering → .connecting
-                // before ICE establishes. If that transition is missed (callId
-                // guard mismatch, setRemoteDescription throw inside the await,
-                // a re-entrant flow that left state at .offering), the call
-                // silently hangs in .offering with media flowing — the original
-                // outgoing-ring timeout was already cancelled, so there's no
-                // fallback. Treat ICE-connected on .offering as an implicit
-                // catch-up to .connecting and run the RTP gate so the user
-                // sees the call connect rather than spin until they cancel.
-                Logger.calls.warning("[CallFSM] ICE connected while state=.offering — recovering via RTP gate")
+                // ICE connected en .offering : handleRemoteAnswer n'a pas
+                // tourné mais ICE a réussi. Catch-up direct à .connected.
+                Logger.calls.warning("[CallFSM] ICE connected while state=.offering — direct catch-up à .connected")
                 self.callState = .connecting
+                self.transitionToConnected()
                 self.startRTPGatePolling()
             default:
                 Logger.calls.debug("[CallFSM] webRTCServiceDidConnect ignored in state \(String(describing: self.callState))")
@@ -1822,6 +1957,24 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
             .map { $0.portType.rawValue }
             .joined(separator: ",")
         Logger.calls.info("CallKit audio session activated; RTCAudioSession enabled (route=\(outputs), category=\(audioSession.category.rawValue), mode=\(audioSession.mode.rawValue))")
+
+        // Phase 1.5 — démarrer le ringback tone APRÈS que CallKit ait
+        // activé la session audio. Démarrer AVAudioPlayer avant ce point
+        // (comme le faisait `startCall` originel) activait implicitement
+        // la session en `.soloAmbient` (default iOS), ce qui pré-emptait
+        // la catégorie `.playAndRecord` de CallKit et empêchait CallKit
+        // de fire `didActivate` — déclenchant son timeout autonome ~3-5s
+        // (le « calls drop after 2-4 seconds » + « wont be a UI to host
+        // the call » sur simulateur).
+        // ⚠️ Sortie .ringing(isOutgoing:true) UNIQUEMENT : sur incoming le
+        // ringback caller-side n'a pas lieu (CallKit gère son propre
+        // ringtone via `ringtoneSound`).
+        Task { @MainActor [weak self] in
+            guard let manager = self?.manager else { return }
+            if case .ringing(isOutgoing: true) = manager.callState {
+                manager.startRingbackIfNeeded()
+            }
+        }
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {

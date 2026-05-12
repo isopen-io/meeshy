@@ -769,6 +769,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallToggleAudio(callId: String, enabled: Bool)
     func emitCallToggleVideo(callId: String, enabled: Bool)
     func emitCallEnd(callId: String)
+    func emitCallEndWithAck(callId: String) async -> Bool
     func emitCallHeartbeat(callId: String)
 }
 
@@ -1224,11 +1225,28 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Call Signaling Emission
 
-    public enum CallInitiateError: Error, Sendable {
+    public enum CallInitiateError: Error, Sendable, LocalizedError {
         case noSocket
         case timeout
         case serverError(String)
         case malformedResponse
+
+        // Conformance LocalizedError pour que les logs d'app et les UI surfaces
+        // exposent la cause réelle au lieu du fallback Swift "error N" peu
+        // discriminant (N étant l'index de case bridgé en NSError._code, qui
+        // peut différer entre les builds quand on ajoute/réordonne des cases).
+        public var errorDescription: String? {
+            switch self {
+            case .noSocket:
+                return "noSocket — MessageSocket non connecté lors de l'émission de call:initiate (vérifier login, connexion réseau, état du gateway)"
+            case .timeout:
+                return "timeout — Le gateway n'a pas répondu à call:initiate sous 10s (vérifier gateway up, latence réseau)"
+            case .serverError(let message):
+                return "serverError — Gateway a rejeté call:initiate: \(message)"
+            case .malformedResponse:
+                return "malformedResponse — La réponse ACK de call:initiate ne contient pas data.callId ou iceServers"
+            }
+        }
     }
 
     public struct CallInitiateAck: Sendable {
@@ -1295,6 +1313,17 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("call:leave", ["callId": callId])
     }
 
+    /// Émet `call:force-leave` pour la conversation donnée. Le gateway
+    /// nettoie alors toute trace d'appel actif où l'utilisateur courant
+    /// était participant (CallParticipant.leftAt = null) sans nécessiter
+    /// le callId — utile en pré-flight avant `call:initiate` pour purger
+    /// les zombies laissés par un crash, un kill app, ou un test antérieur
+    /// dont le cleanup gateway n'a pas tourné. Idempotent : no-op si pas
+    /// de zombie côté DB.
+    public func emitCallForceLeave(conversationId: String) {
+        socket?.emit("call:force-leave", ["conversationId": conversationId])
+    }
+
     public func emitCallSignal(callId: String, type: String, payload: [String: Any]) {
         var signal: [String: Any] = ["type": type]
         for (key, value) in payload { signal[key] = value }
@@ -1339,6 +1368,30 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitCallEnd(callId: String) {
         socket?.emit("call:end", ["callId": callId])
+    }
+
+    /// Variante avec ACK : émet `call:end` et attend confirmation du gateway
+    /// (max 3s). Le gateway accepte et broadcast `call:ended` à tous les
+    /// participants. Sans ACK le client ne sait pas si le peer a été notifié
+    /// — symptôme : l'appelé reste bloqué en `.connecting` ou `.connected`
+    /// alors que l'appelant a raccroché. Utiliser cette variante quand le
+    /// client a un cycle de vie immédiat (raccrocher = vouloir confirmation
+    /// avant de fermer le socket / quitter l'écran).
+    public func emitCallEndWithAck(callId: String) async -> Bool {
+        guard let socket else { return false }
+        return await withCheckedContinuation { continuation in
+            var resumed = false
+            socket.emitWithAck("call:end", ["callId": callId]).timingOut(after: 3) { items in
+                guard !resumed else { return }
+                resumed = true
+                if let response = items.first as? [String: Any],
+                   let success = response["success"] as? Bool {
+                    continuation.resume(returning: success)
+                } else {
+                    continuation.resume(returning: false)
+                }
+            }
+        }
     }
 
     public func emitCallHeartbeat(callId: String) {
