@@ -1,6 +1,7 @@
 import Foundation
 import QuartzCore
 import CoreMedia
+import Metal
 import PencilKit
 import UIKit
 import MeeshySDK
@@ -85,13 +86,22 @@ public enum StoryRenderer {
     ///     frame are reused as-is instead of rebuilt. Defaults to `nil` for the
     ///     live composer/viewer canvas which rebuilds every layer each call.
     /// - Returns: A root `CALayer` whose sublayers represent the slide's items.
+    /// Optional closure that the caller (live composer or AVFoundation compositor)
+    /// supplies to feed glass-background text layers a Metal texture snapshot of
+    /// the canvas region beneath them. Receives the layer's frame in render
+    /// coordinates and returns the cropped backdrop, or `nil` to fall back to the
+    /// `CAFilter` blur path inside `StoryGlassBackdropLayer`. See spec
+    /// `docs/superpowers/specs/2026-05-12-story-glass-backdrop-snapshot-design.md`.
+    public typealias BackdropProvider = (CGRect) -> MTLTexture?
+
     @MainActor
     public static func render(slide: StorySlide,
                               into geometry: CanvasGeometry,
                               at time: CMTime,
                               mode: RenderMode,
                               languages: [String] = [],
-                              cache: StoryRendererCache? = nil) -> CALayer {
+                              cache: StoryRendererCache? = nil,
+                              backdropProvider: BackdropProvider? = nil) -> CALayer {
         let root = CALayer()
         root.frame = CGRect(origin: .zero, size: geometry.renderSize)
         root.anchorPoint = CGPoint(x: 0, y: 0)
@@ -117,6 +127,21 @@ public enum StoryRenderer {
             } else {
                 layer = renderItem(item, into: geometry, at: time, mode: mode, languages: languages)
             }
+
+            // Feed glass-style text layers with a backdrop snapshot when the
+            // caller supplies a provider. The provider receives the layer's
+            // frame in render space so it can crop its canvas-wide snapshot.
+            // Falls back to the `CAFilter` path inside StoryGlassBackdropLayer
+            // when provider is nil or returns nil for this region.
+            if let provider = backdropProvider,
+               let textLayer = layer as? StoryTextLayer,
+               let text = item as? StoryTextObject,
+               case .glass = text.resolvedBackgroundStyle {
+                if let backdrop = provider(layer.frame) {
+                    textLayer.setBackdropTexture(backdrop)
+                }
+            }
+
             // A cached layer might still be attached to the previous frame's
             // root layer. addSublayer auto-detaches before re-attaching, so
             // this is safe and cheap (CALayer parenting is O(1) bookkeeping).
