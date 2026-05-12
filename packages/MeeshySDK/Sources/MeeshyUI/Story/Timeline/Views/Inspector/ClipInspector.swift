@@ -3,6 +3,17 @@ import SwiftUI
 /// Per-clip editor surface. Stateless on its own — receives a snapshot, emits
 /// callbacks for every field commit. The owning container (`QuickTimelineView`
 /// or `ProTimelineView`) wires those callbacks back to `TimelineViewModel`.
+///
+/// ### State sync contract
+/// The inspector holds local `@State` for the slider/toggle values to keep
+/// in-flight gestures smooth (a single drag must not be interrupted by an
+/// external snapshot push). However, when the upstream `clip` changes for
+/// non-edit reasons — most importantly **undo/redo** — the local `@State`
+/// MUST resync to the new snapshot, otherwise the UI shows stale values.
+///
+/// SwiftUI does NOT re-run `init` when only `clip` changes (the view's
+/// identity is preserved), so the resync is implemented via `.onChange(of:)`
+/// inside `body`. See `test_inspector_clipChanges_stateResyncs`.
 public struct ClipInspector: View {
 
     // MARK: - Snapshot
@@ -81,6 +92,21 @@ public struct ClipInspector: View {
         onVolumeChanged(min(1, max(0, value)))
     }
 
+    /// Test-only read of the current local `@State` values. Used by
+    /// `ClipInspector_StateSyncTests` to verify that `.onChange(of: clip)`
+    /// successfully resyncs after an external snapshot change (e.g. undo).
+    public struct _StateProbe: Sendable, Equatable {
+        public let volume: Float
+        public let fadeIn: Float
+        public let fadeOut: Float
+        public let loop: Bool
+        public let background: Bool
+    }
+
+    public var _stateSnapshot: _StateProbe {
+        _StateProbe(volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, loop: loop, background: background)
+    }
+
     public static func formatTime(seconds: Float) -> String {
         let total = max(0, seconds)
         let minutes = Int(total) / 60
@@ -105,6 +131,13 @@ public struct ClipInspector: View {
         .frame(maxWidth: presentation == .popover ? 360 : .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(String(localized: "story.timeline.a11y.clip.video", bundle: .module))
+        .onChange(of: clip) { _, newClip in
+            volume = newClip.volume
+            fadeIn = newClip.fadeInDuration
+            fadeOut = newClip.fadeOutDuration
+            loop = newClip.isLooping
+            background = newClip.isBackground
+        }
     }
 
     // MARK: - Sub-views
