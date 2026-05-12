@@ -151,21 +151,30 @@ extension StoryToolMode {
 
 ### Machine
 
-```swift
-struct BandStateMachine: Equatable {
-  private(set) var state: BandState = .hidden
-  private var lastCategoryBeforeFormat: Category? = nil
+**Isolation** : le SwiftPM target `MeeshyUI` est configuré avec `defaultIsolation(MainActor.self)` (cf. `Package.swift`). Sans annotation explicite, le struct et ses méthodes héritent `@MainActor`. Comme la machine est un **type valeur pur** sans dépendance UI, on marque tous ses membres `nonisolated` pour permettre la testabilité Swift Testing sans `@MainActor` (cf. `feedback_meeshyui_default_isolation.md`).
 
-  mutating func tapFAB(_ category: Category) { ... }
-  mutating func swipeUpOnFAB(_ category: Category) { ... }   // force open tiles
-  mutating func swipeDownOnBand() { ... }                     // -> .hidden
-  mutating func swipeHorizontalOnBand() { ... }               // swap category, no-op if .toolPanel
-  mutating func tapTile(_ tool: StoryToolMode) { ... }        // -> .toolPanel(tool)
-  mutating func openFormatPanel(_ kind: ElementKind, id: String) { ... }
-  mutating func closeFormatPanel() { ... }                    // restore previous category or .hidden
-  mutating func backFromToolPanel() { ... }                   // -> .tiles(tool.category)
+```swift
+nonisolated struct BandStateMachine: Equatable {
+  nonisolated private(set) var state: BandState = .hidden
+  nonisolated private var lastCategoryBeforeFormat: Category? = nil
+
+  nonisolated mutating func tapFAB(_ category: Category) { ... }
+  nonisolated mutating func swipeUpOnFAB(_ category: Category) { ... }   // force open tiles
+  nonisolated mutating func swipeDownOnBand() { ... }                     // -> .hidden
+  nonisolated mutating func swipeHorizontalOnBand() { ... }               // swap category, no-op if .toolPanel
+  nonisolated mutating func tapTile(_ tool: StoryToolMode) { ... }        // -> .toolPanel(tool)
+  nonisolated mutating func openFormatPanel(_ kind: ElementKind, id: String) { ... }
+  nonisolated mutating func closeFormatPanel() { ... }                    // restore previous category or .hidden
+  nonisolated mutating func backFromToolPanel() { ... }                   // -> .tiles(tool.category)
+  nonisolated mutating func reset() { ... }                                // -> .hidden + clear last category
 }
+
+// Equatable conformance dans une extension nonisolated (pas dans le struct,
+// défaut isolation peut interférer avec la synthesis Equatable automatique).
+nonisolated extension BandStateMachine {}
 ```
+
+`BandStateTests.swift` (Swift Testing) NE doit PAS avoir `@MainActor` au niveau de la suite. Toutes les `@Test func` sont synchrones et appellent les méthodes `nonisolated` directement.
 
 ### Table de transitions
 
@@ -202,11 +211,48 @@ struct BandStateMachine: Equatable {
 //   (le clavier remplace les FABs en attention)
 ```
 
+### Reset sur changement de slide
+
+`ComposerControlsLayer` observe `viewModel.currentSlideIndex` et **réinitialise complètement** la machine d'états quand l'index change (un swipe vers une autre slide ferme tous les panels) :
+
+```swift
+.onChange(of: viewModel.currentSlideIndex) { _, _ in
+  bandStateMachine.reset()           // -> .hidden
+  areFabsVisible = true                // ramener les FABs
+}
+```
+
+Justification : un `formatPanel(.text, id: "abc")` ouvert sur le slide N référence un texte qui n'existe pas dans le slide M. Sans reset, on présenterait des contrôles format sur un élément introuvable. Test obligatoire (`StoryComposerView_ResetStateTests.swift` étendu).
+
 ### Compteurs / badges
 
 - **FAB Contenu** = `mediaCount + audioCount + textCount + (hasDrawing ? 1 : 0)`
 - **FAB Effets** = `(filterActive ? 1 : 0) + (timelineHasCustomizations ? 1 : 0)`
-- À ajouter au VM : `var timelineHasCustomizations: Bool` (computed sur `timelineViewModel.timeline` : keyframes non vides, transition non default, duration non default)
+
+**Changement de comportement vs actuel** : le `ContextualToolbar` actuel (l.164) calcule `tabBadge(.effets) = (selectedFilter != nil ? 1 : 0)` sans compter les customisations timeline. Le nouveau badge en tient compte. C'est intentionnel — la timeline a sa propre tuile, son badge doit refléter son état.
+
+**Position de la computed property** : `timelineHasCustomizations` est **ajoutée sur le `StoryComposerViewModel` principal** (PAS sur `StoryTimelineViewModel`), car le badge est calculé au niveau composer, pas timeline. Implémentation :
+
+```swift
+@MainActor extension StoryComposerViewModel {
+  var timelineHasCustomizations: Bool {
+    let tl = timelineViewModel.timeline
+    return !tl.keyframes.isEmpty
+        || tl.transition != .default
+        || tl.duration != StoryTimeline.defaultDuration
+  }
+}
+```
+
+**Risque re-render** : en `@Observable` (Swift 6 Observation), lire `timelineViewModel.timeline` dans une computed property tracking trigger un re-render à chaque mutation timeline. Pendant un scrub timeline (drag d'une keyframe), cela re-render les badges FAB ~60 fois/sec. Mitigation : envelopper dans une `@Observable`-friendly transformation qui ne mute que sur les transitions de booléen :
+
+```swift
+// Dans ComposerFABColumn : observer un wrapper Bool, pas le timeline complet
+@Bindable var viewModel: StoryComposerViewModel
+let effetsBadge: Int  // injecté en let, pas @Bindable, par le parent
+```
+
+Le parent (`ComposerControlsLayer`) calcule `effetsBadge = (...) + (viewModel.timelineHasCustomizations ? 1 : 0)` et le passe en `let` à `ComposerFABColumn` (Equatable). Re-render uniquement quand le booléen change.
 
 ---
 
@@ -258,9 +304,23 @@ struct BandStateMachine: Equatable {
 
 ### Top bar (changement minimal)
 
+L'existant (l.178-180 de `StoryComposerView.swift`) est :
 ```swift
-private var showTopBar: Bool { !isCanvasZoomed && areFabsVisible }
+private var showTopBar: Bool {
+    !viewModel.isCanvasZoomed || viewModel.activeTool != nil || viewModel.selectedElementId != nil
+}
 ```
+
+Devient (préserve les fallbacks pour éléments sélectionnés / tool actif) :
+```swift
+private var showTopBar: Bool {
+    (!viewModel.isCanvasZoomed && areFabsVisible)
+    || viewModel.activeTool != nil
+    || viewModel.selectedElementId != nil
+}
+```
+
+Justification : un utilisateur qui édite (tool actif ou élément sélectionné) doit conserver l'accès au top bar (publier, etc.) même si les FABs sont temporairement cachés (swipe ↓). Le binding `areFabsVisible` ne contrôle que le cas "canvas pur sans édition en cours".
 
 ### Z-index (bas en haut)
 
@@ -299,8 +359,9 @@ private var showTopBar: Bool { !isCanvasZoomed && areFabsVisible }
 
 1. **Tap canvas vs tap élément** : hit-test CALayer absorbe le tap sur l'élément → pas de propagation au background. Garde-fou existant.
 2. **Swipe bandeau vs sliders horizontaux** : swipe ←→ désactivé en `.toolPanel` (où des sliders existent). Activé uniquement en `.tiles`.
-3. **`UIPanGestureRecognizer` vs `UITapGestureRecognizer`** : `minimumNumberOfTouches: 1`, `panGesture.shouldRequireFailureOf(tapGesture)` pour que tap < pan.
+3. **`UIPanGestureRecognizer` vs `UITapGestureRecognizer` sur FAB** : `minimumNumberOfTouches: 1`, `panGesture.shouldRequireFailureOf(tapGesture)` pour que tap < pan.
 4. **Pas de geste swipe sur canvas** (pour éviter conflit avec pinch/pan). Toggle FABs = tap simple uniquement.
+5. **`UIPanGestureRecognizer` FAB vs SwiftUI pinch/pan canvas** : le `UIPanGestureRecognizer` est attaché au **`UIView` wrapper du FAB** (pas au canvas). Le FAB wrapper a `isUserInteractionEnabled = true` et `clipsToBounds = false` ; il absorbe les touches qui commencent dans son hit-rect, empêchant la propagation au canvas en-dessous. Les gestes SwiftUI `MagnificationGesture` / `DragGesture` du canvas ne se déclenchent pas quand le touch initial atterrit sur le FAB (priorité top-down de UIKit hit-test). À vérifier device : si le canvas pinch démarre avant que le FAB absorbe, ajouter `panGesture.delegate = self` avec `gestureRecognizer(_:shouldRecognizeSimultaneouslyWith:) → false` explicite pour bloquer les canvas gestures pendant l'animation FAB.
 
 ### Haptics
 
@@ -348,24 +409,53 @@ override func contextMenuInteraction(_ interaction: UIContextMenuInteraction,
 
 ### Nouvelles méthodes du ViewModel
 
+**Important** : le VM expose déjà `bringToFront(id:)` et `sendToBack(id:)` (l.966 et l.973 de `StoryComposerViewModel.swift`). Le label est `id:`, pas `elementId:`. On conserve la convention existante pour ne pas casser `StoryComposerZIndexTests.swift`.
+
 ```swift
 @MainActor extension StoryComposerViewModel {
-  func bringForward(elementId: String)
-  func sendBackward(elementId: String)
-  func bringToFront(elementId: String)
-  func sendToBack(elementId: String)
-  func duplicateElement(elementId: String)  // clone +20,+20, new UUID
-  func deleteElement(elementId: String)
+  // Existantes (l.966, l.973) — laissées intactes :
+  // func bringToFront(id: String)
+  // func sendToBack(id: String)
+
+  // Nouvelles, même label `id:` :
+  func bringForward(id: String)           // swap avec l'élément immédiatement au-dessus
+  func sendBackward(id: String)           // swap avec l'élément immédiatement en dessous
+  func duplicateElement(id: String)        // clone +20,+20, new UUID, zIndex = nextZIndex
+  func deleteElement(id: String)           // remove de l'array correspondant + recompute layer order
 }
 ```
 
-Le z-index est déjà géré sur `StoryMediaObject.zIndex`, `StoryTextObject.zIndex`, `StoryStickerObject.zIndex` (cf. tests existants `StoryComposerZIndexTests.swift` à étendre).
+**Algorithme `bringForward` / `sendBackward` (gestion des gaps)** :
+
+Le `zIndex` peut avoir des gaps (après deletions). Pour `bringForward(id:)` :
+1. Collecter tous les éléments du slide avec leur zIndex (medias + texts + audios + stickers)
+2. Trier par zIndex ascendant
+3. Trouver l'index `i` du target ; si `i == count - 1` → no-op (déjà au top)
+4. Swap zIndex du target avec celui de `i+1` via `persistZIndex` existant
+5. Idem inversé pour `sendBackward`
+
+Implémentation détaillée à produire en Phase 3 ; tests gap-filling obligatoires (cf. Section 11).
+
+Le z-index est déjà géré sur `StoryMediaObject.zIndex`, `StoryTextObject.zIndex`, `StoryAudioPlayerObject.zIndex`, `StoryStickerObject.zIndex` (cf. tests existants `StoryComposerZIndexTests.swift` à étendre).
 
 ### Double-tap → édition
 
-Câblage existant (`onItemDoubleTapped` l.982-993 de `StoryComposerView.swift`) :
-
+**Important — patch d'un callback existant, pas nouvelle implémentation** : le callback `onItemDoubleTapped` est déjà câblé (l.982-993 de `StoryComposerView.swift`) et fait actuellement :
 ```swift
+// Existant — à patcher en Phase 4
+onItemDoubleTapped: { id, kind in
+  viewModel.selectedElementId = id
+  switch kind {
+  case .text:    viewModel.activeTool = .text
+  case .media:   openMediaEditor(elementId: id)
+  case .sticker: break
+  }
+}
+```
+
+Phase 4 modifie ce closure pour router vers la machine d'états du bandeau :
+```swift
+// Nouveau — Phase 4 cutover
 onItemDoubleTapped: { id, kind in
   viewModel.selectedElementId = id
   switch kind {
@@ -397,7 +487,48 @@ onItemDoubleTapped: { id, kind in
 - Color : 8 swatches indigo/coral/success/warning/info + 1 bouton `+` pour `UIColorPickerViewController` natif
 - Alignment : 4 boutons left/center/right/justify
 
-Implémentation : `UIViewRepresentable` wrappant un `UITextView` avec `inputAccessoryView` = `UIHostingController(rootView: ComposerTextFormatBand)` view.
+**Pattern d'implémentation prescrit** (pour éviter les pièges connus de `UIHostingController` comme `inputAccessoryView`) :
+
+```swift
+// Wrapper UIViewRepresentable autour d'un UITextView custom
+final class ComposerTextEditingView: UITextView {
+    private lazy var accessoryHost: UIHostingController<ComposerTextFormatBand> = {
+        let host = UIHostingController(rootView: ComposerTextFormatBand(...))
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        host.sizingOptions = .intrinsicContentSize        // iOS 16+ : taille auto sans relayout buggy
+        host.view.backgroundColor = .clear
+        // Désactiver la safe-area pour éviter le double-inset au-dessus du clavier.
+        // Sans ça, `UIHostingController` reporte une taille incluant la safe area
+        // du superview et la barre est rendue avec un padding fantôme.
+        if #available(iOS 16.4, *) {
+            host.safeAreaRegions = []
+        } else {
+            host._disableSafeArea = true                  // private API mais widely-used fallback
+        }
+        return host
+    }()
+
+    override var inputAccessoryView: UIView? {
+        let wrapper = UIView()
+        wrapper.translatesAutoresizingMaskIntoConstraints = false
+        wrapper.addSubview(accessoryHost.view)
+        NSLayoutConstraint.activate([
+            accessoryHost.view.leadingAnchor.constraint(equalTo: wrapper.leadingAnchor),
+            accessoryHost.view.trailingAnchor.constraint(equalTo: wrapper.trailingAnchor),
+            accessoryHost.view.topAnchor.constraint(equalTo: wrapper.topAnchor),
+            accessoryHost.view.bottomAnchor.constraint(equalTo: wrapper.bottomAnchor),
+            wrapper.heightAnchor.constraint(equalToConstant: 50)  // height explicite, sinon collapse à 0
+        ])
+        return wrapper
+    }
+}
+```
+
+Points critiques :
+- `sizingOptions = .intrinsicContentSize` (iOS 16+) pour que `UIHostingController` propage correctement sa taille
+- Height constraint explicite (50pt) sur le wrapper, sinon `UIHostingController.view` report `.zero` et la barre disparaît
+- `safeAreaRegions = []` (iOS 16.4+) ou `_disableSafeArea = true` (pre-16.4) pour éviter le double-inset au-dessus du clavier
+- Si iOS 17.x présente encore des bugs (auto-resize lag), fallback total : remplacer `UIHostingController` par un `UIStackView` UIKit pur pour cette barre (le contenu est suffisamment simple : font picker + B/I/U + 8 colors + 4 alignments)
 
 ### Panel format média (bandeau bas standard)
 
@@ -499,8 +630,11 @@ Un futur refactor (hors scope) pourra extraire ces bindings dans un `ComposerEph
 ### Phase 4 — Cutover
 
 - Composer body : remplacer `bottomOverlay` par `ComposerControlsLayer`, mettre à jour `showTopBar` computed
+- **Patcher `onItemDoubleTapped`** (l.982-993) : router vers `bandStateMachine.openFormatPanel(...)` au lieu de `viewModel.activeTool = .text` / `openMediaEditor(elementId:)`
 - **Supprimer** : `ContextualToolbar.swift` (179 lignes), `bottomOverlay` (l.931-956), `activeToolPanel` (l.1089-1108)
+- Ajouter `onChange(of: viewModel.currentSlideIndex)` qui appelle `bandStateMachine.reset()` + `areFabsVisible = true`
 - Mettre à jour `StoryComposerView_ResetStateTests.swift` (le reset doit clear `bandStateMachine.state = .hidden`)
+- **Note sécurité — sheets non affectées** : les `fullScreenCover(item: $audioEditorItem)`, `sheet(item: $mediaAudioEditorItem)`, `sheet(isPresented: $showVoiceRecorderSheet)`, `sheet(isPresented: $viewModel.isTimelineVisible)` sont attachées au root `ZStack` du body (l.324-368), **pas** à `bottomOverlay`. Leur présentation continue de fonctionner après suppression de `bottomOverlay`.
 - **Gate** : tests passent (~50-60 nouveaux), build app passe, smoke tests manuels OK (checklist Section 12)
 
 Chaque phase = une PR séparée. Phase 4 est le seul cutover risqué (état mixte interdit).
@@ -514,15 +648,38 @@ Chaque phase = une PR séparée. Phase 4 est le seul cutover risqué (état mixt
 1. **`BandStateTests.swift`** (Swift Testing, MeeshyUITests) — ~15 tests pure model
 2. **`ComposerControlsLayerTests.swift`** (XCTest @MainActor, MeeshyUITests) — ~15 tests intégration layer ↔ VM
 3. **`ComposerLayerActionsTests.swift`** (XCTest, MeeshyUITests) — ~10 tests z-order, duplicate, delete
-4. **`ComposerGestureRoutingTests.swift`** (XCTest, MeeshyUITests) — ~10 tests conflits gestes (abstraits)
+
+   Inclure **cas limites pour `bringForward` / `sendBackward`** (gap-filling) :
+   - `test_bringForward_atTop_isNoOp`
+   - `test_sendBackward_atBottom_isNoOp`
+   - `test_bringForward_withGapsInZIndex_swapsWithNextHigher` (après delete + new)
+   - `test_sendBackward_acrossKinds_swapsBetweenTextAndMedia` (ordre mixte)
+   - `test_bringForward_persistsThroughSlideSwitch` (intègre `persistZIndex` existant)
+4. **`ComposerGestureRoutingTests.swift`** (XCTest, MeeshyUITests) — ~10 tests routing gestes
+
+**Clarification "tests gestes"** : on ne simule PAS les `UIPanGestureRecognizer` réels (impossible sans `UIWindow` + simulator + event queue). On teste le **routing logique** : étant donné un callback de geste synthétisé (ex: `onSwipeDownOnBand()`, `onSwipeUpOnFAB(.contenu)`), la machine d'états aboutit-elle à l'état attendu ? Cela valide les **handlers**, pas la reconnaissance gesture elle-même. La reconnaissance gesture est vérifiée manuellement via la checklist QA Section 12.
+
+```swift
+// Exemple : test du handler, pas du gesture recognizer
+func test_swipeDownOnBand_inToolPanel_returnsToTiles() {
+  var sm = BandStateMachine()
+  sm.tapFAB(.contenu)
+  sm.tapTile(.media)
+  XCTAssertEqual(sm.state, .toolPanel(.media))
+  sm.swipeDownOnBand()
+  XCTAssertEqual(sm.state, .tiles(.contenu))
+}
+```
 
 **Total nouveau** : ~50 tests unitaires.
 
 ### Tests à étendre (non régression)
 
 - `StoryComposerViewModelTests.swift` — assurer signature `selectTool` inchangée
-- `StoryComposerZIndexTests.swift` — couvrir nouvelles méthodes z-order
-- `StoryComposerView_ResetStateTests.swift` — `bandStateMachine` reset à `.hidden` après publish/reset
+- `StoryComposerZIndexTests.swift` — couvrir nouvelles méthodes z-order (signature `id:`, pas `elementId:` — cohérent avec existant)
+- `StoryComposerView_ResetStateTests.swift` :
+  - `bandStateMachine` reset à `.hidden` après publish/reset
+  - `bandStateMachine` reset à `.hidden` **après changement de `currentSlideIndex`** (cas critique formatPanel ouvert qui référence un élément du slide précédent)
 
 ### Mocks
 
