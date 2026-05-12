@@ -27,7 +27,11 @@ public final class StoryStickerRasterizer: @unchecked Sendable {
     public static let shared = StoryStickerRasterizer()
 
     /// Default upper bound on cached glyphs. See type-level doc for sizing.
-    public static let defaultCountLimit: Int = 100
+    /// `nonisolated` so it can be referenced as a default value from the
+    /// `nonisolated init(countLimit:)` below — under MeeshyUI's
+    /// `defaultIsolation(MainActor)`, an unmarked static `let` is implicitly
+    /// MainActor-isolated and rejected by the compiler in nonisolated context.
+    public nonisolated static let defaultCountLimit: Int = 100
 
     private nonisolated(unsafe) let cache: NSCache<NSString, CGImage>
     private nonisolated(unsafe) var memoryWarningObserver: NSObjectProtocol?
