@@ -102,18 +102,26 @@ public struct AudioClipBar: View, Equatable {
 
     private var waveform: some View {
         GeometryReader { geo in
-            let count = max(waveformSamples.count, 1)
-            let stepX = geo.size.width / CGFloat(count)
-            HStack(alignment: .center, spacing: 1) {
-                ForEach(0..<count, id: \.self) { i in
-                    let amp = CGFloat(waveformSamples[i])
-                    Capsule()
-                        .fill(Color.white.opacity(0.85))
-                        .frame(width: max(1, stepX - 1),
-                               height: max(2, amp * (geo.size.height - 6)))
+            // Empty waveform → render nothing. Previously this used
+            // `max(samples.count, 1)` + ForEach(0..<count) which then
+            // dereferenced samples[0] and crashed with
+            // 'Index out of range' on any audio clip that hadn't yet
+            // had its waveform extracted. iterating samples.indices
+            // is correct for any count including 0.
+            if !waveformSamples.isEmpty {
+                let count = waveformSamples.count
+                let stepX = geo.size.width / CGFloat(count)
+                HStack(alignment: .center, spacing: 1) {
+                    ForEach(waveformSamples.indices, id: \.self) { i in
+                        let amp = CGFloat(waveformSamples[i])
+                        Capsule()
+                            .fill(Color.white.opacity(0.85))
+                            .frame(width: max(1, stepX - 1),
+                                   height: max(2, amp * (geo.size.height - 6)))
+                    }
                 }
+                .frame(maxHeight: .infinity, alignment: .center)
             }
-            .frame(maxHeight: .infinity, alignment: .center)
         }
         .padding(.horizontal, 3)
         .drawingGroup()   // SOTA P7: bake to Metal layer, skip re-stroke when props unchanged
