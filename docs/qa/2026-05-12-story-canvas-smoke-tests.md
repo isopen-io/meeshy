@@ -306,6 +306,30 @@ Tant que ce sprint n'est pas exécuté : ne pas chercher de bouton "Export" ou d
 
 **Attendu** : cohérence visuelle complète entre story chromes et call menu
 
+### 13. Video export end-to-end
+
+**Objectif** : valider le wiring publish→exporter livré au Sprint 8 (P1..P7, spec `docs/superpowers/specs/2026-05-12-story-publish-exporter-wiring-design.md`). Remplace la limitation "non testable depuis l'UI" notée en haut de ce document.
+
+**Setup** : story avec background video (idéalement 5-10s clip MP4 dans la photothèque)
+
+**Steps** :
+1. Composer → Importer video → background activé
+2. Publish (tap Send)
+3. Observer phase chain dans StoryTrayView :
+   - "Préparation…" (.preparingMedia)
+   - "Export en cours… X%" (.exporting) [NEW]
+   - "Upload en cours…" (.uploadingMedia)
+   - "Publication…" (.publishingStory)
+   - "Terminé" (.completed)
+4. Vérifier Console.app : log `Logger.stories` "export.complete duration=...s"
+5. Ouvrir la story publiée depuis le feed → vérifier rendu identique au composer preview (background video + overlays)
+
+**Pass criteria** :
+- ✅ Phase .exporting visible >0.5s pour story 5s
+- ✅ Progress numérique progresse 0→100%
+- ✅ MP4 généré (vérifier mediaUrl Network Inspector)
+- ✅ Story publiée play correctement
+
 ---
 
 ## Reporting
@@ -326,6 +350,7 @@ Après exécution, remplir :
 | 10 — Opening | | | | ☐ | |
 | 11 — Glass text | | | | ☐ | |
 | 12 — Glass chromes | | | | ☐ | |
+| 13 — Video export | | | | ☐ | |
 
 Pour un fail : créer une issue GitHub avec `story-canvas` + `qa-smoke-test` labels, attacher screenshot + crash log (`xcrun simctl spawn 30BF... log show --last 5m --predicate 'process == "Meeshy"'`).
 
