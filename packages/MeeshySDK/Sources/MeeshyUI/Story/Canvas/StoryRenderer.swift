@@ -85,6 +85,13 @@ public enum StoryRenderer {
     ///     When non-nil, item layers whose render signature matches the previous
     ///     frame are reused as-is instead of rebuilt. Defaults to `nil` for the
     ///     live composer/viewer canvas which rebuilds every layer each call.
+    ///   - contentsScale: Pixel density applied to the root layer and to the
+    ///     persisted-drawing rasterization. Live composer/viewer leaves this at
+    ///     the device default (`UIScreen.main.scale`) so the on-screen canvas
+    ///     stays crisp. Export callers (`StoryAVCompositor`) MUST pass `1.0` so
+    ///     the rendered pixel buffer matches the design-space resolution
+    ///     (1080×1920) and does not get upsampled to 3× on devices with a 3×
+    ///     screen scale.
     /// - Returns: A root `CALayer` whose sublayers represent the slide's items.
     /// Optional closure that the caller (live composer or AVFoundation compositor)
     /// supplies to feed glass-background text layers a Metal texture snapshot of
@@ -101,11 +108,12 @@ public enum StoryRenderer {
                               mode: RenderMode,
                               languages: [String] = [],
                               cache: StoryRendererCache? = nil,
-                              backdropProvider: BackdropProvider? = nil) -> CALayer {
+                              backdropProvider: BackdropProvider? = nil,
+                              contentsScale: CGFloat = UIScreen.main.scale) -> CALayer {
         let root = CALayer()
         root.frame = CGRect(origin: .zero, size: geometry.renderSize)
         root.anchorPoint = CGPoint(x: 0, y: 0)
-        root.contentsScale = UIScreen.main.scale
+        root.contentsScale = contentsScale
 
         let allItems = collectItems(from: slide)
         for item in allItems.sorted(by: { $0.zIndex < $1.zIndex }) {
@@ -158,10 +166,10 @@ public enum StoryRenderer {
             drawingLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
             let img = drawing.image(
                 from: CGRect(origin: .zero, size: CanvasGeometry.designSize),
-                scale: UIScreen.main.scale
+                scale: contentsScale
             )
             drawingLayer.contents = img.cgImage
-            drawingLayer.contentsScale = UIScreen.main.scale
+            drawingLayer.contentsScale = contentsScale
             drawingLayer.zPosition = 9999
             root.addSublayer(drawingLayer)
         }
@@ -185,12 +193,12 @@ public enum StoryRenderer {
         let t = CMTimeGetSeconds(time)
         let start = item.startTime ?? 0
         let end = (item.duration.map { start + $0 }) ?? .infinity
-        // Reduce Motion: sharp visibility cut, no fadeIn/fadeOut interpolation
-        // (fade interpolation lands in Phase 3 with CAAnimation; this branch is
-        // structurally future-proof so no diff is needed when fades arrive).
-        if UIAccessibility.isReduceMotionEnabled {
-            return t >= start && t < end
-        }
+        // TODO: Reduce Motion — implement no-fade branch when CAAnimation fades are
+        // added. Today this method only decides visibility (sharp on/off); fade
+        // interpolation lives in the per-layer animation path that will land with
+        // Phase 3 keyframe fades. When that path arrives, gate fade attachment on
+        // `UIAccessibility.isReduceMotionEnabled` and keep this visibility check
+        // unchanged.
         return t >= start && t < end
     }
 

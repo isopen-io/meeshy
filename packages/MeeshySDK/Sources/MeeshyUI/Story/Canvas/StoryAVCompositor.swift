@@ -194,6 +194,11 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                                   mode: .play,
                                                   languages: [])
 
+        // Export path: pin `contentsScale` to 1.0 so the render output stays
+        // 1:1 with the design pixel grid (e.g. 1080×1920) instead of being
+        // upsampled by `UIScreen.main.scale` (3× on Pro devices), which would
+        // produce a 3240×5760 raster fed back through a 1080×1920 pixel
+        // buffer and sub-sample text into the final MP4.
         let layer = StoryRenderer.render(slide: slide,
                                           into: geometry,
                                           at: time,
@@ -202,7 +207,8 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                           cache: cache,
                                           backdropProvider: { frame in
                                               backdropCapture.cropRegion(frame)
-                                          })
+                                          },
+                                          contentsScale: 1.0)
 
         CVPixelBufferLockBaseAddress(buffer, [])
         defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
