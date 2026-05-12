@@ -67,6 +67,19 @@ public final class StoryCanvasUIView: UIView {
     /// media editor sheet (legacy `onEditText` / `onEditMedia` UX parity).
     public var onItemDoubleTapped: ((String, CanvasItemKind) -> Void)?
 
+    /// Fired exactly once per slide rebuild when the background media has
+    /// finished loading (image bytes decoded into `contents`, video transitioned
+    /// to `.readyToPlay`, or synchronous color/gradient applied). Item layers
+    /// are already built by the time `rebuildLayers()` returns, so the
+    /// background is the only async gate; once it is settled the slide is
+    /// visually complete and the reader's slide-duration timer is safe to
+    /// start (see `StoryReaderTimerController`).
+    ///
+    /// The callback is `@MainActor` because all KVO callbacks below are
+    /// dispatched onto the main run loop; using a `nonisolated` closure type
+    /// would silently strand the caller off the main actor on Swift 6.
+    public var onContentReady: (@MainActor () -> Void)?
+
     // MARK: - Internal layers
 
     private let rootLayer = CALayer()
@@ -87,6 +100,31 @@ public final class StoryCanvasUIView: UIView {
     /// items exist on the slide the capture is a no-op (single boolean scan).
     /// See `docs/superpowers/specs/2026-05-12-story-glass-backdrop-snapshot-design.md`.
     private let backdropCapture = StoryBackdropCapture()
+
+    // MARK: - Content readiness tracking
+
+    /// `true` after `onContentReady` has fired for the current background
+    /// state. Reset on every slide change (via `slide.didSet` → `rebuildLayers`)
+    /// and on every `setReaderContext` so re-keying replays the wait.
+    private var contentReadyFired: Bool = false
+
+    /// KVO token watching `backgroundLayer.contentLayer.contents` while an
+    /// image background is loading. Held until the real bytes land or the
+    /// background is replaced. `NSKeyValueObservation` invalidates on deinit
+    /// so there is no manual `invalidate()` requirement on dealloc.
+    private var imageContentsObserver: NSKeyValueObservation?
+
+    /// KVO token watching `avPlayer.currentItem.status` while a video
+    /// background is preparing. Released when the player reaches
+    /// `.readyToPlay` or the background is replaced.
+    private var videoStatusObserver: NSKeyValueObservation?
+
+    /// `CGImage` captured the moment the ThumbHash placeholder was assigned
+    /// to `backgroundLayer.contentLayer.contents`. Used to distinguish
+    /// "still showing the placeholder" from "real bitmap landed" — the
+    /// `imageContentsObserver` only fires `onContentReady` once `contents`
+    /// transitions to a `CGImage` that is not this reference.
+    private weak var thumbHashPlaceholderRef: AnyObject?
 
     // MARK: - Gestures
 
@@ -529,6 +567,7 @@ public final class StoryCanvasUIView: UIView {
         }
 
         updateFilterLayer()
+        scheduleContentReadyEvaluation(for: bgKind)
     }
 
     /// Inserts, updates, or removes the `StoryFilteredLayer` overlay driven by
@@ -549,6 +588,107 @@ public final class StoryCanvasUIView: UIView {
         filteredLayer?.frame = CGRect(origin: .zero, size: geometry.renderSize)
         filteredLayer?.kind = kind
         filteredLayer?.intensity = intensity
+    }
+
+    // MARK: - Content readiness (drives StoryReaderTimerController)
+
+    /// Decides when the background media for the current slide is fully
+    /// usable on screen and fires `onContentReady` exactly once per
+    /// `rebuildLayers()` cycle. Behaviour per `Kind`:
+    ///
+    /// - `.solidColor`, `.gradient` : ready immediately (synchronous draw).
+    ///   We post the callback through the next runloop tick to mirror the
+    ///   async paths and keep the contract observable from a single test
+    ///   `XCTestExpectation`.
+    /// - `.image` : `StoryBackgroundLayer.configure(...)` writes a ThumbHash
+    ///   placeholder synchronously, then `Task`-fetches the real bitmap and
+    ///   reassigns `contentLayer.contents`. We KVO-observe that property and
+    ///   fire when contents transitions from `nil`/`placeholder` to a real
+    ///   `CGImage`. A nil ThumbHash + first contents arrival also counts.
+    /// - `.video` : KVO `avPlayer.currentItem.status` and fire on
+    ///   `.readyToPlay`. If the player is already ready at observation time
+    ///   we fire on the next runloop tick.
+    ///
+    /// The observers are torn down on every entry so they cannot stack across
+    /// slides (slide swipe in the reader rebuilds layers on every keyframe).
+    private func scheduleContentReadyEvaluation(for kind: StoryBackgroundLayer.Kind) {
+        contentReadyFired = false
+        teardownReadinessObservers()
+
+        switch kind {
+        case .solidColor, .gradient:
+            // No async work — yield to the next runloop tick so the caller
+            // can attach `onContentReady` after `rebuildLayers()` returns
+            // (the prefetcher attaches the callback right after init).
+            DispatchQueue.main.async { [weak self] in
+                self?.fireContentReadyIfNeeded()
+            }
+        case .image:
+            thumbHashPlaceholderRef = backgroundLayer.contentLayer?.contents.map { $0 as AnyObject }
+            // If the real bytes already landed synchronously (warm L1 cache),
+            // we still want to honor the contract: fire on the next runloop
+            // tick when no observable transition is pending.
+            if let layer = backgroundLayer.contentLayer {
+                imageContentsObserver = layer.observe(\.contents, options: [.new]) { [weak self] observed, _ in
+                    Task { @MainActor in
+                        guard let self else { return }
+                        let placeholder = self.thumbHashPlaceholderRef
+                        let current = observed.contents.map { $0 as AnyObject }
+                        // Fire only once the new contents differ from the
+                        // ThumbHash placeholder reference. A nil placeholder
+                        // (no thumbHash on the slide) makes the first non-nil
+                        // assignment the trigger.
+                        guard let current else { return }
+                        if let placeholder, current === placeholder { return }
+                        self.fireContentReadyIfNeeded()
+                    }
+                }
+            } else {
+                // Defensive — no contentLayer means the kind switch already
+                // settled (e.g. solidColor path took precedence). Fire async
+                // so the contract still observes a single trailing-edge tick.
+                DispatchQueue.main.async { [weak self] in
+                    self?.fireContentReadyIfNeeded()
+                }
+            }
+        case .video:
+            if let item = backgroundLayer.avPlayer?.currentItem {
+                if item.status == .readyToPlay {
+                    DispatchQueue.main.async { [weak self] in
+                        self?.fireContentReadyIfNeeded()
+                    }
+                } else {
+                    videoStatusObserver = item.observe(\.status, options: [.new]) { [weak self] observed, _ in
+                        guard observed.status == .readyToPlay else { return }
+                        Task { @MainActor in
+                            self?.fireContentReadyIfNeeded()
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func fireContentReadyIfNeeded() {
+        guard !contentReadyFired else { return }
+        contentReadyFired = true
+        onContentReady?()
+    }
+
+    private func teardownReadinessObservers() {
+        imageContentsObserver?.invalidate()
+        imageContentsObserver = nil
+        videoStatusObserver?.invalidate()
+        videoStatusObserver = nil
+        thumbHashPlaceholderRef = nil
+    }
+
+    /// Test-only seam : forces the readiness signal as if the background
+    /// media had finished loading. Lets unit tests exercise the timer-gating
+    /// contract on `StoryReaderTimerController` without staging a real
+    /// `URLSession` fetch or `AVPlayer` status transition.
+    public func _forceContentReadyForTesting() {
+        fireContentReadyIfNeeded()
     }
 
     // MARK: - Window lifecycle
