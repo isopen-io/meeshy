@@ -362,14 +362,11 @@ struct StoryViewerView: View {
                 onDismiss: { sharedContentWrapper = nil },
                 onShareToConversation: nil
             )
-            // SwiftUI sheets run in a separate presentation hierarchy and do
-            // NOT inherit EnvironmentObjects from the parent fullScreenCover.
-            // Re-inject the trio that SharePickerView declares as
-            // @EnvironmentObject, otherwise tapping share crashes with
-            // "EnvironmentObject error → SharePickerView.conversationListViewModel".
-            .environmentObject(conversationListViewModel)
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
+            .injectGlobalEnvironment(
+                router: router,
+                conversationListViewModel: conversationListViewModel,
+                statusViewModel: statusViewModel
+            )
             .presentationDetents([.medium, .large])
         }
         // Repost-as-story composer (C.1). Opened from the bottom-bar "Partager"

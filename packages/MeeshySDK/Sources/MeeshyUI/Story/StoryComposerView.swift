@@ -314,8 +314,15 @@ public struct StoryComposerView: View {
         // `viewModel.currentSlide.effects` exclusively, so re-serialize on
         // each toolbar mutation. Five separate `.onChange` modifiers tipped
         // the type-checker over the time-out threshold, so we collapse them
-        // into a single observation of a coarse fingerprint.
-        .onChange(of: canvasSyncFingerprint) { _, _ in syncCurrentSlideEffects() }
+        // into a single extension modifier to maintain performance in O(1).
+        .granularCanvasSync(
+            filter: selectedFilter?.rawValue,
+            hasImage: selectedImage != nil,
+            stickersCount: stickerObjects.count,
+            drawingCount: viewModel.drawingData?.count ?? 0,
+            bgColor: viewModel.backgroundColor,
+            action: { syncCurrentSlideEffects() }
+        )
         .fileImporter(isPresented: $showAudioDocumentPicker, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first {
                 mediaAudioEditorItem = AudioEditorItemWrapper(url: url)
@@ -1038,20 +1045,7 @@ public struct StoryComposerView: View {
         }
     }
 
-    /// Coarse fingerprint of every composer-local @State that the CALayer
-    /// canvas needs to render. Bumps whenever any of them mutates; observed
-    /// by a single `.onChange` to trigger `syncCurrentSlideEffects()`. Using
-    /// one observation instead of five keeps the body within the SwiftUI
-    /// type-checker's complexity budget (Task 2.18 regression fix).
-    private var canvasSyncFingerprint: Int {
-        var h = selectedFilter?.rawValue.hashValue ?? 0
-        h = h &* 31 &+ (selectedImage != nil ? 1 : 0)
-        h = h &* 31 &+ stickerObjects.count
-        for s in stickerObjects { h = h &* 31 &+ s.id.hashValue }
-        h = h &* 31 &+ (viewModel.drawingData?.count ?? 0)
-        h = h &* 31 &+ viewModel.backgroundColor.hashValue
-        return h
-    }
+
 
     @ViewBuilder
     private var canvasZoomResetButton: some View {
@@ -1663,7 +1657,7 @@ public struct StoryComposerView: View {
     /// Resets every composer-local `@State` that feeds `buildEffects()` or
     /// otherwise mirrors slide content. Must be called immediately after
     /// `viewModel.reset()` (or any other operation that drops all slides)
-    /// to prevent the `canvasSyncFingerprint` sync from re-injecting
+    /// to prevent the `granularCanvasSync` sync modifiers from re-injecting
     /// orphaned local state into the fresh empty slide.
     ///
     /// Scope: covers every `@State` read by `buildEffects()` plus the

@@ -52,28 +52,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// Called by `StoryPublishService` when the queue dequeues an item
     /// (offline → online transition, app cold start with pending items, ...).
     ///
-    /// The implementation is intentionally INCOMPLETE in this commit: the
-    /// upload pipeline lives in `launchUploadTask` and uses an in-memory
-    /// `activeUpload: StoryUploadState` state machine plus mutable progress
-    /// tracking. Reusing it from a non-StoryViewModel-driven entry point
-    /// requires :
-    ///
-    ///   1. Decoding the slides payload (Codable) → `[StorySlide]`
-    ///   2. Loading media files from `item.mediaReferences` paths into
-    ///      [String: UIImage] / [String: URL] dictionaries (StoryDraftStore
-    ///      already persists this layout, but the queue item references
-    ///      arbitrary paths chosen at enqueue time — see V3 integration)
-    ///   3. Building a `StoryUploadState` and either :
-    ///      a) calling `publishStoryInBackground(...)` then awaiting
-    ///         `activeUpload` to terminate via `CheckedContinuation`
-    ///      b) extracting the upload-loop body of `launchUploadTask` into
-    ///         a parameter-driven async method that both call sites use
-    ///
-    ///   4. Returning the LAST `publishedPostIds` entry on success, or
-    ///      throwing on permanent failure (`StoryPublishUnrecoverableError`)
-    ///      vs retryable failure (any other Error).
-    ///
-    /// Decodes the queued payload, materialises the local media files, and
+    /// Decodes the queued payload, materializes the local media files, and
     /// drives the shared `runStoryUpload` pipeline to completion. Headless:
     /// no UI mutations on `activeUpload` so the queue path can run from
     /// cold start without ghost banners. Returns the server-assigned post
@@ -182,12 +161,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         cleanupUploadTempFiles(upload)
 
         // Best-effort cleanup of the persisted draft media now that the
-        // server holds the canonical posts. Files are referenced ONLY by
-        // this queue item (StoryDraftStore.saveMedia clear-then-inserts in
-        // MVP), so deleting per-path is safe even if other items remain
-        // queued — each story will land here on its own success path.
+        // server holds the canonical posts.
         for ref in item.mediaReferences {
             try? FileManager.default.removeItem(atPath: ref.localFilePath)
+        }
+        
+        // Also remove the containing directory if it was an offline queue folder
+        if let firstPath = item.mediaReferences.first?.localFilePath {
+            let dirPath = (firstPath as NSString).deletingLastPathComponent
+            if dirPath.hasSuffix(item.tempStoryId) {
+                try? FileManager.default.removeItem(atPath: dirPath)
+            }
         }
 
         guard let last = ids.last else {
@@ -350,29 +334,32 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     /// Downloads images to disk cache and prerolls video players for the first 3 groups.
     /// First slide of each group is prefetched at high priority for instant display.
     private func prefetchAllStoryMedia(_ groups: [StoryGroup]) {
-        // High priority: prefetch first slide of each unviewed group (what the user taps first)
+        // High priority: prefetch first unviewed slide of each group (what the user taps first)
         let groupsToPreload = Array(groups.prefix(5))
         Task(priority: .userInitiated) {
             let imageCache = await CacheCoordinator.shared.images
             await withTaskGroup(of: Void.self) { taskGroup in
                 for group in groupsToPreload {
-                    guard let firstStory = group.stories.first else { continue }
+                    guard let targetStory = group.stories.first(where: { !$0.isViewed }) ?? group.stories.first else { continue }
                     taskGroup.addTask {
-                        await Self.prefetchStoryMedia(firstStory, imageCache: imageCache, prerollPlayer: true)
+                        await Self.prefetchStoryMedia(targetStory, imageCache: imageCache, prerollPlayer: true)
                     }
                 }
             }
         }
 
-        // Utility priority: prefetch remaining slides (not the first) for smooth navigation
+        // Utility priority: prefetch images/video data (disk cache) for up to 3 upcoming slides per group.
+        // DO NOT preroll AVPlayer here; let `StoryReaderPrefetcher` handle N+1 JIT warming to save memory.
         Task(priority: .utility) {
             let imageCache = await CacheCoordinator.shared.images
-            for (groupIndex, group) in groupsToPreload.enumerated() {
+            for group in groupsToPreload {
                 guard !Task.isCancelled else { return }
-                for (storyIndex, story) in group.stories.enumerated() {
+                let firstUnviewedIndex = group.stories.firstIndex(where: { !$0.isViewed }) ?? 0
+                let slidesToPrefetch = Array(group.stories.dropFirst(firstUnviewedIndex + 1).prefix(3))
+                
+                for story in slidesToPrefetch {
                     guard !Task.isCancelled else { return }
-                    if storyIndex == 0 { continue }
-                    await Self.prefetchStoryMedia(story, imageCache: imageCache, prerollPlayer: groupIndex < 3)
+                    await Self.prefetchStoryMedia(story, imageCache: imageCache, prerollPlayer: false)
                 }
             }
         }
@@ -692,7 +679,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         loadedAudioURLs: [String: URL],
         visibility: String
     ) async {
-        // 1. Re-key slide backgrounds for the loadMediaFromReferences contract.
+        // 1. Re-key slide backgrounds.
         let bgImages = Dictionary(
             uniqueKeysWithValues: slideImages.map { (slideId, img) in
                 ("slide-bg-\(slideId)", img)
@@ -703,14 +690,41 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         // are both UUIDs).
         let allImages = bgImages.merging(loadedImages) { _, fg in fg }
 
-        // 2. Persist media on disk via StoryDraftStore (clear-then-insert ;
-        //    one queued story at a time in MVP).
-        StoryDraftStore.shared.saveMedia(
-            images: allImages,
-            videoURLs: loadedVideoURLs,
-            audioURLs: loadedAudioURLs
-        )
-        let mediaReferences = StoryDraftStore.shared.loadMediaReferences()
+        // 2. Persist media on disk in a dedicated offline queue directory per story.
+        // This avoids `StoryDraftStore.saveMedia` which clears the directory, allowing
+        // multiple stories to be queued without data loss.
+        let fm = FileManager.default
+        let docDir = fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
+        let tempStoryId = "pending_\(UUID().uuidString)"
+        let offlineDir = docDir.appendingPathComponent("meeshy_offline_queue").appendingPathComponent(tempStoryId)
+        try? fm.createDirectory(at: offlineDir, withIntermediateDirectories: true)
+        
+        var mediaReferences: [StoryMediaReference] = []
+
+        for (id, image) in allImages {
+            let fileName = "\(id).jpg"
+            let dest = offlineDir.appendingPathComponent(fileName)
+            if let data = image.jpegData(compressionQuality: 0.85) {
+                try? data.write(to: dest)
+                mediaReferences.append(StoryMediaReference(elementId: id, mediaType: "image", localFilePath: dest.path))
+            }
+        }
+
+        for (id, url) in loadedVideoURLs {
+            let ext = url.pathExtension.isEmpty ? "mp4" : url.pathExtension
+            let fileName = "\(id).\(ext)"
+            let dest = offlineDir.appendingPathComponent(fileName)
+            try? fm.copyItem(at: url, to: dest)
+            mediaReferences.append(StoryMediaReference(elementId: id, mediaType: "video", localFilePath: dest.path))
+        }
+
+        for (id, url) in loadedAudioURLs {
+            let ext = url.pathExtension.isEmpty ? "m4a" : url.pathExtension
+            let fileName = "\(id).\(ext)"
+            let dest = offlineDir.appendingPathComponent(fileName)
+            try? fm.copyItem(at: url, to: dest)
+            mediaReferences.append(StoryMediaReference(elementId: id, mediaType: "audio", localFilePath: dest.path))
+        }
 
         // 3. Encode the slides payload. The custom encoder excludes
         //    `mediaData`, which is exactly why `mediaReferences` carries
@@ -741,6 +755,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             slidesPayload: payload,
             repostOfId: nil,
             mediaReferences: mediaReferences,
+            tempStoryId: tempStoryId,
             videoExportURL: nil
         )
         _ = await StoryPublishQueue.shared.enqueue(item)

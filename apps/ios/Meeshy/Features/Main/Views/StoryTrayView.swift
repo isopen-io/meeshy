@@ -144,12 +144,11 @@ struct StoryTrayView: View {
                     preloadedVideoURLs: assets.videoURLs,
                     preloadedAudioURLs: assets.audioURLs
                 )
-                // Re-inject env objects required by StoryViewerView for its
-                // internal SharePickerView sheet. fullScreenCover does NOT
-                // inherit EnvironmentObjects automatically.
-                .environmentObject(router)
-                .environmentObject(statusViewModel)
-                .environmentObject(conversationListViewModel)
+                .injectGlobalEnvironment(
+                    router: router,
+                    conversationListViewModel: conversationListViewModel,
+                    statusViewModel: statusViewModel
+                )
             }
         }
         .fullScreenCover(isPresented: $showOwnStoryViewer) {
@@ -159,12 +158,11 @@ struct StoryTrayView: View {
                 isPresented: $showOwnStoryViewer,
                 singleGroup: true
             )
-            // Re-inject env objects required by StoryViewerView for its
-            // internal SharePickerView sheet. fullScreenCover does NOT
-            // inherit EnvironmentObjects automatically.
-            .environmentObject(router)
-            .environmentObject(statusViewModel)
-            .environmentObject(conversationListViewModel)
+            .injectGlobalEnvironment(
+                router: router,
+                conversationListViewModel: conversationListViewModel,
+                statusViewModel: statusViewModel
+            )
         }
         .withStatusBubble()
     }
