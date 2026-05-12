@@ -146,7 +146,7 @@ final class ConversationListViewModelTests: XCTestCase {
     func test_loadConversations_skipsFetchWhenCacheIsFresh() async {
         // Pre-populate cache so second call finds fresh data
         let conversation = makeConversation(id: "000000000000000000000001")
-        await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        try? await CacheCoordinator.shared.conversations.save([conversation], for: "list")
 
         let syncEngine = MockConversationSyncEngine()
         let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
@@ -160,7 +160,7 @@ final class ConversationListViewModelTests: XCTestCase {
     func test_loadConversations_refetchesAfterCacheInvalidation() async {
         // Pre-populate cache
         let conversation = makeConversation(id: "000000000000000000000001")
-        await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        try? await CacheCoordinator.shared.conversations.save([conversation], for: "list")
 
         let syncEngine = MockConversationSyncEngine()
         let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)

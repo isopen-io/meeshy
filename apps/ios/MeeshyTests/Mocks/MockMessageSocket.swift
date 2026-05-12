@@ -190,6 +190,12 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         callEndCallCount += 1
     }
 
+    var callEndWithAckResult: Bool = true
+    func emitCallEndWithAck(callId: String) async -> Bool {
+        callEndCallCount += 1
+        return callEndWithAckResult
+    }
+
     func emitCallHeartbeat(callId: String) {
         callHeartbeatCallCount += 1
     }

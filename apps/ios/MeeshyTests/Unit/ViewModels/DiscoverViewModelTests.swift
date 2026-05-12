@@ -158,7 +158,7 @@ final class DiscoverViewModelTests: XCTestCase {
         let cached = [
             UserSearchResult(id: "cached-1", username: "alice", displayName: "Alice", avatar: nil, isOnline: true)
         ]
-        await CacheCoordinator.shared.userSearch.save(cached, for: "discover:suggestions")
+        try? await CacheCoordinator.shared.userSearch.save(cached, for: "discover:suggestions")
 
         let (sut, _, userService) = makeSUT()
         userService.searchUsersResult = .success([
@@ -196,7 +196,7 @@ final class DiscoverViewModelTests: XCTestCase {
     /// adding suggestions to the cache must not affect a typed search.
     func test_performSearch_doesNotUseSuggestionsCache() async {
         let cached = [UserSearchResult(id: "cached-1", username: "alice")]
-        await CacheCoordinator.shared.userSearch.save(cached, for: "discover:suggestions")
+        try? await CacheCoordinator.shared.userSearch.save(cached, for: "discover:suggestions")
 
         let (sut, _, userService) = makeSUT()
         userService.searchUsersResult = .success([
