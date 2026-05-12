@@ -97,9 +97,10 @@ extension CommandStack {
     ///   - they are of the same EditCommand type,
     ///   - they are within `windowSeconds` of each other,
     ///   - they belong to the (small) set of commands declared coalesceable
-    ///     (currently MoveClip and TrimClip — both are emitted at ~60fps
-    ///     during gesture drags and would otherwise saturate the FIFO cap
-    ///     in under one second).
+    ///     (currently MoveClip, TrimClip and MoveKeyframe — all emitted at
+    ///     ~60fps during gesture drags and would otherwise saturate the FIFO
+    ///     cap in under one second). MoveKeyframe also requires same
+    ///     `keyframeId` since one clip can host many keyframes.
     private static func coalesce(previous: AnyEditCommand,
                          with next: AnyEditCommand,
                          windowSeconds: TimeInterval) -> AnyEditCommand? {
@@ -135,6 +136,38 @@ extension CommandStack {
                 newDuration: n.newDuration
             )
             return .trimClip(merged)
+        case let (.moveKeyframe(p), .moveKeyframe(n))
+            where p.clipId == n.clipId
+              && p.kind == n.kind
+              && p.keyframeId == n.keyframeId
+              && abs(n.timestamp.timeIntervalSince(p.timestamp)) <= windowSeconds:
+            // 60fps drag on a position / scale / opacity slider would saturate
+            // the FIFO cap in <1s without coalescing. Same contract as
+            // moveClip / trimClip: preserve p.old* + n.new* so a single undo
+            // rolls back to the pre-drag value across the whole gesture.
+            //
+            // Per-axis merge rule: oldValue = first non-nil between (p.old, n.old);
+            // newValue = last non-nil between (p.new, n.new). This lets a
+            // sequence "scale-edit then opacity-edit" collapse to ONE command
+            // that carries BOTH deltas — neither axis erases the other.
+            let merged = MoveKeyframeCommand(
+                id: n.id,
+                timestamp: n.timestamp,
+                clipId: n.clipId,
+                kind: n.kind,
+                keyframeId: n.keyframeId,
+                oldTime: p.oldTime,
+                newTime: n.newTime,
+                oldX: p.oldX ?? n.oldX, newX: n.newX ?? p.newX,
+                oldY: p.oldY ?? n.oldY, newY: n.newY ?? p.newY,
+                oldScale: p.oldScale ?? n.oldScale,
+                newScale: n.newScale ?? p.newScale,
+                oldOpacity: p.oldOpacity ?? n.oldOpacity,
+                newOpacity: n.newOpacity ?? p.newOpacity,
+                oldEasing: p.oldEasing ?? n.oldEasing,
+                newEasing: n.newEasing ?? p.newEasing
+            )
+            return .moveKeyframe(merged)
         default:
             return nil
         }

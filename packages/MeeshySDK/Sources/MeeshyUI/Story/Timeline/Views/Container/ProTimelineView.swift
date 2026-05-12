@@ -206,6 +206,21 @@ public struct ProTimelineView: View {
         )
     }
 
+    /// Maps a `KeyframeInspector.Easing` UI tag to the SDK-side `StoryEasing`
+    /// used by the command stack. `spring` falls back to `easeInOut` since the
+    /// SDK does not surface a dedicated spring case yet (the inspector picker
+    /// keeps it visible behind the advanced flag so the data model is the only
+    /// thing to update when product unlocks it).
+    public static func mapInspectorEasing(_ easing: KeyframeInspector.Easing) -> StoryEasing {
+        switch easing {
+        case .linear:    return .linear
+        case .easeIn:    return .easeIn
+        case .easeOut:   return .easeOut
+        case .easeInOut: return .easeInOut
+        case .spring:    return .easeInOut
+        }
+    }
+
     /// Resolves the current selection to exactly one inspector kind, applying
     /// the clip → keyframe → transition priority. A clip lookup wins because
     /// media/audio/text object ids are the primary handle the playback engine
@@ -456,16 +471,26 @@ public struct ProTimelineView: View {
             // Advanced easings stay gated behind a future product flag.
             // Linear-only matches the launch surface of KeyframeInspector.
             isAdvancedEnabled: false,
-            onPositionChanged: { _, _ in
-                // Position commits route through MoveKeyframeCommand in a
-                // follow-up wire-up; the inspector currently shape-tests its
-                // own bindings so we surface a no-op closure here rather than
-                // forwarding to a method that does not yet exist on
-                // TimelineViewModel.
+            onPositionChanged: { [viewModel] newX, newY in
+                viewModel.moveKeyframe(clipId: clipId,
+                                       keyframeId: keyframeId,
+                                       position: CGPoint(x: newX, y: newY))
             },
-            onScaleChanged: { _ in },
-            onOpacityChanged: { _ in },
-            onEasingChanged: { _ in },
+            onScaleChanged: { [viewModel] newScale in
+                viewModel.moveKeyframe(clipId: clipId,
+                                       keyframeId: keyframeId,
+                                       scale: newScale)
+            },
+            onOpacityChanged: { [viewModel] newOpacity in
+                viewModel.moveKeyframe(clipId: clipId,
+                                       keyframeId: keyframeId,
+                                       opacity: newOpacity)
+            },
+            onEasingChanged: { [viewModel] newEasing in
+                viewModel.moveKeyframe(clipId: clipId,
+                                       keyframeId: keyframeId,
+                                       easing: Self.mapInspectorEasing(newEasing))
+            },
             onDelete: { [viewModel] in
                 viewModel.deleteKeyframe(clipId: clipId, keyframeId: keyframeId)
             }

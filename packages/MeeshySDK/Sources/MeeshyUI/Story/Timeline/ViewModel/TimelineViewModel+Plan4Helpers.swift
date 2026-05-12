@@ -264,22 +264,52 @@ extension TimelineViewModel {
     // MARK: - Keyframe mutations
 
     public func moveKeyframe(clipId: String, keyframeId: String, newTime: Float) {
-        guard let kind = clipKind(forId: clipId) else { return }
-        let oldTime: Float
-        switch kind {
-        case .video, .image:
-            guard let kf = project.mediaObjects.first(where: { $0.id == clipId })?
-                .keyframes?.first(where: { $0.id == keyframeId }) else { return }
-            oldTime = kf.time
-        case .text:
-            guard let kf = project.textObjects.first(where: { $0.id == clipId })?
-                .keyframes?.first(where: { $0.id == keyframeId }) else { return }
-            oldTime = kf.time
-        case .audio:
-            return
-        }
+        guard let kind = clipKind(forId: clipId),
+              let snapshot = currentKeyframeSnapshot(clipId: clipId, keyframeId: keyframeId, kind: kind) else { return }
         let cmd = MoveKeyframeCommand(clipId: clipId, kind: kind,
-                                      keyframeId: keyframeId, oldTime: oldTime, newTime: newTime)
+                                      keyframeId: keyframeId,
+                                      oldTime: snapshot.time, newTime: newTime)
+        applyMoveKeyframeCommand(cmd)
+    }
+
+    /// Push a transform / easing edit captured by `KeyframeInspector`.
+    /// All arguments are optional — only non-nil pairs (new + current snapshot)
+    /// participate in the resulting `MoveKeyframeCommand`. `newTime` defaults
+    /// to the current time so an inspector-driven edit doesn't shift the
+    /// keyframe along the timeline.
+    ///
+    /// Each edit pushes its own command so coalescing in `CommandStack` can
+    /// collapse a 60fps slider drag into a single undo step.
+    public func moveKeyframe(clipId: String,
+                             keyframeId: String,
+                             position: CGPoint? = nil,
+                             scale: CGFloat? = nil,
+                             opacity: CGFloat? = nil,
+                             easing: StoryEasing? = nil) {
+        guard let kind = clipKind(forId: clipId),
+              let snapshot = currentKeyframeSnapshot(clipId: clipId, keyframeId: keyframeId, kind: kind) else { return }
+        // Audio keyframes are unsupported — currentKeyframeSnapshot already
+        // returns nil for audio, but keep the guard structurally similar to
+        // the time-only overload so a future audio-keyframe surface lights up
+        // both call paths at once.
+        let cmd = MoveKeyframeCommand(
+            clipId: clipId, kind: kind, keyframeId: keyframeId,
+            oldTime: snapshot.time, newTime: snapshot.time,
+            oldX: position != nil ? snapshot.x : nil,
+            newX: position?.x,
+            oldY: position != nil ? snapshot.y : nil,
+            newY: position?.y,
+            oldScale: scale != nil ? snapshot.scale : nil,
+            newScale: scale,
+            oldOpacity: opacity != nil ? snapshot.opacity : nil,
+            newOpacity: opacity,
+            oldEasing: easing != nil ? snapshot.easing : nil,
+            newEasing: easing
+        )
+        applyMoveKeyframeCommand(cmd)
+    }
+
+    private func applyMoveKeyframeCommand(_ cmd: MoveKeyframeCommand) {
         do {
             try cmd.apply(to: &project)
             commandStack.push(.moveKeyframe(cmd))
@@ -287,6 +317,37 @@ extension TimelineViewModel {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+
+    /// Resolves the keyframe currently in the project state into a snapshot of
+    /// all its persisted fields. Returns nil for audio clips or when the
+    /// keyframe id is not found. Surfaces defaults that match
+    /// `KeyframeInspector.KeyframeSnapshot` so the inspector and command stack
+    /// stay aligned on what "no value" means.
+    private func currentKeyframeSnapshot(clipId: String,
+                                         keyframeId: String,
+                                         kind: TimelineClipKind)
+        -> (time: Float, x: CGFloat, y: CGFloat, scale: CGFloat, opacity: CGFloat, easing: StoryEasing)? {
+        let keyframe: StoryKeyframe?
+        switch kind {
+        case .video, .image:
+            keyframe = project.mediaObjects.first(where: { $0.id == clipId })?
+                .keyframes?.first(where: { $0.id == keyframeId })
+        case .text:
+            keyframe = project.textObjects.first(where: { $0.id == clipId })?
+                .keyframes?.first(where: { $0.id == keyframeId })
+        case .audio:
+            return nil
+        }
+        guard let kf = keyframe else { return nil }
+        return (
+            time: kf.time,
+            x: kf.x ?? 0.5,
+            y: kf.y ?? 0.5,
+            scale: kf.scale ?? 1.0,
+            opacity: kf.opacity ?? 1.0,
+            easing: kf.easing ?? .linear
+        )
     }
 
     public func deleteKeyframe(clipId: String, keyframeId: String) {

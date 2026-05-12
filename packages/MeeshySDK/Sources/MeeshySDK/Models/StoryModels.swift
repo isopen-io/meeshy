@@ -2224,8 +2224,26 @@ public struct MoveKeyframeCommand: EditCommand {
     public let clipId: String
     public let kind: TimelineClipKind
     public let keyframeId: String
+    // Time delta — always-encoded, drives the "scrub a keyframe along the
+    // timeline" gesture. Other deltas below are optional (nil = no change)
+    // and let the same command type carry KeyframeInspector edits
+    // (position / scale / opacity / easing) without exploding the
+    // AnyEditCommand enum.
     public let oldTime: Float
     public let newTime: Float
+    // Optional transform deltas — `nil` means "no change on this axis".
+    // Decoded via `decodeIfPresent` so legacy time-only snapshots persisted
+    // before this extension still round-trip cleanly.
+    public let oldX: CGFloat?
+    public let newX: CGFloat?
+    public let oldY: CGFloat?
+    public let newY: CGFloat?
+    public let oldScale: CGFloat?
+    public let newScale: CGFloat?
+    public let oldOpacity: CGFloat?
+    public let newOpacity: CGFloat?
+    public let oldEasing: StoryEasing?
+    public let newEasing: StoryEasing?
 
     public init(id: String = UUID().uuidString,
                 timestamp: Date = Date(),
@@ -2233,7 +2251,12 @@ public struct MoveKeyframeCommand: EditCommand {
                 kind: TimelineClipKind,
                 keyframeId: String,
                 oldTime: Float,
-                newTime: Float) {
+                newTime: Float,
+                oldX: CGFloat? = nil, newX: CGFloat? = nil,
+                oldY: CGFloat? = nil, newY: CGFloat? = nil,
+                oldScale: CGFloat? = nil, newScale: CGFloat? = nil,
+                oldOpacity: CGFloat? = nil, newOpacity: CGFloat? = nil,
+                oldEasing: StoryEasing? = nil, newEasing: StoryEasing? = nil) {
         self.id = id
         self.timestamp = timestamp
         self.clipId = clipId
@@ -2241,22 +2264,94 @@ public struct MoveKeyframeCommand: EditCommand {
         self.keyframeId = keyframeId
         self.oldTime = oldTime
         self.newTime = newTime
+        self.oldX = oldX; self.newX = newX
+        self.oldY = oldY; self.newY = newY
+        self.oldScale = oldScale; self.newScale = newScale
+        self.oldOpacity = oldOpacity; self.newOpacity = newOpacity
+        self.oldEasing = oldEasing; self.newEasing = newEasing
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, timestamp, clipId, kind, keyframeId
+        case oldTime, newTime
+        case oldX, newX, oldY, newY
+        case oldScale, newScale
+        case oldOpacity, newOpacity
+        case oldEasing, newEasing
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(String.self, forKey: .id)
+        self.timestamp = try c.decode(Date.self, forKey: .timestamp)
+        self.clipId = try c.decode(String.self, forKey: .clipId)
+        self.kind = try c.decode(TimelineClipKind.self, forKey: .kind)
+        self.keyframeId = try c.decode(String.self, forKey: .keyframeId)
+        self.oldTime = try c.decode(Float.self, forKey: .oldTime)
+        self.newTime = try c.decode(Float.self, forKey: .newTime)
+        self.oldX = try c.decodeIfPresent(CGFloat.self, forKey: .oldX)
+        self.newX = try c.decodeIfPresent(CGFloat.self, forKey: .newX)
+        self.oldY = try c.decodeIfPresent(CGFloat.self, forKey: .oldY)
+        self.newY = try c.decodeIfPresent(CGFloat.self, forKey: .newY)
+        self.oldScale = try c.decodeIfPresent(CGFloat.self, forKey: .oldScale)
+        self.newScale = try c.decodeIfPresent(CGFloat.self, forKey: .newScale)
+        self.oldOpacity = try c.decodeIfPresent(CGFloat.self, forKey: .oldOpacity)
+        self.newOpacity = try c.decodeIfPresent(CGFloat.self, forKey: .newOpacity)
+        self.oldEasing = try c.decodeIfPresent(StoryEasing.self, forKey: .oldEasing)
+        self.newEasing = try c.decodeIfPresent(StoryEasing.self, forKey: .newEasing)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(timestamp, forKey: .timestamp)
+        try c.encode(clipId, forKey: .clipId)
+        try c.encode(kind, forKey: .kind)
+        try c.encode(keyframeId, forKey: .keyframeId)
+        try c.encode(oldTime, forKey: .oldTime)
+        try c.encode(newTime, forKey: .newTime)
+        try c.encodeIfPresent(oldX, forKey: .oldX)
+        try c.encodeIfPresent(newX, forKey: .newX)
+        try c.encodeIfPresent(oldY, forKey: .oldY)
+        try c.encodeIfPresent(newY, forKey: .newY)
+        try c.encodeIfPresent(oldScale, forKey: .oldScale)
+        try c.encodeIfPresent(newScale, forKey: .newScale)
+        try c.encodeIfPresent(oldOpacity, forKey: .oldOpacity)
+        try c.encodeIfPresent(newOpacity, forKey: .newOpacity)
+        try c.encodeIfPresent(oldEasing, forKey: .oldEasing)
+        try c.encodeIfPresent(newEasing, forKey: .newEasing)
     }
 
     public func apply(to project: inout TimelineProject) throws {
-        try setTime(project: &project, time: newTime)
+        try mutate(project: &project, direction: .forward)
     }
 
     public func revert(from project: inout TimelineProject) throws {
-        try setTime(project: &project, time: oldTime)
+        try mutate(project: &project, direction: .backward)
     }
 
-    private func setTime(project: inout TimelineProject, time: Float) throws {
+    private enum Direction { case forward, backward }
+
+    private func mutate(project: inout TimelineProject, direction: Direction) throws {
         try project.mutateKeyframes(clipId: clipId, kind: kind) { arr in
             guard let idx = arr.firstIndex(where: { $0.id == keyframeId }) else {
                 throw EditCommandError.keyframeNotFound(id: keyframeId)
             }
-            arr[idx].time = time
+            // Time is always tracked (legacy field). Other deltas only mutate
+            // when both sides of the pair are non-nil, so a "scale-only" edit
+            // doesn't accidentally clear x/y/opacity.
+            arr[idx].time = (direction == .forward) ? newTime : oldTime
+            if let nx = newX, let ox = oldX { arr[idx].x = (direction == .forward) ? nx : ox }
+            if let ny = newY, let oy = oldY { arr[idx].y = (direction == .forward) ? ny : oy }
+            if let ns = newScale, let os = oldScale {
+                arr[idx].scale = (direction == .forward) ? ns : os
+            }
+            if let no = newOpacity, let oo = oldOpacity {
+                arr[idx].opacity = (direction == .forward) ? no : oo
+            }
+            if let ne = newEasing, let oe = oldEasing {
+                arr[idx].easing = (direction == .forward) ? ne : oe
+            }
         }
     }
 }
