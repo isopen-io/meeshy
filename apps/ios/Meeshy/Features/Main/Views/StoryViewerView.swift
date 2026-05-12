@@ -298,6 +298,11 @@ struct StoryViewerView: View {
             if initialStoryIndex > 0, currentGroupIndex < groups.count {
                 currentStoryIndex = min(initialStoryIndex, groups[currentGroupIndex].stories.count - 1)
             }
+            
+            StoryMediaCoordinator.shared.activate {
+                isGlobalMuted = true
+            }
+            
             installPrefetchPipelineIfNeeded()
             refreshPrefetchWindowAndTimer()
             startTimer()
