@@ -160,11 +160,21 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
         // closure on its polling task (NOT main), and the public API
         // contract says callers receive on `@MainActor` — the inner
         // `Task { @MainActor in ... }` enforces that hop.
+        // onProgress is a non-Sendable closure (MainActor closure typically
+        // captures self / @Published). StoryExporter's progress parameter
+        // is @Sendable. Bridge via an @unchecked Sendable box: the box's
+        // contents are only ever invoked on the MainActor via the inner
+        // Task hop, so the unchecked annotation is safe.
+        final class ProgressSinkBox: @unchecked Sendable {
+            let sink: (Double) -> Void
+            init(_ sink: @escaping (Double) -> Void) { self.sink = sink }
+        }
         let progressTrampoline: (@Sendable (Double) -> Void)?
         if let sink = onProgress {
+            let box = ProgressSinkBox(sink)
             progressTrampoline = { @Sendable (fraction: Double) in
                 Task { @MainActor in
-                    sink(fraction)
+                    box.sink(fraction)
                 }
             }
         } else {
