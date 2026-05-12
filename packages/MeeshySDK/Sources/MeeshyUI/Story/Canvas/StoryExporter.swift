@@ -250,6 +250,19 @@ public enum StoryExporter {
             try FileManager.default.removeItem(at: url)
         }
 
+        // Track success so the temp file is cleaned up on any failure path.
+        // Caller (syntheticTransparentAsset) reads the bytes into Data and
+        // pipes them to CacheCoordinator.video.save — the temp source is
+        // already cleaned up there on success. The defer here covers the
+        // mid-generation throw paths so we don't leak orphan .mov files in
+        // /tmp on repeated failures.
+        var generationSucceeded = false
+        defer {
+            if !generationSucceeded {
+                try? FileManager.default.removeItem(at: url)
+            }
+        }
+
         let writer: AVAssetWriter
         do {
             writer = try AVAssetWriter(url: url, fileType: .mov)
@@ -259,6 +272,13 @@ public enum StoryExporter {
             )
         }
 
+        // H.264 does NOT preserve alpha — the BGRA 0x00000000 frame below
+        // encodes as opaque black, not transparent. This is intentional and
+        // safe : StoryAVCompositor.startRequest overwrites every pixel via
+        // `layer.render(in:)` so the substrate's color is never visible. If
+        // a future caller blends WITH the substrate (e.g. alpha punch-through
+        // crossfade), switch to AVVideoCodecType.proRes4444 in .mov to get
+        // real transparency at the cost of larger files.
         let videoSettings: [String: Any] = [
             AVVideoCodecKey: AVVideoCodecType.h264,
             AVVideoWidthKey: Int(size.width),
@@ -317,10 +337,10 @@ public enum StoryExporter {
             if let base = CVPixelBufferGetBaseAddress(pixelBuffer) {
                 let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
                 let height = CVPixelBufferGetHeight(pixelBuffer)
-                // 0x00000000 = fully transparent BGRA. The compositor will
-                // overwrite every byte of every frame, so the substrate's
-                // colour is never seen — but we zero it anyway so undefined
-                // memory can never bleed into the encoded MP4.
+                // Zero the buffer (BGRA 0x00000000). Note: H.264 discards
+                // alpha so this encodes as opaque black, NOT transparent —
+                // see top-of-function note. Zeroing prevents undefined memory
+                // from bleeding into the encoded MP4.
                 memset(base, 0, bytesPerRow * height)
             }
             CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
@@ -336,6 +356,7 @@ public enum StoryExporter {
                 writer.error?.localizedDescription ?? "Writer did not complete"
             )
         }
+        generationSucceeded = true
         return url
     }
 }

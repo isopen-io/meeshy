@@ -142,7 +142,7 @@ public struct StoryFilterPicker: View {
     private func fallbackGradient(for filter: StoryFilter?) -> some View {
         let colors: [Color] = {
             guard let filter else {
-                return [Color(hex: "FF2E63"), Color(hex: "08D9D6")]
+                return [MeeshyColors.indigo500, MeeshyColors.indigo700]
             }
             switch filter {
             case .vintage:  return [Color(hex: "D4A574"), Color(hex: "8B7355")]

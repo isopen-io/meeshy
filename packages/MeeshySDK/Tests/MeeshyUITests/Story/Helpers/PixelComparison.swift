@@ -186,9 +186,10 @@ public enum PixelComparison {
                 covAB += dA * dB
             }
         }
-        // Sample variance (N - 1) per Wang et al. — N for biased estimator is
-        // also acceptable; we use N to keep the formula clean (the constants
-        // C1/C2 stabilize the denominator either way).
+        // Biased variance estimator (divide by N) per the original Wang et al.
+        // 2004 SSIM formulation. The 1/(N-1) Bessel correction differs by
+        // ~1.6% on our 8×8 windows — within the C1/C2 stabilizer tolerance,
+        // and the biased form is the canonical SSIM definition.
         varA /= count
         varB /= count
         covAB /= count

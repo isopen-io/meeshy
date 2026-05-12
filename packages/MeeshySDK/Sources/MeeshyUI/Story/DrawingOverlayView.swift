@@ -125,7 +125,7 @@ public struct DrawingToolbarPanel: View {
                         .foregroundColor(toolType == tool ? .white : .white.opacity(0.6))
                         .frame(width: 44, height: 44)
                         .background(
-                            Circle().fill(toolType == tool ? Color(hex: "FF2E63") : Color.white.opacity(0.1))
+                            Circle().fill(toolType == tool ? MeeshyColors.brandPrimary : Color.white.opacity(0.1))
                         )
                 }
                 .accessibilityLabel(tool.label)

@@ -15,7 +15,10 @@ public struct TextBackgroundStylePicker: View {
 
     @Binding public var textObject: StoryTextObject
 
-    @ObservedObject private var theme = ThemeManager.shared
+    // No @ObservedObject on ThemeManager.shared — colorScheme is enough for
+    // the dark/light text color decision; subscribing to the singleton would
+    // trigger view re-evaluation on every unrelated theme @Published change
+    // (forbidden for leaf views per CLAUDE.md Zero Unnecessary Re-render rule).
     @Environment(\.colorScheme) private var colorScheme
 
     public init(textObject: Binding<StoryTextObject>) {

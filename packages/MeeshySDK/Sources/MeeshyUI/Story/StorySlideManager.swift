@@ -145,7 +145,7 @@ public struct StorySlideCarousel: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color(hex: "FF2E63") : Color.white.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+                    .stroke(isSelected ? MeeshyColors.brandPrimary : Color.white.opacity(0.2), lineWidth: isSelected ? 2 : 1)
             )
             .scaleEffect(isSelected ? 1.1 : 1.0)
         }

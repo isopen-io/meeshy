@@ -85,7 +85,12 @@ public final class StoryGlassBackdropLayer: CALayer, @unchecked Sendable {
         }
         let selector = NSSelectorFromString("filterWithName:")
         let unmanaged = filterClass.perform(selector, with: "gaussianBlur")
-        guard let filter = unmanaged?.takeUnretainedValue() else { return }
+        // `+filterWithName:` returns an autoreleased object (+0 retain in Obj-C
+        // class factory convention). `takeRetainedValue` transfers ownership
+        // into ARC so it stays alive until `setValue([filter], forKeyPath:)`
+        // stores it into the layer's filter chain. `takeUnretainedValue` would
+        // risk dealloc under autorelease pool pressure during the render loop.
+        guard let filter = unmanaged?.takeRetainedValue() else { return }
         // inputRadius mirrors MPSImageGaussianBlur sigma (CAFilter uses radius
         // units that are visually equivalent within ±1 px at our scales).
         (filter as AnyObject).setValue(sigma, forKey: "inputRadius")
@@ -97,8 +102,11 @@ public final class StoryGlassBackdropLayer: CALayer, @unchecked Sendable {
     private func applyMPSPath() {
         guard let source = backdropTexture else { return }
         // Allocate a destination texture matching the source dimensions on the
-        // shared device. `.renderTarget` + `.shaderRead` so we can both blit
-        // into a CGImage and feed back into another pass if needed.
+        // shared device. `.shared` storage is REQUIRED for the subsequent
+        // `CIImage(mtlTexture:)` → `createCGImage(_:from:)` CPU readback path
+        // — `.private` textures are GPU-only and `CIImage(mtlTexture:)` returns
+        // nil on A-series iPhones (entire device fleet), silently dropping the
+        // glass surface. MPS blur writes to `.shared` just as efficiently.
         let context = StoryRenderingContext.shared
         let descriptor = MTLTextureDescriptor.texture2DDescriptor(
             pixelFormat: source.pixelFormat,
@@ -107,7 +115,7 @@ public final class StoryGlassBackdropLayer: CALayer, @unchecked Sendable {
             mipmapped: false
         )
         descriptor.usage = [.shaderRead, .shaderWrite, .renderTarget]
-        descriptor.storageMode = .private
+        descriptor.storageMode = .shared
         guard let output = context.metalDevice.makeTexture(descriptor: descriptor) else { return }
 
         // Synchronous apply — caller (StoryCanvasUIView render tick) already
@@ -117,10 +125,18 @@ public final class StoryGlassBackdropLayer: CALayer, @unchecked Sendable {
 
         // Bridge MTLTexture → CGImage via the shared CIContext (Display P3
         // working color space) so the glass surface stays color-accurate.
-        let ci = CIImage(mtlTexture: output, options: [.colorSpace: context.workingColorSpace])
-        guard let ci else { return }
+        //
+        // Metal texture origin is bottom-left ; CALayer.contents expects
+        // top-left coordinates. Flip vertically via CIImage transform before
+        // rasterizing — otherwise the glass appears upside-down behind the
+        // text (silent latent bug if we forgot the Y-flip).
+        guard let raw = CIImage(mtlTexture: output, options: [.colorSpace: context.workingColorSpace])
+        else { return }
+        let h = CGFloat(source.height)
+        let flipped = raw
+            .transformed(by: CGAffineTransform(scaleX: 1, y: -1).translatedBy(x: 0, y: -h))
         let rect = CGRect(x: 0, y: 0, width: source.width, height: source.height)
-        if let cg = context.ciContext.createCGImage(ci, from: rect) {
+        if let cg = context.ciContext.createCGImage(flipped, from: rect) {
             contents = cg
         }
     }
