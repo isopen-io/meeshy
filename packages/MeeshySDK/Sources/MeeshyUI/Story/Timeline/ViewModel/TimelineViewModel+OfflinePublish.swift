@@ -105,13 +105,36 @@ extension TimelineViewModel {
 
     // MARK: - Private helpers
 
+    /// Returns the set of clip ids that belong to `project.audioPlayerObjects`.
+    /// Used to route entries from `pendingMediaURLs` into the correct map
+    /// (`audioURLPaths` vs `mediaURLPaths`) on the offline queue item.
+    ///
+    /// Single source of truth = the project's own structure. Extension-based
+    /// detection (`.m4a`/`.mp3`/…) would be fragile for generated TTS variants
+    /// or test fixtures with synthetic URLs; the project model already knows
+    /// which clips are audio.
+    private func audioClipIds() -> Set<String> {
+        Set(project.audioPlayerObjects.map(\.id))
+    }
+
     private func buildOfflineQueueItem(visibility: StoryVisibility) -> StoryOfflineQueueItem {
         let slideIds = project.mediaObjects.map { $0.id }
             + project.audioPlayerObjects.map { $0.id }
             + project.textObjects.map { $0.id }
 
-        let mediaPaths: [String: String] = pendingMediaURLs.reduce(into: [:]) { acc, pair in
-            acc[pair.key] = pair.value.path
+        // Split `pendingMediaURLs` into video/image (`mediaURLPaths`) vs
+        // audio (`audioURLPaths`) so the queue flush can route uploads to the
+        // correct asset endpoints on reconnect. Without this split, audio URLs
+        // were silently dropped — guaranteed data loss on crash recovery.
+        let audioIds = audioClipIds()
+        var mediaPaths: [String: String] = [:]
+        var audioPaths: [String: String] = [:]
+        for (clipId, url) in pendingMediaURLs {
+            if audioIds.contains(clipId) {
+                audioPaths[clipId] = url.path
+            } else {
+                mediaPaths[clipId] = url.path
+            }
         }
 
         // Serialize the full TimelineProject as JSON so the queue can replay it
@@ -133,7 +156,7 @@ extension TimelineViewModel {
             slideIds: slideIds,
             slidePayloadJSON: payloadJSON,
             mediaURLPaths: mediaPaths,
-            audioURLPaths: [:],
+            audioURLPaths: audioPaths,
             originalLanguage: nil,
             visibility: visibility.rawValue
         )
