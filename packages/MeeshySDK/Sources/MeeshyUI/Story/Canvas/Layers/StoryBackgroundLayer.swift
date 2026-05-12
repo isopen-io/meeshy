@@ -173,10 +173,21 @@ extension StoryBackgroundLayer {
 
 // MARK: - ThumbHash Placeholder
 
-/// No-op fallback decoder. Returns nil until a real ThumbHash library is linked.
+/// Decoder seam wired to `UIImage.fromThumbHash(_:)` (Wolt spec, MeeshySDK/Utils).
+/// Returns a small `UIImage` (≤ 32 px on the long edge) ready to be assigned as
+/// `CALayer.contents`. The hash MUST be base64-encoded; the underlying decoder
+/// guards against short/invalid inputs and returns `nil` in that case.
+///
+/// `nonisolated` so it can be called from `configure(...)` (`@MainActor`) and
+/// from background `Task` resolution without crossing actor boundaries — the
+/// decoder is pure CPU work over a fresh `[UInt8]` and produces an immutable
+/// `UIImage` value. We deliberately ignore the requested `size:` parameter:
+/// resampling to the canvas size happens implicitly when the layer assigns
+/// `contents` and respects `contentsGravity`. Pre-scaling here would waste CPU
+/// and degrade quality on retina displays.
 enum ThumbHashDecoder {
-    static func decodeIfAvailable(_ hash: String, size: CGSize) -> UIImage? {
-        // ThumbHash library wiring (if linked). Conservative no-op for now.
-        return nil
+    nonisolated static func decodeIfAvailable(_ hash: String, size: CGSize) -> UIImage? {
+        guard !hash.isEmpty else { return nil }
+        return UIImage.fromThumbHash(hash)
     }
 }
