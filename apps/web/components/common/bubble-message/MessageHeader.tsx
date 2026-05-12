@@ -22,6 +22,7 @@ export const MessageHeader = memo(function MessageHeader({
   message,
 }: MessageHeaderProps) {
   const [showAvatarLightbox, setShowAvatarLightbox] = useState(false);
+  const avatarUrl = message.sender?.avatar ?? undefined;
 
   return (
     <>

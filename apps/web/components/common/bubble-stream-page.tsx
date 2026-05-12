@@ -80,6 +80,7 @@ export function BubbleStreamPage({
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const messageComposerRef = useRef<unknown>(null);
   const typingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const conversationObjectIdRef = useRef<string | null>(null);
   const currentFocusedConversationRef = useRef<string | null>(null);
 
   // Limite de caractères
