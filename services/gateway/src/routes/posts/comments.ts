@@ -4,7 +4,7 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostCommentService } from '../../services/PostCommentService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
-import { sendSuccess } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
@@ -40,7 +40,7 @@ export function registerCommentRoutes(
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId/comments] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -68,7 +68,7 @@ export function registerCommentRoutes(
       });
     } catch (error) {
       fastify.log.error(`[GET comments/:commentId/replies] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -80,13 +80,13 @@ export function registerCommentRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
       const parsed = CreateCommentSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ success: false, error: 'Invalid request', details: parsed.error.issues });
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
       // Idempotent via clientMutationId — replays return the same comment.
@@ -118,7 +118,7 @@ export function registerCommentRoutes(
       });
 
       if (!comment) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       // Broadcast comment added via Socket.IO
@@ -187,10 +187,10 @@ export function registerCommentRoutes(
       return sendSuccess(reply, comment, { statusCode: 201, meta: { mentionedUsers: newCommentMentionedUsers } });
     } catch (error) {
       if (error instanceof Error && error.message === 'PARENT_NOT_FOUND') {
-        return reply.status(404).send({ success: false, error: 'Parent comment not found' });
+        return sendNotFound(reply, 'Parent comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
       fastify.log.error(`[POST /posts/:postId/comments] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -201,7 +201,7 @@ export function registerCommentRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { commentId } = request.params;
@@ -210,7 +210,7 @@ export function registerCommentRoutes(
 
       const result = await commentService.likeComment(commentId, authContext.registeredUser.id, emoji);
       if (!result) {
-        return reply.status(404).send({ success: false, error: 'Comment not found' });
+        return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
       // Broadcast comment liked via Socket.IO
@@ -240,7 +240,7 @@ export function registerCommentRoutes(
       return sendSuccess(reply, { liked: true, likeCount: result.likeCount, reactionSummary: result.reactionSummary });
     } catch (error) {
       fastify.log.error(`[POST comments/:commentId/like] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -251,7 +251,7 @@ export function registerCommentRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { commentId } = request.params;
@@ -260,13 +260,13 @@ export function registerCommentRoutes(
 
       const result = await commentService.unlikeComment(commentId, authContext.registeredUser.id, emoji);
       if (!result) {
-        return reply.status(404).send({ success: false, error: 'Comment not found' });
+        return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
       return sendSuccess(reply, { liked: false, likeCount: result.likeCount, reactionSummary: result.reactionSummary });
     } catch (error) {
       fastify.log.error(`[DELETE comments/:commentId/like] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -277,7 +277,7 @@ export function registerCommentRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { commentId } = request.params;
@@ -301,7 +301,7 @@ export function registerCommentRoutes(
         throw err;
       });
       if (!result) {
-        return reply.status(404).send({ success: false, error: 'Comment not found' });
+        return sendNotFound(reply, 'Comment not found', { code: 'COMMENT_NOT_FOUND' });
       }
 
       // Broadcast comment deleted via Socket.IO
@@ -323,10 +323,10 @@ export function registerCommentRoutes(
       return sendSuccess(reply, { deleted: true });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return reply.status(403).send({ success: false, error: 'Not authorized to delete this comment' });
+        return sendForbidden(reply, 'Not authorized to delete this comment', { code: 'FORBIDDEN' });
       }
       fastify.log.error(`[DELETE comments/:commentId] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 }

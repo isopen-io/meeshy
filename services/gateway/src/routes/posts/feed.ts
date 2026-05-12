@@ -3,7 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostFeedService } from '../../services/PostFeedService';
 import { FeedQuerySchema, UserParams, CommunityParams } from './types';
-import { sendSuccess } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendInternalError } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
 
 function collectPostContents(posts: unknown[]): string[] {
@@ -35,7 +35,7 @@ export function registerFeedRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const query = FeedQuerySchema.safeParse(request.query);
@@ -54,7 +54,7 @@ export function registerFeedRoutes(
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -65,7 +65,7 @@ export function registerFeedRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const stories = await feedService.getStories(authContext.registeredUser.id);
@@ -78,7 +78,7 @@ export function registerFeedRoutes(
       return sendSuccess(reply, stories, { meta: { mentionedUsers: storyMentionedUsers } });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/stories] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -89,7 +89,7 @@ export function registerFeedRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const query = FeedQuerySchema.safeParse(request.query);
@@ -108,7 +108,7 @@ export function registerFeedRoutes(
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/statuses] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -119,7 +119,7 @@ export function registerFeedRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const query = FeedQuerySchema.safeParse(request.query);
@@ -138,7 +138,7 @@ export function registerFeedRoutes(
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/feed/statuses/discover] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -167,7 +167,7 @@ export function registerFeedRoutes(
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/user/:userId] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -196,7 +196,7 @@ export function registerFeedRoutes(
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/community/:communityId] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -207,7 +207,7 @@ export function registerFeedRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const query = FeedQuerySchema.safeParse(request.query);
@@ -226,7 +226,7 @@ export function registerFeedRoutes(
       });
     } catch (error) {
       fastify.log.error(`[GET /posts/bookmarks] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 }
