@@ -163,7 +163,7 @@ public actor TusUploadManager {
         // Compute the bytewise checkpoint key once. Same source file +
         // same compression settings → same bytes → same key, so a queue
         // retry after kill matches the previous session's checkpoint.
-        let checkpointKey = try sha256Hex(of: fileURL)
+        let checkpointKey = try Self.sha256Hex(of: fileURL)
         let store = TusUploadCheckpointStore.shared
 
         // Step 1: Resolve patchURL — either resume from a stored checkpoint
@@ -354,11 +354,43 @@ public actor TusUploadManager {
         return 0
     }
 
-    /// Computes the SHA256 of the file contents and returns it as a lowercase
-    /// hex string. Used as the bytewise-stable checkpoint key.
-    private func sha256Hex(of fileURL: URL) throws -> String {
-        let data = try Data(contentsOf: fileURL, options: .mappedIfSafe)
-        let digest = SHA256.hash(data: data)
+    /// Streaming buffer size for the SHA-256 file digest. 64 KiB is the
+    /// sweet spot between syscall overhead (too small → many reads) and
+    /// memory pressure under iOS background-task constraints (too large →
+    /// peaks that the OS may use as an OOM trigger on suspended apps).
+    /// Each `read(upToCount:)` allocates a fresh `Data` that we drain into
+    /// `SHA256` and release via the surrounding autoreleasepool.
+    private static let hashBufferSize: Int = 64 * 1024
+
+    /// Computes the SHA256 of the file contents and returns it as a
+    /// lowercase hex string. Used as the bytewise-stable checkpoint key.
+    ///
+    /// Streams the file in 64 KiB chunks and folds each one into a running
+    /// `SHA256` hasher, wrapping every read in an `autoreleasepool` so that
+    /// the transient `Data` blocks are released immediately and not held
+    /// for the entire run-loop tick. This keeps peak RSS bounded at ~64 KiB
+    /// regardless of file size — required for 200-500 MB videos uploaded
+    /// from `BGProcessingTask` / suspended-app contexts where iOS OOM-kills
+    /// processes that touch the whole file with `Data(contentsOf:)` +
+    /// `SHA256.hash(data:)`.
+    ///
+    /// `static` so the implementation is purely a pure I/O helper and can
+    /// be exercised from tests without needing an actor hop.
+    static func sha256Hex(of fileURL: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? handle.close() }
+
+        var hasher = SHA256()
+        while try autoreleasepool(invoking: { () throws -> Bool in
+            guard let chunk = try handle.read(upToCount: hashBufferSize),
+                  !chunk.isEmpty else {
+                return false
+            }
+            hasher.update(data: chunk)
+            return true
+        }) {}
+
+        let digest = hasher.finalize()
         return digest.map { String(format: "%02x", $0) }.joined()
     }
 
