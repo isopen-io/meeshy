@@ -29,11 +29,18 @@ Vérifié dans cette session :
 - ✅ Build succeed (0.1)
 - ✅ Boot to feed sans crash (0.2)
 - ✅ Tests automatisés story-canvas — 11 suites pass (0.3)
-- ❌ Navigation composer / viewer / picker — pas reproductible en CLI
+- ❌ Navigation composer / viewer / picker — pas reproductible en CLI initial
 
-Pour exécuter les scénarios 1-12 :
-- Soit interactivement sur simulator (recommandé pour première passe)
+**Update 09:31-09:53** : Accessibility grant pour Terminal permet osascript + cliclick → driving partiel possible :
+- ✅ **Scenario 1 partial** (`meeshy_20260512_093637.png`) : Tap story carousel (Belva Tano) → viewer fullscreen ouvert. Header (avatar BT + name + "11h" + "expire dans 9h"), progress bar haute, action rail right (React/Répondre/Envoyer/Son active/Traductions), bottom commenter + EN flag picker. Canvas vide (story texte-only ou pas de média visible). Dismiss × OK.
+- ✅ **Scenario 12 partial** (`meeshy_20260512_094219.png`) : Composer ouvert. Top bar glass `.ultraThinMaterial` (× / slide thumb / ▶ / Publish gradient + ↑ / ⋯). Bottom toolbar glass (CONTENU / EFFETS tabs + Media / Drawing / Aa Text / ✨ pills). Aligné sur le pattern VideoFilterControlView ✅.
+- ⚠️ **Scenarios 3-11** : not driven — chaque pill du composer demande multi-step (tap pill → drag/tap canvas → sélectionner item → ouvrir sub-panel). Navigation reste accessible mais l'effort de calibration coords/sec dépasse le ROI pour cette session.
+
+Pour exécuter les scénarios restants :
+- Soit interactivement sur simulator (recommandé pour première passe humaine)
 - Soit en écrivant XCUITest cases (`MeeshyUITests/UI/` à créer) — voir section Automation future en bas de doc
+
+**Feature delivered post-smoke** : commit `ca4bf8f0` ajoute un badge "+" top-left sur l'avatar utilisateur dans le carousel (`MyStoryButton`) pour rendre l'entry composer découvrable sans long-press. Le tap unique sur le badge ouvre `viewModel.showStoryComposer`. Recommandation issue de la session smoke test (Belva Tano vs atabeth carousel confusion).
 
 ## ⚠️ Path actuellement non testable depuis l'UI
 
