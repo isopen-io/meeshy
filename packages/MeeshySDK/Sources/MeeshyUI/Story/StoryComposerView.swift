@@ -253,11 +253,23 @@ public struct StoryComposerView: View {
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showTopBar)
 
-            // Bottom: toolbar + active panel
+            // Bottom: toolbar + active panel.
+            // When the composer is empty (no content + no tool selected) we
+            // swap the compact toolbar for `emptyStateLargePicker` — large
+            // rectangular tiles in a horizontal carousel taking the bottom
+            // half of the screen. The compact toolbar comes back as soon as
+            // a tool is selected OR a slide has any content.
             VStack(spacing: 0) {
                 Spacer()
-                bottomOverlay
+                if shouldShowEmptyStateLargePicker {
+                    emptyStateLargePicker
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                } else {
+                    bottomOverlay
+                }
             }
+            .animation(.spring(response: 0.35, dampingFraction: 0.85),
+                       value: shouldShowEmptyStateLargePicker)
         }
         .statusBarHidden()
         .onAppear {
@@ -660,6 +672,162 @@ public struct StoryComposerView: View {
                 Label(String(localized: "story.composer.duplicateSlide", defaultValue: "Dupliquer", bundle: .module), systemImage: "doc.on.doc")
             }
         }
+    }
+
+    // MARK: - Empty-State Large Picker
+    //
+    // Shown in place of the compact toolbar when the composer canvas is empty
+    // (no media, no text, no sticker, no drawing, no background) AND no tool
+    // is currently active. Surface a roomy carousel of large rectangular
+    // tiles so the user discovers the available creation modes immediately
+    // — better space utilization than ~70% black canvas + tiny pills row.
+    // The current compact toolbar comes back the moment a tool is selected
+    // OR any content is added.
+
+    /// True when the entire composer carries no authoring state yet — used
+    /// to decide whether to surface the discovery-mode large picker.
+    private var isComposerEmpty: Bool {
+        let slidesEmpty = viewModel.slides.allSatisfy { slide in
+            slide.content == nil
+                && viewModel.slideImages[slide.id] == nil
+                && slide.effects.background == nil
+                && slide.effects.textObjects.isEmpty
+                && (slide.effects.mediaObjects ?? []).isEmpty
+                && (slide.effects.stickerObjects ?? []).isEmpty
+                && slide.effects.drawingData == nil
+        }
+        return slidesEmpty
+            && stickerObjects.isEmpty
+            && viewModel.drawingData == nil
+    }
+
+    private var shouldShowEmptyStateLargePicker: Bool {
+        viewModel.activeTool == nil && isComposerEmpty
+    }
+
+    @ViewBuilder
+    private var emptyStateLargePicker: some View {
+        VStack(spacing: 18) {
+            VStack(spacing: 4) {
+                Text(String(localized: "story.composer.empty.title",
+                            defaultValue: "Commencez votre story",
+                            bundle: .module))
+                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .foregroundStyle(MeeshyColors.brandGradient)
+                Text(String(localized: "story.composer.empty.subtitle",
+                            defaultValue: "Choisissez un outil pour démarrer",
+                            bundle: .module))
+                    .font(.system(size: 13))
+                    .foregroundColor(.white.opacity(0.65))
+            }
+            .padding(.top, 16)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 14) {
+                    largeToolTile(
+                        .media,
+                        icon: "play.rectangle.fill",
+                        title: String(localized: "story.composer.empty.tile.media",
+                                      defaultValue: "Médias",
+                                      bundle: .module),
+                        subtitle: String(localized: "story.composer.empty.tile.media.sub",
+                                         defaultValue: "Photos, vidéos, audio",
+                                         bundle: .module)
+                    )
+                    largeToolTile(
+                        .text,
+                        icon: "textformat",
+                        title: String(localized: "story.composer.empty.tile.text",
+                                      defaultValue: "Texte",
+                                      bundle: .module),
+                        subtitle: String(localized: "story.composer.empty.tile.text.sub",
+                                         defaultValue: "Style, couleur, verre",
+                                         bundle: .module)
+                    )
+                    largeToolTile(
+                        .drawing,
+                        icon: "pencil.tip",
+                        title: String(localized: "story.composer.empty.tile.drawing",
+                                      defaultValue: "Dessin",
+                                      bundle: .module),
+                        subtitle: String(localized: "story.composer.empty.tile.drawing.sub",
+                                         defaultValue: "Pencil et couleurs",
+                                         bundle: .module)
+                    )
+                    largeToolTile(
+                        .texture,
+                        icon: "paintpalette.fill",
+                        title: String(localized: "story.composer.empty.tile.texture",
+                                      defaultValue: "Fond",
+                                      bundle: .module),
+                        subtitle: String(localized: "story.composer.empty.tile.texture.sub",
+                                         defaultValue: "Couleur, dégradé",
+                                         bundle: .module)
+                    )
+                }
+                .padding(.horizontal, 20)
+            }
+            .frame(height: 220)
+        }
+        .padding(.bottom, safeAreaBottomInset + 12)
+        .frame(maxWidth: .infinity)
+        .background(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 24,
+                style: .continuous
+            )
+            .fill(.ultraThinMaterial)
+            .ignoresSafeArea(edges: .bottom)
+        )
+    }
+
+    @ViewBuilder
+    private func largeToolTile(
+        _ tool: StoryToolMode,
+        icon: String,
+        title: String,
+        subtitle: String
+    ) -> some View {
+        Button {
+            HapticFeedback.medium()
+            viewModel.selectTool(tool)
+        } label: {
+            VStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 44, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandGradient)
+                    .frame(width: 64, height: 64)
+                    .padding(.top, 18)
+
+                VStack(spacing: 4) {
+                    Text(title)
+                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .foregroundColor(.white)
+                    Text(subtitle)
+                        .font(.system(size: 12))
+                        .foregroundColor(.white.opacity(0.6))
+                        .multilineTextAlignment(.center)
+                        .lineLimit(2)
+                        .padding(.horizontal, 8)
+                }
+                Spacer(minLength: 0)
+            }
+            .frame(width: 160, height: 200)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .stroke(MeeshyColors.brandPrimary.opacity(0.25), lineWidth: 1)
+                    )
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityHint(subtitle)
     }
 
     // MARK: - Bottom Overlay
