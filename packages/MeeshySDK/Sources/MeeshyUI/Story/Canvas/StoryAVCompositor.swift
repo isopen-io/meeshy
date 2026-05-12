@@ -124,12 +124,32 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         cache.invalidateIfNeeded(slideId: slide.id, languages: [], mode: .play)
 
         let geometry = CanvasGeometry(renderSize: renderSize)
+
+        // Per-frame backdrop capture so AVFoundation exports pick up the MPS
+        // path identically to the live composer. The capture is a no-op when
+        // the slide has no glass-style text — common path remains untouched.
+        // We deliberately instantiate per frame rather than sharing a single
+        // instance on the compositor : `renderFrame` already runs once per
+        // exported frame and the helper holds at most one cached MTLTexture,
+        // which is released when this function returns. A shared instance
+        // would require manual `invalidate()` book-keeping for no observable
+        // throughput gain at AVFoundation's export rates.
+        let backdropCapture = StoryBackdropCapture()
+        _ = backdropCapture.captureCanvasBackdrop(slide: slide,
+                                                  geometry: geometry,
+                                                  time: time,
+                                                  mode: .play,
+                                                  languages: [])
+
         let layer = StoryRenderer.render(slide: slide,
                                           into: geometry,
                                           at: time,
                                           mode: .play,
                                           languages: [],
-                                          cache: cache)
+                                          cache: cache,
+                                          backdropProvider: { frame in
+                                              backdropCapture.cropRegion(frame)
+                                          })
 
         CVPixelBufferLockBaseAddress(buffer, [])
         defer { CVPixelBufferUnlockBaseAddress(buffer, []) }

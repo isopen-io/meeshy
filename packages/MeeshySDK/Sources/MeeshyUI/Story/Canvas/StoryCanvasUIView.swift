@@ -80,6 +80,14 @@ public final class StoryCanvasUIView: UIView {
     /// known `StoryFilteredLayer.Kind`. Owned and removed by `updateFilterLayer()`.
     private var filteredLayer: StoryFilteredLayer?
 
+    /// Two-pass backdrop snapshot helper. Drives the MPS path on
+    /// `StoryGlassBackdropLayer` by capturing the canvas-minus-glass tree
+    /// once per `rebuildLayers()` tick and serving cropped regions to each
+    /// glass-text item via the `BackdropProvider` closure. When no glass
+    /// items exist on the slide the capture is a no-op (single boolean scan).
+    /// See `docs/superpowers/specs/2026-05-12-story-glass-backdrop-snapshot-design.md`.
+    private let backdropCapture = StoryBackdropCapture()
+
     // MARK: - Gestures
 
     private var panRecognizer: UIPanGestureRecognizer!
@@ -351,11 +359,26 @@ public final class StoryCanvasUIView: UIView {
 
         // Items
         itemsContainer.sublayers?.forEach { $0.removeFromSuperlayer() }
+
+        // Drop the stale canvas backdrop captured during the previous tick,
+        // then re-capture against the current slide state. The helper short-
+        // circuits to a no-op when no glass-style text exists on the slide,
+        // so this is essentially free for the common path.
+        backdropCapture.invalidate()
+        _ = backdropCapture.captureCanvasBackdrop(slide: slide,
+                                                  geometry: geometry,
+                                                  time: currentTime,
+                                                  mode: mode,
+                                                  languages: readerContext.preferredLanguages)
+
         let rendered = StoryRenderer.render(slide: slide,
                                             into: geometry,
                                             at: currentTime,
                                             mode: mode,
-                                            languages: readerContext.preferredLanguages)
+                                            languages: readerContext.preferredLanguages,
+                                            backdropProvider: { [weak backdropCapture] frame in
+                                                backdropCapture?.cropRegion(frame)
+                                            })
         for sub in rendered.sublayers ?? [] {
             itemsContainer.addSublayer(sub)
         }
