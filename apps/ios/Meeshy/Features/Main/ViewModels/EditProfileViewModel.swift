@@ -89,4 +89,61 @@ final class EditProfileViewModel: ObservableObject {
             avatarPreviewImage = Image(uiImage: uiImage)
         }
     }
+
+    // MARK: - Save
+
+    func saveProfile(onDismiss: @escaping @MainActor () -> Void) async {
+        guard hasChanges, !isSaving else { return }
+        errorMessage = nil
+
+        // 1. Avatar upload (no-op if no image selected — added in Task 16).
+        let uploadedAvatarUrl: String? = nil
+
+        // 2. Build payload.
+        let cmid = ClientMutationId.generate()
+        let trimmedName = displayName.trimmingCharacters(in: .whitespaces)
+        let trimmedBio = bio.trimmingCharacters(in: .whitespaces)
+        let payload = UpdateProfilePayload(
+            clientMutationId: cmid,
+            displayName: trimmedName.isEmpty ? nil : trimmedName,
+            bio: trimmedBio.isEmpty ? nil : trimmedBio,
+            avatarUrl: uploadedAvatarUrl
+        )
+
+        // 3. Optimistic apply local (publishes via @Published currentUser).
+        let snapshot = authManager.applyLocalProfileChanges(
+            displayName: payload.displayName,
+            bio: payload.bio,
+            avatarUrl: payload.avatarUrl
+        )
+
+        // 4. Observer (added in Task 17).
+        // observeOutcome(cmid: cmid, snapshot: snapshot)
+
+        // 5. Enqueue.
+        saveState = .enqueueing
+        do {
+            try await offlineQueue.enqueue(.updateProfile, payload: payload, conversationId: nil)
+        } catch {
+            authManager.restoreLocalProfileSnapshot(snapshot)
+            errorMessage = "Echec de la mise a jour"
+            toast.showError(errorMessage ?? "")
+            haptics.error()
+            saveState = .failed
+            return
+        }
+
+        // 6. Persist optimistic in cache.
+        if let user = authManager.currentUser {
+            try? await profileCache.saveProfile(user, for: user.id)
+        }
+
+        // 7. UX feedback + dismiss.
+        haptics.success()
+        toast.showSuccess("Profil mis a jour")
+        saveState = .success
+        showSuccess = true
+        await sleeper.sleep(milliseconds: 1500)
+        onDismiss()
+    }
 }
