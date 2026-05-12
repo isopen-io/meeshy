@@ -475,6 +475,23 @@ final class CallManager: ObservableObject {
             }
         }
 
+        // Bug D — Push VoIP décalé : APNs peut livrer la push plusieurs minutes
+        // après l'émission (queueing iOS, app suspendue, latence réseau). Si
+        // l'appelant a déjà raccroché entre-temps, on présenterait une fausse
+        // UI d'appel entrant qui ne sonnera jamais réellement (sans ce check).
+        //
+        // Apple exige `reportNewIncomingCall` SYNCHRONE sous 5s du push (sous
+        // peine de révocation du token APNs), donc on report d'abord puis on
+        // vérifie en background. Si le gateway répond avec un statut terminal
+        // (ended/missed/rejected/failed) ou 404, on end immédiatement l'appel
+        // CallKit avec `.unanswered` — la lock-screen flash brièvement puis
+        // disparaît, l'entrée Recents reste neutre.
+        let capturedUuid = uuid
+        let capturedCallId = callId
+        Task { [weak self] in
+            await self?.checkVoIPCallFreshness(uuid: capturedUuid, callId: capturedCallId)
+        }
+
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing.
         // The VoIP push payload carries the per-user ICE servers (TURN credentials)
         // so RTCPeerConnection is built with TURN BEFORE the offer is set.
@@ -513,6 +530,69 @@ final class CallManager: ObservableObject {
 
         Logger.calls.info("VoIP push incoming call reported: \(callId) from \(callerName)")
         HapticFeedback.medium()
+    }
+
+    // MARK: - VoIP Push Freshness Check (Bug D)
+
+    /// Vérifie via REST `GET /api/v1/calls/:callId` que l'appel pour lequel
+    /// on a reçu un push VoIP est toujours actif sur le gateway. Si non,
+    /// end immédiatement l'appel CallKit qu'on vient de reporter — utile
+    /// quand APNs livre la push plusieurs minutes après l'émission (l'app
+    /// suspendue, le device offline, latence réseau).
+    @MainActor
+    private func checkVoIPCallFreshness(uuid: UUID, callId: String) async {
+        // Récupérer le token JWT pour authentifier la requête.
+        guard let token = AuthManager.shared.authToken else {
+            Logger.calls.warning("[VOIP_FRESHNESS] no auth token — cannot verify, assuming fresh")
+            return
+        }
+        let urlString = "\(MeeshyConfig.shared.apiBaseURL)/calls/\(callId)"
+        guard let url = URL(string: urlString) else { return }
+
+        var request = URLRequest(url: url, timeoutInterval: 4.0)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return }
+
+            // 404 ou autre erreur → push stale, end l'appel
+            if httpResponse.statusCode == 404 {
+                Logger.calls.warning("[VOIP_FRESHNESS] callId \(callId) introuvable (404) — push stale, ending phantom call")
+                if activeCallUUID == uuid {
+                    callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+                    endCallInternal(reason: .missed)
+                }
+                return
+            }
+
+            // Parser la réponse pour voir le statut
+            guard httpResponse.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let success = json["success"] as? Bool, success,
+                  let callData = json["data"] as? [String: Any],
+                  let status = callData["status"] as? String else {
+                Logger.calls.info("[VOIP_FRESHNESS] response opaque — assuming fresh")
+                return
+            }
+
+            // Statuts terminaux = push stale, l'appel est fini
+            let terminalStatuses: Set<String> = ["ended", "missed", "rejected", "failed"]
+            if terminalStatuses.contains(status.lowercased()) {
+                Logger.calls.warning("[VOIP_FRESHNESS] callId \(callId) status=\(status) (terminal) — push stale, ending phantom call")
+                if activeCallUUID == uuid {
+                    callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+                    endCallInternal(reason: .missed)
+                }
+            } else {
+                Logger.calls.info("[VOIP_FRESHNESS] callId \(callId) status=\(status) — push fresh, continuing")
+            }
+        } catch {
+            // Network error — on assume fresh (preferable de présenter un
+            // faux appel rare plutôt que de rater un vrai appel).
+            Logger.calls.warning("[VOIP_FRESHNESS] check failed (\(error.localizedDescription)) — assuming fresh")
+        }
     }
 
     // MARK: - Phantom VoIP Call (defense-in-depth)
@@ -1108,6 +1188,40 @@ final class CallManager: ObservableObject {
         //   2) RTP gate poll qui détecte les premiers packets entrants
         // On évite ainsi de relancer durationTask / heartbeat / haptics.
         if case .connected = callState { return }
+
+        // Audio fallback CRITIQUE — si CallKit `provider:didActivate:audioSession`
+        // n'a JAMAIS firé (bug iOS connu sur certaines configs : simulateur,
+        // fresh app launch sur 1er incoming, etc.), `RTCAudioSession.isAudioEnabled`
+        // reste `false` → libwebrtc ne démarre PAS son audio engine →
+        // CONNEXION ICE ÉTABLIE MAIS AUCUNE VOIX (symptôme rapporté par
+        // l'user : "compteur visible mais pas de voix").
+        //
+        // On vérifie ici si la session est active. Si non, on l'active
+        // manuellement avant de passer en `.connected`. Sur device avec
+        // CallKit qui fonctionne normalement, didActivate a déjà firé et
+        // ce code est no-op. Sur simulateur ou edge cases, ça sauve la
+        // voix.
+        let rtc = RTCAudioSession.sharedInstance()
+        if !rtc.isAudioEnabled {
+            Logger.calls.warning("[AUDIO_FALLBACK] CallKit didActivate n'a pas firé — activation manuelle de RTCAudioSession pour transmettre l'audio")
+            rtc.lockForConfiguration()
+            do {
+                // Configurer la session pour VoIP avant d'activer.
+                let configuration = RTCAudioSessionConfiguration.webRTC()
+                configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+                configuration.mode = (isVideoEnabled ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
+                configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
+                try rtc.setConfiguration(configuration, active: true)
+                rtc.isAudioEnabled = true
+                Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession activée manuellement (mode=\(configuration.mode), category=\(configuration.category))")
+            } catch {
+                Logger.calls.error("[AUDIO_FALLBACK] échec activation manuelle: \(error.localizedDescription)")
+            }
+            rtc.unlockForConfiguration()
+        } else {
+            Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession déjà active (CallKit didActivate a firé normalement)")
+        }
+
         ringbackPlayer.stop()
         callState = .connected
         // Audio session was configured ONCE at peer-connection setup; CallKit

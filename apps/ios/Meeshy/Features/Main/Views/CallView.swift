@@ -52,7 +52,14 @@ struct CallView: View {
                     IncomingCallView(callManager: callManager)
                 }
             case .offering:
-                connectingView
+                // `.offering` = SDP offer émis, en attente de l'answer du
+                // peer = en attente que l'appelé tape "Accepter" sur CallKit.
+                // L'utilisateur attend toujours une réponse humaine — afficher
+                // l'UI de "Sonnerie" (outgoingRingingView), pas "Connexion".
+                // La transition vers connectingView ne se fait qu'après que
+                // handleRemoteAnswer ait reçu l'answer SDP = preuve formelle
+                // que le peer a accepté.
+                outgoingRingingView
             case .connecting:
                 connectingView
             case .connected:
