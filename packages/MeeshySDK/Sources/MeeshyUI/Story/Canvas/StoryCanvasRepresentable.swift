@@ -32,18 +32,35 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onItemDoubleTapped = onItemDoubleTapped
 
         // Push outside-driven slide changes (e.g. toolbar mutations of
-        // `slide.effects`) into the canvas. Skip identical-id updates that
-        // share the same element counts to avoid redundant rebuilds.
-        if uiView.slide.id != slide.id || !slidesEqualForCanvas(uiView.slide, slide) {
+        // `slide.effects`) into the canvas. Skip pushes when the slide is
+        // semantically identical to avoid redundant `rebuildLayers()` calls.
+        if !Self.slidesEqualForCanvas(uiView.slide, slide) {
             uiView.slide = slide
         }
     }
 
-    private func slidesEqualForCanvas(_ a: StorySlide, _ b: StorySlide) -> Bool {
+    /// Semantic equality used to decide whether to forward a slide change into
+    /// `StoryCanvasUIView` (which rebuilds all CALayers via `slide.didSet`).
+    ///
+    /// The previous heuristic compared only element counts and silently skipped
+    /// inline edits — colour, text content, position via slider, rotation,
+    /// keyframes, drawing data, filters. We now compare via stable JSON
+    /// fingerprints (`.sortedKeys`) so any encoded field flip yields a
+    /// different `Data`. `StorySlide.mediaData` is omitted from `CodingKeys`
+    /// and therefore intentionally ignored — it is composer ephemeral state
+    /// that does not influence canvas rendering.
+    ///
+    /// On encoding failure (effectively impossible for these Codable structs)
+    /// we fall back to "not equal" so the canvas always reflects the latest
+    /// state rather than silently dropping a real update.
+    internal static func slidesEqualForCanvas(_ a: StorySlide, _ b: StorySlide) -> Bool {
         guard a.id == b.id else { return false }
-        if a.effects.textObjects.count != b.effects.textObjects.count { return false }
-        if (a.effects.mediaObjects?.count ?? 0) != (b.effects.mediaObjects?.count ?? 0) { return false }
-        if (a.effects.stickerObjects?.count ?? 0) != (b.effects.stickerObjects?.count ?? 0) { return false }
-        return true
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys]
+        guard let lhs = try? encoder.encode(a),
+              let rhs = try? encoder.encode(b) else {
+            return false
+        }
+        return lhs == rhs
     }
 }
