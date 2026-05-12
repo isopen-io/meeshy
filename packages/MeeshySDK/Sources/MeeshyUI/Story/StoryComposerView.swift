@@ -288,6 +288,14 @@ public struct StoryComposerView: View {
         .onAppear {
             viewModel.startMemoryObserver()
             viewModel.loadCurrentSlideIntoTimeline()
+            // Apply the random pastel background (initialised on VM) to the
+            // current slide right away so the canvas previews the chosen
+            // color instead of staying black until the user touches anything.
+            // Without this, `slide.effects.background` is nil and the canvas
+            // falls back to opaque black.
+            if viewModel.currentSlide.effects.background == nil {
+                syncCurrentSlideEffects()
+            }
         }
         .onChange(of: viewModel.currentSlideIndex) { _, _ in
             viewModel.loadCurrentSlideIntoTimeline()
@@ -699,11 +707,17 @@ public struct StoryComposerView: View {
 
     /// True when the entire composer carries no authoring state yet — used
     /// to decide whether to surface the discovery-mode large picker.
+    ///
+    /// `slide.effects.background` is intentionally NOT in the check because
+    /// it is always auto-populated with a random pastel on composer open
+    /// (see `.onAppear` → `syncCurrentSlideEffects`). The background being
+    /// set therefore tells us nothing about user intent — only explicit
+    /// content additions (text / media / sticker / drawing) flip the slide
+    /// out of empty state.
     private var isComposerEmpty: Bool {
         let slidesEmpty = viewModel.slides.allSatisfy { slide in
             slide.content == nil
                 && viewModel.slideImages[slide.id] == nil
-                && slide.effects.background == nil
                 && slide.effects.textObjects.isEmpty
                 && (slide.effects.mediaObjects ?? []).isEmpty
                 && (slide.effects.stickerObjects ?? []).isEmpty
@@ -734,31 +748,34 @@ public struct StoryComposerView: View {
 
     @ViewBuilder
     private var emptyStateLargePicker: some View {
-        VStack(spacing: 18) {
-            VStack(spacing: 4) {
+        VStack(spacing: 8) {
+            VStack(spacing: 2) {
                 Text(String(localized: "story.composer.empty.title",
                             defaultValue: "Commencez votre story",
                             bundle: .module))
-                    .font(.system(size: 22, weight: .bold, design: .rounded))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
                     .foregroundStyle(MeeshyColors.brandGradient)
                 Text(String(localized: "story.composer.empty.subtitle",
                             defaultValue: "Choisissez un outil pour démarrer",
                             bundle: .module))
-                    .font(.system(size: 13))
+                    .font(.system(size: 11))
                     .foregroundColor(.white.opacity(0.65))
             }
-            .padding(.top, 16)
+            .padding(.top, 8)
             .opacity(pickerSelectedTool == nil ? 1 : 0)
             .scaleEffect(pickerSelectedTool == nil ? 1 : 0.95)
 
-            ScrollView(.vertical, showsIndicators: false) {
-                LazyVGrid(
-                    columns: [
-                        GridItem(.flexible(), spacing: 14),
-                        GridItem(.flexible(), spacing: 14)
-                    ],
-                    spacing: 14
-                ) {
+            // 4 tiles in a 2-column grid fit comfortably without scrolling.
+            // The grid sizes to its content (~190pt) so the picker stays at
+            // the bottom and leaves ≥ 80 % of the screen for the top bar +
+            // canvas pastel preview, per the empty-state UX brief.
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 10),
+                    GridItem(.flexible(), spacing: 10)
+                ],
+                spacing: 10
+            ) {
                     largeToolTile(
                         .media,
                         icon: "play.rectangle.fill",
@@ -789,20 +806,19 @@ public struct StoryComposerView: View {
                                          defaultValue: "Pencil et couleurs",
                                          bundle: .module)
                     )
-                    largeToolTile(
-                        .texture,
-                        icon: "paintpalette.fill",
-                        title: String(localized: "story.composer.empty.tile.texture",
-                                      defaultValue: "Fond",
-                                      bundle: .module),
-                        subtitle: String(localized: "story.composer.empty.tile.texture.sub",
-                                         defaultValue: "Couleur, dégradé",
-                                         bundle: .module)
-                    )
-                }
-                .padding(.horizontal, 20)
-                .padding(.bottom, 8)
+                largeToolTile(
+                    .texture,
+                    icon: "paintpalette.fill",
+                    title: String(localized: "story.composer.empty.tile.texture",
+                                  defaultValue: "Fond",
+                                  bundle: .module),
+                    subtitle: String(localized: "story.composer.empty.tile.texture.sub",
+                                     defaultValue: "Couleur, dégradé",
+                                     bundle: .module)
+                )
             }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
         }
         .padding(.bottom, safeAreaBottomInset + 12)
         .frame(maxWidth: .infinity)
@@ -846,51 +862,52 @@ public struct StoryComposerView: View {
                 pickerSelectedTool = nil
             }
         } label: {
-            VStack(spacing: 10) {
+            HStack(spacing: 10) {
                 ZStack {
                     Circle()
                         .fill(accent.opacity(isSelected ? 0.55 : 0.30))
-                        .frame(width: 76, height: 76)
+                        .frame(width: 44, height: 44)
                     Image(systemName: icon)
-                        .font(.system(size: 36, weight: .semibold))
+                        .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(accent)
                 }
-                .padding(.top, 18)
 
-                VStack(spacing: 4) {
+                VStack(alignment: .leading, spacing: 2) {
                     Text(title)
-                        .font(.system(size: 17, weight: .semibold, design: .rounded))
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
                         .foregroundColor(.white)
+                        .lineLimit(1)
                     Text(subtitle)
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(.white.opacity(0.65))
-                        .multilineTextAlignment(.center)
                         .lineLimit(2)
-                        .padding(.horizontal, 8)
+                        .multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 0)
             }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
-            .frame(height: 188)
+            .frame(height: 72)
             .background(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
                     // Uniform pastel tint matching the tile's accent — replaces
                     // the previous .ultraThinMaterial gray fill so each tile
                     // reads as its own color instead of a generic glass card.
-                    .fill(accent.opacity(0.18))
+                    .fill(accent.opacity(0.20))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 22, style: .continuous)
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
                             .stroke(accent.opacity(isSelected ? 0.75 : 0.40), lineWidth: isSelected ? 2 : 1)
                     )
             )
-            .shadow(color: accent.opacity(isSelected ? 0.45 : 0), radius: 18, y: 6)
-            .scaleEffect(isSelected ? 1.06 : 1.0)
+            .shadow(color: accent.opacity(isSelected ? 0.45 : 0), radius: 14, y: 4)
+            .scaleEffect(isSelected ? 1.05 : 1.0)
             .opacity(isOtherSelected ? 0.30 : 1.0)
             // Outer padding gives the scale-up animation room to breathe
             // without being clipped by the grid cell — without it, the
             // selected tile's enlarged corners touch neighbouring tiles
             // and shadow gets cropped.
-            .padding(8)
+            .padding(6)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
