@@ -15,6 +15,18 @@ public struct ProTimelineView: View {
         public let tracks: [QuickTimelineView.CompactTrack]
     }
 
+    /// Identifies which inspector the bottom-leading overlay should surface
+    /// for the current `selection.selectedClipId`. Resolution priority is
+    /// clip → keyframe → transition, mirroring the lookup chain a tap on the
+    /// underlying SwiftUI element would trigger (KeyframeMarkerView and
+    /// TransitionBadge both call `selectClip(id:)` with their own id, which
+    /// would otherwise route through the wrong inspector).
+    public enum SelectionKind: Equatable, Sendable {
+        case clip(ClipInspector.ClipSnapshot)
+        case keyframe(KeyframeInspector.KeyframeSnapshot, clipId: String)
+        case transition(TransitionInspector.TransitionSnapshot)
+    }
+
     @Bindable private var viewModel: TimelineViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -124,6 +136,92 @@ public struct ProTimelineView: View {
                 isLooping: audio.loop ?? false,
                 isBackground: audio.isBackground ?? false
             )
+        }
+        return nil
+    }
+
+    /// Pure mapping from the current selection to a `KeyframeSnapshot`,
+    /// mirroring `resolveClipSnapshot` so test code can exercise the
+    /// keyframe-inspector routing without driving a SwiftUI render tree.
+    ///
+    /// A keyframe id is searched across every clip's `keyframes` collection
+    /// (media + text — audio has no keyframes). The owning clip's start time
+    /// is added to the keyframe's relative `time` to produce an absolute
+    /// timeline position so the inspector header reads correctly.
+    ///
+    /// Returns `nil` when no selection is active or when the selected id does
+    /// not match any keyframe.
+    public static func resolveKeyframeSnapshot(
+        viewModel: TimelineViewModel
+    ) -> (snapshot: KeyframeInspector.KeyframeSnapshot, clipId: String)? {
+        guard let id = viewModel.selection.selectedClipId else { return nil }
+        for media in viewModel.project.mediaObjects {
+            guard let keyframes = media.keyframes,
+                  let kf = keyframes.first(where: { $0.id == id }) else { continue }
+            let clipStart = Float(media.startTime ?? 0)
+            let snapshot = KeyframeInspector.KeyframeSnapshot(
+                id: kf.id,
+                absoluteTime: clipStart + kf.time,
+                x: kf.x ?? 0.5,
+                y: kf.y ?? 0.5,
+                scale: kf.scale ?? 1.0,
+                opacity: kf.opacity ?? 1.0
+            )
+            return (snapshot, media.id)
+        }
+        for text in viewModel.project.textObjects {
+            guard let keyframes = text.keyframes,
+                  let kf = keyframes.first(where: { $0.id == id }) else { continue }
+            let clipStart = Float(text.startTime ?? 0)
+            let snapshot = KeyframeInspector.KeyframeSnapshot(
+                id: kf.id,
+                absoluteTime: clipStart + kf.time,
+                x: kf.x ?? 0.5,
+                y: kf.y ?? 0.5,
+                scale: kf.scale ?? 1.0,
+                opacity: kf.opacity ?? 1.0
+            )
+            return (snapshot, text.id)
+        }
+        return nil
+    }
+
+    /// Pure mapping from the current selection to a `TransitionSnapshot`,
+    /// mirroring `resolveClipSnapshot`. The selected id is matched against
+    /// `project.clipTransitions[].id`. Returns `nil` when no selection is
+    /// active or when the id is not a transition.
+    public static func resolveTransitionSnapshot(
+        viewModel: TimelineViewModel
+    ) -> TransitionInspector.TransitionSnapshot? {
+        guard let id = viewModel.selection.selectedClipId else { return nil }
+        guard let transition = viewModel.project.clipTransitions.first(where: { $0.id == id }) else {
+            return nil
+        }
+        return TransitionInspector.TransitionSnapshot(
+            id: transition.id,
+            fromClipId: transition.fromClipId,
+            toClipId: transition.toClipId,
+            kind: transition.kind,
+            duration: transition.duration
+        )
+    }
+
+    /// Resolves the current selection to exactly one inspector kind, applying
+    /// the clip → keyframe → transition priority. A clip lookup wins because
+    /// media/audio/text object ids are the primary handle the playback engine
+    /// reports via `onElementBecameActive`. Returns `nil` when no selection is
+    /// active or the id matches none of the three categories.
+    public static func resolveSelectionKind(
+        viewModel: TimelineViewModel
+    ) -> SelectionKind? {
+        if let clip = resolveClipSnapshot(viewModel: viewModel) {
+            return .clip(clip)
+        }
+        if let keyframe = resolveKeyframeSnapshot(viewModel: viewModel) {
+            return .keyframe(keyframe.snapshot, clipId: keyframe.clipId)
+        }
+        if let transition = resolveTransitionSnapshot(viewModel: viewModel) {
+            return .transition(transition)
         }
         return nil
     }
@@ -299,35 +397,109 @@ public struct ProTimelineView: View {
 
     @ViewBuilder
     private var inspectorOverlay: some View {
-        if Self.shouldShowClipInspector(viewModel: viewModel),
-           let snapshot = currentClipSnapshot() {
-            let clipId = snapshot.id
-            ClipInspector(
-                presentation: .popover,
-                clip: snapshot,
-                onVolumeChanged: { [viewModel] volume in
-                    viewModel.setClipVolume(id: clipId, volume: volume)
-                },
-                onFadeInChanged: { [viewModel] fadeIn in
-                    viewModel.setClipFadeIn(id: clipId, fadeIn: fadeIn)
-                },
-                onFadeOutChanged: { [viewModel] fadeOut in
-                    viewModel.setClipFadeOut(id: clipId, fadeOut: fadeOut)
-                },
-                onLoopToggled: { [viewModel] loop in
-                    viewModel.setClipLoop(id: clipId, isLooping: loop)
-                },
-                onBackgroundToggled: { [viewModel] bg in
-                    viewModel.setClipBackground(id: clipId, isBackground: bg)
-                },
-                onAddKeyframe: { viewModel.addKeyframeAtPlayhead() },
-                onDelete: { viewModel.deleteClip(id: clipId) }
-            )
-            .padding(12)
-            .transition(.opacity)
-            .animation(reduceMotion ? .none : .easeInOut(duration: 0.15),
-                       value: viewModel.selection.selectedClipId)
+        // The selection bus is shared across clips, keyframes and transitions —
+        // KeyframeMarkerView and TransitionBadge both push their own id through
+        // `selectClip(id:)`. We dispatch to the right inspector by attempting
+        // each resolver in priority order (clip wins, then keyframe, then
+        // transition); the catch-all returns nothing so no overlay floats over
+        // the tracks when the selection is empty or stale.
+        switch Self.resolveSelectionKind(viewModel: viewModel) {
+        case .clip(let snapshot):
+            if Self.shouldShowClipInspector(viewModel: viewModel) {
+                clipInspectorOverlay(snapshot: snapshot)
+            }
+        case .keyframe(let snapshot, let clipId):
+            keyframeInspectorOverlay(snapshot: snapshot, clipId: clipId)
+        case .transition(let snapshot):
+            transitionInspectorOverlay(snapshot: snapshot)
+        case .none:
+            EmptyView()
         }
+    }
+
+    @ViewBuilder
+    private func clipInspectorOverlay(snapshot: ClipInspector.ClipSnapshot) -> some View {
+        let clipId = snapshot.id
+        ClipInspector(
+            presentation: .popover,
+            clip: snapshot,
+            onVolumeChanged: { [viewModel] volume in
+                viewModel.setClipVolume(id: clipId, volume: volume)
+            },
+            onFadeInChanged: { [viewModel] fadeIn in
+                viewModel.setClipFadeIn(id: clipId, fadeIn: fadeIn)
+            },
+            onFadeOutChanged: { [viewModel] fadeOut in
+                viewModel.setClipFadeOut(id: clipId, fadeOut: fadeOut)
+            },
+            onLoopToggled: { [viewModel] loop in
+                viewModel.setClipLoop(id: clipId, isLooping: loop)
+            },
+            onBackgroundToggled: { [viewModel] bg in
+                viewModel.setClipBackground(id: clipId, isBackground: bg)
+            },
+            onAddKeyframe: { viewModel.addKeyframeAtPlayhead() },
+            onDelete: { viewModel.deleteClip(id: clipId) }
+        )
+        .padding(12)
+        .transition(.opacity)
+        .animation(reduceMotion ? .none : .easeInOut(duration: 0.15),
+                   value: viewModel.selection.selectedClipId)
+    }
+
+    @ViewBuilder
+    private func keyframeInspectorOverlay(snapshot: KeyframeInspector.KeyframeSnapshot,
+                                          clipId: String) -> some View {
+        let keyframeId = snapshot.id
+        KeyframeInspector(
+            keyframe: snapshot,
+            // Advanced easings stay gated behind a future product flag.
+            // Linear-only matches the launch surface of KeyframeInspector.
+            isAdvancedEnabled: false,
+            onPositionChanged: { _, _ in
+                // Position commits route through MoveKeyframeCommand in a
+                // follow-up wire-up; the inspector currently shape-tests its
+                // own bindings so we surface a no-op closure here rather than
+                // forwarding to a method that does not yet exist on
+                // TimelineViewModel.
+            },
+            onScaleChanged: { _ in },
+            onOpacityChanged: { _ in },
+            onEasingChanged: { _ in },
+            onDelete: { [viewModel] in
+                viewModel.deleteKeyframe(clipId: clipId, keyframeId: keyframeId)
+            }
+        )
+        .padding(12)
+        .transition(.opacity)
+        .animation(reduceMotion ? .none : .easeInOut(duration: 0.15),
+                   value: viewModel.selection.selectedClipId)
+    }
+
+    @ViewBuilder
+    private func transitionInspectorOverlay(snapshot: TransitionInspector.TransitionSnapshot) -> some View {
+        let transitionId = snapshot.id
+        TransitionInspector(
+            transition: snapshot,
+            isAdvancedEnabled: false,
+            onKindChanged: { [viewModel] kind in
+                viewModel.changeTransition(transitionId: transitionId,
+                                           kind: kind,
+                                           duration: snapshot.duration)
+            },
+            onDurationChanged: { [viewModel] duration in
+                viewModel.changeTransition(transitionId: transitionId,
+                                           kind: snapshot.kind,
+                                           duration: duration)
+            },
+            onDelete: { [viewModel] in
+                viewModel.removeTransition(transitionId: transitionId)
+            }
+        )
+        .padding(12)
+        .transition(.opacity)
+        .animation(reduceMotion ? .none : .easeInOut(duration: 0.15),
+                   value: viewModel.selection.selectedClipId)
     }
 
     private func groupHeader(key: String) -> some View {
