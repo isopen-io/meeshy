@@ -162,11 +162,33 @@ public final class AudioMixer: AudioMixerProviding {
         return info
     }()
 
-    fileprivate static func hostTime(forDelaySeconds seconds: Double) -> UInt64 {
-        guard seconds > 0 else { return 0 }
-        let nanos = UInt64(seconds * 1_000_000_000)
-        // hostTime = nanos * (denom / numer)
-        return nanos * UInt64(hostTimebase.denom) / UInt64(hostTimebase.numer)
+    /// Production entry point — uses the cached system timebase.
+    static func hostTime(forDelaySeconds seconds: Double) -> UInt64 {
+        return hostTime(forDelaySeconds: seconds, timebase: hostTimebase)
+    }
+
+    /// Pure helper used by the production path and by tests. Computes
+    /// `nanos * denom / numer` in `Double` to avoid silent `UInt64` overflow
+    /// on non-Apple-Silicon timebases (e.g. Intel reports numer=1, denom=3,
+    /// which triples the nanosecond product before the divide). The Double
+    /// representation has 53 bits of mantissa, plenty for any realistic
+    /// wall-clock delay (centuries), and the final value is clamped to the
+    /// `UInt64` range before truncation so a malformed input can never wrap
+    /// around to a tiny number and miss-schedule audio in the past.
+    static func hostTime(
+        forDelaySeconds seconds: Double,
+        timebase: mach_timebase_info_data_t
+    ) -> UInt64 {
+        guard seconds > 0,
+              seconds.isFinite,
+              timebase.numer > 0,
+              timebase.denom > 0 else {
+            return 0
+        }
+        let nanosDouble = seconds * 1_000_000_000.0
+        let hostUnitsDouble = nanosDouble * Double(timebase.denom) / Double(timebase.numer)
+        let clamped = min(max(0, hostUnitsDouble), Double(UInt64.max))
+        return UInt64(clamped)
     }
 
     public func pause() {
