@@ -2,30 +2,52 @@
  * Tests for useUserStatusRealtime hook
  */
 
-import { renderHook } from '@testing-library/react';
+import { renderHook, act } from '@testing-library/react';
 import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 
 const mockOnUserStatus = jest.fn(() => jest.fn());
+const mockOnPresenceSnapshot = jest.fn(() => jest.fn());
 const mockGetSocket = jest.fn(() => ({ connected: true, emit: jest.fn() }));
 
 jest.mock('@/services/meeshy-socketio.service', () => ({
   getSocketIOService: () => ({
-    onUserStatus: (...args: any[]) => (mockOnUserStatus as any)(...args),
+    onUserStatus: (...args: unknown[]) => (mockOnUserStatus as (...a: unknown[]) => unknown)(...args),
+    onPresenceSnapshot: (...args: unknown[]) => (mockOnPresenceSnapshot as (...a: unknown[]) => unknown)(...args),
     getSocket: () => mockGetSocket(),
   }),
 }));
 
 const mockUpdateUserStatus = jest.fn();
 const mockTriggerStatusTick = jest.fn();
+const mockMergeParticipants = jest.fn();
+const mockUsersMap = new Map<string, { id: string }>();
+
+const userStoreState = {
+  updateUserStatus: mockUpdateUserStatus,
+  triggerStatusTick: mockTriggerStatusTick,
+  mergeParticipants: mockMergeParticipants,
+  usersMap: mockUsersMap,
+};
+
+type Selector<T> = (state: typeof userStoreState) => T;
+
+const useUserStoreMock = (selector: Selector<unknown>) => selector(userStoreState);
+(useUserStoreMock as unknown as { getState: () => typeof userStoreState }).getState = () => userStoreState;
 
 jest.mock('@/stores/user-store', () => ({
-  useUserStore: (selector: (state: any) => any) => {
-    const state = {
-      updateUserStatus: mockUpdateUserStatus,
-      triggerStatusTick: mockTriggerStatusTick,
-    };
-    return selector(state);
-  },
+  useUserStore: useUserStoreMock,
+}));
+
+jest.mock('@/lib/config', () => ({
+  buildApiUrl: (endpoint: string) => `http://localhost:3000/api/v1${endpoint}`,
+}));
+
+jest.mock('@/utils/token-utils', () => ({
+  getAuthToken: () => ({
+    value: 'test-token',
+    type: 'auth' as const,
+    header: { name: 'Authorization', value: 'Bearer test-token' },
+  }),
 }));
 
 describe('useUserStatusRealtime', () => {
@@ -35,6 +57,7 @@ describe('useUserStatusRealtime', () => {
     jest.spyOn(console, 'warn').mockImplementation(() => {});
     jest.spyOn(console, 'error').mockImplementation(() => {});
     jest.spyOn(console, 'log').mockImplementation(() => {});
+    mockUsersMap.clear();
   });
 
   afterEach(() => {
@@ -48,14 +71,22 @@ describe('useUserStatusRealtime', () => {
       expect(mockOnUserStatus).toHaveBeenCalled();
     });
 
+    it('should subscribe to presence snapshot events on mount', () => {
+      renderHook(() => useUserStatusRealtime());
+      expect(mockOnPresenceSnapshot).toHaveBeenCalled();
+    });
+
     it('should unsubscribe on unmount', () => {
       const mockUnsubscribe = jest.fn();
+      const mockUnsubscribeSnapshot = jest.fn();
       mockOnUserStatus.mockReturnValue(mockUnsubscribe);
+      mockOnPresenceSnapshot.mockReturnValue(mockUnsubscribeSnapshot);
 
       const { unmount } = renderHook(() => useUserStatusRealtime());
       unmount();
 
       expect(mockUnsubscribe).toHaveBeenCalled();
+      expect(mockUnsubscribeSnapshot).toHaveBeenCalled();
     });
   });
 
@@ -158,6 +189,96 @@ describe('useUserStatusRealtime', () => {
         lastActiveAt: expect.any(Date),
         username: 'user2',
       });
+    });
+  });
+
+  describe('Presence Snapshot', () => {
+    it('should bulk-merge participants when snapshot received', () => {
+      let snapshotCallback: (event: any) => void = () => {};
+
+      (mockOnPresenceSnapshot as any).mockImplementation((callback: any) => {
+        snapshotCallback = callback;
+        return jest.fn();
+      });
+
+      renderHook(() => useUserStatusRealtime());
+
+      snapshotCallback({
+        users: [
+          { userId: 'u1', username: 'alice', isOnline: true, lastActiveAt: '2024-01-15T10:00:00Z' },
+          { userId: 'u2', username: 'bob', isOnline: false, lastActiveAt: null },
+        ],
+      });
+
+      expect(mockMergeParticipants).toHaveBeenCalledTimes(1);
+      const merged = (mockMergeParticipants.mock.calls[0] as unknown as [Array<{ id: string; username: string; isOnline: boolean }>])[0];
+      expect(merged).toHaveLength(2);
+      expect(merged[0]).toMatchObject({ id: 'u1', username: 'alice', isOnline: true });
+      expect(merged[1]).toMatchObject({ id: 'u2', username: 'bob', isOnline: false });
+    });
+
+    it('should ignore empty snapshots', () => {
+      let snapshotCallback: (event: any) => void = () => {};
+
+      (mockOnPresenceSnapshot as any).mockImplementation((callback: any) => {
+        snapshotCallback = callback;
+        return jest.fn();
+      });
+
+      renderHook(() => useUserStatusRealtime());
+
+      snapshotCallback({ users: [] });
+      expect(mockMergeParticipants).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('Resync on focus', () => {
+    it('should fetch /users/presence when window gains focus', async () => {
+      mockUsersMap.set('u1', { id: 'u1' });
+      mockUsersMap.set('u2', { id: 'u2' });
+
+      const fetchMock = jest.fn().mockResolvedValue({
+        ok: true,
+        json: () => Promise.resolve({
+          success: true,
+          data: {
+            users: [
+              { userId: 'u1', isOnline: true, lastActiveAt: '2024-01-15T10:00:00Z' },
+              { userId: 'u2', isOnline: false, lastActiveAt: null },
+            ],
+          },
+        }),
+      });
+      (global as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
+
+      renderHook(() => useUserStatusRealtime());
+
+      await act(async () => {
+        window.dispatchEvent(new Event('focus'));
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+
+      expect(fetchMock).toHaveBeenCalledTimes(1);
+      const [calledUrl, calledInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+      expect(calledUrl).toContain('/users/presence?ids=');
+      expect(calledUrl).toContain('u1');
+      expect(calledUrl).toContain('u2');
+      expect((calledInit.headers as Record<string, string>).Authorization).toBe('Bearer test-token');
+    });
+
+    it('should skip fetch when store is empty', async () => {
+      const fetchMock = jest.fn();
+      (global as unknown as { fetch: typeof fetch }).fetch = fetchMock as unknown as typeof fetch;
+
+      renderHook(() => useUserStatusRealtime());
+
+      await act(async () => {
+        window.dispatchEvent(new Event('focus'));
+        await Promise.resolve();
+      });
+
+      expect(fetchMock).not.toHaveBeenCalled();
     });
   });
 

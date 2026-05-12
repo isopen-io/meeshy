@@ -544,6 +544,10 @@ export class SocketIOOrchestrator {
     return this.presenceService.onUserStatus(listener);
   }
 
+  onPresenceSnapshot(listener: (event: any) => void): UnsubscribeFn {
+    return this.presenceService.onPresenceSnapshot(listener);
+  }
+
   onConversationStats(listener: (data: any) => void): UnsubscribeFn {
     return this.presenceService.onConversationStats(listener);
   }

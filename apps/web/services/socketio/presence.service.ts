@@ -17,6 +17,7 @@ import type { UserStatusEvent } from '@/types';
 import type {
   TypedSocket,
   UserStatusListener,
+  PresenceSnapshotListener,
   ConversationStatsListener,
   OnlineStatsListener,
   ReactionListener,
@@ -31,6 +32,7 @@ import type {
  */
 export class PresenceService {
   private statusListeners: Set<UserStatusListener> = new Set();
+  private snapshotListeners: Set<PresenceSnapshotListener> = new Set();
   private conversationStatsListeners: Set<ConversationStatsListener> = new Set();
   private onlineStatsListeners: Set<OnlineStatsListener> = new Set();
   private reactionAddedListeners: Set<ReactionListener> = new Set();
@@ -48,6 +50,11 @@ export class PresenceService {
     // User status changes
     socket.on(SERVER_EVENTS.USER_STATUS, (event) => {
       this.statusListeners.forEach(listener => listener(event));
+    });
+
+    // Presence snapshot — initial seed at socket auth
+    socket.on(SERVER_EVENTS.PRESENCE_SNAPSHOT, (event) => {
+      this.snapshotListeners.forEach(listener => listener(event));
     });
 
     // Conversation stats
@@ -117,6 +124,16 @@ export class PresenceService {
   onUserStatus(listener: UserStatusListener): UnsubscribeFn {
     this.statusListeners.add(listener);
     return () => this.statusListeners.delete(listener);
+  }
+
+  /**
+   * Event listener: Presence snapshot (emitted once at socket auth).
+   * Carries the userIds online among the new arrival's contacts so the client
+   * can seed its store without waiting for individual `user:status` events.
+   */
+  onPresenceSnapshot(listener: PresenceSnapshotListener): UnsubscribeFn {
+    this.snapshotListeners.add(listener);
+    return () => this.snapshotListeners.delete(listener);
   }
 
   /**
@@ -190,6 +207,7 @@ export class PresenceService {
    */
   cleanup(): void {
     this.statusListeners.clear();
+    this.snapshotListeners.clear();
     this.conversationStatsListeners.clear();
     this.onlineStatsListeners.clear();
     this.reactionAddedListeners.clear();
