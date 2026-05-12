@@ -51,6 +51,12 @@ public final class TimelineViewModel {
     public var zoomScale: CGFloat = 1.0
     public var errorMessage: String?
     public internal(set) var showOfflineQueuedConfirmation: Bool = false
+    /// True between `beginScrub()` and `endScrub()` — flipped by the playhead
+    /// gesture so `scrub(to:)` can choose a sub-50ms tolerance during the drag
+    /// and a frame-accurate seek on release. Mirrors `selection.activeDrag` for
+    /// clip drags. Default `false` keeps every legacy `scrub(to:)` caller on a
+    /// precise seek.
+    public private(set) var isScrubbing: Bool = false
 
     // MARK: - Dependencies
 
@@ -302,11 +308,38 @@ public final class TimelineViewModel {
 
     // MARK: - Scrub & split
 
+    /// Marks the start of a continuous playhead drag. While `isScrubbing` is
+    /// `true`, every `scrub(to:)` call forwards `precise: false` to the engine
+    /// (sub-50ms tolerance), avoiding the GOP-decompression freeze AVPlayer
+    /// triggers at 60 calls/sec under `.zero` tolerance. The playhead gesture
+    /// must call `endScrub()` once on release so the final seek is precise.
+    public func beginScrub() {
+        isScrubbing = true
+    }
+
+    /// Marks the end of a continuous playhead drag. Subsequent `scrub(to:)`
+    /// calls go back to frame-accurate seeking. Safe to call when no scrub is
+    /// in flight (idempotent).
+    public func endScrub() {
+        isScrubbing = false
+    }
+
+    /// Seeks the engine to `time`. Precision is auto-selected from
+    /// `isScrubbing` — wrap a continuous drag with `beginScrub()` /
+    /// `endScrub()` to get sub-50ms response during the drag and a precise
+    /// seek on release. Single-shot calls (no `beginScrub()`) stay precise.
     public func scrub(to time: Float) {
+        scrub(to: time, precise: !isScrubbing)
+    }
+
+    /// Explicit-precision overload — lets callers pin the tolerance regardless
+    /// of `isScrubbing`. Used by adjustable accessibility actions, keyboard
+    /// shortcuts, and tests that need a deterministic precise seek.
+    public func scrub(to time: Float, precise: Bool) {
         guard time.isFinite else { return }
         let clamped = max(0, min(time, project.slideDuration))
         currentTime = clamped
-        engine.seek(to: clamped, precise: true)
+        engine.seek(to: clamped, precise: precise)
     }
 
     public func splitSelectedAtPlayhead() {

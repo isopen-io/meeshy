@@ -17,18 +17,33 @@ public struct PlayheadView: View, Equatable {
     public let laneHeight: CGFloat
     public let isDark: Bool
     public let onScrub: (Float) -> Void
+    /// Called once when the drag starts. Hosts wire this to
+    /// `TimelineViewModel.beginScrub()` so continuous `onScrub` callbacks
+    /// forward `precise: false` to the engine (sub-50ms tolerance) and avoid
+    /// the AVPlayer GOP-decompression freeze.
+    public let onScrubBegan: () -> Void
+    /// Called once when the drag ends. Hosts wire this to
+    /// `TimelineViewModel.endScrub()` so the final seek is frame-accurate.
+    public let onScrubEnded: () -> Void
 
     public init(
         currentTime: Float, totalDuration: Float,
         geometry: TimelineGeometry, laneHeight: CGFloat,
-        isDark: Bool, onScrub: @escaping (Float) -> Void
+        isDark: Bool, onScrub: @escaping (Float) -> Void,
+        onScrubBegan: @escaping () -> Void = {},
+        onScrubEnded: @escaping () -> Void = {}
     ) {
         self.currentTime = currentTime; self.totalDuration = totalDuration
         self.geometry = geometry; self.laneHeight = laneHeight
         self.isDark = isDark; self.onScrub = onScrub
+        self.onScrubBegan = onScrubBegan; self.onScrubEnded = onScrubEnded
     }
 
     public var computedX: CGFloat { geometry.x(for: currentTime) }
+
+    /// Tracks whether the gesture's first `.onChanged` has fired in the
+    /// current drag — DragGesture has no `.onBegan`, so we synthesize it.
+    @State private var dragInFlight: Bool = false
 
     public var body: some View {
         ZStack(alignment: .top) {
@@ -47,9 +62,19 @@ public struct PlayheadView: View, Equatable {
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { v in
+                    if !dragInFlight {
+                        dragInFlight = true
+                        onScrubBegan()
+                    }
                     let raw = geometry.time(forX: max(0, computedX + v.translation.width))
                     let clamped = max(0, min(raw, totalDuration))
                     onScrub(clamped)
+                }
+                .onEnded { _ in
+                    if dragInFlight {
+                        dragInFlight = false
+                        onScrubEnded()
+                    }
                 }
         )
         .accessibilityElement(children: .ignore)
