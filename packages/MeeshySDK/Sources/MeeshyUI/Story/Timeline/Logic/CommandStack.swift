@@ -97,7 +97,9 @@ extension CommandStack {
     ///   - they are of the same EditCommand type,
     ///   - they are within `windowSeconds` of each other,
     ///   - they belong to the (small) set of commands declared coalesceable
-    ///     (currently MoveClip).
+    ///     (currently MoveClip and TrimClip — both are emitted at ~60fps
+    ///     during gesture drags and would otherwise saturate the FIFO cap
+    ///     in under one second).
     private static func coalesce(previous: AnyEditCommand,
                          with next: AnyEditCommand,
                          windowSeconds: TimeInterval) -> AnyEditCommand? {
@@ -115,6 +117,24 @@ extension CommandStack {
                 newStartTime: n.newStartTime
             )
             return .moveClip(merged)
+        case let (.trimClip(p), .trimClip(n))
+            where p.clipId == n.clipId
+              && p.kind == n.kind
+              && abs(n.timestamp.timeIntervalSince(p.timestamp)) <= windowSeconds:
+            // Preserve the "before-drag" state (p.old*) and the "current-drag"
+            // state (n.new*) so the merged command's revert() rolls all the
+            // way back to the pre-drag values in a single undo step.
+            let merged = TrimClipCommand(
+                id: n.id,
+                timestamp: n.timestamp,
+                clipId: n.clipId,
+                kind: n.kind,
+                oldStartTime: p.oldStartTime,
+                oldDuration: p.oldDuration,
+                newStartTime: n.newStartTime,
+                newDuration: n.newDuration
+            )
+            return .trimClip(merged)
         default:
             return nil
         }
