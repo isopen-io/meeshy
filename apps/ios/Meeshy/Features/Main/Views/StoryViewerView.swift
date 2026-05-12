@@ -334,23 +334,23 @@ struct StoryViewerView: View {
                 repostingStory: wrapper.story,
                 authorHandle: wrapper.authorHandle,
                 onPublishRepost: { content, sourceStory in
-                    Task {
-                        do {
-                            _ = try await PostService.shared.repost(
-                                postId: sourceStory.id,
-                                targetType: .post,
-                                content: content.isEmpty ? nil : content,
-                                isQuote: !content.isEmpty
-                            )
-                            await MainActor.run {
-                                editAndRepostAsPostSource = nil
-                                ToastManager.shared.show("Publié")
-                            }
-                        } catch {
-                            await MainActor.run {
-                                ToastManager.shared.showError("Échec de la publication")
-                            }
-                        }
+                    // Async-throws variant: the composer awaits this closure
+                    // and resets its `isPublishing` flag (re-enabling the
+                    // Publish button) if we throw. That unblocks the user
+                    // from a permanent disabled-button state when the network
+                    // is flaky — they can simply retry without dismissing.
+                    do {
+                        _ = try await PostService.shared.repost(
+                            postId: sourceStory.id,
+                            targetType: .post,
+                            content: content.isEmpty ? nil : content,
+                            isQuote: !content.isEmpty
+                        )
+                        editAndRepostAsPostSource = nil
+                        ToastManager.shared.show("Publié")
+                    } catch {
+                        ToastManager.shared.showError("Échec de la publication")
+                        throw error
                     }
                 },
                 onStoryImported: { result in

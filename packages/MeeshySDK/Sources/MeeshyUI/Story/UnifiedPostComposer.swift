@@ -41,12 +41,17 @@ public struct UnifiedPostComposer: View {
 
     @ObservedObject private var theme = ThemeManager.shared
 
-    public var onPublish: (PostType, String, String?, StoryEffects?, UIImage?) -> Void
-    public var onDismiss: () -> Void
+    /// Async-throwing publish handler used internally by the Publish button.
+    /// Set by every public init — the sync overloads adapt their closures into
+    /// this contract so the button has a single code path that can `try await`
+    /// and rollback `isPublishing` on failure.
+    private let publishHandler: (PostType, String, String?, StoryEffects?, UIImage?) async throws -> Void
 
-    /// Repost-mode publish callback: `(content, sourceStory)`.
-    /// Set by the repost-mode init; nil for normal compose flow.
-    public var onPublishRepost: ((String, StoryItem) -> Void)?
+    /// Async-throwing repost-mode publish handler. Nil when not in repost mode.
+    /// When set, takes precedence over `publishHandler` in the Publish button.
+    private let repostPublishHandler: ((String, StoryItem) async throws -> Void)?
+
+    public var onDismiss: () -> Void
 
     /// Repost-mode import callback: fires once when the source story is shown
     /// inside the composer, after reprojecting its canvas items to the target
@@ -55,13 +60,30 @@ public struct UnifiedPostComposer: View {
     /// state of its own — only the embedded reader). Nil = no-op.
     public var onStoryImported: ((RepostImportResult) -> Void)?
 
+    // MARK: - Public initializers
+
+    /// Sync-callback init (legacy). Use the `async throws` init below for new
+    /// call sites that need rollback semantics on publish failure.
     public init(onPublish: @escaping (PostType, String, String?, StoryEffects?, UIImage?) -> Void,
                 onDismiss: @escaping () -> Void) {
-        self.onPublish = onPublish
+        self.publishHandler = { type, content, mood, effects, image in
+            onPublish(type, content, mood, effects, image)
+        }
+        self.repostPublishHandler = nil
         self.onDismiss = onDismiss
         self.lockedType = nil
         self.repostSourceForTests = nil
-        self.onPublishRepost = nil
+    }
+
+    /// Async-throwing publish init. The Publish button awaits this closure and
+    /// resets `isPublishing` to `false` if it throws, so the user can retry.
+    public init(onPublish: @escaping (PostType, String, String?, StoryEffects?, UIImage?) async throws -> Void,
+                onDismiss: @escaping () -> Void) {
+        self.publishHandler = onPublish
+        self.repostPublishHandler = nil
+        self.onDismiss = onDismiss
+        self.lockedType = nil
+        self.repostSourceForTests = nil
     }
 
     /// Initializes the composer in repost-as-post mode with an embedded story preview.
@@ -73,8 +95,10 @@ public struct UnifiedPostComposer: View {
     ///     `StoryComposerViewModel` init introduced in B.6 — not displayed here because
     ///     the embedded `StoryReaderRepresentable` already shows the original story with
     ///     its locked badge and metadata).
-    ///   - onPublishRepost: Called when the user taps Publish. Receives the typed
-    ///     commentary plus the source story.
+    ///   - onPublishRepost: Sync-callback variant. Called when the user taps Publish.
+    ///     Receives the typed commentary plus the source story. Use the `async throws`
+    ///     variant below if your publish flow can fail and you want the composer to
+    ///     re-enable the Publish button automatically.
     ///   - onStoryImported: Optional callback fired once after the source story's
     ///     canvas items are reprojected to the target post aspect ratio. Use this to
     ///     forward the structured `RepostImportResult` to whatever destination the
@@ -91,28 +115,72 @@ public struct UnifiedPostComposer: View {
         self.lockedType = .post
         self._repostSourceStory = State(initialValue: story)
         self.repostSourceForTests = story
-        self.onPublishRepost = onPublishRepost
+        self.repostPublishHandler = { content, source in
+            onPublishRepost(content, source)
+        }
         self.onStoryImported = onStoryImported
         self.onDismiss = onDismiss
         // Default no-op for the non-repost callback so existing call sites keep working.
-        self.onPublish = { _, _, _, _, _ in }
-        // `authorHandle` is reserved for future polish (e.g., a small attribution row);
-        // for now the embedded reader view shows author/locked-badge metadata itself.
+        self.publishHandler = { _, _, _, _, _ in }
+        _ = authorHandle
+    }
+
+    /// Repost-mode init with an `async throws` publish callback. The Publish
+    /// button awaits the closure and resets `isPublishing` to `false` if it
+    /// throws, so the user can retry after a transient network failure.
+    public init(
+        repostingStory story: StoryItem,
+        authorHandle: String,
+        onPublishRepost: @escaping (_ content: String, _ sourceStory: StoryItem) async throws -> Void,
+        onStoryImported: ((RepostImportResult) -> Void)? = nil,
+        onDismiss: @escaping () -> Void
+    ) {
+        self._selectedType = State(initialValue: .post)
+        self.lockedType = .post
+        self._repostSourceStory = State(initialValue: story)
+        self.repostSourceForTests = story
+        self.repostPublishHandler = onPublishRepost
+        self.onStoryImported = onStoryImported
+        self.onDismiss = onDismiss
+        self.publishHandler = { _, _, _, _, _ in }
         _ = authorHandle
     }
 
     /// Test-only entry point for invoking the publish action without driving the
     /// SwiftUI button hierarchy. Mirrors the production publish behavior:
-    /// when in repost mode, calls `onPublishRepost(content, sourceStory)`;
-    /// otherwise calls the regular `onPublish` callback.
+    /// when in repost mode, calls the repost handler; otherwise the regular one.
     /// Marked `internal` so it stays inside the package.
     internal func triggerPublishForTests(content: String) {
-        if let story = repostSourceForTests, let onPublishRepost {
-            onPublishRepost(content, story)
+        if let story = repostSourceForTests, let repostPublishHandler {
+            Task {
+                try? await repostPublishHandler(content, story)
+            }
         } else {
-            onPublish(selectedType, content, moodEmoji, nil, selectedImage)
+            Task {
+                try? await publishHandler(selectedType, content, moodEmoji, nil, selectedImage)
+            }
         }
     }
+
+    /// Test-only async variant that lets tests `await` the publish path and
+    /// observe whether the handler threw. Returns `true` on success and
+    /// `false` if the handler threw. Marked `internal` so it stays in-package.
+    internal func triggerPublishForTestsAwaiting(content: String) async -> Bool {
+        do {
+            if let story = repostSourceForTests, let repostPublishHandler {
+                try await repostPublishHandler(content, story)
+            } else {
+                try await publishHandler(selectedType, content, moodEmoji, nil, selectedImage)
+            }
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    /// Test-only accessor for `isPublishing`. Reflects the live `@State` value
+    /// at the moment of the call. Marked `internal` so it stays in-package.
+    internal var isPublishingForTests: Bool { isPublishing }
 
     public var body: some View {
         NavigationView {
@@ -145,8 +213,10 @@ public struct UnifiedPostComposer: View {
         .fullScreenCover(isPresented: $showStoryComposer) {
             StoryComposerView(
                 onPublishSlide: { slide, image, _, _, _ in
-                    onPublish(.story, slide.content ?? "", nil, slide.effects, image)
-                    showStoryComposer = false
+                    Task {
+                        try? await publishHandler(.story, slide.content ?? "", nil, slide.effects, image)
+                        await MainActor.run { showStoryComposer = false }
+                    }
                 },
                 onPublishAllInBackground: { _, _, _, _, _, _, _ in },
                 onPreview: { _, _, _, _, _ in },
@@ -453,13 +523,31 @@ public struct UnifiedPostComposer: View {
     private var publishButton: some View {
         Button {
             guard !content.isEmpty || selectedType == .story else { return }
+            guard !isPublishing else { return }
             isPublishing = true
-            if let story = repostSourceStory, let onPublishRepost {
-                onPublishRepost(content, story)
-            } else {
-                onPublish(selectedType, content, moodEmoji, nil, selectedImage)
-            }
             HapticFeedback.success()
+            let typedContent = content
+            let typedType = selectedType
+            let typedMood = moodEmoji
+            let typedImage = selectedImage
+            Task { @MainActor in
+                do {
+                    if let story = repostSourceStory, let repostPublishHandler {
+                        try await repostPublishHandler(typedContent, story)
+                    } else {
+                        try await publishHandler(typedType, typedContent, typedMood, nil, typedImage)
+                    }
+                    // On success, the caller typically dismisses the sheet via
+                    // `onDismiss` — we still reset the flag defensively so that
+                    // any caller that keeps the sheet open lands in a clean
+                    // state (canPublish && !isPublishing).
+                    isPublishing = false
+                } catch {
+                    // Rollback so the user can retry. The caller is responsible
+                    // for surfacing the error (toast, banner, etc).
+                    isPublishing = false
+                }
+            }
         } label: {
             Text(String(localized: "story.post.publish", defaultValue: "Post", bundle: .module))
                 .font(.system(size: 15, weight: .bold))
