@@ -20,6 +20,20 @@
 
 Si 0.1 ou 0.2 échoue, **stop** : régression introduite par les commits récents, faire un `git bisect` sur la chain `31b2ad28..HEAD`.
 
+## ⚠️ Path actuellement non testable depuis l'UI
+
+**Export video pipeline (Phase 4 + Plan B + Step 2 backdrop côté export)** est wired dans le code mais **aucun call site UI ne l'invoque**. Concrètement :
+
+- Aucun bouton "Exporter en vidéo" n'existe dans le composer ou le menu story
+- `StoryPublishService` n'appelle pas `StoryExporter.export()` — toutes les stories sont publiées via le path asset legacy (snapshot PNG + JSON effects)
+- `StoryAVCompositor` ne s'instancie qu'à travers `StoryExporter.customVideoCompositorClass`, donc lui aussi reste inerte en runtime
+
+**Conséquence pour QA** : les scénarios listés couvrent uniquement le **live preview** côté composer/viewer. La fidélité du rendu à l'export (B1 synthetic track, B2 SSIM, B3 cache, StoryBackdropCapture export-side) est **validée par tests automatisés uniquement**, pas testable manuellement aujourd'hui.
+
+Le wiring publish→exporter est documenté dans `docs/superpowers/specs/2026-05-12-story-publish-exporter-wiring-design.md` (plan ~5.5 jours, reporté post-launch par décision projet). Quand ce sprint sera exécuté, un **scénario 13 — Video export end-to-end** sera ajouté à cette checklist.
+
+Tant que ce sprint n'est pas exécuté : ne pas chercher de bouton "Export" ou de Story marquée "video" dans l'UI — le path n'existe pas en runtime.
+
 ---
 
 ## Scénarios
