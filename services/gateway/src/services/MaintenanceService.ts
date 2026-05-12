@@ -18,6 +18,14 @@ export class MaintenanceService {
   private readonly OFFLINE_THRESHOLD_MINUTES = 30; // 30 minutes d'inactivité = hors ligne (cohérent avec getUserStatus)
   private readonly ORPHANED_ATTACHMENT_THRESHOLD_HOURS = 24; // 24 heures avant suppression des attachments orphelins
   private statusBroadcastCallback: ((userId: string, isOnline: boolean, isAnonymous: boolean) => void) | null = null;
+  /**
+   * Predicate qui retourne true si le userId/participantId est actuellement présent dans
+   * la Map `connectedUsers` du SocketIOManager. Permet à `updateOfflineUsers` et au reset
+   * de boot de NE PAS marquer offline (et NE PAS broadcaster) un utilisateur dont le socket
+   * est encore vivant — protège contre le bug où un client passif (pas de heartbeat reçu
+   * depuis 30min) se voit marqué offline par le cleanup périodique.
+   */
+  private isCurrentlyConnected: ((userId: string, isAnonymous: boolean) => boolean) | null = null;
   private lastDailyCleanup: Date | null = null;
 
   private emailService?: EmailService;
@@ -33,6 +41,15 @@ export class MaintenanceService {
    */
   setStatusBroadcastCallback(callback: (userId: string, isOnline: boolean, isAnonymous: boolean) => void): void {
     this.statusBroadcastCallback = callback;
+  }
+
+  /**
+   * Injecter le predicate qui dit si un user/participant est actuellement connecté
+   * (présent dans la Map `connectedUsers` du SocketIOManager). Indispensable pour que
+   * `updateOfflineUsers` n'écrase pas le statut online des sockets vivants mais passifs.
+   */
+  setIsCurrentlyConnected(predicate: (userId: string, isAnonymous: boolean) => boolean): void {
+    this.isCurrentlyConnected = predicate;
   }
 
   /**
@@ -100,7 +117,7 @@ export class MaintenanceService {
       offlineThreshold.setMinutes(offlineThreshold.getMinutes() - this.OFFLINE_THRESHOLD_MINUTES);
 
       // Trouver tous les utilisateurs marqués comme en ligne mais inactifs depuis plus de 30 minutes
-      const inactiveUsers = await this.prisma.user.findMany({
+      const inactiveUsersRaw = await this.prisma.user.findMany({
         where: {
           isOnline: true,
           lastActiveAt: {
@@ -114,6 +131,16 @@ export class MaintenanceService {
           lastActiveAt: true
         }
       });
+
+      // Filtrer ceux dont le socket est encore vivant — éviter de marquer offline un
+      // client passif qui n'envoie pas de heartbeat mais reste connecté.
+      const inactiveUsers = this.isCurrentlyConnected
+        ? inactiveUsersRaw.filter(u => !this.isCurrentlyConnected!(u.id, false))
+        : inactiveUsersRaw;
+      const skippedConnected = inactiveUsersRaw.length - inactiveUsers.length;
+      if (skippedConnected > 0) {
+        logger.info(`🛡️ [CLEANUP] ${skippedConnected} utilisateurs préservés (socket toujours vivant malgré lastActiveAt > ${this.OFFLINE_THRESHOLD_MINUTES}min)`);
+      }
 
       if (inactiveUsers.length > 0) {
         await this.prisma.user.updateMany({
@@ -147,7 +174,7 @@ export class MaintenanceService {
       }
 
       // CORRECTION: Gérer également les participants anonymes inactifs
-      const inactiveAnonymous = await this.prisma.participant.findMany({
+      const inactiveAnonymousRaw = await this.prisma.participant.findMany({
         where: {
           isOnline: true,
           type: 'anonymous',
@@ -162,6 +189,15 @@ export class MaintenanceService {
           lastActiveAt: true
         }
       });
+
+      // Même protection : ne pas marquer offline les participants anonymes dont le socket est vivant.
+      const inactiveAnonymous = this.isCurrentlyConnected
+        ? inactiveAnonymousRaw.filter(p => !this.isCurrentlyConnected!(p.id, true))
+        : inactiveAnonymousRaw;
+      const skippedAnonConnected = inactiveAnonymousRaw.length - inactiveAnonymous.length;
+      if (skippedAnonConnected > 0) {
+        logger.info(`🛡️ [CLEANUP] ${skippedAnonConnected} participants anonymes préservés (socket toujours vivant)`);
+      }
 
       if (inactiveAnonymous.length > 0) {
         await this.prisma.participant.updateMany({
