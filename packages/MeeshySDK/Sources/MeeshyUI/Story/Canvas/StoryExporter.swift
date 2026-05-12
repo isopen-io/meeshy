@@ -48,8 +48,25 @@ public enum StoryExporterError: Error, Sendable {
 ///      compositor).
 public enum StoryExporter {
 
+    /// Exports `slide` to `outputURL` as an MP4 file.
+    ///
+    /// - Parameters:
+    ///   - slide: The slide to render through the AV compositor.
+    ///   - outputURL: Destination MP4 path. Overwritten if it already exists.
+    ///   - progress: Optional callback receiving the export progress fraction
+    ///     in `0.0...1.0`. Polled at ~10Hz against
+    ///     `AVAssetExportSession.progress` while the export is running, then
+    ///     invoked one final time with `1.0` after the session reports
+    ///     completion. Default `nil` preserves the original API for callers
+    ///     that don't need progress.
+    ///
+    /// Throttling: callers receive AT MOST ~10 callbacks/sec while the export
+    /// runs (one every 100ms), plus the terminal `1.0` call on success. Use
+    /// this fraction directly to drive a `ProgressView` — no further smoothing
+    /// is required for UI bars.
     public static func export(_ slide: StorySlide,
-                              to outputURL: URL) async throws {
+                              to outputURL: URL,
+                              progress: (@Sendable (Double) -> Void)? = nil) async throws {
         let composition = AVMutableComposition()
         let effective = slide.effectiveSlideDuration()
         let totalDuration = CMTime(seconds: effective, preferredTimescale: 600)
@@ -157,12 +174,41 @@ public enum StoryExporter {
             try FileManager.default.removeItem(at: outputURL)
         }
 
+        // Wire optional progress polling at 10Hz against
+        // `AVAssetExportSession.progress`. AVFoundation does NOT expose a
+        // progress publisher; the only contract is the property. We poll on a
+        // detached task at 100ms cadence (≤10 callbacks/sec) and exit as soon
+        // as the session terminates so we never invoke the callback past the
+        // export's natural lifetime. The `defer { progressTask?.cancel() }`
+        // also guards against early throws below.
+        let progressTask: Task<Void, Never>? = progress.map { callback in
+            Task { @MainActor in
+                while !Task.isCancelled {
+                    let snapshot = session.progress
+                    let status = session.status
+                    callback(Double(snapshot))
+                    if status == .completed || status == .failed || status == .cancelled {
+                        return
+                    }
+                    try? await Task.sleep(nanoseconds: 100_000_000) // 100ms = 10Hz
+                }
+            }
+        }
+        defer { progressTask?.cancel() }
+
         // iOS 17 ships `AVAssetExportSession.export()` (no args, async, reads
         // outputURL/outputFileType set above). The newer iOS 18 `export(to:as:)`
         // is intentionally avoided here — Package.swift targets iOS 17.
         await session.export()
         switch session.status {
         case .completed:
+            // Terminal progress call. The polling task may not have observed
+            // a value of exactly 1.0 before AVAssetExportSession reported
+            // `.completed` (AVFoundation can flip status before the progress
+            // property reaches 1.0), so we emit it explicitly here. This is
+            // the contract the spec §3.6 promises to callers driving a
+            // ProgressView.
+            progress?(1.0)
             return
         case .failed:
             throw StoryExporterError.exportFailed(
