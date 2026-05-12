@@ -2,6 +2,22 @@ import XCTest
 import SwiftUI
 @testable import MeeshyUI
 
+// MARK: - Snapshot record workflow
+//
+// This file uses `swift-snapshot-testing` (v1.17.6) via `SnapshotHelpers`.
+// The library's default record mode is `.missing` : the first time a test
+// runs on a fresh checkout, the baseline PNG is written to `__Snapshots__/`
+// and the test reports a single failure (with the message
+// "Automatically recorded snapshot: …"). Re-run the test once and it now
+// asserts cleanly against the freshly recorded baseline. Commit the PNGs.
+//
+// To force re-recording after an intentional UI change, run :
+//   ./scripts/record-snapshot-baselines.sh
+// (this exports `SNAPSHOT_TESTING_RECORD=all` and runs the suite).
+//
+// Do NOT add `XCTSkipIf(true)` back to these tests — that yields zero
+// visual regression coverage and silently masks rendering bugs.
+
 @MainActor
 final class ClipInspectorSnapshotTests: XCTestCase {
 
@@ -27,8 +43,7 @@ final class ClipInspectorSnapshotTests: XCTestCase {
 
     // MARK: - Variant 1 : video clip selected
 
-    func test_snapshot_inspector_videoSelected() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_inspector_videoSelected() {
         let video = ClipInspector.ClipSnapshot(
             id: "v1", displayName: "intro.mp4", kind: .video,
             startTime: 0.5, duration: 5, volume: 0.85,
@@ -43,8 +58,7 @@ final class ClipInspectorSnapshotTests: XCTestCase {
 
     // MARK: - Variant 2 : audio clip selected
 
-    func test_snapshot_inspector_audioSelected() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_inspector_audioSelected() {
         let audio = ClipInspector.ClipSnapshot(
             id: "a1", displayName: "music_bg.m4a", kind: .audio,
             startTime: 0, duration: 8, volume: 0.6,
@@ -59,8 +73,7 @@ final class ClipInspectorSnapshotTests: XCTestCase {
 
     // MARK: - Variant 3 : text clip selected
 
-    func test_snapshot_inspector_textSelected() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_inspector_textSelected() {
         let text = ClipInspector.ClipSnapshot(
             id: "t1", displayName: "Bienvenue", kind: .text,
             startTime: 1, duration: 3, volume: 1.0,
@@ -75,8 +88,7 @@ final class ClipInspectorSnapshotTests: XCTestCase {
 
     // MARK: - Variant 4 : no selection (popover empty state)
 
-    func test_snapshot_inspector_noSelection() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_inspector_noSelection() {
         // The "no selection" state is modeled as a placeholder snapshot with
         // zeroed values + an empty displayName. Production renders a hint
         // ("Sélectionnez un clip pour l'éditer") which the snapshot locks in.

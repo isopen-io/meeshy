@@ -3,6 +3,22 @@ import SwiftUI
 import MeeshySDK
 @testable import MeeshyUI
 
+// MARK: - Snapshot record workflow
+//
+// This file uses `swift-snapshot-testing` (v1.17.6) via `SnapshotHelpers`.
+// The library's default record mode is `.missing` : the first time a test
+// runs on a fresh checkout, the baseline PNG is written to `__Snapshots__/`
+// and the test reports a single failure (with the message
+// "Automatically recorded snapshot: …"). Re-run the test once and it now
+// asserts cleanly against the freshly recorded baseline. Commit the PNGs.
+//
+// To force re-recording after an intentional UI change, run :
+//   ./scripts/record-snapshot-baselines.sh
+// (this exports `SNAPSHOT_TESTING_RECORD=all` and runs the suite).
+//
+// Do NOT add `XCTSkipIf(true)` back to these tests — that yields zero
+// visual regression coverage and silently masks rendering bugs.
+
 @MainActor
 final class ProTimelineViewSnapshotTests: XCTestCase {
 
@@ -41,8 +57,7 @@ final class ProTimelineViewSnapshotTests: XCTestCase {
 
     // MARK: - Variant 1 : iPad landscape, inspector closed
 
-    func test_snapshot_pro_iPadLandscape_inspectorClosed() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_pro_iPadLandscape_inspectorClosed() {
         let vm = makeViewModel(project: projectWithEditorialContent())
         SnapshotHelpers.assertLightDarkSnapshot(
             of: ProTimelineView(viewModel: vm),
@@ -53,8 +68,7 @@ final class ProTimelineViewSnapshotTests: XCTestCase {
 
     // MARK: - Variant 2 : iPad landscape, inspector open (selected clip)
 
-    func test_snapshot_pro_iPadLandscape_inspectorOpen() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_pro_iPadLandscape_inspectorOpen() {
         let vm = makeViewModel(project: projectWithEditorialContent())
         vm.selectClip(id: "v1")
         SnapshotHelpers.assertLightDarkSnapshot(
@@ -66,8 +80,7 @@ final class ProTimelineViewSnapshotTests: XCTestCase {
 
     // MARK: - Variant 3 : Portrait fallback on iPhone
 
-    func test_snapshot_pro_portraitFallback_iPhone() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_pro_portraitFallback_iPhone() {
         let vm = makeViewModel(project: projectWithEditorialContent())
         // ProTimelineView in portrait must degrade gracefully — Task 34
         // documents the explicit fallback as a vertical stack with reduced
@@ -81,8 +94,7 @@ final class ProTimelineViewSnapshotTests: XCTestCase {
 
     // MARK: - Variant 4 : iPad landscape with two clips, transition between them
 
-    func test_snapshot_pro_iPadLandscape_withTransition() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_pro_iPadLandscape_withTransition() {
         let vm = makeViewModel(project: projectWithEditorialContent())
         SnapshotHelpers.assertLightDarkSnapshot(
             of: ProTimelineView(viewModel: vm),

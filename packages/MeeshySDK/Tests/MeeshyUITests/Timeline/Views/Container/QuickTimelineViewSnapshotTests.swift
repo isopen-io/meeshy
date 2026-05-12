@@ -3,6 +3,22 @@ import SwiftUI
 import MeeshySDK
 @testable import MeeshyUI
 
+// MARK: - Snapshot record workflow
+//
+// This file uses `swift-snapshot-testing` (v1.17.6) via `SnapshotHelpers`.
+// The library's default record mode is `.missing` : the first time a test
+// runs on a fresh checkout, the baseline PNG is written to `__Snapshots__/`
+// and the test reports a single failure (with the message
+// "Automatically recorded snapshot: …"). Re-run the test once and it now
+// asserts cleanly against the freshly recorded baseline. Commit the PNGs.
+//
+// To force re-recording after an intentional UI change, run :
+//   ./scripts/record-snapshot-baselines.sh
+// (this exports `SNAPSHOT_TESTING_RECORD=all` and runs the suite).
+//
+// Do NOT add `XCTSkipIf(true)` back to these tests — that yields zero
+// visual regression coverage and silently masks rendering bugs.
+
 @MainActor
 final class QuickTimelineViewSnapshotTests: XCTestCase {
 
@@ -40,8 +56,7 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
 
     // MARK: - Variant 1 : empty
 
-    func test_snapshot_quick_empty() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_quick_empty() {
         let vm = makeViewModel(project: TimelineProjectFactory.emptyProject())
         SnapshotHelpers.assertLightDarkSnapshot(
             of: QuickTimelineView(viewModel: vm),
@@ -51,8 +66,7 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
 
     // MARK: - Variant 2 : one clip
 
-    func test_snapshot_quick_oneClip() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_quick_oneClip() {
         let vm = makeViewModel(project: projectWithSingleClip())
         SnapshotHelpers.assertLightDarkSnapshot(
             of: QuickTimelineView(viewModel: vm),
@@ -62,8 +76,7 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
 
     // MARK: - Variant 3 : deployed
 
-    func test_snapshot_quick_deployed() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_quick_deployed() {
         let vm = makeViewModel(project: projectWithThreeTracks())
         // Force the deployed state by toggling the internal expansion flag via
         // the public init then a programmatic state mutation. We expose that
@@ -78,8 +91,7 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
 
     // MARK: - Variant 4 : dragging
 
-    func test_snapshot_quick_dragging() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_quick_dragging() {
         let vm = makeViewModel(project: projectWithSingleClip())
         // Simulate a drag-in-progress by beginning a clip drag.
         // The actual API is beginClipDrag(clipId:) — dragClip(id:deltaTimeSeconds:isCommitted:)
@@ -93,8 +105,7 @@ final class QuickTimelineViewSnapshotTests: XCTestCase {
 
     // MARK: - Variant 5 : selected
 
-    func test_snapshot_quick_selected() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_quick_selected() {
         let vm = makeViewModel(project: projectWithSingleClip())
         vm.selectClip(id: "clip-1")
         SnapshotHelpers.assertLightDarkSnapshot(
