@@ -22,6 +22,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let typingStopped = PassthroughSubject<TypingEvent, Never>()
     let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
     let userStatusChanged = PassthroughSubject<UserStatusEvent, Never>()
+    let presenceSnapshotReceived = PassthroughSubject<PresenceSnapshotEvent, Never>()
     let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
     let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
     let conversationJoinError = PassthroughSubject<ConversationJoinErrorEvent, Never>()

@@ -118,6 +118,19 @@ public struct UserStatusEvent: Decodable, Sendable {
     }
 }
 
+/// Snapshot émis par le gateway juste après l'authentification du socket. Liste tous
+/// les contacts (autres participants des conversations du nouvel arrivant) avec leur
+/// `isOnline` runtime calculé depuis la `connectedUsers` Map. Permet au client de seed
+/// son store de présence sans attendre des events `user:status` individuels. Voir
+/// `services/gateway/src/socketio/MeeshySocketIOManager.ts → _emitPresenceSnapshot`.
+public struct PresenceSnapshotEvent: Decodable, Sendable {
+    public let users: [UserStatusEvent]
+
+    public init(users: [UserStatusEvent]) {
+        self.users = users
+    }
+}
+
 // MARK: - Translation Event Data
 
 public struct TranslationData: Codable, Sendable, CacheIdentifiable {
@@ -689,6 +702,10 @@ public protocol MessageSocketProviding: Sendable {
     var typingStopped: PassthroughSubject<TypingEvent, Never> { get }
     var unreadUpdated: PassthroughSubject<UnreadUpdateEvent, Never> { get }
     var userStatusChanged: PassthroughSubject<UserStatusEvent, Never> { get }
+    /// Bulk snapshot émis par le gateway après l'auth socket. Le client doit ingérer
+    /// chaque entrée comme un `user:status` individuel pour seed son store de présence
+    /// sans attendre une transition d'état spontanée.
+    var presenceSnapshotReceived: PassthroughSubject<PresenceSnapshotEvent, Never> { get }
     var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
     var attachmentStatusUpdated: PassthroughSubject<AttachmentStatusUpdatedEvent, Never> { get }
     var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
@@ -825,6 +842,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publishers — presence
     public let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
     public let userStatusChanged = PassthroughSubject<UserStatusEvent, Never>()
+    public let presenceSnapshotReceived = PassthroughSubject<PresenceSnapshotEvent, Never>()
 
     // Combine publishers — read status
     public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
@@ -1552,6 +1570,18 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(UserStatusEvent.self, from: data) { [weak self] event in
                 self?.userStatusChanged.send(event)
+            }
+        }
+
+        // --- Presence snapshot (emitted by gateway right after auth) ---
+        // Le gateway envoie un seul payload `{ users: [...] }` rassemblant tous
+        // les contacts du nouvel arrivant avec leur statut runtime. Le client
+        // doit hydrater son store en bulk plutôt que d'attendre des transitions
+        // d'état spontanées. Voir gateway `_emitPresenceSnapshot`.
+        socket.on("presence:snapshot") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(PresenceSnapshotEvent.self, from: data) { [weak self] event in
+                self?.presenceSnapshotReceived.send(event)
             }
         }
 

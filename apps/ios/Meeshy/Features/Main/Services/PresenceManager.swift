@@ -51,6 +51,28 @@ final class PresenceManager: ObservableObject {
             }
             .store(in: &cancellables)
 
+        // Subscribe to the post-auth presence snapshot. Lets us seed the entire
+        // contact set in one shot instead of waiting for each contact to emit a
+        // `user:status` transition (which only fires on state changes — so a
+        // user who's been online for hours would never light up otherwise).
+        MessageSocketManager.shared.presenceSnapshotReceived
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                self?.ingestSnapshot(event.users)
+            }
+            .store(in: &cancellables)
+
+        // After a socket reconnect we may have missed N status flips while we
+        // were disconnected. The gateway re-emits `presence:snapshot` only on
+        // a fresh auth, so trigger a REST refresh defensively — it covers the
+        // case where the transport reconnected without re-auth.
+        MessageSocketManager.shared.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { _ in
+                PresenceService.shared.refreshKnownUsers()
+            }
+            .store(in: &cancellables)
+
         // Keep the last-known presence snapshot across brief socket drops
         // (e.g. iOS background → foreground transition). Wiping the map the
         // moment `isConnected` flips to false caused all avatars to lose
@@ -94,6 +116,44 @@ final class PresenceManager: ObservableObject {
 
     func presenceState(for userId: String) -> PresenceState {
         presenceMap[userId]?.state ?? .offline
+    }
+
+    /// Apply a bulk presence snapshot. Used by:
+    /// - the `presence:snapshot` socket event right after auth
+    /// - the REST `/users/presence` refresh on foreground/reconnect
+    ///
+    /// Each entry replaces the local presence row for that userId so a contact
+    /// that was online in our cache but is now offline server-side gets corrected
+    /// (closes the "stale online forever" failure mode).
+    func ingestSnapshot(_ users: [UserStatusEvent]) {
+        guard !users.isEmpty else { return }
+        // TODO presence-bulk: expose a single bulk write on PresenceManager once
+        // we lift the cache into CacheCoordinator. Today the dictionary write is
+        // already main-actor and cheap, so per-row assignment is acceptable.
+        for entry in users {
+            presenceMap[entry.userId] = UserPresence(
+                isOnline: entry.isOnline,
+                lastActiveAt: entry.lastActiveAt
+            )
+        }
+    }
+
+    /// Apply a bulk REST presence response (no `username` field — see
+    /// `PresenceRefreshEntry` in `PresenceService`).
+    func ingestRefresh(_ entries: [PresenceRefreshEntry]) {
+        guard !entries.isEmpty else { return }
+        for entry in entries {
+            presenceMap[entry.userId] = UserPresence(
+                isOnline: entry.isOnline,
+                lastActiveAt: entry.lastActiveAt
+            )
+        }
+    }
+
+    /// The set of userIds we currently track. Used by `PresenceService` to build
+    /// the `?ids=` query for the REST refresh on foreground/reconnect.
+    var knownUserIds: [String] {
+        Array(presenceMap.keys)
     }
 
     deinit {

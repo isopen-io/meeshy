@@ -135,6 +135,13 @@ struct MeeshyApp: App {
                         MeeshyFocusStore.shared.current.toSDKSnapshot()
                     }
                     await CacheCoordinator.shared.start()
+                    // Touch PresenceManager early so it has subscribed to
+                    // `presence:snapshot` + `user:status` + `didReconnect`
+                    // BEFORE the first socket auth lands. Without this, the
+                    // very first snapshot emitted after a cold start could
+                    // land before any view referencing PresenceManager.shared
+                    // has been built, and PassthroughSubject would drop it.
+                    _ = PresenceManager.shared
                     // Wire StoryOfflineQueue publish handler + network-reconnect
                     // flush. Idempotent — safe to call on every cold start.
                     StoryOfflineQueueBootstrap.shared.start()
