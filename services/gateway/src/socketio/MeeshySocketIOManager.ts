@@ -163,7 +163,16 @@ export class MeeshySocketIOManager {
       path: "/socket.io/",
       transports: ["websocket", "polling"],
       cors: {
-        origin: '*',
+        origin: process.env.NODE_ENV === 'development' ? true : (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+          const allowedOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) || 
+                                 process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || 
+                                 ['https://meeshy.me', 'https://www.meeshy.me', 'https://gate.meeshy.me', 'https://ml.meeshy.me'];
+          if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error('Not allowed by CORS'));
+          }
+        },
         methods: ["GET", "POST"],
         allowedHeaders: ['authorization', 'content-type', 'x-session-token', 'websocket', 'polling'],
         credentials: true

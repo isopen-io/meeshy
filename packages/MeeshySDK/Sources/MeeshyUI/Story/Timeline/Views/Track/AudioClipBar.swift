@@ -68,7 +68,9 @@ public struct AudioClipBar: View, Equatable {
 
     public var accessibilityValueDescription: String {
         let pct = Int((volume * 100).rounded())
-        let muted = isMuted ? ", muet" : ""
+        let muted = isMuted
+            ? String(localized: "story.timeline.a11y.audio.muted_suffix", bundle: .module)
+            : ""
         return "Volume \(pct)%\(muted)"
     }
 

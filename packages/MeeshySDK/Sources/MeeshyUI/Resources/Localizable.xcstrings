@@ -13,16 +13,6 @@
     "/" : {
 
     },
-    "%@ - %@" : {
-      "localizations" : {
-        "fr" : {
-          "stringUnit" : {
-            "state" : "new",
-            "value" : "%1$@ - %2$@"
-          }
-        }
-      }
-    },
     "%@ / %@" : {
       "localizations" : {
         "fr" : {
@@ -6898,9 +6888,6 @@
 
     },
     "Easing" : {
-
-    },
-    "Easing: linear" : {
 
     },
     "Echantillon %lld" : {
@@ -13990,6 +13977,116 @@
         }
       }
     },
+    "story.composer.empty.subtitle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Choisissez un outil pour démarrer"
+          }
+        }
+      }
+    },
+    "story.composer.empty.tile.drawing" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Dessin"
+          }
+        }
+      }
+    },
+    "story.composer.empty.tile.drawing.sub" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pencil et couleurs"
+          }
+        }
+      }
+    },
+    "story.composer.empty.tile.media" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Médias"
+          }
+        }
+      }
+    },
+    "story.composer.empty.tile.media.sub" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Photos, vidéos, audio"
+          }
+        }
+      }
+    },
+    "story.composer.empty.tile.text" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Texte"
+          }
+        }
+      }
+    },
+    "story.composer.empty.tile.text.sub" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Style, couleur, verre"
+          }
+        }
+      }
+    },
+    "story.composer.empty.tile.texture" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fond"
+          }
+        }
+      }
+    },
+    "story.composer.empty.tile.texture.sub" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couleur, dégradé"
+          }
+        }
+      }
+    },
+    "story.composer.empty.title" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Commencez votre story"
+          }
+        }
+      }
+    },
     "story.composer.emptyText" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -16178,6 +16275,40 @@
         }
       }
     },
+    "story.timeline.a11y.audio.muted_suffix" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", stummgeschaltet"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", muted"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", silenciado"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", muet"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : ", silenciado"
+          }
+        }
+      }
+    },
     "story.timeline.a11y.clip.audio" : {
       "localizations" : {
         "en" : {
@@ -16999,6 +17130,74 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Durée"
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.easing.label" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Easing: %@"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Easing: %@"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suavizado: %@"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Easing : %@"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Suavização: %@"
+          }
+        }
+      }
+    },
+    "story.timeline.inspector.easing.linear" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linear"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linear"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Lineal"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linéaire"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Linear"
           }
         }
       }
