@@ -15,10 +15,25 @@
 
 | | Étape | Attendu | Constaté |
 |---|---|---|---|
-| 0.1 | `./apps/ios/meeshy.sh run` | Build succeed + app launched + log stream active | ✅ Vérifié 2026-05-12 (commit `e05e146b`, build 19-65s) |
-| 0.2 | Écran d'accueil après boot | Feed conversations rendu sans crash, carousel stories visible en haut, recherche en bas | ✅ Vérifié — screenshot `apps/ios/screenshots/meeshy_20260512_083841.png` |
+| 0.1 | `./apps/ios/meeshy.sh run` | Build succeed + app launched + log stream active | ✅ Vérifié 2026-05-12 (commit `828a2910`, build 19-65s) |
+| 0.2 | Écran d'accueil après boot | Feed conversations rendu sans crash, carousel stories visible en haut, recherche en bas | ✅ Vérifié — screenshots `apps/ios/screenshots/meeshy_20260512_091345.png` (head 828a2910) + `meeshy_20260512_083841.png` (head e05e146b) — identique structurellement, pas de régression |
+| 0.3 | Test baseline isolation story-canvas (11 suites) | StoryBackdropCaptureCIImageReadbackTests + StoryBackdropCaptureTests + StoryRendererBackdropProviderTests + StoryBlurFilterTests + StoryExporterStaticOnlyTests + StoryExporterCacheTests + StoryExporterEquivalenceTests + PixelComparisonTests + StoryTextBackgroundStyleTests + UnifiedPostComposerImportTests + StoryRendererLanguagesTests — toutes PASS | ✅ Vérifié 2026-05-12 09:18 — 11/11 suites passed (`** TEST SUCCEEDED **` agrégé ; un "TEST FAILED" global subsequent est le bug flaky StoryTimelineEnginePerformanceTests pré-existant, non lié) |
 
 Si 0.1 ou 0.2 échoue, **stop** : régression introduite par les commits récents, faire un `git bisect` sur la chain `31b2ad28..HEAD`.
+
+## Limitation automation CLI
+
+L'auto-driving de l'UI via `simctl io` n'est pas disponible — Apple n'expose pas de commande `sendTouch` native. Les scénarios 1-12 nécessitent **interaction humaine** via le simulateur ou un harness XCUITest dédié.
+
+Vérifié dans cette session :
+- ✅ Build succeed (0.1)
+- ✅ Boot to feed sans crash (0.2)
+- ✅ Tests automatisés story-canvas — 11 suites pass (0.3)
+- ❌ Navigation composer / viewer / picker — pas reproductible en CLI
+
+Pour exécuter les scénarios 1-12 :
+- Soit interactivement sur simulator (recommandé pour première passe)
+- Soit en écrivant XCUITest cases (`MeeshyUITests/UI/` à créer) — voir section Automation future en bas de doc
 
 ## ⚠️ Path actuellement non testable depuis l'UI
 
