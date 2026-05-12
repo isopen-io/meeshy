@@ -43,6 +43,11 @@ public final class TimelineViewModel {
     public internal(set) var project: TimelineProject
     public private(set) var currentTime: Float = 0
     public private(set) var isPlaying: Bool = false
+    /// Mirror of `engine.isMuted` so SwiftUI views (TransportBar mute button)
+    /// re-render on toggle. The engine remains the audio-routing source of
+    /// truth — this stored property is the @Observable view-state seam that
+    /// tracks it. Keep them in lock-step inside `toggleMute()`.
+    public private(set) var isMuted: Bool = false
     public private(set) var canUndo: Bool = false
     public private(set) var canRedo: Bool = false
     public internal(set) var isSnapEnabled: Bool = true
@@ -104,6 +109,7 @@ public final class TimelineViewModel {
             textObjects: [],
             clipTransitions: []
         )
+        self.isMuted = engine.isMuted
         wireEngineCallbacks()
         wireCommandStackCallback()
     }
@@ -447,6 +453,10 @@ public final class TimelineViewModel {
         var muted = engine.isMuted
         muted.toggle()
         engine.isMuted = muted
+        // Mirror onto the @Observable view-state seam. Read the engine back
+        // (instead of trusting `muted`) so any clamping or refusal applied by
+        // the engine setter is reflected truthfully to the UI.
+        isMuted = engine.isMuted
     }
 
     // MARK: - Persistence

@@ -221,6 +221,15 @@ public struct ProTimelineView: View {
         }
     }
 
+    /// Per-clip mute resolution for the audio lane bar. A clip is rendered as
+    /// muted when EITHER the global timeline mute is engaged (engine.isMuted)
+    /// OR the clip volume is at or below zero — `StoryAudioPlayerObject` has
+    /// no `isMuted` flag of its own, so volume 0 is the persistent silenced
+    /// state the timeline can show without holding a separate boolean.
+    public static func isMutedForAudio(globalMute: Bool, audio: StoryAudioPlayerObject) -> Bool {
+        globalMute || audio.volume <= 0
+    }
+
     /// Resolves the current selection to exactly one inspector kind, applying
     /// the clip → keyframe → transition priority. A clip lookup wins because
     /// media/audio/text object ids are the primary handle the playback engine
@@ -314,7 +323,7 @@ public struct ProTimelineView: View {
             currentTime: viewModel.currentTime,
             duration: viewModel.project.slideDuration,
             zoomScale: viewModel.zoomScale,
-            isMuted: false,
+            isMuted: viewModel.isMuted,
             onPlayToggle: { viewModel.togglePlayback() },
             onMuteToggle: { viewModel.toggleMute() },
             onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },
@@ -631,7 +640,7 @@ public struct ProTimelineView: View {
                 startTime: Float(audio.startTime ?? 0),
                 duration: Float(audio.duration ?? 0),
                 volume: audio.volume,
-                isMuted: false,
+                isMuted: Self.isMutedForAudio(globalMute: viewModel.isMuted, audio: audio),
                 isSelected: viewModel.selection.selectedClipId == audio.id,
                 isLocked: false,
                 isDark: colorScheme == .dark,
