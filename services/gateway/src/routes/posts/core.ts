@@ -64,8 +64,13 @@ export function registerCoreRoutes(
         }
       }
 
-      // Trigger async translation for posts with text content (fire-and-forget)
-      if (parsed.data.content && (parsed.data.type ?? 'POST') === 'POST') {
+      // Trigger async translation for posts/stories with text content (fire-and-forget)
+      const postType = parsed.data.type ?? 'POST';
+      const shouldTranslateContent = Boolean(parsed.data.content) && (
+        postType === 'POST' ||
+        (postType === 'STORY' && parsed.data.content?.trim())
+      );
+      if (shouldTranslateContent) {
         try {
           const translationService = PostTranslationService.shared;
           translationService.translatePost(
