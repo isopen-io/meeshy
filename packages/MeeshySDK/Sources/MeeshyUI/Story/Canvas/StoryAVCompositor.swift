@@ -36,6 +36,40 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// `startRequest`.
     internal nonisolated let layerCache = StoryRendererCache()
 
+    /// Backdrop-capture instance reused across the export's frames. Lazily
+    /// created on the main actor at the first `renderFrame` so we can stay
+    /// `nonisolated` in `init` (AVFoundation instantiates the compositor via
+    /// `customVideoCompositorClass` using `init()`, which must remain
+    /// nonisolated).
+    ///
+    /// Why pool: a 10 s × 60 fps export drives `renderFrame` 600 times. Each
+    /// `StoryBackdropCapture()` allocation is cheap on its own, but every
+    /// call to `captureCanvasBackdrop` it serves leaks an `MTLTexture` of
+    /// `renderSize` (~8 MB at 1080×1920 BGRA8) into the shared GPU/CPU heap
+    /// until the next ARC sweep. Pooling collapses the peak shared-memory
+    /// footprint from O(frames) to O(1) — the capture's `invalidate()` is
+    /// called at the top of every `renderFrame`, which releases the
+    /// previous frame's texture before the next `captureCanvasBackdrop`
+    /// allocates its replacement.
+    ///
+    /// Long-lived Metal resources (device, command queue, pipeline state)
+    /// live on `StoryRenderingContext.shared` and are never touched by
+    /// `invalidate()`, so the only thing pooled here is the
+    /// `StoryBackdropCapture` instance itself + its two `MTLTexture?` slots.
+    ///
+    /// Exposed `internal` so unit tests can swap the factory via
+    /// `backdropCaptureFactory` and observe instance reuse.
+    private nonisolated(unsafe) var _backdropCapture: (any BackdropCapturing)?
+
+    /// Factory invoked once per compositor instance to produce the shared
+    /// backdrop capture. Defaults to the production `StoryBackdropCapture`.
+    /// Tests assign a fake factory before driving frames through
+    /// `startRequest` to assert pooling behaviour without the full Metal +
+    /// CARenderer pipeline.
+    internal nonisolated(unsafe) var backdropCaptureFactory: @MainActor () -> any BackdropCapturing = {
+        StoryBackdropCapture()
+    }
+
     public override nonisolated init() {
         super.init()
     }
@@ -98,11 +132,13 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         DispatchQueue.main.sync {
             MainActor.assumeIsolated {
                 do {
+                    let backdropCapture = self.sharedBackdropCapture()
                     try Self.renderFrame(slide: instruction.slide,
                                          at: request.compositionTime,
                                          renderSize: renderContext.size,
                                          into: buffer,
-                                         cache: cache)
+                                         cache: cache,
+                                         backdropCapture: backdropCapture)
                     request.finish(withComposedVideoFrame: buffer)
                 } catch {
                     request.finish(with: error)
@@ -111,12 +147,30 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         }
     }
 
+    /// Lazily creates (on first call) and returns the per-export shared
+    /// `BackdropCapturing` instance. Must be called on the main actor — the
+    /// factory closure is `@MainActor` because `StoryBackdropCapture` is
+    /// MainActor-isolated.
     @MainActor
-    private static func renderFrame(slide: StorySlide,
-                                    at time: CMTime,
-                                    renderSize: CGSize,
-                                    into buffer: CVPixelBuffer,
-                                    cache: StoryRendererCache) throws {
+    internal func sharedBackdropCapture() -> any BackdropCapturing {
+        if let existing = _backdropCapture {
+            return existing
+        }
+        let created = backdropCaptureFactory()
+        _backdropCapture = created
+        return created
+    }
+
+    /// Per-frame render entry point. Exposed `internal` so tests can drive it
+    /// directly with a counting `BackdropCapturing` fake without standing up
+    /// the full AVFoundation request pipeline.
+    @MainActor
+    internal static func renderFrame(slide: StorySlide,
+                                     at time: CMTime,
+                                     renderSize: CGSize,
+                                     into buffer: CVPixelBuffer,
+                                     cache: StoryRendererCache,
+                                     backdropCapture: any BackdropCapturing) throws {
         // Scope check: flush the cache if the slide / languages / mode this
         // compositor is now processing differs from the previous frame's
         // scope. For a single export session this is true only on the first
@@ -125,16 +179,15 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
 
         let geometry = CanvasGeometry(renderSize: renderSize)
 
-        // Per-frame backdrop capture so AVFoundation exports pick up the MPS
-        // path identically to the live composer. The capture is a no-op when
-        // the slide has no glass-style text — common path remains untouched.
-        // We deliberately instantiate per frame rather than sharing a single
-        // instance on the compositor : `renderFrame` already runs once per
-        // exported frame and the helper holds at most one cached MTLTexture,
-        // which is released when this function returns. A shared instance
-        // would require manual `invalidate()` book-keeping for no observable
-        // throughput gain at AVFoundation's export rates.
-        let backdropCapture = StoryBackdropCapture()
+        // Per-frame backdrop reset: drop the previous frame's
+        // `MTLTexture` snapshot so `captureCanvasBackdrop` rebuilds against
+        // the current `time` / slide state. The capture *instance itself* is
+        // shared across all frames of the export (see `_backdropCapture`),
+        // which collapses peak shared-memory footprint from
+        // O(frames × renderSize) to O(renderSize). The capture is a no-op
+        // when the slide has no glass-style text — common path remains
+        // untouched.
+        backdropCapture.invalidate()
         _ = backdropCapture.captureCanvasBackdrop(slide: slide,
                                                   geometry: geometry,
                                                   time: time,

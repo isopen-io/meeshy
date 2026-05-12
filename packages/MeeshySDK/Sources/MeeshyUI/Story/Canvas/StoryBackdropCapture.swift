@@ -4,6 +4,37 @@ import CoreMedia
 import Metal
 import MeeshySDK
 
+/// Abstraction over `StoryBackdropCapture` used by `StoryAVCompositor` so the
+/// compositor can hold a single capture instance across export frames and so
+/// unit tests can inject a counting fake without standing up the full
+/// Metal/CARenderer pipeline.
+///
+/// Conforming types are expected to be `@MainActor`-isolated — the only
+/// production implementation, `StoryBackdropCapture`, drives the live
+/// `StoryRenderer.render` + `CARenderer` pipeline which is MainActor-bound.
+@MainActor
+public protocol BackdropCapturing: AnyObject {
+    /// Rasterizes the slide minus any glass-flagged text item into an
+    /// `MTLTexture`. See `StoryBackdropCapture.captureCanvasBackdrop`.
+    @discardableResult
+    func captureCanvasBackdrop(slide: StorySlide,
+                               geometry: CanvasGeometry,
+                               time: CMTime,
+                               mode: RenderMode,
+                               languages: [String]) -> MTLTexture?
+
+    /// Returns a region of the cached canvas backdrop matching `frame`. See
+    /// `StoryBackdropCapture.cropRegion`.
+    func cropRegion(_ frame: CGRect) -> MTLTexture?
+
+    /// Drops any per-tick caches (canvas backdrop, render size) so the next
+    /// `captureCanvasBackdrop` rebuilds against the latest slide state.
+    /// Conforming types MUST preserve any expensive long-lived resources
+    /// (Metal device handles, command queues, pipeline state) across calls
+    /// to `invalidate()` — only per-frame caches are dropped.
+    func invalidate()
+}
+
 /// Two-pass backdrop snapshot helper for `StoryGlassBackdropLayer`.
 ///
 /// `StoryGlassBackdropLayer` ships two render paths:
@@ -54,7 +85,7 @@ import MeeshySDK
 /// awaited synchronously to keep the contract simple : "ask, get a usable
 /// texture back, set it on the layer".
 @MainActor
-public final class StoryBackdropCapture {
+public final class StoryBackdropCapture: BackdropCapturing {
 
     /// Cached full-canvas backdrop for the current tick. Multiple glass-text
     /// layers in the same slide share this snapshot — the exclusion already
@@ -229,6 +260,10 @@ public final class StoryBackdropCapture {
     ///
     /// `StoryCanvasUIView` calls this inside `rebuildLayers()` before each
     /// capture ; `StoryAVCompositor` calls it per frame inside `renderFrame`.
+    ///
+    /// This drops only the per-tick `MTLTexture` cache — long-lived Metal
+    /// resources (device, command queue, pipeline state) live on
+    /// `StoryRenderingContext.shared` and are preserved across invalidations.
     public func invalidate() {
         cachedCanvasBackdrop = nil
         cachedRenderSize = nil
