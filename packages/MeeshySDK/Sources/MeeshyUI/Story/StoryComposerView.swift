@@ -26,12 +26,18 @@ public enum StoryBackgroundPalette {
     ]
 
     public static func randomBackgroundColor() -> String {
+        // Pastel palette : low-medium saturation + high brightness produces
+        // the soft, airy look typical of pastel design (peach, mint, lavender,
+        // butter, baby blue). The previous range (saturation 0.5–0.9 +
+        // brightness 0.2–0.7) yielded dark saturated tones that fought with
+        // the white/indigo text overlays. Aligned with the brand's
+        // glass-aesthetic shift (commit `59b90364`).
         let existingSet = Set(colors.map { $0.uppercased() })
         var hex: String
         repeat {
             let hue = Double.random(in: 0...1)
-            let saturation = Double.random(in: 0.5...0.9)
-            let brightness = Double.random(in: 0.2...0.7)
+            let saturation = Double.random(in: 0.30...0.50)
+            let brightness = Double.random(in: 0.85...0.95)
             let color = UIColor(hue: hue, saturation: saturation, brightness: brightness, alpha: 1.0)
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
             color.getRed(&r, green: &g, blue: &b, alpha: nil)
@@ -90,6 +96,13 @@ public struct StoryComposerView: View {
     // MARK: - Photo / media pickers
 
     @State private var fgMediaItem: PhotosPickerItem?
+
+    // MARK: - Empty-state picker selection animation
+    //
+    // Briefly latched when the user taps a tile in `emptyStateLargePicker`,
+    // before the selection propagates to `viewModel.selectTool(_:)`. Drives
+    // the highlight + fade-others animation in `largeToolTile`.
+    @State private var pickerSelectedTool: StoryToolMode?
 
     // MARK: - Media editor (triggered by edit button on canvas elements)
 
@@ -705,6 +718,20 @@ public struct StoryComposerView: View {
         viewModel.activeTool == nil && isComposerEmpty
     }
 
+    /// Pastel accent color per tile. Picks a distinct hue so the carousel
+    /// feels lively without breaking from the brand palette. Each accent is
+    /// applied at low opacity behind the icon glyph (soft tinted card).
+    private func tileAccent(for tool: StoryToolMode) -> Color {
+        switch tool {
+        case .media:    return MeeshyColors.coral          // peachy red
+        case .text:     return MeeshyColors.indigo400      // soft lavender
+        case .drawing:  return MeeshyColors.success        // mint green
+        case .texture:  return MeeshyColors.warning        // butter yellow
+        case .filters:  return MeeshyColors.info           // sky blue
+        case .timeline: return MeeshyColors.indigo300      // pale indigo
+        }
+    }
+
     @ViewBuilder
     private var emptyStateLargePicker: some View {
         VStack(spacing: 18) {
@@ -721,6 +748,8 @@ public struct StoryComposerView: View {
                     .foregroundColor(.white.opacity(0.65))
             }
             .padding(.top, 16)
+            .opacity(pickerSelectedTool == nil ? 1 : 0)
+            .scaleEffect(pickerSelectedTool == nil ? 1 : 0.95)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 14) {
@@ -791,16 +820,36 @@ public struct StoryComposerView: View {
         title: String,
         subtitle: String
     ) -> some View {
+        let accent = tileAccent(for: tool)
+        let isSelected = pickerSelectedTool == tool
+        let isOtherSelected = pickerSelectedTool != nil && pickerSelectedTool != tool
+
         Button {
+            // Selection animation : briefly highlight the tapped tile + fade
+            // the others before propagating to viewModel.selectTool. The
+            // resulting activeTool change flips `shouldShowEmptyStateLargePicker`
+            // to false and the outer spring animates the picker out, revealing
+            // the compact toolbar + active panel beneath. ~220ms total before
+            // the swap fires so the highlight is perceivable.
             HapticFeedback.medium()
-            viewModel.selectTool(tool)
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.6)) {
+                pickerSelectedTool = tool
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                viewModel.selectTool(tool)
+                pickerSelectedTool = nil
+            }
         } label: {
-            VStack(spacing: 12) {
-                Image(systemName: icon)
-                    .font(.system(size: 44, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.brandGradient)
-                    .frame(width: 64, height: 64)
-                    .padding(.top, 18)
+            VStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(accent.opacity(isSelected ? 0.45 : 0.20))
+                        .frame(width: 76, height: 76)
+                    Image(systemName: icon)
+                        .font(.system(size: 36, weight: .semibold))
+                        .foregroundStyle(accent)
+                }
+                .padding(.top, 16)
 
                 VStack(spacing: 4) {
                     Text(title)
@@ -808,7 +857,7 @@ public struct StoryComposerView: View {
                         .foregroundColor(.white)
                     Text(subtitle)
                         .font(.system(size: 12))
-                        .foregroundColor(.white.opacity(0.6))
+                        .foregroundColor(.white.opacity(0.65))
                         .multilineTextAlignment(.center)
                         .lineLimit(2)
                         .padding(.horizontal, 8)
@@ -821,9 +870,12 @@ public struct StoryComposerView: View {
                     .fill(.ultraThinMaterial)
                     .overlay(
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .stroke(MeeshyColors.brandPrimary.opacity(0.25), lineWidth: 1)
+                            .stroke(accent.opacity(isSelected ? 0.65 : 0.30), lineWidth: isSelected ? 2 : 1)
                     )
             )
+            .shadow(color: accent.opacity(isSelected ? 0.35 : 0), radius: 18, y: 6)
+            .scaleEffect(isSelected ? 1.06 : 1.0)
+            .opacity(isOtherSelected ? 0.25 : 1.0)
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
