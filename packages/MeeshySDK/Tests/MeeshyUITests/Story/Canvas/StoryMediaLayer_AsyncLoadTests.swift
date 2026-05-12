@@ -142,7 +142,7 @@ final class StoryMediaLayer_AsyncLoadTests: XCTestCase {
         layer.configure(with: mediaB, geometry: geometry, mode: .edit)
         let taskB = layer._currentImageLoadTaskForTesting()
         XCTAssertNotNil(taskB)
-        XCTAssertFalse(taskA === taskB,
+        XCTAssertFalse(taskA == taskB,
                        "configure() must reassign currentLoadTask when superseded")
 
         // Drain A's cancellation: even if the stub resolves A with imageA, the

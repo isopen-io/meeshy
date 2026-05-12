@@ -66,9 +66,9 @@ final class VideoCompositor_LayerInstructionsTests: XCTestCase {
     }
 
     fileprivate func layerInstructions(
-        in instruction: AVVideoCompositionInstructionProtocol
+        in instruction: any AVVideoCompositionInstructionProtocol
     ) -> [AVVideoCompositionLayerInstruction] {
-        instruction.layerInstructions
+        (instruction as? AVVideoCompositionInstruction)?.layerInstructions ?? []
     }
 
     // MARK: - 1. Single clip, no transition, no fade — emits instruction with trackID, no ramps
