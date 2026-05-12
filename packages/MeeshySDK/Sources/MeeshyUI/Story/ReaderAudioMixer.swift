@@ -269,10 +269,26 @@ public final class ReaderAudioMixer {
         return info
     }()
 
-    fileprivate static func hostTime(forDelaySeconds seconds: Double) -> UInt64 {
-        guard seconds > 0 else { return 0 }
-        let nanos = UInt64(seconds * 1_000_000_000)
-        return nanos * UInt64(hostTimebase.denom) / UInt64(hostTimebase.numer)
+    /// Forward to `AudioMixer.hostTime(forDelaySeconds:)` so a single, hardened
+    /// implementation (Double-based, clamped to `UInt64.max`, validates timebase
+    /// and finiteness — see P3-#5 in commit `841a528a`) is the source of truth
+    /// for the entire MeeshyUI audio pipeline. The previous local implementation
+    /// silently overflowed on non-Apple-Silicon timebases (numer=1, denom=3 on
+    /// Intel) for delays > 9.22s, which is well within the realistic envelope
+    /// of a 30s slide. Production callers keep the same call shape; the dedicated
+    /// `timebase:` overload below exists for tests that need to exercise the
+    /// overflow path explicitly.
+    static func hostTime(forDelaySeconds seconds: Double) -> UInt64 {
+        return AudioMixer.hostTime(forDelaySeconds: seconds)
+    }
+
+    /// Testable overload that injects an explicit timebase. Delegates to the
+    /// hardened `AudioMixer` helper so the two mixers stay bit-identical.
+    static func hostTime(
+        forDelaySeconds seconds: Double,
+        timebase: mach_timebase_info_data_t
+    ) -> UInt64 {
+        return AudioMixer.hostTime(forDelaySeconds: seconds, timebase: timebase)
     }
 
     fileprivate static func delaySeconds(forHostTime target: UInt64, relativeTo now: UInt64) -> TimeInterval {
