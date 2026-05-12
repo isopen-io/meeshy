@@ -570,7 +570,18 @@ public struct StoryComposerView: View {
                 Label(String(localized: "story.composer.visibility", defaultValue: "Visibilite", bundle: .module), systemImage: "eye")
             }
             Divider()
-            Button(role: .destructive) { viewModel.reset() } label: {
+            Button(role: .destructive) {
+                // Bug fix: viewModel.reset() wipes ViewModel data (slides, effects,
+                // images), but composer-local @State (stickerObjects, selectedFilter,
+                // openingEffect, closingEffect, selectedImage, audio inputs, drawing
+                // canvas, picker scratch) survives. The canvasSyncFingerprint chain
+                // (.onChange → syncCurrentSlideEffects → buildEffects) re-injects
+                // those stale local values into the fresh empty slide, making
+                // "deleted" elements reappear. resetLocalState() clears them in
+                // lock-step so the sync writes back a truly empty effects payload.
+                viewModel.reset()
+                resetLocalState()
+            } label: {
                 Label(String(localized: "story.composer.deleteAllSlides", defaultValue: "Supprimer tous les slides", bundle: .module), systemImage: "trash")
             }
         } label: {
@@ -1383,6 +1394,45 @@ public struct StoryComposerView: View {
 
     private func syncCurrentSlideEffects() {
         viewModel.currentEffects = buildEffects()
+    }
+
+    /// Resets every composer-local `@State` that feeds `buildEffects()` or
+    /// otherwise mirrors slide content. Must be called immediately after
+    /// `viewModel.reset()` (or any other operation that drops all slides)
+    /// to prevent the `canvasSyncFingerprint` sync from re-injecting
+    /// orphaned local state into the fresh empty slide.
+    ///
+    /// Scope: covers every `@State` read by `buildEffects()` plus the
+    /// transient picker / editor scratch state. Intentionally does NOT
+    /// touch user preferences (`storyLanguage`, `visibility`), the
+    /// in-flight loading indicators, or sheet-presentation booleans.
+    private func resetLocalState() {
+        // Canvas-local state (read by buildEffects via canvasSyncFingerprint)
+        selectedFilter = nil
+        selectedImage = nil
+        stickerObjects = []
+        drawingCanvas = PKCanvasView()
+        drawingTool = .pen
+
+        // Transitions (read by buildEffects)
+        openingEffect = nil
+        closingEffect = nil
+
+        // Background audio panel (read by buildEffects)
+        selectedAudioId = nil
+        selectedAudioTitle = nil
+        audioVolume = 0.7
+        audioTrimStart = 0
+        audioTrimEnd = 0
+
+        // Picker / editor scratch state — would otherwise resurrect
+        // half-finished media flows on the freshly reset canvas.
+        fgMediaItem = nil
+        editingBgImage = nil
+        editingElementImage = nil
+        editingElementVideo = nil
+        confirmedMediaAudioURL = nil
+        lostMediaCount = 0
     }
 
     private func restoreCanvas(from slide: StorySlide) {
