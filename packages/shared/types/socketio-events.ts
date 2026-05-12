@@ -88,6 +88,13 @@ export const SERVER_EVENTS = {
   TYPING_START: 'typing:start',
   TYPING_STOP: 'typing:stop',
   USER_STATUS: 'user:status',
+  /**
+   * Snapshot émis à l'authentification socket : liste des userIds actuellement
+   * connectés (présents dans `connectedUsers` Map serveur) parmi les participants
+   * des conversations du nouvel arrivant. Permet au client de seed son store
+   * de présence sans attendre un changement d'état.
+   */
+  PRESENCE_SNAPSHOT: 'presence:snapshot',
   CONVERSATION_JOINED: 'conversation:joined',
   CONVERSATION_LEFT: 'conversation:left',
   /** Server emits when a `conversation:join` is rejected (banned, not a
@@ -714,6 +721,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.TYPING_START]: (data: TypingEvent) => void;
   [SERVER_EVENTS.TYPING_STOP]: (data: TypingEvent) => void;
   [SERVER_EVENTS.USER_STATUS]: (data: UserStatusEvent) => void;
+  [SERVER_EVENTS.PRESENCE_SNAPSHOT]: (data: PresenceSnapshotEventData) => void;
   [SERVER_EVENTS.CONVERSATION_JOINED]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.CONVERSATION_LEFT]: (data: ConversationParticipationEventData) => void;
   [SERVER_EVENTS.AUTHENTICATED]: (data: AuthenticatedEventData) => void;
@@ -1145,6 +1153,20 @@ export interface UserStatusEvent {
   readonly username: string;
   readonly isOnline: boolean;
   readonly lastActiveAt?: Date | null;
+}
+
+/**
+ * Snapshot de présence — userIds actuellement online parmi les contacts du destinataire.
+ * Émis une fois à l'authentification socket pour seed le store côté client.
+ * `lastActiveAt` peut être omis (null) selon les préférences privacy.
+ */
+export interface PresenceSnapshotEventData {
+  readonly users: readonly {
+    readonly userId: string;
+    readonly username: string;
+    readonly isOnline: boolean;
+    readonly lastActiveAt?: Date | null;
+  }[];
 }
 
 // ===== TYPES POUR LES STATISTIQUES DE CONVERSATION =====
