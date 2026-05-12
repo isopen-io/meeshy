@@ -12933,6 +12933,41 @@
         }
       }
     },
+    "story.tray.upload.exporting" : {
+      "comment" : "Story tray row label shown beneath the avatar while a slide is being baked into MP4 by StoryVideoExportService. The %lld placeholder is the integer export progress (0..100).",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export läuft… %lld%%"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exporting… %lld%%"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportando… %lld%%"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Export en cours… %lld%%"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Exportando… %lld%%"
+          }
+        }
+      }
+    },
     "Statut de livraison" : {
       "localizations" : {
         "de" : {
