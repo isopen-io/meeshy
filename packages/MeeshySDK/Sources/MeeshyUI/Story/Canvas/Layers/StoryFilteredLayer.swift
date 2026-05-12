@@ -1,5 +1,6 @@
 import QuartzCore
 import Metal
+import Foundation
 
 /// `CAMetalLayer` subclass that runs a custom Metal compute kernel on its
 /// `sourceTexture` and presents the result. Used for real-time filter previews
@@ -14,6 +15,16 @@ import Metal
 /// MainActor-isolated. The compromise: the bare CAMetalLayer setup happens in
 /// `init` (nonisolated, no Bundle.module access), and pipeline state is
 /// initialised lazily on the first MainActor `render()` call.
+///
+/// ### Pipeline pre-heating (P3 dropframe fix)
+/// Compiling a `MTLComputePipelineState` from a Metal function costs roughly
+/// 5–50 ms the first time. Doing it inside the first `render()` call dropped
+/// the first frame whenever the reader opened a slide with a filter. To avoid
+/// this we cache the compiled pipeline in a process-wide static map, keyed by
+/// `Kind`, and offer `preheatPipeline(kind:)` / `preheatAllPipelines` hooks
+/// that callers (app bootstrap, slide prefetcher) invoke off the critical
+/// path. The lazy fallback inside `render()` is preserved for paths that
+/// never preheated (tests, surprise filter changes).
 public final class StoryFilteredLayer: CAMetalLayer {
 
     /// Kernel selector. The raw value matches the Metal function name.
@@ -25,7 +36,7 @@ public final class StoryFilteredLayer: CAMetalLayer {
     public var kind: Kind = .vintage {
         didSet {
             guard oldValue != kind else { return }
-            pipelineState = nil  // force lazy rebuild on next render()
+            pipelineState = nil  // force rebuild on next render(); hits the static cache if preheated
         }
     }
 
@@ -54,16 +65,21 @@ public final class StoryFilteredLayer: CAMetalLayer {
     }
 
     private func setupPipeline() {
-        let context = StoryRenderingContext.shared
-        // Bundle.module is the MeeshyUI resource bundle — see `Package.swift`
-        // `.process("Story/Canvas/Metal")`. `device.makeDefaultLibrary()` (no
-        // bundle) reads `Bundle.main` and would miss the SDK's metal library.
-        guard let library = try? context.metalDevice.makeDefaultLibrary(bundle: Bundle.module),
-              let function = library.makeFunction(name: kind.rawValue) else {
+        // Hit the process-wide cache first — populated by `preheatPipeline`.
+        if let cached = Self.cachedPipeline(for: kind) {
+            pipelineState = cached
+            return
+        }
+        // Lazy fallback: compile inline and write back to the cache so the
+        // next layer using the same `Kind` gets a hot path. This keeps
+        // behaviour identical for callers that never invoked the preheat hook
+        // (tests, runtime filter changes the user picks mid-session).
+        guard let compiled = Self.compilePipeline(kind: kind) else {
             pipelineState = nil
             return
         }
-        pipelineState = try? context.metalDevice.makeComputePipelineState(function: function)
+        Self.storePipeline(compiled, for: kind)
+        pipelineState = compiled
     }
 
     /// Encodes one frame: kernel(sourceTexture) -> drawable. Lazily builds the
@@ -97,5 +113,85 @@ public final class StoryFilteredLayer: CAMetalLayer {
 
         buffer.present(drawable)
         buffer.commit()
+    }
+
+    // MARK: - Pipeline preheat (process-wide cache)
+
+    /// Process-wide cache of compiled pipelines keyed by kernel `Kind`.
+    /// `MTLComputePipelineState` is documented thread-safe; caching it across
+    /// layers is the recommended Apple pattern. The dict is guarded by
+    /// `cacheLock` and accessed only via the helpers below — never read or
+    /// mutated directly from elsewhere.
+    nonisolated(unsafe) private static var pipelineCache: [Kind: MTLComputePipelineState] = [:]
+    nonisolated(unsafe) private static let cacheLock = NSLock()
+
+    /// Pre-compile a single kernel's pipeline so the first `render()` call
+    /// that uses it skips the 5–50 ms compilation hit. Idempotent — calling
+    /// with a kind that's already cached is a no-op and returns `true`.
+    ///
+    /// Returns `true` if the pipeline is ready in the cache after the call,
+    /// `false` if compilation failed (missing kernel, Bundle.module mis-config).
+    /// Must be called on the MainActor because `Bundle.module` is
+    /// MainActor-isolated under defaultIsolation(MainActor).
+    @MainActor
+    @discardableResult
+    public static func preheatPipeline(kind: Kind) -> Bool {
+        if cachedPipeline(for: kind) != nil { return true }
+        guard let compiled = compilePipeline(kind: kind) else { return false }
+        storePipeline(compiled, for: kind)
+        return true
+    }
+
+    /// Convenience: preheat every kernel exposed by `Kind`. Intended to be
+    /// invoked once at app launch (e.g. from `MeeshyApp.init` via a small
+    /// bootstrap task) so the composer and reader never pay the compile cost
+    /// on a user-visible frame.
+    @MainActor
+    public static func preheatAllPipelines() {
+        for kind in Kind.allCases {
+            _ = preheatPipeline(kind: kind)
+        }
+    }
+
+    /// Test seam: clear the cache so `test_render_withoutPreheat_…` exercises
+    /// the lazy path even after a previous test populated it.
+    static func _resetPipelineCacheForTesting() {
+        cacheLock.lock()
+        pipelineCache.removeAll()
+        cacheLock.unlock()
+    }
+
+    /// Test seam: inspect whether a kind is currently cached.
+    static func _hasCachedPipelineForTesting(_ kind: Kind) -> Bool {
+        cachedPipeline(for: kind) != nil
+    }
+
+    // MARK: - Private cache helpers
+
+    private static func cachedPipeline(for kind: Kind) -> MTLComputePipelineState? {
+        cacheLock.lock()
+        defer { cacheLock.unlock() }
+        return pipelineCache[kind]
+    }
+
+    private static func storePipeline(_ pipeline: MTLComputePipelineState, for kind: Kind) {
+        cacheLock.lock()
+        pipelineCache[kind] = pipeline
+        cacheLock.unlock()
+    }
+
+    /// Compiles a kernel into a pipeline. MainActor-isolated because
+    /// `Bundle.module` is MainActor-isolated under defaultIsolation(MainActor).
+    @MainActor
+    private static func compilePipeline(kind: Kind) -> MTLComputePipelineState? {
+        let context = StoryRenderingContext.shared
+        // Bundle.module is the MeeshyUI resource bundle — see `Package.swift`
+        // `.process("Story/Canvas/Metal")`. `device.makeDefaultLibrary()` (no
+        // bundle) reads `Bundle.main` and would miss the SDK's metal library.
+        guard let library = try? context.metalDevice.makeDefaultLibrary(bundle: Bundle.module),
+              let function = library.makeFunction(name: kind.rawValue) else {
+            return nil
+        }
+        return try? context.metalDevice.makeComputePipelineState(function: function)
     }
 }
