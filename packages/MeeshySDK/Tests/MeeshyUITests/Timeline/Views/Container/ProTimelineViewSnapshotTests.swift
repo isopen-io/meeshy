@@ -19,8 +19,39 @@ import MeeshySDK
 // Do NOT add `XCTSkipIf(true)` back to these tests — that yields zero
 // visual regression coverage and silently masks rendering bugs.
 
+// MARK: - Known production bug surfaced by this suite
+//
+// `AudioClipBar.waveform` (Sources/MeeshyUI/Story/Timeline/Views/Track/
+// AudioClipBar.swift, line ~105) computes `count = max(samples.count, 1)`
+// to "always show at least one bar", then iterates `ForEach(0..<count)`
+// and indexes `samples[i]`. When `samples` is empty, `count` becomes 1
+// but `samples[0]` is out-of-range → `Swift/ContiguousArrayBuffer.swift:675:
+// Fatal error: Index out of range`.
+//
+// The same bug breaks `QuickTimelineViewSnapshotTests.test_snapshot_quick_deployed`
+// and `AudioClipBarSnapshotTests.test_snapshot_audioClip_noWaveform`
+// (their baselines are missing from `__Snapshots__/` for the same reason).
+//
+// Workaround applied here: every `StoryAudioPlayerObject` fixture below
+// carries a non-empty `waveformSamples` array, which is what a real
+// audio clip in the editor always has (samples are extracted at
+// composition time — see `packages/MeeshySDK/CLAUDE.md` Audio Pipeline).
+// The empty-array edge case is a production bug tracked separately.
+
 @MainActor
 final class ProTimelineViewSnapshotTests: XCTestCase {
+
+    /// Stable, deterministic waveform shape used by the audio fixture below.
+    /// Mirrors the `AudioClipBarSnapshotTests.waveSamples` pattern so the
+    /// rendered bars match the look of an actual decoded audio clip.
+    /// Working around the empty-array crash in `AudioClipBar.waveform` —
+    /// see file-level note above.
+    private static let waveformFixture: [Float] = [
+        0.10, 0.20, 0.35, 0.50, 0.65, 0.80, 0.70, 0.55,
+        0.45, 0.30, 0.40, 0.55, 0.70, 0.85, 0.90, 0.75,
+        0.60, 0.50, 0.40, 0.30, 0.20, 0.30, 0.45, 0.60,
+        0.70, 0.55, 0.40, 0.30, 0.25, 0.20, 0.15, 0.10
+    ]
 
     private func makeViewModel(project: TimelineProject) -> TimelineViewModel {
         let engine = MockStoryTimelineEngine()
@@ -37,7 +68,12 @@ final class ProTimelineViewSnapshotTests: XCTestCase {
         video1.startTime = 0; video1.duration = 4
         var video2 = StoryMediaObject(id: "v2", postMediaId: "v2", kind: .video, aspectRatio: 1.0)
         video2.startTime = 4; video2.duration = 4
-        var audio = StoryAudioPlayerObject(id: "a1", postMediaId: "a1")
+        // waveformSamples MUST be non-empty — see file-level "Known production bug" note.
+        var audio = StoryAudioPlayerObject(
+            id: "a1",
+            postMediaId: "a1",
+            waveformSamples: Self.waveformFixture
+        )
         audio.startTime = 0; audio.duration = 8; audio.volume = 0.7
         var text = StoryTextObject(id: "t1", text: "Story")
         text.startTime = 1; text.duration = 3
