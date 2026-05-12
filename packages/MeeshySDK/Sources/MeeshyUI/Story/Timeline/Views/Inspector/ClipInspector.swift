@@ -114,11 +114,34 @@ public struct ClipInspector: View {
         return String(format: "%d:%06.3f", minutes, remainder)
     }
 
+    /// True when the clip's media carries audio playback (`.video` or `.audio`).
+    /// Image clips have no audio track — exposing the volume slider or loop
+    /// toggle for them would surface controls that have no underlying effect.
+    /// Exposed at type-level so tests can assert kind→affordance gating
+    /// without driving the SwiftUI view body.
+    public static func hasAudioAffordances(kind: ClipSnapshot.Kind) -> Bool {
+        switch kind {
+        case .video, .audio: return true
+        case .image, .text:  return false
+        }
+    }
+
+    /// True when looping a clip makes sense. Audio + video can loop; still
+    /// images and text overlays cannot (no playback to wrap around).
+    public static func supportsLoop(kind: ClipSnapshot.Kind) -> Bool {
+        switch kind {
+        case .video, .audio: return true
+        case .image, .text:  return false
+        }
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
             metadataRow
-            volumeSlider
+            if Self.hasAudioAffordances(kind: clip.kind) {
+                volumeSlider
+            }
             fadeSliders
             togglesRow
             actionsRow
@@ -222,16 +245,19 @@ public struct ClipInspector: View {
         }
     }
 
+    @ViewBuilder
     private var togglesRow: some View {
         HStack(spacing: 24) {
-            Toggle(isOn: Binding(
-                get: { loop },
-                set: { loop = $0; onLoopToggled($0) }
-            )) {
-                Text(String(localized: "story.timeline.inspector.loop", bundle: .module))
+            if Self.supportsLoop(kind: clip.kind) {
+                Toggle(isOn: Binding(
+                    get: { loop },
+                    set: { loop = $0; onLoopToggled($0) }
+                )) {
+                    Text(String(localized: "story.timeline.inspector.loop", bundle: .module))
+                }
+                .toggleStyle(.switch)
+                .tint(MeeshyColors.indigo500)
             }
-            .toggleStyle(.switch)
-            .tint(MeeshyColors.indigo500)
 
             Toggle(isOn: Binding(
                 get: { background },

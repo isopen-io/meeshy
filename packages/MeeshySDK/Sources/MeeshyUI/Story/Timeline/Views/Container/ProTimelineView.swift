@@ -73,6 +73,61 @@ public struct ProTimelineView: View {
         return !StoryComposerViewModel.isSyntheticTimelineClipId(id)
     }
 
+    /// Pure mapping from the current timeline selection to a `ClipSnapshot`.
+    ///
+    /// Exposed as a static helper so the `kind` resolution (image vs video vs
+    /// audio) is testable through the public surface without driving SwiftUI
+    /// view bodies. The instance wrapper below reads `viewModel.project` and
+    /// `viewModel.selection` directly, which would otherwise require routing
+    /// tests through gestures.
+    ///
+    /// Returns `nil` when no clip is selected or when the selected id matches
+    /// neither a media clip nor an audio player object.
+    public static func resolveClipSnapshot(viewModel: TimelineViewModel) -> ClipInspector.ClipSnapshot? {
+        guard let id = viewModel.selection.selectedClipId else { return nil }
+        if let media = viewModel.project.mediaObjects.first(where: { $0.id == id }) {
+            // Map StoryMediaKind → ClipSnapshot.Kind. Media objects only carry
+            // image/video — audio lives in `audioPlayerObjects`. An unrecognized
+            // mediaType (forward-compat) defaults to .video so existing
+            // video-tuned controls remain reachable rather than disappearing.
+            let kind: ClipInspector.ClipSnapshot.Kind = {
+                switch media.kind {
+                case .some(.image): return .image
+                case .some(.video): return .video
+                case .none:         return .video
+                }
+            }()
+            return ClipInspector.ClipSnapshot(
+                id: media.id,
+                // No `url` on StoryMediaObject — use postMediaId as display name
+                displayName: media.postMediaId,
+                kind: kind,
+                startTime: Float(media.startTime ?? 0),
+                duration: Float(media.duration ?? 0),
+                volume: media.volume,
+                fadeInDuration: Float(media.fadeIn ?? 0),
+                fadeOutDuration: Float(media.fadeOut ?? 0),
+                isLooping: media.loop,
+                isBackground: media.isBackground
+            )
+        }
+        if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {
+            return ClipInspector.ClipSnapshot(
+                id: audio.id,
+                displayName: audio.postMediaId,
+                kind: .audio,
+                startTime: audio.startTime ?? 0,
+                duration: audio.duration ?? 0,
+                volume: audio.volume,
+                fadeInDuration: audio.fadeIn ?? 0,
+                fadeOutDuration: audio.fadeOut ?? 0,
+                isLooping: audio.loop ?? false,
+                isBackground: audio.isBackground ?? false
+            )
+        }
+        return nil
+    }
+
     // MARK: - Hoisted computed properties (MEDIUM 7)
     // Keyed only on viewModel.project — stable when currentTime / zoomScale change.
 
@@ -449,36 +504,6 @@ public struct ProTimelineView: View {
     }
 
     private func currentClipSnapshot() -> ClipInspector.ClipSnapshot? {
-        guard let id = viewModel.selection.selectedClipId else { return nil }
-        if let media = viewModel.project.mediaObjects.first(where: { $0.id == id }) {
-            return ClipInspector.ClipSnapshot(
-                id: media.id,
-                // No `url` on StoryMediaObject — use postMediaId as display name
-                displayName: media.postMediaId,
-                kind: media.mediaType == "audio" ? .audio : .video,
-                startTime: Float(media.startTime ?? 0),
-                duration: Float(media.duration ?? 0),
-                volume: media.volume,
-                fadeInDuration: Float(media.fadeIn ?? 0),
-                fadeOutDuration: Float(media.fadeOut ?? 0),
-                isLooping: media.loop,
-                isBackground: media.isBackground
-            )
-        }
-        if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == id }) {
-            return ClipInspector.ClipSnapshot(
-                id: audio.id,
-                displayName: audio.postMediaId,
-                kind: .audio,
-                startTime: audio.startTime ?? 0,
-                duration: audio.duration ?? 0,
-                volume: audio.volume,
-                fadeInDuration: audio.fadeIn ?? 0,
-                fadeOutDuration: audio.fadeOut ?? 0,
-                isLooping: audio.loop ?? false,
-                isBackground: audio.isBackground ?? false
-            )
-        }
-        return nil
+        Self.resolveClipSnapshot(viewModel: viewModel)
     }
 }
