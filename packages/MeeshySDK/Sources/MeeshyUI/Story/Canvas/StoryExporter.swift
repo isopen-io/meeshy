@@ -28,14 +28,24 @@ public enum StoryExporterError: Error, Sendable {
 ///   each frame; if the caller blocks main waiting on `export()`, that bridge
 ///   deadlocks. Always invoke from a `Task` or a non-main async context.
 ///
-/// Static-only slides:
-///   When the slide has no background looping video (text/sticker/drawing only),
-///   a synthetic 1-sec transparent BGRA asset is generated on the fly and
-///   inserted as repeated time ranges to cover the slide duration. The
-///   compositor's `startRequest(_:)` overwrites every pixel via
-///   `layerTree.render(in: context)` each frame, so the synthetic substrate is
-///   never visible — only its presence as a video track matters (AVFoundation
-///   needs at least one video track to invoke a custom compositor).
+/// Background video selection:
+///   The composition's video substrate is chosen in this priority order:
+///
+///   1. A `mediaObjects` entry with `isBackground == true && kind == .video`,
+///      regardless of its `loop` flag. When `loop == true`, the clip is
+///      repeated until the slide's effective duration is covered. When
+///      `loop == false`, the clip plays once and any tail remaining in the
+///      slide is filled with the same transparent substrate used for
+///      static-only slides (so the compositor still has a video track to draw
+///      on past the end of the underlying clip).
+///   2. Otherwise (no video background, or image background only) → a
+///      synthetic 1-sec transparent BGRA asset is generated on the fly and
+///      inserted as repeated time ranges to cover the slide duration. The
+///      compositor's `startRequest(_:)` overwrites every pixel via
+///      `layerTree.render(in: context)` each frame, so the synthetic substrate
+///      is never visible — only its presence as a video track matters
+///      (AVFoundation needs at least one video track to invoke a custom
+///      compositor).
 public enum StoryExporter {
 
     public static func export(_ slide: StorySlide,
@@ -44,11 +54,14 @@ public enum StoryExporter {
         let effective = slide.effectiveSlideDuration()
         let totalDuration = CMTime(seconds: effective, preferredTimescale: 600)
 
-        // 1. If the slide has a background looping video, drive the composition
-        //    timing from it. Otherwise, fall through to `ensureVideoTrack` which
-        //    synthesises a transparent track for static-only slides.
+        // 1. If the slide has a background VIDEO (looped or not), drive the
+        //    composition timing from it. The previous predicate required
+        //    `loop == true`, which silently dropped non-looped background
+        //    videos and produced an MP4 with no real footage — see
+        //    fix/story-export-bg-video-no-loop. We now key on `kind == .video`
+        //    and branch on `loop` inside the block.
         if let bg = (slide.effects.mediaObjects ?? [])
-            .first(where: { $0.isBackground && $0.loop }) {
+            .first(where: { $0.isBackground && $0.kind == .video }) {
             guard let urlString = bg.mediaURL,
                   let bgURL = URL(string: urlString) else {
                 throw StoryExporterError.invalidMediaURL
@@ -66,21 +79,53 @@ public enum StoryExporter {
             }
             let assetDuration = try await asset.load(.duration)
 
-            // Loop background video to cover effectiveSlideDuration() (Section 3.6
-            // of the spec: ensures the slide ends on a full repetition).
-            var inserted = CMTime.zero
-            while inserted < totalDuration {
-                let remaining = totalDuration - inserted
-                let chunkDuration = CMTimeMinimum(assetDuration, remaining)
+            if bg.loop {
+                // Loop the background video to cover effectiveSlideDuration()
+                // (Section 3.6 of the spec: ensures the slide ends on a full
+                // repetition). `effectiveSlideDuration()` already rounds the
+                // slide length up to a full repetition for looped backgrounds,
+                // so the final chunk is always a complete cycle.
+                var inserted = CMTime.zero
+                while inserted < totalDuration {
+                    let remaining = totalDuration - inserted
+                    let chunkDuration = CMTimeMinimum(assetDuration, remaining)
+                    try videoTrack.insertTimeRange(
+                        CMTimeRange(start: .zero, duration: chunkDuration),
+                        of: assetVideoTrack,
+                        at: inserted
+                    )
+                    inserted = inserted + chunkDuration
+                }
+            } else {
+                // No-loop background: play the clip once, clipped to the slide
+                // duration if the asset is longer. If the asset is shorter than
+                // the slide, the remainder is filled with the transparent
+                // synthetic substrate so the compositor still has a video
+                // track to draw on for the tail (StoryRenderer keeps rendering
+                // static content — text, stickers, drawings — past the end of
+                // the background clip).
+                let playableDuration = CMTimeMinimum(assetDuration, totalDuration)
                 try videoTrack.insertTimeRange(
-                    CMTimeRange(start: .zero, duration: chunkDuration),
+                    CMTimeRange(start: .zero, duration: playableDuration),
                     of: assetVideoTrack,
-                    at: inserted
+                    at: .zero
                 )
-                inserted = inserted + chunkDuration
+
+                let tailDuration = totalDuration - playableDuration
+                if tailDuration > .zero {
+                    try await appendTransparentTail(
+                        to: videoTrack,
+                        at: playableDuration,
+                        duration: tailDuration,
+                        size: CanvasGeometry.designSize
+                    )
+                }
             }
         } else {
-            // 2. Static-only slide — synthesise a transparent video substrate.
+            // 2. Static-only slide (or image-only background) — synthesise a
+            //    transparent video substrate. Image backgrounds are drawn by
+            //    StoryRenderer through `layerTree.render(in:)` each frame, so
+            //    they don't need a real video track underneath.
             try await ensureVideoTrack(in: composition,
                                        duration: totalDuration,
                                        size: CanvasGeometry.designSize)
@@ -180,6 +225,46 @@ public enum StoryExporter {
                 CMTimeRange(start: .zero, duration: chunkDuration),
                 of: assetVideoTrack,
                 at: inserted
+            )
+            inserted = inserted + chunkDuration
+        }
+    }
+
+    /// Appends repetitions of the cached transparent substrate to an EXISTING
+    /// video track, starting at `startTime` and covering `duration`. Used to
+    /// pad the tail of a non-looped background video clip that ends before the
+    /// slide's effective duration. Mirrors `ensureVideoTrack`'s loop logic but
+    /// operates on a caller-owned track so we don't add a second track to the
+    /// composition (AVAssetExportSession + custom compositor expects exactly
+    /// one video track in this pipeline).
+    static func appendTransparentTail(to videoTrack: AVMutableCompositionTrack,
+                                      at startTime: CMTime,
+                                      duration: CMTime,
+                                      size: CGSize) async throws {
+        guard duration > .zero else { return }
+
+        let syntheticURL = try await syntheticTransparentAsset(size: size)
+        let asset = AVURLAsset(url: syntheticURL)
+        guard let assetVideoTrack = try await asset.loadTracks(withMediaType: .video).first else {
+            throw StoryExporterError.syntheticAssetGenerationFailed(
+                "Generated synthetic asset has no video track"
+            )
+        }
+        let assetDuration = try await asset.load(.duration)
+        guard assetDuration > .zero else {
+            throw StoryExporterError.syntheticAssetGenerationFailed(
+                "Synthetic asset has zero duration"
+            )
+        }
+
+        var inserted = CMTime.zero
+        while inserted < duration {
+            let remaining = duration - inserted
+            let chunkDuration = CMTimeMinimum(assetDuration, remaining)
+            try videoTrack.insertTimeRange(
+                CMTimeRange(start: .zero, duration: chunkDuration),
+                of: assetVideoTrack,
+                at: startTime + inserted
             )
             inserted = inserted + chunkDuration
         }
