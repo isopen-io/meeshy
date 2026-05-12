@@ -32,12 +32,43 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
     public var retryCount: Int
     public var lastError: String?
 
+    /// Sprint 8 Phase 5 — publish→exporter wiring (spec §3.4).
+    ///
+    /// When set, the queue item carries a baked MP4 sitting at this absolute
+    /// path on disk to upload via TUS instead of a raw composite image. The
+    /// TUS uploader resumes the chunked upload from this URL after restarts,
+    /// using the SHA hash carried alongside in the chunk metadata to detect
+    /// stale exports.
+    ///
+    /// Encoding strategy: absolute path string (default `URL` Codable
+    /// behaviour). The path always points into `NSTemporaryDirectory()` for
+    /// freshly baked exports — but tmp on iOS is sandbox-stable for the
+    /// process lifetime and survives suspensions. After app restart the
+    /// resume logic checks `hasValidVideoExport`; if the file is gone (tmp
+    /// purged by the OS) the publish handler falls back to the slow path —
+    /// re-export from the serialized `slidesPayload`. The relative-path
+    /// option was rejected because it would require resolving against the
+    /// current tmp root at decode time, and the existing
+    /// `StoryMediaReference.localFilePath` field already stores absolute
+    /// paths as `String`, so this keeps the persistence schema consistent.
+    public var videoExportURL: URL?
+
+    /// True iff a `videoExportURL` is set AND the underlying file still
+    /// exists on disk. The publish handler uses this to decide between
+    /// resuming the TUS upload (fast path) or re-exporting from the
+    /// serialized slide payload (slow path) after a restart.
+    public var hasValidVideoExport: Bool {
+        guard let url = videoExportURL else { return false }
+        return FileManager.default.fileExists(atPath: url.path)
+    }
+
     public init(
         visibility: String,
         slidesPayload: Data,
         repostOfId: String? = nil,
         mediaReferences: [StoryMediaReference] = [],
-        tempStoryId: String? = nil
+        tempStoryId: String? = nil,
+        videoExportURL: URL? = nil
     ) {
         let queueId = UUID().uuidString
         self.id = queueId
@@ -49,6 +80,7 @@ public struct StoryPublishQueueItem: Codable, Identifiable, Sendable {
         self.createdAt = Date()
         self.retryCount = 0
         self.lastError = nil
+        self.videoExportURL = videoExportURL
     }
 }
 
