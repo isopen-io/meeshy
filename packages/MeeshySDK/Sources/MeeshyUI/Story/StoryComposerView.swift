@@ -26,18 +26,17 @@ public enum StoryBackgroundPalette {
     ]
 
     public static func randomBackgroundColor() -> String {
-        // Pastel palette : low-medium saturation + high brightness produces
-        // the soft, airy look typical of pastel design (peach, mint, lavender,
-        // butter, baby blue). The previous range (saturation 0.5–0.9 +
-        // brightness 0.2–0.7) yielded dark saturated tones that fought with
-        // the white/indigo text overlays. Aligned with the brand's
-        // glass-aesthetic shift (commit `59b90364`).
+        // Soft pastel palette : low saturation + very high brightness keeps
+        // each pick desaturated enough that the picker tiles + text overlays
+        // stay clearly legible on top. Higher saturation (>0.25) tinted the
+        // canvas too strongly and washed out the tile contents. Aligned with
+        // the glass-aesthetic shift (commit `59b90364`).
         let existingSet = Set(colors.map { $0.uppercased() })
         var hex: String
         repeat {
             let hue = Double.random(in: 0...1)
-            let saturation = Double.random(in: 0.30...0.50)
-            let brightness = Double.random(in: 0.85...0.95)
+            let saturation = Double.random(in: 0.14...0.24)
+            let brightness = Double.random(in: 0.93...0.98)
             let color = UIColor(hue: hue, saturation: saturation, brightness: brightness, alpha: 1.0)
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
             color.getRed(&r, green: &g, blue: &b, alpha: nil)
@@ -859,6 +858,15 @@ public struct StoryComposerView: View {
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
                 viewModel.selectTool(tool)
+                // For the Text tile, jump straight into the inline editor :
+                // spawn a fresh text object and select it so the textPanel's
+                // StoryTextEditorView opens with focus, instead of forcing
+                // the user through the extra "Ajouter du texte" tap.
+                if tool == .text,
+                   viewModel.currentEffects.textObjects.isEmpty,
+                   let newText = viewModel.addText() {
+                    viewModel.selectedElementId = newText.id
+                }
                 pickerSelectedTool = nil
             }
         } label: {

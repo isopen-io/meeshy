@@ -104,6 +104,7 @@ struct ContextualToolbar: View {
 
         Button {
             guard !isDisabled else { return }
+            HapticFeedback.medium()
             viewModel.selectTool(tool)
         } label: {
             HStack(spacing: 6) {
@@ -126,6 +127,11 @@ struct ContextualToolbar: View {
                         .offset(x: 6, y: -6)
                 }
             }
+            // Reserve breathing room above + right so the badge (which
+            // overflows the pill by 6pt each axis) is fully visible even
+            // when the pill sits at the edge of the scroll viewport.
+            .padding(.top, 8)
+            .padding(.trailing, 8)
         }
         .buttonStyle(.plain)
         .animation(.easeInOut(duration: 0.15), value: isActive)
