@@ -526,11 +526,93 @@ public final class StoryComposerViewModel {
         reorderSlides()
     }
 
+    /// Duplicate slide at `index`. The visual identity of the duplicated slide
+    /// MUST match the original at duplication time — same background image,
+    /// same media bitmaps, same video/audio URLs, same drawing, same filter.
+    ///
+    /// `StorySlide` itself is a value type, so the struct-level state (effects,
+    /// duration, content) clones via `var copy = slides[index]`. But the
+    /// composer holds side caches keyed by element/slide id (`loadedImages`,
+    /// `loadedVideoURLs`, `loadedAudioURLs`, `mediaAspectRatios`, `slideImages`,
+    /// `backgroundTransformCache`); these MUST be re-keyed under the freshly-
+    /// generated ids so the new slide renders with its own bitmaps instead of
+    /// landing on empty placeholders. Without this, the original slide's media
+    /// stayed visible while the duplicate showed placeholders — and any later
+    /// deletion of the original would orphan the bitmaps the duplicate was
+    /// silently still pointing at via the shared old key.
+    ///
+    /// Mirrors the per-element id reassignment performed by `duplicateElement`.
     func duplicateSlide(at index: Int) {
         guard canAddSlide, slides.indices.contains(index) else { return }
+        let originalSlideId = slides[index].id
         var copy = slides[index]
-        copy.id = UUID().uuidString
+        let newSlideId = UUID().uuidString
+        copy.id = newSlideId
         copy.order = slides.count
+
+        // Re-key per-element side caches by generating a new id for every child
+        // object and copying its bitmap / URL / aspect-ratio entry under the new
+        // key. The mutations happen on `copy.effects` (a value type) before the
+        // copy is inserted into `slides`, so the original slide is untouched.
+        var effects = copy.effects
+
+        // Text objects: ids are referenced by zIndex bookkeeping but carry no
+        // side-cache. New id keeps future selection / persistZIndex from
+        // clobbering the original text object's z value.
+        effects.textObjects = effects.textObjects.map { text in
+            var clone = text
+            clone.id = UUID().uuidString
+            return clone
+        }
+
+        // Media objects (image / video on canvas): the id keys
+        // `loadedImages` (UIImage), `loadedVideoURLs` (URL) and
+        // `mediaAspectRatios` (CGFloat). Walk the array, mint a new id for each
+        // entry, and copy the side-cache rows over to the new key.
+        if let medias = effects.mediaObjects {
+            effects.mediaObjects = medias.map { media in
+                var clone = media
+                let newId = UUID().uuidString
+                clone.id = newId
+                if let img = loadedImages[media.id] { loadedImages[newId] = img }
+                if let url = loadedVideoURLs[media.id] { loadedVideoURLs[newId] = url }
+                if let ratio = mediaAspectRatios[media.id] { mediaAspectRatios[newId] = ratio }
+                return clone
+            }
+        }
+
+        // Audio player objects: the id keys `loadedAudioURLs`.
+        if let audios = effects.audioPlayerObjects {
+            effects.audioPlayerObjects = audios.map { audio in
+                var clone = audio
+                let newId = UUID().uuidString
+                clone.id = newId
+                if let url = loadedAudioURLs[audio.id] { loadedAudioURLs[newId] = url }
+                return clone
+            }
+        }
+
+        // Stickers: no side cache, but their ids are still referenced by the
+        // composer's z-order bookkeeping (`zIndexMap`, `persistZIndex`). New
+        // id avoids accidental id collisions on subsequent edits.
+        if let stickers = effects.stickerObjects {
+            effects.stickerObjects = stickers.map { sticker in
+                var clone = sticker
+                clone.id = UUID().uuidString
+                return clone
+            }
+        }
+
+        copy.effects = effects
+
+        // Slide-level side caches keyed by slideId.
+        if let bgImage = slideImages[originalSlideId] {
+            slideImages[newSlideId] = bgImage
+        }
+        if let transform = backgroundTransformCache[originalSlideId] {
+            backgroundTransformCache[newSlideId] = transform
+        }
+
         slides.insert(copy, at: index + 1)
         currentSlideIndex = index + 1
         reorderSlides()
