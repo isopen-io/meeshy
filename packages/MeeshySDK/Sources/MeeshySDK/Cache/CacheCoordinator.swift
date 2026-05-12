@@ -693,3 +693,18 @@ public actor CacheCoordinator {
         return total
     }
 }
+
+// MARK: - Test Seam — ProfileCacheWriting
+
+/// Narrow contract for persisting an updated user in the profile cache.
+/// EditProfileViewModel uses this after `AuthManager.applyLocalProfileChanges`
+/// so the optimistic state survives an app kill via GRDBCacheStore.
+public protocol ProfileCacheWriting: Sendable {
+    func saveProfile(_ user: MeeshyUser, for userId: String) async throws
+}
+
+extension CacheCoordinator: ProfileCacheWriting {
+    public func saveProfile(_ user: MeeshyUser, for userId: String) async throws {
+        try await profiles.save([user], for: userId)
+    }
+}
