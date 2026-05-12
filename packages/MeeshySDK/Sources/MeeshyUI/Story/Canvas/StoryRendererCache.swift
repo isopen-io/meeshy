@@ -43,7 +43,18 @@ public final class StoryRendererCache: @unchecked Sendable {
 
     /// Render-time fingerprint of a `RenderableItem` at a given timestamp.
     /// Value type, `Hashable` + `Sendable`. Two signatures are equal iff the
-    /// item would produce a visually identical CALayer at the captured time.
+    /// item would produce a visually identical CALayer at the captured time —
+    /// **for an immutable item**.
+    ///
+    /// **Limitation by design**: the signature captures only spatial / opacity /
+    /// visibility state. It does NOT include text content, fontFamily, fontSize,
+    /// backgroundStyle, textBg, sticker emoji, or any other display-content
+    /// field. The cache is therefore safe ONLY when the item never mutates
+    /// across frames — which is the contract for `StoryAVCompositor`'s frozen
+    /// per-export `StorySlide`. Reusing a `StoryRendererCache` instance with
+    /// the same item id but mutated content would return the stale layer with
+    /// the old content. Live composer / preview surfaces MUST NOT share the
+    /// compositor's cache — they pass `cache: nil` to `StoryRenderer.render`.
     public struct ItemSignature: Sendable {
         public nonisolated let id: String
         public nonisolated let position: CGPoint

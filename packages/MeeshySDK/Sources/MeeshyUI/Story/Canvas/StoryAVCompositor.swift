@@ -53,8 +53,19 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     }
 
     public nonisolated func cancelAllPendingVideoCompositionRequests() {
+        // Set the cancel flag immediately (sync) so any startRequest reaching
+        // `contextQueue.sync { _shouldCancelAllRequests }` next observes it.
+        // Then clear it asynchronously — the async runs AFTER all pending sync
+        // blocks drain on the serial contextQueue, so every in-flight request
+        // sees true, and any fresh session that reuses this compositor sees
+        // false again. The original implementation cleared synchronously in a
+        // second `sync` block, which made the cancellation window essentially
+        // zero — in-flight requests almost never observed it, silently leaking
+        // export sessions when the user dismissed the export UI mid-render.
         contextQueue.sync { _shouldCancelAllRequests = true }
-        contextQueue.sync { _shouldCancelAllRequests = false }
+        contextQueue.async { [weak self] in
+            self?._shouldCancelAllRequests = false
+        }
     }
 
     public nonisolated func startRequest(_ request: AVAsynchronousVideoCompositionRequest) {
