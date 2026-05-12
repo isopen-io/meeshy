@@ -142,8 +142,12 @@ final class StoryMediaLayer_AsyncLoadTests: XCTestCase {
         layer.configure(with: mediaB, geometry: geometry, mode: .edit)
         let taskB = layer._currentImageLoadTaskForTesting()
         XCTAssertNotNil(taskB)
-        XCTAssertFalse(taskA === taskB,
-                       "configure() must reassign currentLoadTask when superseded")
+        // `Task<Void, Never>` is a struct in Swift 6 (no identity via `===`).
+        // The reassignment is verified indirectly: taskA must have been
+        // cancelled by the second configure(), and its post-resolution
+        // continuation must NOT touch `contents` (asserted below).
+        XCTAssertTrue(taskA?.isCancelled == true,
+                      "configure() must cancel the previous load task when superseded")
 
         // Drain A's cancellation: even if the stub resolves A with imageA, the
         // Task<Void, Never> continuation must observe `isCancelled` and NOT

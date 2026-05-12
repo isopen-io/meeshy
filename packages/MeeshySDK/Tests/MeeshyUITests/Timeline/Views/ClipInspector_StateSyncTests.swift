@@ -1,5 +1,6 @@
 import XCTest
 import SwiftUI
+import Combine
 @testable import MeeshyUI
 
 /// Regression suite for the P1 bug where `ClipInspector` failed to resync its

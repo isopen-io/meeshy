@@ -133,7 +133,7 @@ final class AudioTextDragDriftTests: XCTestCase {
             + "\(originalStart + Float(frameDeltas.reduce(0, +) / pps)) or worse"
         )
         XCTAssertEqual(
-            sut.selection.activeDrag?.originalStartTime, originalStart, accuracy: 0.001,
+            sut.selection.activeDrag?.originalStartTime ?? Float.nan, originalStart, accuracy: 0.001,
             "originalStartTime must be captured ONCE at first beginClipDrag — "
             + "subsequent .onChanged callbacks must NOT reset it"
         )

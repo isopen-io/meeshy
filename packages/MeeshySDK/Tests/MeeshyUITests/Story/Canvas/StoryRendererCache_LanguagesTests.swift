@@ -45,6 +45,7 @@ final class StoryRendererCache_LanguagesTests: XCTestCase {
     /// counter increments internally too, but checking the build-closure
     /// invocation count tests the user-visible contract directly: "did we
     /// pay the cost of rebuilding the layer?".
+    @MainActor
     private final class BuildCounter {
         var invocations: Int = 0
         func build(_ item: any RenderableItem) -> CALayer {

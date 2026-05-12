@@ -66,9 +66,18 @@ final class VideoCompositor_LayerInstructionsTests: XCTestCase {
     }
 
     fileprivate func layerInstructions(
-        in instruction: AVVideoCompositionInstructionProtocol
+        in instruction: any AVVideoCompositionInstructionProtocol
     ) -> [AVVideoCompositionLayerInstruction] {
-        instruction.layerInstructions
+        // The protocol only exposes the read-only getters needed for the
+        // compositor protocol. The concrete instructions emitted by
+        // `VideoCompositor.makeComposition` are always
+        // `AVMutableVideoCompositionInstruction`, which is where
+        // `layerInstructions` actually lives.
+        guard let mutable = instruction as? AVMutableVideoCompositionInstruction else {
+            XCTFail("Expected AVMutableVideoCompositionInstruction, got \(type(of: instruction))")
+            return []
+        }
+        return mutable.layerInstructions.compactMap { $0 as? AVVideoCompositionLayerInstruction }
     }
 
     // MARK: - 1. Single clip, no transition, no fade — emits instruction with trackID, no ramps
