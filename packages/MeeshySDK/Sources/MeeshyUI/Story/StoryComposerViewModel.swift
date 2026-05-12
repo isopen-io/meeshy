@@ -58,13 +58,37 @@ enum MediaAsset {
 @MainActor
 public final class StoryComposerViewModel {
 
-    // MARK: - Keyboard Language Detection
+    // MARK: - Source Language Resolution (Prisme Linguistique)
+
+    /// Pure resolver for the composer's source language.
+    ///
+    /// Per CLAUDE.md "Prisme Linguistique", the source language assigned to a
+    /// newly authored story element (text, media, audio) MUST come from the
+    /// user's in-app content preferences (`systemLanguage` then
+    /// `regionalLanguage`), NEVER from the device locale or the active
+    /// keyboard. A French speaker typing on an English keyboard still produces
+    /// French content; using `UITextInputMode.primaryLanguage` here would
+    /// mislabel that content as English and poison the translation pipeline.
+    ///
+    /// Resolution order matches `MeeshyUser.preferredContentLanguages` and the
+    /// gateway's `resolveUserLanguage()`:
+    /// 1. `systemLanguage` (primary in-app language)
+    /// 2. `regionalLanguage` (secondary in-app language)
+    /// 3. Hardcoded `"fr"` fallback.
+    nonisolated public static func resolveComposerSourceLanguage(
+        user: MeeshyUser?
+    ) -> String {
+        if let sys = user?.systemLanguage, !sys.isEmpty {
+            return sys
+        }
+        if let reg = user?.regionalLanguage, !reg.isEmpty {
+            return reg
+        }
+        return "fr"
+    }
 
     private var detectedKeyboardLanguage: String {
-        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
-            return String(kbd.prefix(2))
-        }
-        return AuthManager.shared.currentUser?.systemLanguage ?? "fr"
+        Self.resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)
     }
 
     // MARK: - Slides

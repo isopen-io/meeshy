@@ -114,12 +114,12 @@ public struct StoryComposerView: View {
 
     @State private var showAudioDocumentPicker = false
     @State private var showVoiceRecorderSheet = false
-    @State private var storyLanguage: String = {
-        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
-            return String(kbd.prefix(2))
-        }
-        return AuthManager.shared.currentUser?.systemLanguage ?? "fr"
-    }()
+    // Prisme Linguistique: the story's source language comes from the user's
+    // in-app content preferences (systemLanguage → regionalLanguage → "fr"),
+    // NEVER from the keyboard locale. See `StoryComposerViewModel
+    // .resolveComposerSourceLanguage(user:)` for the canonical resolver.
+    @State private var storyLanguage: String = StoryComposerViewModel
+        .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)
     @State private var showFilterSheet = false
     @State private var showTransitionSheet = false
     @State private var audioEditorItem: AudioEditorItemWrapper?
