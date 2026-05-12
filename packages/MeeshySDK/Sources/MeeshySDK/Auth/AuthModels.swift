@@ -276,6 +276,39 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.signalIdentityKeyPublic = signalIdentityKeyPublic
     }
 
+    /// Returns a new MeeshyUser with the specified profile fields replaced.
+    /// `nil` arguments preserve the existing value (no erase) — matching the
+    /// PATCH-style API contract used by the profile mutation endpoints.
+    /// All other fields are carried over from `self`.
+    public func withProfileChanges(
+        displayName: String? = nil,
+        bio: String? = nil,
+        avatar: String? = nil
+    ) -> MeeshyUser {
+        MeeshyUser(
+            id: id, username: username, email: email,
+            firstName: firstName, lastName: lastName,
+            displayName: displayName ?? self.displayName,
+            bio: bio ?? self.bio,
+            avatar: avatar ?? self.avatar,
+            banner: banner, role: role,
+            systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
+            isOnline: isOnline, lastActiveAt: lastActiveAt,
+            createdAt: createdAt, updatedAt: updatedAt,
+            blockedUserIds: blockedUserIds,
+            isActive: isActive, deactivatedAt: deactivatedAt,
+            isAnonymous: isAnonymous, isMeeshyer: isMeeshyer,
+            phoneNumber: phoneNumber,
+            emailVerifiedAt: emailVerifiedAt, phoneVerifiedAt: phoneVerifiedAt,
+            customDestinationLanguage: customDestinationLanguage,
+            autoTranslateEnabled: autoTranslateEnabled,
+            timezone: timezone,
+            registrationCountry: registrationCountry,
+            profileCompletionRate: profileCompletionRate,
+            signalIdentityKeyPublic: signalIdentityKeyPublic
+        )
+    }
+
     /// Ordered list of preferred content languages for the Prisme Linguistique.
     /// Resolution order: systemLanguage → regionalLanguage → customDestinationLanguage → "fr"
     /// Device locale (Locale.current) is NEVER included — it is the UI language, not content.
