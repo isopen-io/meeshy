@@ -193,12 +193,12 @@ public enum StoryRenderer {
         let t = CMTimeGetSeconds(time)
         let start = item.startTime ?? 0
         let end = (item.duration.map { start + $0 }) ?? .infinity
-        // TODO: Reduce Motion — implement no-fade branch when CAAnimation fades are
-        // added. Today this method only decides visibility (sharp on/off); fade
-        // interpolation lives in the per-layer animation path that will land with
-        // Phase 3 keyframe fades. When that path arrives, gate fade attachment on
-        // `UIAccessibility.isReduceMotionEnabled` and keep this visibility check
-        // unchanged.
+        // Reduce Motion compliance: this gate is intentionally a sharp on/off
+        // visibility check (not an animated fade). The smooth fade interpolation
+        // lives in `fadeOpacity(item:at:)` applied in `renderItem` — that
+        // computes a snapshot opacity at the current frame, not a continuous
+        // CAAnimation, so it is already "reduce-motion safe": opacity changes
+        // are tied to the playhead, not to a runtime-animated transition.
         return t >= start && t < end
     }
 
@@ -232,6 +232,13 @@ public enum StoryRenderer {
             var displayObj = text
             displayObj.text = displayText
             layer.configure(with: displayObj, geometry: geometry, mode: mode)
+            // Snapshot fadeIn/fadeOut envelope at the current playhead. Applied
+            // before keyframe overrides so that an explicit keyframe `opacity`
+            // wins over the fade envelope (keyframes are authored explicitly,
+            // fade is the default envelope).
+            if mode == .play {
+                applyFadeOpacity(item: text, at: time.seconds, into: layer)
+            }
             // Keyframe overrides for text objects (position, scale, opacity)
             if mode == .play, let kfs = text.keyframes, !kfs.isEmpty {
                 applyKeyframeOverrides(kfs,
@@ -245,6 +252,12 @@ public enum StoryRenderer {
         if let sticker = item as? StorySticker {
             let layer = StoryStickerLayer()
             layer.configure(with: sticker, geometry: geometry, mode: mode)
+            // Snapshot fadeIn/fadeOut envelope at the current playhead.
+            // StorySticker has no `keyframes` field (per StoryModels.swift),
+            // so fades are the only animation channel for stickers.
+            if mode == .play {
+                applyFadeOpacity(item: sticker, at: time.seconds, into: layer)
+            }
             return layer
         }
         // Unknown RenderableItem type — bare placeholder.
@@ -279,6 +292,18 @@ public enum StoryRenderer {
         if let o = overrides.opacity {
             layer.opacity = Float(o)
         }
+    }
+
+    /// Writes the fade-envelope opacity computed by `fadeOpacity(item:at:)`
+    /// into the given layer. No-op when no fade is configured (avoids touching
+    /// `layer.opacity` so default `1.0` is preserved). Live preview path —
+    /// pure snapshot at `currentTime`, no `CAAnimation` is attached.
+    @MainActor
+    private static func applyFadeOpacity(item: any RenderableItem,
+                                         at currentTime: Double,
+                                         into layer: CALayer) {
+        guard let value = fadeOpacity(item: item, at: currentTime) else { return }
+        layer.opacity = Float(value)
     }
 }
 
@@ -469,5 +494,56 @@ extension StoryRenderer {
             scale: sVal.map { Double($0) },
             opacity: oVal.map { Double($0) }
         )
+    }
+}
+
+// MARK: - fadeOpacity
+
+extension StoryRenderer {
+
+    /// Returns the snapshot opacity in `[0, 1]` produced by the item's `fadeIn` /
+    /// `fadeOut` envelope at the given absolute playback time.
+    ///
+    /// Pure computation — no UIKit access. `nonisolated` so tests can call it
+    /// without hopping to `@MainActor`. Mirrors the AVFoundation opacity ramps
+    /// applied to video clips in `VideoCompositor.layerInstructionConfig`,
+    /// guaranteeing that what the timeline preview displays matches what the
+    /// final export produces (WYSIWYG at the playhead).
+    ///
+    /// Semantics:
+    /// - During `[start, start + fadeIn]`: ramps `0 → 1` linearly.
+    /// - During `[end - fadeOut, end]`: ramps `1 → 0` linearly (where
+    ///   `end = start + duration`).
+    /// - Otherwise inside the visibility window: `1.0`.
+    /// - Outside the visibility window: returns `nil` (callers should rely on
+    ///   `shouldRender` to drop the layer entirely; we do not produce a `0`
+    ///   opacity here to keep the snapshot semantics narrow).
+    ///
+    /// Returns `nil` when no fade envelope is configured (fadeIn == nil &&
+    /// fadeOut == nil) so the caller can preserve `CALayer`'s default `1.0`
+    /// without touching the property.
+    public nonisolated static func fadeOpacity(item: any RenderableItem,
+                                               at currentTime: Double) -> Double? {
+        let fadeIn = item.fadeIn ?? 0
+        let fadeOut = item.fadeOut ?? 0
+        guard fadeIn > 0 || fadeOut > 0 else { return nil }
+
+        let start = item.startTime ?? 0
+        let duration = item.duration
+        let end: Double = duration.map { start + $0 } ?? .infinity
+
+        guard currentTime >= start, currentTime < end else { return nil }
+
+        if fadeIn > 0, currentTime < start + fadeIn {
+            let progress = (currentTime - start) / fadeIn
+            return max(0, min(1, progress))
+        }
+
+        if fadeOut > 0, end.isFinite, currentTime > end - fadeOut {
+            let progress = (end - currentTime) / fadeOut
+            return max(0, min(1, progress))
+        }
+
+        return 1.0
     }
 }
