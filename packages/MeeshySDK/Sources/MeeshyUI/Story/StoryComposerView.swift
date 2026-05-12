@@ -885,6 +885,9 @@ public struct StoryComposerView: View {
                     textObject: binding,
                     onDelete: { viewModel.deleteElement(id: selectedId) }
                 )
+
+                TextBackgroundStylePicker(textObject: binding)
+                    .padding(.top, 8)
             }
 
             // Add text button — always visible when under limit
