@@ -24,8 +24,8 @@ public protocol StoryMediaImageLoading: Sendable {
 /// confuses Swift 6.2's conformance checker; a value-type shim sidesteps
 /// the issue and stays trivially `Sendable`.
 public struct DiskCacheImageLoader: StoryMediaImageLoading {
-    public init() {}
-    public func image(for urlString: String) async -> UIImage? {
+    public nonisolated init() {}
+    public nonisolated func image(for urlString: String) async -> UIImage? {
         await CacheCoordinator.shared.images.image(for: urlString)
     }
 }
