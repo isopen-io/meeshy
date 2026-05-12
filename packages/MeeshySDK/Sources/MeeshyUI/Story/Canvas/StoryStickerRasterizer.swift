@@ -4,25 +4,74 @@ import UIKit
 /// Caches rasterized emoji glyphs (`emoji|sizePx → CGImage`) so a sticker is
 /// drawn through Core Text at most once per (emoji, integer size) pair.
 ///
-/// Thread-safety: backed by an `NSLock`; the rasterization itself is performed
-/// on the main thread (UIKit `UIGraphicsImageRenderer`). The cache is small
-/// (one slide rarely uses more than a few sticker sizes) so unbounded growth
-/// is acceptable for Phase 2; an LRU policy can be layered in later if needed.
+/// Storage: `NSCache<NSString, CGImage>` with a configurable `countLimit`
+/// (default `100`). NSCache provides:
+///   - automatic LRU-style eviction when `countLimit` is exceeded;
+///   - thread-safe access without an external lock.
+///
+/// In addition, the rasterizer subscribes to
+/// `UIApplication.didReceiveMemoryWarningNotification` and drops every cached
+/// glyph on memory pressure — NSCache evicts opportunistically under
+/// pressure but does not guarantee a flush tied to that notification, so we
+/// drive it ourselves to make the behavior testable and deterministic.
+///
+/// `countLimit = 100` is sized for the worst-case sticker storyboard
+/// (≈50 distinct emojis × 2 integer sizes per slide × a small reuse window
+/// across slides). Beyond that, eviction is graceful: a re-rasterization
+/// costs a single off-screen Core Text draw, which is cheap compared to the
+/// memory pressure of holding unlimited `CGImage`s alive.
+///
+/// The rasterization itself is performed on the main thread (UIKit
+/// `UIGraphicsImageRenderer`).
 public final class StoryStickerRasterizer: @unchecked Sendable {
     public static let shared = StoryStickerRasterizer()
 
-    private nonisolated(unsafe) var cache: [String: CGImage] = [:]
-    private nonisolated let lock = NSLock()
+    /// Default upper bound on cached glyphs. See type-level doc for sizing.
+    public static let defaultCountLimit: Int = 100
 
-    private nonisolated init() {}
+    private nonisolated(unsafe) let cache: NSCache<NSString, CGImage>
+    private nonisolated(unsafe) var memoryWarningObserver: NSObjectProtocol?
+
+    private nonisolated init(countLimit: Int = StoryStickerRasterizer.defaultCountLimit) {
+        let cache = NSCache<NSString, CGImage>()
+        cache.countLimit = countLimit
+        self.cache = cache
+        self.memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: nil
+        ) { [cache] _ in
+            cache.removeAllObjects()
+        }
+    }
+
+    /// Test-only initializer that allows shrinking the cache to exercise the
+    /// eviction path without rasterizing thousands of glyphs.
+    internal nonisolated init(countLimitForTesting: Int) {
+        let cache = NSCache<NSString, CGImage>()
+        cache.countLimit = countLimitForTesting
+        self.cache = cache
+        self.memoryWarningObserver = NotificationCenter.default.addObserver(
+            forName: UIApplication.didReceiveMemoryWarningNotification,
+            object: nil,
+            queue: nil
+        ) { [cache] _ in
+            cache.removeAllObjects()
+        }
+    }
+
+    deinit {
+        if let observer = memoryWarningObserver {
+            NotificationCenter.default.removeObserver(observer)
+        }
+    }
 
     @MainActor
     public func cgImage(for emoji: String, size: CGFloat) -> CGImage? {
         let key = Self.cacheKey(emoji: emoji, size: size)
-        lock.lock()
-        let cached = cache[key]
-        lock.unlock()
-        if let cached { return cached }
+        if let cached = cache.object(forKey: key) {
+            return cached
+        }
 
         let attributes: [NSAttributedString.Key: Any] = [
             .font: UIFont.systemFont(ofSize: size)
@@ -33,19 +82,21 @@ public final class StoryStickerRasterizer: @unchecked Sendable {
         let image = renderer.image { _ in attributed.draw(at: .zero) }
         guard let cgImage = image.cgImage else { return nil }
 
-        lock.lock()
-        cache[key] = cgImage
-        lock.unlock()
+        cache.setObject(cgImage, forKey: key)
         return cgImage
     }
 
     public nonisolated func clear() {
-        lock.lock()
-        cache.removeAll()
-        lock.unlock()
+        cache.removeAllObjects()
     }
 
-    private nonisolated static func cacheKey(emoji: String, size: CGFloat) -> String {
-        "\(emoji)|\(Int(size.rounded()))"
+    /// Test-only probe to assert membership without exposing the underlying
+    /// `NSCache` instance. Returns `nil` when the glyph has been evicted.
+    internal nonisolated func cachedImage(emoji: String, size: CGFloat) -> CGImage? {
+        cache.object(forKey: Self.cacheKey(emoji: emoji, size: size))
+    }
+
+    private nonisolated static func cacheKey(emoji: String, size: CGFloat) -> NSString {
+        "\(emoji)|\(Int(size.rounded()))" as NSString
     }
 }
