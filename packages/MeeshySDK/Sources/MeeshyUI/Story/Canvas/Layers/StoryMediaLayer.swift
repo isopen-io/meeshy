@@ -51,14 +51,17 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     /// Image loader used by `configureImage`. Defaults to a shim that calls
     /// `CacheCoordinator.shared.images.image(for:)`. Override in tests via
     /// `_setImageLoaderForTesting(_:)` to inject a deterministic stub.
-    @MainActor private var imageLoader: any StoryMediaImageLoading = DiskCacheImageLoader()
+    /// `nonisolated(unsafe)` so the `nonisolated init()` can populate the
+    /// default value; readers/writers below are explicitly `@MainActor` so
+    /// mutation always happens on a single isolation context.
+    private nonisolated(unsafe) var imageLoader: any StoryMediaImageLoading = DiskCacheImageLoader()
 
     /// In-flight network/cache fetch for the current media URL. Captured so a
     /// subsequent `configure(with:geometry:mode:)` call (recycled layer, new
     /// slide, scrub) cancels the previous load before it can stamp a stale
     /// CGImage into `contents`. `Task<Void, Never>` because the closure
     /// swallows all errors — it either sets `contents` or no-ops.
-    @MainActor private var currentLoadTask: Task<Void, Never>?
+    private nonisolated(unsafe) var currentLoadTask: Task<Void, Never>?
 
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
