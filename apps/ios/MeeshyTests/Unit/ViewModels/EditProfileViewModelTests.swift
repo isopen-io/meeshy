@@ -136,4 +136,30 @@ final class EditProfileViewModelTests: XCTestCase {
         XCTAssertTrue(dismissed)
         XCTAssertEqual(doubles.sleeper.sleepCalls, [1500])
     }
+
+    // MARK: - saveProfile with avatar
+
+    func test_save_uploadsAvatarBeforeEnqueue_whenImageSelected() async {
+        let (sut, doubles) = makeSUT()
+        sut.displayName = "Bob"
+        sut.selectedImageData = Data([0x01, 0x02, 0x03])
+        doubles.uploader.uploadAvatarResult = .success(URL(string: "https://cdn/new.jpg")!)
+
+        await sut.saveProfile(onDismiss: {})
+
+        XCTAssertEqual(doubles.uploader.uploadAvatarCallCount, 1)
+        XCTAssertEqual(doubles.uploader.lastUploadAvatarData, Data([0x01, 0x02, 0x03]))
+    }
+
+    func test_save_enqueuesPayloadWithUploadedUrl() async {
+        let (sut, doubles) = makeSUT()
+        sut.displayName = "Bob"
+        sut.selectedImageData = Data([0x01])
+        doubles.uploader.uploadAvatarResult = .success(URL(string: "https://cdn/new.jpg")!)
+
+        await sut.saveProfile(onDismiss: {})
+
+        let payload = doubles.queue.lastPayload as? UpdateProfilePayload
+        XCTAssertEqual(payload?.avatarUrl, "https://cdn/new.jpg")
+    }
 }

@@ -96,8 +96,21 @@ final class EditProfileViewModel: ObservableObject {
         guard hasChanges, !isSaving else { return }
         errorMessage = nil
 
-        // 1. Avatar upload (no-op if no image selected — added in Task 16).
-        let uploadedAvatarUrl: String? = nil
+        // 1. Avatar upload (online-only, sync before enqueue).
+        var uploadedAvatarUrl: String?
+        if let imageData = selectedImageData {
+            saveState = .uploadingAvatar
+            do {
+                let url = try await attachmentUploader.uploadAvatar(imageData)
+                uploadedAvatarUrl = url.absoluteString
+            } catch {
+                errorMessage = humanReadable(error)
+                toast.showError(errorMessage ?? "")
+                haptics.error()
+                saveState = .failed
+                return
+            }
+        }
 
         // 2. Build payload.
         let cmid = ClientMutationId.generate()
@@ -145,5 +158,15 @@ final class EditProfileViewModel: ObservableObject {
         showSuccess = true
         await sleeper.sleep(milliseconds: 1500)
         onDismiss()
+    }
+
+    private func humanReadable(_ error: Error) -> String {
+        if let e = error as? MeeshyError { return e.errorDescription ?? defaultFailureMessage() }
+        if let e = error as? APIError    { return e.errorDescription ?? defaultFailureMessage() }
+        return defaultFailureMessage()
+    }
+
+    private func defaultFailureMessage() -> String {
+        "Echec de la mise a jour"
     }
 }
