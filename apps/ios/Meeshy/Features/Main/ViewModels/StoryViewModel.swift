@@ -25,17 +25,24 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket: SocialSocketProviding
     private let api: APIClientProviding
+    private let videoExporter: StoryVideoExportServiceProviding
 
     init(
         storyService: StoryServiceProviding = StoryService.shared,
         postService: PostServiceProviding = PostService.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
-        api: APIClientProviding = APIClient.shared
+        api: APIClientProviding = APIClient.shared,
+        videoExporter: StoryVideoExportServiceProviding? = nil
     ) {
         self.storyService = storyService
         self.postService = postService
         self.socialSocket = socialSocket
         self.api = api
+        // `StoryVideoExportService.shared` is `@MainActor` so it cannot be
+        // referenced as a default argument expression evaluated outside the
+        // actor. Resolve the default inside the body where the surrounding
+        // init is already `@MainActor`-isolated by the class annotation.
+        self.videoExporter = videoExporter ?? StoryVideoExportService.shared
         observeReconnectionForRetry()
     }
 
@@ -198,7 +205,20 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         ///     fails at slide 3 leaves slides 1-2 visible to friends as orphans).
         var publishedPostIds: [String] = []
 
+        /// Sprint 8 Phase 4 — publish→exporter wiring (spec §3.5).
+        ///
+        /// `.exporting` is emitted by `runStoryUpload` while
+        /// `StoryVideoExportService.prepareExport` bakes a slide that
+        /// reports `needsVideoExport == true`. It is intentionally
+        /// distinct from `.uploading` so the banner can swap the copy
+        /// from "Téléversement …" → "Export en cours …" without coupling
+        /// to AVAssetExportSession internals. The case carries no
+        /// associated value because per-slide export progress is already
+        /// reported via the shared `progress` field on the surrounding
+        /// `StoryUploadState`. Once P6 promotes this enum to the SDK the
+        /// remaining lifecycle cases will land alongside.
         enum UploadPhase: Sendable {
+            case exporting
             case uploading
             case publishing
             case failed(String)
@@ -658,11 +678,21 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
         // 4. Enqueue. The queue persists to disk synchronously so a crash
         //    immediately after this call still preserves the item.
+        //
+        //    P5 hook : `videoExportURL` is left nil here because the
+        //    offline path enqueues from the COMPOSER (not from an
+        //    in-flight upload). The exporter only fires inside
+        //    `runStoryUpload`, which is the online path. If the app is
+        //    suspended mid-export during the online path, the export
+        //    task is cancelled and there is no MP4 yet — the queue does
+        //    NOT inherit a partial export. Re-export from `slidesPayload`
+        //    on the next replay (spec §3.4) is the design intent.
         let item = StoryPublishQueueItem(
             visibility: visibility,
             slidesPayload: payload,
             repostOfId: nil,
-            mediaReferences: mediaReferences
+            mediaReferences: mediaReferences,
+            videoExportURL: nil
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
 
@@ -762,8 +792,55 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
             let baseProgress = Double(slideIdx) * slideShare
 
+            // MARK: Sprint 8 Phase 4 — video export branch
+            //
+            // Spec : docs/superpowers/specs/2026-05-12-story-publish-exporter-wiring-design.md §3.1
+            //
+            // For slides whose effects encode time-evolving content
+            // (`needsVideoExport == true` — animated text/media keyframes,
+            // looping background video, background audio, voice
+            // attachment, opening transition), bake a single MP4 via
+            // `StoryVideoExportService.prepareExport` and upload THAT
+            // instead of the static thumbnail + foreground graph. Static
+            // slides flow through the legacy asset path below unchanged.
+            //
+            // `prepareExport` is robust by design : it returns `nil` for
+            // static slides AND for export failures (logged internally),
+            // so we don't need a do/catch here — `nil` simply routes the
+            // slide back through the legacy path so the story still
+            // publishes. This matches D-7 in the spec.
+            var exportedVideoURL: URL? = nil
+            if slide.needsVideoExport {
+                let exportShare = 0.40 * slideShare
+                exportedVideoURL = await videoExporter.prepareExport(
+                    slide: slide,
+                    onProgress: { fraction in
+                        onProgress(baseProgress + fraction * exportShare)
+                    },
+                    onPhaseChange: { phase in
+                        switch phase {
+                        case .exporting:
+                            onPhase(.exporting)
+                        }
+                    }
+                )
+            }
+
             var uploadResult: TusUploadResult? = nil
-            if let bgImage = upload.slideImages[slide.id] {
+            if let videoURL = exportedVideoURL {
+                // Bake-and-upload path : the exported MP4 IS the slide
+                // (background + foreground composited + animations baked
+                // in). The post is created with this single mediaId so
+                // playback on web / web-feed / push thumbnails reproduces
+                // the canvas exactly. No foreground media re-upload —
+                // they are already inside the MP4.
+                onPhase(.uploading)
+                uploadResult = try await uploader.uploadFile(
+                    fileURL: videoURL, mimeType: "video/mp4",
+                    token: token, uploadContext: "story"
+                )
+                onProgress(baseProgress + 0.80 * slideShare)
+            } else if let bgImage = upload.slideImages[slide.id] {
                 let thumbHash = bgImage.toThumbHash()
                 let compressed = await MediaCompressor.shared.compressImage(bgImage)
                 let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
@@ -774,12 +851,18 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                     fileURL: tempURL, mimeType: compressed.mimeType,
                     token: token, uploadContext: "story", thumbHash: thumbHash
                 )
+                onProgress(baseProgress + 0.30 * slideShare)
+            } else {
+                onProgress(baseProgress + 0.30 * slideShare)
             }
-            onProgress(baseProgress + 0.30 * slideShare)
 
             var updatedEffects = slide.effects
             var foregroundMediaIds: [String] = []
-            if var mediaObjects = updatedEffects.mediaObjects {
+            // Skip foreground media re-upload when the export bake path
+            // ran — the MP4 already contains them. Without this guard we
+            // would double-upload every effect image/video, wasting
+            // bandwidth and creating orphan PostMedia rows on the server.
+            if exportedVideoURL == nil, var mediaObjects = updatedEffects.mediaObjects {
                 let mediaCount = mediaObjects.filter({ $0.postMediaId.isEmpty }).count
                 var mediaIdx = 0
                 for i in mediaObjects.indices where mediaObjects[i].postMediaId.isEmpty {
@@ -813,7 +896,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 updatedEffects.mediaObjects = mediaObjects
             }
 
-            if var audioObjects = updatedEffects.audioPlayerObjects {
+            if exportedVideoURL == nil, var audioObjects = updatedEffects.audioPlayerObjects {
                 for i in audioObjects.indices where audioObjects[i].postMediaId.isEmpty {
                     guard !Task.isCancelled else { return newPostIds }
                     let obj = audioObjects[i]
@@ -844,6 +927,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             )
 
             newPostIds.append(post.id)
+            // Bake path success → drop the temp MP4 now. The TUS upload
+            // is committed server-side, the post row references its id,
+            // and the caller won't need to resume from this file.
+            if let videoURL = exportedVideoURL {
+                videoExporter.cleanupTempExport(at: videoURL)
+            }
             let media = buildFeedMedia(from: post, fallback: uploadResult)
             let newItem = StoryItem(
                 id: post.id, content: post.content, media: media,
@@ -967,7 +1056,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     func deleteStory(storyId: String) async -> Bool {
         do {
             try await storyService.delete(storyId: storyId)
-            
+
             // Remove from local state
             for i in storyGroups.indices {
                 if let j = storyGroups[i].stories.firstIndex(where: { $0.id == storyId }) {
