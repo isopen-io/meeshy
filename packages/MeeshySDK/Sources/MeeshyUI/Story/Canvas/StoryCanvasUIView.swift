@@ -630,20 +630,23 @@ public final class StoryCanvasUIView: UIView {
             // tick when no observable transition is pending.
             if let layer = backgroundLayer.contentLayer {
                 imageContentsObserver = layer.observe(\.contents, options: [.new]) { [weak self] _, change in
-                    // Extract sendable AnyObject? snapshot SYNCHRONOUSLY in the
-                    // KVO callback (which runs on the layer's actor). Passing
-                    // the layer itself across the actor hop trips Swift 6's
-                    // sending-risks-data-races check.
-                    let snapshot: AnyObject? = change.newValue.flatMap { $0 } as AnyObject?
+                    // Convert the new contents to a Sendable `ObjectIdentifier`
+                    // inside the KVO callback. AnyObject is non-Sendable so we
+                    // cannot ship it across the actor hop, but ObjectIdentifier
+                    // (a UInt wrapper) is Sendable and gives us the reference-
+                    // equality semantics we need to distinguish the ThumbHash
+                    // placeholder from the real loaded CGImage.
+                    let newAny: Any? = change.newValue.flatMap { $0 }
+                    let snapshotID: ObjectIdentifier? = (newAny as AnyObject?).map { ObjectIdentifier($0) }
                     Task { @MainActor in
                         guard let self else { return }
-                        let placeholder = self.thumbHashPlaceholderRef
+                        guard let snapshotID else { return }
                         // Fire only once the new contents differ from the
                         // ThumbHash placeholder reference. A nil placeholder
                         // (no thumbHash on the slide) makes the first non-nil
                         // assignment the trigger.
-                        guard let current = snapshot else { return }
-                        if let placeholder, current === placeholder { return }
+                        let placeholderID = self.thumbHashPlaceholderRef.map { ObjectIdentifier($0) }
+                        if let placeholderID, snapshotID == placeholderID { return }
                         self.fireContentReadyIfNeeded()
                     }
                 }

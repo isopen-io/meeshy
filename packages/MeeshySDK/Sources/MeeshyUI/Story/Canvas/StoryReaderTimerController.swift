@@ -115,7 +115,11 @@ public final class StoryReaderTimerController: NSObject, StoryReaderTimerControl
     /// drive the timer via `_advanceClockForTesting(by:)` never have
     /// to instantiate one. Created lazily on the first real
     /// `setCurrentSlide` call where `useDisplayLink == true`.
-    private var displayLink: CADisplayLink?
+    // `nonisolated(unsafe)` so the `nonisolated deinit` can invalidate it
+    // without crossing the MainActor isolation boundary. All mutations happen
+    // in MainActor methods (setCurrentSlide / startDisplayLinkIfNeeded /
+    // stopDisplayLink), so single-context mutation is preserved.
+    private nonisolated(unsafe) var displayLink: CADisplayLink?
     private var lastTick: CFTimeInterval?
 
     /// `false` in tests (skips CADisplayLink instantiation so a single
