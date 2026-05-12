@@ -2,6 +2,7 @@ import UIKit
 import QuartzCore
 import CoreMedia
 import AVFoundation
+import Metal
 import PencilKit
 import MeeshySDK
 
@@ -43,7 +44,14 @@ public final class StoryCanvasUIView: UIView {
     // MARK: - Public API
 
     public var slide: StorySlide {
-        didSet { rebuildLayers() }
+        didSet {
+            // The captured filter source texture is content-dependent. Drop the
+            // freshness token so the next `updateFilterLayer()` rebuilds it
+            // against the new slide. Geometry-only changes (`layoutSubviews`)
+            // already invalidate via `lastCapturedSize`.
+            slideContentRevision &+= 1
+            rebuildLayers()
+        }
     }
     public private(set) var mode: RenderMode
     public private(set) var currentTime: CMTime = .zero
@@ -92,6 +100,17 @@ public final class StoryCanvasUIView: UIView {
     /// Optional Metal filter overlay (Task 19). Non-nil iff `slide.effects.filter` maps to a
     /// known `StoryFilteredLayer.Kind`. Owned and removed by `updateFilterLayer()`.
     private var filteredLayer: StoryFilteredLayer?
+
+    /// Monotonic counter incremented whenever `slide` is reassigned. The filter
+    /// source-texture cache compares this token against `lastCapturedRevision`
+    /// to decide whether `CARenderer` needs to walk the layer tree again. In
+    /// `.play` mode the slide model doesn't mutate between display-link ticks
+    /// (only `currentTime` advances), so the same captured texture is reused
+    /// across the full slide duration — turning the worst case 60 Hz
+    /// `CARenderer.render()` loop into a single capture per slide.
+    private var slideContentRevision: UInt64 = 0
+    private var lastCapturedRevision: UInt64?
+    private var lastCapturedSize: CGSize?
 
     /// Two-pass backdrop snapshot helper. Drives the MPS path on
     /// `StoryGlassBackdropLayer` by capturing the canvas-minus-glass tree
@@ -572,22 +591,172 @@ public final class StoryCanvasUIView: UIView {
 
     /// Inserts, updates, or removes the `StoryFilteredLayer` overlay driven by
     /// `slide.effects.filter` + `slide.effects.filterIntensity`.
+    ///
+    /// When a filter kernel is active, the slide content beneath the overlay
+    /// (background + items, excluding the filter layer itself and the edit
+    /// overlay) is captured into an `MTLTexture` via `CARenderer` and assigned
+    /// to `filteredLayer.sourceTexture`. Without that texture the Metal compute
+    /// kernel would have no input and silently produce a no-op — the bug this
+    /// method previously contained.
+    ///
+    /// Capture cost is dominated by the synchronous `CARenderer.render()` call
+    /// (typically 1–3 ms on a 412 x 732 slide). To keep the per-tick rebuild
+    /// loop cheap during `.play` (60 Hz display-link), the captured texture is
+    /// cached keyed by `slideContentRevision` and render size — the slide model
+    /// doesn't mutate between display-link ticks, only `currentTime` advances,
+    /// so reusing the snapshot is correct as long as the user hasn't edited
+    /// the slide. Gesture-driven edits in `.edit` mode bump the revision
+    /// through `slide.didSet`, triggering a fresh capture.
     private func updateFilterLayer() {
         guard let raw = slide.effects.filter,
               let kind = StoryFilteredLayer.Kind(rawValue: raw) else {
             filteredLayer?.removeFromSuperlayer()
             filteredLayer = nil
+            lastCapturedRevision = nil
+            lastCapturedSize = nil
             return
         }
         let intensity = Float(slide.effects.filterIntensity ?? 1.0)
+        let renderSize = geometry.renderSize
         if filteredLayer == nil {
             let l = StoryFilteredLayer()
             rootLayer.addSublayer(l)
             filteredLayer = l
+            // First attach — force a capture even if nothing else changed.
+            lastCapturedRevision = nil
+            lastCapturedSize = nil
         }
-        filteredLayer?.frame = CGRect(origin: .zero, size: geometry.renderSize)
-        filteredLayer?.kind = kind
-        filteredLayer?.intensity = intensity
+        guard let layer = filteredLayer else { return }
+
+        layer.frame = CGRect(origin: .zero, size: renderSize)
+        layer.kind = kind
+        layer.intensity = intensity
+        // `drawableSize` controls the MTLTexture size returned by
+        // `nextDrawable()`. Pin it to the render size in pixels so the kernel
+        // dispatch grid matches `sourceTexture`'s dimensions.
+        let scale = layer.contentsScale > 0 ? layer.contentsScale : UIScreen.main.scale
+        layer.drawableSize = CGSize(width: renderSize.width * scale,
+                                    height: renderSize.height * scale)
+
+        let needsRecapture = (lastCapturedRevision != slideContentRevision)
+            || (lastCapturedSize != renderSize)
+            || (layer.sourceTexture == nil)
+        if needsRecapture {
+            if let texture = captureFilterSourceTexture(renderSize: renderSize) {
+                layer.sourceTexture = texture
+                lastCapturedRevision = slideContentRevision
+                lastCapturedSize = renderSize
+            }
+        }
+
+        // Execute the compute kernel against the current source texture so the
+        // drawable presents a filtered frame on this rebuild tick. `render()`
+        // short-circuits when `sourceTexture` is nil, so a failed capture
+        // (e.g. CARenderer init failure on a headless host) is graceful.
+        layer.render()
+    }
+
+    /// Captures the slide content that should be filtered (background +
+    /// itemsContainer) into a fresh `MTLTexture` sized to `renderSize`.
+    ///
+    /// Mirrors the `StoryBackdropCapture` pattern: build a transient
+    /// `CARenderer` over a `MTLTexture`, present the relevant layer tree, and
+    /// hand back the texture for the consumer to read. The render target uses
+    /// `.shared` storage so the Metal compute kernel inside
+    /// `StoryFilteredLayer.render()` can sample it directly without an extra
+    /// blit.
+    ///
+    /// We rasterize a **fresh** layer tree rather than re-targeting the live
+    /// `rootLayer`. Reusing a layer that is already attached to a window-
+    /// backed `UIView` would force CARenderer to walk the same tree the
+    /// display server is mid-flushing, which has produced render glitches in
+    /// other call sites (`StoryBackdropCapture` does the same).
+    ///
+    /// Returns `nil` when:
+    /// - `renderSize` collapses to zero (view not yet laid out).
+    /// - Metal texture allocation fails (rare; e.g. headless test hosts).
+    /// - `CARenderer` couldn't be obtained.
+    private func captureFilterSourceTexture(renderSize: CGSize) -> MTLTexture? {
+        guard renderSize.width > 0, renderSize.height > 0 else { return nil }
+        let width = Int(renderSize.width.rounded())
+        let height = Int(renderSize.height.rounded())
+        guard width > 0, height > 0 else { return nil }
+
+        let context = StoryRenderingContext.shared
+        let descriptor = MTLTextureDescriptor.texture2DDescriptor(
+            pixelFormat: .bgra8Unorm,
+            width: width,
+            height: height,
+            mipmapped: false
+        )
+        descriptor.usage = [.renderTarget, .shaderRead]
+        descriptor.storageMode = .shared
+        guard let target = context.metalDevice.makeTexture(descriptor: descriptor) else {
+            return nil
+        }
+
+        // Fresh layer tree: a transient `CALayer` host wrapping a freshly
+        // configured `StoryBackgroundLayer` and the items rendered by
+        // `StoryRenderer.render`. The filter layer itself and the edit
+        // overlay are intentionally excluded.
+        let host = CALayer()
+        host.frame = CGRect(origin: .zero, size: renderSize)
+        host.anchorPoint = CGPoint(x: 0, y: 0)
+
+        let bgKind = StoryRenderer.renderBackground(slide: slide,
+                                                    languages: readerContext.preferredLanguages)
+        let bgTransform: BackgroundTransform = {
+            guard let t = slide.effects.backgroundTransform else { return .identity }
+            return BackgroundTransform(scale: Double(t.scale ?? 1),
+                                       offsetX: Double(t.offsetX ?? 0),
+                                       offsetY: Double(t.offsetY ?? 0),
+                                       rotation: t.rotation ?? 0)
+        }()
+        let captureBackground = StoryBackgroundLayer()
+        captureBackground.frame = CGRect(origin: .zero, size: renderSize)
+        captureBackground.configure(
+            kind: bgKind,
+            transform: bgTransform,
+            geometry: geometry,
+            resolver: readerContext.postMediaURLResolver,
+            imageCache: readerContext.imageCache
+        )
+        host.addSublayer(captureBackground)
+
+        let itemTree = StoryRenderer.render(slide: slide,
+                                            into: geometry,
+                                            at: currentTime,
+                                            mode: mode,
+                                            languages: readerContext.preferredLanguages,
+                                            backdropProvider: { [weak backdropCapture] frame in
+                                                backdropCapture?.cropRegion(frame)
+                                            })
+        itemTree.frame = CGRect(origin: .zero, size: renderSize)
+        host.addSublayer(itemTree)
+
+        let renderer = CARenderer(mtlTexture: target, options: nil)
+        renderer.layer = host
+        renderer.bounds = host.frame
+        renderer.beginFrame(atTime: 0, timeStamp: nil)
+        renderer.addUpdate(renderer.bounds)
+        renderer.render()
+        renderer.endFrame()
+        renderer.layer = nil
+        return target
+    }
+
+    /// Test-only seam: forces a fresh filter source capture and returns the
+    /// resulting texture without applying it to the live layer. Lets unit tests
+    /// inspect the bytes coming out of `CARenderer` and assert non-zero pixels
+    /// without coupling to the live presentation pipeline.
+    public func _captureFilterSourceForTesting(renderSize: CGSize) -> MTLTexture? {
+        captureFilterSourceTexture(renderSize: renderSize)
+    }
+
+    /// Test-only seam: read-only access to the currently attached filter
+    /// layer. Returns `nil` when `slide.effects.filter` is unset.
+    public var _filteredLayerForTesting: StoryFilteredLayer? {
+        filteredLayer
     }
 
     // MARK: - Content readiness (drives StoryReaderTimerController)
