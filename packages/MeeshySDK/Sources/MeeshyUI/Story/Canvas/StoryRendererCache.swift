@@ -16,10 +16,10 @@ import MeeshySDK
 /// animated items change only via keyframe interpolation.
 ///
 /// This cache keys CALayer instances by an `ItemSignature` (id + interpolated
-/// position/scale/rotation/opacity/visibility at `time`). If the signature
-/// matches the previous frame's signature for the same item, the previously
-/// built layer is returned unchanged. Otherwise a fresh layer is built via
-/// the caller-provided closure and stored.
+/// position/scale/rotation/opacity/visibility/languages at `time`). If the
+/// signature matches the previous frame's signature for the same item, the
+/// previously built layer is returned unchanged. Otherwise a fresh layer is
+/// built via the caller-provided closure and stored.
 ///
 /// Lifecycle: one cache per `StoryAVCompositor` instance, automatically scoped
 /// to a single export session. Scoping context (slide id / languages / mode)
@@ -47,14 +47,28 @@ public final class StoryRendererCache: @unchecked Sendable {
     /// **for an immutable item**.
     ///
     /// **Limitation by design**: the signature captures only spatial / opacity /
-    /// visibility state. It does NOT include text content, fontFamily, fontSize,
-    /// backgroundStyle, textBg, sticker emoji, or any other display-content
-    /// field. The cache is therefore safe ONLY when the item never mutates
-    /// across frames — which is the contract for `StoryAVCompositor`'s frozen
-    /// per-export `StorySlide`. Reusing a `StoryRendererCache` instance with
-    /// the same item id but mutated content would return the stale layer with
-    /// the old content. Live composer / preview surfaces MUST NOT share the
+    /// visibility state plus the requested `languages` list. It does NOT
+    /// include text content, fontFamily, fontSize, backgroundStyle, textBg,
+    /// sticker emoji, or any other display-content field. The cache is
+    /// therefore safe ONLY when the item never mutates across frames — which
+    /// is the contract for `StoryAVCompositor`'s frozen per-export
+    /// `StorySlide`. Reusing a `StoryRendererCache` instance with the same
+    /// item id but mutated content would return the stale layer with the old
+    /// content. Live composer / preview surfaces MUST NOT share the
     /// compositor's cache — they pass `cache: nil` to `StoryRenderer.render`.
+    ///
+    /// **Languages note**: `languages` is included in the signature so that a
+    /// per-frame call to `layer(for:at:languages:build:)` with a different
+    /// preferred-language list produces a cache miss and rebuilds the text
+    /// layer with the right translation. In practice an export session has a
+    /// single language list applied uniformly to every frame
+    /// (`invalidateIfNeeded(slideId:languages:mode:)` flushes the whole cache
+    /// when the scope changes), but encoding `languages` in the signature is
+    /// future-proofing for multilingual export pipelines (e.g. the publish →
+    /// exporter wiring) that may issue per-frame language overrides without
+    /// flipping the coarse-grained scope. Order is significant — callers MUST
+    /// pass languages in a canonical order (highest priority first), which is
+    /// already the contract enforced by `resolveUserLanguage()` in shared.
     public struct ItemSignature: Sendable {
         public nonisolated let id: String
         public nonisolated let position: CGPoint
@@ -62,19 +76,22 @@ public final class StoryRendererCache: @unchecked Sendable {
         public nonisolated let rotation: Double
         public nonisolated let opacity: Double
         public nonisolated let visible: Bool
+        public nonisolated let languages: [String]
 
         public nonisolated init(id: String,
                                 position: CGPoint,
                                 scale: Double,
                                 rotation: Double,
                                 opacity: Double,
-                                visible: Bool) {
+                                visible: Bool,
+                                languages: [String] = []) {
             self.id = id
             self.position = position
             self.scale = scale
             self.rotation = rotation
             self.opacity = opacity
             self.visible = visible
+            self.languages = languages
         }
     }
 
@@ -106,16 +123,17 @@ public final class StoryRendererCache: @unchecked Sendable {
     /// signature equals the current signature, returns it unchanged; otherwise
     /// invokes `build(item)` to produce a fresh layer and caches it.
     ///
-    /// `languages` is accepted for symmetry with `StoryRenderer.render` and
-    /// because text item content depends on it — language changes are handled
-    /// at a coarser grain via `invalidateIfNeeded(languages:)`, not encoded in
-    /// the signature, so a switch from `["fr"]` to `["en"]` between frames in
-    /// the same export is impossible by construction.
+    /// `languages` participates in the signature: a call with `["fr"]` and a
+    /// subsequent call with `["en"]` for the same item id at the same time
+    /// produce different signatures and therefore a cache miss the second
+    /// time. This protects future multilingual export pipelines from serving
+    /// a stale wrong-language layer when the coarse-grained scope check
+    /// (`invalidateIfNeeded(languages:)`) is not flipped between calls.
     public func layer(for item: any RenderableItem,
                       at time: Double,
                       languages: [String],
                       build: (any RenderableItem) -> CALayer) -> CALayer {
-        let sig = Self.makeSignature(for: item, at: time)
+        let sig = Self.makeSignature(for: item, at: time, languages: languages)
         if let cached = layerCache[item.id], cached.signature == sig {
             cacheHitCount += 1
             return cached.layer
@@ -162,10 +180,11 @@ public final class StoryRendererCache: @unchecked Sendable {
 
     // MARK: - Signature
 
-    /// Builds the signature of `item` at `time`. Pure function — no UIKit,
-    /// no AVPlayer, no allocations beyond the returned struct. MainActor by
-    /// default because it reads `RenderableItem` properties (the protocol
-    /// inherits MainActor isolation from MeeshyUI's default).
+    /// Builds the signature of `item` at `time` for the given `languages`.
+    /// Pure function — no UIKit, no AVPlayer, no allocations beyond the
+    /// returned struct. MainActor by default because it reads
+    /// `RenderableItem` properties (the protocol inherits MainActor isolation
+    /// from MeeshyUI's default).
     ///
     /// `position` / `scale` / `opacity` reflect keyframe interpolation when
     /// the item has keyframes; otherwise they fall back to the item's static
@@ -173,8 +192,12 @@ public final class StoryRendererCache: @unchecked Sendable {
     /// fully opaque (no keyframe opacity track). `visible` mirrors the
     /// `shouldRender` decision in `StoryRenderer` (timing window only — fade
     /// in/out is not yet animated, so it does not influence the signature).
+    /// `languages` is carried verbatim into the signature so a switch from
+    /// `["fr"]` to `["en"]` between two `layer(for:...)` calls produces a
+    /// cache miss instead of returning the previous wrong-language layer.
     static func makeSignature(for item: any RenderableItem,
-                              at time: Double) -> ItemSignature {
+                              at time: Double,
+                              languages: [String]) -> ItemSignature {
         let overrides = StoryRenderer.applyKeyframes(
             keyframes: keyframes(of: item),
             at: time,
@@ -194,7 +217,8 @@ public final class StoryRendererCache: @unchecked Sendable {
             scale: scl,
             rotation: rot,
             opacity: opacity,
-            visible: visible
+            visible: visible,
+            languages: languages
         )
     }
 
@@ -243,6 +267,7 @@ extension StoryRendererCache.ItemSignature: Hashable {
             && lhs.rotation == rhs.rotation
             && lhs.opacity == rhs.opacity
             && lhs.visible == rhs.visible
+            && lhs.languages == rhs.languages
     }
 
     public nonisolated func hash(into hasher: inout Hasher) {
@@ -253,5 +278,6 @@ extension StoryRendererCache.ItemSignature: Hashable {
         hasher.combine(rotation)
         hasher.combine(opacity)
         hasher.combine(visible)
+        hasher.combine(languages)
     }
 }
