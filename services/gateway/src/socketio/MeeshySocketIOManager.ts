@@ -151,6 +151,13 @@ export class MeeshySocketIOManager {
       }
     );
 
+    // PRÉSENCE FIX: protéger les sockets vivants du cleanup périodique.
+    // Sans ça, un client passif (pas de heartbeat depuis 30min) se voit marqué
+    // offline par `updateOfflineUsers`, broadcastant un faux `isOnline: false`.
+    this.maintenanceService.setIsCurrentlyConnected(
+      (userId: string, _isAnonymous: boolean) => this.connectedUsers.has(userId)
+    );
+
     // Initialiser Socket.IO avec les types shared
     this.io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
       path: "/socket.io/",

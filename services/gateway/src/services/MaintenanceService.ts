@@ -58,15 +58,31 @@ export class MaintenanceService {
   async startMaintenanceTasks(): Promise<void> {
     logger.info('🚀 Démarrage des tâches de maintenance...');
 
-    // Reset all stale online statuses from previous instance
+    // Reset all stale online statuses from previous instance.
+    // À ce stade, `connectedUsers` Map est généralement vide (boot avant l'init Socket.IO),
+    // mais on respecte quand même le predicate au cas où startMaintenanceTasks serait
+    // rappelé runtime (tests, admin tooling).
     try {
+      const candidateUsers = this.isCurrentlyConnected
+        ? (await this.prisma.user.findMany({ where: { isOnline: true }, select: { id: true } }))
+            .filter(u => !this.isCurrentlyConnected!(u.id, false))
+            .map(u => u.id)
+        : null;
+      const candidateAnon = this.isCurrentlyConnected
+        ? (await this.prisma.participant.findMany({ where: { isOnline: true, type: 'anonymous' }, select: { id: true } }))
+            .filter(p => !this.isCurrentlyConnected!(p.id, true))
+            .map(p => p.id)
+        : null;
+
       const [resetUsers, resetAnon] = await Promise.all([
         this.prisma.user.updateMany({
-          where: { isOnline: true },
+          where: candidateUsers ? { id: { in: candidateUsers } } : { isOnline: true },
           data: { isOnline: false }
         }),
         this.prisma.participant.updateMany({
-          where: { isOnline: true, type: 'anonymous' },
+          where: candidateAnon
+            ? { id: { in: candidateAnon }, type: 'anonymous' }
+            : { isOnline: true, type: 'anonymous' },
           data: { isOnline: false }
         })
       ]);
