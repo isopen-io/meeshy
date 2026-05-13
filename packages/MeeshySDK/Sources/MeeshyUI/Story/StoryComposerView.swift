@@ -326,7 +326,9 @@ public struct StoryComposerView: View {
         )
     }
 
-    public var body: some View {
+    // Sheets and full-screen covers are extracted here to keep `body` small
+    // enough for the SwiftUI type-checker to handle within its time budget.
+    private var sheetModifiers: some View {
         mainContent
         .fileImporter(isPresented: $showAudioDocumentPicker, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first {
@@ -373,26 +375,13 @@ public struct StoryComposerView: View {
         .sheet(isPresented: $viewModel.isTimelineVisible,
                onDismiss: { viewModel.commitTimelineToCurrentSlide() }) {
             TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
-                // `.fraction(0.45)` ≈ enough to surface the toolbar + transport
-                // + ruler + 2 tracks without obscuring the canvas; users can
-                // drag up to .large for full Pro layout. Removing `.medium`
-                // (which is OS-defined, ~50%) and replacing with a hand-tuned
-                // fraction gives a tighter "tools strip" feel.
                 .presentationDetents([.fraction(0.45), .large])
                 .presentationDragIndicator(.visible)
-                // Glass background — the canvas behind shows through, giving
-                // the editor a "floating tools" feel rather than a flat sheet
-                // that hides the slide. Keeps the user's mental model: "I'm
-                // editing this slide" instead of "I'm in a separate screen."
                 .presentationBackground(.ultraThinMaterial)
                 .presentationContentInteraction(.scrolls)
                 .presentationCornerRadius(28)
         }
         .onChange(of: viewModel.isTimelineVisible) { _, isVisible in
-            // Refresh the timeline whenever the sheet opens so any media
-            // added between mount and sheet-open (e.g. a background image
-            // dropped via the composer toolbar) is reflected immediately
-            // instead of only on next slide change.
             if isVisible { viewModel.loadCurrentSlideIntoTimeline() }
         }
         .sheet(isPresented: $showFilterSheet) {
@@ -461,6 +450,10 @@ public struct StoryComposerView: View {
                 onCancel: { editingElementVideo = nil }
             )
         }
+    }
+
+    public var body: some View {
+        sheetModifiers
         .alert(String(localized: "story.composer.resumeStory", defaultValue: "Reprendre votre story ?", bundle: .module), isPresented: $showRestoreDraftAlert) {
             Button(String(localized: "story.composer.resume", defaultValue: "Reprendre", bundle: .module)) { restoreDraft() }
             Button(String(localized: "story.composer.clearDraft", defaultValue: "Effacer le brouillon", bundle: .module), role: .destructive) { clearAllDrafts() }
