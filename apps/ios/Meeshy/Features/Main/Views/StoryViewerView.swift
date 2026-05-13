@@ -340,12 +340,10 @@ struct StoryViewerView: View {
                 onDismiss: { sharedContentWrapper = nil },
                 onShareToConversation: nil
             )
-            .injectGlobalEnvironment(
-                router: router,
-                conversationListViewModel: conversationListViewModel,
-                statusViewModel: statusViewModel
-            )
-            .presentationDetents([.medium, .large])
+            .environmentObject(router)
+            .environmentObject(conversationListViewModel)
+            .environmentObject(statusViewModel)
+            .presentationDetents([.medium, .large] as Set<PresentationDetent>)
         }
         .fullScreenCover(item: $repostStoryComposerSource, onDismiss: { resumeTimer() }) { wrapper in
             StoryComposerView(
