@@ -831,7 +831,7 @@ final class CallManager: ObservableObject {
 
     func rejectCall() {
         guard case .ringing(isOutgoing: false) = callState else { return }
-        guard let callId = currentCallId, let userId = remoteUserId else { return }
+        guard let callId = currentCallId, remoteUserId != nil else { return }
 
         emitCallReject(callId: callId)
 

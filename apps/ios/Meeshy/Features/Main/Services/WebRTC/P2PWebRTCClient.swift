@@ -554,7 +554,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     func getStats() async -> CallStats? {
         guard let pc = peerConnection else { return nil }
-        return await withCheckedContinuation { continuation in
+        // Collect raw values inside the nonisolated pc.statistics callback,
+        // then build CallStats (which is @MainActor) after the continuation
+        // returns — avoiding an 'await' inside a synchronous closure.
+        typealias RawStats = (rtt: Double, packetsLost: Int, bytesSent: Int, packetsReceived: Int, codec: String?)
+        let raw: RawStats = await withCheckedContinuation { continuation in
             pc.statistics { report in
                 var rtt: Double = 0
                 var packetsLost: Int = 0
@@ -597,20 +601,19 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                     }
                 }
 
-                // Audit P3 — was .info, fired every 5s (statsIntervalSeconds);
-                // demoted to .debug so release builds don't accumulate ~720
-                // log lines/hour per call.
                 Logger.webrtc.debug("[STATS] sent=\(bytesSent)B/\(packetsSent)pkt recv=\(bytesReceived)B/\(packetsReceived)pkt rtt=\(rtt)ms loss=\(packetsLost)")
-
-                continuation.resume(returning: CallStats(
-                    roundTripTimeMs: rtt,
-                    packetsLost: packetsLost,
-                    bandwidth: bytesSent,
-                    codec: codec,
-                    inboundPacketsReceived: packetsReceived
-                ))
+                continuation.resume(returning: (rtt, packetsLost, bytesSent, packetsReceived, codec))
             }
         }
+        // CallStats.init is @MainActor — safe here because getStats() is called
+        // on the main actor (P2PWebRTCClient is @MainActor-isolated).
+        return CallStats(
+            roundTripTimeMs: raw.rtt,
+            packetsLost: raw.packetsLost,
+            bandwidth: raw.bytesSent,
+            codec: raw.codec,
+            inboundPacketsReceived: raw.packetsReceived
+        )
     }
 
     // MARK: - DataChannel

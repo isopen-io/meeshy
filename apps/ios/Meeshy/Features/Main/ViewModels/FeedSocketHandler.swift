@@ -63,7 +63,7 @@ final class FeedSocketHandler {
             .store(in: &cancellables)
 
         socialSocket.postBookmarked
-            .sink { [weak self] _ in
+            .sink { _ in
                 // Bookmark state is UI-only — no persistence record to update
             }
             .store(in: &cancellables)
