@@ -38,14 +38,12 @@ enum CanvasElementType {
     case text, image, video, audio
 }
 
-@MainActor
 protocol CanvasElement: Identifiable {
     var id: String { get }
     var elementType: CanvasElementType { get }
     var zIndex: Int { get set }
 }
 
-@MainActor
 struct AnyCanvasElement: CanvasElement {
     var id: String
     var elementType: CanvasElementType

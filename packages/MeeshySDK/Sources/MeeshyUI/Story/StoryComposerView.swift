@@ -255,7 +255,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Body
 
-    public var body: some View {
+    private var mainContent: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
@@ -324,6 +324,10 @@ public struct StoryComposerView: View {
             bgColor: viewModel.backgroundColor,
             action: { syncCurrentSlideEffects() }
         )
+    }
+
+    public var body: some View {
+        mainContent
         .fileImporter(isPresented: $showAudioDocumentPicker, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first {
                 mediaAudioEditorItem = AudioEditorItemWrapper(url: url)
