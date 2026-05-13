@@ -8,7 +8,7 @@ import SwiftUI
 extension View {
     @ViewBuilder
     func granularCanvasSync(
-        filter: Int?,
+        filter: String?,
         hasImage: Bool,
         stickersCount: Int,
         drawingCount: Int,
