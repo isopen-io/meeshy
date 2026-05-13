@@ -176,10 +176,13 @@ public struct StoryComposerView: View {
     /// Top bar hides during free canvas manipulation (zoomed, no tool/selection)
     /// to reveal canvas controls underneath. Reappears when activating a tool or selecting media.
     private var showTopBar: Bool {
-        !viewModel.isCanvasZoomed || viewModel.activeTool != nil || viewModel.selectedElementId != nil
+        (!viewModel.isCanvasZoomed && areFabsVisible) || viewModel.activeTool != nil || viewModel.selectedElementId != nil
     }
 
     // MARK: - UI state
+
+    @State private var areFabsVisible: Bool = true
+    @State private var bandStateMachine: BandStateMachine = BandStateMachine()
 
     @State private var showDiscardAlert = false
     @State private var showRestoreDraftAlert = false
@@ -277,7 +280,21 @@ public struct StoryComposerView: View {
                     emptyStateLargePicker
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 } else {
-                    bottomOverlay
+                    ComposerControlsLayer(
+                        viewModel: viewModel,
+                        areFabsVisible: $areFabsVisible,
+                        drawingCanvas: $drawingCanvas,
+                        drawingTool: $drawingTool,
+                        selectedFilter: $selectedFilter,
+                        fgMediaItem: $fgMediaItem,
+                        showAudioDocumentPicker: $showAudioDocumentPicker,
+                        showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                        onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
+                        onOpenFilterForElement: { id in
+                            viewModel.selectedElementId = id
+                            viewModel.activeTool = .filters
+                        }
+                    )
                 }
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.85),
@@ -298,6 +315,8 @@ public struct StoryComposerView: View {
         }
         .onChange(of: viewModel.currentSlideIndex) { _, _ in
             viewModel.loadCurrentSlideIntoTimeline()
+            bandStateMachine.reset()
+            areFabsVisible = true
         }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
@@ -367,7 +386,7 @@ public struct StoryComposerView: View {
         }
         .sheet(isPresented: $viewModel.isTimelineVisible,
                onDismiss: { viewModel.commitTimelineToCurrentSlide() }) {
-            timelineSection
+            TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
                 // `.fraction(0.45)` ≈ enough to surface the toolbar + transport
                 // + ruler + 2 tracks without obscuring the canvas; users can
                 // drag up to .large for full Pro layout. Removing `.medium`
@@ -933,35 +952,6 @@ public struct StoryComposerView: View {
         .accessibilityHint(subtitle)
     }
 
-    // MARK: - Bottom Overlay
-
-    private var bottomOverlay: some View {
-        VStack(spacing: 0) {
-            ContextualToolbar(viewModel: viewModel)
-                .padding(.top, 6)
-                .padding(.bottom, viewModel.activeTool != nil ? 4 : 0)
-
-            if viewModel.activeTool != nil {
-                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 0.5)
-                activeToolPanel
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
-        }
-        .padding(.bottom, safeAreaBottomInset)
-        .background(
-            Group {
-                if viewModel.activeTool != nil {
-                    Color.black.opacity(0.55)
-                        .background(.ultraThinMaterial.opacity(0.7))
-                } else {
-                    Color.clear
-                }
-            }
-            .ignoresSafeArea(edges: .bottom)
-        )
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: viewModel.activeTool)
-    }
-
     // MARK: - Canvas + Drawing Layer (Task 2.18)
 
     /// CALayer-based canvas + drawing overlay + viewport transform/gestures
@@ -990,9 +980,9 @@ public struct StoryComposerView: View {
                 viewModel.selectedElementId = id
                 switch kind {
                 case .text:
-                    viewModel.activeTool = .text
+                    bandStateMachine.openFormatPanel(.text, id: id)
                 case .media:
-                    openMediaEditor(elementId: id)
+                    bandStateMachine.openFormatPanel(.media, id: id)
                 case .sticker:
                     break
                 }
@@ -1077,551 +1067,7 @@ public struct StoryComposerView: View {
         TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
     }
 
-    // MARK: - Active Tool Panel
 
-    @ViewBuilder
-    private var activeToolPanel: some View {
-        switch viewModel.activeTool {
-        case .media:
-            mediaPanel
-        case .texture:
-            texturePanel
-        case .drawing:
-            drawingPanel
-        case .text:
-            textPanel.padding(.bottom, 8)
-        case .filters:
-            StoryFilterGridView(viewModel: viewModel, previewImage: selectedImage)
-        case .timeline:
-            timelineSection
-        case .none:
-            EmptyView()
-        }
-    }
-
-    // MARK: - Drawing Panel
-
-    private var drawingPanel: some View {
-        DrawingToolbarPanel(
-            toolColor: $viewModel.drawingColor,
-            toolWidth: $viewModel.drawingWidth,
-            toolType: $drawingTool,
-            onUndo: {
-                drawingCanvas.undoManager?.undo()
-                viewModel.drawingData = drawingCanvas.drawing.dataRepresentation()
-                HapticFeedback.light()
-            },
-            onRedo: {
-                drawingCanvas.undoManager?.redo()
-                viewModel.drawingData = drawingCanvas.drawing.dataRepresentation()
-                HapticFeedback.light()
-            },
-            onClear: {
-                drawingCanvas.drawing = PKDrawing()
-                viewModel.drawingData = nil
-                HapticFeedback.medium()
-            }
-        )
-        .padding(.bottom, 8)
-    }
-
-    // MARK: - Background Audio Panel
-
-    private var bgAudioPanel: some View {
-        VStack(spacing: 0) {
-        StoryAudioPanel(
-            selectedAudioId: $selectedAudioId,
-            selectedAudioTitle: $selectedAudioTitle,
-            audioVolume: $audioVolume,
-            onRecordingReady: { url in
-                audioEditorItem = AudioEditorItemWrapper(url: url)
-            }
-        )
-        .frame(maxHeight: 280)
-
-        audioElementList()
-        } // VStack bgAudioPanel
-    }
-
-    // MARK: - Text Panel
-
-    @ViewBuilder
-    private var textPanel: some View {
-        VStack(spacing: 0) {
-            if let selectedId = viewModel.selectedElementId,
-               let binding = textObjectBinding(for: selectedId) {
-                StoryTextEditorView(
-                    textObject: binding,
-                    onDelete: { viewModel.deleteElement(id: selectedId) }
-                )
-
-                TextBackgroundStylePicker(textObject: binding)
-                    .padding(.top, 8)
-            }
-
-            // Add text button — always visible when under limit
-            if viewModel.canAddText {
-                Button {
-                    viewModel.addText()
-                    HapticFeedback.light()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(viewModel.selectedElementId != nil ? String(localized: "story.composer.anotherText", defaultValue: "Autre texte", bundle: .module) : String(localized: "story.composer.addText", defaultValue: "Ajouter du texte", bundle: .module))
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(MeeshyColors.brandPrimary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                }
-            }
-
-            textElementList()
-        }
-    }
-
-    // MARK: - Unified Media Panel (images, videos, audio — flat list)
-    // Background vs foreground is decided automatically by `addMediaObject`
-    // (first media → isBackground=true, rest → foreground). The element list
-    // below shows a "Fond" badge on whichever object currently holds the
-    // background flag, so users still see the distinction without needing
-    // a separate UI section for it.
-
-    private var mediaPanel: some View {
-        VStack(spacing: 10) {
-            HStack {
-                Label(String(localized: "story.composer.fgMedia", defaultValue: "Medias", bundle: .module),
-                      systemImage: "square.stack.3d.up")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.6))
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-
-            HStack(spacing: 8) {
-                if viewModel.canAddMedia {
-                    PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
-                        mediaPillLabel(icon: "photo.on.rectangle.angled", text: String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module))
-                    }
-                }
-                if viewModel.canAddAudio {
-                    Button { showAudioDocumentPicker = true } label: {
-                        mediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module))
-                    }
-                    Button { showVoiceRecorderSheet = true } label: {
-                        mediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module))
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-
-            // Element list (all media + audio objects, with "Fond" badge on
-            // whichever entry currently holds the background flag).
-            mediaElementList()
-            audioElementList()
-        }
-        .padding(.vertical, 10)
-    }
-
-    private func mediaPillLabel(icon: String, text: String, destructive: Bool = false) -> MediaPillLabel {
-        MediaPillLabel(icon: icon, text: text, destructive: destructive)
-    }
-
-    // MARK: - Texture Panel (background color / patterns)
-
-
-    private var texturePanel: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Label(String(localized: "story.composer.bgColor", defaultValue: "Couleur de fond", bundle: .module),
-                      systemImage: "paintpalette")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-
-            // Color grid — large touch targets (50pt circles, 56pt hit area)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 56), spacing: 10)], spacing: 10) {
-                ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
-                    Button {
-                        viewModel.backgroundColor = "#\(hex)"
-                        selectedImage = nil
-                        viewModel.hasBackgroundImage = false
-                        HapticFeedback.light()
-                    } label: {
-                        Circle().fill(Color(hex: hex))
-                            .frame(width: 50, height: 50)
-                            .overlay(
-                                Circle().stroke(Color.white, lineWidth: viewModel.backgroundColor == "#\(hex)" && selectedImage == nil ? 3 : 0)
-                                    .padding(2)
-                            )
-                            .shadow(color: Color(hex: hex).opacity(viewModel.backgroundColor == "#\(hex)" ? 0.5 : 0), radius: 6)
-                    }
-                    .frame(width: 56, height: 56)
-                    .contentShape(Circle())
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - Foreground Audio Panel (legacy — kept for voice recorder sheet wiring)
-
-    private var fgAudioPanel: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                Button { showAudioDocumentPicker = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "waveform").font(.system(size: 14, weight: .medium))
-                        Text(String(localized: "story.composer.library", defaultValue: "Bibliotheque", bundle: .module)).font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
-                }
-
-                Button { showVoiceRecorderSheet = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "mic").font(.system(size: 14, weight: .medium))
-                        Text(String(localized: "story.composer.recordAudio", defaultValue: "Enregistrer", bundle: .module)).font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
-                }
-            }
-            .padding(.horizontal, 16)
-
-            audioElementList()
-        }
-        .padding(.vertical, 10)
-    }
-
-    // MARK: - Element Lists
-
-    @ViewBuilder
-    private func mediaElementList() -> some View {
-        let items = viewModel.currentEffects.mediaObjects ?? []
-        return Group {
-            if !items.isEmpty {
-                VStack(spacing: 4) {
-                    ForEach(items, id: \.id) { obj in
-                        mediaElementRow(obj: obj)
-                    }
-                }
-                .padding(.horizontal, 12)
-            }
-        }
-    }
-
-    private func mediaElementRow(obj: StoryMediaObject) -> some View {
-        let isSelected = viewModel.selectedElementId == obj.id
-        let isBackground = viewModel.isBackground(id: obj.id)
-        return HStack(spacing: 8) {
-            mediaElementThumbnail(obj: obj)
-            Text(obj.kind == .video ? String(localized: "story.composer.videoLabel", defaultValue: "Video", bundle: .module) : String(localized: "story.composer.imageLabel", defaultValue: "Image", bundle: .module))
-                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
-            if isBackground {
-                Text(String(localized: "story.composer.backgroundBadge", defaultValue: "Fond", bundle: .module))
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(MeeshyColors.indigo950)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Capsule().fill(MeeshyColors.indigo300))
-            }
-            Spacer()
-            // Edit button
-            Button {
-                openMediaEditor(elementId: obj.id)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: obj.kind == .video ? "film" : "crop")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.brandPrimary)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.brandPrimary.opacity(0.15)))
-            }
-            .accessibilityLabel(String(localized: "story.composer.editMedia", defaultValue: "Editer", bundle: .module))
-            // Background/foreground toggle
-            Button {
-                viewModel.toggleBackground(id: obj.id)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: isBackground ? "square.filled.on.square" : "square.on.square")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(isBackground ? MeeshyColors.indigo200 : MeeshyColors.indigo400)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.indigo400.opacity(isBackground ? 0.25 : 0.15)))
-            }
-            .accessibilityLabel(isBackground
-                ? String(localized: "story.composer.moveToForeground", defaultValue: "Mettre en premier plan", bundle: .module)
-                : String(localized: "story.composer.moveToBackground", defaultValue: "Mettre en fond", bundle: .module))
-            // Timeline
-            Button {
-                viewModel.selectedElementId = obj.id
-                viewModel.activeTool = .timeline
-            } label: {
-                Image(systemName: "timer")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.indigo400)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
-            }
-            // Delete
-            Button {
-                viewModel.deleteElement(id: obj.id)
-                HapticFeedback.medium()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MeeshyColors.error)
-                    .frame(width: 28, height: 28)
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
-        .onTapGesture {
-            viewModel.selectedElementId = obj.id
-            viewModel.bringToFront(id: obj.id)
-        }
-    }
-
-    // MARK: - Text list (tap row → select + edit in place on canvas)
-
-    @ViewBuilder
-    private func textElementList() -> some View {
-        let items = viewModel.currentEffects.textObjects
-        if !items.isEmpty {
-            VStack(spacing: 4) {
-                ForEach(items, id: \.id) { obj in
-                    textElementRow(obj: obj)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 4)
-        }
-    }
-
-    private func textElementRow(obj: StoryTextObject) -> some View {
-        let isSelected = viewModel.selectedElementId == obj.id
-        let preview = obj.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? String(localized: "story.composer.emptyText", defaultValue: "Texte vide", bundle: .module)
-            : obj.text
-        return HStack(spacing: 8) {
-            Image(systemName: "textformat")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(MeeshyColors.indigo400)
-                .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
-            Text(preview)
-                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer()
-            Button {
-                viewModel.selectedElementId = obj.id
-                viewModel.isTimelineVisible = true
-            } label: {
-                Image(systemName: "timeline.selection")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.indigo400)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
-            }
-            Button {
-                viewModel.deleteElement(id: obj.id)
-                HapticFeedback.medium()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MeeshyColors.error)
-                    .frame(width: 28, height: 28)
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
-        .contentShape(Rectangle())
-        .onTapGesture {
-            // Sélection → édition en place sur canvas : handles de drag visibles
-            // + StoryTextEditorView ouvert au-dessus via textPanel.
-            viewModel.selectedElementId = obj.id
-            viewModel.bringToFront(id: obj.id)
-            viewModel.activeTool = .text
-            HapticFeedback.light()
-        }
-    }
-
-    @ViewBuilder
-    private func mediaElementThumbnail(obj: StoryMediaObject) -> some View {
-        if let img = viewModel.loadedImages[obj.id] {
-            Image(uiImage: img)
-                .resizable().scaledToFill()
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        } else {
-            Image(systemName: obj.kind == .video ? "video.fill" : "photo")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(MeeshyColors.indigo400)
-                .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
-        }
-    }
-
-    private func audioElementList() -> some View {
-        let items = viewModel.currentEffects.audioPlayerObjects ?? []
-        return Group {
-            if !items.isEmpty {
-                VStack(spacing: 4) {
-                    ForEach(items, id: \.id) { obj in
-                        audioElementRow(obj: obj)
-                    }
-                }
-                .padding(.horizontal, 12)
-            }
-        }
-    }
-
-    private func audioElementRow(obj: StoryAudioPlayerObject) -> some View {
-        let isSelected = viewModel.selectedElementId == obj.id
-        let isBackground = viewModel.isBackground(id: obj.id)
-        return HStack(spacing: 8) {
-            Image(systemName: "waveform")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(MeeshyColors.indigo400)
-                .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
-            Text(String(localized: "story.composer.audioLabel", defaultValue: "Audio", bundle: .module))
-                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
-            if isBackground {
-                Text(String(localized: "story.composer.backgroundBadge", defaultValue: "Fond", bundle: .module))
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(MeeshyColors.indigo950)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Capsule().fill(MeeshyColors.indigo300))
-            }
-            Spacer()
-            // Edit (timeline for audio)
-            Button {
-                viewModel.selectedElementId = obj.id
-                viewModel.activeTool = .timeline
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "waveform.and.magnifyingglass")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.brandPrimary)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.brandPrimary.opacity(0.15)))
-            }
-            .accessibilityLabel(String(localized: "story.composer.editAudio", defaultValue: "Editer l'audio", bundle: .module))
-            // Background/foreground toggle
-            Button {
-                viewModel.toggleBackground(id: obj.id)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: isBackground ? "square.filled.on.square" : "square.on.square")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(isBackground ? MeeshyColors.indigo200 : MeeshyColors.indigo400)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.indigo400.opacity(isBackground ? 0.25 : 0.15)))
-            }
-            .accessibilityLabel(isBackground
-                ? String(localized: "story.composer.moveToForeground", defaultValue: "Mettre en premier plan", bundle: .module)
-                : String(localized: "story.composer.moveToBackground", defaultValue: "Mettre en fond", bundle: .module))
-            // Timeline
-            Button {
-                viewModel.selectedElementId = obj.id
-                viewModel.activeTool = .timeline
-            } label: {
-                Image(systemName: "timer")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.indigo400)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
-            }
-            // Delete
-            Button {
-                viewModel.deleteElement(id: obj.id)
-                HapticFeedback.medium()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MeeshyColors.error)
-                    .frame(width: 28, height: 28)
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
-        .onTapGesture {
-            viewModel.selectedElementId = obj.id
-            viewModel.bringToFront(id: obj.id)
-        }
-    }
-
-    // MARK: - Transition Picker
-
-    private var transitionPicker: some View {
-        VStack(spacing: 12) {
-            Text(String(localized: "story.composer.openingEffect", defaultValue: "Effet d'ouverture", bundle: .module))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.6))
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    effectButton(effect: nil, label: String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module), icon: "minus.circle", isOpening: true)
-                    ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
-                        effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: true)
-                    }
-                }
-                .padding(.horizontal, 2)
-            }
-            Text(String(localized: "story.composer.closingEffect", defaultValue: "Effet de fermeture", bundle: .module))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.6))
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    effectButton(effect: nil, label: String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module), icon: "minus.circle", isOpening: false)
-                    ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
-                        effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: false)
-                    }
-                }
-                .padding(.horizontal, 2)
-            }
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-    }
-
-    private func effectButton(effect: StoryTransitionEffect?, label: String, icon: String, isOpening: Bool) -> some View {
-        let isSelected = isOpening ? (openingEffect == effect) : (closingEffect == effect)
-        return Button {
-            withAnimation(.spring(response: 0.25)) {
-                if isOpening { openingEffect = effect } else { closingEffect = effect }
-            }
-            HapticFeedback.light()
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                    .foregroundColor(isSelected ? MeeshyColors.brandPrimary : .white.opacity(0.6))
-                Text(label)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(isSelected ? MeeshyColors.brandPrimary : .white.opacity(0.4))
-            }
-            .frame(width: 60, height: 54)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.15) : Color.white.opacity(0.06))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(isSelected ? MeeshyColors.brandPrimary.opacity(0.5) : Color.clear, lineWidth: 1)
-                    )
-            )
-        }
-    }
 
     // MARK: - Helpers
 

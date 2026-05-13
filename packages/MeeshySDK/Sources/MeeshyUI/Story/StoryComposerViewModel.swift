@@ -44,6 +44,12 @@ protocol CanvasElement: Identifiable {
     var zIndex: Int { get set }
 }
 
+struct AnyCanvasElement: CanvasElement {
+    var id: String
+    var elementType: CanvasElementType
+    var zIndex: Int
+}
+
 // MARK: - Media Asset
 
 enum MediaAsset {
@@ -207,6 +213,8 @@ protocol StoryComposerProviding: AnyObject {
     func zIndex(for id: String) -> Int
     func bringToFront(id: String)
     func sendToBack(id: String)
+    func bringForward(id: String)
+    func sendBackward(id: String)
 
     // MARK: Tool Actions
     func selectTool(_ tool: StoryToolMode?)
@@ -1149,6 +1157,60 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         persistZIndex(0, for: id)
     }
 
+    func bringForward(id: String) {
+        let all = allElementsSortedByZ()
+        guard let index = all.firstIndex(where: { $0.id == id }) else { return }
+        guard index < all.count - 1 else { return }
+
+        let next = all[index + 1]
+        let currentZ = zIndexMap[id] ?? zIndex(for: id)
+        let nextZ = zIndexMap[next.id] ?? zIndex(for: next.id)
+        
+        let newCurrentZ = currentZ == nextZ ? nextZ + 1 : nextZ
+        let newNextZ = currentZ == nextZ ? currentZ : currentZ
+        
+        persistZIndex(newCurrentZ, for: id)
+        persistZIndex(newNextZ, for: next.id)
+        zIndexMap[id] = newCurrentZ
+        zIndexMap[next.id] = newNextZ
+    }
+
+    func sendBackward(id: String) {
+        let all = allElementsSortedByZ()
+        guard let index = all.firstIndex(where: { $0.id == id }) else { return }
+        guard index > 0 else { return }
+
+        let prev = all[index - 1]
+        let currentZ = zIndexMap[id] ?? zIndex(for: id)
+        let prevZ = zIndexMap[prev.id] ?? zIndex(for: prev.id)
+        
+        let newCurrentZ = currentZ == prevZ ? prevZ : prevZ
+        let newPrevZ = currentZ == prevZ ? currentZ + 1 : currentZ
+        
+        persistZIndex(newCurrentZ, for: id)
+        persistZIndex(newPrevZ, for: prev.id)
+        zIndexMap[id] = newCurrentZ
+        zIndexMap[prev.id] = newPrevZ
+    }
+
+    func allElementsSortedByZ() -> [AnyCanvasElement] {
+        var elements: [AnyCanvasElement] = []
+        let effects = currentEffects
+        for t in effects.textObjects {
+            elements.append(AnyCanvasElement(id: t.id, elementType: .text, zIndex: zIndexMap[t.id] ?? t.zIndex ?? 0))
+        }
+        for m in effects.mediaObjects ?? [] {
+            elements.append(AnyCanvasElement(id: m.id, elementType: m.kind == .video ? .video : .image, zIndex: zIndexMap[m.id] ?? m.zIndex ?? 0))
+        }
+        for a in effects.audioPlayerObjects ?? [] {
+            elements.append(AnyCanvasElement(id: a.id, elementType: .audio, zIndex: zIndexMap[a.id] ?? a.zIndex ?? 0))
+        }
+        for s in effects.stickerObjects ?? [] {
+            elements.append(AnyCanvasElement(id: s.id, elementType: .image, zIndex: zIndexMap[s.id] ?? s.zIndex ?? 0))
+        }
+        return elements.sorted { $0.zIndex < $1.zIndex }
+    }
+
     private func persistZIndex(_ z: Int, for id: String) {
         var effects = currentEffects
         if let i = effects.textObjects.firstIndex(where: { $0.id == id }) {
@@ -1163,6 +1225,20 @@ public final class StoryComposerViewModel: StoryComposerProviding {
             return  // Sticker handled by view-level state — caller patches via onUpdate
         }
         currentEffects = effects
+    }
+
+    // MARK: - Phase 3 real implementation
+
+    /// Returns true if the timeline has been customized away from defaults.
+    public var timelineHasCustomizations: Bool {
+        let p = timelineViewModel.project
+        let hasKeyframes = p.mediaObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) }) ||
+                           p.textObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) }) ||
+                           p.audioPlayerObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) }) ||
+                           (p.stickerObjects?.contains(where: { !($0.keyframes?.isEmpty ?? true) }) ?? false)
+        let hasTransitions = !p.clipTransitions.isEmpty
+        let hasNonDefaultDuration = abs(p.slideDuration - 12.0) > 0.01
+        return hasKeyframes || hasTransitions || hasNonDefaultDuration
     }
 
     // MARK: - Tool Actions

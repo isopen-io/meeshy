@@ -1315,6 +1315,52 @@ public final class StoryCanvasUIView: UIView {
         onItemModified?(slide)
     }
 
+    func bringForward(id: String) {
+        var elements = slide.effects.textObjects.map { ($0.id, $0.zIndex ?? 0) }
+        elements += (slide.effects.mediaObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
+        elements += (slide.effects.audioPlayerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
+        elements += (slide.effects.stickerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
+        
+        elements.sort { $0.1 < $1.1 }
+        
+        guard let index = elements.firstIndex(where: { $0.0 == id }), index < elements.count - 1 else { return }
+        
+        let currentZ = elements[index].1
+        let nextZ = elements[index + 1].1
+        
+        let newCurrentZ = currentZ == nextZ ? nextZ + 1 : nextZ
+        let newNextZ = currentZ == nextZ ? currentZ : currentZ
+        
+        let nextId = elements[index + 1].0
+        
+        slide = mutateItem(slideId: id, text: { $0.zIndex = newCurrentZ }, media: { $0.zIndex = newCurrentZ }, sticker: { $0.zIndex = newCurrentZ })
+        slide = mutateItem(slideId: nextId, text: { $0.zIndex = newNextZ }, media: { $0.zIndex = newNextZ }, sticker: { $0.zIndex = newNextZ })
+        onItemModified?(slide)
+    }
+
+    func sendBackward(id: String) {
+        var elements = slide.effects.textObjects.map { ($0.id, $0.zIndex ?? 0) }
+        elements += (slide.effects.mediaObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
+        elements += (slide.effects.audioPlayerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
+        elements += (slide.effects.stickerObjects ?? []).map { ($0.id, $0.zIndex ?? 0) }
+        
+        elements.sort { $0.1 < $1.1 }
+        
+        guard let index = elements.firstIndex(where: { $0.0 == id }), index > 0 else { return }
+        
+        let currentZ = elements[index].1
+        let prevZ = elements[index - 1].1
+        
+        let newCurrentZ = currentZ == prevZ ? prevZ : prevZ
+        let newPrevZ = currentZ == prevZ ? currentZ + 1 : currentZ
+        
+        let prevId = elements[index - 1].0
+        
+        slide = mutateItem(slideId: id, text: { $0.zIndex = newCurrentZ }, media: { $0.zIndex = newCurrentZ }, sticker: { $0.zIndex = newCurrentZ })
+        slide = mutateItem(slideId: prevId, text: { $0.zIndex = newPrevZ }, media: { $0.zIndex = newPrevZ }, sticker: { $0.zIndex = newPrevZ })
+        onItemModified?(slide)
+    }
+
     private func nextTopZ() -> Int {
         let allZ = slide.effects.textObjects.map(\.zIndex)
             + (slide.effects.mediaObjects?.map(\.zIndex) ?? [])
@@ -1337,20 +1383,39 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
                                        configurationForMenuAtLocation location: CGPoint)
     -> UIContextMenuConfiguration? {
         guard mode == .edit, let id = hitTestItem(at: location) else { return nil }
+        
+        let kind: CanvasItemKind = {
+            if slide.effects.textObjects.contains(where: { $0.id == id }) { return .text }
+            if slide.effects.stickerObjects?.contains(where: { $0.id == id }) == true { return .sticker }
+            return .media
+        }()
+
         return UIContextMenuConfiguration(
             identifier: id as NSString,
             previewProvider: nil
         ) { [weak self] _ in
             UIMenu(children: [
-                UIAction(title: "Duplicate",
+                UIAction(title: "Modifier",
+                         image: UIImage(systemName: "pencil")) { _ in
+                    self?.onItemDoubleTapped?(id, kind)
+                },
+                UIAction(title: "Dupliquer",
                          image: UIImage(systemName: "doc.on.doc")) { _ in
                     self?.duplicateItem(id: id)
                 },
-                UIAction(title: "Send to Back",
+                UIAction(title: "Mettre au premier plan",
+                         image: UIImage(systemName: "square.3.stack.3d.top.filled")) { _ in
+                    self?.bringForward(id: id)
+                },
+                UIAction(title: "Mettre à l'arrière",
+                         image: UIImage(systemName: "square.2.stack.3d.bottom.filled")) { _ in
+                    self?.sendBackward(id: id)
+                },
+                UIAction(title: "Mettre à l'arrière plan",
                          image: UIImage(systemName: "square.3.stack.3d.bottom.filled")) { _ in
                     self?.sendToBack(id: id)
                 },
-                UIAction(title: "Delete",
+                UIAction(title: "Supprimer",
                          image: UIImage(systemName: "trash"),
                          attributes: .destructive) { _ in
                     self?.deleteItem(id: id)
