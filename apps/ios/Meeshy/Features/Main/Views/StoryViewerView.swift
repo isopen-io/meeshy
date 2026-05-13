@@ -229,18 +229,14 @@ struct StoryViewerView: View {
         min(abs(totalSlideX) / screenW, 1.0)
     }
 
-    var body: some View {
+    // Extracted from `body` to keep the SwiftUI type-checker within its time
+    // budget. Holds the ZStack canvas and all lifecycle modifiers.
+    private var viewerContent: some View {
         ZStack {
             // Opaque black base — prevents any white frame bleed
             Color.black.ignoresSafeArea()
 
             // === P3 wire-up : offscreen prefetcher host ===
-            // 1x1 invisible UIView under every visible layer. Hosts the
-            // `StoryReaderPrefetcher`'s sliding-window canvas views so they
-            // bootstrap (decode image, layer-tree, AVPlayer asset) before
-            // the user swipes to them. Insertion via `ZStack` rather than
-            // `.background(...)` keeps it inside the same coordinate space
-            // as the visible reader without changing safe-area behaviour.
             PrefetcherHostView(prefetcher: prefetcher)
                 .frame(width: 1, height: 1)
                 .allowsHitTesting(false)
@@ -298,25 +294,18 @@ struct StoryViewerView: View {
             if initialStoryIndex > 0, currentGroupIndex < groups.count {
                 currentStoryIndex = min(initialStoryIndex, groups[currentGroupIndex].stories.count - 1)
             }
-            
             StoryMediaCoordinator.shared.activate {
                 isGlobalMuted = true
             }
-            
             installPrefetchPipelineIfNeeded()
             refreshPrefetchWindowAndTimer()
             startTimer()
             markCurrentViewed()
             prefetchCurrentGroup()
-            // Entrance: subtle scale-up from near-fullscreen card
             withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                 appearScale = 1.0
                 appearCornerRadius = 0
             }
-            // Phase F: when this viewer was launched from a story
-            // notification redirect, auto-open the matching overlay/sheet.
-            // Latched internally so re-fires on scene phase changes are
-            // no-ops.
             triggerInitialActionIfNeeded()
         }
         .onDisappear {
@@ -325,13 +314,6 @@ struct StoryViewerView: View {
             prefetcher.detach()
             hasInstalledPrefetchPipeline = false
             StoryMediaCoordinator.shared.deactivate()
-            // Don't aggressively `clearThumbnailCache()` / `clearPlayerCache()` here.
-            // Both caches use LRU + size budgets, plus `StoryMediaLoader.init()`
-            // listens to memory-warning notifications to drop them under pressure.
-            // Eagerly evicting on every viewer dismiss defeated the prefetch
-            // benefit when the user immediately re-opened the tray (audit C1/C3 +
-            // the perf-audit observation that 6 prerolled players were torn down
-            // right after the user finished tapping through them).
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
@@ -341,22 +323,18 @@ struct StoryViewerView: View {
                 isPresented = false
             }
         }
-        .onChange(of: currentStoryIndex) { _, _ in
-            refreshPrefetchWindowAndTimer()
-        }
-        .onChange(of: currentGroupIndex) { _, _ in
-            refreshPrefetchWindowAndTimer()
-        }
-        .sheet(isPresented: $showViewersSheet, onDismiss: {
-            resumeTimer()
-        }) {
+        .onChange(of: currentStoryIndex) { _, _ in refreshPrefetchWindowAndTimer() }
+        .onChange(of: currentGroupIndex) { _, _ in refreshPrefetchWindowAndTimer() }
+    }
+
+    var body: some View {
+        viewerContent
+        .sheet(isPresented: $showViewersSheet, onDismiss: { resumeTimer() }) {
             if let story = currentStory {
                 StoryViewersSheet(story: story, accentColor: Color(hex: "4ECDC4"))
             }
         }
-        .sheet(item: $sharedContentWrapper, onDismiss: {
-            resumeTimer()
-        }) { wrapper in
+        .sheet(item: $sharedContentWrapper, onDismiss: { resumeTimer() }) { wrapper in
             SharePickerView(
                 sharedContent: wrapper.content,
                 onDismiss: { sharedContentWrapper = nil },
@@ -369,29 +347,13 @@ struct StoryViewerView: View {
             )
             .presentationDetents([.medium, .large])
         }
-        // Repost-as-story composer (C.1). Opened from the bottom-bar "Partager"
-        // action; uses the new `init(viewModel:onPublishSlide:onPublishAllInBackground:onDismiss:)`
-        // exposed by `StoryComposerView` so we can hand it a pre-built VM seeded
-        // by `StoryComposerViewModel(reposting:authorHandle:)`. The publish path
-        // delegates to `viewModel.publishStoryInBackground(...)` exactly like the
-        // tray-launched composer (StoryTrayView) — keeping a single upload flow.
-        // Note: full `repostOfId` propagation through `publishStoryInBackground`
-        // is the responsibility of a follow-up patch (the VM still carries the
-        // chain via `repostOfId` / `originalRepostOfId` for that wiring).
-        .fullScreenCover(item: $repostStoryComposerSource, onDismiss: {
-            resumeTimer()
-        }) { wrapper in
+        .fullScreenCover(item: $repostStoryComposerSource, onDismiss: { resumeTimer() }) { wrapper in
             StoryComposerView(
                 viewModel: StoryComposerViewModel(
                     reposting: wrapper.story,
                     authorHandle: wrapper.authorHandle
                 ),
-                onPublishSlide: { _, _, _, _, _ in
-                    // No-op: background-publish path (`onPublishAllInBackground`)
-                    // is what `publishStoryInBackground` consumes. Keeping this
-                    // symmetric with the tray-launched composer keeps a single
-                    // upload code path.
-                },
+                onPublishSlide: { _, _, _, _, _ in },
                 onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility in
                     viewModel.publishStoryInBackground(
                         slides: slides,
@@ -407,24 +369,11 @@ struct StoryViewerView: View {
                 onDismiss: { repostStoryComposerSource = nil }
             )
         }
-        // Repost-as-post composer (C.2). Opened from the kebab menu's
-        // "Editer et republier en post" action. Uses the new
-        // `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
-        // init introduced in B.7 — locks the type to `.post` and embeds a
-        // story preview canvas. Submission goes through `PostService.repost`
-        // with `targetType: .post` so the gateway records the correct shape.
-        .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: {
-            resumeTimer()
-        }) { wrapper in
+        .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: { resumeTimer() }) { wrapper in
             UnifiedPostComposer(
                 repostingStory: wrapper.story,
                 authorHandle: wrapper.authorHandle,
                 onPublishRepost: { content, sourceStory in
-                    // Async-throws variant: the composer awaits this closure
-                    // and resets its `isPublishing` flag (re-enabling the
-                    // Publish button) if we throw. That unblocks the user
-                    // from a permanent disabled-button state when the network
-                    // is flaky — they can simply retry without dismissing.
                     do {
                         _ = try await PostService.shared.repost(
                             postId: sourceStory.id,
@@ -440,11 +389,6 @@ struct StoryViewerView: View {
                     }
                 },
                 onStoryImported: { result in
-                    // UnifiedPostComposer has no canvas-overlay state of its own
-                    // (constraint D-8), so the reprojected items aren't placed
-                    // visually. We log the structured RepostImportResult so the
-                    // signal isn't silently lost — useful for diagnostics when
-                    // an aspect-ratio mismatch produced unexpected clamping.
                     Logger.stories.info(
                         "repost.import slide=\(result.targetSize.width, privacy: .public)x\(result.targetSize.height, privacy: .public) texts=\(result.texts.count, privacy: .public) media=\(result.media.count, privacy: .public) stickers=\(result.stickers.count, privacy: .public) drawing=\(result.drawingData != nil, privacy: .public) audios=\(result.audios.count, privacy: .public) clamped=\(result.warnings.count, privacy: .public)"
                     )
