@@ -20,6 +20,12 @@ public nonisolated struct MeeshyColors {
 
     public static let brandPrimary = indigo500
     public static let brandDeep = indigo700
+    
+    // MARK: - Neutral Scale
+    
+    public static let neutral400 = Color(hex: "9CA3AF")
+    public static let neutral500 = Color(hex: "6B7280")
+    public static let neutral600 = Color(hex: "4B5563")
 
     // MARK: - Brand Hex Strings (for accentColor parameters)
 

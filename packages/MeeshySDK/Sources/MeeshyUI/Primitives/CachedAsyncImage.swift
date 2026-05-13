@@ -113,19 +113,28 @@ extension CachedAsyncImage where Placeholder == Color {
 
 public struct CachedAvatarImage: View {
     public let urlString: String?
+    public let thumbHash: String?
     public let name: String
     public let size: CGFloat
     public let accentColor: String
 
     @State private var image: UIImage?
+    @State private var thumbHashImage: UIImage?
 
-    public init(urlString: String?, name: String, size: CGFloat, accentColor: String) {
-        self.urlString = urlString; self.name = name; self.size = size; self.accentColor = accentColor
+    public init(urlString: String?, thumbHash: String? = nil, name: String, size: CGFloat, accentColor: String) {
+        self.urlString = urlString; self.thumbHash = thumbHash; self.name = name; self.size = size; self.accentColor = accentColor
+        
+        let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            _image = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
+            cachedFull = DiskCacheStore.cachedImage(for: resolved)
         } else {
-            _image = State(initialValue: nil)
+            cachedFull = nil
+        }
+        _image = State(initialValue: cachedFull)
+        
+        if cachedFull == nil, let thumbHash, !thumbHash.isEmpty {
+            _thumbHashImage = State(initialValue: UIImage.fromThumbHash(thumbHash))
         }
     }
 
@@ -133,6 +142,8 @@ public struct CachedAvatarImage: View {
         Group {
             if let image {
                 Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
+            } else if let thumbHashImage {
+                Image(uiImage: thumbHashImage).resizable().aspectRatio(contentMode: .fill)
             } else { initialsFallback }
         }
         .frame(width: size, height: size).clipShape(Circle())
@@ -174,18 +185,27 @@ public struct CachedAvatarImage: View {
 
 public struct CachedBannerImage: View {
     public let urlString: String?
+    public let thumbHash: String?
     public let fallbackColor: String
     public let height: CGFloat
 
     @State private var image: UIImage?
+    @State private var thumbHashImage: UIImage?
 
-    public init(urlString: String?, fallbackColor: String, height: CGFloat) {
-        self.urlString = urlString; self.fallbackColor = fallbackColor; self.height = height
+    public init(urlString: String?, thumbHash: String? = nil, fallbackColor: String, height: CGFloat) {
+        self.urlString = urlString; self.thumbHash = thumbHash; self.fallbackColor = fallbackColor; self.height = height
+        
+        let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            _image = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
+            cachedFull = DiskCacheStore.cachedImage(for: resolved)
         } else {
-            _image = State(initialValue: nil)
+            cachedFull = nil
+        }
+        _image = State(initialValue: cachedFull)
+        
+        if cachedFull == nil, let thumbHash, !thumbHash.isEmpty {
+            _thumbHashImage = State(initialValue: UIImage.fromThumbHash(thumbHash))
         }
     }
 
@@ -193,6 +213,8 @@ public struct CachedBannerImage: View {
         Group {
             if let image {
                 Image(uiImage: image).resizable().aspectRatio(contentMode: .fill)
+            } else if let thumbHashImage {
+                Image(uiImage: thumbHashImage).resizable().aspectRatio(contentMode: .fill)
             } else {
                 let color = Color(hex: fallbackColor)
                 LinearGradient(colors: [color.opacity(0.8), color.opacity(0.4)], startPoint: .topLeading, endPoint: .bottomTrailing)

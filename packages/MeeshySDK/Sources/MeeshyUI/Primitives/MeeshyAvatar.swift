@@ -193,6 +193,7 @@ public struct MeeshyAvatar: View {
     public var accentColor: String = ""
     public var secondaryColor: String? = nil
     public var avatarURL: String? = nil
+    public var thumbHash: String? = nil
     public var storyState: StoryRingState = .none
     public var moodEmoji: String? = nil
     public var presenceState: PresenceState = .offline
@@ -207,7 +208,7 @@ public struct MeeshyAvatar: View {
 
     // Primary init (AvatarContext)
     public init(name: String, context: AvatarContext, kind: AvatarKind = .user, accentColor: String = "",
-                secondaryColor: String? = nil, avatarURL: String? = nil,
+                secondaryColor: String? = nil, avatarURL: String? = nil, thumbHash: String? = nil,
                 storyState: StoryRingState = .none, moodEmoji: String? = nil,
                 presenceState: PresenceState = .offline, enablePulse: Bool? = nil,
                 isDark: Bool = ThemeManager.shared.mode.isDark,
@@ -215,7 +216,7 @@ public struct MeeshyAvatar: View {
                 onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
                 onOnlineTap: (() -> Void)? = nil, contextMenuItems: [AvatarContextMenuItem]? = nil) {
         self.name = name; self.context = context; self.kind = kind; self.accentColor = accentColor
-        self.secondaryColor = secondaryColor; self.avatarURL = avatarURL
+        self.secondaryColor = secondaryColor; self.avatarURL = avatarURL; self.thumbHash = thumbHash
         self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
         self.enablePulse = enablePulse ?? context.defaultPulse; self.isDark = isDark
         self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
@@ -351,7 +352,7 @@ public struct MeeshyAvatar: View {
     @ViewBuilder
     private var avatarBody: some View {
         if let url = avatarURL, !url.isEmpty {
-            CachedAvatarImage(urlString: url, name: name, size: context.size, accentColor: resolvedAccent)
+            CachedAvatarImage(urlString: url, thumbHash: thumbHash, name: name, size: context.size, accentColor: resolvedAccent)
                 .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: context.shadowRadius, y: context.shadowY)
         } else {
             ZStack {

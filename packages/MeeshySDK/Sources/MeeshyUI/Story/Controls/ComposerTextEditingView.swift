@@ -6,7 +6,8 @@ final class ComposerTextEditingUITextView: UITextView {
     var accessoryViewBuilder: (() -> UIView)?
 
     override var inputAccessoryView: UIView? {
-        accessoryViewBuilder?()
+        get { accessoryViewBuilder?() }
+        set {}
     }
 }
 

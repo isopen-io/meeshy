@@ -144,11 +144,9 @@ struct StoryTrayView: View {
                     preloadedVideoURLs: assets.videoURLs,
                     preloadedAudioURLs: assets.audioURLs
                 )
-                .injectGlobalEnvironment(
-                    router: router,
-                    conversationListViewModel: conversationListViewModel,
-                    statusViewModel: statusViewModel
-                )
+                .environmentObject(router)
+                .environmentObject(conversationListViewModel)
+                .environmentObject(statusViewModel)
             }
         }
         .fullScreenCover(isPresented: $showOwnStoryViewer) {
@@ -158,11 +156,9 @@ struct StoryTrayView: View {
                 isPresented: $showOwnStoryViewer,
                 singleGroup: true
             )
-            .injectGlobalEnvironment(
-                router: router,
-                conversationListViewModel: conversationListViewModel,
-                statusViewModel: statusViewModel
-            )
+            .environmentObject(router)
+            .environmentObject(conversationListViewModel)
+            .environmentObject(statusViewModel)
         }
         .withStatusBubble()
     }

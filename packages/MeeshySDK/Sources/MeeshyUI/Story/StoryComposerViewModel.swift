@@ -5,7 +5,7 @@ import PencilKit
 
 // MARK: - Tool Modes
 
-enum StoryToolMode: String, CaseIterable {
+public enum StoryToolMode: String, CaseIterable, Sendable {
     // Contenu
     case media      // Images, videos, audio (foreground + background)
     case drawing
@@ -38,12 +38,14 @@ enum CanvasElementType {
     case text, image, video, audio
 }
 
+@MainActor
 protocol CanvasElement: Identifiable {
     var id: String { get }
     var elementType: CanvasElementType { get }
     var zIndex: Int { get set }
 }
 
+@MainActor
 struct AnyCanvasElement: CanvasElement {
     var id: String
     var elementType: CanvasElementType
@@ -1233,9 +1235,7 @@ public final class StoryComposerViewModel: StoryComposerProviding {
     public var timelineHasCustomizations: Bool {
         let p = timelineViewModel.project
         let hasKeyframes = p.mediaObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) }) ||
-                           p.textObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) }) ||
-                           p.audioPlayerObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) }) ||
-                           (p.stickerObjects?.contains(where: { !($0.keyframes?.isEmpty ?? true) }) ?? false)
+                           p.textObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) })
         let hasTransitions = !p.clipTransitions.isEmpty
         let hasNonDefaultDuration = abs(p.slideDuration - 12.0) > 0.01
         return hasKeyframes || hasTransitions || hasNonDefaultDuration

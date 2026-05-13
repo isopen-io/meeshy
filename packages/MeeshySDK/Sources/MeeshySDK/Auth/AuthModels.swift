@@ -195,7 +195,9 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public let displayName: String?
     public let bio: String?
     public let avatar: String?
+    public let avatarThumbHash: String?
     public let banner: String?
+    public let bannerThumbHash: String?
     public let role: String?
     public let systemLanguage: String?
     public let regionalLanguage: String?
@@ -228,7 +230,7 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         id: String, username: String, email: String? = nil,
         firstName: String? = nil, lastName: String? = nil,
         displayName: String? = nil, bio: String? = nil,
-        avatar: String? = nil, banner: String? = nil, role: String? = nil,
+        avatar: String? = nil, avatarThumbHash: String? = nil, banner: String? = nil, bannerThumbHash: String? = nil, role: String? = nil,
         systemLanguage: String? = nil, regionalLanguage: String? = nil,
         isOnline: Bool? = nil, lastActiveAt: String? = nil,
         createdAt: String? = nil, updatedAt: String? = nil,
@@ -252,7 +254,9 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
         self.displayName = displayName
         self.bio = bio
         self.avatar = avatar
+        self.avatarThumbHash = avatarThumbHash
         self.banner = banner
+        self.bannerThumbHash = bannerThumbHash
         self.role = role
         self.systemLanguage = systemLanguage
         self.regionalLanguage = regionalLanguage
@@ -283,7 +287,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
     public func withProfileChanges(
         displayName: String? = nil,
         bio: String? = nil,
-        avatar: String? = nil
+        avatar: String? = nil,
+        avatarThumbHash: String? = nil,
+        banner: String? = nil,
+        bannerThumbHash: String? = nil
     ) -> MeeshyUser {
         MeeshyUser(
             id: id, username: username, email: email,
@@ -291,7 +298,10 @@ public struct MeeshyUser: Codable, Identifiable, Sendable {
             displayName: displayName ?? self.displayName,
             bio: bio ?? self.bio,
             avatar: avatar ?? self.avatar,
-            banner: banner, role: role,
+            avatarThumbHash: avatarThumbHash ?? self.avatarThumbHash,
+            banner: banner ?? self.banner,
+            bannerThumbHash: bannerThumbHash ?? self.bannerThumbHash,
+            role: role,
             systemLanguage: systemLanguage, regionalLanguage: regionalLanguage,
             isOnline: isOnline, lastActiveAt: lastActiveAt,
             createdAt: createdAt, updatedAt: updatedAt,

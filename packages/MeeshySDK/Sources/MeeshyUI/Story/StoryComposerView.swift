@@ -179,6 +179,12 @@ public struct StoryComposerView: View {
         (!viewModel.isCanvasZoomed && areFabsVisible) || viewModel.activeTool != nil || viewModel.selectedElementId != nil
     }
 
+    // MARK: - Pickers
+    private var transitionPicker: some View {
+        Text("Transitions")
+            .foregroundColor(.white)
+    }
+
     // MARK: - UI state
 
     @State private var areFabsVisible: Bool = true
@@ -274,31 +280,7 @@ public struct StoryComposerView: View {
             // rectangular tiles in a horizontal carousel taking the bottom
             // half of the screen. The compact toolbar comes back as soon as
             // a tool is selected OR a slide has any content.
-            VStack(spacing: 0) {
-                Spacer()
-                if shouldShowEmptyStateLargePicker {
-                    emptyStateLargePicker
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                } else {
-                    ComposerControlsLayer(
-                        viewModel: viewModel,
-                        areFabsVisible: $areFabsVisible,
-                        drawingCanvas: $drawingCanvas,
-                        drawingTool: $drawingTool,
-                        selectedFilter: $selectedFilter,
-                        fgMediaItem: $fgMediaItem,
-                        showAudioDocumentPicker: $showAudioDocumentPicker,
-                        showVoiceRecorderSheet: $showVoiceRecorderSheet,
-                        onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
-                        onOpenFilterForElement: { id in
-                            viewModel.selectedElementId = id
-                            viewModel.activeTool = .filters
-                        }
-                    )
-                }
-            }
-            .animation(.spring(response: 0.35, dampingFraction: 0.85),
-                       value: shouldShowEmptyStateLargePicker)
+            bottomRegion
         }
         .statusBarHidden()
         .onAppear {
@@ -510,6 +492,34 @@ public struct StoryComposerView: View {
             )
         }
         .onAppear { checkForDraft() }
+    }
+
+    private var bottomRegion: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            if shouldShowEmptyStateLargePicker {
+                emptyStateLargePicker
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                ComposerControlsLayer(
+                    viewModel: viewModel,
+                    areFabsVisible: $areFabsVisible,
+                    drawingCanvas: $drawingCanvas,
+                    drawingTool: $drawingTool,
+                    selectedFilter: $selectedFilter,
+                    fgMediaItem: $fgMediaItem,
+                    showAudioDocumentPicker: $showAudioDocumentPicker,
+                    showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                    onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
+                    onOpenFilterForElement: { id in
+                        viewModel.selectedElementId = id
+                        viewModel.activeTool = .filters
+                    }
+                )
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85),
+                   value: shouldShowEmptyStateLargePicker)
     }
 
     // MARK: - Top Bar

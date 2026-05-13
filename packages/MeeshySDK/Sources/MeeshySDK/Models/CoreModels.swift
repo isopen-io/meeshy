@@ -96,7 +96,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var title: String?
     public var description: String?
     public var avatar: String?
+    public var avatarThumbHash: String?
     public var banner: String?
+    public var bannerThumbHash: String?
     public var communityId: String?
     public var isActive: Bool = true
     public var memberCount: Int = 0
@@ -207,7 +209,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     }
 
     public init(id: String = UUID().uuidString, identifier: String, type: ConversationType = .direct,
-                title: String? = nil, description: String? = nil, avatar: String? = nil, banner: String? = nil,
+                title: String? = nil, description: String? = nil, avatar: String? = nil, avatarThumbHash: String? = nil, banner: String? = nil, bannerThumbHash: String? = nil,
                 communityId: String? = nil, isActive: Bool = true, memberCount: Int = 2,
                 lastMessageAt: Date = Date(), encryptionMode: String? = nil,
                 createdAt: Date = Date(), updatedAt: Date = Date(),
@@ -229,7 +231,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 theme: ConversationContext.ConversationTheme = .general,
                 colorPalette: ConversationColorPalette? = nil) {
         self.id = id; self.identifier = identifier; self.type = type
-        self.title = title; self.description = description; self.avatar = avatar; self.banner = banner
+        self.title = title; self.description = description; self.avatar = avatar; self.avatarThumbHash = avatarThumbHash; self.banner = banner; self.bannerThumbHash = bannerThumbHash
         self.communityId = communityId; self.isActive = isActive; self.memberCount = memberCount
         self.lastMessageAt = lastMessageAt; self.encryptionMode = encryptionMode
         self.createdAt = createdAt; self.updatedAt = updatedAt
@@ -269,7 +271,9 @@ public struct MeeshyCommunity: Identifiable, Hashable, Sendable {
     public let name: String
     public var description: String?
     public var avatar: String?
+    public var avatarThumbHash: String?
     public var banner: String?
+    public var bannerThumbHash: String?
     public var isPrivate: Bool = true
     public var isActive: Bool = true
     public var deletedAt: Date?
@@ -284,7 +288,7 @@ public struct MeeshyCommunity: Identifiable, Hashable, Sendable {
     public var language: ConversationContext.ConversationLanguage = .french
 
     public init(id: String = UUID().uuidString, identifier: String, name: String,
-                description: String? = nil, avatar: String? = nil, banner: String? = nil,
+                description: String? = nil, avatar: String? = nil, avatarThumbHash: String? = nil, banner: String? = nil, bannerThumbHash: String? = nil,
                 isPrivate: Bool = true, isActive: Bool = true, deletedAt: Date? = nil,
                 createdBy: String = "", createdAt: Date = Date(), updatedAt: Date = Date(),
                 memberCount: Int = 0, conversationCount: Int = 0,
@@ -292,7 +296,7 @@ public struct MeeshyCommunity: Identifiable, Hashable, Sendable {
                 theme: ConversationContext.ConversationTheme = .general,
                 language: ConversationContext.ConversationLanguage = .french) {
         self.id = id; self.identifier = identifier; self.name = name
-        self.description = description; self.avatar = avatar; self.banner = banner
+        self.description = description; self.avatar = avatar; self.avatarThumbHash = avatarThumbHash; self.banner = banner; self.bannerThumbHash = bannerThumbHash
         self.isPrivate = isPrivate; self.isActive = isActive; self.deletedAt = deletedAt
         self.createdBy = createdBy; self.createdAt = createdAt; self.updatedAt = updatedAt
         self.memberCount = memberCount; self.conversationCount = conversationCount
