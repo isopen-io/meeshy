@@ -923,16 +923,22 @@ class ConversationViewModel: ObservableObject {
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
         case .fresh:
-            // GRDB store already has data (loaded in init + kept warm by socket events).
-            // Let the store observation surface the current window — no direct assignment.
+            // Surface GRDB data immediately (fast path for returning to a conversation).
             await messageStore.loadInitial()
-            // The legacy CacheCoordinator can be in sync while GRDB is still cold for
-            // this conversation (first open after install / clear). Bootstrap GRDB
-            // from API so the user sees their messages instead of an empty bubble list.
-            if messageStore.messages.isEmpty {
-                await refreshMessagesFromAPI()
-            }
             await hydrateTranslationsFromCache()
+            // Always revalidate from API in background — the GRDB local store may only
+            // contain messages WE sent (optimistic inserts) while messages received from
+            // other participants while the conversation was closed are absent because
+            // `handleNewMessage` only buffers into GRDB when the socket handler is armed
+            // (i.e. the conversation is open). Without this background refresh, messages
+            // received offline (e.g. Belva's messages while the app was in background)
+            // never appear until the user manually scrolls up to trigger pagination.
+            isRevalidating = !messageStore.messages.isEmpty
+            Task { [weak self] in
+                guard let self else { return }
+                await self.refreshMessagesFromAPI()
+                await MainActor.run { self.isRevalidating = false }
+            }
 
         case .stale:
             // Surface GRDB data immediately, then revalidate in background.
@@ -1313,11 +1319,12 @@ class ConversationViewModel: ObservableObject {
         // by the `clientMessageId` coalescing rules.
 
         // Offline: enqueue for later delivery + show optimistic message.
-        // Phase 4 §6.1 — also branch offline when the socket is not currently
-        // connected (transient disconnect with NetworkMonitor still reporting
-        // online), since otherwise the POST would race against an unhealthy
-        // socket and the optimistic row would never reconcile.
-        if NetworkMonitor.shared.isOffline || !MessageSocketManager.shared.isConnected {
+        // NOTE: we only gate on network availability here — NOT on socket
+        // connection state. The send path is a plain REST POST which works
+        // regardless of socket status. Routing through the offline queue when
+        // the socket is still handshaking (common at startup) caused the clock
+        // indicator to stay visible for seconds while waiting for retryAll().
+        if NetworkMonitor.shared.isOffline {
             let offlineClientMessageId = existingTempId ?? ClientMessageId.generate()
             let queueItem = OfflineQueueItem(
                 conversationId: conversationId,

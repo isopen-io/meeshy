@@ -836,7 +836,12 @@ export function registerMessagesRoutes(
           // Identifiants
           id: message.id,
           conversationId: message.conversationId,
-          senderId: message.senderId,
+          // CORRECTION senderId: en DB, senderId = Participant.id (FK).
+          // Les clients (iOS/Web) comparent senderId avec leur userId (User.id).
+          // On résout ici : senderId devient sender.userId si disponible.
+          senderId: message.sender?.userId ?? message.sender?.user?.id ?? message.senderId,
+          // Conserver le participantId brut pour debug/internal usage
+          senderParticipantId: message.senderId,
           
 
           // Contenu

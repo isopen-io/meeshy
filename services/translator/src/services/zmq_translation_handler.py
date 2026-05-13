@@ -293,8 +293,11 @@ class TranslationHandler:
                 return
             
             # Créer la tâche de traduction
+            # CORRECTION: Réutiliser le taskId envoyé par la Gateway pour que la corrélation
+            # de la réponse ZMQ fonctionne. Si le worker génère un nouveau uuid4(), la Gateway
+            # attend une réponse sur l'ancien taskId qui n'arrivera jamais → timeout 4×30s.
             task = TranslationTask(
-                task_id=str(uuid.uuid4()),
+                task_id=request_data.get('taskId') or str(uuid.uuid4()),
                 message_id=request_data.get('messageId'),
                 text=message_text,
                 source_language=request_data.get('sourceLanguage', 'fr'),

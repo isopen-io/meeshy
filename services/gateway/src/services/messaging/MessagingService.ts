@@ -376,9 +376,19 @@ export class MessagingService {
       }
     };
 
+    // CORRECTION senderId: message.senderId = Participant.id (FK Prisma).
+    // Les clients comparent senderId avec leur userId → on normalise avant sérialisation.
+    const senderObj = (message as any).sender;
+    const resolvedSenderId = senderObj?.userId ?? senderObj?.user?.id ?? message.senderId;
+
     return {
       success: true,
-      data: { ...message, timestamp: message.createdAt } as any,
+      data: {
+        ...message,
+        senderId: resolvedSenderId,
+        senderParticipantId: message.senderId,
+        timestamp: message.createdAt
+      } as any,
       message: 'Message envoyé avec succès',
       metadata
     };

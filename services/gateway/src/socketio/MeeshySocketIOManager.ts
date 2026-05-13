@@ -1215,10 +1215,14 @@ export class MeeshySocketIOManager {
 
       // Construire le payload de message pour broadcast - compatible avec les types existants
       // CORRECTION CRITIQUE: Utiliser l'ObjectId normalisé pour cohérence client-serveur
+      const s = message.sender as any;
+      // CORRECTION senderId: message.senderId = participant ID, mais les clients comparent
+      // senderId avec leur userId. On expose sender.userId (= User.id) en priorité.
+      const resolvedSenderId = s?.userId || s?.user?.id || message.senderId || undefined;
       const messagePayload = {
         id: message.id,
         conversationId: normalizedId,  // ← FIX: Toujours utiliser l'ObjectId normalisé
-        senderId: message.senderId || undefined,
+        senderId: resolvedSenderId,
         content: message.content,
         originalLanguage: message.originalLanguage || 'fr',
         originalContent: (message as any).originalContent || message.content,

@@ -1462,7 +1462,10 @@ public actor OfflineQueue {
 
         for (index, item) in items.enumerated() {
             if index > 0 {
-                let jitter = UInt64(Double.random(in: 100...500) * 1_000_000)
+                // Brief jitter to avoid a thundering-herd on the gateway when
+                // draining a large backlog — kept short so the user sees their
+                // messages confirmed quickly (was 100–500 ms, now 50–150 ms).
+                let jitter = UInt64(Double.random(in: 50...150) * 1_000_000)
                 try? await Task.sleep(nanoseconds: jitter)
             }
             if let serverId = await retrySend(item) {
@@ -1523,8 +1526,10 @@ public actor OfflineQueue {
             .sink { [weak self] _ in
                 guard let self else { return }
                 Task {
-                    // Small delay to let the connection stabilize
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    // Brief delay to let the socket handshake complete before
+                    // draining the outbox — avoids sending on an unhealthy pipe
+                    // while keeping the UX snappy (was 2 000 ms, now 200 ms).
+                    try? await Task.sleep(nanoseconds: 200_000_000)
                     await self.retryAll()
                 }
             }
