@@ -697,6 +697,43 @@ public actor MessagePersistenceActor {
                     let ui: [MeeshyMessageAttachment] = atts.map { apiAtt in
                         let thumbColor = senderName.map { DynamicColorGenerator.colorForName($0) }
                             ?? DynamicColorGenerator.colorForName("?")
+
+                        // Embed transcription so GRDB load surfaces it instantly.
+                        let embeddedTranscription: MeeshyMessageAttachment.EmbeddedTranscription? = apiAtt.transcription.flatMap { t in
+                            guard let text = t.text ?? t.transcribedText, !text.isEmpty else { return nil }
+                            return .init(
+                                text: text,
+                                language: t.language ?? "unknown",
+                                confidence: t.confidence,
+                                durationMs: t.durationMs,
+                                speakerCount: t.speakerCount,
+                                segments: t.segments?.map { s in
+                                    .init(text: s.text, startTime: s.startTime, endTime: s.endTime, speakerId: s.speakerId)
+                                }
+                            )
+                        }
+
+                        // Embed audio translations keyed by language.
+                        let embeddedAudioTranslations: [String: MeeshyMessageAttachment.EmbeddedAudioTranslation]? = apiAtt.translations.flatMap { dict in
+                            let mapped: [String: MeeshyMessageAttachment.EmbeddedAudioTranslation] = dict.compactMapValues { t in
+                                guard let url = t.url, !url.isEmpty else { return nil }
+                                return .init(
+                                    url: url,
+                                    transcription: t.transcription,
+                                    durationMs: t.durationMs,
+                                    format: t.format,
+                                    cloned: t.cloned,
+                                    quality: t.quality,
+                                    voiceModelId: t.voiceModelId,
+                                    ttsModel: t.ttsModel,
+                                    segments: t.segments?.map { s in
+                                        .init(text: s.text, startTime: s.startTime, endTime: s.endTime, speakerId: s.speakerId)
+                                    }
+                                )
+                            }
+                            return mapped.isEmpty ? nil : mapped
+                        }
+
                         return MeeshyMessageAttachment(
                             id: apiAtt.id,
                             fileName: apiAtt.fileName ?? "",
@@ -712,7 +749,9 @@ public actor MessagePersistenceActor {
                             uploadedBy: api.senderId,
                             latitude: apiAtt.latitude,
                             longitude: apiAtt.longitude,
-                            thumbnailColor: thumbColor
+                            thumbnailColor: thumbColor,
+                            transcription: embeddedTranscription,
+                            audioTranslations: embeddedAudioTranslations
                         )
                     }
                     return try? encoder.encode(ui)
@@ -913,6 +952,26 @@ public actor MessagePersistenceActor {
                         reconciledAt: Date()
                     ).insert(db)
                 }
+
+                // Persist text translations from REST into GRDB so they
+                // survive app restarts and are available on cold-start load.
+                if let apiTranslations = api.translations, !apiTranslations.isEmpty {
+                    let now = Date()
+                    for t in apiTranslations {
+                        let record = TranslationRecord(
+                            id: t.id,
+                            messageLocalId: api.id,
+                            messageServerId: api.id,
+                            targetLanguage: t.targetLanguage,
+                            translatedContent: t.translatedContent,
+                            translationModel: t.translationModel,
+                            confidenceScore: t.confidenceScore,
+                            sourceLanguage: t.sourceLanguage,
+                            receivedAt: now
+                        )
+                        try record.save(db)
+                    }
+                }
             }
         }
     }
@@ -993,6 +1052,74 @@ public actor MessagePersistenceActor {
         if didMutate, let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
         }
+    }
+
+    // MARK: - Retention Policy
+
+    /// Default retention period for locally cached messages.
+    /// Messages older than this are purged on app launch to keep the database
+    /// lean. The server remains the authoritative source — purged messages
+    /// can be re-fetched on demand via pagination.
+    public static let defaultRetentionMonths: Int = 6
+
+    /// Deletes all message records whose `createdAt` is older than
+    /// `retentionMonths` months from now. Also removes associated rows in
+    /// `message_translations` and `translation_cache` to avoid orphans.
+    ///
+    /// Returns the number of message rows deleted so callers can log it.
+    ///
+    /// - Parameter retentionMonths: How many months of history to keep.
+    ///   Defaults to ``defaultRetentionMonths`` (6).
+    @discardableResult
+    public func purgeOldMessages(retentionMonths: Int = defaultRetentionMonths) async throws -> Int {
+        let calendar = Calendar.current
+        guard let cutoff = calendar.date(byAdding: .month, value: -retentionMonths, to: Date()) else {
+            return 0
+        }
+
+        let (deletedCount, affectedConvIds): (Int, Set<String>) = try await dbWriter.write { db in
+            // Collect affected conversation IDs before deleting so we can post
+            // targeted refresh notifications.
+            let affected = try String.fetchSet(db, sql: """
+                SELECT DISTINCT conversationId FROM messages
+                WHERE createdAt < ?
+            """, arguments: [cutoff])
+
+            // Collect message IDs for cascade cleanup of translation tables
+            let expiredIds = try String.fetchAll(db, sql: """
+                SELECT localId FROM messages WHERE createdAt < ?
+            """, arguments: [cutoff])
+
+            if !expiredIds.isEmpty {
+                // Delete associated translation cache entries
+                let placeholders = expiredIds.map { _ in "?" }.joined(separator: ",")
+                try db.execute(
+                    sql: "DELETE FROM translation_cache WHERE messageId IN (\(placeholders))",
+                    arguments: StatementArguments(expiredIds)
+                )
+
+                // Delete message_translations if the table exists
+                if try db.tableExists("message_translations") {
+                    try db.execute(
+                        sql: "DELETE FROM message_translations WHERE messageId IN (\(placeholders))",
+                        arguments: StatementArguments(expiredIds)
+                    )
+                }
+            }
+
+            // Delete the messages themselves
+            let count = try MessageRecord
+                .filter(Column("createdAt") < cutoff)
+                .deleteAll(db)
+
+            return (count, affected)
+        }
+
+        if !affectedConvIds.isEmpty {
+            postMessageStoreRefresh(conversationIds: affectedConvIds)
+        }
+
+        return deletedCount
     }
 
     deinit {

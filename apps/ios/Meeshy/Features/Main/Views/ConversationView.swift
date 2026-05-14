@@ -54,6 +54,10 @@ struct ConversationScrollState {
     var unreadBadgeCount: Int = 0
     var scrollToBottomTrigger: Int = 0
     var scrollToMessageId: String? = nil
+    /// Counter incremented each time a scroll-to-message is requested via the
+    /// server-loaded path (jumpToQuotedMessage). The MessageListView bridge
+    /// compares old vs. new to fire the VC's scrollToMessage.
+    var scrollToMessageTrigger: Int = 0
     var highlightedMessageId: String? = nil
     var swipedMessageId: String? = nil
     var swipeOffset: CGFloat = 0
@@ -660,11 +664,13 @@ struct ConversationView: View {
                     guard !Task.isCancelled else { return }
                     if viewModel.messages.contains(where: { $0.id == messageId }) {
                         scrollState.scrollToMessageId = messageId
+                        scrollState.scrollToMessageTrigger += 1
                     } else {
                         await viewModel.loadMessagesAround(messageId: messageId)
                         try? await Task.sleep(nanoseconds: 100_000_000)
                         guard !Task.isCancelled else { return }
                         scrollState.scrollToMessageId = messageId
+                        scrollState.scrollToMessageTrigger += 1
                     }
                 }
             }
@@ -802,17 +808,37 @@ struct ConversationView: View {
                 accentColor: accentColor,
                 isDirect: isDirect,
                 bottomInset: composerHeight + 16,
+                scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
+                scrollToMessageId: scrollState.scrollToMessageId,
+                scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
+                isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
                 onNewMessagesBadge: { count in
                     scrollState.unreadBadgeCount = count
                 },
                 onScrollToMessage: { targetId in
                     // Tap on a reply chip inside a bubble: jump to the cited
-                    // message. If the target is in the current window, the
-                    // VC handles the visual scroll itself; here we cover the
-                    // case where it's outside the window by widening the
-                    // store's anchor (loadMessagesAround triggers a
-                    // refreshFromDB which re-emits the snapshot).
-                    Task { await viewModel.loadMessagesAround(messageId: targetId) }
+                    // message. Uses the new jumpToQuotedMessage flow which:
+                    // 1. Checks if the message is already local → instant scroll
+                    // 2. If not, shows a pulsing indicator on the scroll button
+                    //    while fetching from the server
+                    // 3. After loading, triggers the visual scroll + highlight
+                    Task {
+                        let result = await viewModel.jumpToQuotedMessage(messageId: targetId)
+                        switch result {
+                        case .foundLocally:
+                            // The VC's scrollToMessage already handled the
+                            // visual scroll for the local case.
+                            break
+                        case .loadedFromServer:
+                            // The store snapshot was reloaded around the target.
+                            // Trigger the VC to scroll to it now.
+                            scrollState.scrollToMessageId = targetId
+                            scrollState.scrollToMessageTrigger += 1
+                        case .notFound:
+                            HapticFeedback.error()
+                            ToastManager.shared.show("Message introuvable", type: .info)
+                        }
+                    }
                 },
                 onLoadOlder: {
                     // Infinite scroll: VM owns the cache + network sequence
@@ -821,6 +847,12 @@ struct ConversationView: View {
                     // GRDB window is exhausted, leaving older messages
                     // unreachable.
                     await viewModel.loadOlderMessages()
+                },
+                onNearBottomChanged: { nearBottom in
+                    if scrollState.isNearBottom != nearBottom {
+                        scrollState.isNearBottom = nearBottom
+                    }
+                    viewModel.isCurrentlyNearBottom = nearBottom
                 },
                 onStoryReplyTap: { storyId in
                     // Open the story viewer at the slide that originated the
@@ -1006,11 +1038,12 @@ struct ConversationView: View {
             .allowsHitTesting(false)
             .accessibilityHidden(true)
 
-            if !scrollState.isNearBottom {
+            if !scrollState.isNearBottom || viewModel.isSearchingQuotedMessage {
                 VStack { Spacer(); HStack { Spacer(); scrollToBottomButton.padding(.trailing, 16).padding(.bottom, composerHeight + 8) } }
                     .zIndex(60)
                     .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .scale(scale: 0.6).combined(with: .opacity)))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isSearchingQuotedMessage)
             }
 
             VStack {

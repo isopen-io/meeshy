@@ -279,6 +279,21 @@ struct MeeshyApp: App {
                     // toast lands on a stable UI rather than racing the splash
                     // animation.
                     surfacePendingCrashReports()
+
+                    // Retention policy: purge messages older than 6 months from
+                    // GRDB on every cold start. The server remains the source of
+                    // truth — purged messages can be re-fetched via pagination.
+                    // Runs at background priority so it never blocks the UI.
+                    let retentionPersistence = MessagePersistenceActor(dbWriter: dependencies.dbPool)
+                    Task.detached(priority: .background) {
+                        await retentionPersistence.start()
+                        if let count = try? await retentionPersistence.purgeOldMessages() {
+                            if count > 0 {
+                                Logger(subsystem: "com.meeshy.app", category: "retention")
+                                    .info("Purged \(count) messages older than \(MessagePersistenceActor.defaultRetentionMonths) months")
+                            }
+                        }
+                    }
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {

@@ -38,6 +38,7 @@ extension ConversationView {
             unreadAttachmentIsAudio: unreadAttachment?.type == .audio,
             isAudioPlaying: scrollButtonAudioPlayer.isPlaying,
             isOffline: isOffline,
+            isSearchingQuotedMessage: viewModel.isSearchingQuotedMessage,
             typingDotPhase: headerState.typingDotPhase,
             accentColor: accentColor,
             secondaryColor: secondaryColor,

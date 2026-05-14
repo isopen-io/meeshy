@@ -18,6 +18,28 @@ final class MessageListViewController: UIViewController {
     private let conversationListViewModel: ConversationListViewModel
     private var cancellables = Set<AnyCancellable>()
     private var isLoadingOlder = false
+    /// Tracks the item count from the last snapshot so we can detect genuinely
+    /// new messages (appended at the bottom) vs. older messages (prepended via
+    /// pagination). Only new messages bump the unread badge.
+    private var previousSnapshotCount: Int = 0
+    /// Running counter of messages that arrived while the user was scrolled
+    /// away from the bottom. Reset to 0 when the user returns to near-bottom.
+    private var pendingUnreadCount: Int = 0
+    /// Cached near-bottom state so applySnapshot can decide whether to bump
+    /// the unread badge without querying contentOffset mid-layout.
+    private var isCurrentlyNearBottom: Bool = true
+
+    // MARK: - Slow scroll for quoted message search
+
+    /// Display link that drives the slow continuous scroll while searching
+    /// for a quoted message. We keep the speed at ~80pt/s so the user sees
+    /// the messages "flow" past without blur, yet fast enough to feel like
+    /// the app is actively searching.
+    private var slowScrollDisplayLink: CADisplayLink?
+    /// Points per second the slow scroll advances toward older messages.
+    /// In the inverted layout, increasing `contentOffset.y` scrolls visually
+    /// upward (toward older messages).
+    private let slowScrollSpeed: CGFloat = 80
     var onNewMessagesBadge: ((Int) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
     /// Invoked when the scroll position approaches the older-messages
@@ -27,6 +49,9 @@ final class MessageListViewController: UIViewController {
     /// store directly would bypass the network fallback and silently
     /// stall pagination once the local GRDB window is exhausted.
     var onLoadOlder: (() async -> Void)?
+    /// Invoked when the scroll position crosses the near-bottom threshold.
+    /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
+    var onNearBottomChanged: ((Bool) -> Void)?
     /// Invoked when the user taps a story reply preview inside a bubble.
     /// Receives the story id (NOT the message id). Wire to the parent's
     /// story viewer presentation logic.
@@ -90,6 +115,11 @@ final class MessageListViewController: UIViewController {
     }
 
     required init?(coder: NSCoder) { fatalError() }
+
+    deinit {
+        slowScrollDisplayLink?.invalidate()
+        slowScrollDisplayLink = nil
+    }
 
     func update(isDark: Bool, accentColor: String) {
         var changed = false
@@ -157,6 +187,10 @@ final class MessageListViewController: UIViewController {
         // from top of the array. The cell's contentView is counter-flipped in
         // the SwiftUI host so visual content stays right-side-up.
         collectionView.transform = CGAffineTransform(scaleX: 1, y: -1)
+        // Disable native status-bar-tap scroll-to-top: with the inverted
+        // transform it would scroll to the newest (visual bottom) instead of
+        // the oldest (visual top). We handle status-bar taps manually if needed.
+        collectionView.scrollsToTop = false
         collectionView.delegate = self
         view.addSubview(collectionView)
     }
@@ -307,6 +341,17 @@ final class MessageListViewController: UIViewController {
         // GRDB-driven state / content / delivery / reaction changes in place
         // without triggering the costly insert/move/delete diff animation.
         snapshot.reconfigureItems(items)
+
+        // Unread badge: if the snapshot grew at the BOTTOM (new messages, not
+        // older pagination) while the user is scrolled away, bump the counter.
+        let newCount = items.count
+        let delta = newCount - previousSnapshotCount
+        if delta > 0, !isCurrentlyNearBottom, !isLoadingOlder, previousSnapshotCount > 0 {
+            pendingUnreadCount += delta
+            onNewMessagesBadge?(pendingUnreadCount)
+        }
+        previousSnapshotCount = newCount
+
         dataSource.apply(snapshot, animatingDifferences: animated)
     }
 
@@ -369,7 +414,7 @@ final class MessageListViewController: UIViewController {
 
         // Items are inserted reversed (newest first) for the inverted
         // collection view. Locate by linear scan over the snapshot — there
-        // are at most `MessageStore.windowSize` items so the cost is
+        // are at most `MessageStore.initialWindowSize` items initially (growing dynamically) so the cost is
         // negligible compared to the layout pass that follows.
         let snapshot = dataSource.snapshot()
         guard let index = snapshot.itemIdentifiers.firstIndex(where: {
@@ -380,14 +425,95 @@ final class MessageListViewController: UIViewController {
         let indexPath = IndexPath(item: index, section: 0)
         collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
 
-        // Brief flash so the user spots the target after the scroll lands.
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { [weak self] in
+        flashCell(at: indexPath)
+    }
+
+    /// Scrolls fast (no slow-scroll preamble) to a message that was just loaded
+    /// from the server after a quoted-message search. Stops any ongoing slow
+    /// scroll, then jumps directly to the target with a highlight flash.
+    func scrollToMessageFast(localId: String) {
+        stopSlowScroll()
+
+        let snapshot = dataSource.snapshot()
+        guard let index = snapshot.itemIdentifiers.firstIndex(where: {
+            if case .message(let id) = $0 { return id == localId }
+            return false
+        }) else { return }
+
+        let indexPath = IndexPath(item: index, section: 0)
+        // Use `scrollToItem` with animated: true for a swift but visible scroll.
+        collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
+
+        flashCell(at: indexPath, strong: true)
+    }
+
+    // MARK: - Slow Continuous Scroll (Quoted Message Search)
+
+    /// Starts a slow, continuous scroll toward older messages (visually upward).
+    /// Used during quoted message search to give the user a visual impression
+    /// that the app is actively browsing through message history.
+    func startSlowScrollUp() {
+        guard slowScrollDisplayLink == nil else { return }
+        let link = CADisplayLink(target: self, selector: #selector(slowScrollTick))
+        link.preferredFrameRateRange = CAFrameRateRange(minimum: 30, maximum: 60, preferred: 60)
+        link.add(to: .main, forMode: .common)
+        slowScrollDisplayLink = link
+    }
+
+    /// Stops the slow continuous scroll.
+    func stopSlowScroll() {
+        slowScrollDisplayLink?.invalidate()
+        slowScrollDisplayLink = nil
+    }
+
+    @objc private func slowScrollTick(_ displayLink: CADisplayLink) {
+        guard let cv = collectionView else {
+            stopSlowScroll()
+            return
+        }
+        let dt = displayLink.targetTimestamp - displayLink.timestamp
+        let delta = slowScrollSpeed * CGFloat(dt)
+        let maxY = cv.contentSize.height - cv.bounds.height + cv.contentInset.bottom
+        guard maxY > 0 else { return }
+        let newY = min(cv.contentOffset.y + delta, maxY)
+        cv.contentOffset.y = newY
+
+        // If we hit the end, trigger pagination so the slow scroll can continue
+        // once new older messages are loaded.
+        if newY >= maxY - 100, !isLoadingOlder {
+            guard !store.messages.isEmpty, let onLoadOlder else { return }
+            isLoadingOlder = true
+            Task { @MainActor [weak self] in
+                defer { self?.isLoadingOlder = false }
+                await onLoadOlder()
+            }
+        }
+    }
+
+    // MARK: - Cell Flash Highlight
+
+    /// Briefly flashes a cell so the user spots the target after scroll.
+    /// `strong: true` uses a more pronounced effect for the fast-scroll case.
+    private func flashCell(at indexPath: IndexPath, strong: Bool = false) {
+        let delay: TimeInterval = strong ? 0.25 : 0.35
+        let flashAlpha: CGFloat = strong ? 0.2 : 0.4
+        let flashDuration: TimeInterval = strong ? 0.15 : 0.18
+        let recoverDuration: TimeInterval = strong ? 0.25 : 0.22
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
             guard let cell = self?.collectionView.cellForItem(at: indexPath) else { return }
-            UIView.animate(withDuration: 0.18, animations: {
-                cell.alpha = 0.4
+            // Scale bounce for strong flash
+            if strong {
+                cell.transform = CGAffineTransform(scaleX: 1.02, y: 1.02)
+            }
+            UIView.animate(withDuration: flashDuration, animations: {
+                cell.alpha = flashAlpha
             }) { _ in
-                UIView.animate(withDuration: 0.22) {
+                UIView.animate(withDuration: recoverDuration, delay: 0, options: .curveEaseOut) {
                     cell.alpha = 1.0
+                    if strong {
+                        cell.transform = .identity
+                    }
                 }
             }
         }
@@ -404,21 +530,36 @@ extension MessageListViewController: UICollectionViewDelegate {
 
         store.isUserScrolling = scrollView.isDragging || scrollView.isDecelerating
 
+        // Near-bottom detection for the floating "scroll to latest" button.
+        // In the inverted layout, contentOffset.y ≈ 0 means the user is at
+        // the visual bottom (newest messages). A threshold of 200pt gives a
+        // comfortable zone before the button appears.
+        let nearBottom = offset < 200
+        if nearBottom != isCurrentlyNearBottom {
+            isCurrentlyNearBottom = nearBottom
+            onNearBottomChanged?(nearBottom)
+            // Reset unread badge when the user scrolls back to bottom
+            if nearBottom && pendingUnreadCount > 0 {
+                pendingUnreadCount = 0
+                onNewMessagesBadge?(0)
+            }
+        }
+
         guard contentHeight > frameHeight else { return }
         let distanceFromBottom = contentHeight - offset - frameHeight
 
-        if distanceFromBottom < 300, !isLoadingOlder {
-            // The collection view is `scaleY: -1` flipped, so what looks like
-            // the visual top (older messages) lives at the data tail. Approaching
-            // `distanceFromBottom < 300` means the user is scrolling toward the
-            // older end. Hand off to `onLoadOlder` (wired to the ViewModel) so
-            // pagination tries cache first, then network — the store-only path
-            // would stall once GRDB has no more rows.
+        if distanceFromBottom < 800, !isLoadingOlder {
+            // Threshold 800pt ≈ 4–5 screen-heights of messages. Firing early
+            // gives the network request time to complete BEFORE the user
+            // reaches the edge of loaded content. Combined with the VM's
+            // anticipatory prefetch (auto-loads the NEXT page after each page
+            // completes), this eliminates the "stall at the top" effect on
+            // fast scrolls in large conversations.
             guard !store.messages.isEmpty, let onLoadOlder else { return }
             isLoadingOlder = true
             Task { @MainActor [weak self] in
+                defer { self?.isLoadingOlder = false }
                 await onLoadOlder()
-                self?.isLoadingOlder = false
             }
         }
     }

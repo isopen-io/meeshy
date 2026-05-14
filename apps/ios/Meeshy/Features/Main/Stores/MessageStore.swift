@@ -36,12 +36,12 @@ private func fetchMessageWindow(
     convId: String,
     mode: WindowMode,
     anchor: Date?,
-    windowSize: Int
+    initialWindowSize: Int
 ) throws -> [MessageRecord] {
     switch mode {
     case .around(let centerDate):
         return try reader.read { db in
-            let half = windowSize / 2
+        let half = initialWindowSize / 2
             let before = try MessageRecord
                 .filter(Column("conversationId") == convId)
                 .filter(Column("createdAt") <= centerDate)
@@ -58,20 +58,23 @@ private func fetchMessageWindow(
         }
     case .latest:
         if let anchor {
+            // Dynamic window: when the user has scrolled up, load ALL
+            // messages from the anchor to the newest. No cap — the window
+            // grows as the user paginates deeper into history.
             return try reader.read { db in
                 try MessageRecord
                     .filter(Column("conversationId") == convId)
                     .filter(Column("createdAt") >= anchor)
                     .order(Column("createdAt").asc)
-                    .limit(windowSize)
                     .fetchAll(db)
             }
         } else {
+            // Initial load: fetch the most recent N messages.
             return try reader.read { db in
                 try Array(MessageRecord
                     .filter(Column("conversationId") == convId)
                     .order(Column("createdAt").desc)
-                    .limit(windowSize)
+                    .limit(initialWindowSize)
                     .fetchAll(db)
                     .reversed())
             }
@@ -102,7 +105,9 @@ public enum WindowMode: Equatable, Sendable {
 @Observable
 @MainActor
 public final class MessageStore {
-    static let windowSize = 200
+    /// Number of messages fetched on initial load (no anchor). Once the user
+    /// scrolls and an anchor is set, the window grows dynamically without cap.
+    static let initialWindowSize = 200
     static let prefetchThreshold = 30
 
     // MARK: - Public State
@@ -200,7 +205,7 @@ public final class MessageStore {
         let convId = conversationId
         let mode = windowMode
         let anchor = windowAnchor
-        let windowSize = Self.windowSize
+        let initialWindowSize = Self.initialWindowSize
         let reader = persistence.reader
 
         // Read on the calling actor (MainActor). Direct reads via GRDB are
@@ -211,7 +216,7 @@ public final class MessageStore {
         do {
             newRecords = try fetchMessageWindow(
                 reader: reader, convId: convId, mode: mode,
-                anchor: anchor, windowSize: windowSize
+                anchor: anchor, initialWindowSize: initialWindowSize
             )
         } catch {
             print("[MessageStore] refreshFromDB failed: \(error.localizedDescription)")
