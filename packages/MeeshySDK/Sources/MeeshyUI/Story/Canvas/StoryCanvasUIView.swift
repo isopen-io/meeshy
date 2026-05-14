@@ -620,9 +620,9 @@ public final class StoryCanvasUIView: UIView {
         let fgMediaIds = Set((slide.effects.mediaObjects ?? []).filter { !$0.isBackground }.map { $0.id })
         let fgTextIds = Set(slide.effects.textObjects.map { $0.id })
 
-        // Couleur contrastante : blanc semi-transparent sur la quasi-totalité
-        // des slides (canvas typiquement sombre / saturé). Pour les slides clair,
-        // on bascule sur indigo950 atténué pour rester lisible.
+        // Couleur contrastante. Le cadre doit être très visible (demande UX) :
+        //  - Sur slide sombre / image foncée → blanc franc (95%)
+        //  - Sur slide clair (background pastel) → indigo950 marqué (85%)
         let bgHex = (slide.effects.background ?? "#000000").replacingOccurrences(of: "#", with: "")
         var rgb: UInt64 = 0; Scanner(string: bgHex).scanHexInt64(&rgb)
         let r = CGFloat((rgb & 0xFF0000) >> 16) / 255.0
@@ -630,15 +630,15 @@ public final class StoryCanvasUIView: UIView {
         let b = CGFloat(rgb & 0x0000FF) / 255.0
         let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
         let frameColor: CGColor = lum > 0.6
-            ? UIColor(red: 0.12, green: 0.11, blue: 0.29, alpha: 0.55).cgColor // indigo950 @ 55%
-            : UIColor.white.withAlphaComponent(0.55).cgColor
+            ? UIColor(red: 0.12, green: 0.11, blue: 0.29, alpha: 0.85).cgColor // indigo950 @ 85%
+            : UIColor.white.withAlphaComponent(0.95).cgColor
 
         for sub in itemsContainer.sublayers ?? [] {
             guard let name = sub.name else { continue }
             if fgMediaIds.contains(name) || fgTextIds.contains(name) {
                 sub.borderColor = frameColor
-                sub.borderWidth = 1
-                sub.cornerRadius = 4
+                sub.borderWidth = 2
+                sub.cornerRadius = 2
                 sub.masksToBounds = false
             }
         }
@@ -1097,6 +1097,7 @@ public final class StoryCanvasUIView: UIView {
             guard let id = hitTestItem(at: recognizer.location(in: self)) else { return }
             manipulatedItemId = id
             baseScale = currentScale(forId: id) ?? 1.0
+            bringForegroundToFront(id: id)
         case .changed:
             guard let id = manipulatedItemId else { return }
             let newScale = max(0.3, min(4.0, baseScale * Double(recognizer.scale)))
@@ -1118,6 +1119,7 @@ public final class StoryCanvasUIView: UIView {
             guard let id = hitTestItem(at: recognizer.location(in: self)) else { return }
             manipulatedItemId = id
             baseRotation = currentRotation(forId: id) ?? 0
+            bringForegroundToFront(id: id)
         case .changed:
             guard let id = manipulatedItemId else { return }
             let degrees = Double(recognizer.rotation) * 180 / .pi
@@ -1142,11 +1144,25 @@ public final class StoryCanvasUIView: UIView {
             manipulatedItemId = id
             dragStartSlideX = sx
             dragStartSlideY = sy
+            // Bring-to-front au touch : l'élément touché passe immédiatement
+            // devant les autres. Couvre tap simple ET début de drag (le pan
+            // recognizer émet .began sur le touch initial même sans translation).
+            // Skip pour le background media (toujours derrière les fg) et pour
+            // les éléments déjà au sommet (no-op via swap-with-self filtré).
+            bringForegroundToFront(id: id)
         case .changed:
             guard let id = manipulatedItemId, bounds.size != .zero else { return }
             let translation = recognizer.translation(in: self)
+            // Projection écran → normalisé alignée sur la projection design→render
+            // utilisée par `StoryRenderer.renderItem` (cf. `updateManipulatedItemLayer`).
+            // - x reste linéaire sur la largeur du canvas
+            // - y est mappé sur `1920 * scaleFactor` (et non `bounds.height`)
+            //   pour rester cohérent quand le canvas n'a pas un ratio exactement
+            //   9:16 — sinon le drag accumulait un offset Y au release.
+            let geo = CanvasGeometry(renderSize: bounds.size)
+            let renderHeightFor1920 = geo.render(CanvasGeometry.designHeight)
             let dxNorm = Double(translation.x / bounds.width)
-            let dyNorm = Double(translation.y / bounds.height)
+            let dyNorm = Double(translation.y / renderHeightFor1920)
             let rawX = clamp(dragStartSlideX + dxNorm)
             let rawY = clamp(dragStartSlideY + dyNorm)
             let (snappedX, didSnapX) = snap(rawX)
@@ -1234,11 +1250,27 @@ public final class StoryCanvasUIView: UIView {
         let bounds = self.bounds
         guard bounds.size != .zero else { return }
 
+        // Position dans le même référentiel que `StoryRenderer.renderItem` :
+        // - x  est mappé en `media.x * renderWidth` (linéaire sur la largeur)
+        // - y  est mappé en `media.y * 1920 * scaleFactor` où scaleFactor est
+        //   `renderWidth / 1080` → c'est la projection design→render utilisée
+        //   par `StoryMediaLayer.configure`. Sans cet alignement, la layer
+        //   sautait au release du drag : updateManipulatedItemLayer plaçait via
+        //   `bounds.height * y` (qui ≠ 1920*scaleFactor*y dès que bounds.height
+        //   ≠ 16/9 × bounds.width, ce qui arrive systématiquement quand la
+        //   safe area top/bottom est non-nulle).
+        let geo = CanvasGeometry(renderSize: bounds.size)
+        func renderPosition(x: Double, y: Double) -> CGPoint {
+            let designX = geo.designLength(forNormalized: CGFloat(x))
+            let designY = CGFloat(y) * CanvasGeometry.designHeight
+            return geo.render(CGPoint(x: designX, y: designY))
+        }
+
         // Read the current model values for this item
         if let media = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            layer.position = CGPoint(x: bounds.width * media.x, y: bounds.height * media.y)
+            layer.position = renderPosition(x: media.x, y: media.y)
             let scale = CGFloat(media.scale)
             let rotation = CGFloat(media.rotation * .pi / 180)
             layer.transform = CATransform3DConcat(
@@ -1249,7 +1281,7 @@ public final class StoryCanvasUIView: UIView {
         } else if let text = slide.effects.textObjects.first(where: { $0.id == id }) {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            layer.position = CGPoint(x: bounds.width * text.x, y: bounds.height * text.y)
+            layer.position = renderPosition(x: text.x, y: text.y)
             let scale = CGFloat(text.scale)
             let rotation = CGFloat(text.rotation * .pi / 180)
             layer.transform = CATransform3DConcat(
@@ -1260,7 +1292,7 @@ public final class StoryCanvasUIView: UIView {
         } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
             CATransaction.begin()
             CATransaction.setDisableActions(true)
-            layer.position = CGPoint(x: bounds.width * sticker.x, y: bounds.height * sticker.y)
+            layer.position = renderPosition(x: sticker.x, y: sticker.y)
             let scale = CGFloat(sticker.scale)
             let rotation = CGFloat(sticker.rotation * .pi / 180)
             layer.transform = CATransform3DConcat(
@@ -1606,6 +1638,44 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
 
     /// These mutate the slide and re-fire onItemModified so the binding
     /// propagates back to the SwiftUI composer layer.
+    /// Réordonne un élément foreground pour le placer en tête de la liste
+    /// `mediaObjects` / `textObjects` / `stickerObjects`. Appelé au touch
+    /// (`handlePan.began`, `handlePinch.began`, `handleRotation.began`) pour
+    /// que l'élément manipulé soit immédiatement le plus en avant. No-op pour
+    /// le background media (les bg restent toujours derrière les fg via le
+    /// filtre de `StoryRenderer.collectItems`).
+    private func bringForegroundToFront(id: String) {
+        // Texte
+        if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }),
+           idx != slide.effects.textObjects.count - 1 {
+            let item = slide.effects.textObjects.remove(at: idx)
+            slide.effects.textObjects.append(item)
+            onItemModified?(slide)
+            return
+        }
+        // Media foreground (skip si bg)
+        if var medias = slide.effects.mediaObjects,
+           let idx = medias.firstIndex(where: { $0.id == id }),
+           medias[idx].isBackground == false,
+           idx != medias.count - 1 {
+            let item = medias.remove(at: idx)
+            medias.append(item)
+            slide.effects.mediaObjects = medias
+            onItemModified?(slide)
+            return
+        }
+        // Sticker
+        if var stickers = slide.effects.stickerObjects,
+           let idx = stickers.firstIndex(where: { $0.id == id }),
+           idx != stickers.count - 1 {
+            let item = stickers.remove(at: idx)
+            stickers.append(item)
+            slide.effects.stickerObjects = stickers
+            onItemModified?(slide)
+            return
+        }
+    }
+
     private func contextDuplicate(id: String) {
         var duplicatedNewId: String?
         var duplicatedKind: CanvasItemKind?

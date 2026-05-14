@@ -182,7 +182,13 @@ public enum StoryRenderer {
     private static func collectItems(from slide: StorySlide) -> [any RenderableItem] {
         var items: [any RenderableItem] = []
         items.append(contentsOf: slide.effects.textObjects)
-        items.append(contentsOf: slide.effects.mediaObjects ?? [])
+        // Les medias `isBackground == true` sont pris en charge par le
+        // `StoryBackgroundLayer` (fill du canvas via `resizeAspectFill`). On
+        // les filtre ici sinon ils étaient rendus DEUX FOIS : une en bg layer
+        // (fond plein) ET une comme item de premier plan centré (effet "image
+        // au centre du noir" décrit par l'utilisateur).
+        let foregroundMedias = (slide.effects.mediaObjects ?? []).filter { $0.isBackground == false }
+        items.append(contentsOf: foregroundMedias)
         items.append(contentsOf: slide.effects.stickerObjects ?? [])
         return items
     }
@@ -322,13 +328,26 @@ extension StoryRenderer {
                                         languages: [String]) -> StoryBackgroundLayer.Kind {
         // Video background object
         if let bgVideo = slide.effects.mediaObjects?.first(where: { $0.isBackground && $0.kind == .video }) {
-            return .video(postMediaId: bgVideo.postMediaId,
+            // En composer édition la vidéo locale n'a pas encore de postMediaId
+            // serveur ; on utilise alors directement la `mediaURL` (file://…)
+            // que `StoryBackgroundLayer.configure` détecte par préfixe.
+            let routingKey = (!bgVideo.postMediaId.isEmpty)
+                ? bgVideo.postMediaId
+                : (bgVideo.mediaURL ?? "")
+            return .video(postMediaId: routingKey,
                           looping: bgVideo.loop ?? true,
                           mute: true)
         }
         // Image background object or slide.mediaURL
         if let bgImage = slide.effects.mediaObjects?.first(where: { $0.isBackground && $0.kind == .image }) {
-            return .image(postMediaId: bgImage.postMediaId,
+            // Idem image : si l'élément n'a pas encore de postMediaId distant
+            // (sortie PhotosPicker → temp file), on pousse la file URL dans le
+            // champ `postMediaId` pour que `StoryBackgroundLayer.configure`
+            // puisse la charger directement sans cache lookup.
+            let routingKey = (!bgImage.postMediaId.isEmpty)
+                ? bgImage.postMediaId
+                : (bgImage.mediaURL ?? "")
+            return .image(postMediaId: routingKey,
                           thumbHash: slide.effects.thumbHash)
         }
         if let urlString = slide.mediaURL, !urlString.isEmpty {

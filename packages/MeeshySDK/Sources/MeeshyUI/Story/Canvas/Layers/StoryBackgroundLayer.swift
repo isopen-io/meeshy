@@ -123,6 +123,27 @@ extension StoryBackgroundLayer {
                 img.contents = placeholderImage.cgImage
             }
 
+            // Composer édition : si `postMediaId` est en réalité une URL
+            // (file:// vers le temp .jpg posé par le composer après PhotosPicker,
+            // ou bien une URL distante), on la charge directement sans passer
+            // par le couple resolver/imageCache (qui est nil en édition). Sans
+            // ce shortcut le slide affichait un rectangle noir car la pipe
+            // attend un `postMediaId` distant et un cache fourni par le reader.
+            if let directURL = Self.directURLIfAny(from: postMediaId) {
+                Task { @MainActor [weak img] in
+                    if directURL.isFileURL {
+                        if let data = try? Data(contentsOf: directURL),
+                           let uiImage = UIImage(data: data) {
+                            img?.contents = uiImage.cgImage
+                        }
+                    } else if let (data, _) = try? await URLSession.shared.data(from: directURL),
+                              let uiImage = UIImage(data: data) {
+                        img?.contents = uiImage.cgImage
+                    }
+                }
+                break
+            }
+
             // Async swap to cached / network image
             if let cache = imageCache, let resolver = resolver {
                 Task { @MainActor [weak img] in
@@ -139,7 +160,12 @@ extension StoryBackgroundLayer {
             }
         case .video(let postMediaId, let looping, let mute):
             backgroundColor = UIColor.black.cgColor
-            guard let url = resolver?(postMediaId) else { break }
+            // Édition composer : même fallback URL directe qu'en image.
+            let resolvedURL: URL? = {
+                if let direct = Self.directURLIfAny(from: postMediaId) { return direct }
+                return resolver?(postMediaId)
+            }()
+            guard let url = resolvedURL else { break }
             let item = AVPlayerItem(url: url)
             if looping {
                 let queuePlayer = AVQueuePlayer()
@@ -168,6 +194,22 @@ extension StoryBackgroundLayer {
     public func handleAppLifecycle(active: Bool) {
         guard let player = avPlayer else { return }
         if active { player.play() } else { player.pause() }
+    }
+
+    /// Helper de routage du `postMediaId` en édition composer.
+    ///
+    /// En édition, `StoryRenderer.renderBackground` peut pousser la `mediaURL`
+    /// de l'élément (`file://…` pour un media fraîchement issu de PhotosPicker,
+    /// ou une URL distante) dans le champ `postMediaId` de la `Kind`, parce que
+    /// le `resolver`/`imageCache` ne sont jamais branchés en édition (ils sont
+    /// fournis uniquement par le reader). Cette détection limite la confusion
+    /// aux strings parsables en URL avec un scheme connu.
+    nonisolated static func directURLIfAny(from candidate: String) -> URL? {
+        guard !candidate.isEmpty else { return nil }
+        guard candidate.hasPrefix("file://")
+                || candidate.hasPrefix("http://")
+                || candidate.hasPrefix("https://") else { return nil }
+        return URL(string: candidate)
     }
 }
 

@@ -119,16 +119,48 @@ struct ComposerToolPanelHost: View {
                 Spacer()
             }
 
-            // List of existing media items. Layer order is changed via the
-            // long-press context menu ("Mettre au premier plan / arrière") on
-            // the canvas — so the legacy drag-to-reorder handle from `List`
-            // (which required `editMode = .active` and displayed an "≡" glyph
-            // in every row) has been removed to keep the row UI clean.
+            // Liste des médias avec drag-to-reorder via long-press natif
+            // (`.draggable` + `.dropDestination`). Pas de hamburger `≡` comme
+            // le faisait `List` en `editMode = .active` : l'utilisateur appuie
+            // longuement sur une row pour la commencer à glisser, puis la lâche
+            // sur la position cible. Plus discret + plus compatible avec le
+            // reste de l'UX (long-press déjà utilisé sur le canvas).
             if let mediaObjects = viewModel.currentEffects.mediaObjects, !mediaObjects.isEmpty {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 4) {
                         ForEach(mediaObjects) { media in
                             mediaItemRow(media)
+                                .draggable(media.id) {
+                                    // Aperçu visuel pendant le drag — version compacte
+                                    // de la row avec juste le nom du media et son rôle.
+                                    HStack(spacing: 6) {
+                                        Image(systemName: media.kind == .image ? "photo.fill" : "video.fill")
+                                            .font(.system(size: 14))
+                                        Text(media.kind == .image ? "Image" : "Vidéo")
+                                            .font(.system(size: 13, weight: .semibold))
+                                    }
+                                    .foregroundColor(primaryText)
+                                    .padding(.horizontal, 12)
+                                    .padding(.vertical, 8)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(MeeshyColors.indigo400.opacity(0.25))
+                                    )
+                                }
+                                .dropDestination(for: String.self) { items, _ in
+                                    guard let sourceId = items.first,
+                                          let mediaList = viewModel.currentEffects.mediaObjects,
+                                          let sourceIdx = mediaList.firstIndex(where: { $0.id == sourceId }),
+                                          let targetIdx = mediaList.firstIndex(where: { $0.id == media.id }),
+                                          sourceIdx != targetIdx else { return false }
+                                    // `.onMove` consomme un IndexSet source + un offset destination.
+                                    // Pour glisser un élément vers une position donnée, l'offset doit
+                                    // pointer APRÈS la cible si on descend, AVANT si on monte.
+                                    let destination = sourceIdx < targetIdx ? targetIdx + 1 : targetIdx
+                                    viewModel.moveMedia(from: IndexSet(integer: sourceIdx), to: destination)
+                                    HapticFeedback.light()
+                                    return true
+                                }
                         }
                     }
                     .padding(.horizontal, 12)

@@ -76,6 +76,10 @@ public struct StoryComposerView: View {
 
     @State private var viewModel = StoryComposerViewModel()
 
+    // MARK: - System environment
+
+    @Environment(\.colorScheme) private var colorScheme
+
     // MARK: - Canvas-local state (PKCanvasView must be @State)
 
     @State private var drawingCanvas = PKCanvasView()
@@ -803,7 +807,7 @@ public struct StoryComposerView: View {
                             defaultValue: "Choisissez un outil pour démarrer",
                             bundle: .module))
                     .font(.system(size: 11))
-                    .foregroundColor(.white.opacity(0.65))
+                    .foregroundColor((colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.7))
             }
             .padding(.top, 8)
             .opacity(pickerSelectedTool == nil ? 1 : 0)
@@ -874,7 +878,28 @@ public struct StoryComposerView: View {
                 topTrailingRadius: 24,
                 style: .continuous
             )
-            .fill(.ultraThinMaterial)
+            // Aligné sur la même charte que `ComposerBottomBand` : un tint
+            // opaque adaptatif (blanc en light / indigo950 en dark) pour rester
+            // lisible quelle que soit la couleur du canvas (pastel/photo) en
+            // arrière-plan. Avant: `.ultraThinMaterial` qui se faisait teinter
+            // par la slide et écrasait le contraste des sous-titres.
+            .fill(colorScheme == .dark
+                ? MeeshyColors.indigo950.opacity(0.92)
+                : Color.white.opacity(0.92))
+            .overlay(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 24,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 24,
+                    style: .continuous
+                )
+                .stroke(
+                    (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.08),
+                    lineWidth: 0.5
+                )
+            )
+            .shadow(color: .black.opacity(0.20), radius: 14, y: -6)
             .ignoresSafeArea(edges: .bottom)
         )
     }
@@ -936,13 +961,16 @@ public struct StoryComposerView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
+                    // Couleur adaptée au mode système — sur fond pastel clair
+                    // le blanc sur clair était illisible. On utilise indigo950
+                    // en light mode (contraste sur pastel) et blanc en dark.
                     Text(title)
                         .font(.system(size: 14, weight: .semibold, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
                         .lineLimit(1)
                     Text(subtitle)
                         .font(.system(size: 11))
-                        .foregroundColor(.white.opacity(0.65))
+                        .foregroundColor((colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.75))
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)
                 }
@@ -1648,16 +1676,35 @@ struct MediaPillLabel: View {
     let text: String
     var destructive: Bool = false
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        HStack(spacing: 5) {
+        // Le bandeau composer a un fond opaque adaptatif (blanc en light,
+        // indigo950 en dark). Les pills hardcodés en `.white` étaient
+        // invisibles sur fond clair (blanc sur blanc). On adapte foreground
+        // et background fill au mode.
+        let fgBase: Color = colorScheme == .dark ? .white : MeeshyColors.indigo950
+        let foreground: Color = destructive ? MeeshyColors.error : fgBase.opacity(0.88)
+        let bgFill: Color = destructive
+            ? MeeshyColors.error.opacity(0.15)
+            : fgBase.opacity(0.10)
+        let strokeColor: Color = destructive
+            ? MeeshyColors.error.opacity(0.35)
+            : fgBase.opacity(0.18)
+
+        return HStack(spacing: 5) {
             Image(systemName: icon).font(.system(size: 12, weight: .medium))
             Text(text).font(.system(size: 11, weight: .medium))
         }
-        .foregroundColor(destructive ? MeeshyColors.error : .white.opacity(0.8))
+        .foregroundColor(foreground)
         .padding(.horizontal, 10).padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(destructive ? MeeshyColors.error.opacity(0.15) : Color.white.opacity(0.08))
+                .fill(bgFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(strokeColor, lineWidth: 0.5)
+                )
         )
     }
 }
