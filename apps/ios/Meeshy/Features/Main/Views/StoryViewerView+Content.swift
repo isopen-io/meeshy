@@ -1485,9 +1485,9 @@ extension StoryViewerView {
     // MARK: - Story Comment Reactions
 
     func toggleStoryCommentLike(_ comment: FeedComment) async {
-        guard let story = currentStory else { return }
         let id = comment.id
         let wasLiked = storyCommentLikedIds.contains(id)
+        let heartEmoji = "\u{2764}\u{FE0F}"
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
             if wasLiked {
@@ -1501,9 +1501,9 @@ extension StoryViewerView {
 
         do {
             if wasLiked {
-                try await PostService.shared.unlikeComment(postId: story.id, commentId: id)
+                _ = try await SocialSocketManager.shared.removeCommentReaction(commentId: id, emoji: heartEmoji)
             } else {
-                try await PostService.shared.likeComment(postId: story.id, commentId: id)
+                _ = try await SocialSocketManager.shared.addCommentReaction(commentId: id, emoji: heartEmoji)
             }
         } catch {
             withAnimation {
@@ -1520,6 +1520,15 @@ extension StoryViewerView {
 
     // MARK: - Load Comments
 
+    static func computeLikedIds(from comments: [APIPostComment]) -> Set<String> {
+        let heartEmoji = "\u{2764}\u{FE0F}"
+        return Set(
+            comments
+                .filter { $0.currentUserReactions?.contains(heartEmoji) == true }
+                .map { $0.id }
+        )
+    }
+
     func loadStoryComments() {
         guard let story = currentStory, !isLoadingComments else { return }
         isLoadingComments = true
@@ -1529,6 +1538,7 @@ extension StoryViewerView {
             do {
                 let response = try await PostService.shared.getComments(postId: story.id, limit: 50)
                 if response.success {
+                    storyCommentLikedIds = Self.computeLikedIds(from: response.data)
                     let comments = response.data.map { c -> FeedComment in
                         let translated: String? = {
                             guard let dict = c.translations else { return nil }

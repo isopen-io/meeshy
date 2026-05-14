@@ -318,6 +318,9 @@ struct StoryViewerView: View {
                 appearCornerRadius = 0
             }
             triggerInitialActionIfNeeded()
+            if let story = currentStory {
+                SocialSocketManager.shared.joinPostRoom(postId: story.id)
+            }
         }
         .onDisappear {
             timerCancellable?.cancel()
@@ -325,6 +328,9 @@ struct StoryViewerView: View {
             prefetcher.detach()
             hasInstalledPrefetchPipeline = false
             StoryMediaCoordinator.shared.deactivate()
+            if let story = currentStory {
+                SocialSocketManager.shared.leavePostRoom(postId: story.id)
+            }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
@@ -334,8 +340,48 @@ struct StoryViewerView: View {
                 isPresented = false
             }
         }
-        .onChange(of: currentStoryIndex) { _, _ in refreshPrefetchWindowAndTimer() }
-        .onChange(of: currentGroupIndex) { _, _ in refreshPrefetchWindowAndTimer() }
+        .onChange(of: currentStoryIndex) { oldValue, _ in
+            refreshPrefetchWindowAndTimer()
+            let previousStory = currentGroup.flatMap { group in
+                group.stories.indices.contains(oldValue) ? group.stories[oldValue] : nil
+            }
+            if let prev = previousStory {
+                SocialSocketManager.shared.leavePostRoom(postId: prev.id)
+            }
+            if let story = currentStory {
+                SocialSocketManager.shared.joinPostRoom(postId: story.id)
+            }
+        }
+        .onChange(of: currentGroupIndex) { oldValue, _ in
+            refreshPrefetchWindowAndTimer()
+            if oldValue >= 0 && oldValue < groups.count,
+               groups[oldValue].stories.indices.contains(currentStoryIndex) {
+                SocialSocketManager.shared.leavePostRoom(postId: groups[oldValue].stories[currentStoryIndex].id)
+            }
+            if let story = currentStory {
+                SocialSocketManager.shared.joinPostRoom(postId: story.id)
+            }
+        }
+        .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
+            let heartEmoji = "\u{2764}\u{FE0F}"
+            guard event.emoji == heartEmoji else { return }
+            let currentUserId = AuthManager.shared.currentUser?.id
+            if event.userId == currentUserId {
+                storyCommentLikedIds.insert(event.commentId)
+            } else {
+                storyCommentLikeDelta[event.commentId] = (storyCommentLikeDelta[event.commentId] ?? 0) + 1
+            }
+        }
+        .onReceive(SocialSocketManager.shared.commentReactionRemoved.receive(on: DispatchQueue.main)) { event in
+            let heartEmoji = "\u{2764}\u{FE0F}"
+            guard event.emoji == heartEmoji else { return }
+            let currentUserId = AuthManager.shared.currentUser?.id
+            if event.userId == currentUserId {
+                storyCommentLikedIds.remove(event.commentId)
+            } else {
+                storyCommentLikeDelta[event.commentId] = (storyCommentLikeDelta[event.commentId] ?? 0) - 1
+            }
+        }
     }
 
     var body: some View {
