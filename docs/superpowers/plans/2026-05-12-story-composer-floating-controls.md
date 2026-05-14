@@ -3176,3 +3176,368 @@ After completing Phase 4, ensure:
 **Plan complete and saved to `docs/superpowers/plans/2026-05-12-story-composer-floating-controls.md`.**
 
 The plan spans **29 tasks across 4 phases**, each phase producing a separate PR. Per the spec, each phase's gate is `xcodebuild -scheme MeeshySDK-Package test` (full suite passes) + `./apps/ios/meeshy.sh build` (iOS app compiles).
+
+---
+
+# PHASE 5 — Post-Cutover Stabilization (2026-05-14)
+
+**Goal:** Resolve UX/interaction bugs reported after Phase 4 cutover, enhance media panel controls, and optimize canvas gesture performance.
+
+**Commit:** `9d84acb4` on `main` — `feat(story-composer): stabilize canvas interactions & enhance media panel`
+
+---
+
+## Behavioral Changes Applied
+
+### 5.1 Canvas Drag Performance — Skip `rebuildLayers` During Gestures
+
+**Problem:** With multiple media on canvas, dragging an element was extremely laggy because every frame of `handlePan`/`handlePinch`/`handleRotation` mutated `slide`, which triggered `slide.didSet → rebuildLayers()`. This destroyed and recreated ALL `CALayer`s on every frame — O(n) layer rebuild per gesture frame.
+
+**Fix (`StoryCanvasUIView.swift`):**
+- `slide.didSet` now checks `manipulatedItemId != nil`. During an active gesture, it calls `updateManipulatedItemLayer()` instead of `rebuildLayers()`.
+- `updateManipulatedItemLayer()` finds the single manipulated element's `CALayer` by `name` and updates only its `position` and `transform` via `CATransaction` (animation disabled).
+- Full `rebuildLayers()` + `slideContentRevision` increment happens **only when the gesture ends** (`.ended`/`.cancelled`/`.failed`).
+
+**Result:** Drag/pinch/rotate is now fluid regardless of how many media layers are on the canvas.
+
+### 5.2 Context Menu — Targeted Preview (No Full-Canvas Lift)
+
+**Problem:** Long-pressing a foreground element caused the system `UIContextMenuInteraction` to lift the **entire** `StoryCanvasUIView` as the preview, creating a disorienting full-canvas animation.
+
+**Fix (`StoryCanvasUIView.swift`):**
+- Added `contextMenuInteraction(_:previewForHighlightingMenuWithConfiguration:)` and `previewForDismissingMenuWithConfiguration:` delegate methods.
+- These create a `UITargetedPreview` from a snapshot of just the element's `CALayer` (via `UIGraphicsImageRenderer` + `layer.render(in:)`).
+- The temporary `UIImageView` is auto-removed after 0.5s.
+
+**Context menu actions now self-contained in `StoryCanvasUIView`:**
+- `contextDuplicate(id:)` — struct copy with new UUID, offset +0.05, isBackground=false
+- `contextBringForward(id:)` — swap with next index in `mediaObjects`
+- `contextSendBackward(id:)` — swap with previous index in `mediaObjects`
+- `contextDelete(id:)` — removes from `mediaObjects`, `textObjects`, or `stickerObjects`
+- All fire `onItemModified?(slide)` to propagate back to SwiftUI
+
+**All canvas elements (including background) remain interactive** — drag, rotate, pinch, double-tap, and long-press all work on every element.
+
+### 5.3 Double-Tap — Opens Dedicated Full-Screen Editor
+
+**Problem:** Double-tap on a media element opened the bottom format panel (`bandStateMachine.openFormatPanel`), which the user found useless for media editing.
+
+**Fix (`StoryComposerView.swift`):**
+- Double-tap on **media** now calls `HapticFeedback.medium()` + `openMediaEditor(elementId:)`, which opens `MeeshyImageEditorView` (for images) or `MeeshyVideoEditorView` (for videos) as a `fullScreenCover`.
+- Double-tap on **text** still opens the inline text format panel via `bandStateMachine.openFormatPanel(.text, id:)`.
+- The context menu's "Modifier" action also routes through `onItemDoubleTapped`, so it inherits the same behavior.
+
+### 5.4 Media Panel — Full Controls + Drag-to-Reorder
+
+**Problem:** The media tool panel only had add buttons and a minimal list with toggle + delete.
+
+**Enhancements (`ComposerToolPanelHost.swift`):**
+
+Each media item row now has **5 action buttons** (right side, compact icons):
+
+| Button | Icon | Action |
+|--------|------|--------|
+| **Front/Back** | `square.3.layers.3d.top/bottom.filled` | `toggleBackground(id:)` |
+| **Edit** | `pencil` | Opens format panel via `onEditMedia` callback |
+| **Timeline** | `timeline.selection` | Sets `selectedElementId` + shows timeline via `onShowInTimeline` |
+| **Duplicate** | `doc.on.doc` | `duplicateElement(id:)` |
+| **Delete** | `trash` (red) | `deleteElement(id:)` with medium haptic |
+
+**Drag-to-reorder:**
+- Media list now uses `List` with `.onMove` handler
+- `.environment(\.editMode, .constant(.active))` keeps drag handles always visible
+- `moveMedia(from:to:)` added to `StoryComposerViewModel` protocol + implementation
+- Reorder changes the actual layer order in `effects.mediaObjects`
+
+**Callback chain:**
+```
+ComposerToolPanelHost.onEditMedia/onShowInTimeline
+  → ComposerBottomBand (pass-through)
+    → ComposerControlsLayer (wiring)
+      onEditMedia → bandStateMachine.openFormatPanel(.media, id:)
+      onShowInTimeline → viewModel.isTimelineVisible = true
+```
+
+### 5.5 Bottom Safe-Area Padding
+
+**Problem:** Controls were too close to the iPhone home indicator / bezel area.
+
+**Fix (`ComposerBottomBand.swift`):**
+- Added `.padding(.bottom, 16)` to the main VStack to keep controls above the safe area.
+
+### 5.6 Panel Transitions — Slide Down/Up (No Overlap)
+
+**Problem:** When switching between tool panels, the old and new panels overlapped during transition.
+
+**Fix (`ComposerBottomBand.swift`):**
+- Added `stateKey` computed property for stable SwiftUI view identity.
+- Panel content wrapped in `Group { ... }.id(stateKey)`.
+- Asymmetric transition: old panel slides down (`.move(edge: .bottom)`), new one slides up from bottom.
+- Local `.animation(.spring(response: 0.3, dampingFraction: 0.85))` keyed to `stateKey`.
+
+### 5.7 FAB Hide/Show Coordination
+
+**Fix (`ComposerControlsLayer.swift`):**
+- FABs **hide** when any band panel is visible (`bandStateMachine.state != .hidden`).
+- FABs **reappear** when the band is dismissed (swipe-down or state reset).
+- `shouldShowFABs` computed property = `areFabsVisible && bandStateMachine.state == .hidden`.
+- Swipe gestures on the band:
+  - Swipe down → `bandStateMachine.swipeDownOnBand()` (collapse one level) + restore FABs if band is now hidden
+  - Swipe horizontal → `bandStateMachine.swipeHorizontalOnBand()` (switch contenu↔effets)
+
+### 5.8 BandStateMachine — Unified as `@Binding`
+
+**Problem:** `ComposerControlsLayer` owned its own `@State bandStateMachine`, so `StoryComposerView` couldn't access it to route double-tap or empty-state picker actions through the state machine.
+
+**Fix:**
+- `bandStateMachine` moved from `@State` in `ComposerControlsLayer` to `@State` in `StoryComposerView`.
+- Passed as `@Binding` to `ComposerControlsLayer`.
+- Removed `ComposerControlsLayer.openFormatPanel()` public method — callers now use the binding directly.
+- This enables direct manipulation from `StoryComposerView`: double-tap, empty-state picker, and `onEditMedia` all call `bandStateMachine.openFormatPanel(...)` via the binding.
+
+### 5.9 Controls Layer Layout — VStack (Not ZStack)
+
+**Problem:** The original `ZStack` layout placed FABs **on top of** the band, which made both visible simultaneously and cluttered the bottom area.
+
+**Fix (`ComposerControlsLayer.swift`):**
+- Refactored from `ZStack(alignment: .bottomLeading)` to `VStack(spacing: 0)`.
+- FABs are now in a `VStack` **above** the band, not overlapping it.
+- Only one is visible at a time: FABs when band is hidden, band when it's open.
+- `.ignoresSafeArea(edges: .bottom)` moved from band-level to the outer VStack.
+
+### 5.10 Media URL Bridge — Image & Video Rendering on Canvas
+
+**Problem:** After adding a photo/video, the canvas showed a black rectangle instead of the media. The `StoryMediaLayer.configureImage/configureVideo` methods load from `media.mediaURL`, which was `nil` because the composer only stored the `UIImage`/`URL` in memory (`loadedImages`/`loadedVideoURLs`) but never set the model's `mediaURL`.
+
+**Fix (`StoryComposerView.swift`):**
+- **Images:** After loading from `PhotosPicker`, the image is persisted to a temp JPEG file (`FileManager.default.temporaryDirectory/{id}.jpg`) and `viewModel.setMediaURL(id:url:slideId:)` is called with the `file://` URL.
+- **Videos:** Similarly, `viewModel.setMediaURL(id:url:slideId:)` is called after transferring the video to a temp file.
+- This bridges the in-memory `UIImage`/`URL` cache with the `StoryMediaObject.mediaURL` property that the `CALayer` rendering pipeline reads.
+
+### 5.11 Empty-State Auto-Open Band
+
+**Problem:** When the user selected a tool from the empty-state picker (shown when canvas has no content), the band stayed `.hidden`. The user had to manually tap a FAB to reveal the controls for the selected tool.
+
+**Fix (`StoryComposerView.swift`):**
+- After the empty-state picker sets the tool, the code now calls:
+  ```swift
+  bandStateMachine.tapFAB(tool.bandCategory)
+  bandStateMachine.tapTile(tool)
+  ```
+- This transitions the band from `.hidden` → `.tiles(category)` → `.toolPanel(tool)`, immediately showing the relevant controls.
+
+---
+
+## Files Modified (Phase 5)
+
+| File | Lines Changed | Change Summary |
+|------|--------------|----------------|
+| `StoryCanvasUIView.swift` | +165 / -14 | Gesture perf (`updateManipulatedItemLayer`), targeted context menu preview, context actions (`contextDuplicate/BringForward/SendBackward/Delete`) |
+| `StoryComposerView.swift` | +31 / -3 | Double-tap → dedicated editor + haptic, media URL bridge (image+video), empty-state auto-open band, bandStateMachine binding |
+| `ComposerControlsLayer.swift` | +96 / -61 | `@Binding bandStateMachine`, VStack layout, `shouldShowFABs`, swipe gestures on band, `onEditMedia`/`onShowInTimeline` wiring, removed `openFormatPanel` public method |
+| `ComposerToolPanelHost.swift` | +142 / -55 | Full media list (5 action buttons per row), drag-to-reorder via `List`+`onMove`, `onEditMedia`/`onShowInTimeline` callbacks, `mediaActionBtn` helper |
+| `ComposerBottomBand.swift` | +57 / -26 | `stateKey` identity, `Group{}.id()` keyed panel, asymmetric transitions, safe-area padding, `onEditMedia`/`onShowInTimeline` pass-through, `.animation` on `stateKey` |
+| `StoryComposerViewModel.swift` | +35 / -0 | `moveMedia(from:to:)` protocol + implementation |
+| `Localizable.xcstrings` | +18 / -0 | New localization entries |
+
+---
+
+## Phase 5 — Smoke Test Checklist
+
+### Canvas — Drag / Move
+
+```
+- [ ] Ajouter 1 image de fond + 1 image de premier plan → déplacer l'image de premier plan au doigt : mouvement fluide et instantané, pas de saccade
+- [ ] Ajouter 3+ médias (images/vidéos) → déplacer chacun individuellement : performance identique quel que soit le nombre d'éléments
+- [ ] Pendant le drag d'un élément, les autres éléments restent parfaitement stables (pas de flicker/rebuild)
+- [ ] Lâcher le doigt après un drag → l'élément conserve sa position finale exacte (pas de saut au relâchement)
+- [ ] Déplacer l'image de fond (background) → elle se déplace comme tout élément (drag fluide)
+- [ ] Ajouter un texte → le déplacer → mouvement fluide
+- [ ] Guides de snap apparaissent à 0.5/0.25/0.75 (centre, quarts) pendant le drag
+- [ ] Guides disparaissent au relâchement du doigt
+```
+
+### Canvas — Pinch (Zoom) & Rotation
+
+```
+- [ ] Pinch sur un élément de premier plan → agrandit/réduit fluidement
+- [ ] Pinch sur l'image de fond → agrandit/réduit l'image de fond
+- [ ] Rotation à deux doigts sur un élément → rotation fluide en temps réel
+- [ ] Pinch + rotation simultanés → les deux transformations s'appliquent ensemble sans conflit
+- [ ] Après lâcher, la taille et rotation sont conservées exactement
+- [ ] Pendant le pinch/rotation, aucun rebuild visible des autres layers
+```
+
+### Canvas — Double-Tap
+
+```
+- [ ] Double-tap sur une IMAGE de premier plan → haptic medium ressenti + MeeshyImageEditorView s'ouvre en plein écran
+- [ ] Double-tap sur une IMAGE de fond → haptic medium + MeeshyImageEditorView s'ouvre en plein écran
+- [ ] Double-tap sur une VIDÉO de premier plan → haptic medium + MeeshyVideoEditorView s'ouvre en plein écran
+- [ ] Double-tap sur une VIDÉO de fond → haptic medium + MeeshyVideoEditorView s'ouvre en plein écran
+- [ ] Double-tap sur un TEXTE → le bandeau format texte s'ouvre (clavier monte + format band au-dessus)
+- [ ] Double-tap sur un sticker → rien ne se passe (pas de crash)
+- [ ] Double-tap sur une zone vide du canvas (sans élément) → rien ne se passe
+- [ ] Fermer l'éditeur image/vidéo → retour au canvas, modifications appliquées
+```
+
+### Canvas — Long-Press (Context Menu)
+
+```
+- [ ] Long-press sur une image de premier plan → menu contextuel apparaît avec preview de L'ÉLÉMENT SEUL (pas le canvas entier)
+- [ ] L'aperçu montre uniquement le média ciblé, pas tout le canvas
+- [ ] Long-press sur l'image de fond → menu contextuel apparaît avec preview de l'image de fond
+- [ ] Long-press sur un texte → menu contextuel avec preview du texte seul
+- [ ] Long-press sur une zone vide → PAS de menu contextuel (nil)
+- [ ] Options du menu : « Modifier », « Dupliquer », « Mettre au premier plan », « Mettre à l'arrière », « Supprimer »
+- [ ] Tap « Modifier » sur un media → ouvre l'éditeur dédié (même comportement que double-tap)
+- [ ] Tap « Modifier » sur un texte → ouvre le format band texte
+- [ ] Tap « Dupliquer » → un clone apparaît décalé de +0.05 en x et y, isBackground=false
+- [ ] Tap « Dupliquer » sur un texte → clone du texte décalé
+- [ ] Tap « Mettre au premier plan » → l'élément passe devant l'élément qui était au-dessus
+- [ ] Tap « Mettre à l'arrière » → l'élément passe derrière l'élément qui était en-dessous
+- [ ] Tap « Supprimer » → l'élément disparaît du canvas immédiatement
+- [ ] Après suppression, le menu se ferme proprement
+- [ ] Dismiss du menu (tap à côté) → le canvas revient exactement à son état précédent, pas de flicker
+```
+
+### FABs — Visibilité & Interaction
+
+```
+- [ ] Au lancement du composer, les 2 FABs (Contenu + Effets) sont visibles en bas à gauche
+- [ ] Tap FAB Contenu → grille tuiles Contenu apparaît, FABs disparaissent
+- [ ] Tap FAB Effets → grille tuiles Effets apparaît, FABs disparaissent
+- [ ] Swipe ↑ sur FAB Contenu → grille tuiles Contenu s'ouvre
+- [ ] Swipe ↑ sur FAB Effets → grille tuiles Effets s'ouvre
+- [ ] Swipe ↓ sur un FAB → les FABs disparaissent
+- [ ] Tap sur une zone vide du canvas après disparition → FABs reviennent
+- [ ] Les badges des FABs affichent le bon nombre (médias + dessins + textes pour Contenu, filtres + timeline pour Effets)
+- [ ] FABs ne sont PAS visibles quand le bandeau/panel est ouvert
+- [ ] FABs réapparaissent quand le bandeau est fermé (swipe ↓ ou back)
+```
+
+### Bandeau (Bottom Band) — Transitions & Navigation
+
+```
+- [ ] Ouvrir grille tuiles → le panel apparaît avec animation slide-up depuis le bas
+- [ ] Passer de tuiles Contenu → tap FAB Effets → le panel Contenu sort (slide-down) et Effets entre (slide-up), PAS de chevauchement
+- [ ] Tap sur une tuile Média → le panel outil Média apparaît, la grille tuiles sort
+- [ ] Tap sur une tuile Dessin → le panel outil Dessin apparaît
+- [ ] Tap sur une tuile Texte → le panel outil Texte apparaît
+- [ ] Swipe ↓ sur le bandeau en mode toolPanel → retour à la grille tuiles (un niveau en arrière)
+- [ ] Swipe ↓ sur le bandeau en mode grille tuiles → bandeau se ferme, FABs réapparaissent
+- [ ] Swipe ←→ sur la grille tuiles → swap entre Contenu et Effets
+- [ ] Swipe ←→ en toolPanel → rien ne se passe (pas de conflit avec les sliders)
+- [ ] Swipe ←→ en formatPanel → rien ne se passe
+- [ ] Le bandeau ne masque PAS la zone du home indicator iPhone (padding 16pt en bas)
+- [ ] Les contrôles sont tous accessibles au-dessus de la zone de sécurité inférieure
+- [ ] Animation spring naturelle (response: 0.3, dampingFraction: 0.85) sur toutes les transitions
+```
+
+### Panneau Média — Liste & Contrôles
+
+```
+- [ ] Ouvrir le panel outil Média → la liste des médias ajoutés est visible
+- [ ] Chaque ligne affiche : miniature (vignette), nom/type, badge « Fond »/« Premier plan »
+- [ ] 5 boutons d'action par ligne : Front/Back, Edit, Timeline, Dupliquer, Supprimer
+- [ ] Tap bouton Front/Back → bascule isBackground (le badge change)
+- [ ] Tap bouton Edit → ouvre le formatPanel pour ce média (bandStateMachine transite vers .formatPanel(.media, id))
+- [ ] Tap bouton Timeline → ouvre la timeline et sélectionne cet élément
+- [ ] Tap bouton Dupliquer → un nouveau media identique apparaît dans la liste
+- [ ] Tap bouton Supprimer (rouge) → haptic medium + l'élément disparaît de la liste ET du canvas
+- [ ] Les boutons « + Photo » et « + Vidéo » au sommet du panel fonctionnent (ouvrent le picker)
+- [ ] Drag-to-reorder : les handles de drag sont toujours visibles (editMode actif)
+- [ ] Glisser un élément vers le haut/bas dans la liste → change l'ordre des layers sur le canvas
+- [ ] L'ordre visuel sur le canvas correspond à l'ordre dans la liste après reorder
+```
+
+### Ajout de Média — Rendu sur Canvas
+
+```
+- [ ] Ajouter une PHOTO depuis la galerie → l'image s'affiche sur le canvas (PAS un rectangle noir)
+- [ ] Ajouter une VIDÉO depuis la galerie → la vidéo s'affiche sur le canvas (PAS un rectangle noir)
+- [ ] L'image est rendue à la bonne résolution (JPEG 0.92, max 1080px)
+- [ ] media.mediaURL est renseigné (file:// vers le fichier temporaire) après ajout
+- [ ] Ajouter un premier média (fond) → pas de contrôleur/panel supplémentaire, juste l'éditeur image s'affiche
+- [ ] Ajouter un 2ème média → il apparaît en premier plan, l'image de fond reste
+```
+
+### Empty-State → Tool Auto-Open
+
+```
+- [ ] Canvas vide → tap sur un outil depuis le picker empty-state (ex: Média)
+- [ ] Le band s'ouvre automatiquement avec le panel de l'outil sélectionné (pas besoin de taper un FAB)
+- [ ] La transition est : .hidden → .tiles(category) → .toolPanel(tool)
+- [ ] L'outil sélectionné est immédiatement actif (ex: camera picker, dessin)
+```
+
+### BandStateMachine — Routing & Cohérence
+
+```
+- [ ] bandStateMachine.state == .hidden au lancement
+- [ ] Changer de slide (swipe gauche/droite) → le bandeau se ferme (.hidden), les FABs réapparaissent
+- [ ] Publier une story → bandStateMachine reset à .hidden
+- [ ] Double-tap sur un texte → bandStateMachine.state == .formatPanel(.text, id)
+- [ ] Double-tap sur un média → bandStateMachine NE CHANGE PAS (l'éditeur plein écran est hors du band)
+- [ ] Long-press → « Modifier » sur un média → même que double-tap (éditeur plein écran)
+- [ ] Le binding est partagé entre StoryComposerView et ComposerControlsLayer (pas de désynchronisation)
+```
+
+### Dessin (Drawing)
+
+```
+- [ ] Activer le mode dessin → le canvas accepte le tracé au doigt
+- [ ] Le tracé ne se DOUBLE PAS (chaque trait apparaît une seule fois)
+- [ ] Désactiver le mode dessin → les traits restent, le canvas redevient manipulable
+- [ ] Le dessin n'interfère PAS avec les gestures drag/pinch/rotate (allowsHitTesting false sur le canvas quand dessin actif)
+```
+
+### Visuels & Esthétique
+
+```
+- [ ] Le fond du bandeau a un coin arrondi en haut (UnevenRoundedRectangle topLeading/topTrailing)
+- [ ] L'ombre du bandeau est visible (shadow color noir 15%, radius 12, y -4)
+- [ ] Les FABs ont un style pill/rounded cohérent avec le thème
+- [ ] Les icônes des boutons d'action dans la liste média sont compacts et lisibles (11pt font)
+- [ ] Le badge « Fond »/« 1er Plan » dans la liste média est lisible (capsule colorée)
+- [ ] La transition d'apparition/disparition des panels est smooth (spring animation)
+- [ ] Pas de clignotement/flash blanc lors du switch de panel
+- [ ] Les couleurs respectent le thème MeeshyColors (dark/light mode)
+- [ ] Le menu contextuel a un fond flou (système iOS standard)
+- [ ] Le preview dans le menu contextuel est arrondi (cornerRadius 8)
+```
+
+### Performance
+
+```
+- [ ] Avec 1 média sur le canvas : drag à 60fps
+- [ ] Avec 3 médias sur le canvas : drag à 60fps (pas de différence perceptible)
+- [ ] Avec 5+ médias : drag reste fluide (updateManipulatedItemLayer, pas rebuildLayers)
+- [ ] Ouvrir/fermer le bandeau rapidement 10 fois → pas de crash, pas de state leak
+- [ ] Dupliquer un élément 5 fois rapidement → chaque clone a un UUID unique, pas de conflit
+- [ ] Supprimer tous les éléments un par un → le canvas se vide proprement, pas de layer orpheline
+```
+
+### Cas Limites (Edge Cases)
+
+```
+- [ ] Long-press sur le canvas quand il n'y a aucun élément → pas de menu, pas de crash
+- [ ] Double-tap quand il n'y a aucun élément → rien ne se passe
+- [ ] Swipe sur le bandeau quand il est .hidden → pas d'effet, pas de crash
+- [ ] Drag-to-reorder avec un seul élément dans la liste → pas de crash
+- [ ] Ajouter un média, supprimer via context menu, undo (si disponible) → comportement cohérent
+- [ ] Rotation rapide 360°+ sur un élément → pas de valeur aberrante, pas de crash
+- [ ] Pinch to scale très petit (0.1x) puis très grand (5x) → l'élément ne disparaît pas
+- [ ] Context menu « Mettre au premier plan » sur l'élément déjà tout devant → pas d'effet, pas de crash
+- [ ] Context menu « Mettre à l'arrière » sur l'élément déjà tout derrière → pas d'effet, pas de crash
+```
+
+---
+
+## Known Remaining Issues
+
+1. **Drawing duplication** — `DrawingOverlayView` (PencilKit) may re-apply strokes via a `canvasViewDrawingDidChange` → `drawingData` → `updateUIView` feedback loop. The `isUpdatingFromDelegate` guard exists but PencilKit's data encoding can produce non-identical bytes for the same drawing. Pre-existing issue.
+
+2. **Canvas item selection highlight** — No visual indicator (e.g. bounding box) appears when an element is selected. Could be added as a `CAShapeLayer` border around the selected item's bounds.
+
+3. **Audio elements in media panel** — `audioPlayerObjects` are not yet listed in the media panel. They exist as a separate array (`effects.audioPlayerObjects`) and could be merged into the panel with an audio-specific row UI.
