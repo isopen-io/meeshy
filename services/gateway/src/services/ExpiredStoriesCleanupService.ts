@@ -85,14 +85,34 @@ export class ExpiredStoriesCleanupService {
     }
 
     try {
-      const hardResult = await this.prisma.post.deleteMany({
+      // Find IDs to hard-delete first so we can dissolve FK relations.
+      // The `PostReposts` relation uses onDelete: NoAction, so Prisma / MongoDB
+      // will reject deleteMany if any other Post still references these via
+      // `repostOfId`. We null out those references before deleting.
+      const toDelete = await this.prisma.post.findMany({
         where: {
           type: 'STORY',
           isDeleted: true,
           expiresAt: { lt: hardDeleteCutoff },
         },
+        select: { id: true },
       });
-      hardDeleted = hardResult.count;
+
+      if (toDelete.length > 0) {
+        const ids = toDelete.map((p) => p.id);
+
+        // Nullify repostOfId on any Post that reposts one of the to-be-deleted stories.
+        await this.prisma.post.updateMany({
+          where: { repostOfId: { in: ids } },
+          data: { repostOfId: null },
+        });
+
+        // Now safe to delete.
+        const hardResult = await this.prisma.post.deleteMany({
+          where: { id: { in: ids } },
+        });
+        hardDeleted = hardResult.count;
+      }
     } catch (err) {
       log.warn('hard-delete pass failed', { err });
     }
