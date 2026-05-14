@@ -1226,37 +1226,21 @@ extension StoryViewerView {
                 // Scrollable comments
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 2) {
+                        LazyVStack(alignment: .leading, spacing: 6) {
                             ForEach(topLevelComments) { comment in
-                                // Top-level comment
-                                storyCommentRow(comment: comment, userLang: userLang)
+                                makeStoryCommentRow(comment, userLang: userLang)
                                     .id(comment.id)
-                                    .onTapGesture {
-                                        // Tap a comment to reply to it
-                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                            replyingToStoryComment = comment
-                                        }
-                                        HapticFeedback.light()
-                                    }
 
-                                // Auto-show first 2 replies
                                 let replies = storyCommentRepliesMap[comment.id] ?? []
                                 let autoPreview = Array(replies.prefix(2))
                                 if !autoPreview.isEmpty && !storyCommentExpandedThreads.contains(comment.id) {
                                     ForEach(autoPreview) { reply in
-                                        storyCommentRow(comment: reply, userLang: userLang)
-                                            .padding(.leading, 28)
+                                        makeStoryCommentRow(reply, userLang: userLang)
+                                            .padding(.leading, 32)
                                             .id(reply.id)
-                                            .onTapGesture {
-                                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                                    replyingToStoryComment = reply
-                                                }
-                                                HapticFeedback.light()
-                                            }
                                     }
                                 }
 
-                                // Show more replies toggle
                                 if comment.replies > 2 {
                                     Button {
                                         HapticFeedback.light()
@@ -1271,13 +1255,12 @@ extension StoryViewerView {
                                                  : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
                                                 .font(.system(size: 11, weight: .semibold))
                                         }
-                                        .foregroundColor(MeeshyColors.indigo400)
-                                        .padding(.leading, 36)
+                                        .foregroundColor(Color(hex: comment.authorColor))
+                                        .padding(.leading, 40)
                                         .padding(.vertical, 4)
                                     }
                                 }
 
-                                // Expanded all replies
                                 if storyCommentExpandedThreads.contains(comment.id) {
                                     if storyCommentLoadingReplies.contains(comment.id) && replies.isEmpty {
                                         HStack {
@@ -1285,20 +1268,14 @@ extension StoryViewerView {
                                             ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
                                             Spacer()
                                         }
-                                        .padding(.leading, 28)
+                                        .padding(.leading, 32)
                                         .padding(.vertical, 4)
                                     }
 
                                     ForEach(replies) { reply in
-                                        storyCommentRow(comment: reply, userLang: userLang)
-                                            .padding(.leading, 28)
+                                        makeStoryCommentRow(reply, userLang: userLang)
+                                            .padding(.leading, 32)
                                             .id(reply.id)
-                                            .onTapGesture {
-                                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                                    replyingToStoryComment = reply
-                                                }
-                                                HapticFeedback.light()
-                                            }
                                     }
                                 }
                             }
@@ -1342,44 +1319,7 @@ extension StoryViewerView {
                     }
                 }
 
-                // Reply banner
-                if let reply = replyingToStoryComment {
-                    HStack(spacing: 8) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(Color(hex: reply.authorColor))
-                            .frame(width: 3, height: 28)
-
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(reply.author)
-                                .font(.system(size: 11, weight: .semibold))
-                                .foregroundColor(Color(hex: reply.authorColor))
-                            Text(reply.displayContent)
-                                .font(.system(size: 11))
-                                .foregroundColor(.white.opacity(0.6))
-                                .lineLimit(1)
-                        }
-
-                        Spacer()
-
-                        Button {
-                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                                replyingToStoryComment = nil
-                            }
-                        } label: {
-                            Image(systemName: "xmark")
-                                .font(.system(size: 9, weight: .bold))
-                                .foregroundColor(.white.opacity(0.5))
-                                .frame(width: 20, height: 20)
-                                .background(Circle().fill(Color.white.opacity(0.1)))
-                        }
-                    }
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 6)
-                    .background(Color.white.opacity(0.08))
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-
-                // Inline composer for story comments
+                // Inline composer for story comments (reply banner attached inside)
                 storyCommentComposerBar
             }
             .frame(maxHeight: UIScreen.main.bounds.height * 0.5)
@@ -1398,10 +1338,11 @@ extension StoryViewerView {
     // MARK: - Story Comment Composer
 
     private var storyCommentComposerBar: some View {
-        UniversalComposerBar(
+        let replyContext = replyingToStoryComment
+        return UniversalComposerBar(
             style: .dark,
             mode: .comment,
-            accentColor: currentGroup?.avatarColor ?? "6366F1",
+            accentColor: replyContext?.authorColor ?? currentGroup?.avatarColor ?? "6366F1",
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onSend: { text in
@@ -1415,7 +1356,53 @@ extension StoryViewerView {
                 replyingToStoryComment = nil
                 sendComment(text: text, effectFlags: effectFlags, parentId: parentId)
             },
-            replyBanner: nil, // Reply banner is handled above
+            replyBanner: replyContext.map { reply in
+                AnyView(
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color(hex: reply.authorColor))
+                            .frame(width: 3, height: 30)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "arrowshape.turn.up.left.fill")
+                                    .font(.system(size: 9, weight: .semibold))
+                                    .foregroundColor(Color(hex: reply.authorColor))
+                                Text("R\u{00E9}ponse \u{00E0} \(reply.author)")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Color(hex: reply.authorColor))
+                            }
+                            Text(reply.displayContent)
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.6))
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                replyingToStoryComment = nil
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white.opacity(0.6))
+                                .frame(width: 22, height: 22)
+                                .background(Circle().fill(Color.white.opacity(0.12)))
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color(hex: reply.authorColor).opacity(0.18))
+                    .overlay(
+                        Rectangle()
+                            .fill(Color(hex: reply.authorColor).opacity(0.35))
+                            .frame(height: 0.5),
+                        alignment: .bottom
+                    )
+                )
+            },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects
         )
@@ -1465,94 +1452,59 @@ extension StoryViewerView {
         }
     }
 
-    func storyCommentRow(comment: FeedComment, userLang: String) -> some View {
-        let displayContent = comment.translatedContent ?? comment.content
-        let hasTranslation = comment.translatedContent != nil
-        let originalLang = comment.originalLanguage
-
-        return HStack(alignment: .top, spacing: 8) {
-            // Avatar
-            if let avatarURL = comment.authorAvatarURL,
-               let url = MeeshyConfig.resolveMediaURL(avatarURL) {
-                CachedAsyncImage(url: url.absoluteString, targetSize: CGSize(width: 28, height: 28)) {
-                    commentAvatarPlaceholder(color: comment.authorColor)
+    @ViewBuilder
+    func makeStoryCommentRow(_ comment: FeedComment, userLang: String) -> some View {
+        StoryCommentRowView(
+            comment: comment,
+            userLang: userLang,
+            isLiked: storyCommentLikedIds.contains(comment.id),
+            likeCount: max(0, comment.likes + (storyCommentLikeDelta[comment.id] ?? 0)),
+            onReply: {
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    replyingToStoryComment = comment
                 }
-                .frame(width: 28, height: 28)
-                .clipShape(Circle())
-            } else {
-                commentAvatarPlaceholder(color: comment.authorColor)
+                HapticFeedback.light()
+            },
+            onToggleLike: {
+                HapticFeedback.light()
+                Task { await toggleStoryCommentLike(comment) }
             }
-
-            VStack(alignment: .leading, spacing: 2) {
-                // Header: displayName · timestamp · flags · translate
-                HStack(spacing: 6) {
-                    Text(comment.author)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(.white)
-
-                    Text("·")
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.4))
-
-                    Text(comment.timestamp, style: .relative)
-                        .font(.system(size: 10))
-                        .foregroundColor(.white.opacity(0.4))
-
-                    if let lang = originalLang, lang != userLang {
-                        Text(commentFlagEmoji(for: lang))
-                            .font(.system(size: 10))
-                    }
-
-                    if hasTranslation {
-                        Image(systemName: "translate")
-                            .font(.system(size: 9))
-                            .foregroundColor(MeeshyColors.indigo400.opacity(0.7))
-                    }
-                }
-
-                // Comment text
-                Text(displayContent)
-                    .font(.system(size: 13))
-                    .foregroundColor(.white.opacity(0.9))
-                    .lineLimit(4)
-                    .multilineTextAlignment(.leading)
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 4)
-        .padding(.horizontal, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.black.opacity(0.35))
-                .background(.ultraThinMaterial.opacity(0.15))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
         )
     }
 
-    func commentAvatarPlaceholder(color: String) -> some View {
-        Circle()
-            .fill(Color(hex: color))
-            .frame(width: 28, height: 28)
-    }
+    // MARK: - Story Comment Reactions
 
-    func commentFlagEmoji(for languageCode: String) -> String {
-        switch languageCode.prefix(2) {
-        case "fr": return "🇫🇷"
-        case "en": return "🇬🇧"
-        case "es": return "🇪🇸"
-        case "de": return "🇩🇪"
-        case "it": return "🇮🇹"
-        case "pt": return "🇵🇹"
-        case "ar": return "🇸🇦"
-        case "zh": return "🇨🇳"
-        case "ja": return "🇯🇵"
-        case "ko": return "🇰🇷"
-        case "ru": return "🇷🇺"
-        case "hi": return "🇮🇳"
-        case "tr": return "🇹🇷"
-        case "nl": return "🇳🇱"
-        default: return "🌐"
+    func toggleStoryCommentLike(_ comment: FeedComment) async {
+        guard let story = currentStory else { return }
+        let id = comment.id
+        let wasLiked = storyCommentLikedIds.contains(id)
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
+            if wasLiked {
+                storyCommentLikedIds.remove(id)
+                storyCommentLikeDelta[id] = (storyCommentLikeDelta[id] ?? 0) - 1
+            } else {
+                storyCommentLikedIds.insert(id)
+                storyCommentLikeDelta[id] = (storyCommentLikeDelta[id] ?? 0) + 1
+            }
+        }
+
+        do {
+            if wasLiked {
+                try await PostService.shared.unlikeComment(postId: story.id, commentId: id)
+            } else {
+                try await PostService.shared.likeComment(postId: story.id, commentId: id)
+            }
+        } catch {
+            withAnimation {
+                if wasLiked {
+                    storyCommentLikedIds.insert(id)
+                    storyCommentLikeDelta[id] = (storyCommentLikeDelta[id] ?? 0) + 1
+                } else {
+                    storyCommentLikedIds.remove(id)
+                    storyCommentLikeDelta[id] = (storyCommentLikeDelta[id] ?? 0) - 1
+                }
+            }
         }
     }
 
@@ -1585,11 +1537,13 @@ extension StoryViewerView {
                         )
                     }
                     storyComments = comments
-                    storyCommentCount = comments.filter { $0.parentId == nil }.count
+                    let topAll = comments.filter { $0.parentId == nil }
+                    let totalReplies = topAll.reduce(0) { $0 + $1.replies }
+                    storyCommentCount = topAll.count + totalReplies
 
                     // Auto-fetch replies for top-level comments that have replies
                     // Sequential to avoid burst of concurrent requests
-                    let topLevel = comments.filter { $0.parentId == nil && $0.replies > 0 }
+                    let topLevel = topAll.filter { $0.replies > 0 }
                     Task {
                         for comment in topLevel.prefix(5) {
                             await loadStoryCommentReplies(commentId: comment.id)
@@ -1612,11 +1566,206 @@ extension StoryViewerView {
 
         Task {
             do {
-                let response = try await PostService.shared.getComments(postId: story.id, limit: 1)
-                if response.success && response.data.count > storyCommentCount {
-                    storyCommentCount = response.data.count
+                let response = try await PostService.shared.getComments(postId: story.id, limit: 50)
+                if response.success {
+                    let top = response.data.filter { $0.parentId == nil }
+                    let totalReplies = top.reduce(0) { $0 + ($1.replyCount ?? 0) }
+                    let total = top.count + totalReplies
+                    if total != storyCommentCount {
+                        storyCommentCount = total
+                    }
                 }
             } catch {}
         }
+    }
+}
+
+// MARK: - Story Comment Row View
+//
+// Modern bubble-style row used by the story viewer comments overlay.
+// - Background tinted with the author's accent color (mirrors post comment cards).
+// - Header pair of language flags lets the viewer toggle between original and
+//   prisme-translated content without leaving the overlay.
+// - Heart reaction + Reply CTAs sit below the text in their own action row.
+struct StoryCommentRowView: View {
+    let comment: FeedComment
+    let userLang: String
+    let isLiked: Bool
+    let likeCount: Int
+    let onReply: () -> Void
+    let onToggleLike: () -> Void
+
+    @State private var showOriginal: Bool = false
+
+    private var hasTranslation: Bool {
+        comment.translatedContent != nil && comment.originalLanguage != nil
+    }
+
+    private var displayContent: String {
+        if showOriginal { return comment.content }
+        return comment.translatedContent ?? comment.content
+    }
+
+    private var bubbleColor: Color { Color(hex: comment.authorColor) }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            avatar
+
+            VStack(alignment: .leading, spacing: 4) {
+                headerRow
+                contentText
+                actionRow
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 12)
+        .background(
+            ZStack {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(bubbleColor.opacity(0.18))
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .strokeBorder(bubbleColor.opacity(0.35), lineWidth: 0.5)
+            }
+        )
+    }
+
+    @ViewBuilder
+    private var avatar: some View {
+        Group {
+            if let avatarURL = comment.authorAvatarURL,
+               let url = MeeshyConfig.resolveMediaURL(avatarURL) {
+                CachedAsyncImage(url: url.absoluteString, targetSize: CGSize(width: 32, height: 32)) {
+                    Circle().fill(bubbleColor)
+                }
+            } else {
+                Circle()
+                    .fill(bubbleColor)
+                    .overlay(
+                        Text(String(comment.author.prefix(1)).uppercased())
+                            .font(.system(size: 13, weight: .bold))
+                            .foregroundColor(.white)
+                    )
+            }
+        }
+        .frame(width: 32, height: 32)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(bubbleColor.opacity(0.55), lineWidth: 1))
+    }
+
+    private var headerRow: some View {
+        HStack(spacing: 6) {
+            Text(comment.author)
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundColor(bubbleColor)
+
+            if hasTranslation {
+                Text("\u{00B7}").font(.system(size: 10)).foregroundColor(.white.opacity(0.35))
+                languageSwitcher
+            }
+
+            Text("\u{00B7}").font(.system(size: 10)).foregroundColor(.white.opacity(0.35))
+
+            Text(comment.timestamp, style: .relative)
+                .font(.system(size: 10))
+                .foregroundColor(.white.opacity(0.5))
+        }
+    }
+
+    private var languageSwitcher: some View {
+        let origCode = comment.originalLanguage
+        let origDisplay = LanguageDisplay.from(code: origCode)
+        let targetDisplay = LanguageDisplay.from(code: userLang)
+
+        return HStack(spacing: 4) {
+            languageFlag(
+                flag: origDisplay?.flag ?? "?",
+                color: origDisplay?.color ?? LanguageDisplay.defaultColor,
+                isActive: showOriginal
+            )
+            .onTapGesture {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showOriginal = true
+                }
+                HapticFeedback.light()
+            }
+
+            languageFlag(
+                flag: targetDisplay?.flag ?? "?",
+                color: targetDisplay?.color ?? LanguageDisplay.defaultColor,
+                isActive: !showOriginal
+            )
+            .onTapGesture {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    showOriginal = false
+                }
+                HapticFeedback.light()
+            }
+
+            Image(systemName: "translate")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(MeeshyColors.indigo400.opacity(0.85))
+        }
+    }
+
+    private func languageFlag(flag: String, color: String, isActive: Bool) -> some View {
+        VStack(spacing: 1) {
+            Text(flag)
+                .font(.system(size: isActive ? 12 : 10))
+                .scaleEffect(isActive ? 1.05 : 1.0)
+            if isActive {
+                RoundedRectangle(cornerRadius: 1)
+                    .fill(Color(hex: color))
+                    .frame(width: 10, height: 1.5)
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: isActive)
+    }
+
+    private var contentText: some View {
+        Text(displayContent)
+            .font(.system(size: 13.5))
+            .foregroundColor(.white.opacity(0.95))
+            .lineLimit(6)
+            .multilineTextAlignment(.leading)
+            .animation(.easeInOut(duration: 0.2), value: showOriginal)
+            .messageEffects(comment.effects, hasPlayedAppearance: true)
+    }
+
+    private var actionRow: some View {
+        HStack(spacing: 16) {
+            Button(action: onToggleLike) {
+                HStack(spacing: 3) {
+                    Image(systemName: isLiked ? "heart.fill" : "heart")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.55))
+                        .scaleEffect(isLiked ? 1.15 : 1.0)
+                    if likeCount > 0 {
+                        Text("\(likeCount)")
+                            .font(.system(size: 10.5, weight: .semibold))
+                            .foregroundColor(isLiked ? MeeshyColors.error : .white.opacity(0.6))
+                    }
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onReply) {
+                HStack(spacing: 3) {
+                    Image(systemName: "arrowshape.turn.up.left")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("R\u{00E9}pondre")
+                        .font(.system(size: 10.5, weight: .semibold))
+                }
+                .foregroundColor(.white.opacity(0.6))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+        }
+        .padding(.top, 2)
     }
 }

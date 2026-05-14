@@ -207,6 +207,11 @@ struct StoryViewerView: View {
     @State var storyCommentRepliesMap: [String: [FeedComment]] = [:]
     @State var storyCommentExpandedThreads: Set<String> = []
     @State var storyCommentLoadingReplies: Set<String> = []
+    /// Optimistic local tracking of liked comments (id ∈ set => current user reacted).
+    @State var storyCommentLikedIds: Set<String> = []
+    /// Local like-count delta keyed by comment id, applied on top of the server `comment.likes`
+    /// to avoid waiting for refetch after a tap.
+    @State var storyCommentLikeDelta: [String: Int] = [:]
     /// Latched once the `initialAction` (Phase F notification entry point) has
     /// been honoured. Guards against re-firing on every `.onAppear` cycle —
     /// scene phase transitions and parent re-renders both republish onAppear,
