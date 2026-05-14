@@ -89,6 +89,30 @@ public struct SocketCommentLikedData: Decodable, Sendable {
     public let likeCount: Int
 }
 
+public struct SocketCommentReactionAggregation: Codable, Sendable {
+    public let emoji: String
+    public let count: Int
+    public let userIds: [String]
+    public let hasCurrentUser: Bool
+}
+
+public struct SocketCommentReactionUpdateEvent: Codable, Sendable {
+    public let commentId: String
+    public let postId: String
+    public let userId: String
+    public let emoji: String
+    public let action: String
+    public let aggregation: SocketCommentReactionAggregation
+    public let timestamp: Date?
+}
+
+public struct SocketCommentReactionSyncEvent: Codable, Sendable {
+    public let commentId: String
+    public let reactions: [SocketCommentReactionAggregation]
+    public let totalCount: Int
+    public let userReactions: [String]
+}
+
 public struct SocketPostBookmarkedData: Decodable, Sendable {
     public let postId: String
     public let bookmarked: Bool
@@ -141,6 +165,9 @@ public protocol SocialSocketProviding: Sendable {
     var commentAdded: PassthroughSubject<SocketCommentAddedData, Never> { get }
     var commentDeleted: PassthroughSubject<SocketCommentDeletedData, Never> { get }
     var commentLiked: PassthroughSubject<SocketCommentLikedData, Never> { get }
+    var commentReactionAdded: PassthroughSubject<SocketCommentReactionUpdateEvent, Never> { get }
+    var commentReactionRemoved: PassthroughSubject<SocketCommentReactionUpdateEvent, Never> { get }
+    var commentReactionSync: PassthroughSubject<SocketCommentReactionSyncEvent, Never> { get }
     var storyTranslationUpdated: PassthroughSubject<SocketStoryTranslationUpdatedData, Never> { get }
     var postTranslationUpdated: PassthroughSubject<SocketPostTranslationUpdatedData, Never> { get }
     var commentTranslationUpdated: PassthroughSubject<SocketCommentTranslationUpdatedData, Never> { get }
@@ -175,6 +202,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let commentAdded = PassthroughSubject<SocketCommentAddedData, Never>()
     public let commentDeleted = PassthroughSubject<SocketCommentDeletedData, Never>()
     public let commentLiked = PassthroughSubject<SocketCommentLikedData, Never>()
+    public let commentReactionAdded = PassthroughSubject<SocketCommentReactionUpdateEvent, Never>()
+    public let commentReactionRemoved = PassthroughSubject<SocketCommentReactionUpdateEvent, Never>()
+    public let commentReactionSync = PassthroughSubject<SocketCommentReactionSyncEvent, Never>()
     public let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
     public let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
     public let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
@@ -332,6 +362,123 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
     public func unsubscribeFeed() {
         socket?.emit("feed:unsubscribe")
+    }
+
+    // MARK: - Post Room Management
+
+    public func joinPostRoom(postId: String) {
+        socket?.emit("post:join", ["postId": postId])
+        Logger.socket.info("SocialSocket joined post room: \(postId)")
+    }
+
+    public func leavePostRoom(postId: String) {
+        socket?.emit("post:leave", ["postId": postId])
+        Logger.socket.info("SocialSocket left post room: \(postId)")
+    }
+
+    // MARK: - Comment Reaction Emission
+
+    public enum CommentReactionError: Error, Sendable, LocalizedError {
+        case noSocket
+        case timeout
+        case serverError(String)
+        case malformedResponse
+
+        public var errorDescription: String? {
+            switch self {
+            case .noSocket: return "noSocket — SocialSocket not connected"
+            case .timeout: return "timeout — Gateway did not respond within 10s"
+            case .serverError(let message): return "serverError — \(message)"
+            case .malformedResponse: return "malformedResponse — Unexpected ACK format"
+            }
+        }
+    }
+
+    public func addCommentReaction(commentId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
+        guard let socket else { throw CommentReactionError.noSocket }
+        return try await withCheckedThrowingContinuation { continuation in
+            var resumed = false
+            socket.emitWithAck("comment:reaction-add", ["commentId": commentId, "emoji": emoji]).timingOut(after: 10) { items in
+                guard !resumed else { return }
+                resumed = true
+                guard let response = items.first as? [String: Any] else {
+                    continuation.resume(throwing: CommentReactionError.timeout)
+                    return
+                }
+                guard let success = response["success"] as? Bool, success,
+                      let data = response["data"] as? [String: Any] else {
+                    let message = (response["error"] as? [String: Any])?["message"] as? String
+                        ?? (response["error"] as? String)
+                        ?? "unknown error"
+                    continuation.resume(throwing: CommentReactionError.serverError(message))
+                    return
+                }
+                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
+                      let event = try? self.decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData) else {
+                    continuation.resume(throwing: CommentReactionError.malformedResponse)
+                    return
+                }
+                continuation.resume(returning: event)
+            }
+        }
+    }
+
+    public func removeCommentReaction(commentId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
+        guard let socket else { throw CommentReactionError.noSocket }
+        return try await withCheckedThrowingContinuation { continuation in
+            var resumed = false
+            socket.emitWithAck("comment:reaction-remove", ["commentId": commentId, "emoji": emoji]).timingOut(after: 10) { items in
+                guard !resumed else { return }
+                resumed = true
+                guard let response = items.first as? [String: Any] else {
+                    continuation.resume(throwing: CommentReactionError.timeout)
+                    return
+                }
+                guard let success = response["success"] as? Bool, success,
+                      let data = response["data"] as? [String: Any] else {
+                    let message = (response["error"] as? [String: Any])?["message"] as? String
+                        ?? (response["error"] as? String)
+                        ?? "unknown error"
+                    continuation.resume(throwing: CommentReactionError.serverError(message))
+                    return
+                }
+                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
+                      let event = try? self.decoder.decode(SocketCommentReactionUpdateEvent.self, from: jsonData) else {
+                    continuation.resume(throwing: CommentReactionError.malformedResponse)
+                    return
+                }
+                continuation.resume(returning: event)
+            }
+        }
+    }
+
+    public func requestCommentReactionSync(commentId: String) async throws -> SocketCommentReactionSyncEvent {
+        guard let socket else { throw CommentReactionError.noSocket }
+        return try await withCheckedThrowingContinuation { continuation in
+            var resumed = false
+            socket.emitWithAck("comment:reaction-request-sync", ["commentId": commentId]).timingOut(after: 10) { items in
+                guard !resumed else { return }
+                resumed = true
+                guard let response = items.first as? [String: Any] else {
+                    continuation.resume(throwing: CommentReactionError.timeout)
+                    return
+                }
+                guard let success = response["success"] as? Bool, success,
+                      let data = response["data"] as? [String: Any] else {
+                    let message = (response["error"] as? [String: Any])?["message"] as? String
+                        ?? (response["error"] as? String)
+                        ?? "unknown error"
+                    continuation.resume(throwing: CommentReactionError.serverError(message))
+                    return
+                }
+                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
+                      let event = try? self.decoder.decode(SocketCommentReactionSyncEvent.self, from: jsonData) else {
+                    continuation.resume(throwing: CommentReactionError.malformedResponse)
+                    return
+                }
+                continuation.resume(returning: event)
+            }
+        }
     }
 
     // MARK: - Event Handlers
@@ -509,6 +656,27 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             guard let self else { return }
             self.decode(SocketCommentLikedData.self, from: data) { [weak self] payload in
                 self?.commentLiked.send(payload)
+            }
+        }
+
+        socket.on("comment:reaction-added") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketCommentReactionUpdateEvent.self, from: data) { [weak self] payload in
+                self?.commentReactionAdded.send(payload)
+            }
+        }
+
+        socket.on("comment:reaction-removed") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketCommentReactionUpdateEvent.self, from: data) { [weak self] payload in
+                self?.commentReactionRemoved.send(payload)
+            }
+        }
+
+        socket.on("comment:reaction-sync") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketCommentReactionSyncEvent.self, from: data) { [weak self] payload in
+                self?.commentReactionSync.send(payload)
             }
         }
 

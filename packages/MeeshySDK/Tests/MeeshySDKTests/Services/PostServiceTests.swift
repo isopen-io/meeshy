@@ -42,7 +42,8 @@ final class PostServiceTests: XCTestCase {
             translations: nil, likeCount: 0, replyCount: 0,
             effectFlags: nil,
             createdAt: Date(),
-            author: APIAuthor(id: "author2", username: "bob", displayName: "Bob", avatar: nil)
+            author: APIAuthor(id: "author2", username: "bob", displayName: "Bob", avatar: nil),
+            currentUserReactions: nil
         )
     }
 

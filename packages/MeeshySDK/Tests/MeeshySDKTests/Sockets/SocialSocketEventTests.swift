@@ -383,6 +383,116 @@ final class SocialSocketEventTests: XCTestCase {
         XCTAssertEqual(post.audioDuration, 5000)
     }
 
+    // MARK: - SocketCommentReactionUpdateEvent
+
+    func testSocketCommentReactionUpdateEvent_decoding() throws {
+        let json = """
+        {
+            "commentId": "c1",
+            "postId": "p1",
+            "userId": "u1",
+            "emoji": "\u{2764}\u{FE0F}",
+            "action": "add",
+            "aggregation": {
+                "emoji": "\u{2764}\u{FE0F}",
+                "count": 3,
+                "userIds": ["u1", "u2", "u3"],
+                "hasCurrentUser": true
+            },
+            "timestamp": "2026-05-14T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+        let event = try decoder.decode(SocketCommentReactionUpdateEvent.self, from: json)
+        XCTAssertEqual(event.commentId, "c1")
+        XCTAssertEqual(event.postId, "p1")
+        XCTAssertEqual(event.userId, "u1")
+        XCTAssertEqual(event.emoji, "\u{2764}\u{FE0F}")
+        XCTAssertEqual(event.action, "add")
+        XCTAssertEqual(event.aggregation.count, 3)
+        XCTAssertEqual(event.aggregation.emoji, "\u{2764}\u{FE0F}")
+        XCTAssertEqual(event.aggregation.userIds, ["u1", "u2", "u3"])
+        XCTAssertTrue(event.aggregation.hasCurrentUser)
+        XCTAssertNotNil(event.timestamp)
+    }
+
+    func testSocketCommentReactionUpdateEvent_decoding_removeAction() throws {
+        let json = """
+        {
+            "commentId": "c2",
+            "postId": "p2",
+            "userId": "u2",
+            "emoji": "\u{1F525}",
+            "action": "remove",
+            "aggregation": {
+                "emoji": "\u{1F525}",
+                "count": 0,
+                "userIds": [],
+                "hasCurrentUser": false
+            }
+        }
+        """.data(using: .utf8)!
+        let event = try decoder.decode(SocketCommentReactionUpdateEvent.self, from: json)
+        XCTAssertEqual(event.action, "remove")
+        XCTAssertEqual(event.emoji, "\u{1F525}")
+        XCTAssertEqual(event.aggregation.count, 0)
+        XCTAssertFalse(event.aggregation.hasCurrentUser)
+        XCTAssertNil(event.timestamp)
+    }
+
+    // MARK: - SocketCommentReactionSyncEvent
+
+    func testSocketCommentReactionSyncEvent_decoding() throws {
+        let json = """
+        {
+            "commentId": "c3",
+            "reactions": [
+                {
+                    "emoji": "\u{2764}\u{FE0F}",
+                    "count": 5,
+                    "userIds": ["u1", "u2", "u3", "u4", "u5"],
+                    "hasCurrentUser": true
+                },
+                {
+                    "emoji": "\u{1F44D}",
+                    "count": 2,
+                    "userIds": ["u6", "u7"],
+                    "hasCurrentUser": false
+                }
+            ],
+            "totalCount": 7,
+            "userReactions": ["\u{2764}\u{FE0F}"]
+        }
+        """.data(using: .utf8)!
+        let event = try decoder.decode(SocketCommentReactionSyncEvent.self, from: json)
+        XCTAssertEqual(event.commentId, "c3")
+        XCTAssertEqual(event.reactions.count, 2)
+        XCTAssertEqual(event.reactions[0].emoji, "\u{2764}\u{FE0F}")
+        XCTAssertEqual(event.reactions[0].count, 5)
+        XCTAssertTrue(event.reactions[0].hasCurrentUser)
+        XCTAssertEqual(event.reactions[1].emoji, "\u{1F44D}")
+        XCTAssertFalse(event.reactions[1].hasCurrentUser)
+        XCTAssertEqual(event.totalCount, 7)
+        XCTAssertEqual(event.userReactions, ["\u{2764}\u{FE0F}"])
+    }
+
+    // MARK: - SocketCommentReactionAggregation
+
+    func testSocketCommentReactionAggregation_hasCurrentUser_true() throws {
+        let json = """
+        {
+            "emoji": "\u{1F389}",
+            "count": 1,
+            "userIds": ["me123"],
+            "hasCurrentUser": true
+        }
+        """.data(using: .utf8)!
+        let aggregation = try decoder.decode(SocketCommentReactionAggregation.self, from: json)
+        XCTAssertEqual(aggregation.emoji, "\u{1F389}")
+        XCTAssertEqual(aggregation.count, 1)
+        XCTAssertEqual(aggregation.userIds, ["me123"])
+        XCTAssertTrue(aggregation.hasCurrentUser)
+    }
+
     // MARK: - APIPostComment optional fields
 
     func testAPIPostCommentDecodingWithOptionals() throws {

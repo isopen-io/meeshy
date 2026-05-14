@@ -392,4 +392,35 @@ final class PostModelsTests: XCTestCase {
         let post = try makeDecoder().decode(APIPost.self, from: json)
         XCTAssertEqual(post.originalRepostOfId, "root-1")
     }
+
+    // MARK: - APIPostComment.currentUserReactions
+
+    func testAPIPostCommentDecodes_currentUserReactions_emptyByDefault() throws {
+        let json = """
+        {
+            "id": "comment10",
+            "content": "No reactions here",
+            "createdAt": "2026-05-14T10:00:00.000Z",
+            "author": {"id": "a1", "username": "alice"}
+        }
+        """.data(using: .utf8)!
+        let comment = try makeDecoder().decode(APIPostComment.self, from: json)
+        XCTAssertEqual(comment.id, "comment10")
+        XCTAssertNil(comment.currentUserReactions)
+    }
+
+    func testAPIPostCommentDecodes_currentUserReactions_populated() throws {
+        let json = """
+        {
+            "id": "comment11",
+            "content": "Reactions present",
+            "createdAt": "2026-05-14T10:00:00.000Z",
+            "author": {"id": "a2", "username": "bob"},
+            "currentUserReactions": ["\u{2764}\u{FE0F}", "\u{1F525}"]
+        }
+        """.data(using: .utf8)!
+        let comment = try makeDecoder().decode(APIPostComment.self, from: json)
+        XCTAssertEqual(comment.currentUserReactions, ["\u{2764}\u{FE0F}", "\u{1F525}"])
+        XCTAssertEqual(comment.currentUserReactions?.count, 2)
+    }
 }

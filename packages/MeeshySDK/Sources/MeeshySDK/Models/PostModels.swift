@@ -66,6 +66,7 @@ public struct APIPostComment: Decodable, Sendable {
     public let effectFlags: Int?
     public let createdAt: Date
     public let author: APIAuthor
+    public let currentUserReactions: [String]?
 }
 
 public struct APIPostTranslationEntry: Codable, Sendable {
