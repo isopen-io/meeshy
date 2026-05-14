@@ -151,6 +151,27 @@ struct CommentsSheetView: View {
     @State private var expandedThreads: Set<String> = []
     @State private var loadingReplies: Set<String> = []
 
+    /// Tracks current composer text so `MentionSuggestionPanel` can pass it
+    /// back to `insertMention(_:into:)` without needing to own the text field.
+    @State private var composerText: String = ""
+
+    @StateObject private var mentionController: MentionComposerController
+
+    init(
+        post: FeedPost,
+        accentColor: String,
+        onSendComment: ((String, String, String?) -> Void)? = nil,
+        onLikeComment: ((String, String) -> Void)? = nil
+    ) {
+        self.post = post
+        self.accentColor = accentColor
+        self.onSendComment = onSendComment
+        self.onLikeComment = onLikeComment
+        _mentionController = StateObject(wrappedValue: MentionComposerController(
+            context: .post(id: post.id)
+        ))
+    }
+
     private var comments: [FeedComment] { liveComments ?? post.comments }
     private var commentCount: Int { liveCommentCount ?? post.commentCount }
 
@@ -196,7 +217,23 @@ struct CommentsSheetView: View {
                         .padding(.bottom, 100)
                     }
 
-                    commentComposer
+                    VStack(spacing: 0) {
+                        if !mentionController.suggestions.isEmpty {
+                            MentionSuggestionPanel(
+                                controller: mentionController,
+                                accentColor: accentColor,
+                                currentText: composerText,
+                                onSelect: { updated in
+                                    // The panel calls insertMention which clears suggestions;
+                                    // we update composerText so the next onChange syncs.
+                                    composerText = updated
+                                }
+                            )
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        commentComposer
+                    }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.suggestions.isEmpty)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -476,15 +513,20 @@ struct CommentsSheetView: View {
                             liveComments = current
                         }
                         liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
+                        mentionController.clearDraft()
                     } catch {
                         ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
                     }
                 }
             },
+            textBinding: $composerText,
             replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
-            focusTrigger: $composerFocusTrigger
+            focusTrigger: $composerFocusTrigger,
+            onTextChange: { text in
+                mentionController.handleQuery(in: text)
+            }
         )
     }
 
