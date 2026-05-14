@@ -1487,7 +1487,7 @@ extension StoryViewerView {
     func toggleStoryCommentLike(_ comment: FeedComment) async {
         let id = comment.id
         let wasLiked = storyCommentLikedIds.contains(id)
-        let heartEmoji = "\u{2764}\u{FE0F}"
+        let postId = currentStory?.id ?? ""
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
             if wasLiked {
@@ -1501,9 +1501,9 @@ extension StoryViewerView {
 
         do {
             if wasLiked {
-                _ = try await SocialSocketManager.shared.removeCommentReaction(commentId: id, emoji: heartEmoji)
+                _ = try await SocialSocketManager.shared.removeCommentReaction(commentId: id, postId: postId, emoji: StoryViewerView.heartEmoji)
             } else {
-                _ = try await SocialSocketManager.shared.addCommentReaction(commentId: id, emoji: heartEmoji)
+                _ = try await SocialSocketManager.shared.addCommentReaction(commentId: id, postId: postId, emoji: StoryViewerView.heartEmoji)
             }
         } catch {
             withAnimation {
@@ -1521,10 +1521,9 @@ extension StoryViewerView {
     // MARK: - Load Comments
 
     static func computeLikedIds(from comments: [APIPostComment]) -> Set<String> {
-        let heartEmoji = "\u{2764}\u{FE0F}"
         return Set(
             comments
-                .filter { $0.currentUserReactions?.contains(heartEmoji) == true }
+                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
                 .map { $0.id }
         )
     }

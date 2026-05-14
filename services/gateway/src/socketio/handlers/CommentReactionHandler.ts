@@ -23,6 +23,7 @@ import { validateSocketEvent } from '../../middleware/validation.js';
 import {
   SocketCommentReactionAddSchema,
   SocketCommentReactionRemoveSchema,
+  SocketPostRoomActionSchema,
 } from '../../validation/socket-event-schemas.js';
 
 export interface CommentReactionHandlerDependencies {
@@ -261,7 +262,8 @@ export class CommentReactionHandler {
   }
 
   /**
-   * Rejoint la room d'un post pour recevoir les événements de réactions
+   * Rejoint la room d'un post pour recevoir les événements de réactions.
+   * Requires authentication — anonymous sockets cannot subscribe to post rooms.
    */
   async handleJoinPost(
     socket: Socket,
@@ -269,7 +271,20 @@ export class CommentReactionHandler {
     callback?: (response: SocketIOResponse<unknown>) => void
   ): Promise<void> {
     try {
-      socket.join(ROOMS.post(data.postId));
+      const schemaValidation = validateSocketEvent(SocketPostRoomActionSchema, data);
+      if (schemaValidation.success === false) {
+        if (callback) callback({ success: false, error: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      if (!userIdOrToken) {
+        if (callback) callback({ success: false, error: 'User not authenticated' });
+        return;
+      }
+
+      socket.join(ROOMS.post(validated.postId));
       if (callback) callback({ success: true });
     } catch (error: unknown) {
       console.error('❌ Erreur lors du join post room:', error);
@@ -282,7 +297,8 @@ export class CommentReactionHandler {
   }
 
   /**
-   * Quitte la room d'un post
+   * Quitte la room d'un post.
+   * Requires authentication — mirrors handleJoinPost guards.
    */
   async handleLeavePost(
     socket: Socket,
@@ -290,7 +306,20 @@ export class CommentReactionHandler {
     callback?: (response: SocketIOResponse<unknown>) => void
   ): Promise<void> {
     try {
-      socket.leave(ROOMS.post(data.postId));
+      const schemaValidation = validateSocketEvent(SocketPostRoomActionSchema, data);
+      if (schemaValidation.success === false) {
+        if (callback) callback({ success: false, error: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      if (!userIdOrToken) {
+        if (callback) callback({ success: false, error: 'User not authenticated' });
+        return;
+      }
+
+      socket.leave(ROOMS.post(validated.postId));
       if (callback) callback({ success: true });
     } catch (error: unknown) {
       console.error('❌ Erreur lors du leave post room:', error);

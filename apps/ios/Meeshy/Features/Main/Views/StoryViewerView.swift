@@ -90,6 +90,8 @@ struct StoryViewerView: View {
     /// (tray, deep link, story-reaction redirect) on the existing path.
     var initialAction: StoryViewerInitialAction? = nil
 
+    static let heartEmoji = "\u{2764}\u{FE0F}"
+
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
@@ -345,26 +347,19 @@ struct StoryViewerView: View {
             let previousStory = currentGroup.flatMap { group in
                 group.stories.indices.contains(oldValue) ? group.stories[oldValue] : nil
             }
-            if let prev = previousStory {
-                SocialSocketManager.shared.leavePostRoom(postId: prev.id)
-            }
-            if let story = currentStory {
-                SocialSocketManager.shared.joinPostRoom(postId: story.id)
-            }
+            transitionPostRoom(from: previousStory, to: currentStory)
         }
         .onChange(of: currentGroupIndex) { oldValue, _ in
             refreshPrefetchWindowAndTimer()
-            if oldValue >= 0 && oldValue < groups.count,
-               groups[oldValue].stories.indices.contains(currentStoryIndex) {
-                SocialSocketManager.shared.leavePostRoom(postId: groups[oldValue].stories[currentStoryIndex].id)
-            }
-            if let story = currentStory {
-                SocialSocketManager.shared.joinPostRoom(postId: story.id)
-            }
+            let previousStory: StoryItem? = (oldValue >= 0 && oldValue < groups.count &&
+                groups[oldValue].stories.indices.contains(currentStoryIndex))
+                ? groups[oldValue].stories[currentStoryIndex]
+                : nil
+            transitionPostRoom(from: previousStory, to: currentStory)
         }
         .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
-            let heartEmoji = "\u{2764}\u{FE0F}"
-            guard event.emoji == heartEmoji else { return }
+            guard event.postId == currentStory?.id else { return }
+            guard event.emoji == Self.heartEmoji else { return }
             let currentUserId = AuthManager.shared.currentUser?.id
             if event.userId == currentUserId {
                 storyCommentLikedIds.insert(event.commentId)
@@ -373,8 +368,8 @@ struct StoryViewerView: View {
             }
         }
         .onReceive(SocialSocketManager.shared.commentReactionRemoved.receive(on: DispatchQueue.main)) { event in
-            let heartEmoji = "\u{2764}\u{FE0F}"
-            guard event.emoji == heartEmoji else { return }
+            guard event.postId == currentStory?.id else { return }
+            guard event.emoji == Self.heartEmoji else { return }
             let currentUserId = AuthManager.shared.currentUser?.id
             if event.userId == currentUserId {
                 storyCommentLikedIds.remove(event.commentId)
@@ -602,6 +597,18 @@ struct StoryViewerView: View {
     /// Direct repost-as-post action wired to the kebab menu's "Republier en
     /// post" item. Mirrors the share-button repost UX (C.1) but skips the
     /// composer — fires `PostService.repost` immediately with no content and
+    /// Transitions the Socket.IO post room subscription from `oldStory` to `newStory`.
+    /// The old.id != new.id check makes redundant calls (e.g. double-fire from both
+    /// onChange handlers at a group boundary) idempotent.
+    private func transitionPostRoom(from oldStory: StoryItem?, to newStory: StoryItem?) {
+        if let old = oldStory, old.id != newStory?.id {
+            SocialSocketManager.shared.leavePostRoom(postId: old.id)
+        }
+        if let new = newStory, new.id != oldStory?.id {
+            SocialSocketManager.shared.joinPostRoom(postId: new.id)
+        }
+    }
+
     /// `isQuote: false`. Surfaces user-facing toasts on success / known error
     /// codes (404 = source story gone, 403 = repost forbidden) and a generic
     /// failure otherwise. Errors are mapped against `APIError.serverError`'s

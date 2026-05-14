@@ -276,4 +276,34 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(pagination.limit, 20)
         XCTAssertTrue(pagination.hasMore)
     }
+
+    // MARK: - New story/comment reaction notification types
+
+    func test_notificationType_commentReaction_decodesCorrectly() {
+        XCTAssertEqual(MeeshyNotificationType(rawValue: "comment_reaction"), .commentReaction)
+        XCTAssertEqual(MeeshyNotificationType.commentReaction.rawValue, "comment_reaction")
+        XCTAssertEqual(MeeshyNotificationType.commentReaction.systemIcon, "heart.fill")
+        XCTAssertEqual(MeeshyNotificationType.commentReaction.accentHex, "FF6B6B")
+    }
+
+    func test_notificationType_storyNewComment_decodesCorrectly() {
+        XCTAssertEqual(MeeshyNotificationType(rawValue: "story_new_comment"), .storyNewComment)
+        XCTAssertEqual(MeeshyNotificationType.storyNewComment.rawValue, "story_new_comment")
+        XCTAssertEqual(MeeshyNotificationType.storyNewComment.systemIcon, "text.bubble.fill")
+        XCTAssertEqual(MeeshyNotificationType.storyNewComment.accentHex, "3498DB")
+    }
+
+    func test_notificationType_friendStoryComment_decodesCorrectly() {
+        XCTAssertEqual(MeeshyNotificationType(rawValue: "friend_story_comment"), .friendStoryComment)
+        XCTAssertEqual(MeeshyNotificationType.friendStoryComment.rawValue, "friend_story_comment")
+        XCTAssertEqual(MeeshyNotificationType.friendStoryComment.systemIcon, "text.bubble.fill")
+        XCTAssertEqual(MeeshyNotificationType.friendStoryComment.accentHex, "3498DB")
+    }
+
+    func test_notificationType_storyThreadReply_decodesCorrectly() {
+        XCTAssertEqual(MeeshyNotificationType(rawValue: "story_thread_reply"), .storyThreadReply)
+        XCTAssertEqual(MeeshyNotificationType.storyThreadReply.rawValue, "story_thread_reply")
+        XCTAssertEqual(MeeshyNotificationType.storyThreadReply.systemIcon, "text.bubble.fill")
+        XCTAssertEqual(MeeshyNotificationType.storyThreadReply.accentHex, "3498DB")
+    }
 }

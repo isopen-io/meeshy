@@ -888,6 +888,8 @@ export class NotificationService {
     authorId: string,
     commenterId: string
   ): Promise<{ authorId: string; friendIds: string[]; previousCommenterIds: string[] }> {
+    // Cap at 500 rows to bound fan-out cost on viral posts.
+    // Future: large posts should use a background queue for fan-out.
     const [previousComments, friendRequests] = await Promise.all([
       this.prisma.postComment.findMany({
         where: {
@@ -897,6 +899,7 @@ export class NotificationService {
         },
         distinct: ['authorId'],
         select: { authorId: true },
+        take: 500,
       }),
       this.prisma.friendRequest.findMany({
         where: {
@@ -904,6 +907,7 @@ export class NotificationService {
           OR: [{ senderId: authorId }, { receiverId: authorId }],
         },
         select: { senderId: true, receiverId: true },
+        take: 500,
       }),
     ]);
 

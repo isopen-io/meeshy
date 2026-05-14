@@ -421,7 +421,7 @@ describe('CommentReactionService', () => {
 
       const thumbsUpAggregation = result.reactions.find(r => r.emoji === '👍');
       expect(thumbsUpAggregation?.count).toBe(3);
-      expect(thumbsUpAggregation?.participantIds.length).toBe(3);
+      expect(thumbsUpAggregation?.userIds.length).toBe(3);
     });
 
     it('should mark hasCurrentUser correctly for current user', async () => {
@@ -506,7 +506,7 @@ describe('CommentReactionService', () => {
 
       expect(result.emoji).toBe('👍');
       expect(result.count).toBe(3);
-      expect(result.participantIds.length).toBe(3);
+      expect(result.userIds.length).toBe(3);
     });
 
     it('should throw error for invalid emoji', async () => {
@@ -555,7 +555,7 @@ describe('CommentReactionService', () => {
       );
 
       expect(result.count).toBe(0);
-      expect(result.participantIds).toEqual([]);
+      expect(result.userIds).toEqual([]);
       expect(result.hasCurrentUser).toBe(false);
     });
   });
@@ -1011,7 +1011,7 @@ describe('CommentReactionService', () => {
 
       const thumbsUp = result.reactions.find(r => r.emoji === '👍');
       expect(thumbsUp?.count).toBe(5);
-      expect(thumbsUp?.participantIds.length).toBe(5);
+      expect(thumbsUp?.userIds.length).toBe(5);
     });
 
     it('should handle reactions ordered by createdAt', async () => {

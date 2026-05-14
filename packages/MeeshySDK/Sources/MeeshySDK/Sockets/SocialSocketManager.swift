@@ -177,6 +177,11 @@ public protocol SocialSocketProviding: Sendable {
     func disconnect()
     func subscribeFeed()
     func unsubscribeFeed()
+    func joinPostRoom(postId: String)
+    func leavePostRoom(postId: String)
+    func addCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent
+    func removeCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent
+    func requestCommentReactionSync(commentId: String) async throws -> SocketCommentReactionSyncEvent
 }
 
 // MARK: - Social Socket Manager
@@ -394,11 +399,11 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         }
     }
 
-    public func addCommentReaction(commentId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
+    public func addCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
         guard let socket else { throw CommentReactionError.noSocket }
         return try await withCheckedThrowingContinuation { continuation in
             var resumed = false
-            socket.emitWithAck("comment:reaction-add", ["commentId": commentId, "emoji": emoji]).timingOut(after: 10) { items in
+            socket.emitWithAck("comment:reaction-add", ["commentId": commentId, "postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
                 guard !resumed else { return }
                 resumed = true
                 guard let response = items.first as? [String: Any] else {
@@ -423,11 +428,11 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         }
     }
 
-    public func removeCommentReaction(commentId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
+    public func removeCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
         guard let socket else { throw CommentReactionError.noSocket }
         return try await withCheckedThrowingContinuation { continuation in
             var resumed = false
-            socket.emitWithAck("comment:reaction-remove", ["commentId": commentId, "emoji": emoji]).timingOut(after: 10) { items in
+            socket.emitWithAck("comment:reaction-remove", ["commentId": commentId, "postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
                 guard !resumed else { return }
                 resumed = true
                 guard let response = items.first as? [String: Any] else {

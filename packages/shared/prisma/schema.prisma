@@ -1095,6 +1095,7 @@ model CommentReaction {
   @@index([commentId])
   @@index([userId])
   @@index([emoji])
+  @@index([userId, commentId])
 }
 
 /// Mention d'un participant dans un message

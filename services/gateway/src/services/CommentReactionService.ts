@@ -7,7 +7,7 @@
 
 import { PrismaClient, CommentReaction } from '@meeshy/shared/prisma/client';
 import { sanitizeEmoji, isValidEmoji } from '@meeshy/shared/types/reaction';
-import type { ReactionAggregation } from '@meeshy/shared/types';
+import type { CommentReactionAggregation } from '@meeshy/shared/types/post';
 
 export interface CommentReactionData {
   readonly id: string;
@@ -25,7 +25,7 @@ export interface CommentReactionSync {
   readonly userReactions: readonly string[];
 }
 
-export interface CommentReactionAggregationWithUsers extends ReactionAggregation {
+export interface CommentReactionAggregationWithUsers extends CommentReactionAggregation {
   readonly users: readonly {
     readonly userId: string;
     readonly username: string;
@@ -40,7 +40,7 @@ export interface CommentReactionUpdateEvent {
   readonly userId: string;
   readonly emoji: string;
   readonly action: 'add' | 'remove';
-  readonly aggregation: ReactionAggregation;
+  readonly aggregation: CommentReactionAggregation;
   readonly timestamp: Date;
 }
 
@@ -174,14 +174,14 @@ export class CommentReactionService {
       orderBy: { createdAt: 'asc' }
     });
 
-    const aggregationMap = new Map<string, ReactionAggregation>();
+    const aggregationMap = new Map<string, CommentReactionAggregation>();
 
     reactions.forEach(reaction => {
       const existing = aggregationMap.get(reaction.emoji);
 
       if (existing) {
-        const participantIds = [...existing.participantIds];
-        participantIds.push(reaction.userId);
+        const userIds = [...existing.userIds];
+        userIds.push(reaction.userId);
 
         let hasCurrentUser = existing.hasCurrentUser;
         if (currentUserId && reaction.userId === currentUserId) {
@@ -191,7 +191,7 @@ export class CommentReactionService {
         aggregationMap.set(reaction.emoji, {
           emoji: reaction.emoji,
           count: existing.count + 1,
-          participantIds,
+          userIds,
           hasCurrentUser
         });
       } else {
@@ -200,7 +200,7 @@ export class CommentReactionService {
         aggregationMap.set(reaction.emoji, {
           emoji: reaction.emoji,
           count: 1,
-          participantIds: [reaction.userId],
+          userIds: [reaction.userId],
           hasCurrentUser
         });
       }
@@ -209,7 +209,7 @@ export class CommentReactionService {
     const aggregations = Array.from(aggregationMap.values());
 
     const allUserIds = new Set<string>();
-    aggregations.forEach(a => a.participantIds.forEach((uid: string) => allUserIds.add(uid)));
+    aggregations.forEach(a => a.userIds.forEach((uid: string) => allUserIds.add(uid)));
 
     const users = allUserIds.size > 0
       ? await this.prisma.user.findMany({
@@ -222,7 +222,7 @@ export class CommentReactionService {
 
     const enrichedReactions: CommentReactionAggregationWithUsers[] = aggregations.map(agg => ({
       ...agg,
-      users: agg.participantIds.map((uid: string) => {
+      users: agg.userIds.map((uid: string) => {
         const user = userMap.get(uid);
         const reaction = reactions.find(r => r.emoji === agg.emoji && r.userId === uid);
         return {
@@ -250,7 +250,7 @@ export class CommentReactionService {
     commentId: string,
     emoji: string,
     currentUserId?: string
-  ): Promise<ReactionAggregation> {
+  ): Promise<CommentReactionAggregation> {
     this.validateCommentId(commentId);
 
     const sanitized = sanitizeEmoji(emoji);
@@ -265,7 +265,7 @@ export class CommentReactionService {
       }
     });
 
-    const participantIds = reactions.map(r => r.userId);
+    const userIds = reactions.map(r => r.userId);
 
     const hasCurrentUser = reactions.some(r =>
       currentUserId && r.userId === currentUserId
@@ -274,7 +274,7 @@ export class CommentReactionService {
     return {
       emoji: sanitized,
       count: reactions.length,
-      participantIds,
+      userIds,
       hasCurrentUser
     };
   }

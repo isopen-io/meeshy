@@ -237,6 +237,28 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
         })
       );
     });
+
+    it('caps postComment query at 500 rows to bound fan-out on viral posts', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(prisma.postComment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 500 })
+      );
+    });
+
+    it('caps friendRequest query at 500 rows to bound fan-out on popular authors', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ take: 500 })
+      );
+    });
   });
 
   // ======================================================

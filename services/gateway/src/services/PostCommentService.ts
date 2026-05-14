@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 
 const authorSelect = {
@@ -229,7 +229,7 @@ export class PostCommentService {
       where: { id: commentId },
       data: {
         likeCount: { increment: 1 },
-        reactionSummary: summary as any,
+        reactionSummary: summary as Prisma.InputJsonValue,
       },
       select: {
         id: true,
@@ -258,7 +258,7 @@ export class PostCommentService {
       where: { id: commentId },
       data: {
         likeCount: { decrement: 1 },
-        reactionSummary: summary as any,
+        reactionSummary: summary as Prisma.InputJsonValue,
       },
       select: {
         id: true,

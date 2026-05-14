@@ -2,11 +2,12 @@ import XCTest
 @testable import Meeshy
 import MeeshySDK
 
+@MainActor
 final class StoryViewerCommentReactionTests: XCTestCase {
 
     // MARK: - Factory Helpers
 
-    private static func makeComment(
+    private func makeComment(
         id: String,
         currentUserReactions: [String]?
     ) -> APIPostComment {
@@ -32,9 +33,9 @@ final class StoryViewerCommentReactionTests: XCTestCase {
 
     func test_computeLikedIds_withHeartReaction_includesCommentId() {
         let comments = [
-            Self.makeComment(id: "c1", currentUserReactions: ["\u{2764}\u{FE0F}"]),
-            Self.makeComment(id: "c2", currentUserReactions: ["\u{1F525}"]),
-            Self.makeComment(id: "c3", currentUserReactions: nil)
+            makeComment(id: "c1", currentUserReactions: ["\u{2764}\u{FE0F}"]),
+            makeComment(id: "c2", currentUserReactions: ["\u{1F525}"]),
+            makeComment(id: "c3", currentUserReactions: nil)
         ]
 
         let result = StoryViewerView.computeLikedIds(from: comments)
@@ -44,8 +45,8 @@ final class StoryViewerCommentReactionTests: XCTestCase {
 
     func test_computeLikedIds_withNoReactions_returnsEmptySet() {
         let comments = [
-            Self.makeComment(id: "c1", currentUserReactions: nil),
-            Self.makeComment(id: "c2", currentUserReactions: [])
+            makeComment(id: "c1", currentUserReactions: nil),
+            makeComment(id: "c2", currentUserReactions: [])
         ]
 
         let result = StoryViewerView.computeLikedIds(from: comments)
@@ -55,9 +56,9 @@ final class StoryViewerCommentReactionTests: XCTestCase {
 
     func test_computeLikedIds_withMultipleHeartComments_includesAllIds() {
         let comments = [
-            Self.makeComment(id: "c1", currentUserReactions: ["\u{2764}\u{FE0F}"]),
-            Self.makeComment(id: "c2", currentUserReactions: ["\u{2764}\u{FE0F}", "\u{1F525}"]),
-            Self.makeComment(id: "c3", currentUserReactions: ["\u{1F525}"])
+            makeComment(id: "c1", currentUserReactions: ["\u{2764}\u{FE0F}"]),
+            makeComment(id: "c2", currentUserReactions: ["\u{2764}\u{FE0F}", "\u{1F525}"]),
+            makeComment(id: "c3", currentUserReactions: ["\u{1F525}"])
         ]
 
         let result = StoryViewerView.computeLikedIds(from: comments)

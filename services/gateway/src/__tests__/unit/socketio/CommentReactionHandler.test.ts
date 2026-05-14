@@ -127,7 +127,7 @@ const sampleUpdateEvent = {
   aggregation: {
     emoji: EMOJI,
     count: 1,
-    participantIds: [USER_ID],
+    userIds: [USER_ID],
     hasCurrentUser: true,
   },
   timestamp: new Date(),
@@ -447,7 +447,7 @@ describe('CommentReactionHandler', () => {
       const syncData = {
         commentId: COMMENT_ID,
         reactions: [
-          { emoji: EMOJI, count: 2, participantIds: [USER_ID, ANOTHER_USER_ID], hasCurrentUser: true },
+          { emoji: EMOJI, count: 2, userIds: [USER_ID, ANOTHER_USER_ID], hasCurrentUser: true },
         ],
         totalCount: 2,
         userReactions: [EMOJI],
@@ -491,10 +491,44 @@ describe('CommentReactionHandler', () => {
       const data = { postId: POST_ID };
       const callback = jest.fn();
 
+      mockValidate.mockReturnValue({ success: true, data });
+
       await handler.handleJoinPost(socket as any, data, callback);
 
       expect(socket.join).toHaveBeenCalledWith(ROOMS.post(POST_ID));
       expect(callback).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('test_handleJoinPost_malformedPostId_callbackError', async () => {
+      const socket = createMockSocket();
+      const data = { postId: 'not-a-valid-id' };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: false, error: 'Invalid postId format' });
+
+      await handler.handleJoinPost(socket as any, data, callback);
+
+      expect(socket.join).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({
+        success: false,
+        error: 'Invalid postId format',
+      });
+    });
+
+    it('test_handleJoinPost_unauthenticated_callbackError', async () => {
+      const socket = { ...createMockSocket(), id: 'unknown-socket' };
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+
+      await handler.handleJoinPost(socket as any, data, callback);
+
+      expect(socket.join).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({
+        success: false,
+        error: 'User not authenticated',
+      });
     });
   });
 
@@ -506,10 +540,44 @@ describe('CommentReactionHandler', () => {
       const data = { postId: POST_ID };
       const callback = jest.fn();
 
+      mockValidate.mockReturnValue({ success: true, data });
+
       await handler.handleLeavePost(socket as any, data, callback);
 
       expect(socket.leave).toHaveBeenCalledWith(ROOMS.post(POST_ID));
       expect(callback).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('test_handleLeavePost_malformedPostId_callbackError', async () => {
+      const socket = createMockSocket();
+      const data = { postId: 'bad-id' };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: false, error: 'Invalid postId format' });
+
+      await handler.handleLeavePost(socket as any, data, callback);
+
+      expect(socket.leave).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({
+        success: false,
+        error: 'Invalid postId format',
+      });
+    });
+
+    it('test_handleLeavePost_unauthenticated_callbackError', async () => {
+      const socket = { ...createMockSocket(), id: 'unknown-socket' };
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+
+      await handler.handleLeavePost(socket as any, data, callback);
+
+      expect(socket.leave).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({
+        success: false,
+        error: 'User not authenticated',
+      });
     });
   });
 });
