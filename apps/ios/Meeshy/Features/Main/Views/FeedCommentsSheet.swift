@@ -31,7 +31,10 @@ struct ThreadedCommentSection: View {
     }
 
     private var remainingRepliesCount: Int {
-        max(0, comment.replies - autoPreviewReplies.count)
+        let loaded = replies.count
+        // Use the greater of server count or local count for accuracy
+        let total = max(comment.replies, loaded)
+        return max(0, total - autoPreviewReplies.count)
     }
 
     var body: some View {
@@ -234,12 +237,11 @@ struct CommentsSheetView: View {
                 parentId: parentId
             )
             if let parentId {
-                if expandedThreads.contains(parentId) {
-                    var existing = repliesMap[parentId] ?? []
-                    if !existing.contains(where: { $0.id == feedComment.id }) {
-                        existing.insert(feedComment, at: 0)
-                        repliesMap[parentId] = existing
-                    }
+                // Always insert into repliesMap so auto-preview stays live
+                var existing = repliesMap[parentId] ?? []
+                if !existing.contains(where: { $0.id == feedComment.id }) {
+                    existing.insert(feedComment, at: 0)
+                    repliesMap[parentId] = existing
                 }
                 var current = liveComments ?? post.comments
                 if let idx = current.firstIndex(where: { $0.id == parentId }) {
@@ -265,6 +267,14 @@ struct CommentsSheetView: View {
             .presentationDragIndicator(.visible)
         }
         .withStatusBubble()
+        .task {
+            // Auto-load replies for first 5 comments that have replies > 0
+            // so the auto-preview (first 2 replies) is populated on appear
+            let withReplies = topLevelComments.filter { $0.replies > 0 }
+            for comment in withReplies.prefix(5) {
+                await loadReplies(commentId: comment.id)
+            }
+        }
     }
 
     // MARK: - Thread Management

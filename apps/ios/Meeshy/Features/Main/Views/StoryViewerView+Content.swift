@@ -826,8 +826,21 @@ extension StoryViewerView {
             effectFlags: effectFlags ?? 0,
             originalLanguage: composerLanguage
         )
-        storyComments.append(optimisticComment)
-        storyCommentCount += 1
+
+        if let parentId {
+            // Reply — insert into repliesMap so it appears in the thread
+            var existing = storyCommentRepliesMap[parentId] ?? []
+            existing.append(optimisticComment)
+            storyCommentRepliesMap[parentId] = existing
+            // Also increment the reply count on the parent comment
+            if let idx = storyComments.firstIndex(where: { $0.id == parentId }) {
+                storyComments[idx].replies += 1
+            }
+        } else {
+            // Top-level comment
+            storyComments.append(optimisticComment)
+            storyCommentCount += 1
+        }
 
         // Send to API
         let language = composerLanguage
@@ -1397,16 +1410,14 @@ extension StoryViewerView {
             storyCommentExpandedThreads.remove(commentId)
         } else {
             storyCommentExpandedThreads.insert(commentId)
-            if storyCommentRepliesMap[commentId] == nil {
-                await loadStoryCommentReplies(commentId: commentId)
-            }
+            // Always refetch to get latest replies
+            await loadStoryCommentReplies(commentId: commentId)
         }
     }
 
     func loadStoryCommentReplies(commentId: String) async {
         guard let story = currentStory,
-              !storyCommentLoadingReplies.contains(commentId),
-              storyCommentRepliesMap[commentId] == nil else { return }
+              !storyCommentLoadingReplies.contains(commentId) else { return }
         storyCommentLoadingReplies.insert(commentId)
         defer { storyCommentLoadingReplies.remove(commentId) }
         do {

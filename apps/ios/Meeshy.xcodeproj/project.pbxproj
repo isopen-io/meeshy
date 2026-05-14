@@ -255,6 +255,15 @@
 		EDD817AE0118AEBF9FE37640 /* E2EEService.swift in Sources */ = {isa = PBXBuildFile; fileRef = A35C370F515C4807CB86FA5E /* E2EEService.swift */; };
 		EDECFA614C67F4DA7C1164A1 /* MeeshyNotificationExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = D476AE3A97B7291A27F716AD /* MeeshyNotificationExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		EDIT002A002A002A002A0002 /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EDIT001A001A001A001A0001 /* EditProfileView.swift */; };
+		EPVM00200000000001F00 /* EditProfileViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = EPVM00100000000001F00 /* EditProfileViewModel.swift */; };
+		EPVT00200000000001F00 /* EditProfileViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = EPVT00100000000001F00 /* EditProfileViewModelTests.swift */; };
+		MATU00200000000001F00 /* MockAttachmentUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = MATU00100000000001F00 /* MockAttachmentUploader.swift */; };
+		MEPD00200000000001F00 /* MockEditProfileDoubles.swift in Sources */ = {isa = PBXBuildFile; fileRef = MEPD00100000000001F00 /* MockEditProfileDoubles.swift */; };
+		SLEP00200000000001F00 /* Sleeping.swift in Sources */ = {isa = PBXBuildFile; fileRef = SLEP00100000000001F00 /* Sleeping.swift */; };
+		TSSU00200000000001F00 /* ToastSurfacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSSU00100000000001F00 /* ToastSurfacing.swift */; };
+		HPSU00200000000001F00 /* HapticSurfacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = HPSU00100000000001F00 /* HapticSurfacing.swift */; };
+		ATUP00200000000001F00 /* AttachmentUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATUP00100000000001F00 /* AttachmentUploader.swift */; };
+		ATUT00200000000001F00 /* AttachmentUploaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATUT00100000000001F00 /* AttachmentUploaderTests.swift */; };
 		EE44FF55AA66BB77CC880003 /* LoginView.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE44FF55AA66BB77CC880033 /* LoginView.swift */; };
 		EE55FF66AA77BB88CC990041 /* ConversationAnimatedBackground.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */; };
 		EE55FF66AA77BB88CC990043 /* ConversationBackgroundComponents.swift in Sources */ = {isa = PBXBuildFile; fileRef = EE55FF66AA77BB88CC990042 /* ConversationBackgroundComponents.swift */; };
@@ -729,6 +738,15 @@
 		E5AC4E027FC1B934E44A48FD /* GlobalSearchViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = GlobalSearchViewModelTests.swift; sourceTree = "<group>"; };
 		EC507BC8B27D02CB58CC096C /* DarkFrameDetector.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DarkFrameDetector.swift; sourceTree = "<group>"; };
 		EDIT001A001A001A001A0001 /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
+		EPVM00100000000001F00 /* EditProfileViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileViewModel.swift; sourceTree = "<group>"; };
+		EPVT00100000000001F00 /* EditProfileViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = EditProfileViewModelTests.swift; sourceTree = "<group>"; };
+		MATU00100000000001F00 /* MockAttachmentUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockAttachmentUploader.swift; sourceTree = "<group>"; };
+		MEPD00100000000001F00 /* MockEditProfileDoubles.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockEditProfileDoubles.swift; sourceTree = "<group>"; };
+		SLEP00100000000001F00 /* Sleeping.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Sleeping.swift; sourceTree = "<group>"; };
+		TSSU00100000000001F00 /* ToastSurfacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastSurfacing.swift; sourceTree = "<group>"; };
+		HPSU00100000000001F00 /* HapticSurfacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticSurfacing.swift; sourceTree = "<group>"; };
+		ATUP00100000000001F00 /* AttachmentUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentUploader.swift; sourceTree = "<group>"; };
+		ATUT00100000000001F00 /* AttachmentUploaderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AttachmentUploaderTests.swift; sourceTree = "<group>"; };
 		EE44FF55AA66BB77CC880033 /* LoginView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LoginView.swift; sourceTree = "<group>"; };
 		EE55FF66AA77BB88CC990040 /* ConversationAnimatedBackground.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationAnimatedBackground.swift; sourceTree = "<group>"; };
 		EE55FF66AA77BB88CC990042 /* ConversationBackgroundComponents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationBackgroundComponents.swift; sourceTree = "<group>"; };
@@ -1310,6 +1328,10 @@
 				ANA00100010001000100F001 /* AnalyticsManager.swift */,
 				LANG0010010010010010001 /* LanguageProviding.swift */,
 				7EE5D71D9A67552B9345231E /* ConversationPreferencesBroadcaster.swift */,
+				SLEP00100000000001F00 /* Sleeping.swift */,
+				TSSU00100000000001F00 /* ToastSurfacing.swift */,
+				HPSU00100000000001F00 /* HapticSurfacing.swift */,
+				ATUP00100000000001F00 /* AttachmentUploader.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -1353,6 +1375,7 @@
 				VPMT0001000100010001000 /* VoiceProfileManageViewModelTests.swift */,
 				VPWT0001000100010001000 /* VoiceProfileWizardViewModelTests.swift */,
 				0F5FEBA083B51BF23F6F3C9E /* ConversationOptionsViewModelTests.swift */,
+				EPVT00100000000001F00 /* EditProfileViewModelTests.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -1375,6 +1398,7 @@
 				TFA0VM01B001B001B001B001 /* TwoFactorViewModel.swift */,
 				CSVM470B470B470B470B4701 /* ConnectionStatusViewModel.swift */,
 				0DC6B1EFE559FE8634F4D330 /* ConversationOptionsViewModel.swift */,
+				EPVM00100000000001F00 /* EditProfileViewModel.swift */,
 			);
 			path = ViewModels;
 			sourceTree = "<group>";
@@ -1607,6 +1631,8 @@
 				MVPS0001000100010001000 /* MockVoiceProfileService.swift */,
 				2679E46450A1AA7A85436BCE /* MockFriendService.swift */,
 				C11B9A13244FA9699333355B /* MockCacheService.swift */,
+				MATU00100000000001F00 /* MockAttachmentUploader.swift */,
+				MEPD00100000000001F00 /* MockEditProfileDoubles.swift */,
 			);
 			path = Mocks;
 			sourceTree = "<group>";
@@ -1768,6 +1794,7 @@
 				WRET000000001F01 /* WebRTCErrorTests.swift */,
 				WTTT000000001F01 /* WebRTCTypesTests.swift */,
 				CDPF000000001F01 /* CodecPreferencesTests.swift */,
+				ATUT00100000000001F00 /* AttachmentUploaderTests.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -2265,6 +2292,11 @@
 				DFTP000100010001000100B1 /* DiffableTypes.swift in Sources */,
 				DDE8B064EF5D6FAE5ACA40CF /* ConversationOptionsViewModel.swift in Sources */,
 				6D829DF9D5D32E88815DF3E9 /* ConversationPreferencesBroadcaster.swift in Sources */,
+				SLEP00200000000001F00 /* Sleeping.swift in Sources */,
+				TSSU00200000000001F00 /* ToastSurfacing.swift in Sources */,
+				HPSU00200000000001F00 /* HapticSurfacing.swift in Sources */,
+				ATUP00200000000001F00 /* AttachmentUploader.swift in Sources */,
+				EPVM00200000000001F00 /* EditProfileViewModel.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -2392,6 +2424,10 @@
 				BBLH0001000100010001BLD /* BubbleBlurRevealLifecycleTests.swift in Sources */,
 				BDBG0001000100010001BLD /* BubbleDeliveryBadgeTests.swift in Sources */,
 				320813BE4021B286D9F68C98 /* ConversationOptionsViewModelTests.swift in Sources */,
+				ATUT00200000000001F00 /* AttachmentUploaderTests.swift in Sources */,
+				MATU00200000000001F00 /* MockAttachmentUploader.swift in Sources */,
+				MEPD00200000000001F00 /* MockEditProfileDoubles.swift in Sources */,
+				EPVT00200000000001F00 /* EditProfileViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

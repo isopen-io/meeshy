@@ -141,7 +141,7 @@ final class StoryRepostFlowTests: XCTestCase {
         let lockedBadges = texts.filter { $0.isLocked == true }
         XCTAssertEqual(lockedBadges.count, 1,
                        "Exactly one locked badge is added — repost attribution cannot be stripped")
-        XCTAssertTrue(lockedBadges.first?.content.contains("@alice") == true,
+        XCTAssertTrue(lockedBadges.first?.text.contains("@alice") == true,
                       "Badge mentions the original author handle")
         XCTAssertEqual(lockedBadges.first?.y ?? 0, 0.92, accuracy: 0.001,
                        "Badge sits at bottom-center (y = 0.92)")

@@ -301,6 +301,24 @@ public enum OutboxOutcome: Sendable, Equatable {
     }
 }
 
+// MARK: - Test Seam
+
+/// Subset of `OfflineQueue`'s public surface that consumers
+/// (EditProfileViewModel + other Phase 4 VMs) depend on. Lets tests
+/// inject a mock without faking the full actor.
+public protocol OfflineQueueing: Sendable {
+    @discardableResult
+    func enqueue<P: Codable & Sendable>(
+        _ kind: OutboxKind,
+        payload: P,
+        conversationId: String?
+    ) async throws -> String
+
+    func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome>
+}
+
+extension OfflineQueue: OfflineQueueing {}
+
 // MARK: - Offline Queue
 
 public actor OfflineQueue {
