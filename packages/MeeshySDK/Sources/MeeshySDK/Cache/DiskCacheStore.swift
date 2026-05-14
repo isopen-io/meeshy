@@ -9,7 +9,7 @@ public actor DiskCacheStore: ReadableCacheStore {
 
     public let policy: CachePolicy
 
-    nonisolated(unsafe) private let memoryCache: NSCache<NSString, CacheBox<Data>>
+    nonisolated(unsafe) private let memoryCache: NSCache<NSString, CacheBox>
     private let baseDirectory: URL
     private let fileManager = FileManager.default
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "disk-cache")
@@ -31,7 +31,7 @@ public actor DiskCacheStore: ReadableCacheStore {
             let root = FileManager.default.urls(for: searchPath, in: .userDomainMask).first!
             self.baseDirectory = root.appendingPathComponent("MeeshyMedia/\(subdir)", isDirectory: true)
         }
-        let cache = NSCache<NSString, CacheBox<Data>>()
+        let cache = NSCache<NSString, CacheBox>()
         cache.countLimit = 100
         cache.totalCostLimit = 80 * 1024 * 1024
         self.memoryCache = cache

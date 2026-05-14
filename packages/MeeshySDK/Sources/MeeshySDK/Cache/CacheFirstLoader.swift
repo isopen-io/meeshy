@@ -45,6 +45,15 @@ public final class CacheFirstLoader<Store: MutableCacheStore>: @unchecked Sendab
         self.networkMonitor = networkMonitor
     }
 
+    /// Explicit empty deinit — defensive workaround for the Swift 6.3.2
+    /// optimizer crash (EarlyPerfInliner / isCallerAndCalleeLayoutConstraintsCompatible)
+    /// observed on generic-class synthesized deinits under Release
+    /// `-O -whole-module-optimization`. The class is generic
+    /// (`<Store: MutableCacheStore>`) and held with `@unchecked Sendable`,
+    /// the exact shape that has tripped the inliner elsewhere
+    /// (`WeakBox<T>`, `FABPanGestureWrapper<Content>.Coordinator`).
+    deinit {}
+
     /// Cache-first load. Returns the in-flight revalidation `Task` for the
     /// `.stale` branch (so the caller can cancel it), `nil` otherwise.
     @discardableResult

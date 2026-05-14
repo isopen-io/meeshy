@@ -16,9 +16,15 @@ import MeeshySDK
 /// triggering Swift 6 strict concurrency's `_swift_task_checkIsolatedSwift`
 /// assertion at closure invocation. Mirrors the `WeakBox` pattern used in
 /// `MessageStore.swift`.
-private final class FeedStoreWeakBox<T: AnyObject>: @unchecked Sendable {
-    weak var value: T?
-    init(_ value: T) { self.value = value }
+///
+/// NOTE — kept NON-GENERIC on purpose. The previous generic form tripped a
+/// Swift 6.3.2 optimizer crash (`EarlyPerfInliner` /
+/// `isCallerAndCalleeLayoutConstraintsCompatible`) on the synthesized
+/// `deinit` under Release `-O -whole-module-optimization` (Xcode Cloud
+/// archive). Keep typed on the concrete `FeedStore`.
+private final class FeedStoreWeakBox: @unchecked Sendable {
+    weak var value: FeedStore?
+    init(_ value: FeedStore) { self.value = value }
 }
 
 /// Fetches the feed page synchronously on the calling actor. Declared at

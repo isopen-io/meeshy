@@ -11,16 +11,25 @@ import Combine
 @preconcurrency import GRDB
 import MeeshySDK
 
-/// Sendable weak-reference box. Used to capture a weak reference to a
-/// `@MainActor`-isolated class in a `@Sendable` closure WITHOUT triggering
-/// Swift 6 strict concurrency's `_swift_task_checkIsolatedSwift` assertion
-/// at closure invocation (which would fire when the closure runs off-actor).
-/// The box itself is `@unchecked Sendable` because the wrapped reference
-/// is `weak` and access is gated by the unwrap site (callers must hop to
-/// the right actor before touching the value).
-private final class WeakBox<T: AnyObject>: @unchecked Sendable {
-    weak var value: T?
-    init(_ value: T) { self.value = value }
+/// Sendable weak-reference box. Used to capture a weak reference to the
+/// `@MainActor`-isolated `MessageStore` inside a `@Sendable` closure WITHOUT
+/// triggering Swift 6 strict concurrency's `_swift_task_checkIsolatedSwift`
+/// assertion at closure invocation (which would fire when the closure runs
+/// off-actor). The box itself is `@unchecked Sendable` because the wrapped
+/// reference is `weak` and access is gated by the unwrap site (callers must
+/// hop to the right actor before touching the value).
+///
+/// NOTE — kept NON-GENERIC on purpose. A previous generic version
+/// (`WeakBox<T: AnyObject>`) tripped a Swift 6.3.2 optimizer crash in
+/// `EarlyPerfInliner` / `isCallerAndCalleeLayoutConstraintsCompatible` on
+/// the synthesized `deinit` under Release `-O -whole-module-optimization`
+/// (Xcode Cloud archive). The single concrete instantiation makes the
+/// generic gratuitous. If a future call site needs a different concrete
+/// type, copy the pattern with that type rather than re-introducing the
+/// generic.
+private final class WeakBox: @unchecked Sendable {
+    weak var value: MessageStore?
+    init(_ value: MessageStore) { self.value = value }
 }
 
 // Notification.Name `messageStoreShouldRefresh` is defined in
