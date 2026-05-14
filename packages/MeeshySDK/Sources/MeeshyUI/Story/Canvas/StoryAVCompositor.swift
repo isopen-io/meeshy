@@ -266,6 +266,42 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
             cg.setFillColor(color.cgColor)
             cg.fill(CGRect(origin: .zero, size: CGSize(width: width, height: height)))
             cg.restoreGState()
+        case .gradient(let colors, let direction):
+            // Mirrors `StoryBackgroundLayer.configure` gradient setup so the
+            // baked MP4 matches the live preview. The context is already
+            // flipped (translateBy + scaleBy above) so coordinates are
+            // UIKit-style — y=0 at top, y=height at bottom.
+            let cgColors = colors.map { $0.cgColor } as CFArray
+            let space = StoryRenderingContext.shared.workingColorSpace
+            if let gradient = CGGradient(colorsSpace: space,
+                                          colors: cgColors,
+                                          locations: nil) {
+                let w = CGFloat(width)
+                let h = CGFloat(height)
+                let start: CGPoint
+                let end: CGPoint
+                switch direction {
+                case .topToBottom:
+                    start = CGPoint(x: w / 2, y: 0)
+                    end = CGPoint(x: w / 2, y: h)
+                case .leftToRight:
+                    start = CGPoint(x: 0, y: h / 2)
+                    end = CGPoint(x: w, y: h / 2)
+                case .topLeftToBottomRight:
+                    start = .zero
+                    end = CGPoint(x: w, y: h)
+                }
+                cg.saveGState()
+                cg.drawLinearGradient(gradient, start: start, end: end, options: [])
+                cg.restoreGState()
+            } else if let first = colors.first {
+                // Fallback : if gradient creation fails (e.g. zero colors)
+                // paint the first color so the slide isn't pure black.
+                cg.saveGState()
+                cg.setFillColor(first.cgColor)
+                cg.fill(CGRect(origin: .zero, size: CGSize(width: width, height: height)))
+                cg.restoreGState()
+            }
         case .image:
             // Image backgrounds resolve through `StoryBackgroundLayer.configure`
             // which reads the media object's local file URL OR fetches via

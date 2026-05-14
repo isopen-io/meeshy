@@ -277,7 +277,7 @@ final class RequestsViewModel: ObservableObject {
     private static func persistAcceptedFriend(_ user: FriendRequestUser) async {
         let store = await CacheCoordinator.shared.friends
         let key = FriendshipCache.PersistenceKeys.friendsList
-        let existing = await store.load(for: key).value ?? []
+        let existing = await store.load(for: key).snapshot() ?? []
         guard !existing.contains(where: { $0.id == user.id }) else { return }
         var merged = existing
         merged.append(user)
