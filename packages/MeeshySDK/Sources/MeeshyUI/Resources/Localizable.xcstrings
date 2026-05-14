@@ -7171,6 +7171,9 @@
     "Filtre %@" : {
 
     },
+    "Fond" : {
+
+    },
     "Font" : {
 
     },
@@ -7181,6 +7184,9 @@
 
     },
     "Hors zone visible" : {
+
+    },
+    "Image" : {
 
     },
     "Invite par %@" : {
@@ -11455,6 +11461,9 @@
     "Portugues" : {
 
     },
+    "Premier plan" : {
+
+    },
     "profile.action.acceptConnection" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -12860,6 +12869,9 @@
       }
     },
     "Read" : {
+
+    },
+    "Recherche…" : {
 
     },
     "Rechercher un membre..." : {
@@ -16277,6 +16289,9 @@
         }
       }
     },
+    "story.timeline.a11y.clip.image" : {
+
+    },
     "story.timeline.a11y.clip.text" : {
       "localizations" : {
         "en" : {
@@ -18543,6 +18558,9 @@
 
     },
     "vide" : {
+
+    },
+    "Vidéo" : {
 
     },
     "voiceProfile.age.birthDate" : {

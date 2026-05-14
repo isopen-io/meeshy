@@ -207,6 +207,7 @@ protocol StoryComposerProviding: AnyObject {
     @discardableResult
     func addMediaObject(kind: StoryMediaKind, toSlideId: String?) -> StoryMediaObject?
     func setMediaDuration(id: String, duration: Float, slideId: String?)
+    func setMediaURL(id: String, url: String, slideId: String?)
     @discardableResult
     func addAudioObject() -> StoryAudioPlayerObject?
     func deleteElement(id: String)
@@ -223,6 +224,9 @@ protocol StoryComposerProviding: AnyObject {
     func sendToBack(id: String)
     func bringForward(id: String)
     func sendBackward(id: String)
+
+    // MARK: Media Reorder
+    func moveMedia(from source: IndexSet, to destination: Int)
 
     // MARK: Tool Actions
     func selectTool(_ tool: StoryToolMode?)
@@ -977,6 +981,27 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         slides[targetIndex].effects = effects
     }
 
+    /// Set the `mediaURL` on a `StoryMediaObject`. Called after persisting
+    /// a composer-loaded UIImage to a temp file so the CALayer canvas
+    /// (`StoryMediaLayer.configureImage`) can load it via `file://` URL.
+    /// Without this bridge the media object's `mediaURL` stays `nil` and the
+    /// layer renders a black rectangle.
+    func setMediaURL(id: String, url: String, slideId: String? = nil) {
+        let targetIndex: Int = {
+            if let slideId, let idx = slides.firstIndex(where: { $0.id == slideId }) {
+                return idx
+            }
+            return currentSlideIndex
+        }()
+        guard slides.indices.contains(targetIndex) else { return }
+        var effects = slides[targetIndex].effects
+        guard var medias = effects.mediaObjects,
+              let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
+        medias[mediaIdx].mediaURL = url
+        effects.mediaObjects = medias
+        slides[targetIndex].effects = effects
+    }
+
     @discardableResult
     func addAudioObject() -> StoryAudioPlayerObject? {
         guard canAddMedia else { return nil }
@@ -1137,6 +1162,16 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         if currentEffects.resolvedBackgroundMedia?.id == id { return true }
         if currentEffects.resolvedBackgroundAudio?.id == id { return true }
         return false
+    }
+
+    // MARK: - Media Reorder
+
+    func moveMedia(from source: IndexSet, to destination: Int) {
+        var effects = currentEffects
+        guard var medias = effects.mediaObjects else { return }
+        medias.move(fromOffsets: source, toOffset: destination)
+        effects.mediaObjects = medias
+        currentEffects = effects
     }
 
     // MARK: - Z-Order

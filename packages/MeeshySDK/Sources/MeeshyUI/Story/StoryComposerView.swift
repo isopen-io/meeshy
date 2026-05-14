@@ -500,6 +500,7 @@ public struct StoryComposerView: View {
             } else {
                 ComposerControlsLayer(
                     viewModel: viewModel,
+                    bandStateMachine: $bandStateMachine,
                     areFabsVisible: $areFabsVisible,
                     drawingCanvas: $drawingCanvas,
                     drawingTool: $drawingTool,
@@ -904,6 +905,12 @@ public struct StoryComposerView: View {
                 } else {
                     viewModel.selectTool(tool)
                 }
+                // Auto-open the band to the selected tool's category + panel
+                // so controls appear immediately when the empty-state picker
+                // transitions out. Without this, the band stayed .hidden and
+                // the user had to manually tap a FAB to reveal controls.
+                bandStateMachine.tapFAB(tool.bandCategory)
+                bandStateMachine.tapTile(tool)
                 pickerSelectedTool = nil
             }
         } label: {
@@ -984,12 +991,15 @@ public struct StoryComposerView: View {
         StoryComposerCanvasView(
             slide: $viewModel.currentSlide,
             onItemDoubleTapped: { id, kind in
+                HapticFeedback.medium()
                 viewModel.selectedElementId = id
                 switch kind {
                 case .text:
+                    // Open inline text editing
                     bandStateMachine.openFormatPanel(.text, id: id)
                 case .media:
-                    bandStateMachine.openFormatPanel(.media, id: id)
+                    // Open dedicated full-screen media editor (image crop / video editor)
+                    openMediaEditor(elementId: id)
                 case .sticker:
                     break
                 }
@@ -1270,6 +1280,10 @@ public struct StoryComposerView: View {
                         if let obj = viewModel.addMediaObject(kind: .video, toSlideId: targetSlideId) {
                             viewModel.loadedVideoURLs[obj.id] = tempURL
                             if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
+                            // Set mediaURL so StoryMediaLayer.configureVideo can find
+                            // the file. Same bridge as the image path — without this,
+                            // media.mediaURL is nil and the video layer has no source.
+                            viewModel.setMediaURL(id: obj.id, url: tempURL.absoluteString, slideId: targetSlideId)
                             if obj.id != objectId {
                                 viewModel.loadedVideoURLs.removeValue(forKey: objectId)
                                 viewModel.loadedImages.removeValue(forKey: objectId)
@@ -1295,10 +1309,25 @@ public struct StoryComposerView: View {
                 mediaLoadProgress = 0.3
                 guard let data = try? await item.loadTransferable(type: Data.self),
                       let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else { return }
+                mediaLoadProgress = 0.7
+                // Persist the image to a temp file so StoryMediaLayer.configureImage
+                // can load it via its file:// URL. Without this, media.mediaURL stays
+                // nil and the CALayer canvas renders a black rectangle.
+                let tempImageURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(objectId + ".jpg")
+                let jpegData = image.jpegData(compressionQuality: 0.92)
+                try? jpegData?.write(to: tempImageURL)
+                let imageFileURL = jpegData != nil ? tempImageURL : nil
                 mediaLoadProgress = 1.0
                 await MainActor.run {
                     if let obj = viewModel.addMediaObject(kind: .image, toSlideId: targetSlideId) {
                         viewModel.loadedImages[obj.id] = image
+                        // Set mediaURL on the StoryMediaObject so the canvas renderer
+                        // can load the image from disk. This is the critical bridge
+                        // between the in-memory UIImage and the CALayer pipeline.
+                        if let fileURL = imageFileURL {
+                            viewModel.setMediaURL(id: obj.id, url: fileURL.absoluteString, slideId: targetSlideId)
+                        }
                     }
                 }
             }

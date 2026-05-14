@@ -19,6 +19,19 @@ struct ComposerBottomBand: View {
     let onCloseFormatPanel: () -> Void
     let onOpenMediaCrop: (String) -> Void
     let onOpenFilterForElement: (String) -> Void
+    var onEditMedia: ((String) -> Void)? = nil
+    var onShowInTimeline: (() -> Void)? = nil
+
+    /// Stable identity key for the current panel content, so SwiftUI
+    /// treats each state as a different view and animates the swap.
+    private var stateKey: String {
+        switch state {
+        case .hidden: return "hidden"
+        case .tiles(let c): return "tiles-\(c)"
+        case .toolPanel(let t): return "tool-\(t)"
+        case .formatPanel(let k, let id): return "format-\(k)-\(id)"
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -29,51 +42,57 @@ struct ComposerBottomBand: View {
                 .padding(.top, 8)
                 .padding(.bottom, 6)
 
-            switch state {
-            case .hidden:
-                EmptyView()
-            case .tiles(let category):
-                ComposerTilesGrid(
-                    category: category,
-                    mediaCount: viewModel.currentEffects.mediaObjects?.count ?? 0,
-                    drawingCount: viewModel.drawingData != nil ? 1 : 0,
-                    textCount: viewModel.currentEffects.textObjects.count,
-                    audioCount: viewModel.currentEffects.audioPlayerObjects?.count ?? 0,
-                    filterCount: viewModel.selectedFilter != nil ? 1 : 0,
-                    timelineCount: viewModel.timelineHasCustomizations ? 1 : 0,
-                    onTapTile: onTapTile
-                )
-            case .toolPanel(let tool):
-                ComposerToolPanelHost(
-                    tool: tool,
-                    viewModel: viewModel,
-                    drawingCanvas: $drawingCanvas,
-                    drawingTool: $drawingTool,
-                    selectedFilter: $selectedFilter,
-                    fgMediaItem: $fgMediaItem,
-                    showAudioDocumentPicker: $showAudioDocumentPicker,
-                    showVoiceRecorderSheet: $showVoiceRecorderSheet,
-                    onBack: onBackFromToolPanel
-                )
-            case .formatPanel(.text, let elementId):
-                // Text format band is presented via UITextView.inputAccessoryView,
-                // so this case shows a stub here. The actual accessory bar is
-                // built by ComposerTextEditingView in Phase 4.
-                Color.clear.frame(height: 110)
-                    .onAppear {
-                        // Phase 4: trigger first-responder on the text element
-                        _ = elementId
-                    }
-            case .formatPanel(.media, let elementId):
-                ComposerMediaFormatBand(
-                    elementId: elementId,
-                    viewModel: viewModel,
-                    onDone: onCloseFormatPanel,
-                    onOpenCropEditor: onOpenMediaCrop,
-                    onOpenFilterPicker: onOpenFilterForElement
-                )
+            // Panel content — keyed by state so the old panel slides
+            // down and the new one slides up from the bottom.
+            Group {
+                switch state {
+                case .hidden:
+                    EmptyView()
+                case .tiles(let category):
+                    ComposerTilesGrid(
+                        category: category,
+                        mediaCount: viewModel.currentEffects.mediaObjects?.count ?? 0,
+                        drawingCount: viewModel.drawingData != nil ? 1 : 0,
+                        textCount: viewModel.currentEffects.textObjects.count,
+                        audioCount: viewModel.currentEffects.audioPlayerObjects?.count ?? 0,
+                        filterCount: viewModel.selectedFilter != nil ? 1 : 0,
+                        timelineCount: viewModel.timelineHasCustomizations ? 1 : 0,
+                        onTapTile: onTapTile
+                    )
+                case .toolPanel(let tool):
+                    ComposerToolPanelHost(
+                        tool: tool,
+                        viewModel: viewModel,
+                        drawingCanvas: $drawingCanvas,
+                        drawingTool: $drawingTool,
+                        selectedFilter: $selectedFilter,
+                        fgMediaItem: $fgMediaItem,
+                        showAudioDocumentPicker: $showAudioDocumentPicker,
+                        showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                        onBack: onBackFromToolPanel,
+                        onEditMedia: onEditMedia,
+                        onShowInTimeline: onShowInTimeline
+                    )
+                case .formatPanel(.text, let elementId):
+                    Color.clear.frame(height: 110)
+                        .onAppear { _ = elementId }
+                case .formatPanel(.media, let elementId):
+                    ComposerMediaFormatBand(
+                        elementId: elementId,
+                        viewModel: viewModel,
+                        onDone: onCloseFormatPanel,
+                        onOpenCropEditor: onOpenMediaCrop,
+                        onOpenFilterPicker: onOpenFilterForElement
+                    )
+                }
             }
+            .id(stateKey)
+            .transition(.asymmetric(
+                insertion: .move(edge: .bottom).combined(with: .opacity),
+                removal: .move(edge: .bottom).combined(with: .opacity)
+            ))
         }
+        .padding(.bottom, 16) // Breathing room above home indicator
         .frame(maxWidth: .infinity)
         .background(
             UnevenRoundedRectangle(
@@ -87,5 +106,6 @@ struct ComposerBottomBand: View {
             .ignoresSafeArea(edges: .bottom)
         )
         .shadow(color: .black.opacity(0.15), radius: 12, y: -4)
+        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: stateKey)
     }
 }

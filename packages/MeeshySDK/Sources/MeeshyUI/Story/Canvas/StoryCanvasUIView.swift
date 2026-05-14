@@ -45,6 +45,14 @@ public final class StoryCanvasUIView: UIView {
 
     public var slide: StorySlide {
         didSet {
+            // Skip expensive full-layer rebuild while a gesture is actively
+            // manipulating an item (pan/pinch/rotate). The gesture handlers
+            // update the specific CALayer transform directly. A full rebuild
+            // happens once the gesture ends (manipulatedItemId becomes nil).
+            guard manipulatedItemId == nil else {
+                updateManipulatedItemLayer()
+                return
+            }
             // The captured filter source texture is content-dependent. Drop the
             // freshness token so the next `updateFilterLayer()` rebuilds it
             // against the new slide. Geometry-only changes (`layoutSubviews`)
@@ -1049,6 +1057,8 @@ public final class StoryCanvasUIView: UIView {
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
             manipulatedItemId = nil
+            slideContentRevision &+= 1
+            rebuildLayers()
         default:
             break
         }
@@ -1068,6 +1078,8 @@ public final class StoryCanvasUIView: UIView {
             onItemModified?(slide)
         case .ended, .cancelled, .failed:
             manipulatedItemId = nil
+            slideContentRevision &+= 1
+            rebuildLayers()
         default:
             break
         }
@@ -1099,6 +1111,8 @@ public final class StoryCanvasUIView: UIView {
         case .ended, .cancelled, .failed:
             manipulatedItemId = nil
             hideSnapGuides()
+            slideContentRevision &+= 1
+            rebuildLayers()
         default:
             break
         }
@@ -1160,6 +1174,54 @@ public final class StoryCanvasUIView: UIView {
         line.lineDashPattern = [4, 4]
         line.fillColor = UIColor.clear.cgColor
         return line
+    }
+
+    // MARK: - Lightweight gesture update
+
+    /// During an active gesture (pan/pinch/rotate), update only the manipulated
+    /// item's CALayer transform instead of rebuilding all layers. This keeps
+    /// drag/resize fluid even with many layers on canvas.
+    private func updateManipulatedItemLayer() {
+        guard let id = manipulatedItemId else { return }
+        guard let layer = itemsContainer.sublayers?.first(where: { $0.name == id }) else { return }
+        let bounds = self.bounds
+        guard bounds.size != .zero else { return }
+
+        // Read the current model values for this item
+        if let media = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.position = CGPoint(x: bounds.width * media.x, y: bounds.height * media.y)
+            let scale = CGFloat(media.scale)
+            let rotation = CGFloat(media.rotation * .pi / 180)
+            layer.transform = CATransform3DConcat(
+                CATransform3DMakeScale(scale, scale, 1),
+                CATransform3DMakeRotation(rotation, 0, 0, 1)
+            )
+            CATransaction.commit()
+        } else if let text = slide.effects.textObjects.first(where: { $0.id == id }) {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.position = CGPoint(x: bounds.width * text.x, y: bounds.height * text.y)
+            let scale = CGFloat(text.scale)
+            let rotation = CGFloat(text.rotation * .pi / 180)
+            layer.transform = CATransform3DConcat(
+                CATransform3DMakeScale(scale, scale, 1),
+                CATransform3DMakeRotation(rotation, 0, 0, 1)
+            )
+            CATransaction.commit()
+        } else if let sticker = slide.effects.stickerObjects?.first(where: { $0.id == id }) {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            layer.position = CGPoint(x: bounds.width * sticker.x, y: bounds.height * sticker.y)
+            let scale = CGFloat(sticker.scale)
+            let rotation = CGFloat(sticker.rotation * .pi / 180)
+            layer.transform = CATransform3DConcat(
+                CATransform3DMakeScale(scale, scale, 1),
+                CATransform3DMakeRotation(rotation, 0, 0, 1)
+            )
+            CATransaction.commit()
+        }
     }
 
     // MARK: - Hit testing
@@ -1401,27 +1463,114 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
                 },
                 UIAction(title: "Dupliquer",
                          image: UIImage(systemName: "doc.on.doc")) { _ in
-                    self?.duplicateItem(id: id)
+                    self?.contextDuplicate(id: id)
                 },
                 UIAction(title: "Mettre au premier plan",
                          image: UIImage(systemName: "square.3.stack.3d.top.filled")) { _ in
-                    self?.bringForward(id: id)
+                    self?.contextBringForward(id: id)
                 },
                 UIAction(title: "Mettre à l'arrière",
                          image: UIImage(systemName: "square.2.stack.3d.bottom.filled")) { _ in
-                    self?.sendBackward(id: id)
-                },
-                UIAction(title: "Mettre à l'arrière plan",
-                         image: UIImage(systemName: "square.3.stack.3d.bottom.filled")) { _ in
-                    self?.sendToBack(id: id)
+                    self?.contextSendBackward(id: id)
                 },
                 UIAction(title: "Supprimer",
                          image: UIImage(systemName: "trash"),
                          attributes: .destructive) { _ in
-                    self?.deleteItem(id: id)
+                    self?.contextDelete(id: id)
                 },
             ])
         }
+    }
+
+    /// Provide a targeted preview so the system only lifts the specific
+    /// element layer instead of the entire canvas view.
+    public func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction,
+        previewForHighlightingMenuWithConfiguration configuration: UIContextMenuConfiguration
+    ) -> UITargetedPreview? {
+        return targetedPreview(for: configuration)
+    }
+
+    public func contextMenuInteraction(
+        _ interaction: UIContextMenuInteraction,
+        previewForDismissingMenuWithConfiguration configuration: UIContextMenuConfiguration
+    ) -> UITargetedPreview? {
+        return targetedPreview(for: configuration)
+    }
+
+    private func targetedPreview(for configuration: UIContextMenuConfiguration) -> UITargetedPreview? {
+        guard let id = configuration.identifier as? String,
+              let layer = itemsContainer.sublayers?.first(where: { $0.name == id }) else { return nil }
+
+        // Create a snapshot image of just the element's layer
+        let renderer = UIGraphicsImageRenderer(size: layer.bounds.size)
+        let snapshot = renderer.image { ctx in
+            layer.render(in: ctx.cgContext)
+        }
+        let imageView = UIImageView(image: snapshot)
+        imageView.frame = layer.frame
+        imageView.layer.cornerRadius = 8
+        imageView.clipsToBounds = true
+        addSubview(imageView)
+
+        let params = UIPreviewParameters()
+        params.backgroundColor = .clear
+        let preview = UITargetedPreview(view: imageView, parameters: params)
+
+        // Remove the temporary imageView after animation
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            imageView.removeFromSuperview()
+        }
+        return preview
+    }
+
+    // MARK: - Context menu actions
+
+    /// These mutate the slide and re-fire onItemModified so the binding
+    /// propagates back to the SwiftUI composer layer.
+    private func contextDuplicate(id: String) {
+        if let idx = slide.effects.mediaObjects?.firstIndex(where: { $0.id == id }) {
+            var copy = slide.effects.mediaObjects![idx]
+            copy.id = UUID().uuidString
+            copy.x += 0.05
+            copy.y += 0.05
+            copy.isBackground = false
+            slide.effects.mediaObjects?.append(copy)
+        } else if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }) {
+            var copy = slide.effects.textObjects[idx]
+            copy.id = UUID().uuidString
+            copy.x += 0.05
+            copy.y += 0.05
+            slide.effects.textObjects.append(copy)
+        }
+        onItemModified?(slide)
+    }
+
+    private func contextBringForward(id: String) {
+        if var medias = slide.effects.mediaObjects,
+           let idx = medias.firstIndex(where: { $0.id == id }),
+           idx < medias.count - 1 {
+            medias.swapAt(idx, idx + 1)
+            slide.effects.mediaObjects = medias
+            onItemModified?(slide)
+        }
+    }
+
+    private func contextSendBackward(id: String) {
+        if var medias = slide.effects.mediaObjects,
+           let idx = medias.firstIndex(where: { $0.id == id }),
+           idx > 0 {
+            medias.swapAt(idx, idx - 1)
+            slide.effects.mediaObjects = medias
+            onItemModified?(slide)
+        }
+    }
+
+    private func contextDelete(id: String) {
+        slide.effects.mediaObjects?.removeAll { $0.id == id }
+        slide.effects.textObjects.removeAll { $0.id == id }
+        slide.effects.stickerObjects?.removeAll { $0.id == id }
+        onItemModified?(slide)
     }
 }
 

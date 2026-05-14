@@ -13,6 +13,8 @@ struct ComposerToolPanelHost: View {
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
     let onBack: () -> Void
+    var onEditMedia: ((String) -> Void)? = nil
+    var onShowInTimeline: (() -> Void)? = nil
 
     var body: some View {
         VStack(spacing: 8) {
@@ -55,7 +57,7 @@ struct ComposerToolPanelHost: View {
 
     private var panelHeight: CGFloat {
         switch tool {
-        case .media:    return 220
+        case .media:    return 280
         case .drawing:  return 140
         case .text:     return 140
         case .texture:  return 160
@@ -82,23 +84,143 @@ struct ComposerToolPanelHost: View {
         }
     }
 
+    // MARK: - Media Panel
+
     private var mediaPanel: some View {
-        HStack(spacing: 8) {
-            if viewModel.canAddMedia {
-                PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
-                    MediaPillLabel(icon: "photo.on.rectangle.angled", text: String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module), destructive: false)
+        VStack(spacing: 10) {
+            // Add buttons
+            HStack(spacing: 8) {
+                if viewModel.canAddMedia {
+                    PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
+                        MediaPillLabel(icon: "photo.on.rectangle.angled", text: String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module), destructive: false)
+                    }
                 }
+                if viewModel.canAddAudio {
+                    Button { showAudioDocumentPicker = true } label: {
+                        MediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module), destructive: false)
+                    }
+                    Button { showVoiceRecorderSheet = true } label: {
+                        MediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module), destructive: false)
+                    }
+                }
+                Spacer()
             }
-            if viewModel.canAddAudio {
-                Button { showAudioDocumentPicker = true } label: {
-                    MediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module), destructive: false)
+
+            // List of existing media items — drag to reorder changes layer order
+            if let mediaObjects = viewModel.currentEffects.mediaObjects, !mediaObjects.isEmpty {
+                List {
+                    ForEach(mediaObjects) { media in
+                        mediaItemRow(media)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
+                            .listRowSeparator(.hidden)
+                    }
+                    .onMove { source, destination in
+                        viewModel.moveMedia(from: source, to: destination)
+                        HapticFeedback.light()
+                    }
                 }
-                Button { showVoiceRecorderSheet = true } label: {
-                    MediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module), destructive: false)
-                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .environment(\.editMode, .constant(.active))
+                .frame(maxHeight: 150)
             }
-            Spacer()
         }
+    }
+
+    @ViewBuilder
+    private func mediaItemRow(_ media: StoryMediaObject) -> some View {
+        let isBg = viewModel.isBackground(id: media.id)
+        let isImage = media.kind == .image
+        HStack(spacing: 8) {
+            // Thumbnail
+            Group {
+                if let img = viewModel.loadedImages[media.id] {
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    ZStack {
+                        Color.white.opacity(0.1)
+                        Image(systemName: isImage ? "photo" : "video")
+                            .font(.system(size: 12))
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                }
+            }
+            .frame(width: 32, height: 32)
+            .clipShape(RoundedRectangle(cornerRadius: 5))
+
+            // Type + role
+            VStack(alignment: .leading, spacing: 1) {
+                Text(isImage ? "Image" : "Vidéo")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+                Text(isBg ? "Fond" : "Premier plan")
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(isBg ? MeeshyColors.indigo300 : .white.opacity(0.5))
+            }
+
+            Spacer(minLength: 4)
+
+            // Action buttons — compact icon row
+            HStack(spacing: 6) {
+                // Toggle front/back
+                mediaActionBtn(
+                    icon: isBg ? "square.3.layers.3d.top.filled" : "square.3.layers.3d.bottom.filled",
+                    color: isBg ? MeeshyColors.indigo300 : .white.opacity(0.6),
+                    tip: isBg ? "Premier plan" : "Fond"
+                ) {
+                    viewModel.toggleBackground(id: media.id)
+                }
+
+                // Edit
+                mediaActionBtn(icon: "pencil", color: .white.opacity(0.6), tip: "Éditer") {
+                    onEditMedia?(media.id)
+                }
+
+                // Timeline
+                mediaActionBtn(icon: "timeline.selection", color: .white.opacity(0.6), tip: "Timeline") {
+                    viewModel.selectedElementId = media.id
+                    onShowInTimeline?()
+                }
+
+                // Duplicate
+                mediaActionBtn(icon: "doc.on.doc", color: .white.opacity(0.6), tip: "Dupliquer") {
+                    viewModel.duplicateElement(id: media.id)
+                }
+
+                // Delete
+                mediaActionBtn(icon: "trash", color: .red.opacity(0.7), tip: "Supprimer") {
+                    viewModel.deleteElement(id: media.id)
+                    HapticFeedback.medium()
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(isBg ? MeeshyColors.indigo400.opacity(0.15) : Color.white.opacity(0.05))
+        )
+    }
+
+    private func mediaActionBtn(
+        icon: String, color: Color, tip: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            action()
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(color)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tip)
     }
 
     private var drawingPanel: some View {
