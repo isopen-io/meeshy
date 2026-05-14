@@ -6035,6 +6035,156 @@
         }
       }
     },
+    "connection.action.accept": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Annehmen" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Accept" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "Aceptar" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Accepter" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Aceitar" } }
+      }
+    },
+    "connection.action.add": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Hinzufügen" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Add" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "Añadir" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Ajouter" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Adicionar" } }
+      }
+    },
+    "connection.action.cancel": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Anfrage abbrechen" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Cancel request" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "Cancelar solicitud" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Annuler la demande" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Cancelar pedido" } }
+      }
+    },
+    "connection.action.decline": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Ablehnen" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Decline" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "Rechazar" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Refuser" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Recusar" } }
+      }
+    },
+    "connection.badge.blocked": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Blockiert" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Blocked" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "Bloqueado" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Bloqué" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Bloqueado" } }
+      }
+    },
+    "connection.badge.contact": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Kontakt" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Contact" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "Contacto" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Contact" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Contato" } }
+      }
+    },
+    "connection.badge.pendingSent": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Ausstehend" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Pending" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "Pendiente" } },
+        "fr": { "stringUnit": { "state": "new", "value": "En attente" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Pendente" } }
+      }
+    },
+    "connection.toast.acceptFailed": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Annehmen fehlgeschlagen" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Could not accept" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "No se pudo aceptar" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Impossible d'accepter" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Não foi possível aceitar" } }
+      }
+    },
+    "connection.toast.cancelFailed": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Abbruch fehlgeschlagen" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Could not cancel" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "No se pudo cancelar" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Impossible d'annuler" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Não foi possível cancelar" } }
+      }
+    },
+    "connection.toast.connectionAccepted": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Verbindung akzeptiert" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Connection accepted" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "Conexión aceptada" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Connexion acceptée" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Conexão aceita" } }
+      }
+    },
+    "connection.toast.declineFailed": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Ablehnen fehlgeschlagen" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Could not decline" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "No se pudo rechazar" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Impossible de refuser" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Não foi possível recusar" } }
+      }
+    },
+    "connection.toast.requestCancelled": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Anfrage abgebrochen" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Request cancelled" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "Solicitud cancelada" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Demande annulée" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Pedido cancelado" } }
+      }
+    },
+    "connection.toast.requestDeclined": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Anfrage abgelehnt" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Request declined" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "Solicitud rechazada" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Demande refusée" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Pedido recusado" } }
+      }
+    },
+    "connection.toast.requestSendFailed": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Anfrage konnte nicht gesendet werden" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Could not send request" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "No se pudo enviar la solicitud" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Impossible d'envoyer la demande" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Não foi possível enviar a solicitação" } }
+      }
+    },
+    "connection.toast.requestSent": {
+      "extractionState": "extracted_with_value",
+      "localizations": {
+        "de": { "stringUnit": { "state": "needs_review", "value": "Anfrage gesendet" } },
+        "en": { "stringUnit": { "state": "needs_review", "value": "Request sent" } },
+        "es": { "stringUnit": { "state": "needs_review", "value": "Solicitud enviada" } },
+        "fr": { "stringUnit": { "state": "new", "value": "Demande envoyée" } },
+        "pt-BR": { "stringUnit": { "state": "needs_review", "value": "Solicitação enviada" } }
+      }
+    },
     "conversation.settings.avatar": {
       "extractionState": "stale",
       "localizations": {

@@ -227,7 +227,6 @@ struct DiscoverTab: View {
     private func searchResultRow(_ user: UserSearchResult, index: Int) -> some View {
         let name = user.displayName ?? user.username
         let color = DynamicColorGenerator.colorForName(name)
-        let status = viewModel.connectionStatus(for: user.id)
 
         return HStack(spacing: 14) {
             MeeshyAvatar(
@@ -268,57 +267,17 @@ struct DiscoverTab: View {
 
             Spacer()
 
-            connectionActionButton(for: user.id, status: status)
+            ConnectionActionView(
+                userId: user.id,
+                userName: name,
+                accentColor: MeeshyColors.indigo500,
+                onError: { ToastManager.shared.showError($0) },
+                onSuccess: { ToastManager.shared.showSuccess($0) }
+            )
         }
         .padding(.horizontal, 4)
         .padding(.vertical, 10)
         .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.searchResults.count)
-    }
-
-    @ViewBuilder
-    private func connectionActionButton(for userId: String, status: ContactConnectionStatus) -> some View {
-        switch status {
-        case .connected:
-            Text("Connecte")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(MeeshyColors.success)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(MeeshyColors.success.opacity(0.15)))
-
-        case .pendingSent:
-            Text("En attente")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(MeeshyColors.warning)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Capsule().fill(MeeshyColors.warning.opacity(0.15)))
-
-        case .pendingReceived:
-            Button {
-                Task { await viewModel.acceptReceivedRequest(from: userId) }
-            } label: {
-                Text("Accepter")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(MeeshyColors.success))
-            }
-
-        case .none:
-            Button {
-                Task { await viewModel.sendRequest(to: userId) }
-            } label: {
-                Text("Ajouter")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 5)
-                    .background(Capsule().fill(MeeshyColors.indigo500))
-            }
-            .accessibilityLabel("Ajouter en ami")
-        }
     }
 }
 

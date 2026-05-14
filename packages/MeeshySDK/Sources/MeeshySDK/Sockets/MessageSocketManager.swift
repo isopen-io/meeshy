@@ -1785,12 +1785,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        socket.on("notification") { [weak self] data, _ in
-            guard let self else { return }
-            self.decode(SocketNotificationEvent.self, from: data) { [weak self] event in
-                self?.notificationReceived.send(event)
-            }
-        }
+        // Intentionally NOT listening for the legacy `"notification"` event
+        // here. The gateway only emits `notification:new` (see
+        // `NotificationService.createNotification` → `SERVER_EVENTS.NOTIFICATION_NEW`).
+        // Keeping a parallel `"notification"` listener that funneled into
+        // the same `notificationReceived` subject was a latent
+        // double-delivery vector — if any future gateway change emitted
+        // both, every notification would arrive twice on iOS and surface
+        // duplicate toasts. Single channel keeps the contract obvious.
 
         socket.on("notification:read") { [weak self] data, _ in
             guard let self else { return }

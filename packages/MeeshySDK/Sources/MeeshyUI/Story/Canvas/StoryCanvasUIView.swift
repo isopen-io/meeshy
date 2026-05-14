@@ -848,8 +848,15 @@ public final class StoryCanvasUIView: UIView {
         contentReadyFired = false
         teardownReadinessObservers()
 
+        // Explicit `_` placeholders on the comma-combined cases — Swift 6.2
+        // under iOS 26.5 SDK no longer accepts the bare `.solidColor, .gradient`
+        // shorthand here (the Xcode Cloud build reports `error: switch must be
+        // exhaustive` for this site, misattributed to StoryAVCompositor.swift
+        // because of cross-file batch compilation). Pinning the arities makes
+        // the pattern unambiguous: solidColor has 1 associated value, gradient
+        // has 2 named (colors:, direction:).
         switch kind {
-        case .solidColor, .gradient:
+        case .solidColor(_), .gradient(_, _):
             // No async work — yield to the next runloop tick so the caller
             // can attach `onContentReady` after `rebuildLayers()` returns
             // (the prefetcher attaches the callback right after init).
