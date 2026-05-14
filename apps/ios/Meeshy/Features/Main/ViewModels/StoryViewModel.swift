@@ -20,24 +20,17 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     private var cancellables = Set<AnyCancellable>()
     private let socialSocket: SocialSocketProviding
     private let api: APIClientProviding
-    private let videoExporter: StoryVideoExportServiceProviding
 
     init(
         storyService: StoryServiceProviding = StoryService.shared,
         postService: PostServiceProviding = PostService.shared,
         socialSocket: SocialSocketProviding = SocialSocketManager.shared,
-        api: APIClientProviding = APIClient.shared,
-        videoExporter: StoryVideoExportServiceProviding? = nil
+        api: APIClientProviding = APIClient.shared
     ) {
         self.storyService = storyService
         self.postService = postService
         self.socialSocket = socialSocket
         self.api = api
-        // `StoryVideoExportService.shared` is `@MainActor` so it cannot be
-        // referenced as a default argument expression evaluated outside the
-        // actor. Resolve the default inside the body where the surrounding
-        // init is already `@MainActor`-isolated by the class annotation.
-        self.videoExporter = videoExporter ?? StoryVideoExportService.shared
         observeReconnectionForRetry()
     }
 
@@ -59,17 +52,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     ///   payload, missing/corrupt media, empty slides, server 4xx) so the
     ///   queue drops the item instead of looping.
     /// - any other `Error` (network, 5xx, TUS resume failure) → retryable.
-    ///
-    /// Sprint 8 Phase 5+ — publish→exporter wiring (spec §3.4) :
-    /// Fast-path TUS resume when `item.hasValidVideoExport` is true. The
-    /// pre-baked MP4 sitting at `item.videoExportURL` is mapped to the
-    /// first slide whose `needsVideoExport == true` and threaded into
-    /// `runStoryUpload` via `prebakedExports`. The exporter is skipped
-    /// entirely for that slide — saving ~4s per story on relaunch resume.
-    /// If the URL is stale (file purged from tmp by the OS during the
-    /// suspension), `hasValidVideoExport` flips to false and we fall back
-    /// to the slow path : re-export from `slidesPayload` via the regular
-    /// `runStoryUpload` branch that already handles `needsVideoExport`.
     func executeQueuedPublish(item: StoryPublishQueueItem) async throws -> String {
         Logger.media.info(
             "executeQueuedPublish start tempId=\(item.tempStoryId, privacy: .public)"
@@ -108,46 +90,8 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             visibility: item.visibility
         )
 
-        // Spec §3.4 — fast path resume : if the queue item carries a baked
-        // MP4 still on disk, hand it to `runStoryUpload` keyed by the first
-        // slide that needs an export. The exporter is skipped for that
-        // slide (~4s saved) and TUS uploads the existing file directly.
-        //
-        // Three branches :
-        //   1. hasValidVideoExport == true → fast path (skip export).
-        //   2. videoExportURL != nil but hasValidVideoExport == false →
-        //      MP4 purged from tmp during suspension. Log and fall back
-        //      to the slow path so the exporter re-bakes from slidesPayload.
-        //   3. videoExportURL == nil → legacy path, no pre-bake to inject.
-        let prebakedExports: [String: URL]
-        if item.hasValidVideoExport, let exportURL = item.videoExportURL {
-            if let targetSlide = slides.first(where: { $0.needsVideoExport }) {
-                Logger.media.info(
-                    "executeQueuedPublish fast-path : reusing baked MP4 at \(exportURL.path, privacy: .public) for slide \(targetSlide.id, privacy: .public)"
-                )
-                prebakedExports = [targetSlide.id: exportURL]
-            } else {
-                // Edge case : URL set but no slide needs export. Drop the
-                // URL silently — the slow path produces an identical
-                // outcome (no export call) and avoids feeding a TUS
-                // upload an MP4 unrelated to any visible slide.
-                Logger.media.info(
-                    "executeQueuedPublish : baked MP4 present but no slide needs export — discarding videoExportURL"
-                )
-                prebakedExports = [:]
-            }
-        } else {
-            if item.videoExportURL != nil {
-                Logger.media.info(
-                    "executeQueuedPublish : MP4 export purged from disk, falling back to re-export from slidesPayload"
-                )
-            }
-            prebakedExports = [:]
-        }
-
         let ids = try await runStoryUpload(
             upload,
-            prebakedExports: prebakedExports,
             onProgress: { _ in },
             onPhase: { _ in },
             onPublishedSlide: { _ in }
@@ -233,20 +177,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
         ///     fails at slide 3 leaves slides 1-2 visible to friends as orphans).
         var publishedPostIds: [String] = []
 
-        /// Sprint 8 Phase 4 — publish→exporter wiring (spec §3.5).
-        ///
-        /// `.exporting` is emitted by `runStoryUpload` while
-        /// `StoryVideoExportService.prepareExport` bakes a slide that
-        /// reports `needsVideoExport == true`. It is intentionally
-        /// distinct from `.uploading` so the banner can swap the copy
-        /// from "Téléversement …" → "Export en cours …" without coupling
-        /// to AVAssetExportSession internals. The case carries no
-        /// associated value because per-slide export progress is already
-        /// reported via the shared `progress` field on the surrounding
-        /// `StoryUploadState`. Once P6 promotes this enum to the SDK the
-        /// remaining lifecycle cases will land alongside.
         enum UploadPhase: Sendable {
-            case exporting
             case uploading
             case publishing
             case failed(String)
@@ -736,22 +667,12 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
         // 4. Enqueue. The queue persists to disk synchronously so a crash
         //    immediately after this call still preserves the item.
-        //
-        //    P5 hook : `videoExportURL` is left nil here because the
-        //    offline path enqueues from the COMPOSER (not from an
-        //    in-flight upload). The exporter only fires inside
-        //    `runStoryUpload`, which is the online path. If the app is
-        //    suspended mid-export during the online path, the export
-        //    task is cancelled and there is no MP4 yet — the queue does
-        //    NOT inherit a partial export. Re-export from `slidesPayload`
-        //    on the next replay (spec §3.4) is the design intent.
         let item = StoryPublishQueueItem(
             visibility: visibility,
             slidesPayload: payload,
             repostOfId: nil,
             mediaReferences: mediaReferences,
-            tempStoryId: tempStoryId,
-            videoExportURL: nil
+            tempStoryId: tempStoryId
         )
         _ = await StoryPublishQueue.shared.enqueue(item)
 
@@ -818,22 +739,18 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     ///   2. `executeQueuedPublish` (queue flow) — passes no-op callbacks since
     ///       there is no banner to update on cold-start replay.
     ///
+    /// Stories publish RAW (assets + JSON effects) so the Prisme Linguistique
+    /// can retranslate text/audio per viewer. The MP4 export pipeline is a
+    /// separate author-only feature (see `StoryExportShareViewModel`) and
+    /// must never be wired here — refer to
+    /// `docs/superpowers/plans/2026-05-14-story-export-realignment-plan.md`.
+    ///
     /// Authentication is checked here (not in callers) because it can change
     /// between an enqueue and a replay; the queue path needs the same gate.
     /// Returns `[String]` of the post ids created in this invocation (excluding
     /// any slides skipped via `upload.publishedPostIds`).
-    ///
-    /// Sprint 8 Phase 5+ — `prebakedExports` (spec §3.4) :
-    /// Map keyed by `slide.id` to a pre-baked MP4 sitting on disk. When a
-    /// slide has an entry here AND `needsVideoExport == true`, we skip the
-    /// call to `videoExporter.prepareExport` entirely and feed the existing
-    /// MP4 straight into TUS (fast path, ~4s saved per export on relaunch
-    /// resume). The cleanup-on-success branch at the bottom of the slide
-    /// loop fires unchanged whether the URL came from a fresh bake or from
-    /// the pre-baked map — `cleanupTempExport` is idempotent.
     private func runStoryUpload(
         _ upload: StoryUploadState,
-        prebakedExports: [String: URL] = [:],
         onProgress: @escaping (Double) -> Void,
         onPhase: @escaping (StoryUploadState.UploadPhase) -> Void,
         onPublishedSlide: @escaping (PublishedSlide) -> Void
@@ -861,69 +778,15 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
             let baseProgress = Double(slideIdx) * slideShare
 
-            // MARK: Sprint 8 Phase 4 — video export branch
-            //
-            // Spec : docs/superpowers/specs/2026-05-12-story-publish-exporter-wiring-design.md §3.1
-            //
-            // For slides whose effects encode time-evolving content
-            // (`needsVideoExport == true` — animated text/media keyframes,
-            // looping background video, background audio, voice
-            // attachment, opening transition), bake a single MP4 via
-            // `StoryVideoExportService.prepareExport` and upload THAT
-            // instead of the static thumbnail + foreground graph. Static
-            // slides flow through the legacy asset path below unchanged.
-            //
-            // `prepareExport` is robust by design : it returns `nil` for
-            // static slides AND for export failures (logged internally),
-            // so we don't need a do/catch here — `nil` simply routes the
-            // slide back through the legacy path so the story still
-            // publishes. This matches D-7 in the spec.
-            //
-            // P5+ FAST PATH : if `prebakedExports[slide.id]` is populated
-            // AND points to a file still on disk, bypass `prepareExport`
-            // entirely and reuse the existing MP4. This is the queue
-            // resume path documented in spec §3.4 — it saves ~4s per
-            // story on a cold relaunch where the bake had already
-            // completed before the app was suspended.
-            var exportedVideoURL: URL? = nil
-            if slide.needsVideoExport {
-                if let prebaked = prebakedExports[slide.id],
-                   FileManager.default.fileExists(atPath: prebaked.path) {
-                    exportedVideoURL = prebaked
-                    onPhase(.uploading)
-                    onProgress(baseProgress + 0.40 * slideShare)
-                } else {
-                    let exportShare = 0.40 * slideShare
-                    exportedVideoURL = await videoExporter.prepareExport(
-                        slide: slide,
-                        onProgress: { fraction in
-                            onProgress(baseProgress + fraction * exportShare)
-                        },
-                        onPhaseChange: { phase in
-                            switch phase {
-                            case .exporting:
-                                onPhase(.exporting)
-                            }
-                        }
-                    )
-                }
-            }
+            // RAW publish path : background image (if any) + foreground assets
+            // (image/video/audio) are uploaded individually. The StoryEffects
+            // JSON encodes text, keyframes, transitions, filters and opening.
+            // Viewers re-render locally per their preferred language (Prisme
+            // Linguistique). MP4 baking is reserved for the author-only export
+            // flow (`StoryExportShareViewModel`).
 
             var uploadResult: TusUploadResult? = nil
-            if let videoURL = exportedVideoURL {
-                // Bake-and-upload path : the exported MP4 IS the slide
-                // (background + foreground composited + animations baked
-                // in). The post is created with this single mediaId so
-                // playback on web / web-feed / push thumbnails reproduces
-                // the canvas exactly. No foreground media re-upload —
-                // they are already inside the MP4.
-                onPhase(.uploading)
-                uploadResult = try await uploader.uploadFile(
-                    fileURL: videoURL, mimeType: "video/mp4",
-                    token: token, uploadContext: "story"
-                )
-                onProgress(baseProgress + 0.80 * slideShare)
-            } else if let bgImage = upload.slideImages[slide.id] {
+            if let bgImage = upload.slideImages[slide.id] {
                 let thumbHash = bgImage.toThumbHash()
                 let compressed = await MediaCompressor.shared.compressImage(bgImage)
                 let fileName = "image_\(UUID().uuidString).\(compressed.fileExtension)"
@@ -941,11 +804,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
 
             var updatedEffects = slide.effects
             var foregroundMediaIds: [String] = []
-            // Skip foreground media re-upload when the export bake path
-            // ran — the MP4 already contains them. Without this guard we
-            // would double-upload every effect image/video, wasting
-            // bandwidth and creating orphan PostMedia rows on the server.
-            if exportedVideoURL == nil, var mediaObjects = updatedEffects.mediaObjects {
+            if var mediaObjects = updatedEffects.mediaObjects {
                 let mediaCount = mediaObjects.filter({ $0.postMediaId.isEmpty }).count
                 var mediaIdx = 0
                 for i in mediaObjects.indices where mediaObjects[i].postMediaId.isEmpty {
@@ -979,7 +838,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 updatedEffects.mediaObjects = mediaObjects
             }
 
-            if exportedVideoURL == nil, var audioObjects = updatedEffects.audioPlayerObjects {
+            if var audioObjects = updatedEffects.audioPlayerObjects {
                 for i in audioObjects.indices where audioObjects[i].postMediaId.isEmpty {
                     guard !Task.isCancelled else { return newPostIds }
                     let obj = audioObjects[i]
@@ -1010,16 +869,6 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             )
 
             newPostIds.append(post.id)
-            // Bake path success → drop the temp MP4 now. The TUS upload
-            // is committed server-side, the post row references its id,
-            // and the caller won't need to resume from this file. The
-            // same cleanup applies to a pre-baked MP4 fed via
-            // `prebakedExports` — once it's uploaded successfully the
-            // queue won't replay it and the file would otherwise leak
-            // in tmp until the OS reaper kicks in.
-            if let videoURL = exportedVideoURL {
-                videoExporter.cleanupTempExport(at: videoURL)
-            }
             let media = buildFeedMedia(from: post, fallback: uploadResult)
             let newItem = StoryItem(
                 id: post.id, content: post.content, media: media,
