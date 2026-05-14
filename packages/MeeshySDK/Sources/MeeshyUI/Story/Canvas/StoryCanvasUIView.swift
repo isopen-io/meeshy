@@ -626,8 +626,12 @@ public final class StoryCanvasUIView: UIView {
     /// Le contour reste désactivé en `.play` mode pour ne pas polluer le rendu.
     private func applyForegroundFrames() {
         guard mode == .edit else { return }
+        // Les textes ne reçoivent PAS de cadre permanent : le contour
+        // rectangulaire entoure inutilement la chaîne de caractères et alourdit
+        // le rendu (le glyph dessine déjà sa propre forme). Seuls les médias
+        // visuels foreground (images / vidéos) gardent un cadre.
         let fgMediaIds = Set((slide.effects.mediaObjects ?? []).filter { !$0.isBackground }.map { $0.id })
-        let fgTextIds = Set(slide.effects.textObjects.map { $0.id })
+        let fgTextIds: Set<String> = []
 
         // Couleur contrastante. Le cadre doit être très visible (demande UX) :
         //  - Sur slide sombre / image foncée → blanc franc (95%)
