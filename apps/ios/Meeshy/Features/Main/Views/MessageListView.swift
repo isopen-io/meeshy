@@ -314,6 +314,17 @@ struct MessageListView: UIViewControllerRepresentable {
     /// message is never hidden behind the composer/keyboard.
     /// Pass the composer height here.
     var bottomInset: CGFloat = 0
+    /// Incremented from the parent SwiftUI view when the "scroll to latest"
+    /// button is tapped. The bridge compares old vs. new to fire scrollToBottom.
+    var scrollToBottomTrigger: Int = 0
+    /// Set by the parent when a quoted message has been loaded from the server
+    /// and the VC needs to scroll to it. Pair with `scrollToMessageTrigger`
+    /// (counter) so the bridge detects each distinct request.
+    var scrollToMessageId: String? = nil
+    var scrollToMessageTrigger: Int = 0
+    /// True while the ViewModel is searching for a quoted message on the server.
+    /// Drives the slow continuous scroll on the underlying UICollectionView.
+    var isSearchingQuotedMessage: Bool = false
     var onNewMessagesBadge: ((Int) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
     /// Invoked when the user approaches the older-messages threshold. Wire to
@@ -321,6 +332,9 @@ struct MessageListView: UIViewControllerRepresentable {
     /// then network — bypassing this hook leaves the store stuck on whatever
     /// GRDB already holds.
     var onLoadOlder: (() async -> Void)?
+    /// Invoked when the scroll position crosses the near-bottom threshold.
+    /// Drives the floating "scroll to latest" button in the parent SwiftUI view.
+    var onNearBottomChanged: ((Bool) -> Void)?
     /// Tap on a story reply preview inside a bubble. Argument is the story id
     /// (not the message id) — the parent resolves it to a story group + slide.
     var onStoryReplyTap: ((String) -> Void)?
@@ -357,6 +371,14 @@ struct MessageListView: UIViewControllerRepresentable {
     @EnvironmentObject private var conversationListViewModel: ConversationListViewModel
     @Environment(\.colorScheme) private var colorScheme
 
+    class Coordinator {
+        var lastScrollToBottomTrigger: Int = 0
+        var lastScrollToMessageTrigger: Int = 0
+        var wasSearchingQuotedMessage: Bool = false
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func makeUIViewController(context: Context) -> MessageListViewController {
         let vc = MessageListViewController(
             store: store,
@@ -372,6 +394,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onNewMessagesBadge = onNewMessagesBadge
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
+        vc.onNearBottomChanged = onNearBottomChanged
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward
@@ -392,8 +415,31 @@ struct MessageListView: UIViewControllerRepresentable {
 
     func updateUIViewController(_ vc: MessageListViewController, context: Context) {
         vc.update(isDark: colorScheme == .dark, accentColor: accentColor)
+        // If the trigger changed since last update, scroll to latest.
+        if scrollToBottomTrigger != context.coordinator.lastScrollToBottomTrigger {
+            context.coordinator.lastScrollToBottomTrigger = scrollToBottomTrigger
+            vc.scrollToBottom(animated: true)
+        }
+        // If the trigger changed, FAST scroll to the requested message
+        // (this fires after jumpToQuotedMessage loaded the target from server).
+        if scrollToMessageTrigger != context.coordinator.lastScrollToMessageTrigger {
+            context.coordinator.lastScrollToMessageTrigger = scrollToMessageTrigger
+            if let targetId = scrollToMessageId {
+                vc.scrollToMessageFast(localId: targetId)
+            }
+        }
+        // Start/stop slow scroll based on search state.
+        if isSearchingQuotedMessage != context.coordinator.wasSearchingQuotedMessage {
+            context.coordinator.wasSearchingQuotedMessage = isSearchingQuotedMessage
+            if isSearchingQuotedMessage {
+                vc.startSlowScrollUp()
+            } else {
+                vc.stopSlowScroll()
+            }
+        }
         vc.onScrollToMessage = onScrollToMessage
         vc.onLoadOlder = onLoadOlder
+        vc.onNearBottomChanged = onNearBottomChanged
         vc.onStoryReplyTap = onStoryReplyTap
         vc.onSwipeReply = onSwipeReply
         vc.onSwipeForward = onSwipeForward

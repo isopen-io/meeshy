@@ -115,14 +115,33 @@ final class RequestsViewModel: ObservableObject {
         } catch {}
     }
 
-    // MARK: - Accept
+    // MARK: - Accept / Reject (Wave 1 Phase B)
+    //
+    // Accept / Reject flow through the offline outbox. The list is
+    // updated optimistically and a `.respondFriendRequest` row is
+    // enqueued ; the OutboxFlusher fires the gateway PATCH with
+    // `X-Client-Mutation-Id` so a transient network failure replays
+    // safely without producing a duplicate. The success toast fires
+    // immediately because from the user's perspective the action is
+    // done — the OutboxFlusher cleans up the wire side in the background.
 
     func accept(requestId: String) async {
         let snapshot = receivedRequests
+        let cmid = ClientMutationId.generate()
         receivedRequests.removeAll { $0.id == requestId }
         HapticFeedback.success()
+        observeOutcome(
+            cmid: cmid,
+            rollback: { [weak self] in self?.receivedRequests = snapshot },
+            toast: "Impossible d'accepter cette demande"
+        )
+        let payload = RespondFriendRequestPayload(
+            clientMutationId: cmid,
+            friendRequestId: requestId,
+            action: .accept
+        )
         do {
-            _ = try await friendService.respond(requestId: requestId, accepted: true)
+            try await OfflineQueue.shared.enqueue(.respondFriendRequest, payload: payload)
             ToastManager.shared.showSuccess("Connexion acceptee")
         } catch {
             receivedRequests = snapshot
@@ -131,19 +150,51 @@ final class RequestsViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Reject
-
     func reject(requestId: String) async {
         let snapshot = receivedRequests
+        let cmid = ClientMutationId.generate()
         receivedRequests.removeAll { $0.id == requestId }
         HapticFeedback.medium()
+        observeOutcome(
+            cmid: cmid,
+            rollback: { [weak self] in self?.receivedRequests = snapshot },
+            toast: "Impossible de refuser cette demande"
+        )
+        let payload = RespondFriendRequestPayload(
+            clientMutationId: cmid,
+            friendRequestId: requestId,
+            action: .reject
+        )
         do {
-            _ = try await friendService.respond(requestId: requestId, accepted: false)
+            try await OfflineQueue.shared.enqueue(.respondFriendRequest, payload: payload)
             ToastManager.shared.showSuccess("Demande refusee")
         } catch {
             receivedRequests = snapshot
             HapticFeedback.error()
             ToastManager.shared.showError("Impossible de refuser")
+        }
+    }
+
+    // MARK: - Outcome Observer (Phase 4 Task 4.9)
+
+    /// Subscribes to `OfflineQueue.outcomeStream(for: cmid)` and rolls back
+    /// the optimistic mutation if the OutboxFlusher escalates the row to
+    /// `.exhausted` after exhausting its retry budget. `.applied` events are
+    /// a no-op (the optimistic state is already the final state).
+    private func observeOutcome(
+        cmid: String,
+        rollback: @escaping @MainActor () -> Void,
+        toast: String
+    ) {
+        Task { @MainActor in
+            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    rollback()
+                    ToastManager.shared.showError(toast)
+                    HapticFeedback.error()
+                }
+            }
         }
     }
 

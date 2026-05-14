@@ -5,7 +5,7 @@ import path from 'path';
 import fs from 'fs/promises';
 import { randomUUID } from 'crypto';
 import { UnifiedAuthRequest } from '../../middleware/auth';
-import { sendSuccess } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound } from '../../utils/response';
 
 const UPLOAD_DIR = process.env.UPLOAD_DIR ?? '/tmp/meeshy-uploads';
 const MAX_AUDIO_DURATION_SEC = 60;
@@ -17,6 +17,15 @@ const ALLOWED_MIME = new Set([
   'audio/aac',
   'audio/ogg',
 ]);
+const ALLOWED_AUDIO_EXT = new Set(['.mp3', '.mp4', '.wav', '.m4a', '.aac', '.ogg']);
+const EXT_TO_MIME: Record<string, string> = {
+  '.mp3': 'audio/mpeg',
+  '.mp4': 'audio/mp4',
+  '.wav': 'audio/wav',
+  '.m4a': 'audio/x-m4a',
+  '.aac': 'audio/aac',
+  '.ogg': 'audio/ogg',
+};
 
 const ListQuerySchema = z.object({
   q: z.string().optional(),
@@ -34,15 +43,15 @@ export function registerStoryAudioRoutes(
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const authContext = (request as UnifiedAuthRequest).authContext;
     if (!authContext?.registeredUser) {
-      return reply.status(401).send({ success: false, error: 'Authentication required' });
+      return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
     }
 
     const data = await (request as any).file();
     if (!data) {
-      return reply.status(400).send({ success: false, error: 'No file provided' });
+      return sendBadRequest(reply, 'No file provided', { code: 'NO_FILE' });
     }
     if (!ALLOWED_MIME.has(data.mimetype)) {
-      return reply.status(400).send({ success: false, error: 'Invalid audio format. Supported: mp3, mp4, wav, m4a, aac, ogg' });
+      return sendBadRequest(reply, 'Invalid audio format. Supported: mp3, mp4, wav, m4a, aac, ogg', { code: 'INVALID_AUDIO_FORMAT' });
     }
 
     const title = String((data.fields['title'] as any)?.value ?? 'Son sans titre').slice(0, 100);
@@ -80,7 +89,7 @@ export function registerStoryAudioRoutes(
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const parsed = ListQuerySchema.safeParse(request.query);
     if (!parsed.success) {
-      return reply.status(400).send({ success: false, error: 'Invalid query parameters' });
+      return sendBadRequest(reply, 'Invalid query parameters', { code: 'VALIDATION_ERROR' });
     }
 
     const { q, limit } = parsed.data;
@@ -110,5 +119,31 @@ export function registerStoryAudioRoutes(
     }).catch(() => null); // Silencieux si l'audio n'existe pas
 
     return sendSuccess(reply, null);
+  });
+
+  // GET /static/:filename — Serve uploaded story audio files (JWT-protected)
+  fastify.get<{ Params: { filename: string } }>('/static/:filename', {
+    preValidation: [requiredAuth],
+  }, async (request: FastifyRequest<{ Params: { filename: string } }>, reply: FastifyReply) => {
+    const { filename } = request.params;
+
+    const ext = path.extname(filename).toLowerCase();
+    if (!ALLOWED_AUDIO_EXT.has(ext)) {
+      return sendBadRequest(reply, 'Invalid file type', { code: 'INVALID_FILE_TYPE' });
+    }
+
+    const safeName = path.basename(filename);
+    const filePath = path.join(UPLOAD_DIR, safeName);
+
+    try {
+      await fs.access(filePath);
+    } catch {
+      return sendNotFound(reply, 'Audio file not found', { code: 'FILE_NOT_FOUND' });
+    }
+
+    const contentType = EXT_TO_MIME[ext] ?? 'application/octet-stream';
+    reply.header('Content-Type', contentType);
+    reply.header('Cache-Control', 'private, max-age=3600');
+    return reply.send(await fs.readFile(filePath));
   });
 }

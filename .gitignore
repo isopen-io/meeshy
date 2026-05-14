@@ -242,6 +242,8 @@ Carthage/
 fastlane/report.xml
 fastlane/Preview.html
 fastlane/screenshots/**/*.png
+apps/ios/screenshots/
+.claude/worktrees/
 fastlane/test_output
 fastlane/ui_test_output
 fastlane/.env.local

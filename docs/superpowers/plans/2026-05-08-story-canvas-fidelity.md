@@ -1183,8 +1183,16 @@ git tag story-canvas-p1-complete
 
 ## Task 2.1 : Define `StoryRenderer` skeleton
 
+> **Phase 2 amendments (2026-05-09)** :
+> 1. `RenderableItem.anchor` is `CGPoint` (not `UnitPoint`). Phase 1 stored anchor as `CGPoint` in MeeshySDK (no SwiftUI dep, dual-target rule). Empty conformances must match the stored property type.
+> 2. Conformance extensions (`extension StoryTextObject: RenderableItem {}` …) live in `MeeshyUI/Story/Canvas/StoryRenderer.swift` (alongside the protocol), NOT in `MeeshySDK/Models/StoryModels.swift` — the MeeshySDK target cannot see types defined in MeeshyUI. Retroactive cross-target conformance is supported.
+> 3. Build commands : replace `cd packages/MeeshySDK && swift build` (fails on macOS host because MeeshyUI imports UIKit/UIScreen) by `xcodebuild build -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -quiet` (or `./apps/ios/meeshy.sh build` for full app integration). This applies to ALL Phase 2 build steps.
+> 4. The Phase 1 stub file `StoryCanvasStubs.swift` will be progressively dismantled : Task 2.1 removes the `RenderMode` and `StoryRenderer` stubs, Task 2.5 removes the `StoryCanvasUIView` stub. The `StorySlide.effectiveSlideDuration()` extension is migrated to `StoryModels.swift` in Task 2.1 (it belongs to the model, not the canvas).
+
 **Files:**
 - Create: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift`
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasStubs.swift` (drop RenderMode + StoryRenderer + effectiveSlideDuration)
+- Modify: `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` (re-home `effectiveSlideDuration()`)
 
 - [ ] **Step 1: Define skeleton**
 
@@ -1192,11 +1200,33 @@ git tag story-canvas-p1-complete
 import Foundation
 import QuartzCore
 import CoreMedia
+import UIKit
+import MeeshySDK
 
 public enum RenderMode: Sendable {
     case edit  // tout visible, gestures actifs
     case play  // timing appliqué, animations actives
 }
+
+public protocol RenderableItem {
+    var id: String { get }
+    var x: Double { get }
+    var y: Double { get }
+    var scale: Double { get }
+    var rotation: Double { get }
+    var zIndex: Int { get }
+    /// Anchor in normalized [0,1] coordinates. Type CGPoint (Phase 1 dual-target rule —
+    /// SwiftUI's UnitPoint cannot live in MeeshySDK target).
+    var anchor: CGPoint { get }
+    var startTime: Double? { get }
+    var duration: Double? { get }
+    var fadeIn: Double? { get }
+    var fadeOut: Double? { get }
+}
+
+extension StoryTextObject: RenderableItem {}
+extension StoryMediaObject: RenderableItem {}
+extension StorySticker: RenderableItem {}
 
 public enum StoryRenderer {
 
@@ -1205,6 +1235,7 @@ public enum StoryRenderer {
     /// - StoryCanvasUIView (live render)
     /// - StoryAVCompositor (per-frame export)
     /// - Snapshot tests
+    @MainActor
     public static func render(slide: StorySlide,
                               into geometry: CanvasGeometry,
                               at time: CMTime,
@@ -1227,8 +1258,11 @@ public enum StoryRenderer {
     // MARK: - Private
 
     private static func collectItems(from slide: StorySlide) -> [any RenderableItem] {
-        // Will be implemented per-type in subsequent tasks
-        []
+        var items: [any RenderableItem] = []
+        items.append(contentsOf: slide.effects.textObjects)
+        items.append(contentsOf: slide.effects.mediaObjects ?? [])
+        // stickers (StoryEffects.stickerObjects) — wired in Task 2.4
+        return items
     }
 
     private static func shouldRender(item: any RenderableItem, at time: CMTime, mode: RenderMode) -> Bool {
@@ -1239,6 +1273,7 @@ public enum StoryRenderer {
         return t >= start && t < end
     }
 
+    @MainActor
     private static func renderItem(_ item: any RenderableItem,
                                     into geometry: CanvasGeometry,
                                     at time: CMTime,
@@ -1246,47 +1281,47 @@ public enum StoryRenderer {
         // Will be specialized per type in subsequent tasks
         let layer = CALayer()
         layer.zPosition = CGFloat(item.zIndex)
+        layer.name = item.id
         return layer
     }
 }
+```
 
-public protocol RenderableItem {
-    var id: String { get }
-    var x: Double { get }
-    var y: Double { get }
-    var scale: Double { get }
-    var rotation: Double { get }
-    var zIndex: Int { get }
-    var anchor: UnitPoint { get }
-    var startTime: Double? { get }
-    var duration: Double? { get }
-    var fadeIn: Double? { get }
-    var fadeOut: Double? { get }
+- [ ] **Step 2: Move `effectiveSlideDuration()` to StoryModels.swift, drop stubs**
+
+The Phase 1 stub file `StoryCanvasStubs.swift` contains `RenderMode`, `StoryRenderer`, `StoryCanvasUIView` and a `StorySlide.effectiveSlideDuration()` extension. Remove `RenderMode` and `StoryRenderer` (now real types) and move the extension into `StoryModels.swift` (top-level extension on `StorySlide`).
+
+```swift
+// In StoryModels.swift, append:
+extension StorySlide {
+    public func effectiveSlideDuration() -> TimeInterval {
+        let base = duration
+        guard let loopMedia = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop }),
+              let videoDuration = loopMedia.duration, videoDuration > 0 else {
+            return base
+        }
+        let repetitions = ceil(base / videoDuration)
+        return repetitions * videoDuration
+    }
 }
 ```
 
-- [ ] **Step 2: Conform StoryTextObject, StoryMediaObject, StorySticker to RenderableItem**
-
-In `StoryModels.swift`, after each struct, add :
-
-```swift
-extension StoryTextObject: RenderableItem {}
-extension StoryMediaObject: RenderableItem {}
-extension StorySticker: RenderableItem {}
-```
+`StoryCanvasUIView` stub stays until Task 2.5.
 
 - [ ] **Step 3: Build check**
 
 ```bash
-cd packages/MeeshySDK && swift build
+xcodebuild build -scheme MeeshySDK-Package \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -quiet
 ```
 
 - [ ] **Step 4: Commit**
 
 ```bash
 git add packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift \
+        packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasStubs.swift \
         packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift
-git commit -m "feat(story-canvas): StoryRenderer skeleton + RenderableItem protocol"
+git commit -m "feat(story-canvas): StoryRenderer skeleton + RenderableItem protocol (CGPoint anchor)"
 ```
 
 ---
@@ -2545,8 +2580,19 @@ git commit -m "feat(story-canvas): SwiftUI bridge UIViewControllerRepresentable 
 
 ## Task 2.18 : Migrate `StoryComposerView.swift` to use Representable
 
+> **Status (2026-05-09)** : DONE. Migration livrée par commit `75240f15`. Implémentation finale s'écarte du plan initial — voir « Implementation notes » ci-dessous. La portion canvas du composer utilise désormais `StoryComposerCanvasView` (UIViewRepresentable) au lieu de l'historique `StoryCanvasView` SwiftUI.
+
+> **Implementation notes (2026-05-09)** :
+> - `StoryComposerCanvasView: UIViewRepresentable` ajouté à `StoryCanvasRepresentable.swift` pour wrap directement `StoryCanvasUIView` (sans le chrome dev-time du `StoryComposerVC` qui contient un `UISegmentedControl` Edit/Play).
+> - **Single source of truth** : drawing/sticker/filter/background passent par `slide.effects` (lu par le canvas). Les `@State` SwiftUI (`drawingCanvas: PKCanvasView`, `drawingTool`, `selectedFilter`, `selectedImage`, `stickerObjects`) restent côté composer car les toolbars/sheets les bind directement. Pas de doublon de bindings sur le Representable — le slide suffit.
+> - **Double-tap parity** : `StoryCanvasUIView` étendu avec `enum CanvasItemKind { text, media, sticker }` + `var onItemDoubleTapped: ((String, CanvasItemKind) -> Void)?` + `UITapGestureRecognizer(numberOfTapsRequired: 2)`. Préserve l'UX legacy `onEditText` / `onEditMedia`.
+> - **PencilKit drawing** : préservé via overlay SwiftUI `DrawingOverlayView` au-dessus du canvas (pas via le `setDrawingMode` interne du UIView). La toolbar undo/redo/clear continue d'opérer sur le `drawingCanvas` @State, et `viewModel.drawingData` est synchronisé via `PKCanvasViewDelegate.canvasViewDrawingDidChange`.
+> - **Real-time sync** : 5 `.onChange` (selectedFilter / selectedImage / stickerObjects / drawingData / backgroundColor) collapsed dans un seul `.onChange(of: canvasSyncFingerprint)` qui appelle `syncCurrentSlideEffects()` — sinon le SwiftUI type-checker timed out sur le body. Sticker double-tap UX (toggle delete button) est différée.
+
 **Files:**
 - Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryComposerView.swift`
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift`
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasRepresentable.swift`
 
 - [ ] **Step 1: Replace canvas portion with `StoryComposerRepresentable`**
 
@@ -2582,10 +2628,16 @@ public struct StoryComposerView: View {
 - [ ] **Step 2: Build check (will require ViewModel adjustments)**
 
 ```bash
-cd packages/MeeshySDK && swift build
+xcodebuild build -scheme MeeshySDK-Package \
+  -destination 'platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5'
 ```
 
 Fix any compile errors that result from the migration. The ViewModel's slide management may need adjustments — keep them minimal, the canvas now owns the rendering.
+
+> **Note (post-Phase 3 audit)** : `StoryComposerView` actuel a 8+ `@State` à migrer (cf. correction notes en tête de Phase 3). Plan exhaustif :
+> - **Migrent au VC (canvas-side)** : `drawingCanvas: PKCanvasView`, `drawingTool`, `selectedFilter`, `stickerObjects`, `selectedImage` (background)
+> - **Restent SwiftUI** : `viewModel`, audio state (`selectedAudioId`, `selectedAudioTitle`, `audioVolume`, `audioTrimStart`, `audioTrimEnd`) — gérés via toolbars + sheets
+> - `StoryComposerRepresentable` (livré Phase 2, `Sources/MeeshyUI/Story/Canvas/StoryCanvasRepresentable.swift`) doit étendre son binding-set pour exposer drawingTool/selectedFilter/stickerObjects au composer SwiftUI parent.
 
 - [ ] **Step 3: Commit**
 
@@ -2598,15 +2650,43 @@ git commit -m "refactor(story-canvas): StoryComposerView uses StoryComposerRepre
 
 ## Task 2.19 : Delete legacy SwiftUI canvas files
 
-**Files:**
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasView.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/DraggableMediaView.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/DraggableTextObjectView.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/CanvasElementModifiers.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasReaderView.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasReaderView+Timeline.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/SimpleTimelineView.swift`
-- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/TimelinePlaybackEngine.swift`
+> **Status (2026-05-09)** : PARTIEL. Audit pré-exécution a révélé que `StoryCanvasReaderView` (1732 lignes) consomme `DraggableMediaView` ligne 558 et est lui-même utilisé par 5 sites prod (`UnifiedPostComposer.swift:225`, `StoryRepostEmbedCell.swift:32`, `StoryViewerView.swift:450,464`). Migrer ces sites vers la nouvelle infra UIKit nécessite d'étendre `StoryViewerRepresentable` (Story multi-slide, preloaded URLs, langage chain) — projet en soi.
+>
+> **Choix pragmatique (2026-05-09)** : suppression des 5 fichiers SANS dépendances externes au Reader, **différer** Reader + Draggable + tests Reader pour session future.
+>
+> **Supprimés (commit `75240f15`)** :
+> - `StoryCanvasView.swift` (967 lignes) — remplacé par `StoryComposerCanvasView`
+> - `TimelinePanel.swift` (860 lignes) — dead code (référencé seulement par lui-même ; le composer utilise `TimelineContainerSwitcher` v2)
+> - `TimelinePlaybackEngine.swift` (215 lignes) — dead code (consommé seulement par `TimelinePanel`)
+> - `SimpleTimelineView.swift` (452 lignes) — dead code (no external refs)
+> - `CanvasElementModifiers.swift` (86 lignes) — dead code (no external refs)
+> - `Tests/MeeshyUITests/TimelineTests.swift` — tests de `TimelinePlaybackEngine`
+>
+> **Total supprimé : ~2580 lignes** (vs ~4220 dans le scope d'origine).
+>
+> **Différés (Reader migration, session future)** :
+> - `DraggableMediaView.swift` (426 lignes) — consommé par `StoryCanvasReaderView`
+> - `DraggableTextObjectView.swift` (248 lignes) — consommé par `StoryCanvasReaderView`
+> - `StoryCanvasReaderView.swift` (1732 lignes) — consommé par 5 sites prod
+> - `StoryCanvasReaderView+Timeline.swift` (94 lignes) — extensions du Reader
+> - Tests : `StoryCanvasReaderViewMuteTests.swift`, `StoryCanvasReaderTransitionTests.swift`, `StoryCanvasReaderKeyframeTests.swift`
+>
+> **Pour la session Reader migration future** :
+> 1. Étendre `StoryViewerRepresentable` (`StoryCanvasRepresentable.swift`) pour accepter : `story: Story` (multi-slide), `preferredLanguage`/`preferredContentLanguages` (Prisme), `preloadedImages/Videos/AudioURLs`, `mute: Bool`, `repost: RepostPayload?` initializer.
+> 2. Migrer les 5 call sites vers le nouveau Representable (idéalement en gardant la même signature SwiftUI).
+> 3. Supprimer Reader + Draggable + tests.
+
+**Files (initial scope) :**
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasView.swift` ✅
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/DraggableMediaView.swift` ⏳ (différé)
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/DraggableTextObjectView.swift` ⏳ (différé)
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/CanvasElementModifiers.swift` ✅
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasReaderView.swift` ⏳ (différé)
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryCanvasReaderView+Timeline.swift` ⏳ (différé)
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/SimpleTimelineView.swift` ✅
+- Delete: `packages/MeeshySDK/Sources/MeeshyUI/Story/TimelinePlaybackEngine.swift` ✅
+- Delete (bonus): `packages/MeeshySDK/Sources/MeeshyUI/Story/TimelinePanel.swift` ✅
+- Delete (bonus): `packages/MeeshySDK/Tests/MeeshyUITests/TimelineTests.swift` ✅
 
 - [ ] **Step 1: Delete files**
 
@@ -2635,16 +2715,25 @@ For each match, update the call site to use `StoryComposerRepresentable` / `Stor
 - [ ] **Step 3: Build verification**
 
 ```bash
-cd packages/MeeshySDK && swift build
+xcodebuild build -scheme MeeshySDK-Package \
+  -destination 'platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5'
 ./apps/ios/meeshy.sh build
 ```
 
 Both must pass.
 
+> **Note (post-Phase 3 audit)** :
+> - Audit ligne par ligne : ~3800 lignes (pas 3200) sur les 8 fichiers (StoryCanvasView ~968 + DraggableMediaView 427 + DraggableTextObjectView ~350 + CanvasElementModifiers ~100 + StoryCanvasReaderView ~300 + StoryCanvasReaderView+Timeline ~200 + SimpleTimelineView ~150 + TimelinePlaybackEngine 216).
+> - **AVANT delete `TimelinePlaybackEngine.swift`** : auditer son usage dans le Timeline Editor v2 (déjà mergé sur dev). Run :
+>   ```bash
+>   grep -rn "TimelinePlaybackEngine" packages/MeeshySDK/Sources/ apps/ios/Meeshy/ 2>/dev/null
+>   ```
+>   Si dépendance trouvée hors des 8 fichiers à supprimer → préserver le fichier (le retirer de la liste) OU migrer son call site vers la nouvelle infrastructure CALayer (à scoper en sous-task).
+
 - [ ] **Step 4: Commit**
 
 ```bash
-git commit -m "refactor(story-canvas): remove 8 legacy SwiftUI canvas files (~3200 lines)"
+git commit -m "refactor(story-canvas): remove 8 legacy SwiftUI canvas files (~3800 lines)"
 ```
 
 ---
@@ -2673,13 +2762,93 @@ git tag story-canvas-p2-complete
 
 ---
 
+## Phase 3 — Corrections post-Phase 2 audit (2026-05-09)
+
+Après audit du code livré en Phase 2 et des API Metal réelles, les déviations suivantes par rapport au plan d'origine sont actées avant exécution :
+
+**Task 3.1 (Metal kernel)** :
+- **Bug API** : `dispatchThreads(threadsPerGrid, threadsPerThreadgroupSize:)` n'existe pas dans `MTLComputeCommandEncoder`. La signature correcte est `dispatchThreads(_ threadsPerGrid: MTLSize, threadsPerThreadgroup: MTLSize)`. Le snippet du plan est corrigé.
+- **SPM resources** : `Package.swift` MeeshyUI target a actuellement `resources: [.process("Resources")]`. SPM ne discover PAS automatiquement les `.metal` — ajouter explicitement `.process("Story/Canvas/Metal")` (ou un dossier `Resources/Metal/`). À défaut, `device.makeDefaultLibrary()` retourne nil au runtime.
+- **Library lookup** : `device.makeDefaultLibrary()` cherche dans `Bundle.main` (l'app), pas dans le bundle du SDK. Utiliser `try device.makeDefaultLibrary(bundle: Bundle.module)` pour charger depuis le resource bundle MeeshyUI.
+- **Scope étendu** : 2 kernels au lieu d'1 — `vintageFilter` (sepia + vignette, démo richesse) + `bwContrastFilter` (luminance + contrast, démo basique). Valide l'extensibilité du pattern. Les 6 autres presets (`warm`, `cool`, `dramatic`, `vivid`, `fade`, `chrome`) restent CIFilter-based dans `StoryFilterProcessor` (migration Metal différée post-launch).
+- **MainActor isolation** : MeeshyUI utilise `defaultIsolation(MainActor)`. `StoryFilteredLayer: CAMetalLayer` doit déclarer ses `init`/`init(layer:)`/`init?(coder:)` `nonisolated` (parent `CALayer` est nonisolated, voir mémoire `feedback_meeshyui_default_isolation`). `setupPipeline()` peut rester `@MainActor` si appelé depuis init MainActor — sinon le marquer `nonisolated` aussi.
+
+**Task 3.2 (MPS blur)** :
+- **Mode out-of-place explicite** : utiliser `blur.encode(commandBuffer:sourceTexture:destinationTexture:)` (l'API in-place avec `fallbackCopyAllocator: nil` peut throw silencieusement quand le device ne supporte pas l'in-place). Le snippet ambigu du plan est corrigé.
+- **commandQueue partagé** : ne pas créer un nouveau `MTLCommandQueue` par appel `apply()` (allocation chère). Étendre `StoryRenderingContext` avec `public lazy var commandQueue: MTLCommandQueue` (ou getter `makeCommandQueue()` cached) et l'utiliser ici + en Task 3.1.
+
+**Task 3.3 (HW decode)** :
+- **Wire-up précis** : le call site n'est pas un mythique « StoryMediaCoordinator » mais `StoryMediaLoader.extractThumbnail(url:maxDimension:)` (lignes 114-124, packages/MeeshySDK/Sources/MeeshyUI/Story/StoryMediaLoader.swift), appelé depuis `StoryMediaLoader.videoThumbnail(url:maxDimension:)` (ligne 90).
+- **Préserver `maximumSize`** : la version actuelle utilise `generator.maximumSize = CGSize(width: maxDimension, height: maxDimension)` pour réduire le cost sur les sources 4K. Préserver dans la version async, sinon régression mémoire.
+- **Async API iOS 16+** : `imageGenerator.image(at:)` async retourne `(image: CGImage, actualTime: CMTime)` — le plan utilise `.image` correctement.
+
+**Task 3.4 (PencilKit)** :
+- **DrawingOverlayView existe DÉJÀ** : c'est un wrapper SwiftUI autour de `PencilKitCanvas` (lui-même `UIViewRepresentable` autour de `PKCanvasView`). Le plan disait « replace UIBezierPath with PKCanvasView » — incorrect, c'est déjà PKCanvasView. La task réelle = **intégrer un `PKCanvasView` natif UIKit comme sous-vue de `StoryCanvasUIView`** (pas via UIHostingController : surcoût + isolation), gérée par un toggle `isDrawingMode`.
+- **Conflict gestures Phase 2** : `StoryCanvasUIView` a `panRecognizer/pinchRecognizer/rotationRecognizer` actifs. Quand `isDrawingMode = true`, désactiver ces gestures (`isEnabled = false`) et activer `PKCanvasView` au-dessus. Inverse au toggle off.
+- **`StoryEffects.pencilDrawing: Data?` à ajouter** : champ absent aujourd'hui. Migration model (custom Codable backward-compat avec `decodeIfPresent` → nil par défaut). Le commit de la Task 3.4 modifie donc `StoryModels.swift` (champ + Codable manuel).
+- **Render dans StoryRenderer** : ajouter le drawing layer APRÈS la sorted items loop (ligne 76-81 de StoryRenderer.swift), avec `zPosition = 9999`. Utiliser `CanvasGeometry.designSize` (déjà static public, ligne 7) comme bounding rect du `PKDrawing.image(from:scale:)`.
+
+**Tasks 2.18 / 2.19** :
+- **2.18 — bindings exhaustifs** : `StoryComposerView` actuel a 8+ `@State` à migrer (`viewModel`, `drawingCanvas: PKCanvasView`, `drawingTool: DrawingTool`, `selectedFilter: StoryFilter?`, `selectedImage: UIImage?`, `stickerObjects: [StorySticker]`, plus audio state `selectedAudioId/selectedAudioTitle/audioVolume/audioTrimStart/audioTrimEnd`). Le plan ne montrait que `viewModel` — incomplet. La migration doit expliciter pour chaque binding s'il passe au VC (drawing/filter/sticker — canvas-side) ou reste SwiftUI (toolbars/audio sheet). `StoryComposerRepresentable` existe déjà (livré Phase 2, packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasRepresentable.swift) — vérifier extension du binding-set.
+- **2.19 — comptage lignes** : audit donne ~3800 lignes (pas 3200) sur les 8 fichiers. Mettre à jour le commit message.
+- **2.19 — TimelinePlaybackEngine.swift** : avant suppression, vérifier qu'il n'est pas une dépendance du Timeline Editor v2 (déjà mergé sur dev). Audit grep depuis tout le repo. Si dépendance trouvée, soit le préserver (le retirer de la liste des 8), soit migrer son call site vers la nouvelle infrastructure CALayer.
+
+**Build verification (3.5, 2.18, 2.19, et tout Phase 3)** :
+- `swift build` ne fonctionne pas sur macOS hôte (MeeshyUI importe UIKit/UIScreen). Remplacer par :
+  ```bash
+  xcodebuild build -scheme MeeshySDK-Package \
+    -destination 'platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5'
+  ```
+  (ou l'invocation `./apps/ios/meeshy.sh build` pour le test app-side). Cohérent avec la mémoire `feedback_meeshysdk_test_scheme`.
+
+---
+
 ## Task 3.1 : Custom Metal kernel for real-time filters
 
 **Files:**
+- Modify: `packages/MeeshySDK/Package.swift` (add `.metal` resource directive to MeeshyUI target)
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderingContext.swift` (expose shared commandQueue)
 - Create: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Metal/StoryFilters.metal`
 - Create: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryFilteredLayer.swift`
 
-- [ ] **Step 1: Write `.metal` shader**
+- [ ] **Step 1: Update Package.swift to include the `.metal` resource**
+
+```swift
+// In MeeshyUI target:
+resources: [
+    .process("Resources"),
+    .process("Story/Canvas/Metal"),  // NEW — Metal shader bundle
+],
+```
+
+`.process(...)` runs the Xcode resource pipeline on the directory, which compiles `.metal` into a `.metallib` and includes it in `Bundle.module`. SPM does NOT auto-discover .metal files.
+
+- [ ] **Step 2: Extend StoryRenderingContext with shared commandQueue**
+
+`StoryRenderingContext` (`@unchecked Sendable`, singleton) currently exposes `metalDevice` + `ciContext`. Tasks 3.1 and 3.2 both need a `MTLCommandQueue` ; allocating one per encode is expensive. Add a shared queue :
+
+```swift
+public final class StoryRenderingContext: @unchecked Sendable {
+    public static let shared = StoryRenderingContext()
+    public let metalDevice: MTLDevice
+    public let commandQueue: MTLCommandQueue   // NEW
+    public let ciContext: CIContext
+    // ...
+    private init() {
+        guard let device = MTLCreateSystemDefaultDevice() else {
+            fatalError("Metal device unavailable — Story canvas requires Metal")
+        }
+        self.metalDevice = device
+        guard let queue = device.makeCommandQueue() else {
+            fatalError("Metal command queue allocation failed")
+        }
+        self.commandQueue = queue
+        // ... rest unchanged
+    }
+}
+```
+
+- [ ] **Step 3: Write `.metal` shader**
 
 ```metal
 #include <metal_stdlib>
@@ -2713,9 +2882,31 @@ kernel void vintageFilter(
     float4 result = mix(c, sepia, intensity) * vignette;
     output.write(result, gid);
 }
+
+// BW + contrast filter: luminance to grayscale + S-curve contrast
+// Demonstrates extensibility of the kernel pattern. `intensity` 0..1 controls
+// the contrast curve steepness (0 = flat gray, 1 = high contrast).
+kernel void bwContrastFilter(
+    texture2d<float, access::read> input  [[ texture(0) ]],
+    texture2d<float, access::write> output [[ texture(1) ]],
+    constant float &intensity [[ buffer(0) ]],
+    uint2 gid [[ thread_position_in_grid ]]
+) {
+    if (gid.x >= input.get_width() || gid.y >= input.get_height()) return;
+    float4 c = input.read(gid);
+
+    // Rec.709 luminance
+    float lum = dot(c.rgb, float3(0.2126, 0.7152, 0.0722));
+
+    // Centered S-curve: steeper midtones as intensity rises
+    float curved = (lum - 0.5) * (1.0 + 2.0 * intensity) + 0.5;
+    curved = clamp(curved, 0.0, 1.0);
+
+    output.write(float4(curved, curved, curved, c.a), gid);
+}
 ```
 
-- [ ] **Step 2: Implement `StoryFilteredLayer` (CAMetalLayer wrapper)**
+- [ ] **Step 4: Implement `StoryFilteredLayer` (CAMetalLayer wrapper)**
 
 ```swift
 import QuartzCore
@@ -2723,24 +2914,33 @@ import Metal
 import MetalKit
 
 public final class StoryFilteredLayer: CAMetalLayer {
+    public enum Kind: String { case vintage = "vintageFilter"
+                                case bwContrast = "bwContrastFilter" }
+
     private var pipelineState: MTLComputePipelineState?
     public var intensity: Float = 0.5
     public var sourceTexture: MTLTexture?
+    public var kind: Kind = .vintage { didSet { setupPipeline() } }
 
-    public override init() {
+    // CALayer is nonisolated (Core Animation server-side). Under MeeshyUI's
+    // defaultIsolation(MainActor), these inits MUST be `nonisolated` so Swift 6
+    // doesn't infer @MainActor on a parent that isn't.
+    public override nonisolated init() {
         super.init()
         self.device = StoryRenderingContext.shared.metalDevice
         self.pixelFormat = .bgra8Unorm
         self.framebufferOnly = false
         setupPipeline()
     }
-    public override init(layer: Any) { super.init(layer: layer) }
-    required init?(coder: NSCoder) { fatalError() }
+    public override nonisolated init(layer: Any) { super.init(layer: layer) }
+    required nonisolated init?(coder: NSCoder) { fatalError() }
 
     private func setupPipeline() {
         let device = StoryRenderingContext.shared.metalDevice
-        guard let library = device.makeDefaultLibrary(),
-              let function = library.makeFunction(name: "vintageFilter") else { return }
+        // Bundle.module = MeeshyUI resource bundle (see Package.swift `.process("Story/Canvas/Metal")`).
+        // device.makeDefaultLibrary() (no bundle) reads Bundle.main and would miss the SDK's metal library.
+        guard let library = try? device.makeDefaultLibrary(bundle: Bundle.module),
+              let function = library.makeFunction(name: kind.rawValue) else { return }
         pipelineState = try? device.makeComputePipelineState(function: function)
     }
 
@@ -2760,7 +2960,7 @@ public final class StoryFilteredLayer: CAMetalLayer {
         let h = pipeline.maxTotalThreadsPerThreadgroup / w
         let threadsPerGrid = MTLSize(width: source.width, height: source.height, depth: 1)
         let threadsPerThreadgroup = MTLSize(width: w, height: h, depth: 1)
-        encoder.dispatchThreads(threadsPerGrid, threadsPerThreadgroupSize: threadsPerThreadgroup)
+        encoder.dispatchThreads(threadsPerGrid, threadsPerThreadgroup: threadsPerThreadgroup)
         encoder.endEncoding()
         commandBuffer.present(drawable)
         commandBuffer.commit()
@@ -2768,12 +2968,14 @@ public final class StoryFilteredLayer: CAMetalLayer {
 }
 ```
 
-- [ ] **Step 3: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Metal/StoryFilters.metal \
+git add packages/MeeshySDK/Package.swift \
+        packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderingContext.swift \
+        packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Metal/StoryFilters.metal \
         packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryFilteredLayer.swift
-git commit -m "feat(story-canvas): custom Metal kernel for real-time vintage filter"
+git commit -m "feat(story-canvas): custom Metal kernels (vintage + bw-contrast) for real-time filters"
 ```
 
 ---
@@ -2794,17 +2996,15 @@ public enum StoryBlurFilter {
     public static func apply(sigma: Float,
                              to inputTexture: MTLTexture,
                              outputTexture: MTLTexture) {
-        let device = StoryRenderingContext.shared.metalDevice
-        let blur = MPSImageGaussianBlur(device: device, sigma: sigma)
-        guard let queue = device.makeCommandQueue(),
-              let buffer = queue.makeCommandBuffer() else { return }
-        var inout1 = inputTexture
-        var inout2 = outputTexture
+        // Out-of-place explicit: in-place encode with `fallbackCopyAllocator: nil`
+        // can fail silently when the device doesn't support in-place. Caller
+        // owns the output texture, so out-of-place is the simpler contract.
+        let context = StoryRenderingContext.shared
+        let blur = MPSImageGaussianBlur(device: context.metalDevice, sigma: sigma)
+        guard let buffer = context.commandQueue.makeCommandBuffer() else { return }
         blur.encode(commandBuffer: buffer,
-                    inPlaceTexture: &inout1,
-                    fallbackCopyAllocator: nil)
-        // Or :
-        // blur.encode(commandBuffer: buffer, sourceTexture: inputTexture, destinationTexture: outputTexture)
+                    sourceTexture: inputTexture,
+                    destinationTexture: outputTexture)
         buffer.commit()
         buffer.waitUntilCompleted()
     }
@@ -2861,9 +3061,11 @@ public enum StoryMediaDecoder {
 }
 ```
 
-- [ ] **Step 2: Wire into media drop pipeline (StoryMediaCoordinator or similar)**
+- [ ] **Step 2: Wire into media drop pipeline**
 
-In the existing `StoryMediaCoordinator` (or wherever media drops are handled), replace the blocking decode with `StoryMediaDecoder.firstFrame(of:)`.
+Real call site: `StoryMediaLoader.extractThumbnail(url:maxDimension:)` (private, lines 114-124 of `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryMediaLoader.swift`), called from public `StoryMediaLoader.videoThumbnail(url:maxDimension:)` (line 90).
+
+Replace the synchronous `generator.copyCGImage(at: .zero, actualTime: nil)` with the async `StoryMediaDecoder.firstFrame(of:)` API. Preserve `generator.maximumSize = CGSize(width: maxDimension, height: maxDimension)` to avoid full-resolution decode of 4K sources (otherwise memory regression). Convert `videoThumbnail` to `async throws` and update its callers.
 
 - [ ] **Step 3: Commit**
 
@@ -2877,62 +3079,106 @@ git commit -m "feat(story-canvas): VideoToolbox HW decode + MTKTextureLoader for
 ## Task 3.4 : PencilKit drawing overlay
 
 **Files:**
-- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift`
-- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/DrawingOverlayView.swift` (existing, replace UIBezierPath with PKCanvasView)
+- Modify: `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` (add `StoryEffects.pencilDrawing` + Codable)
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift` (UIKit-native PKCanvasView + drawing-mode toggle)
+- Modify: `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift` (render `PKDrawing` layer)
 
-- [ ] **Step 1: Add `PKCanvasView` as drawing layer**
+> **Note (post-Phase 3 audit)** :
+> - `DrawingOverlayView.swift` (existant) est déjà un wrapper SwiftUI autour de `PencilKitCanvas` (lui-même `UIViewRepresentable` autour de `PKCanvasView`). Le plan d'origine disait « replace UIBezierPath with PKCanvasView » — incorrect, c'est déjà PKCanvasView. **Ne PAS modifier DrawingOverlayView.swift**. La migration PencilKit consiste à ajouter un `PKCanvasView` natif UIKit comme sous-vue de `StoryCanvasUIView` (pas de UIHostingController qui ajoute surcoût + complexité d'isolation).
+> - `StoryCanvasUIView` a déjà `panRecognizer/pinchRecognizer/rotationRecognizer` actifs (Phase 2 task 2.4). Conflict gestures ⇒ ajouter un toggle `isDrawingMode` qui désactive ces gestures et active le `PKCanvasView` au-dessus, et inversement.
+> - `StoryEffects.pencilDrawing` n'existe PAS aujourd'hui. Ajouter le champ + Codable backward-compat (`decodeIfPresent` → `nil`).
 
-In `StoryCanvasUIView` :
+- [ ] **Step 1: Add `pencilDrawing: Data?` field to StoryEffects**
+
+In `Sources/MeeshySDK/Models/StoryModels.swift` :
+
+```swift
+public struct StoryEffects: Codable, Sendable {
+    // ... existing fields ...
+    public var pencilDrawing: Data?    // NEW — serialized PKDrawing.dataRepresentation()
+
+    enum CodingKeys: String, CodingKey {
+        // ... existing keys ...
+        case pencilDrawing
+    }
+
+    public init(from decoder: Decoder) throws {
+        // ... existing decoding ...
+        pencilDrawing = try c.decodeIfPresent(Data.self, forKey: .pencilDrawing)
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        // ... existing encoding ...
+        try c.encodeIfPresent(pencilDrawing, forKey: .pencilDrawing)
+    }
+}
+```
+
+Encode via `PKDrawing.dataRepresentation()`, decode via `PKDrawing(data:)`.
+
+- [ ] **Step 2: Add UIKit-native PKCanvasView + drawing-mode toggle to StoryCanvasUIView**
+
+In `StoryCanvasUIView.swift` :
 
 ```swift
 import PencilKit
 
 private var drawingCanvas: PKCanvasView?
+public private(set) var isDrawingMode: Bool = false
 
-public func enableDrawing() {
-    guard drawingCanvas == nil else { return }
-    let canvas = PKCanvasView(frame: bounds)
-    canvas.drawingPolicy = .anyInput  // accept finger and Pencil
-    canvas.tool = PKInkingTool(.pen, color: .systemPink, width: 4)
-    canvas.translatesAutoresizingMaskIntoConstraints = false
-    addSubview(canvas)
-    NSLayoutConstraint.activate([
-        canvas.topAnchor.constraint(equalTo: topAnchor),
-        canvas.leadingAnchor.constraint(equalTo: leadingAnchor),
-        canvas.trailingAnchor.constraint(equalTo: trailingAnchor),
-        canvas.bottomAnchor.constraint(equalTo: bottomAnchor),
-    ])
-    self.drawingCanvas = canvas
+public func setDrawingMode(_ enabled: Bool, tool: PKTool? = nil) {
+    isDrawingMode = enabled
+
+    // Disable item gestures when drawing — PKCanvasView captures touches above them.
+    panRecognizer.isEnabled = !enabled
+    pinchRecognizer.isEnabled = !enabled
+    rotationRecognizer.isEnabled = !enabled
+
+    if enabled {
+        guard drawingCanvas == nil else { return }
+        let canvas = PKCanvasView(frame: bounds)
+        canvas.drawingPolicy = .anyInput  // accept finger and Pencil
+        canvas.tool = tool ?? PKInkingTool(.pen, color: .systemPink, width: 4)
+        canvas.backgroundColor = .clear
+        canvas.isOpaque = false
+        canvas.translatesAutoresizingMaskIntoConstraints = false
+        addSubview(canvas)
+        NSLayoutConstraint.activate([
+            canvas.topAnchor.constraint(equalTo: topAnchor),
+            canvas.leadingAnchor.constraint(equalTo: leadingAnchor),
+            canvas.trailingAnchor.constraint(equalTo: trailingAnchor),
+            canvas.bottomAnchor.constraint(equalTo: bottomAnchor),
+        ])
+        self.drawingCanvas = canvas
+    } else {
+        // On exit, persist the drawing into the bound slide via callback (set by VC).
+        // The VC writes to slide.effects.pencilDrawing = drawingCanvas?.drawing.dataRepresentation()
+        drawingCanvas?.removeFromSuperview()
+        drawingCanvas = nil
+    }
 }
 
-public func disableDrawing() -> PKDrawing? {
-    let result = drawingCanvas?.drawing
-    drawingCanvas?.removeFromSuperview()
-    drawingCanvas = nil
-    return result
+public var currentDrawingData: Data? {
+    drawingCanvas?.drawing.dataRepresentation()
 }
 ```
 
-- [ ] **Step 2: Persist `PKDrawing` into `StorySlide.effects` (new field if needed)**
+The VC (composer) is responsible for persisting `currentDrawingData` into the slide model on toggle off.
 
-Add to `StoryEffects` :
+- [ ] **Step 3: Render `PKDrawing` in StoryRenderer**
 
-```swift
-public var pencilDrawing: Data?  // serialized PKDrawing
-```
-
-Encode via `PKDrawing.dataRepresentation()`, decode via `PKDrawing(data:)`.
-
-- [ ] **Step 3: Render `PKDrawing` in StoryRenderer (via `PKDrawing.image(...)`)**
+After the items loop (lines 76-81 of `StoryRenderer.swift`, between the `for item in allItems.sorted ...` block and the `return root`), add:
 
 ```swift
-// In StoryRenderer.render, before items loop:
 if let drawingData = slide.effects.pencilDrawing,
    let drawing = try? PKDrawing(data: drawingData) {
     let drawingLayer = CALayer()
     drawingLayer.frame = CGRect(origin: .zero, size: geometry.renderSize)
     let scale = UIScreen.main.scale
-    let img = drawing.image(from: CGRect(origin: .zero, size: CanvasGeometry.designSize), scale: scale)
+    let img = drawing.image(
+        from: CGRect(origin: .zero, size: CanvasGeometry.designSize),
+        scale: scale
+    )
     drawingLayer.contents = img.cgImage
     drawingLayer.zPosition = 9999  // above all items unless explicitly z-ordered
     root.addSublayer(drawingLayer)
@@ -2942,8 +3188,8 @@ if let drawingData = slide.effects.pencilDrawing,
 - [ ] **Step 4: Commit**
 
 ```bash
-git add packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift \
-        packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift \
+git add packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift \
+        packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift \
         packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryRenderer.swift
 git commit -m "feat(story-canvas): PencilKit drawing overlay with PKDrawing persistence"
 ```
@@ -2955,11 +3201,22 @@ git commit -m "feat(story-canvas): PencilKit drawing overlay with PKDrawing pers
 - [ ] **Step 1: Build verification**
 
 ```bash
-cd packages/MeeshySDK && swift build
+# swift build does NOT work on macOS host (MeeshyUI imports UIKit/UIScreen).
+xcodebuild build -scheme MeeshySDK-Package \
+  -destination 'platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5'
 ./apps/ios/meeshy.sh build
 ```
 
-- [ ] **Step 2: Tag**
+- [ ] **Step 2: Run full SDK + UI test suite**
+
+```bash
+xcodebuild test -scheme MeeshySDK-Package \
+  -destination 'platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5' 2>&1 | tail -30
+```
+
+Expected: zero failures. Snapshot baselines wired in 3.4 should now be stable.
+
+- [ ] **Step 3: Tag**
 
 ```bash
 git tag story-canvas-p3-complete
@@ -2969,7 +3226,25 @@ git tag story-canvas-p3-complete
 
 # Phase 4 — AVFoundation custom compositor (3 jours)
 
-**Objectif** : `StoryAVCompositor` utilise `StoryRenderer.render()` pour produire chaque frame d'export. Identité bit-exact avec live preview.
+**Objectif** : `StoryAVCompositor` utilise `StoryRenderer.render()` pour produire chaque frame d'export. Identité bit-exact (à la tolérance H.264 près) avec live preview.
+
+---
+
+## Phase 4 — Patches post-Phase 3 audit (2026-05-09)
+
+Le code template original de Phase 4 a été écrit avant que les contraintes runtime ne soient découvertes en Phase 2/3. Avant d'implémenter, on patche :
+
+1. **iOS 17, pas 18.** `Package.swift` cible `.iOS(.v17)`. `AVAssetExportSession.export(to:as:)` (iOS 18+) doit être remplacé par le pattern legacy `exportAsynchronously(completionHandler:)` enveloppé dans `withCheckedThrowingContinuation`.
+2. **`mediaObjects` est optionnel.** `slide.effects.mediaObjects: [StoryMediaObject]?` — `?? []` ou `?.first(where:)` requis.
+3. **`StoryRenderer.render` est `@MainActor`.** `AVVideoCompositing.startRequest(_:)` est appelé par AVFoundation sur un worker thread interne. On bridge via `DispatchQueue.main.sync { ... StoryRenderer.render + layer.render(in:) ... }`. Sécurité : `StoryExporter.export()` est exposé en `async` ; le caller ne doit jamais l'appeler depuis `MainActor.run` synchronisé pour éviter le deadlock croisé.
+4. **CGContext bitmap info pour 32BGRA.** `kCVPixelFormatType_32BGRA` exige `CGImageByteOrderInfo.order32Little.rawValue | CGImageAlphaInfo.premultipliedFirst.rawValue`. Le template original n'a que `premultipliedFirst.rawValue` (interprété en big-endian par défaut sur iOS) → buffer corrompu.
+5. **Cas no-bg-video : pour Phase 4 on lève `StoryExporterError.noBackgroundVideo`.** Le pattern AVMutableComposition exige au moins une track source. Cas "static slide sans bg video" → follow-up (générer un track noir 1s programmatique ou utiliser `AVMutableComposition.insertEmptyTimeRange`).
+6. **Fixture pour test 4.3.** `StoryFixtures.complexSlide()` n'a pas de `mediaURL` résolvable. Test 4.3 fournit son propre fixture programmatique (asset noir 2s généré via AVAssetWriter) ou s'appuie sur un bundle ressource minimal. Cf. patch ci-dessous dans Task 4.3.
+7. **Pixel-exact 0 diff irréaliste.** H.264 encoding est lossy ; color space sRGB↔Display P3 round-trip ; AVAssetImageGenerator interpolation. Tolérance documentée : SSIM > 0.97 sur le frame ou max-pixel-diff < 8 niveaux sur 99 % des pixels. Le test peut aussi être marqué `XCTSkipIf` si l'env n'a pas de simulateur GPU adéquat.
+8. **`videoComposition.renderSize`.** Ajusté à `CanvasGeometry.designSize` (1080×1920) pour produire un master haute fidélité ; live preview rendu à la taille écran reste équivalent au scale factor près.
+9. **Build via xcodebuild, pas swift build.** Comme Phases 1-3 : `xcodebuild build -scheme MeeshySDK-Package -destination 'platform=iOS Simulator,id=30BFD3A6-C80B-489D-825E-5D14D6FCCAB5' -derivedDataPath /tmp/meeshy-derived-data`. `swift build` échoue car MeeshyUI importe UIKit/AVFoundation.
+
+Toute occurrence ci-dessous des steps "Build check / Run test" se réfère à ces commandes patchées, même si la signature originale apparaît littéralement.
 
 ---
 

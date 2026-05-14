@@ -7,9 +7,10 @@ import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 import { LikeSchema, RepostSchema, PostParams } from './types';
-import { sendSuccess, sendForbidden } from '../../utils/response';
+import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { withMutationLog } from '../../utils/withMutationLog';
 
 export function registerInteractionRoutes(
   fastify: FastifyInstance,
@@ -31,16 +32,37 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
       const parsed = LikeSchema.safeParse(request.body ?? {});
       const emoji = parsed.success ? parsed.data.emoji : '❤️';
 
-      const post = await postService.likePost(postId, authContext.registeredUser.id, emoji);
+      // Idempotent via clientMutationId. `likePost` is naturally
+      // idempotent at the storage layer (the reaction set keeps a
+      // single entry per (userId, postId)), but we still record the
+      // mutation so replays don't double-fire notifications.
+      const post = await withMutationLog({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'toggleLikePost',
+        op: async () => {
+          const res = await postService.likePost(postId, authContext.registeredUser.id, emoji);
+          if (!res) throw new Error('POST_NOT_FOUND');
+          return res as typeof res & { id: string };
+        },
+        onDuplicate: async (_resultId) => {
+          const res = await postService.getPostById(postId, authContext.registeredUser.id);
+          return res as (typeof res & { id: string }) | null;
+        },
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
+        throw err;
+      });
       if (!post) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       // Broadcast like via Socket.IO. Stories use a private `story:reacted`
@@ -81,7 +103,7 @@ export function registerInteractionRoutes(
       return sendSuccess(reply, { liked: true, reactionSummary: post.reactionSummary });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/like] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -92,13 +114,34 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
-      const post = await postService.unlikePost(postId, authContext.registeredUser.id);
+      // Idempotent via clientMutationId. Unlike is also naturally
+      // idempotent — re-running over an already-unliked post is a
+      // no-op — but recording the mutation prevents the broadcast
+      // path from firing twice on replay.
+      const post = await withMutationLog({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'toggleLikePost',
+        op: async () => {
+          const res = await postService.unlikePost(postId, authContext.registeredUser.id);
+          if (!res) throw new Error('POST_NOT_FOUND');
+          return res as typeof res & { id: string };
+        },
+        onDuplicate: async (_resultId) => {
+          const res = await postService.getPostById(postId, authContext.registeredUser.id);
+          return res as (typeof res & { id: string }) | null;
+        },
+      }).catch((err) => {
+        if (err instanceof Error && err.message === 'POST_NOT_FOUND') return null;
+        throw err;
+      });
       if (!post) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       // Broadcast unlike via Socket.IO
@@ -116,7 +159,7 @@ export function registerInteractionRoutes(
       return sendSuccess(reply, { liked: false, reactionSummary: post.reactionSummary });
     } catch (error) {
       fastify.log.error(`[DELETE /posts/:postId/like] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -127,7 +170,7 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
@@ -135,7 +178,7 @@ export function registerInteractionRoutes(
       return sendSuccess(reply, { bookmarked: true });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/bookmark] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -146,7 +189,7 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
@@ -154,7 +197,7 @@ export function registerInteractionRoutes(
       return sendSuccess(reply, { bookmarked: false });
     } catch (error) {
       fastify.log.error(`[DELETE /posts/:postId/bookmark] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -166,7 +209,7 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
@@ -191,7 +234,7 @@ export function registerInteractionRoutes(
       return sendSuccess(reply, { viewed: true });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/view] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -211,7 +254,7 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
@@ -229,7 +272,7 @@ export function registerInteractionRoutes(
       return sendSuccess(reply, { recorded: true });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/impression] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -251,7 +294,7 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postIds, source = 'feed' } = request.body as any;
@@ -278,7 +321,7 @@ export function registerInteractionRoutes(
       return sendSuccess(reply, { recorded: capped.length });
     } catch (error) {
       fastify.log.error(`[POST /posts/impressions/batch] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -289,20 +332,20 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
       const { platform } = (request.body as any) ?? {};
       const post = await postService.sharePost(postId, authContext.registeredUser.id, platform);
       if (!post) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       return sendSuccess(reply, { shared: true, shareCount: post.shareCount });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/share] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -313,22 +356,22 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
       const post = await postService.pinPost(postId, authContext.registeredUser.id);
       if (!post) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       return sendSuccess(reply, { pinned: true });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return reply.status(403).send({ success: false, error: 'Only the author can pin this post' });
+        return sendForbidden(reply, 'Only the author can pin this post', { code: 'FORBIDDEN' });
       }
       fastify.log.error(`[POST /posts/:postId/pin] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -339,22 +382,22 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
       const post = await postService.unpinPost(postId, authContext.registeredUser.id);
       if (!post) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       return sendSuccess(reply, { pinned: false });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return reply.status(403).send({ success: false, error: 'Only the author can unpin this post' });
+        return sendForbidden(reply, 'Only the author can unpin this post', { code: 'FORBIDDEN' });
       }
       fastify.log.error(`[DELETE /posts/:postId/pin] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -365,7 +408,7 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
@@ -375,7 +418,7 @@ export function registerInteractionRoutes(
 
       const result = await postService.getPostViews(postId, authContext.registeredUser.id, limit, offset);
       if (!result) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       return sendSuccess(reply, result.items, {
@@ -383,10 +426,10 @@ export function registerInteractionRoutes(
       });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return reply.status(403).send({ success: false, error: 'Only the author can view this list' });
+        return sendForbidden(reply, 'Only the author can view this list', { code: 'FORBIDDEN' });
       }
       fastify.log.error(`[GET /posts/:postId/views] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -397,7 +440,7 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
@@ -407,7 +450,7 @@ export function registerInteractionRoutes(
 
       const result = await postService.getPostInteractions(postId, authContext.registeredUser.id, limit, offset);
       if (!result) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       return sendSuccess(reply, { viewers: result.viewers }, {
@@ -415,10 +458,10 @@ export function registerInteractionRoutes(
       });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return reply.status(403).send({ success: false, error: 'Only the author can view interactions' });
+        return sendForbidden(reply, 'Only the author can view interactions', { code: 'FORBIDDEN' });
       }
       fastify.log.error(`[GET /posts/:postId/interactions] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -429,7 +472,7 @@ export function registerInteractionRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
@@ -447,7 +490,7 @@ export function registerInteractionRoutes(
       );
 
       if (!repost) {
-        return reply.status(404).send({ success: false, error: 'Original post not found' });
+        return sendNotFound(reply, 'Original post not found', { code: 'POST_NOT_FOUND' });
       }
 
       // Broadcast repost via Socket.IO
@@ -479,7 +522,7 @@ export function registerInteractionRoutes(
         return sendForbidden(reply, error.message);
       }
       fastify.log.error(`[POST /posts/:postId/repost] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 }

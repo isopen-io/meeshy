@@ -29,6 +29,8 @@ import { MentionService } from './services/MentionService';
 import { StatusService } from './services/StatusService';
 import { AuthMiddleware, createUnifiedAuthMiddleware } from './middleware/auth';
 import { registerGlobalRateLimiter } from './middleware/rate-limiter';
+import { registerClientMutationIdHook } from './middleware/clientMutationId';
+import { MutationLogService } from './services/MutationLogService';
 import { authRoutes } from './routes/auth';
 import { conversationRoutes } from './routes/conversations';
 import { linksRoutes } from './routes/links';
@@ -573,6 +575,18 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
     await registerGlobalRateLimiter(this.server);
     logger.info('✅ Global rate limiter configured (300 req/min per IP)');
 
+    // Wave 1 Task 3.5 — clientMutationId middleware (cmid validation +
+    // request decoration). MUST be registered before any route reads
+    // `request.clientMutationId`.
+    registerClientMutationIdHook(this.server);
+    logger.info('✅ clientMutationId hook registered');
+
+    // Wave 1 Task 3.4 — expose MutationLogService on fastify so routes
+    // can wrap their writes in `recordOrReturn(...)` for idempotency.
+    const mutationLogService = new MutationLogService(this.prisma);
+    this.server.decorate('mutationLogService', mutationLogService);
+    logger.info('✅ MutationLogService registered');
+
     // Client identification logging — enrichit le logger Pino avec version/device/geo client
     this.server.addHook('onRequest', (request, _reply, done) => {
       const get = (key: string): string | undefined => {
@@ -772,6 +786,16 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
         // Permet aux requêtes REST de marquer un utilisateur en ligne et broadcaster
         this.statusService.setPresenceCallback(manager.getPresenceBroadcastCallback());
         logger.info('[GWY] ✅ StatusService presence callback wired to SocketIO broadcast');
+
+        // Exposer la source de vérité runtime de présence aux routes REST.
+        // Utilisé par GET /conversations pour overrider isOnline (potentiellement
+        // obsolète en DB) et par GET /users/presence pour le snapshot à la demande.
+        this.server.decorate('presenceChecker', {
+          isOnline: (id: string) => manager.isPresenceOnline(id),
+          bulk: (ids: readonly string[]) => manager.getPresenceForIds(ids),
+          listOnlineAmong: (ids: readonly string[]) => manager.listOnlineAmong(ids)
+        });
+        logger.info('[GWY] ✅ Presence runtime checker exposed for REST routes');
       }
     } catch (error) {
       logger.error('[GWY] ❌ Failed to setup Socket.IO:', error);
@@ -1240,6 +1264,15 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
       logger.info('🎉 Server started successfully and ready to accept connections');
 
       // Start automatic call cleanup service
+      // Attach the Socket.IO server FIRST so that force-end events emit
+      // `call:ended` to the affected clients — otherwise the cleanup just
+      // updates the DB and the caller stays in `.ringing` forever.
+      const cleanupManager = this.socketIOHandler.getManager();
+      if (cleanupManager) {
+        this.callCleanupService.attachSocketServer(cleanupManager.getIO());
+      } else {
+        logger.warn('[GWY] CallCleanupService starting without Socket.IO server — clients will not receive force-end broadcasts');
+      }
       this.callCleanupService.start();
       logger.info('✓ Call cleanup service started');
 

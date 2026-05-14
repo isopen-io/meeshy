@@ -68,7 +68,7 @@ public final class NotificationCoordinator: ObservableObject {
 
     public init(
         badgeWriter: NotificationBadgeWriting = SystemNotificationBadgeWriter(),
-        appGroupSuiteName: String = "group.me.meeshy.app"
+        appGroupSuiteName: String = "group.me.meeshy.apps"
     ) {
         self.badgeWriter = badgeWriter
         self.appGroupDefaults = UserDefaults(suiteName: appGroupSuiteName)

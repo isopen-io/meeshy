@@ -31,14 +31,38 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // during the rest of `didFinishLaunching` (or at any later point in
         // this session) is captured. MetricKit also delivers diagnostics
         // recorded during *previous* sessions here.
+        //
+        // P3 wire-up (Sprint 4):
+        // - `StoryFilteredLayer.preheatAllPipelines()` compiles every Metal
+        //   compute pipeline state process-wide so the composer / reader
+        //   never pay the compile cost on the first user-visible frame.
+        // - `MeeshyMetricsSubscriber.shared.register()` attaches to
+        //   `MXMetricManager` so the `MXSignpostMetric` entries produced by
+        //   `TimelineSignposter` are aggregated into the rolling 24h window.
+        //   Without this call the docstring promise of "automatic
+        //   aggregation" is vacuous: the signposts appear in Instruments
+        //   but no payload ever lands. Both calls are `@MainActor`-isolated
+        //   and idempotent — safe to invoke alongside the crash observer
+        //   install in the same MainActor hop.
         Task { @MainActor in
             CrashDiagnosticsManager.shared.install(crashReporter: crashReporter)
+            StoryFilteredLayer.preheatAllPipelines()
+            MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
         }
 
         UNUserNotificationCenter.current().delegate = self
         registerNotificationCategories()
         BackgroundTaskManager.shared.registerTasks()
+
+        // Masquer le spinner natif d'iOS pour les pull-to-refresh
+        // SwiftUI `.refreshable`. `.tint(.clear)` au site d'utilisation
+        // ne suffit pas sur iOS 17+ — l'UIRefreshControl sous-jacent
+        // garde sa couleur systeme par defaut. En forcant tintColor
+        // = .clear AU NIVEAU de l'appearance proxy, le ProgressView
+        // natif est totalement invisible et seul notre `MeeshyPullIndicator`
+        // brand est visible pendant le refresh.
+        UIRefreshControl.appearance().tintColor = .clear
 
         // NotificationCoordinator must be wired as early as possible so unread/badge
         // state stays aligned even if no view is yet in the hierarchy.
@@ -98,6 +122,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         let convId = userInfo["conversationId"] as? String
         let convUnread = userInfo["conversationUnread"] as? Int
         let messageId = userInfo["messageId"] as? String
+        // Phase A real-time instrumentation — log the silent-push arrival
+        // so we can correlate `perf:push.sendViaAPNS` (gateway side) with
+        // the actual moment APN delivers it to the device, and measure the
+        // background-task completion delta separately.
+        let notifReceivedAt = Date()
+        Logger.network.info("perf:ios.notif.silent-push messageId=\(messageId ?? "nil", privacy: .public) conversationId=\(convId ?? "nil", privacy: .public) unreadTotal=\(unreadTotal ?? -1, privacy: .public) appState=\(application.applicationState.rawValue, privacy: .public)")
 
         // Guard the entire async chain with a background task so iOS gives us
         // the full ~25s budget instead of suspending the process the moment
@@ -138,6 +168,8 @@ class AppDelegate: NSObject, UIApplicationDelegate {
                 }
             }
 
+            let handledMs = Int(Date().timeIntervalSince(notifReceivedAt) * 1000)
+            Logger.network.info("perf:ios.notif.silent-push.handled messageId=\(messageId ?? "nil", privacy: .public) conversationId=\(convId ?? "nil", privacy: .public) durationMs=\(handledMs, privacy: .public)")
             state.finish()
         }
     }

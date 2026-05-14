@@ -5,10 +5,12 @@ import os
 
 /// Snapshot d'une story en attente de publish (offline-first, Timeline composer).
 ///
-/// Distinct from `StoryPublishQueueItem` (which has exponential-backoff retry logic):
-/// `StoryOfflineQueueItem` is a lightweight FIFO snapshot designed for the Timeline
-/// composer offline flow (Task 74). `slidePayloadJSON` contains the serialized slides
-/// so the queue stays schema-agnostic if `StorySlide` evolves.
+/// Co-existed with `StoryPublishQueueItem` historically. Since the 2026-05-12
+/// queue unification (cf. `packages/MeeshySDK/decisions.md`) this struct is
+/// only kept as the wire format consumed by `TimelineViewModel` and by the
+/// legacy disk file format that `StoryQueueMigrator` drains on cold start —
+/// every `enqueue` call is forwarded to `StoryPublishQueue` so there is now
+/// a SINGLE persisted store for pending stories.
 public struct StoryOfflineQueueItem: Codable, Identifiable, Sendable {
     public let id: String
     public let slideIds: [String]
@@ -52,136 +54,131 @@ public protocol OfflineQueueProviding: Sendable {
     var pendingItems: [StoryOfflineQueueItem] { get async }
 }
 
-// MARK: - Story Offline Queue actor
+// MARK: - Story Offline Queue — adapter over StoryPublishQueue
 
-/// Persists story-publish jobs while the device is offline.
+/// Thin adapter that forwards every operation to `StoryPublishQueue`.
 ///
-/// Pattern mirrors `OfflineQueue` (messages) but with a schema adapted to stories.
-/// Auto-flush on reconnect is wired externally (via `NetworkMonitor` observation in
-/// `StoryComposerViewModel`). FIFO ordering: items are appended and flushed head-first.
+/// Historically `StoryOfflineQueue` owned its own JSON file under
+/// `.applicationSupportDirectory` with FIFO semantics. That created a parallel
+/// persistence path next to `StoryPublishQueue` (`Documents/meeshy_cache/`)
+/// and made it possible to lose items depending on which call-site enqueued
+/// them. The 2026-05-12 unification kept the public surface of this type but
+/// rewired the implementation so every enqueue goes through the unified
+/// `StoryPublishQueue` (retry + exponential backoff + max-5 attempts).
 ///
-/// Max queue size: 20 (stories are heavier than messages — keep the queue bounded).
+/// The legacy disk file is drained on cold start by `StoryQueueMigrator` —
+/// callers that still rely on the snapshot semantics (`pendingItems`,
+/// `dequeue`, `flush`, `setOnPublish`, `purge`) keep working unchanged.
 public actor StoryOfflineQueue: OfflineQueueProviding {
     public static let shared = StoryOfflineQueue()
 
-    private static let maxQueueSize = 20
-    private static let queueFileName = "story_offline_queue.json"
-
-    private var items: [StoryOfflineQueueItem] = []
-    private var isRetrying = false
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "story-offline-queue")
-
-    private let encoder: JSONEncoder = {
-        let e = JSONEncoder()
-        e.dateEncodingStrategy = .iso8601
-        return e
-    }()
-
-    /// Publish handler — set by `StoryOfflineQueue.shared.setOnPublish(...)`.
-    /// Returns `true` on success; `false` on retryable failure.
-    public var onPublish: (@Sendable (StoryOfflineQueueItem) async -> Bool)?
-
-    public func setOnPublish(_ handler: @escaping @Sendable (StoryOfflineQueueItem) async -> Bool) {
-        onPublish = handler
-    }
+    private let publishQueue: any PublishQueueForwarding
 
     private init() {
-        items = Self.loadFromDisk()
+        self.publishQueue = StoryPublishQueue.shared
+    }
+
+    /// Internal test seam : creates an isolated adapter wired to a fake
+    /// publish queue. Production code uses `StoryOfflineQueue.shared`.
+    internal init(forwardingTo publishQueue: any PublishQueueForwarding) {
+        self.publishQueue = publishQueue
     }
 
     // MARK: - Queue operations
 
-    public func enqueue(_ item: StoryOfflineQueueItem) {
-        if items.count >= Self.maxQueueSize {
-            items.removeFirst()
-            logger.warning("StoryOfflineQueue full — evicted oldest item")
+    public func enqueue(_ item: StoryOfflineQueueItem) async {
+        let converted = StoryQueueItemConverter.convert(item)
+        await publishQueue.enqueue(converted)
+        logger.info("Forwarded story \(item.id) to StoryPublishQueue")
+    }
+
+    public func dequeue(_ itemId: String) async {
+        await publishQueue.dequeueByTempStoryId(itemId)
+    }
+
+    public var pendingItems: [StoryOfflineQueueItem] {
+        get async {
+            let publishItems = await publishQueue.pendingItems
+            return publishItems.map(StoryQueueItemConverter.reverse)
         }
-        items.append(item)
-        saveToDisk()
-        logger.info("Enqueued story \(item.id), queue size: \(self.items.count)")
     }
 
-    public func dequeue(_ itemId: String) {
-        items.removeAll { $0.id == itemId }
-        saveToDisk()
+    /// Replaces the legacy publish handler. The handler keeps the historical
+    /// `Bool` signature ; the adapter translates `false` into a retryable
+    /// error and `true` into a synthetic published id so `StoryPublishQueue`
+    /// can drive its retry loop. The adapter wraps the handler before
+    /// forwarding so the publish queue sees the typed signature.
+    public func setOnPublish(_ handler: @escaping @Sendable (StoryOfflineQueueItem) async -> Bool) async {
+        await publishQueue.setPublishHandler { item in
+            let legacyItem = StoryQueueItemConverter.reverse(item)
+            let succeeded = await handler(legacyItem)
+            if succeeded {
+                return item.tempStoryId
+            }
+            throw StoryOfflineRetryableError.handlerReportedFailure
+        }
     }
 
-    public var pendingItems: [StoryOfflineQueueItem] { items }
+    /// Drains the queue by triggering the unified processor.
+    public func flush() async {
+        await publishQueue.processNext()
+    }
 
     /// Remove all items (used by tests and explicit user action).
-    public func purge() {
-        items.removeAll()
-        saveToDisk()
+    public func purge() async {
+        await publishQueue.clearAll()
     }
 
-    /// Test seam: reloads from disk so persistence round-trips can be tested.
+    /// Test seam preserved for backward compatibility ; under the adapter
+    /// the legacy disk file no longer exists, so reload is a no-op once
+    /// `StoryQueueMigrator` has run.
     public func reloadFromDisk() {
-        items = Self.loadFromDisk()
+        // No-op : the unified `StoryPublishQueue` loads its own persisted
+        // items at init time. The legacy file (if any) is drained by
+        // `StoryQueueMigrator.migrateLegacyOfflineQueue()`.
     }
+}
 
-    // MARK: - Flush (FIFO, stop on first failure)
+// MARK: - Retry signal
 
-    /// Attempts to publish each item in FIFO order.
-    /// Stops on the first failure and leaves the remainder in the queue for the
-    /// next connectivity trigger.
-    public func flush() async {
-        guard !isRetrying, !items.isEmpty, let handler = onPublish else { return }
-        isRetrying = true
-        defer { isRetrying = false }
+/// Adapter-internal error thrown when the legacy `Bool` handler reports a
+/// retryable failure. `StoryPublishQueue` treats any non-`StoryPublishUnrecoverableError`
+/// throw as retryable, which is exactly the legacy `false`-return semantic.
+private struct StoryOfflineRetryableError: Error, Sendable {
+    static let handlerReportedFailure = StoryOfflineRetryableError()
+}
 
-        for item in items {
-            let success = await handler(item)
-            if success {
-                items.removeAll { $0.id == item.id }
-                saveToDisk()
-            } else {
-                logger.error("Story publish failed for \(item.id) — pausing flush")
-                return
-            }
-        }
-    }
+// MARK: - Reverse converter
 
-    // MARK: - Disk persistence
+extension StoryQueueItemConverter {
 
-    /// Returns (and creates if needed) the queue storage directory under
-    /// `.applicationSupportDirectory` — hidden from Files.app and iTunes file sharing.
-    /// The directory is created with `FileProtectionType.complete` so its contents
-    /// are encrypted when the device is locked.
-    private static func queueDirectory() throws -> URL {
-        let base = try FileManager.default.url(
-            for: .applicationSupportDirectory,
-            in: .userDomainMask,
-            appropriateFor: nil,
-            create: true
+    /// Rebuilds a `StoryOfflineQueueItem` from a unified `StoryPublishQueueItem`.
+    /// The conversion is lossy : the legacy `originalLanguage` is dropped
+    /// (not represented in the publish item) and `slideIds` are reconstructed
+    /// from `mediaReferences.elementId`. Callers that round-trip the same
+    /// item observe the original `id` via `tempStoryId` which the forward
+    /// converter carries through.
+    public static func reverse(_ unified: StoryPublishQueueItem) -> StoryOfflineQueueItem {
+        let payloadString = String(data: unified.slidesPayload, encoding: .utf8) ?? "{}"
+        let mediaPairs = unified.mediaReferences
+            .filter { $0.mediaType != "audio" }
+            .map { ($0.elementId, $0.localFilePath) }
+        let audioPairs = unified.mediaReferences
+            .filter { $0.mediaType == "audio" }
+            .map { ($0.elementId, $0.localFilePath) }
+        let mediaPaths = Dictionary(uniqueKeysWithValues: mediaPairs)
+        let audioPaths = Dictionary(uniqueKeysWithValues: audioPairs)
+        let slideIds = unified.mediaReferences.map(\.elementId)
+
+        return StoryOfflineQueueItem(
+            id: unified.tempStoryId,
+            slideIds: slideIds,
+            slidePayloadJSON: payloadString,
+            mediaURLPaths: mediaPaths,
+            audioURLPaths: audioPaths,
+            originalLanguage: nil,
+            visibility: unified.visibility
         )
-        let dir = base.appendingPathComponent("StoryOfflineQueue", isDirectory: true)
-        try FileManager.default.createDirectory(
-            at: dir,
-            withIntermediateDirectories: true,
-            attributes: [.protectionKey: FileProtectionType.complete]
-        )
-        return dir
-    }
-
-    private static func queueFileURL() -> URL? {
-        try? queueDirectory().appendingPathComponent(queueFileName)
-    }
-
-    private static func loadFromDisk() -> [StoryOfflineQueueItem] {
-        guard let url = queueFileURL(),
-              let data = try? Data(contentsOf: url) else { return [] }
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
-        return (try? decoder.decode([StoryOfflineQueueItem].self, from: data)) ?? []
-    }
-
-    private func saveToDisk() {
-        guard let url = Self.queueFileURL() else { return }
-        do {
-            let data = try encoder.encode(items)
-            try data.write(to: url, options: [.atomic, .completeFileProtection])
-        } catch {
-            logger.error("Failed to save StoryOfflineQueue: \(error.localizedDescription)")
-        }
     }
 }

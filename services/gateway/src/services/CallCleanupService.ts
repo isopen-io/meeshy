@@ -9,6 +9,9 @@
  */
 
 import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
+import type { Server as SocketIOServer } from 'socket.io';
+import { CALL_EVENTS } from '@meeshy/shared/types/video-call';
+import { ROOMS } from '@meeshy/shared/types/socketio-events';
 import { logger } from '../utils/logger';
 import type { CallService } from './CallService';
 
@@ -21,10 +24,21 @@ export class CallCleanupService {
   private readonly MAX_ACTIVE_MS = 2 * 60 * 60 * 1000;
   private readonly HEARTBEAT_TIMEOUT_MS = 60 * 1000;
 
+  // Optional Socket.IO server — set via `attachSocketServer()` once the
+  // socket layer is ready. Without it the cleanup still runs but the
+  // affected clients won't receive the `call:ended` broadcast and would
+  // stay in `.ringing(true)` until their own client-side timeout fires.
+  private io: SocketIOServer | null = null;
+
   constructor(
     private prisma: PrismaClient,
     private callService?: CallService
   ) {}
+
+  attachSocketServer(io: SocketIOServer): void {
+    this.io = io;
+    logger.info('[CallCleanupService] Socket.IO server attached — force-end events will be broadcast');
+  }
 
   start(): void {
     if (this.cleanupInterval) {
@@ -167,6 +181,14 @@ export class CallCleanupService {
   ): Promise<void> {
     const duration = Math.floor((now.getTime() - startedAt.getTime()) / 1000);
 
+    // Read conversationId BEFORE the transaction so we can broadcast to the
+    // conversation room as well (the call room would already empty if every
+    // participant disconnected).
+    const session = await this.prisma.callSession.findUnique({
+      where: { id: callId },
+      select: { conversationId: true }
+    });
+
     await this.prisma.$transaction(async (tx) => {
       await tx.callParticipant.updateMany({
         where: { callSessionId: callId, leftAt: null },
@@ -180,6 +202,28 @@ export class CallCleanupService {
     });
 
     this.callService?.clearHeartbeats(callId);
+
+    // Broadcast `call:ended` so clients (caller stuck in `.ringing`,
+    // callee stuck in `.connecting`) leave their hung state instead of
+    // ringing forever. Mirrors the inline path in CallEventsHandler's
+    // scheduleRingingTimeout callback. The DB write is the source of
+    // truth — if the broadcast fails, the next client reconnect will
+    // observe the call status as ended.
+    if (this.io) {
+      const endedEvent = {
+        callId,
+        duration,
+        endedBy: undefined,
+        reason: endReason
+      };
+      this.io.to(ROOMS.call(callId)).emit(CALL_EVENTS.ENDED, endedEvent);
+      if (session?.conversationId) {
+        this.io.to(ROOMS.conversation(session.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+      }
+      logger.info('[CallCleanupService] Broadcast call:ended', { callId, endReason, conversationId: session?.conversationId });
+    } else {
+      logger.warn('[CallCleanupService] No Socket.IO server attached — clients will not receive call:ended', { callId });
+    }
   }
 
   async manualCleanup(): Promise<{ cleaned: number; errors: number }> {

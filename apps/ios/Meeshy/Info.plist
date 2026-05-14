@@ -6,6 +6,7 @@
 	<array>
 		<string>me.meeshy.app.conversation-sync</string>
 		<string>me.meeshy.app.message-prefetch</string>
+		<string>me.meeshy.cache.background-flush</string>
 	</array>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>$(DEVELOPMENT_LANGUAGE)</string>
@@ -75,6 +76,11 @@
 	<string>Meeshy needs access to your photo library to share photos and videos with your contacts.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Meeshy uses on-device speech recognition for real-time voice translation and voice message transcription. Your voice data stays on your device for maximum privacy.</string>
+	<key>NSUserActivityTypes</key>
+	<array>
+		<string>INSendMessageIntent</string>
+		<string>INStartCallIntent</string>
+	</array>
 	<key>NSVoIPUsageDescription</key>
 	<string>Meeshy uses VoIP to enable real-time voice and video calls with your contacts.</string>
 	<key>UIApplicationSceneManifest</key>

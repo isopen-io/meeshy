@@ -13,7 +13,7 @@ struct MeeshyApp: App {
     @StateObject private var toastManager = ToastManager.shared
     @StateObject private var pushManager = PushNotificationManager.shared
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
-    @ObservedObject private var theme = ThemeManager.shared
+    @StateObject private var theme = ThemeManager.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
     @State private var showSplash = AuthManager.shared.authToken == nil
     @State private var hasCheckedSession = false
@@ -26,6 +26,18 @@ struct MeeshyApp: App {
 
     private var shouldShowOnboarding: Bool {
         !hasCompletedOnboarding && !authManager.isAuthenticated
+    }
+
+    init() {
+        // Task 1.3 — register the BGProcessingTask identifier BEFORE the
+        // scene is created. `BGTaskScheduler.register` MUST run before
+        // `application(_:didFinishLaunchingWithOptions:)` returns, which
+        // for SwiftUI apps means inside the App initializer. Registering
+        // later (e.g. in `.task`) is a programmer error and crashes with
+        // a clear "All launch handlers must be registered before
+        // application finishes launching" exception. The coordinator
+        // submits the request later, when `willTerminate` fires.
+        CacheBackgroundFlushTask().register()
     }
 
     var body: some Scene {
@@ -123,16 +135,30 @@ struct MeeshyApp: App {
                         MeeshyFocusStore.shared.current.toSDKSnapshot()
                     }
                     await CacheCoordinator.shared.start()
+                    // Touch PresenceManager early so it has subscribed to
+                    // `presence:snapshot` + `user:status` + `didReconnect`
+                    // BEFORE the first socket auth lands. Without this, the
+                    // very first snapshot emitted after a cold start could
+                    // land before any view referencing PresenceManager.shared
+                    // has been built, and PassthroughSubject would drop it.
+                    _ = PresenceManager.shared
                     // Wire StoryOfflineQueue publish handler + network-reconnect
                     // flush. Idempotent — safe to call on every cold start.
                     StoryOfflineQueueBootstrap.shared.start()
-                    // Wire the outbox pool so OfflineQueue and MessageRetryQueue
-                    // can persist items to SQLite on enqueue. Must run before
-                    // any enqueue calls to avoid silent no-ops.
+                    // Wire the outbox pool so OfflineQueue can persist every
+                    // outbox kind (sendMessage, sendReaction, edit/delete,
+                    // and the 14 non-message mutations) to SQLite on enqueue.
+                    // Must run before any enqueue call to avoid silent
+                    // poolNotConfigured throws on the hot path.
+                    //
+                    // Wave 1 Task 3.6 — the legacy MessageRetryQueue +
+                    // ReactionQueue actors were collapsed into OfflineQueue ;
+                    // they shared the same `outbox` table and namespaces
+                    // (`ofq_*` / `mrq_*` / `rxq_*`), so the unified
+                    // `OfflineQueue.bootRecovery()` already resets every
+                    // inflight record regardless of kind or id prefix.
                     let bootPool = dependencies.dbPool
                     await OfflineQueue.shared.configure(pool: bootPool)
-                    await MessageRetryQueue.shared.configure(pool: bootPool)
-                    await ReactionQueue.shared.configure(pool: bootPool)
 
                     // Phase 4 §6.1.1 — boot crash recovery. Any record left
                     // `.inflight` from a previous process (the app was killed
@@ -140,12 +166,12 @@ struct MeeshyApp: App {
                     // picks it back up. The gateway dedup contract on
                     // `(conversationId, clientMessageId)` ensures a message
                     // that actually reached the server before the crash is
-                    // not duplicated at replay time.
+                    // not duplicated at replay time. The sweep covers ALL
+                    // kinds (sendMessage, sendReaction, edit/delete,
+                    // non-message mutations) thanks to the unified outbox.
                     Task.detached(priority: .background) {
                         do {
                             _ = try await OfflineQueue.shared.bootRecovery()
-                            _ = try await MessageRetryQueue.shared.bootRecovery()
-                            _ = try await ReactionQueue.shared.bootRecovery()
                         } catch {
                             Logger.messages.error("Boot recovery failed: \(error.localizedDescription, privacy: .public)")
                         }
@@ -181,46 +207,6 @@ struct MeeshyApp: App {
                             return nil
                         }
                     }
-                    await MessageRetryQueue.shared.setRetrySend { @Sendable item in
-                        do {
-                            let request = SendMessageRequest(
-                                content: item.content,
-                                originalLanguage: item.originalLanguage,
-                                replyToId: item.replyToId,
-                                attachmentIds: item.attachmentIds,
-                                clientMessageId: item.clientMessageId
-                            )
-                            let response = try await MessageService.shared.send(
-                                conversationId: item.conversationId, request: request
-                            )
-                            return response.id
-                        } catch {
-                            return nil
-                        }
-                    }
-                    await ReactionQueue.shared.setRetry { @Sendable item in
-                        do {
-                            switch item.action {
-                            case .add:
-                                try await ReactionService.shared.add(
-                                    messageId: item.messageId, emoji: item.emoji
-                                )
-                            case .remove:
-                                try await ReactionService.shared.remove(
-                                    messageId: item.messageId, emoji: item.emoji
-                                )
-                            }
-                            return .succeeded
-                        } catch APIError.serverError(let code, _) where code == 404 || code == 409 || code == 410 {
-                            // Treat 404/410 (message gone) and 409 (state
-                            // conflict: already reacted / already removed) as
-                            // terminal — keeping the item in the queue would
-                            // bounce forever.
-                            return .dropped
-                        } catch {
-                            return .transient
-                        }
-                    }
                     await SettingsActionQueue.shared.setFlushHandler { @Sendable action in
                         do {
                             // Most settings endpoints return the updated user.
@@ -247,11 +233,15 @@ struct MeeshyApp: App {
                     // Delete legacy JSON queue files from disk on the first boot
                     // after migration to the SQLite outbox pipeline. The files are
                     // no longer written to; this removes any stale data on device.
+                    // Wave 1 Task 3.6 — `OfflineQueue.deleteLegacyFile()` now
+                    // sweeps the `message_retry_queue.json` + `reaction_queue.json`
+                    // files in addition to the original `offline_queue.json`
+                    // since the corresponding actors were folded into the
+                    // unified queue.
                     let didDeleteLegacyKey = "meeshy.outbox.legacyFilesDeleted"
                     if !UserDefaults.standard.bool(forKey: didDeleteLegacyKey) {
                         Task.detached(priority: .background) {
                             OfflineQueue.deleteLegacyFile()
-                            MessageRetryQueue.deleteLegacyFile()
                             await MainActor.run {
                                 UserDefaults.standard.set(true, forKey: didDeleteLegacyKey)
                             }
@@ -261,7 +251,13 @@ struct MeeshyApp: App {
                     // This runs at every boot (not just once) so items from the
                     // previous session are retried as soon as the app is active.
                     Task.detached(priority: .background) {
-                        let flusher = OutboxFlusher(pool: bootPool, dispatcher: OutboxDispatcher())
+                        let flusher = OutboxFlusher(
+                            pool: bootPool,
+                            dispatcher: OutboxDispatcher(),
+                            onOutcome: { @Sendable outcome in
+                                Task { await OfflineQueue.shared.publishOutcome(outcome) }
+                            }
+                        )
                         await flusher.flush()
                     }
 
@@ -283,6 +279,21 @@ struct MeeshyApp: App {
                     // toast lands on a stable UI rather than racing the splash
                     // animation.
                     surfacePendingCrashReports()
+
+                    // Retention policy: purge messages older than 6 months from
+                    // GRDB on every cold start. The server remains the source of
+                    // truth — purged messages can be re-fetched via pagination.
+                    // Runs at background priority so it never blocks the UI.
+                    let retentionPersistence = MessagePersistenceActor(dbWriter: dependencies.dbPool)
+                    Task.detached(priority: .background) {
+                        await retentionPersistence.start()
+                        if let count = try? await retentionPersistence.purgeOldMessages() {
+                            if count > 0 {
+                                Logger(subsystem: "com.meeshy.app", category: "retention")
+                                    .info("Purged \(count) messages older than \(MessagePersistenceActor.defaultRetentionMonths) months")
+                            }
+                        }
+                    }
                 }
                 .onChange(of: scenePhase) { _, newPhase in
                     switch newPhase {

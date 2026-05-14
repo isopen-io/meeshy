@@ -39,6 +39,9 @@ import { AttachmentService } from '../../services/attachments/AttachmentService'
 import { MessageReadStatusService } from '../../services/MessageReadStatusService.js';
 import { validateSocketEvent } from '../../middleware/validation.js';
 import { SocketMessageSendSchema, SocketMessageSendWithAttachmentsSchema } from '../../validation/socket-event-schemas.js';
+import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
+
+const handlerLogger = enhancedLogger.child({ module: 'MessageHandler' });
 
 
 export interface MessageHandlerDependencies {
@@ -176,6 +179,18 @@ export class MessageHandler {
         return;
       }
 
+      const corr: Record<string, any> = {
+        clientMessageId: validated.clientMessageId,
+        conversationId: validated.conversationId,
+        socketId: socket.id,
+        participantId: resolvedParticipantId,
+        isAnonymous
+      };
+      const handlerStart = Date.now();
+      handlerLogger.info('perf:ws.message.send', {
+        ...corr, step: 'ws.message.send', phase: 'start'
+      });
+
       const messageRequest: MessageRequest = {
         conversationId: validated.conversationId,
         content: validated.content,
@@ -214,7 +229,11 @@ export class MessageHandler {
       // response.data is already enriched (sender.user, attachments, replyTo) from saveMessage include
       if (response.success && response.data) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
-        await this.broadcastNewMessage(message, message.conversationId, socket);
+        await performanceLogger.withTiming(
+          'ws.broadcastNewMessage',
+          () => this.broadcastNewMessage(message, message.conversationId, socket),
+          { ...corr, messageId: message.id }
+        );
 
         this._notifyAgent({
           id: message.id,
@@ -240,6 +259,13 @@ export class MessageHandler {
           this.prisma, message.conversationId, userId || participantId, data.content ?? '', [], null
         ).catch(err => console.error('[MessageHandler] Stats update error:', err));
       }
+
+      handlerLogger.info('perf:ws.message.send', {
+        ...corr, step: 'ws.message.send', phase: 'end',
+        durationMs: Date.now() - handlerStart,
+        success: response.success,
+        messageId: response.success ? response.data?.id : undefined
+      });
 
       this.stats.messages_processed++;
     } catch (error: unknown) {
@@ -319,6 +345,19 @@ export class MessageHandler {
         }
       }
 
+      const corr: Record<string, any> = {
+        clientMessageId: validated.clientMessageId,
+        conversationId: validated.conversationId,
+        socketId: socket.id,
+        participantId: resolvedParticipantId,
+        isAnonymous,
+        attachmentCount: validated.attachmentIds.length
+      };
+      const handlerStart = Date.now();
+      handlerLogger.info('perf:ws.message.send-with-attachments', {
+        ...corr, step: 'ws.message.send-with-attachments', phase: 'start'
+      });
+
       const messageRequest: MessageRequest = {
         conversationId: validated.conversationId,
         content: validated.content,
@@ -358,7 +397,11 @@ export class MessageHandler {
 
       if (response.success && response.data) {
         const message = response.data as unknown as import('@meeshy/shared/types/index').Message;
-        await this.broadcastNewMessage(message, message.conversationId, socket);
+        await performanceLogger.withTiming(
+          'ws.broadcastNewMessage',
+          () => this.broadcastNewMessage(message, message.conversationId, socket),
+          { ...corr, messageId: message.id }
+        );
 
         this._notifyAgent({
           id: message.id,
@@ -392,6 +435,13 @@ export class MessageHandler {
           this.prisma, message.conversationId, userId || participantId, data.content ?? '', attachmentTypes, null
         ).catch(err => console.error('[MessageHandler] Stats update error:', err));
       }
+
+      handlerLogger.info('perf:ws.message.send-with-attachments', {
+        ...corr, step: 'ws.message.send-with-attachments', phase: 'end',
+        durationMs: Date.now() - handlerStart,
+        success: response.success,
+        messageId: response.success ? response.data?.id : undefined
+      });
 
       this.stats.messages_processed++;
     } catch (error: unknown) {

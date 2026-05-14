@@ -99,4 +99,43 @@ final class AttachmentServiceTests: XCTestCase {
             // expected
         }
     }
+
+    // Regression: the gateway keys attachment status rows by `participantId`,
+    // not `userId`. A prior version of `AttachmentStatusUser` required
+    // `userId`, which caused JSONDecoder to throw `keyNotFound` against the
+    // real payload — surfacing as silently empty "Écouté" / "Vu" tabs in the
+    // long-press detail sheet even when stats existed in MongoDB.
+    func test_attachmentStatusUser_decodesGatewayPayload() throws {
+        let json = """
+        {
+          "participantId": "p-123",
+          "username": "alice",
+          "avatar": "https://cdn/a.jpg",
+          "viewedAt": null,
+          "downloadedAt": null,
+          "listenedAt": "2026-05-11T08:00:00.000Z",
+          "watchedAt": null,
+          "listenCount": 3,
+          "watchCount": 0,
+          "listenedComplete": true,
+          "watchedComplete": false,
+          "lastPlayPositionMs": 42000,
+          "lastWatchPositionMs": null
+        }
+        """.data(using: .utf8)!
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        let user = try decoder.decode(AttachmentStatusUser.self, from: json)
+
+        XCTAssertEqual(user.participantId, "p-123")
+        XCTAssertEqual(user.id, "p-123")
+        XCTAssertEqual(user.username, "alice")
+        XCTAssertEqual(user.listenCount, 3)
+        XCTAssertEqual(user.listenedComplete, true)
+        XCTAssertEqual(user.lastPlayPositionMs, 42000)
+        XCTAssertNil(user.watchedAt)
+        XCTAssertNil(user.lastWatchPositionMs)
+    }
 }

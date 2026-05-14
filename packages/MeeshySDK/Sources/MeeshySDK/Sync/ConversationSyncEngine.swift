@@ -45,6 +45,21 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     }
     private var socketSubscriptions = Set<AnyCancellable>()
 
+    // Cooldown between successive delta syncs. The gateway delta endpoint
+    // is cheap (~10-50 ms) but a chatty socket that flaps reconnect every
+    // 200 ms used to spam `/conversations?updatedSince=...` once per flap
+    // — multiplied by N listeners (we historically had two for the same
+    // `didReconnect` signal). Cooldown is a small wall-clock window: if
+    // a delta sync just ran, skip until the window elapses. Cold-start
+    // `fullSync` is unaffected because it runs through the `isSyncing`
+    // path, not this guard.
+    private var _lastDeltaSyncAt: Date = .distantPast
+    private var lastDeltaSyncAt: Date {
+        get { stateQueue.sync { _lastDeltaSyncAt } }
+        set { stateQueue.sync { _lastDeltaSyncAt = newValue } }
+    }
+    private let deltaSyncCooldown: TimeInterval = 3
+
     // Dependencies
     private let cache: CacheCoordinator
     private let conversationService: ConversationServiceProviding
@@ -268,7 +283,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         var hasMore = totalCount == nil
             ? firstPageReturnedCount > 0
             : (offset < (totalCount ?? 0))
-        while hasMore {
+        // Hard ceiling on tail iterations as a last-resort safety belt.
+        // The progress guards below should always trip first; this keeps
+        // a misbehaving gateway from spamming the network indefinitely
+        // even if those guards were ever bypassed by a future refactor.
+        var tailIterations = 0
+        let maxTailIterations = 50
+        while hasMore && tailIterations < maxTailIterations {
+            tailIterations += 1
             do {
                 let response = try await Self.fetchPageWithRetry(via: service, offset: offset, limit: pageSize)
                 let page = response.data.map { $0.toConversation(currentUserId: userId) }
@@ -283,21 +305,37 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 // Trust the backend's `hasMore` if present; otherwise
                 // assume "full page = more might follow" so we keep
                 // probing instead of stopping at a backend-capped page.
+                //
+                // We removed the older `data.count == firstPageReturnedCount`
+                // heuristic because it created an infinite loop when the
+                // gateway consistently returned the same page size (offset
+                // was stagnating but the heuristic kept claiming "more
+                // might follow"). The `newItems.isEmpty` guard below is the
+                // correct stop signal: zero new ids = zero progress.
                 let backendHasMore = response.pagination?.hasMore
                 if let backendHasMore {
                     hasMore = backendHasMore
                 } else {
-                    hasMore = response.data.count >= pageSize || response.data.count == firstPageReturnedCount
+                    hasMore = response.data.count >= pageSize
                 }
                 offset += response.data.count
-                // Safety belt: if the server returned 0 items, abort —
-                // otherwise we'd loop forever on a misconfigured endpoint.
-                if response.data.isEmpty { hasMore = false }
+                // Progress guards. STOP when:
+                //   - the server returned an empty page (canonical EOF), or
+                //   - the page contained ZERO new ids (offset stagnation —
+                //     the gateway is replaying the same window). Without
+                //     this we hammered `/conversations` forever on a
+                //     misconfigured pagination response.
+                if response.data.isEmpty || newItems.isEmpty {
+                    hasMore = false
+                }
             } catch {
                 Self.logger.error("[SyncEngine] fullSync tail error: \(error.localizedDescription)")
                 succeeded = false
                 break
             }
+        }
+        if tailIterations >= maxTailIterations {
+            Self.logger.error("[SyncEngine] fullSync tail aborted after \(maxTailIterations) iterations — pagination likely stuck (offset=\(offset), merged=\(merged.count))")
         }
 
         if succeeded {
@@ -311,6 +349,16 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     @discardableResult
     public func syncSinceLastCheckpoint() async -> Bool {
         guard !isSyncing else { return true }
+        // Throttle bursts: when several signals (socket reconnect,
+        // foreground return, cache-stale revalidate) fire within the
+        // same window, only the first one hits the network. Returning
+        // `true` is intentional — from the caller's perspective the
+        // delta is "fresh enough" since a recent one just landed.
+        let now = Date()
+        if now.timeIntervalSince(lastDeltaSyncAt) < deltaSyncCooldown {
+            return true
+        }
+        lastDeltaSyncAt = now
         isSyncing = true
         defer { isSyncing = false }
 
@@ -333,7 +381,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             let userId = await currentUserId()
             let deltaConversations = response.data.map { $0.toConversation(currentUserId: userId) }
 
-            let existing = await cache.conversations.load(for: "list").value ?? []
+            let existing = await cache.conversations.load(for: "list").snapshot() ?? []
             var merged = existing
 
             for delta in deltaConversations {
@@ -424,10 +472,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         }
 
         let oneYearAgo = Calendar.current.date(byAdding: .year, value: -1, to: Date()) ?? Date()
-        let convs = await cache.conversations.load(for: "list").value ?? []
+        let convs = await cache.conversations.load(for: "list").snapshot() ?? []
 
         for conv in convs {
-            let messages = await cache.messages.load(for: conv.id).value ?? []
+            let messages = await cache.messages.load(for: conv.id).snapshot() ?? []
             guard messages.count > 600 else { continue }
 
             let recentByDate = messages.filter { $0.createdAt > oneYearAgo }
@@ -436,7 +484,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             let toKeep = recentByDate.count > recentByCount.count ? recentByDate : recentByCount
 
             if toKeep.count < messages.count {
-                await cache.messages.save(toKeep, for: conv.id)
+                do {
+                    try await cache.messages.save(toKeep, for: conv.id)
+                } catch {
+                    Logger.cache.error("ConversationSyncEngine cleanup save failed for \(conv.id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                }
             }
         }
 
@@ -625,7 +677,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         // already exists. The `update` mutate closure is sync +
         // nonisolated, so we can't fetch from inside it — branch here.
         let cachedList = await cache.conversations.load(for: "list")
-        let conversationExists = cachedList.value?.contains(where: { $0.id == msg.conversationId }) ?? false
+        let conversationExists = cachedList.snapshot()?.contains(where: { $0.id == msg.conversationId }) ?? false
 
         if conversationExists {
             await cache.conversations.update(for: "list") { conversations in
@@ -851,6 +903,10 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     /// so the engine must enforce the order rather than trust the network.
     private func saveSorted(_ items: [MeeshyConversation], to cacheKey: String) async {
         let sorted = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
-        await cache.conversations.save(sorted, for: cacheKey)
+        do {
+            try await cache.conversations.save(sorted, for: cacheKey)
+        } catch {
+            Logger.cache.error("ConversationSyncEngine saveSorted failed for \(cacheKey, privacy: .public): \(error.localizedDescription, privacy: .public)")
+        }
     }
 }

@@ -22,10 +22,19 @@ nonisolated enum NSEDataSync {
     /// Fetch a message from the API and persist it to the shared container.
     /// Call from `didReceive(_:withContentHandler:)` after extracting the
     /// push payload fields.
+    ///
+    /// IMPORTANT — security note (audit 2026-05-11):
+    /// The `apiBaseURL` is resolved from the shared App Group UserDefaults
+    /// (which the main app writes when its environment changes), with a
+    /// strict allowlist + a hardcoded production fallback. We deliberately
+    /// do NOT accept a URL from the push payload anymore — that prior
+    /// design allowed an attacker who could deliver a push (compromised
+    /// FCM credentials, MITM in the APNs delivery chain) to redirect this
+    /// authenticated request to an attacker-controlled host and exfiltrate
+    /// the user's live Bearer JWT.
     static func syncMessage(
         conversationId: String,
         messageId: String,
-        apiBaseURL: String,
         completion: @escaping @Sendable (Bool) -> Void
     ) {
         guard let token = readAuthToken() else {
@@ -33,6 +42,7 @@ nonisolated enum NSEDataSync {
             return
         }
 
+        let apiBaseURL = resolveApiBaseURL()
         let urlString = "\(apiBaseURL)/api/v1/conversations/\(conversationId)/messages/\(messageId)"
         guard let url = URL(string: urlString) else {
             completion(false)
@@ -121,25 +131,86 @@ nonisolated enum NSEDataSync {
         return results
     }
 
+    // MARK: - Trusted base URL resolution
+    //
+    // The NSE never trusts a URL coming from the push payload (see security
+    // note on syncMessage). The base URL is resolved from a small allowlist
+    // matching the xcconfig environments (Production, Staging, Localhost).
+    // The main app writes the active environment to App Group UserDefaults
+    // (`meeshy_api_base_url`) when the user switches environment via the
+    // dev menu; the NSE reads it at request time. Anything outside the
+    // allowlist falls back to production.
+
+    private static let allowedApiBaseURLs: Set<String> = [
+        "https://gate.meeshy.me",
+        "https://gate.staging.meeshy.me",
+        "http://localhost:3000"
+    ]
+    private static let defaultApiBaseURL = "https://gate.meeshy.me"
+    private static let apiBaseURLDefaultsKey = "meeshy_api_base_url"
+
+    private static func resolveApiBaseURL() -> String {
+        guard let defaults = UserDefaults(suiteName: appGroupId),
+              let stored = defaults.string(forKey: apiBaseURLDefaultsKey),
+              allowedApiBaseURLs.contains(stored) else {
+            return defaultApiBaseURL
+        }
+        return stored
+    }
+
     // MARK: - Auth token from shared Keychain
+
+    /// Resolves the keychain access group at runtime by querying iOS for the
+    /// access group it assigns to a discovery item. Returns
+    /// `<TEAMID>.me.meeshy.app` — the shared group declared in both the main
+    /// app's and the NSE's `keychain-access-groups` entitlement.
+    ///
+    /// We must specify `kSecAttrAccessGroup` explicitly because the NSE runs
+    /// in its own process and iOS may default to the extension's own bundle
+    /// access group (`<TEAMID>.me.meeshy.app.MeeshyNotificationExtension`)
+    /// instead of the shared one — at which point `SecItemCopyMatching`
+    /// silently returns `errSecItemNotFound`.
+    private static let sharedKeychainAccessGroup: String? = {
+        let discoveryQuery: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrAccount as String: "_meeshy_nse_seed_discovery",
+            kSecAttrService as String: "_meeshy_nse_seed_discovery",
+            kSecReturnAttributes as String: true
+        ]
+        var result: AnyObject?
+        var status = SecItemCopyMatching(discoveryQuery as CFDictionary, &result)
+        if status == errSecItemNotFound {
+            status = SecItemAdd(discoveryQuery as CFDictionary, &result)
+        }
+        guard status == errSecSuccess,
+              let attributes = result as? [String: Any],
+              let assignedGroup = attributes[kSecAttrAccessGroup as String] as? String,
+              let teamPrefix = assignedGroup.components(separatedBy: ".").first,
+              !teamPrefix.isEmpty else {
+            return nil
+        }
+        return "\(teamPrefix).me.meeshy.app"
+    }()
 
     private static func readAuthToken() -> String? {
         // Read active user ID from shared UserDefaults
         guard let defaults = UserDefaults(suiteName: appGroupId),
               let userId = defaults.string(forKey: "meeshy_active_user_id") else {
-            // Fallback: try reading from standard UserDefaults shared key
             return nil
         }
 
         // Read token from Keychain (shared access group)
         let key = "meeshy_token_\(userId)"
-        let query: [String: Any] = [
+        var query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "me.meeshy.app",
             kSecAttrAccount as String: key,
             kSecReturnData as String: true,
             kSecMatchLimit as String: kSecMatchLimitOne,
         ]
+        if let group = sharedKeychainAccessGroup {
+            query[kSecAttrAccessGroup as String] = group
+        }
 
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)

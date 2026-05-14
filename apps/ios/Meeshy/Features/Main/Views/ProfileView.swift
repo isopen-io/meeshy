@@ -10,7 +10,7 @@ struct ProfileView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
-    @ObservedObject private var authManager = AuthManager.shared
+    @EnvironmentObject private var authManager: AuthManager
 
     @State private var firstName = ""
     @State private var lastName = ""
@@ -91,12 +91,12 @@ struct ProfileView: View {
                 stats = cached.first
                 if let fresh = try? await StatsService.shared.fetchStats() {
                     stats = fresh
-                    await CacheCoordinator.shared.stats.save([fresh], for: userId)
+                    try? await CacheCoordinator.shared.stats.save([fresh], for: userId)
                 }
             case .expired, .empty:
                 if let fresh = try? await StatsService.shared.fetchStats() {
                     stats = fresh
-                    await CacheCoordinator.shared.stats.save([fresh], for: userId)
+                    try? await CacheCoordinator.shared.stats.save([fresh], for: userId)
                 }
             }
             pendingRequestCount = FriendshipCache.shared.pendingReceivedCount
@@ -197,13 +197,25 @@ struct ProfileView: View {
             Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
 
             VStack(spacing: 24) {
-                bannerAndAvatarSection
-                identitySection
-                contactSection
-                languagesSection
-                statsSection
-                friendRequestsSection
-                memberSinceSection
+                // Cold-start placeholder: AuthManager has no cached
+                // user yet (first run, post-logout). Skip rendering the
+                // real banner/avatar/identity sections to avoid the
+                // chain of `?? ""` fallback strings flashing on screen.
+                if SkeletonVisibilityResolver.shouldShowSkeleton(
+                    isLoading: true,
+                    hasCachedData: user != nil
+                ) {
+                    SkeletonProfileHeader()
+                        .transition(.opacity)
+                } else {
+                    bannerAndAvatarSection
+                    identitySection
+                    contactSection
+                    languagesSection
+                    statsSection
+                    friendRequestsSection
+                    memberSinceSection
+                }
                 Spacer().frame(height: 40)
             }
             .padding(.horizontal, 16)

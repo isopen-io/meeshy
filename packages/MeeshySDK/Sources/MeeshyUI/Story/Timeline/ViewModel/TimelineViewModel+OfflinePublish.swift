@@ -67,8 +67,19 @@ extension TimelineViewModel {
     ///
     /// In either case, `errorMessage` is NOT set — this is the OFFLINE-FIRST
     /// contract: the user sees confirmation, not failure.
+    ///
+    /// - Parameter originalLanguage: BCP-47 source language tag stamped onto
+    ///   the queued item. Required by the Prisme Linguistique pipeline so the
+    ///   gateway can route NLLB-200 translations correctly when the item
+    ///   flushes after reconnect. Defaults to `StoryComposerViewModel
+    ///   .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)`
+    ///   which honours the user's in-app `systemLanguage` / `regionalLanguage`
+    ///   preference (NEVER the device locale). Callers should pass an explicit
+    ///   value when the composer's source language is already known.
     public func handlePublishTap(
         visibility: StoryVisibility,
+        originalLanguage: String = StoryComposerViewModel
+            .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser),
         networkMonitor: NetworkMonitorProviding = NetworkMonitor.shared,
         offlineQueue: OfflineQueueProviding = StoryOfflineQueue.shared,
         onlinePublisher: TimelineOnlinePublishing = StubOnlinePublisher()
@@ -77,7 +88,8 @@ extension TimelineViewModel {
             // Online path: hand off to the injected online publisher with the
             // serialised project payload. Fall back to offline queue if the
             // attempt fails so the user's work is never silently discarded.
-            let item = buildOfflineQueueItem(visibility: visibility)
+            let item = buildOfflineQueueItem(visibility: visibility,
+                                             originalLanguage: originalLanguage)
             do {
                 try await onlinePublisher.publishTimelineItem(item)
                 errorMessage = nil
@@ -92,7 +104,8 @@ extension TimelineViewModel {
         }
 
         // Offline path: enqueue silently, set confirmation flag.
-        let item = buildOfflineQueueItem(visibility: visibility)
+        let item = buildOfflineQueueItem(visibility: visibility,
+                                         originalLanguage: originalLanguage)
         await offlineQueue.enqueue(item)
         errorMessage = nil
         showOfflineQueuedConfirmation = true
@@ -105,13 +118,45 @@ extension TimelineViewModel {
 
     // MARK: - Private helpers
 
-    private func buildOfflineQueueItem(visibility: StoryVisibility) -> StoryOfflineQueueItem {
+    /// Returns the set of clip ids that belong to `project.audioPlayerObjects`.
+    /// Used to route entries from `pendingMediaURLs` into the correct map
+    /// (`audioURLPaths` vs `mediaURLPaths`) on the offline queue item.
+    ///
+    /// Single source of truth = the project's own structure. Extension-based
+    /// detection (`.m4a`/`.mp3`/…) would be fragile for generated TTS variants
+    /// or test fixtures with synthetic URLs; the project model already knows
+    /// which clips are audio.
+    private func audioClipIds() -> Set<String> {
+        Set(project.audioPlayerObjects.map(\.id))
+    }
+
+    /// Builds the offline queue snapshot. `originalLanguage` is stamped onto
+    /// the persisted item so the gateway can route NLLB-200 translations on
+    /// flush — passing `nil` would break the Prisme Linguistique pipeline
+    /// (P0 data-integrity regression). The caller is expected to resolve the
+    /// language up-front via `StoryComposerViewModel.resolveComposerSourceLanguage`
+    /// so that this helper stays a pure transformer of `project` + inputs.
+    internal func buildOfflineQueueItem(
+        visibility: StoryVisibility,
+        originalLanguage: String
+    ) -> StoryOfflineQueueItem {
         let slideIds = project.mediaObjects.map { $0.id }
             + project.audioPlayerObjects.map { $0.id }
             + project.textObjects.map { $0.id }
 
-        let mediaPaths: [String: String] = pendingMediaURLs.reduce(into: [:]) { acc, pair in
-            acc[pair.key] = pair.value.path
+        // Split `pendingMediaURLs` into video/image (`mediaURLPaths`) vs
+        // audio (`audioURLPaths`) so the queue flush can route uploads to the
+        // correct asset endpoints on reconnect. Without this split, audio URLs
+        // were silently dropped — guaranteed data loss on crash recovery.
+        let audioIds = audioClipIds()
+        var mediaPaths: [String: String] = [:]
+        var audioPaths: [String: String] = [:]
+        for (clipId, url) in pendingMediaURLs {
+            if audioIds.contains(clipId) {
+                audioPaths[clipId] = url.path
+            } else {
+                mediaPaths[clipId] = url.path
+            }
         }
 
         // Serialize the full TimelineProject as JSON so the queue can replay it
@@ -129,12 +174,20 @@ extension TimelineViewModel {
             return json
         }()
 
+        // Defensive invariant: an empty / whitespace-only language tag would
+        // break the gateway's NLLB-200 routing exactly the same way `nil` does.
+        // Fall back to the Prisme Linguistique default (`"fr"`) so an upstream
+        // bug never leaks into the persisted item.
+        let resolvedLanguage = originalLanguage
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let safeLanguage = resolvedLanguage.isEmpty ? "fr" : resolvedLanguage
+
         return StoryOfflineQueueItem(
             slideIds: slideIds,
             slidePayloadJSON: payloadJSON,
             mediaURLPaths: mediaPaths,
-            audioURLPaths: [:],
-            originalLanguage: nil,
+            audioURLPaths: audioPaths,
+            originalLanguage: safeLanguage,
             visibility: visibility.rawValue
         )
     }

@@ -3,7 +3,25 @@ import Combine
 import MeeshySDK
 
 // MARK: - Story Slide Manager
+//
+// DEPRECATED — Single Source of Truth violation.
+//
+// `StorySlideManager` is a legacy `ObservableObject` that duplicates slide
+// state (slides, currentSlideIndex, slideImages) already owned by the
+// `@Observable` `StoryComposerViewModel`. The real composer UI does NOT
+// reference this manager — only the in-file `StorySlideCarousel` view does.
+//
+// Use `StoryComposerViewModel` instead. It is the single source of truth
+// for slide state in the composer flow.
+//
+// TODO: Remove in next minor release after migration of any remaining
+// test/preview usages.
 
+/// Legacy slide state container.
+///
+/// - Warning: Deprecated. Use `StoryComposerViewModel` for slide state in
+///   the composer. This type duplicates state and violates the SSoT rule.
+@available(*, deprecated, message: "Use StoryComposerViewModel instead — single source of truth")
 @MainActor
 public class StorySlideManager: ObservableObject {
     @Published public var slides: [StorySlide] = [StorySlide()]
@@ -92,7 +110,20 @@ public class StorySlideManager: ObservableObject {
 }
 
 // MARK: - Slide Carousel View
+//
+// DEPRECATED — Coupled to the deprecated `StorySlideManager` above. The
+// production composer uses its own carousel wired directly to
+// `StoryComposerViewModel`. Kept only to preserve the existing API surface
+// and any in-file/preview usages while migration completes.
+//
+// TODO: Remove in next minor release after migration of any remaining
+// test/preview usages.
 
+/// Legacy slide carousel view.
+///
+/// - Warning: Deprecated. Use the composer's slide carousel backed by
+///   `StoryComposerViewModel` instead — that is the single source of truth.
+@available(*, deprecated, message: "Use StoryComposerViewModel instead — single source of truth")
 public struct StorySlideCarousel: View {
     @ObservedObject public var manager: StorySlideManager
     public var onAddSlide: () -> Void
@@ -145,7 +176,7 @@ public struct StorySlideCarousel: View {
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
-                    .stroke(isSelected ? Color(hex: "FF2E63") : Color.white.opacity(0.2), lineWidth: isSelected ? 2 : 1)
+                    .stroke(isSelected ? MeeshyColors.brandPrimary : Color.white.opacity(0.2), lineWidth: isSelected ? 2 : 1)
             )
             .scaleEffect(isSelected ? 1.1 : 1.0)
         }

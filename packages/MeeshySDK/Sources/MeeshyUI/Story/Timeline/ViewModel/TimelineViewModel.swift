@@ -43,6 +43,11 @@ public final class TimelineViewModel {
     public internal(set) var project: TimelineProject
     public private(set) var currentTime: Float = 0
     public private(set) var isPlaying: Bool = false
+    /// Mirror of `engine.isMuted` so SwiftUI views (TransportBar mute button)
+    /// re-render on toggle. The engine remains the audio-routing source of
+    /// truth — this stored property is the @Observable view-state seam that
+    /// tracks it. Keep them in lock-step inside `toggleMute()`.
+    public private(set) var isMuted: Bool = false
     public private(set) var canUndo: Bool = false
     public private(set) var canRedo: Bool = false
     public internal(set) var isSnapEnabled: Bool = true
@@ -51,6 +56,12 @@ public final class TimelineViewModel {
     public var zoomScale: CGFloat = 1.0
     public var errorMessage: String?
     public internal(set) var showOfflineQueuedConfirmation: Bool = false
+    /// True between `beginScrub()` and `endScrub()` — flipped by the playhead
+    /// gesture so `scrub(to:)` can choose a sub-50ms tolerance during the drag
+    /// and a frame-accurate seek on release. Mirrors `selection.activeDrag` for
+    /// clip drags. Default `false` keeps every legacy `scrub(to:)` caller on a
+    /// precise seek.
+    public private(set) var isScrubbing: Bool = false
 
     // MARK: - Dependencies
 
@@ -98,6 +109,7 @@ public final class TimelineViewModel {
             textObjects: [],
             clipTransitions: []
         )
+        self.isMuted = engine.isMuted
         wireEngineCallbacks()
         wireCommandStackCallback()
     }
@@ -232,15 +244,15 @@ public final class TimelineViewModel {
     // MARK: - Private helpers
 
     func clipStartTime(id: String) -> Float? {
-        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.startTime ?? 0 }
+        if let m = project.mediaObjects.first(where: { $0.id == id }) { return Float(m.startTime ?? 0) }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.startTime ?? 0 }
-        if let t = project.textObjects.first(where: { $0.id == id }) { return t.startTime ?? 0 }
+        if let t = project.textObjects.first(where: { $0.id == id }) { return Float(t.startTime ?? 0) }
         return nil
     }
 
     private func applyClipPosition(clipId: String, newStartTime: Float) {
         if let i = project.mediaObjects.firstIndex(where: { $0.id == clipId }) {
-            project.mediaObjects[i].startTime = newStartTime
+            project.mediaObjects[i].startTime = Double(newStartTime)
             return
         }
         if let i = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) {
@@ -248,7 +260,7 @@ public final class TimelineViewModel {
             return
         }
         if let i = project.textObjects.firstIndex(where: { $0.id == clipId }) {
-            project.textObjects[i].startTime = newStartTime
+            project.textObjects[i].startTime = Double(newStartTime)
         }
     }
 
@@ -302,11 +314,38 @@ public final class TimelineViewModel {
 
     // MARK: - Scrub & split
 
+    /// Marks the start of a continuous playhead drag. While `isScrubbing` is
+    /// `true`, every `scrub(to:)` call forwards `precise: false` to the engine
+    /// (sub-50ms tolerance), avoiding the GOP-decompression freeze AVPlayer
+    /// triggers at 60 calls/sec under `.zero` tolerance. The playhead gesture
+    /// must call `endScrub()` once on release so the final seek is precise.
+    public func beginScrub() {
+        isScrubbing = true
+    }
+
+    /// Marks the end of a continuous playhead drag. Subsequent `scrub(to:)`
+    /// calls go back to frame-accurate seeking. Safe to call when no scrub is
+    /// in flight (idempotent).
+    public func endScrub() {
+        isScrubbing = false
+    }
+
+    /// Seeks the engine to `time`. Precision is auto-selected from
+    /// `isScrubbing` — wrap a continuous drag with `beginScrub()` /
+    /// `endScrub()` to get sub-50ms response during the drag and a precise
+    /// seek on release. Single-shot calls (no `beginScrub()`) stay precise.
     public func scrub(to time: Float) {
+        scrub(to: time, precise: !isScrubbing)
+    }
+
+    /// Explicit-precision overload — lets callers pin the tolerance regardless
+    /// of `isScrubbing`. Used by adjustable accessibility actions, keyboard
+    /// shortcuts, and tests that need a deterministic precise seek.
+    public func scrub(to time: Float, precise: Bool) {
         guard time.isFinite else { return }
         let clamped = max(0, min(time, project.slideDuration))
         currentTime = clamped
-        engine.seek(to: clamped, precise: true)
+        engine.seek(to: clamped, precise: precise)
     }
 
     public func splitSelectedAtPlayhead() {
@@ -340,9 +379,9 @@ public final class TimelineViewModel {
 
     /// Returns the duration of any clip (media/audio/text) by id, or nil.
     private func clipDuration(forId id: String) -> Float? {
-        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration }
+        if let m = project.mediaObjects.first(where: { $0.id == id }) { return m.duration.map { Float($0) } }
         if let a = project.audioPlayerObjects.first(where: { $0.id == id }) { return a.duration }
-        if let t = project.textObjects.first(where: { $0.id == id }) { return t.displayDuration }
+        if let t = project.textObjects.first(where: { $0.id == id }) { return t.duration.map { Float($0) } }
         return nil
     }
 
@@ -414,6 +453,10 @@ public final class TimelineViewModel {
         var muted = engine.isMuted
         muted.toggle()
         engine.isMuted = muted
+        // Mirror onto the @Observable view-state seam. Read the engine back
+        // (instead of trusting `muted`) so any clamping or refusal applied by
+        // the engine setter is reflected truthfully to the UI.
+        isMuted = engine.isMuted
     }
 
     // MARK: - Persistence

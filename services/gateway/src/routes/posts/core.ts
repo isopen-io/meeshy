@@ -5,9 +5,10 @@ import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
-import { sendSuccess } from '../../utils/response';
+import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError } from '../../utils/response';
 import { resolveMentionedUsers } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
+import { withMutationLog } from '../../utils/withMutationLog';
 
 export function registerCoreRoutes(
   fastify: FastifyInstance,
@@ -24,19 +25,30 @@ export function registerCoreRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const parsed = CreatePostSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ success: false, error: 'Invalid request', details: parsed.error.issues });
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
-      const post = await postService.createPost({
-        ...parsed.data,
-        type: parsed.data.type ?? 'POST',
-        visibility: parsed.data.visibility ?? 'PUBLIC',
-      }, authContext.registeredUser.id);
+      type CreatedPost = Awaited<ReturnType<typeof postService.createPost>>;
+      const post = await withMutationLog<CreatedPost>({
+        request,
+        fastify,
+        userId: authContext.registeredUser.id,
+        kind: 'createPost',
+        op: () => postService.createPost({
+          ...parsed.data,
+          type: parsed.data.type ?? 'POST',
+          visibility: parsed.data.visibility ?? 'PUBLIC',
+        }, authContext.registeredUser.id) as Promise<CreatedPost & { id: string }>,
+        onDuplicate: async (resultId) => {
+          const replayed = await postService.getPostById(resultId, authContext.registeredUser.id);
+          return replayed ? (replayed as unknown as CreatedPost & { id: string }) : null;
+        },
+      });
 
       // Broadcast via Socket.IO
       const socialEvents = fastify.socialEvents;
@@ -52,8 +64,13 @@ export function registerCoreRoutes(
         }
       }
 
-      // Trigger async translation for posts with text content (fire-and-forget)
-      if (parsed.data.content && (parsed.data.type ?? 'POST') === 'POST') {
+      // Trigger async translation for posts/stories with text content (fire-and-forget)
+      const postType = parsed.data.type ?? 'POST';
+      const shouldTranslateContent = Boolean(parsed.data.content) && (
+        postType === 'POST' ||
+        (postType === 'STORY' && parsed.data.content?.trim())
+      );
+      if (shouldTranslateContent) {
         try {
           const translationService = PostTranslationService.shared;
           translationService.translatePost(
@@ -75,7 +92,7 @@ export function registerCoreRoutes(
       return sendSuccess(reply, post, { statusCode: 201, meta: { mentionedUsers } });
     } catch (error) {
       fastify.log.error(`[POST /posts] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -90,7 +107,7 @@ export function registerCoreRoutes(
 
       const post = await postService.getPostById(postId, viewerUserId);
       if (!post) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       const contentStrings: string[] = [];
@@ -108,7 +125,7 @@ export function registerCoreRoutes(
       return sendSuccess(reply, post, { meta: { mentionedUsers } });
     } catch (error) {
       fastify.log.error(`[GET /posts/:postId] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -119,18 +136,18 @@ export function registerCoreRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
       const parsed = UpdatePostSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ success: false, error: 'Invalid request', details: parsed.error.issues });
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
       const post = await postService.updatePost(postId, authContext.registeredUser.id, parsed.data);
       if (!post) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       const updateContentStrings: string[] = [];
@@ -157,10 +174,10 @@ export function registerCoreRoutes(
       return sendSuccess(reply, post, { meta: { mentionedUsers: updateMentionedUsers } });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return reply.status(403).send({ success: false, error: 'Not authorized to edit this post' });
+        return sendForbidden(reply, 'Not authorized to edit this post', { code: 'FORBIDDEN' });
       }
       fastify.log.error(`[PUT /posts/:postId] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -171,13 +188,13 @@ export function registerCoreRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
       const result = await postService.deletePost(postId, authContext.registeredUser.id);
       if (!result) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       // Broadcast deletion via Socket.IO (use correct event based on post type)
@@ -195,10 +212,10 @@ export function registerCoreRoutes(
       return sendSuccess(reply, { deleted: true });
     } catch (error) {
       if (error instanceof Error && error.message === 'FORBIDDEN') {
-        return reply.status(403).send({ success: false, error: 'Not authorized to delete this post' });
+        return sendForbidden(reply, 'Not authorized to delete this post', { code: 'FORBIDDEN' });
       }
       fastify.log.error(`[DELETE /posts/:postId] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 
@@ -209,31 +226,31 @@ export function registerCoreRoutes(
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
       if (!authContext?.isAuthenticated || !authContext.registeredUser) {
-        return reply.status(401).send({ success: false, error: 'Authentication required' });
+        return sendUnauthorized(reply, 'Authentication required', { code: 'UNAUTHORIZED' });
       }
 
       const { postId } = request.params;
       const parsed = TranslatePostSchema.safeParse(request.body);
       if (!parsed.success) {
-        return reply.status(400).send({ success: false, error: 'Invalid request', details: parsed.error.issues });
+        return sendBadRequest(reply, 'Invalid request', { code: 'VALIDATION_ERROR' });
       }
 
       const post = await postService.getPostById(postId);
       if (!post) {
-        return reply.status(404).send({ success: false, error: 'Post not found' });
+        return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
       try {
         const translationService = PostTranslationService.shared;
         await translationService.translateOnDemand(postId, parsed.data.targetLanguage);
       } catch {
-        return reply.status(503).send({ success: false, error: 'Translation service not available' });
+        return sendError(reply, 503, 'Translation service not available', { code: 'SERVICE_UNAVAILABLE' });
       }
 
       return sendSuccess(reply, { requested: true, targetLanguage: parsed.data.targetLanguage });
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/translate] Error: ${error}`);
-      return reply.status(500).send({ success: false, error: error instanceof Error ? error.message : 'Unknown error' });
+      return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });
     }
   });
 }

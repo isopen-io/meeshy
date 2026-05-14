@@ -1,4 +1,5 @@
 import XCTest
+import GRDB
 @testable import MeeshySDK
 
 final class OfflineQueueTests: XCTestCase {
@@ -6,6 +7,13 @@ final class OfflineQueueTests: XCTestCase {
     private var queue: OfflineQueue { OfflineQueue.shared }
 
     override func setUp() async throws {
+        // Wave 1 Task 3.6 — every enqueue path on `OfflineQueue` requires a
+        // configured pool. Wiring a fresh in-memory `DatabaseQueue` per test
+        // case keeps the legacy tests green while the unified outbox path is
+        // exercised. The migrations need to run so the `outbox` table exists.
+        let pool = try DatabaseQueue()
+        try MessageDatabaseMigrations.runAll(on: pool)
+        await OfflineQueue.shared.configure(pool: pool)
         await queue.clearAll()
     }
 

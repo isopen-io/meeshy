@@ -10,6 +10,8 @@ struct TrackDetailPopover: View {
 
     @Environment(\.theme) private var theme
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
         VStack(spacing: 12) {
             header
@@ -22,17 +24,10 @@ struct TrackDetailPopover: View {
             Divider().overlay(MeeshyColors.indigo900.opacity(0.3))
             deleteButton
         }
-        .padding(14)
+        .padding(16)
         .frame(width: 280)
-        .background(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 14, style: .continuous)
-                        .fill(theme.backgroundSecondary.opacity(0.85))
-                )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .shadow(color: .black.opacity(0.4), radius: 20, y: 8)
     }
 
@@ -41,11 +36,11 @@ struct TrackDetailPopover: View {
     private var header: some View {
         HStack {
             Image(systemName: track.type.icon)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(track.type.color)
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(MeeshyColors.brandGradient)
             Text(track.name)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(theme.textPrimary)
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
                 .lineLimit(1)
             Spacer()
             Button { onDismiss() } label: {

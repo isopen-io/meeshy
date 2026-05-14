@@ -3,82 +3,69 @@ import SwiftUI
 @testable import MeeshyUI
 @testable import MeeshySDK
 
-/// Tests for `StoryCanvasReaderView`'s `mute` parameter.
+/// Tests for `StoryReaderRepresentable`'s `mute` parameter.
 ///
-/// `ReaderState` is `@StateObject private` inside `StoryCanvasReaderView`, so we cannot
-/// inspect `AVQueuePlayer.isMuted` directly. Instead we observe the **side effect** of
-/// `startBackgroundAudio` via `StoryMediaCoordinator.shared.backgroundAudioSourceId`,
-/// which is set by `ReaderState.startBackgroundAudio` when audio activation actually
-/// proceeds (and skipped when `mute=true`).
+/// Migrated from the legacy `StoryCanvasReaderView`-based test during Phase A4
+/// reader migration. The new canvas passes mute through `StoryReaderContext` into
+/// `StoryCanvasUIView.isAudioMuted`; we verify the struct captures the param
+/// correctly and that the underlying `StoryCanvasUIView` reflects it after layout.
 @MainActor
 final class StoryCanvasReaderViewMuteTests: XCTestCase {
 
-    override func setUp() async throws {
-        try await super.setUp()
-        // Reset coordinator state between tests.
-        StoryMediaCoordinator.shared.backgroundAudioSourceId = nil
-    }
-
-    override func tearDown() async throws {
-        StoryMediaCoordinator.shared.backgroundAudioSourceId = nil
-        try await super.tearDown()
-    }
-
-    func test_mute_true_skipsBackgroundAudioActivation() async {
+    func test_mute_true_storedOnRepresentable() {
         let story = Self.makeStoryWithBackgroundAudio()
+        let rep = StoryReaderRepresentable(story: story, mute: true)
+        XCTAssertTrue(rep.mute, "mute=true must be preserved on the representable")
+    }
 
-        let view = StoryCanvasReaderView(story: story, mute: true)
-        let host = UIHostingController(rootView: view)
+    func test_mute_false_storedOnRepresentable() {
+        let story = Self.makeStoryWithBackgroundAudio()
+        let rep = StoryReaderRepresentable(story: story, mute: false)
+        XCTAssertFalse(rep.mute, "mute=false must be preserved on the representable")
+    }
+
+    func test_mute_true_propagatesToCanvasUIView() {
+        let story = Self.makeStoryWithBackgroundAudio()
+        let rep = StoryReaderRepresentable(story: story, mute: true)
+        let host = UIHostingController(rootView: rep.frame(width: 360, height: 640))
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 360, height: 640))
         window.rootViewController = host
         window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil }
-
         host.view.layoutIfNeeded()
-        // Let SwiftUI's `.onAppear` propagate (hosting controller needs a
-        // real window to fire the lifecycle callbacks).
-        await waitForOnAppear()
 
-        XCTAssertNil(StoryMediaCoordinator.shared.backgroundAudioSourceId,
-                     "mute=true must NOT activate background audio")
+        let canvas = firstCanvasView(in: host.view)
+        XCTAssertNotNil(canvas, "StoryCanvasUIView must be present after layout")
+        XCTAssertTrue(canvas?.isAudioMuted ?? false,
+                      "isAudioMuted must be true when mute=true is passed to StoryReaderRepresentable")
     }
 
-    func test_mute_false_activatesBackgroundAudio() async {
+    func test_mute_false_leavesCanvasUnmuted() {
         let story = Self.makeStoryWithBackgroundAudio()
-
-        let view = StoryCanvasReaderView(story: story, mute: false)
-        let host = UIHostingController(rootView: view)
+        let rep = StoryReaderRepresentable(story: story, mute: false)
+        let host = UIHostingController(rootView: rep.frame(width: 360, height: 640))
         let window = UIWindow(frame: CGRect(x: 0, y: 0, width: 360, height: 640))
         window.rootViewController = host
         window.makeKeyAndVisible()
         defer { window.isHidden = true; window.rootViewController = nil }
-
         host.view.layoutIfNeeded()
-        await waitForOnAppear()
 
-        XCTAssertEqual(StoryMediaCoordinator.shared.backgroundAudioSourceId,
-                       "media-bg-1",
-                       "mute=false must activate background audio for the resolved media id")
+        let canvas = firstCanvasView(in: host.view)
+        XCTAssertNotNil(canvas, "StoryCanvasUIView must be present after layout")
+        XCTAssertFalse(canvas?.isAudioMuted ?? true,
+                       "isAudioMuted must be false when mute=false is passed to StoryReaderRepresentable")
     }
 
-    /// SwiftUI delivers `.onAppear` on the next runloop turn after the host
-    /// view is added to a window. Yield several times so the side effect
-    /// (`StoryMediaCoordinator.shared.backgroundAudioSourceId` mutation) lands
-    /// before the assertion runs.
-    private func waitForOnAppear() async {
-        for _ in 0..<20 {
-            await Task.yield()
-            try? await Task.sleep(nanoseconds: 25_000_000)
-            if StoryMediaCoordinator.shared.backgroundAudioSourceId != nil { return }
+    // MARK: - Helpers
+
+    private func firstCanvasView(in view: UIView) -> StoryCanvasUIView? {
+        if let canvas = view as? StoryCanvasUIView { return canvas }
+        for sub in view.subviews {
+            if let found = firstCanvasView(in: sub) { return found }
         }
+        return nil
     }
 
-    // MARK: - Fixtures
-
-    /// Builds a `StoryItem` whose `storyEffects.audioPlayerObjects` contains a single
-    /// background audio entry that resolves to a real-looking URL via `story.media`.
-    /// `MeeshyConfig.resolveMediaURL` only requires a non-empty string to return a URL,
-    /// so we use an `https://` scheme to keep the test hermetic.
     private static func makeStoryWithBackgroundAudio() -> StoryItem {
         let mediaId = "media-bg-1"
         let bgAudio = StoryAudioPlayerObject(

@@ -72,6 +72,14 @@ export interface TranslationNotification {
 
 export class MeeshySocketIOManager {
   private io: SocketIOServer<ClientToServerEvents, ServerToClientEvents>;
+
+  /// Exposes the underlying Socket.IO server. Used by background services
+  /// (e.g. CallCleanupService) that need to broadcast events without going
+  /// through the per-socket handler path.
+  getIO(): SocketIOServer<ClientToServerEvents, ServerToClientEvents> {
+    return this.io;
+  }
+
   private prisma: PrismaClient;
   private translationService: MessageTranslationService;
   private maintenanceService: MaintenanceService;
@@ -143,12 +151,28 @@ export class MeeshySocketIOManager {
       }
     );
 
+    // PRÉSENCE FIX: protéger les sockets vivants du cleanup périodique.
+    // Sans ça, un client passif (pas de heartbeat depuis 30min) se voit marqué
+    // offline par `updateOfflineUsers`, broadcastant un faux `isOnline: false`.
+    this.maintenanceService.setIsCurrentlyConnected(
+      (userId: string, _isAnonymous: boolean) => this.connectedUsers.has(userId)
+    );
+
     // Initialiser Socket.IO avec les types shared
     this.io = new SocketIOServer<ClientToServerEvents, ServerToClientEvents>(httpServer, {
       path: "/socket.io/",
       transports: ["websocket", "polling"],
       cors: {
-        origin: '*',
+        origin: process.env.NODE_ENV === 'development' ? true : (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+          const allowedOrigins = process.env.CORS_ORIGINS?.split(',').map(o => o.trim()) || 
+                                 process.env.ALLOWED_ORIGINS?.split(',').map(o => o.trim()) || 
+                                 ['https://meeshy.me', 'https://www.meeshy.me', 'https://gate.meeshy.me', 'https://ml.meeshy.me'];
+          if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+          } else {
+            callback(new Error('Not allowed by CORS'));
+          }
+        },
         methods: ["GET", "POST"],
         allowedHeaders: ['authorization', 'content-type', 'x-session-token', 'websocket', 'polling'],
         credentials: true
@@ -190,6 +214,8 @@ export class MeeshySocketIOManager {
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
       userSockets: this.userSockets,
+      emitPresenceSnapshot: (socket, userId, isAnonymous) =>
+        this._emitPresenceSnapshot(socket, userId, isAnonymous),
     });
 
     const reactionService = new ReactionService(prisma);
@@ -300,6 +326,109 @@ export class MeeshySocketIOManager {
     return (userId: string, isOnline: boolean, isAnonymous: boolean) => {
       this._broadcastUserStatus(userId, isOnline, isAnonymous);
     };
+  }
+
+  /**
+   * Source de vérité runtime pour la présence : true si l'id (userId pour registered,
+   * participantId pour anonyme) est actuellement dans `connectedUsers` Map. Utilisé par
+   * les routes REST pour overrider le `isOnline` de la DB (potentiellement obsolète).
+   */
+  public isPresenceOnline(idOrUserId: string): boolean {
+    return this.connectedUsers.has(idOrUserId);
+  }
+
+  /**
+   * Émet `presence:snapshot` au socket fraîchement authentifié : liste les userIds
+   * (ou participantIds anonymes) actuellement online parmi les contacts du nouvel
+   * arrivant — c'est-à-dire les autres participants des conversations qu'il rejoint.
+   * Permet au client de seed son store sans attendre qu'un changement d'état arrive
+   * (closes la faille "ne se met jamais à jour" sur les contacts déjà connectés).
+   */
+  private async _emitPresenceSnapshot(socket: any, userId: string, isAnonymous: boolean): Promise<void> {
+    try {
+      // Trouver toutes les conversations du user/participant
+      const participantRows = isAnonymous
+        ? await this.prisma.participant.findMany({
+            where: { id: userId, isActive: true },
+            select: { conversationId: true }
+          })
+        : await this.prisma.participant.findMany({
+            where: { userId: userId, isActive: true },
+            select: { conversationId: true }
+          });
+
+      if (participantRows.length === 0) {
+        return;
+      }
+
+      const conversationIds = participantRows.map(p => p.conversationId);
+
+      // Lister tous les autres participants (registered + anonymes) de ces conversations
+      const contacts = await this.prisma.participant.findMany({
+        where: {
+          conversationId: { in: conversationIds },
+          isActive: true,
+          NOT: isAnonymous
+            ? { id: userId }
+            : { userId: userId }
+        },
+        select: {
+          id: true,
+          userId: true,
+          displayName: true,
+          type: true,
+          lastActiveAt: true,
+          user: { select: { id: true, username: true, displayName: true, lastActiveAt: true } }
+        }
+      });
+
+      // Dédupliquer par userId (un même user peut être dans plusieurs conversations)
+      const seen = new Set<string>();
+      const users: { userId: string; username: string; isOnline: boolean; lastActiveAt: Date | null }[] = [];
+
+      for (const c of contacts) {
+        const presenceKey = c.userId ?? c.id; // userId pour registered, id pour anonyme
+        if (seen.has(presenceKey)) continue;
+        seen.add(presenceKey);
+
+        const isOnline = this.connectedUsers.has(presenceKey);
+        const username = c.user?.username ?? c.user?.displayName ?? c.displayName ?? presenceKey;
+        const lastActiveAt = c.user?.lastActiveAt ?? c.lastActiveAt ?? null;
+
+        users.push({
+          userId: presenceKey,
+          username,
+          isOnline,
+          lastActiveAt
+        });
+      }
+
+      socket.emit(SERVER_EVENTS.PRESENCE_SNAPSHOT, { users });
+      logger.info(`📸 [PRESENCE_SNAPSHOT] ${users.length} contacts sent to ${userId} (${users.filter(u => u.isOnline).length} online)`);
+    } catch (error) {
+      logger.error('❌ [PRESENCE_SNAPSHOT] Failed to build snapshot', error);
+    }
+  }
+
+  /**
+   * Variante bulk pour minimiser les appels : retourne un Map<id, isOnline> pour les
+   * ids fournis. Utile lors du formatting de listes (conversations, participants).
+   */
+  public getPresenceForIds(ids: readonly string[]): Map<string, boolean> {
+    const out = new Map<string, boolean>();
+    for (const id of ids) {
+      out.set(id, this.connectedUsers.has(id));
+    }
+    return out;
+  }
+
+  /**
+   * Liste les userIds actuellement online parmi un ensemble candidat (généralement
+   * les participants des conversations de l'utilisateur authentifié). Utilisé pour
+   * construire le snapshot `presence:snapshot` émis à l'auth.
+   */
+  public listOnlineAmong(candidateIds: readonly string[]): string[] {
+    return candidateIds.filter(id => this.connectedUsers.has(id));
   }
 
   async initialize(): Promise<void> {
@@ -1086,10 +1215,14 @@ export class MeeshySocketIOManager {
 
       // Construire le payload de message pour broadcast - compatible avec les types existants
       // CORRECTION CRITIQUE: Utiliser l'ObjectId normalisé pour cohérence client-serveur
+      const s = message.sender as any;
+      // CORRECTION senderId: message.senderId = participant ID, mais les clients comparent
+      // senderId avec leur userId. On expose sender.userId (= User.id) en priorité.
+      const resolvedSenderId = s?.userId || s?.user?.id || message.senderId || undefined;
       const messagePayload = {
         id: message.id,
         conversationId: normalizedId,  // ← FIX: Toujours utiliser l'ObjectId normalisé
-        senderId: message.senderId || undefined,
+        senderId: resolvedSenderId,
         content: message.content,
         originalLanguage: message.originalLanguage || 'fr',
         originalContent: (message as any).originalContent || message.content,

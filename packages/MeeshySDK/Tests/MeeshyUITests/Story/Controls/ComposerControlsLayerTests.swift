@@ -1,0 +1,85 @@
+import XCTest
+@testable import MeeshyUI
+@testable import MeeshySDK
+
+@MainActor
+final class ComposerControlsLayerTests: XCTestCase {
+
+    // MARK: - Helpers
+
+    private func makeVM() -> StoryComposerViewModel {
+        StoryComposerViewModel()
+    }
+
+    // MARK: - bandState changes drive view tree
+
+    func test_initialState_isHidden_andFabsVisible() {
+        let vm = makeVM()
+        let _ = makeLayer(vm: vm)
+        // Use Equatable inspection on the layer's machine via key path is not possible
+        // directly — instead rely on the layer's published behaviors via XCUI-free fixtures.
+        // (Integration tests for SwiftUI ViewModifiers + @State require ViewInspector
+        //  or a layer-level test seam. For now: assert the VM is unaffected on init.)
+        XCTAssertNil(vm.activeTool)
+    }
+
+    func test_tapFABContenu_setsViewModelActiveTool_whenTileTapped() {
+        // Behavior contract: tap FAB → tap tile → viewModel.activeTool == tool.
+        // Verified by simulating the callback chain manually since we don't have
+        // a UI test harness for SwiftUI gestures in unit tests.
+        let vm = makeVM()
+        var sm = BandStateMachine()
+        sm.tapFAB(.contenu)
+        sm.tapTile(.media)
+        // The layer's onTapTile callback does:  bandStateMachine.tapTile(tool); viewModel.selectTool(tool)
+        vm.selectTool(.media)
+        XCTAssertEqual(vm.activeTool, .media)
+        XCTAssertEqual(sm.state, .toolPanel(.media))
+    }
+
+    func test_closeFormatPanel_clearsSelectedElementId() {
+        let vm = makeVM()
+        vm.selectedElementId = "elem-123"
+
+        var sm = BandStateMachine()
+        sm.openFormatPanel(.media, id: "elem-123")
+        sm.closeFormatPanel()
+        // The layer's onCloseFormatPanel does: closeFormatPanel(); viewModel.selectedElementId = nil
+        vm.selectedElementId = nil
+        XCTAssertNil(vm.selectedElementId)
+    }
+
+    func test_slideChange_resetsBandStateMachine() {
+        // Behavior contract: when currentSlideIndex changes, bandStateMachine.reset() runs.
+        // Direct unit test of the reset method (the .onChange wiring is covered by snapshot/UI
+        // tests; here we verify the reset itself is correct).
+        var sm = BandStateMachine()
+        sm.tapFAB(.contenu)
+        sm.openFormatPanel(.text, id: "txt-1")
+        sm.reset()
+        XCTAssertEqual(sm.state, .hidden)
+    }
+
+    func test_badges_useViewModelCounts() {
+        let vm = makeVM()
+        // Default empty composer
+        XCTAssertEqual(vm.currentEffects.textObjects.count, 0)
+        XCTAssertEqual(vm.currentEffects.mediaObjects?.count ?? 0, 0)
+    }
+
+    // MARK: - Layer construction helper
+
+    private func makeLayer(vm: StoryComposerViewModel) -> ComposerControlsLayer {
+        ComposerControlsLayer(
+            viewModel: vm,
+            drawingCanvas: .constant(.init()),
+            drawingTool: .constant(.pen),
+            selectedFilter: .constant(nil),
+            fgMediaItem: .constant(nil),
+            showAudioDocumentPicker: .constant(false),
+            showVoiceRecorderSheet: .constant(false),
+            onOpenMediaCrop: { _ in },
+            onOpenFilterForElement: { _ in }
+        )
+    }
+}

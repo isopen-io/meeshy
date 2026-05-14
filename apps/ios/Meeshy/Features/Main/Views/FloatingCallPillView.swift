@@ -4,7 +4,14 @@ import MeeshyUI
 // MARK: - Floating Call Pill View
 
 struct FloatingCallPillView: View {
-    @EnvironmentObject var callManager: CallManager
+    // Use the singleton directly via @ObservedObject like the rest of the
+    // app (RootView, CallView). The previous @EnvironmentObject form
+    // crashed at launch because the pill is mounted as a `.overlay` on
+    // the RootView/iPadRootView ZStack — SwiftUI does NOT propagate
+    // environment objects into overlay closures by default, and the app
+    // does not inject CallManager via `.environmentObject(...)` either
+    // (the singleton is the only source of truth).
+    @ObservedObject private var callManager = CallManager.shared
 
     private let pillHeight: CGFloat = 64
 
@@ -82,6 +89,7 @@ struct FloatingCallPillView: View {
     private var controlButtons: some View {
         HStack(spacing: 8) {
             muteButton
+            speakerButton
             expandButton
             hangupButton
         }
@@ -103,6 +111,24 @@ struct FloatingCallPillView: View {
         }
         .pressable()
         .accessibilityLabel(callManager.isMuted ? "Reactiver le micro" : "Couper le micro")
+    }
+
+    private var speakerButton: some View {
+        Button {
+            callManager.toggleSpeaker()
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: callManager.isSpeaker ? "speaker.wave.3.fill" : "speaker.fill")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(callManager.isSpeaker ? MeeshyColors.indigo400 : .white)
+                .frame(width: 36, height: 36)
+                .background(
+                    Circle()
+                        .fill(callManager.isSpeaker ? MeeshyColors.indigo400.opacity(0.2) : Color.white.opacity(0.1))
+                )
+        }
+        .pressable()
+        .accessibilityLabel(callManager.isSpeaker ? "Désactiver le haut-parleur" : "Activer le haut-parleur")
     }
 
     private var expandButton: some View {

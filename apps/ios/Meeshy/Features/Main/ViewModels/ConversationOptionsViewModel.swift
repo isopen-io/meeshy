@@ -37,11 +37,30 @@ final class ConversationOptionsViewModel: ObservableObject {
     }
 
     func load() async {
-        loadState = .loading
+        // Cache-first: paint immediately from L2 if any of the 3 cached
+        // payloads exist. The sheet opens to a fully-populated form on warm
+        // start instead of a "loading" placeholder. The revalidate that
+        // follows updates fields silently as fresh server data lands.
+        async let cachedPrefs = preferenceService.loadCachedConversationPreferences(conversationId: conversationId)
+        async let cachedCategories = preferenceService.loadCachedCategories()
+        async let cachedTags = preferenceService.loadCachedConversationTags()
+        let (cp, cc, ct) = await (cachedPrefs, cachedCategories, cachedTags)
+        if let cp { self.prefs = cp }
+        if let cc { self.categories = cc.sorted { ($0.order ?? 0) < ($1.order ?? 0) } }
+        if let ct { self.allTags = ct }
+        if cp != nil || cc != nil || ct != nil {
+            loadState = .loaded   // surface stale data immediately
+        } else {
+            loadState = .loading
+        }
+
+        // Background revalidate. Same shape as the previous network-only
+        // load, but each `revalidate…` also persists to the L2 cache so
+        // the next session warms up instantly.
         do {
-            async let prefsCall = preferenceService.getConversationPreferences(conversationId: conversationId)
-            async let categoriesCall = preferenceService.getCategories()
-            async let tagsCall = preferenceService.getMyConversationTags()
+            async let prefsCall = preferenceService.revalidateConversationPreferences(conversationId: conversationId)
+            async let categoriesCall = preferenceService.revalidateCategories()
+            async let tagsCall = preferenceService.revalidateConversationTags()
             let (p, c, t) = try await (prefsCall, categoriesCall, tagsCall)
             self.prefs = p
             self.categories = c.sorted { ($0.order ?? 0) < ($1.order ?? 0) }
@@ -49,8 +68,14 @@ final class ConversationOptionsViewModel: ObservableObject {
             self.loadState = .loaded
         } catch {
             Self.logger.error("Failed to load options: \(error.localizedDescription)")
-            loadState = .error(error.localizedDescription)
-            errorMessage = "Impossible de charger les préférences."
+            // If we already painted cached data above, keep it visible
+            // and surface the error silently — no sense flipping the
+            // whole sheet into an error state when the user can still
+            // interact with the cached prefs.
+            if loadState != .loaded {
+                loadState = .error(error.localizedDescription)
+                errorMessage = "Impossible de charger les préférences."
+            }
         }
     }
 
@@ -249,6 +274,14 @@ final class ConversationOptionsViewModel: ObservableObject {
                 // event that may never arrive).
                 if let prefs = self?.prefs {
                     ConversationPreferencesBroadcaster.shared.broadcast(
+                        conversationId: convId,
+                        prefs: prefs
+                    )
+                    // Persist the optimistic mutation to the L2 cache so a
+                    // subsequent revalidate-from-cold-start (or a sheet
+                    // re-open before the next revalidate runs) shows the
+                    // new value instead of the pre-mutation state.
+                    await service.persistConversationPreferences(
                         conversationId: convId,
                         prefs: prefs
                     )

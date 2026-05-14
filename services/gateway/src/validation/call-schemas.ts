@@ -230,6 +230,13 @@ export const socketReconnectedSchema = z.object({
 });
 
 /**
+ * Socket.IO Event: call:force-leave
+ */
+export const socketForceLeaveSchema = z.object({
+  conversationId: objectIdSchema
+});
+
+/**
  * Socket.IO Event: call:transcription-segment (fire-and-forget)
  */
 export const socketTranscriptionSegmentSchema = z.object({
@@ -265,4 +272,5 @@ export type SocketHeartbeatInput = z.infer<typeof socketHeartbeatSchema>;
 export type SocketQualityReportInput = z.infer<typeof socketQualityReportSchema>;
 export type SocketReconnectingInput = z.infer<typeof socketReconnectingSchema>;
 export type SocketReconnectedInput = z.infer<typeof socketReconnectedSchema>;
+export type SocketForceLeaveInput = z.infer<typeof socketForceLeaveSchema>;
 export type SocketTranscriptionSegmentInput = z.infer<typeof socketTranscriptionSegmentSchema>;

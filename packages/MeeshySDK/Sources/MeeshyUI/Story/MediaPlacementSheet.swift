@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshySDK
 
 // MediaPlacement enum kept for backward compat with existing stories in DB
 public enum MediaPlacement: String, Sendable {
@@ -16,17 +17,23 @@ public enum AudioSource: Sendable {
 public struct AudioSourceSheet: View {
     public let onSelect: (AudioSource) -> Void
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(onSelect: @escaping (AudioSource) -> Void) {
         self.onSelect = onSelect
     }
 
     public var body: some View {
-        VStack(spacing: 0) {
-            Text(String(localized: "story.audioSource.title", defaultValue: "Source audio", bundle: .module))
-                .font(.headline)
-                .padding(.top, 20)
-                .padding(.bottom, 16)
+        VStack(spacing: 16) {
+            HStack {
+                Image(systemName: "waveform")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandGradient)
+                Text(String(localized: "story.audioSource.title", defaultValue: "Source audio", bundle: .module))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                Spacer()
+            }
 
             HStack(spacing: 16) {
                 sourceButton(source: .library,
@@ -37,10 +44,12 @@ public struct AudioSourceSheet: View {
                              icon: "mic.fill",
                              label: String(localized: "story.audioSource.record", defaultValue: "Enregistrer", bundle: .module))
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 24)
         }
-        .presentationDetents([.height(160)])
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
+        .presentationDetents([.height(180)])
         .presentationDragIndicator(.visible)
     }
 
@@ -52,14 +61,16 @@ public struct AudioSourceSheet: View {
             VStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.system(size: 28))
-                    .foregroundColor(.primary)
+                    .foregroundStyle(MeeshyColors.brandGradient)
                 Text(label)
                     .font(.subheadline).fontWeight(.semibold)
+                    .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
-            .background(Color(UIColor.secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
         }
+        .pressable()
         .accessibilityLabel(label)
     }
 }

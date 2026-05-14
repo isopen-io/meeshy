@@ -223,7 +223,7 @@ public struct QuickTimelineView: View {
             currentTime: viewModel.currentTime,
             duration: viewModel.project.slideDuration,
             zoomScale: viewModel.zoomScale,
-            isMuted: false,
+            isMuted: viewModel.isMuted,
             onPlayToggle: { viewModel.togglePlayback() },
             onMuteToggle: { viewModel.toggleMute() },
             onZoomIn: { viewModel.zoomScale = min(4.0, viewModel.zoomScale * 1.25) },
@@ -345,10 +345,10 @@ public struct QuickTimelineView: View {
             VideoClipBar(
                 clipId: media.id,
                 title: Self.clipTitle(for: media, isSynthetic: isSynthetic),
-                startTime: media.startTime ?? 0,
-                duration: media.duration ?? 0,
-                fadeIn: media.fadeIn ?? 0,
-                fadeOut: media.fadeOut ?? 0,
+                startTime: Float(media.startTime ?? 0),
+                duration: Float(media.duration ?? 0),
+                fadeIn: Float(media.fadeIn ?? 0),
+                fadeOut: Float(media.fadeOut ?? 0),
                 isSelected: viewModel.selection.selectedClipId == media.id,
                 isLocked: isSynthetic,
                 isDark: colorScheme == .dark,
@@ -396,7 +396,7 @@ public struct QuickTimelineView: View {
                 startTime: audio.startTime ?? 0,
                 duration: audio.duration ?? 0,
                 volume: audio.volume,
-                isMuted: false,
+                isMuted: ProTimelineView.isMutedForAudio(globalMute: viewModel.isMuted, audio: audio),
                 isSelected: viewModel.selection.selectedClipId == audio.id,
                 isLocked: false,
                 isDark: colorScheme == .dark,
@@ -407,22 +407,32 @@ public struct QuickTimelineView: View {
                 onDoubleTap: { viewModel.selectClip(id: audio.id) },
                 onLongPress: { viewModel.selectClip(id: audio.id) },
                 onMoveDelta: { delta in
+                    // Snowball-drift guard mirrors VideoClipBar above: only call
+                    // beginClipDrag once per gesture (when activeDrag is absent
+                    // or belongs to another clip), then compute rawTime from
+                    // drag.originalStartTime — NOT audio.startTime, which has
+                    // already been mutated by the previous frame's applyClipPosition.
                     let audioId = audio.id
-                    let originalStart = audio.startTime ?? 0
-                    viewModel.beginClipDrag(clipId: audioId)
+                    if viewModel.selection.activeDrag?.clipId != audioId {
+                        viewModel.beginClipDrag(clipId: audioId)
+                    }
+                    guard let drag = viewModel.selection.activeDrag else { return }
                     viewModel.dragClipMoved(
-                        rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
+                        rawTime: drag.originalStartTime + Float(delta) / Float(geometry.pixelsPerSecond),
                         snapCandidates: []
                     )
+                },
+                onMoveEnded: {
+                    viewModel.endClipDrag()
                 }
             )
             .equatable()
         } else if let text = viewModel.project.textObjects.first(where: { $0.id == clipId }) {
             TextClipBar(
                 clipId: text.id,
-                content: text.content,
-                startTime: text.startTime ?? 0,
-                duration: text.displayDuration ?? 0,
+                content: text.text,
+                startTime: Float(text.startTime ?? 0),
+                duration: Float(text.duration ?? 0),
                 isSelected: viewModel.selection.selectedClipId == text.id,
                 isLocked: false,
                 isDark: colorScheme == .dark,
@@ -432,13 +442,23 @@ public struct QuickTimelineView: View {
                 onDoubleTap: { viewModel.selectClip(id: text.id) },
                 onLongPress: { viewModel.selectClip(id: text.id) },
                 onMoveDelta: { delta in
+                    // Snowball-drift guard mirrors VideoClipBar above: only call
+                    // beginClipDrag once per gesture (when activeDrag is absent
+                    // or belongs to another clip), then compute rawTime from
+                    // drag.originalStartTime — NOT text.startTime, which has
+                    // already been mutated by the previous frame's applyClipPosition.
                     let textId = text.id
-                    let originalStart = text.startTime ?? 0
-                    viewModel.beginClipDrag(clipId: textId)
+                    if viewModel.selection.activeDrag?.clipId != textId {
+                        viewModel.beginClipDrag(clipId: textId)
+                    }
+                    guard let drag = viewModel.selection.activeDrag else { return }
                     viewModel.dragClipMoved(
-                        rawTime: originalStart + Float(delta) / Float(geometry.pixelsPerSecond),
+                        rawTime: drag.originalStartTime + Float(delta) / Float(geometry.pixelsPerSecond),
                         snapCandidates: []
                     )
+                },
+                onMoveEnded: {
+                    viewModel.endClipDrag()
                 }
             )
             .equatable()

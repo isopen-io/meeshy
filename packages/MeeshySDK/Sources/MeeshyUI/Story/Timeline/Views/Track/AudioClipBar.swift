@@ -34,6 +34,11 @@ public struct AudioClipBar: View, Equatable {
     public let onDoubleTap: () -> Void
     public let onLongPress: () -> Void
     public let onMoveDelta: (CGFloat) -> Void
+    /// Fired when the move drag ends so the caller can commit the move as
+    /// an undoable command and clear the in-flight drag state. Without this
+    /// the drift snowballs across frames because each `onChanged` re-reads
+    /// the (already-mutated) clip start. Mirrors `VideoClipBar.onMoveEnded`.
+    public let onMoveEnded: () -> Void
 
     public init(
         clipId: String, title: String, startTime: Float, duration: Float,
@@ -43,7 +48,8 @@ public struct AudioClipBar: View, Equatable {
         onTap: @escaping () -> Void,
         onDoubleTap: @escaping () -> Void,
         onLongPress: @escaping () -> Void,
-        onMoveDelta: @escaping (CGFloat) -> Void
+        onMoveDelta: @escaping (CGFloat) -> Void,
+        onMoveEnded: @escaping () -> Void = {}
     ) {
         self.clipId = clipId; self.title = title
         self.startTime = startTime; self.duration = duration
@@ -53,6 +59,7 @@ public struct AudioClipBar: View, Equatable {
         self.laneHeight = laneHeight; self.waveformSamples = waveformSamples
         self.onTap = onTap; self.onDoubleTap = onDoubleTap
         self.onLongPress = onLongPress; self.onMoveDelta = onMoveDelta
+        self.onMoveEnded = onMoveEnded
     }
 
     public var accessibilityComposed: String {
@@ -61,7 +68,9 @@ public struct AudioClipBar: View, Equatable {
 
     public var accessibilityValueDescription: String {
         let pct = Int((volume * 100).rounded())
-        let muted = isMuted ? ", muet" : ""
+        let muted = isMuted
+            ? String(localized: "story.timeline.a11y.audio.muted_suffix", bundle: .module)
+            : ""
         return "Volume \(pct)%\(muted)"
     }
 
@@ -86,6 +95,7 @@ public struct AudioClipBar: View, Equatable {
         .gesture(
             DragGesture(minimumDistance: 4)
                 .onChanged { v in if !isLocked { onMoveDelta(v.translation.width) } }
+                .onEnded { _ in if !isLocked { onMoveEnded() } }
         )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
@@ -94,18 +104,26 @@ public struct AudioClipBar: View, Equatable {
 
     private var waveform: some View {
         GeometryReader { geo in
-            let count = max(waveformSamples.count, 1)
-            let stepX = geo.size.width / CGFloat(count)
-            HStack(alignment: .center, spacing: 1) {
-                ForEach(0..<count, id: \.self) { i in
-                    let amp = CGFloat(waveformSamples[i])
-                    Capsule()
-                        .fill(Color.white.opacity(0.85))
-                        .frame(width: max(1, stepX - 1),
-                               height: max(2, amp * (geo.size.height - 6)))
+            // Empty waveform → render nothing. Previously this used
+            // `max(samples.count, 1)` + ForEach(0..<count) which then
+            // dereferenced samples[0] and crashed with
+            // 'Index out of range' on any audio clip that hadn't yet
+            // had its waveform extracted. iterating samples.indices
+            // is correct for any count including 0.
+            if !waveformSamples.isEmpty {
+                let count = waveformSamples.count
+                let stepX = geo.size.width / CGFloat(count)
+                HStack(alignment: .center, spacing: 1) {
+                    ForEach(waveformSamples.indices, id: \.self) { i in
+                        let amp = CGFloat(waveformSamples[i])
+                        Capsule()
+                            .fill(Color.white.opacity(0.85))
+                            .frame(width: max(1, stepX - 1),
+                                   height: max(2, amp * (geo.size.height - 6)))
+                    }
                 }
+                .frame(maxHeight: .infinity, alignment: .center)
             }
-            .frame(maxHeight: .infinity, alignment: .center)
         }
         .padding(.horizontal, 3)
         .drawingGroup()   // SOTA P7: bake to Metal layer, skip re-stroke when props unchanged

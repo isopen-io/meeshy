@@ -153,13 +153,26 @@ export function registerCoreRoutes(
 
       let t0 = performance.now();
 
-      // Build the where clause with optional filters
+      // Build the where clause with optional filters.
+      //
+      // `deletedForMe` matches en deux temps : valeur null explicite OU champ
+      // absent. Sans le `isSet: false` (filtre MongoDB-only de Prisma), les
+      // documents Participant herites ne possedant pas le champ `deletedForMe`
+      // du tout (cree avant l'introduction du concept, 10 docs sur 716 dans
+      // l'instance prod du 2026-05-11) etaient exclus de la liste — les
+      // conversations DM correspondantes (Bertine, Suz, etc.) disparaissaient
+      // meme apres pull-to-refresh. Le `NOT: { not: null }` precedent et le
+      // `deletedForMe: null` simple ont la meme limite : ils ne matchent que
+      // les champs presents avec valeur null.
       const whereClause: any = {
         participants: {
           some: {
             userId: userId,
             isActive: true,
-            NOT: { deletedForMe: { not: null } }
+            OR: [
+              { deletedForMe: null },
+              { deletedForMe: { isSet: false } }
+            ]
           }
         },
         isActive: true
@@ -415,7 +428,17 @@ export function registerCoreRoutes(
         : new Map<string, number>();
 
       perfTimings.parallelQueries = performance.now() - t0;
-      const userMap = new Map(memberUsers.map(u => [u.id, u]));
+
+      // Override runtime de isOnline : la DB peut être obsolète (heartbeat manqué,
+      // crash gateway, déconnexion non détectée). La source de vérité est `connectedUsers`
+      // Map du SocketIOManager, exposée via le décorateur `presenceChecker`.
+      const presenceChecker = (fastify as any).presenceChecker as
+        | { isOnline: (id: string) => boolean; bulk: (ids: readonly string[]) => Map<string, boolean> }
+        | undefined;
+      const userMap = new Map(memberUsers.map(u => {
+        const liveOnline = presenceChecker?.isOnline(u.id);
+        return [u.id, liveOnline === undefined ? u : { ...u, isOnline: liveOnline }];
+      }));
 
       // Calculate hasMore. Two strategies:
       //   1. When we have a real `totalCount` (includeCount=true OR
@@ -441,11 +464,19 @@ export function registerCoreRoutes(
         // Merge user data for all participants (never filter out — SDK needs them for DM name resolution)
         const membersWithUser = conversation.participants
           .slice(0, 5)
-          .map((m: any) => ({
-            ...m,
-            avatar: m.avatar,
-            user: m.userId ? (userMap.get(m.userId) ? userMap.get(m.userId) : m.user ?? null) : null
-          }));
+          .map((m: any) => {
+            const mergedUser = m.userId
+              ? (userMap.get(m.userId) ? userMap.get(m.userId) : m.user ?? null)
+              : null;
+            // Override participant.isOnline aussi (pour les anonymes, on regarde l'id participant)
+            const liveOnline = presenceChecker?.isOnline(m.userId ?? m.id);
+            return {
+              ...m,
+              avatar: m.avatar,
+              isOnline: liveOnline === undefined ? m.isOnline : liveOnline,
+              user: mergedUser
+            };
+          });
 
         // Pour les DMs, pas de titre obligatoire — le frontend résout le nom de l'interlocuteur
         // Pour les groupes/publics, s'assurer qu'un titre existe
@@ -902,6 +933,46 @@ export function registerCoreRoutes(
                 })),
                 userId
               ));
+
+      // Diffuser le nouvel event typé CONVERSATION_NEW à TOUS les participants
+      // — y compris le créateur — dans leurs user-rooms respectives. Avant ce
+      // change, le créateur n'avait AUCUN signal socket (la boucle de
+      // notifications ci-dessous itère uniquement sur `uniqueParticipantIds`
+      // qui exclut `userId`), ce qui forçait les clients iOS et web à
+      // implémenter un workaround local (ConversationCreatedBroadcaster sur
+      // iOS) pour faire apparaître la nouvelle conversation immédiatement.
+      // Avec CONVERSATION_NEW, la source de vérité reste sur le gateway et
+      // tous les clients (web, iOS, future plateformes) reçoivent le même
+      // payload typé. La notification:new legacy reste émise en parallèle
+      // pour compat avec les anciens clients pendant ~3 mois.
+      try {
+        const socketIOHandler = (fastify as any).socketIOHandler;
+        const socketIOManager = socketIOHandler?.getManager?.();
+        const io = socketIOManager?.io || (socketIOHandler as any)?.io;
+        if (io) {
+          const allParticipantIds = [userId, ...uniqueParticipantIds];
+          const conversationNewPayload = {
+            conversationId: conversation.id,
+            conversationType: type,
+            title: displayTitle,
+            creatorId: userId,
+            participantIds: allParticipantIds,
+            createdAt: conversation.createdAt instanceof Date
+              ? conversation.createdAt.toISOString()
+              : String(conversation.createdAt)
+          };
+          for (const participantId of allParticipantIds) {
+            io.to(ROOMS.user(participantId)).emit(
+              SERVER_EVENTS.CONVERSATION_NEW,
+              conversationNewPayload
+            );
+          }
+        }
+      } catch (broadcastError) {
+        console.error('Erreur lors de la diffusion CONVERSATION_NEW:', broadcastError);
+        // Non bloquant : la conversation est créée, les clients la verront
+        // au prochain delta sync ou via la notification legacy ci-dessous.
+      }
 
       // Envoyer des notifications aux participants invités
       const notificationService = (fastify as any).notificationService;

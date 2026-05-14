@@ -90,7 +90,7 @@ final class CacheCoordinatorTests: XCTestCase {
         // second call would have been a silent no-op. We can't introspect
         // `isStarted` directly, but we can verify that `reset()` doesn't
         // crash and that subsequent cache operations still work.
-        await sut.messages.save(
+        try await sut.messages.save(
             [TestFactories.makeMessage(id: "m-reset", conversationId: "c-reset", content: "ok")],
             for: "c-reset"
         )
@@ -105,7 +105,7 @@ final class CacheCoordinatorTests: XCTestCase {
         withExtendedLifetime(engine) {}
 
         let existingMsg = TestFactories.makeMessage(id: "m1", conversationId: "conv-1", content: "First")
-        await sut.messages.save([existingMsg], for: "conv-1")
+        try await sut.messages.save([existingMsg], for: "conv-1")
 
         let apiMsg = TestFactories.makeAPIMessage(id: "m2", conversationId: "conv-1", content: "Second")
         msgSocket.messageReceived.send(apiMsg)
@@ -128,7 +128,7 @@ final class CacheCoordinatorTests: XCTestCase {
 
         let m1 = TestFactories.makeMessage(id: "m1", conversationId: "conv-1", content: "Keep")
         let m2 = TestFactories.makeMessage(id: "m2", conversationId: "conv-1", content: "Delete")
-        await sut.messages.save([m1, m2], for: "conv-1")
+        try await sut.messages.save([m1, m2], for: "conv-1")
 
         msgSocket.messageDeleted.send(MessageDeletedEvent(messageId: "m2", conversationId: "conv-1"))
 
@@ -155,7 +155,7 @@ final class CacheCoordinatorTests: XCTestCase {
         withExtendedLifetime(engine) {}
 
         let conv = TestFactories.makeConversation(id: "conv-1", unreadCount: 0)
-        await sut.conversations.save([conv], for: "list")
+        try await sut.conversations.save([conv], for: "list")
 
         msgSocket.unreadUpdated.send(UnreadUpdateEvent(conversationId: "conv-1", unreadCount: 5))
 
@@ -175,7 +175,7 @@ final class CacheCoordinatorTests: XCTestCase {
         withExtendedLifetime(engine) {}
 
         let participant = TestFactories.makeParticipant(id: "p1", conversationRole: "MEMBER")
-        await sut.participants.save([participant], for: "conv-1")
+        try await sut.participants.save([participant], for: "conv-1")
 
         let participantInfo = ParticipantRoleUpdatedParticipantInfo(
             id: "p1", role: "ADMIN", displayName: "Test", userId: nil
@@ -207,7 +207,7 @@ final class CacheCoordinatorTests: XCTestCase {
         withExtendedLifetime(engine) {}
 
         let conv = TestFactories.makeConversation(id: "conv-1")
-        await sut.conversations.save([conv], for: "list")
+        try await sut.conversations.save([conv], for: "list")
 
         msgSocket.didReconnect.send(())
 
@@ -231,10 +231,10 @@ final class CacheCoordinatorTests: XCTestCase {
         let (sut, _, _) = try makeSUT()
 
         let conv = TestFactories.makeConversation(id: "conv-1")
-        await sut.conversations.save([conv], for: "list")
+        try await sut.conversations.save([conv], for: "list")
 
         let msg = TestFactories.makeMessage(id: "m1", conversationId: "conv-1")
-        await sut.messages.save([msg], for: "conv-1")
+        try await sut.messages.save([msg], for: "conv-1")
 
         await sut.invalidateAll()
 
@@ -259,7 +259,7 @@ final class CacheCoordinatorTests: XCTestCase {
         withExtendedLifetime(engine) {}
 
         let participant = TestFactories.makeParticipant(id: "p1")
-        await sut.participants.save([participant], for: "conv-1")
+        try await sut.participants.save([participant], for: "conv-1")
 
         msgSocket.conversationJoined.send(ConversationParticipationEvent(conversationId: "conv-1", userId: "u-new"))
 

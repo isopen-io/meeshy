@@ -54,7 +54,10 @@ let package = Package(
         .target(
             name: "MeeshyUI",
             dependencies: ["MeeshySDK"],
-            resources: [.process("Resources")],
+            resources: [
+                .process("Resources"),
+                .process("Story/Canvas/Metal"),
+            ],
             swiftSettings: uiSwiftSettings
         ),
         .testTarget(

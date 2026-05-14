@@ -192,6 +192,15 @@ export interface NotificationContext {
   readonly commentId?: string;
   readonly encryptedContent?: string;
   readonly notificationLocKey?: string;
+  /** Phase A iOS Communication Notifications — URL accessible publiquement du
+   *  1er attachment du message (image/audio/video). Téléchargé par
+   *  MeeshyNotificationExtension et attaché comme UNNotificationAttachment
+   *  natif avec UTI typeHint (audio waveform, image preview, video thumbnail). */
+  readonly firstAttachmentUrl?: string;
+  /** MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`, `video/mp4`. */
+  readonly firstAttachmentMimeType?: string;
+  /** Durée en millisecondes du 1er attachment audio/video. */
+  readonly firstAttachmentDurationMs?: number;
 }
 
 /**

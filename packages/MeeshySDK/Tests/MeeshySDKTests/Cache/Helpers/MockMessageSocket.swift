@@ -11,6 +11,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let typingStopped = PassthroughSubject<TypingEvent, Never>()
     let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
     let userStatusChanged = PassthroughSubject<UserStatusEvent, Never>()
+    let presenceSnapshotReceived = PassthroughSubject<PresenceSnapshotEvent, Never>()
     let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
     let attachmentStatusUpdated = PassthroughSubject<AttachmentStatusUpdatedEvent, Never>()
     let conversationJoined = PassthroughSubject<ConversationParticipationEvent, Never>()
@@ -36,6 +37,7 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let audioTranslationCompleted = PassthroughSubject<AudioTranslationEvent, Never>()
     let didReconnect = PassthroughSubject<Void, Never>()
     let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
+    let conversationNew = PassthroughSubject<ConversationNewEvent, Never>()
     let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
     let notificationDeleted = PassthroughSubject<NotificationDeletedEvent, Never>()
     let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
@@ -45,6 +47,8 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
     let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
     let callEnded = PassthroughSubject<CallEndData, Never>()
+    let callMissed = PassthroughSubject<CallMissedData, Never>()
+    let callAlreadyAnswered = PassthroughSubject<CallAlreadyAnsweredData, Never>()
     let callParticipantJoined = PassthroughSubject<CallParticipantData, Never>()
     let callParticipantLeft = PassthroughSubject<CallParticipantData, Never>()
     let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()
@@ -85,5 +89,6 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     func emitCallToggleAudio(callId: String, enabled: Bool) {}
     func emitCallToggleVideo(callId: String, enabled: Bool) {}
     func emitCallEnd(callId: String) {}
+    func emitCallEndWithAck(callId: String) async -> Bool { true }
     func emitCallHeartbeat(callId: String) {}
 }

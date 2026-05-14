@@ -7,31 +7,21 @@ import MeeshyUI
 struct EditProfileView: View {
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) private var colorScheme
+    @EnvironmentObject private var authManager: AuthManager
+
+    @StateObject private var viewModel: EditProfileViewModel
+
+    @State private var selectedPhotoItem: PhotosPickerItem?
+
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
-    @ObservedObject private var authManager = AuthManager.shared
-
-    @State private var displayName: String = ""
-    @State private var bio: String = ""
-    @State private var selectedPhotoItem: PhotosPickerItem?
-    @State private var selectedImageData: Data?
-    @State private var avatarPreviewImage: Image?
-    @State private var isSaving = false
-    @State private var isUploadingAvatar = false
-    @State private var errorMessage: String?
-    @State private var showSuccess = false
-
     private let accentColor = "818CF8"
-    private let bioMaxLength = 300
+
+    init(viewModel: EditProfileViewModel = EditProfileViewModel()) {
+        _viewModel = StateObject(wrappedValue: viewModel)
+    }
 
     private var user: MeeshyUser? { authManager.currentUser }
-
-    private var hasChanges: Bool {
-        let nameChanged = displayName != (user?.displayName ?? user?.username ?? "")
-        let bioChanged = bio != (user?.bio ?? "")
-        let avatarChanged = selectedImageData != nil
-        return nameChanged || bioChanged || avatarChanged
-    }
 
     var body: some View {
         ZStack {
@@ -42,16 +32,12 @@ struct EditProfileView: View {
                 scrollContent
             }
 
-            if showSuccess {
+            if viewModel.showSuccess {
                 successOverlay
             }
         }
-        .onAppear {
-            displayName = user?.displayName ?? user?.username ?? ""
-            bio = user?.bio ?? ""
-        }
         .onChange(of: selectedPhotoItem) { _, newItem in
-            loadSelectedPhoto(newItem)
+            Task { await viewModel.loadSelectedPhoto(newItem) }
         }
     }
 
@@ -66,7 +52,7 @@ struct EditProfileView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text(String(localized: "Retour", defaultValue: "Retour"))
+                    Text("Retour")
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(MeeshyColors.indigo400)
@@ -74,7 +60,7 @@ struct EditProfileView: View {
 
             Spacer()
 
-            Text(String(localized: "Modifier le profil", defaultValue: "Modifier le profil"))
+            Text("Modifier le profil")
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -108,8 +94,8 @@ struct EditProfileView: View {
     private var avatarSection: some View {
         VStack(spacing: 12) {
             ZStack(alignment: .bottomTrailing) {
-                if let avatarPreviewImage {
-                    avatarPreviewImage
+                if let preview = viewModel.avatarPreviewImage {
+                    preview
                         .resizable()
                         .scaledToFill()
                         .frame(width: 100, height: 100)
@@ -138,23 +124,17 @@ struct EditProfileView: View {
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.white)
                         .frame(width: 30, height: 30)
-                        .background(
-                            Circle()
-                                .fill(MeeshyColors.indigo400)
-                        )
-                        .overlay(
-                            Circle()
-                                .stroke(bgPrimary, lineWidth: 2)
-                        )
+                        .background(Circle().fill(MeeshyColors.indigo400))
+                        .overlay(Circle().stroke(bgPrimary, lineWidth: 2))
                 }
             }
 
-            if isUploadingAvatar {
+            if viewModel.isUploadingAvatar {
                 HStack(spacing: 6) {
                     ProgressView()
                         .scaleEffect(0.8)
                         .tint(MeeshyColors.indigo400)
-                    Text(String(localized: "Envoi de la photo...", defaultValue: "Envoi de la photo..."))
+                    Text("Envoi de la photo...")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
@@ -166,14 +146,17 @@ struct EditProfileView: View {
 
     private var fieldsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "Informations", defaultValue: "Informations"), icon: "pencil.circle.fill", color: accentColor)
+            sectionHeader(
+                title: "Informations",
+                icon: "pencil.circle.fill", color: accentColor
+            )
 
             VStack(spacing: 0) {
                 editableField(
                     icon: "person.fill",
-                    title: String(localized: "Nom d'affichage", defaultValue: "Nom d'affichage"),
-                    text: $displayName,
-                    placeholder: String(localized: "Votre nom", defaultValue: "Votre nom")
+                    title: "Nom d'affichage",
+                    text: $viewModel.displayName,
+                    placeholder: "Votre nom"
                 )
 
                 bioField
@@ -202,25 +185,33 @@ struct EditProfileView: View {
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 4) {
-                Text(String(localized: "Bio", defaultValue: "Bio"))
+                Text("Bio")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
-                TextField(String(localized: "Parlez de vous...", defaultValue: "Parlez de vous..."), text: $bio, axis: .vertical)
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(theme.textPrimary)
-                    .lineLimit(3...6)
-                    .onChange(of: bio) { _, newValue in
-                        if newValue.count > bioMaxLength {
-                            bio = String(newValue.prefix(bioMaxLength))
-                        }
+                TextField(
+                    "Parlez de vous...",
+                    text: $viewModel.bio,
+                    axis: .vertical
+                )
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(theme.textPrimary)
+                .lineLimit(3...6)
+                .onChange(of: viewModel.bio) { _, newValue in
+                    if newValue.count > viewModel.bioMaxLength {
+                        viewModel.bio = String(newValue.prefix(viewModel.bioMaxLength))
                     }
+                }
 
                 HStack {
                     Spacer()
-                    Text("\(bio.count)/\(bioMaxLength)")
+                    Text("\(viewModel.bio.count)/\(viewModel.bioMaxLength)")
                         .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(bio.count >= bioMaxLength ? MeeshyColors.error : theme.textMuted)
+                        .foregroundColor(
+                            viewModel.bio.count >= viewModel.bioMaxLength
+                                ? MeeshyColors.error
+                                : theme.textMuted
+                        )
                 }
             }
 
@@ -234,20 +225,31 @@ struct EditProfileView: View {
 
     private var readOnlySection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: String(localized: "Compte", defaultValue: "Compte"), icon: "lock.fill", color: "4338CA")
+            sectionHeader(
+                title: "Compte",
+                icon: "lock.fill", color: "4338CA"
+            )
 
             VStack(spacing: 0) {
                 if let email = user?.email {
-                    readOnlyRow(icon: "envelope.fill", title: String(localized: "Email", defaultValue: "Email"), value: email, color: "4338CA")
+                    readOnlyRow(
+                        icon: "envelope.fill",
+                        title: "Email",
+                        value: email, color: "4338CA"
+                    )
                 }
 
                 if let phone = user?.phoneNumber {
-                    readOnlyRow(icon: "phone.fill", title: String(localized: "Telephone", defaultValue: "T\u{00E9}l\u{00E9}phone"), value: phone, color: "4338CA")
+                    readOnlyRow(
+                        icon: "phone.fill",
+                        title: "Telephone",
+                        value: phone, color: "4338CA"
+                    )
                 }
 
                 readOnlyRow(
                     icon: "at",
-                    title: String(localized: "Nom d'utilisateur", defaultValue: "Nom d'utilisateur"),
+                    title: "Nom d'utilisateur",
                     value: "@\(user?.username ?? "—")",
                     color: "4338CA"
                 )
@@ -267,7 +269,7 @@ struct EditProfileView: View {
 
     private var saveButton: some View {
         VStack(spacing: 8) {
-            if let errorMessage {
+            if let errorMessage = viewModel.errorMessage {
                 Text(errorMessage)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(MeeshyColors.error)
@@ -277,15 +279,17 @@ struct EditProfileView: View {
 
             Button {
                 HapticFeedback.medium()
-                saveProfile()
+                Task {
+                    await viewModel.saveProfile { dismiss() }
+                }
             } label: {
                 HStack(spacing: 8) {
-                    if isSaving {
+                    if viewModel.isSaving {
                         ProgressView()
                             .scaleEffect(0.8)
                             .tint(.white)
                     }
-                    Text(String(localized: "Sauvegarder", defaultValue: "Sauvegarder"))
+                    Text("Sauvegarder")
                         .font(.system(size: 15, weight: .bold))
                 }
                 .foregroundColor(.white)
@@ -294,13 +298,13 @@ struct EditProfileView: View {
                 .background(
                     RoundedRectangle(cornerRadius: 16)
                         .fill(
-                            hasChanges && !isSaving
+                            viewModel.hasChanges && !viewModel.isSaving
                                 ? MeeshyColors.indigo400
                                 : MeeshyColors.indigo400.opacity(0.4)
                         )
                 )
             }
-            .disabled(!hasChanges || isSaving)
+            .disabled(!viewModel.hasChanges || viewModel.isSaving)
         }
     }
 
@@ -312,7 +316,7 @@ struct EditProfileView: View {
                 .font(.system(size: 48))
                 .foregroundColor(MeeshyColors.success)
 
-            Text(String(localized: "Profil mis a jour", defaultValue: "Profil mis \u{00E0} jour"))
+            Text("Profil mis a jour")
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
         }
@@ -344,10 +348,8 @@ struct EditProfileView: View {
     }
 
     private func editableField(
-        icon: String,
-        title: String,
-        text: Binding<String>,
-        placeholder: String
+        icon: String, title: String,
+        text: Binding<String>, placeholder: String
     ) -> some View {
         HStack(spacing: 12) {
             Image(systemName: icon)
@@ -399,148 +401,5 @@ struct EditProfileView: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
-    }
-
-    // MARK: - Actions
-
-    private func loadSelectedPhoto(_ item: PhotosPickerItem?) {
-        guard let item else { return }
-        Task {
-            guard let data = try? await item.loadTransferable(type: Data.self) else { return }
-            selectedImageData = data
-            if let uiImage = UIImage(data: data) {
-                avatarPreviewImage = Image(uiImage: uiImage)
-            }
-        }
-    }
-
-    private func saveProfile() {
-        isSaving = true
-        errorMessage = nil
-
-        Task { [weak authManager] in
-            do {
-                if let imageData = selectedImageData {
-                    isUploadingAvatar = true
-                    let avatarURL = try await uploadAvatar(imageData)
-                    isUploadingAvatar = false
-
-                    struct AvatarBody: Encodable {
-                        let avatar: String
-                    }
-                    let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.request(
-                        endpoint: "/users/me/avatar",
-                        method: "PATCH",
-                        body: try JSONEncoder().encode(AvatarBody(avatar: avatarURL))
-                    )
-                }
-
-                struct UpdateProfileBody: Encodable {
-                    let displayName: String?
-                    let bio: String?
-                }
-                let body = UpdateProfileBody(
-                    displayName: displayName.isEmpty ? nil : displayName,
-                    bio: bio
-                )
-                let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.patch(
-                    endpoint: "/users/me",
-                    body: body
-                )
-
-                await authManager?.checkExistingSession()
-                if let userId = authManager?.currentUser?.id {
-                    await CacheCoordinator.shared.profiles.invalidate(for: userId)
-                }
-
-                HapticFeedback.success()
-                ToastManager.shared.showSuccess("Profil mis a jour")
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showSuccess = true
-                }
-                try? await Task.sleep(nanoseconds: 1_500_000_000)
-                dismiss()
-            } catch let error as MeeshyError {
-                HapticFeedback.error()
-                ToastManager.shared.showError(error.errorDescription ?? "Echec de la mise a jour")
-                errorMessage = error.errorDescription
-                isUploadingAvatar = false
-            } catch let error as APIError {
-                HapticFeedback.error()
-                ToastManager.shared.showError(error.errorDescription ?? "Echec de la mise a jour")
-                errorMessage = error.errorDescription
-                isUploadingAvatar = false
-            } catch {
-                HapticFeedback.error()
-                ToastManager.shared.showError("Echec de la mise a jour du profil")
-                errorMessage = String(localized: "Une erreur est survenue", defaultValue: "Une erreur est survenue")
-                isUploadingAvatar = false
-            }
-            isSaving = false
-        }
-    }
-
-    private func uploadAvatar(_ imageData: Data) async throws -> String {
-        let compressed = compressImage(imageData, maxSizeKB: 500)
-
-        let boundary = UUID().uuidString
-        var body = Data()
-
-        body.append("--\(boundary)\r\n".data(using: .utf8)!)
-        body.append("Content-Disposition: form-data; name=\"files\"; filename=\"avatar.jpg\"\r\n".data(using: .utf8)!)
-        body.append("Content-Type: image/jpeg\r\n\r\n".data(using: .utf8)!)
-        body.append(compressed)
-        body.append("\r\n--\(boundary)--\r\n".data(using: .utf8)!)
-
-        guard let url = URL(string: "\(APIClient.shared.baseURL)/attachments/upload") else {
-            throw APIError.invalidURL
-        }
-
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
-
-        if let token = APIClient.shared.authToken {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
-        }
-
-        request.httpBody = body
-
-        let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse,
-              (200...299).contains(httpResponse.statusCode) else {
-            throw APIError.serverError(
-                (response as? HTTPURLResponse)?.statusCode ?? 500,
-                String(localized: "Echec de l'envoi de l'avatar", defaultValue: "\u{00C9}chec de l'envoi de l'avatar")
-            )
-        }
-
-        struct UploadResponse: Decodable {
-            let success: Bool
-            let data: UploadData
-        }
-        struct UploadData: Decodable {
-            let attachments: [UploadedAttachment]
-        }
-        struct UploadedAttachment: Decodable {
-            let url: String
-        }
-
-        let decoded = try JSONDecoder().decode(UploadResponse.self, from: data)
-        guard let avatarURL = decoded.data.attachments.first?.url else {
-            throw APIError.noData
-        }
-        return avatarURL
-    }
-
-    private func compressImage(_ data: Data, maxSizeKB: Int) -> Data {
-        guard let image = UIImage(data: data) else { return data }
-        var compression: CGFloat = 0.8
-        var compressed = image.jpegData(compressionQuality: compression) ?? data
-        while compressed.count > maxSizeKB * 1024, compression > 0.1 {
-            compression -= 0.1
-            compressed = image.jpegData(compressionQuality: compression) ?? data
-        }
-        return compressed
     }
 }

@@ -99,6 +99,33 @@ public enum AvatarContext: Sendable {
         }
     }
 
+    /// Si vrai, l'anneau "story unread" tourne en continu (linear repeatForever).
+    /// Faux pour les contextes list/feed où 30+ avatars visibles simultanément
+    /// rendraient le scroll saccadé : on garde le dégradé statique (toujours
+    /// reconnaissable comme story non lue) sans animation GPU continue.
+    public var animatesStoryRing: Bool {
+        switch self {
+        case .storyTray, .storyViewer, .feedComposer, .postAuthor,
+             .profileBanner, .profileSheet, .profileEdit,
+             .conversationHeaderExpanded:
+            return true
+        default: return false
+        }
+    }
+
+    /// Si vrai, le badge mood pulse en continu (spring repeatForever).
+    /// Idem : exclu des contextes list pour éviter N animations simultanées
+    /// pendant le scroll.
+    public var animatesMoodBadge: Bool {
+        switch self {
+        case .storyTray, .feedComposer, .postAuthor,
+             .profileBanner, .profileSheet,
+             .conversationHeaderExpanded, .conversationHeaderCollapsed:
+            return true
+        default: return false
+        }
+    }
+
     public var shadowRadius: CGFloat {
         switch self {
         case .postReaction, .typingIndicator, .recentParticipant: return 0
@@ -147,13 +174,18 @@ public enum AvatarKind: Sendable {
 // MARK: - Avatar Context Menu Item
 
 public struct AvatarContextMenuItem: Identifiable {
-    public let id = UUID()
+    /// Stable identity derived from label+icon so SwiftUI can diff items
+    /// across re-evaluations instead of tearing down / recreating them.
+    /// Using UUID() caused identity churn → use-after-free when the
+    /// AttributeGraph held stale closure references during view transitions.
+    public let id: String
     public let label: String
     public let icon: String
     public var role: ButtonRole? = nil
     public let action: () -> Void
 
     public init(label: String, icon: String, role: ButtonRole? = nil, action: @escaping () -> Void) {
+        self.id = "\(label)_\(icon)"
         self.label = label; self.icon = icon; self.role = role; self.action = action
     }
 }
@@ -166,6 +198,7 @@ public struct MeeshyAvatar: View {
     public var accentColor: String = ""
     public var secondaryColor: String? = nil
     public var avatarURL: String? = nil
+    public var thumbHash: String? = nil
     public var storyState: StoryRingState = .none
     public var moodEmoji: String? = nil
     public var presenceState: PresenceState = .offline
@@ -180,7 +213,7 @@ public struct MeeshyAvatar: View {
 
     // Primary init (AvatarContext)
     public init(name: String, context: AvatarContext, kind: AvatarKind = .user, accentColor: String = "",
-                secondaryColor: String? = nil, avatarURL: String? = nil,
+                secondaryColor: String? = nil, avatarURL: String? = nil, thumbHash: String? = nil,
                 storyState: StoryRingState = .none, moodEmoji: String? = nil,
                 presenceState: PresenceState = .offline, enablePulse: Bool? = nil,
                 isDark: Bool = ThemeManager.shared.mode.isDark,
@@ -188,7 +221,7 @@ public struct MeeshyAvatar: View {
                 onViewStory: (() -> Void)? = nil, onMoodTap: ((CGPoint) -> Void)? = nil,
                 onOnlineTap: (() -> Void)? = nil, contextMenuItems: [AvatarContextMenuItem]? = nil) {
         self.name = name; self.context = context; self.kind = kind; self.accentColor = accentColor
-        self.secondaryColor = secondaryColor; self.avatarURL = avatarURL
+        self.secondaryColor = secondaryColor; self.avatarURL = avatarURL; self.thumbHash = thumbHash
         self.storyState = storyState; self.moodEmoji = moodEmoji; self.presenceState = presenceState
         self.enablePulse = enablePulse ?? context.defaultPulse; self.isDark = isDark
         self.onTap = onTap; self.onViewProfile = onViewProfile; self.onViewStory = onViewStory
@@ -250,8 +283,8 @@ public struct MeeshyAvatar: View {
         return items
     }
 
-    private var hasContextMenu: Bool {
-        context.isTappable && !effectiveContextMenuItems.isEmpty
+    private func hasContextMenu(resolvedItems: [AvatarContextMenuItem]) -> Bool {
+        context.isTappable && !resolvedItems.isEmpty
     }
 
     private func handleTap() {
@@ -264,6 +297,15 @@ public struct MeeshyAvatar: View {
     // MARK: - Body
 
     public var body: some View {
+        // Eagerly resolve the menu items ONCE per body evaluation so the
+        // contextMenu closure captures a single, stable array. Previously
+        // the computed property was called lazily inside the closure,
+        // creating a new array (with new closures) on each SwiftUI
+        // attribute-graph pass — the old closures could be deallocated
+        // while the graph still referenced them (EXC_BAD_ACCESS).
+        let resolvedMenuItems = effectiveContextMenuItems
+        let showContextMenu = hasContextMenu(resolvedItems: resolvedMenuItems)
+
         let visual = ZStack {
             storyRing
             avatarBody
@@ -279,7 +321,7 @@ public struct MeeshyAvatar: View {
         }
         .scaleEffect(tapScale)
         .onAppear {
-            if effectiveStoryState == .unread {
+            if effectiveStoryState == .unread && context.animatesStoryRing {
                 withAnimation(.linear(duration: 4.0).repeatForever(autoreverses: false)) {
                     ringRotation = 360
                 }
@@ -305,10 +347,10 @@ public struct MeeshyAvatar: View {
             } else { visual }
         }
 
-        if hasContextMenu {
+        if showContextMenu {
             tappable
                 .contextMenu {
-                    ForEach(effectiveContextMenuItems) { item in
+                    ForEach(resolvedMenuItems) { item in
                         Button(role: item.role) {
                             item.action()
                         } label: {
@@ -324,7 +366,7 @@ public struct MeeshyAvatar: View {
     @ViewBuilder
     private var avatarBody: some View {
         if let url = avatarURL, !url.isEmpty {
-            CachedAvatarImage(urlString: url, name: name, size: context.size, accentColor: resolvedAccent)
+            CachedAvatarImage(urlString: url, thumbHash: thumbHash, name: name, size: context.size, accentColor: resolvedAccent)
                 .shadow(color: Color(hex: resolvedAccent).opacity(0.4), radius: context.shadowRadius, y: context.shadowY)
         } else {
             ZStack {
@@ -398,6 +440,7 @@ public struct MeeshyAvatar: View {
                     onMoodTap?(CGPoint(x: f.midX, y: f.midY))
                 }
                 .onAppear {
+                    guard context.animatesMoodBadge else { return }
                     withAnimation(
                         .spring(response: 0.5, dampingFraction: 0.4)
                         .repeatForever(autoreverses: true)

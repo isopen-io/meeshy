@@ -110,11 +110,28 @@ public struct TransitionInspector: View {
     @ViewBuilder
     private var easingDisabledNotice: some View {
         if !isAdvancedEnabled {
-            Text("Easing: linear")
+            Text(Self.easingDisabledNoticeText(easingName: Self.linearEasingName))
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .accessibilityHidden(true)
         }
+    }
+
+    /// Localized display name for the only easing exposed at launch (linear).
+    /// Exposed as a static for testability — `LocalizedStringsBacklogTests`
+    /// asserts the bundle resolves both `easing.label` and `easing.linear`.
+    public static var linearEasingName: String {
+        String(localized: "story.timeline.inspector.easing.linear", bundle: .module)
+    }
+
+    /// Builds the "Easing: <name>" notice shown when advanced easings are gated.
+    /// `easing.label` carries a `%@` placeholder so each locale controls its own
+    /// punctuation (e.g. `Easing : %@` in fr, `Easing: %@` in en).
+    public static func easingDisabledNoticeText(easingName: String) -> String {
+        String(
+            format: String(localized: "story.timeline.inspector.easing.label", bundle: .module),
+            easingName
+        )
     }
 
     private var deleteButton: some View {

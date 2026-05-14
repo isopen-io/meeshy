@@ -67,9 +67,9 @@ final class UserProfileViewModel: ObservableObject {
         defer { isLoading = false }
         do {
             let user = try await UserService.shared.getProfile(idOrUsername: idOrUsername)
-            await CacheCoordinator.shared.profiles.save([user], for: user.id)
+            try? await CacheCoordinator.shared.profiles.save([user], for: user.id)
             if idOrUsername != user.id {
-                await CacheCoordinator.shared.profiles.save([user], for: idOrUsername)
+                try? await CacheCoordinator.shared.profiles.save([user], for: idOrUsername)
             }
             await SearchIndex.shared.indexUsers([user])
             fullUser = user
@@ -109,7 +109,7 @@ final class UserProfileViewModel: ObservableObject {
         do {
             let stats = try await UserService.shared.getUserStats(userId: userId)
             userStats = stats
-            await CacheCoordinator.shared.stats.save([stats], for: userId)
+            try? await CacheCoordinator.shared.stats.save([stats], for: userId)
         } catch {
             statsError = "Impossible de charger les statistiques"
         }
@@ -122,20 +122,75 @@ final class UserProfileViewModel: ObservableObject {
         }
     }
 
+    /// Wave 1 Phase B — block flows through the offline outbox so the
+    /// gateway's `MutationLog` can dedup retries, the UI flips optimistically
+    /// regardless of network state, and a queued block survives an app
+    /// kill before the request reaches the wire. The local BlockService
+    /// cache is updated synchronously so `isBlocked(userId:)` reads stay
+    /// consistent with the optimistic UI.
+    ///
+    /// Phase 4 Task 4.9 — wraps the optimistic write in a snapshot/rollback
+    /// pair driven by `OfflineQueue.outcomeStream(for:)`. If the OutboxFlusher
+    /// escalates the row to `.exhausted` (`maxAttempts` retries failed), the
+    /// observer fires `.exhausted` exactly once, the local `isBlocked` flag
+    /// is reset to its pre-mutation value, and a user-facing toast surfaces.
     func blockUser() async {
         guard let userId = profileUser.userId ?? fullUser?.id else { return }
+        let cmid = ClientMutationId.generate()
+        let snapshot = isBlocked
+        isBlocked = true
+        observeOutcome(
+            cmid: cmid,
+            rollback: { [weak self] in self?.isBlocked = snapshot },
+            toast: "Impossible de bloquer cet utilisateur"
+        )
+        let payload = BlockUserPayload(clientMutationId: cmid, targetUserId: userId)
         do {
-            try await blockService.blockUser(userId: userId)
-            isBlocked = true
-        } catch {}
+            try await OfflineQueue.shared.enqueue(.blockUser, payload: payload)
+        } catch {
+            isBlocked = snapshot
+        }
     }
 
     func unblockUser() async {
         guard let userId = profileUser.userId ?? fullUser?.id else { return }
+        let cmid = ClientMutationId.generate()
+        let snapshot = isBlocked
+        isBlocked = false
+        observeOutcome(
+            cmid: cmid,
+            rollback: { [weak self] in self?.isBlocked = snapshot },
+            toast: "Impossible de debloquer cet utilisateur"
+        )
+        let payload = UnblockUserPayload(clientMutationId: cmid, targetUserId: userId)
         do {
-            try await blockService.unblockUser(userId: userId)
-            isBlocked = false
-        } catch {}
+            try await OfflineQueue.shared.enqueue(.unblockUser, payload: payload)
+        } catch {
+            isBlocked = snapshot
+        }
+    }
+
+    /// Subscribes to `OfflineQueue.outcomeStream(for: cmid)` and rolls back
+    /// the optimistic mutation when the stream emits `.exhausted`. The
+    /// closure is `@MainActor` so direct `@Published` writes are safe.
+    /// `.applied` outcomes are a no-op — the optimistic write is already
+    /// the final state. The stream completes after a single event, so the
+    /// `for await` loop returns and the Task terminates.
+    private func observeOutcome(
+        cmid: String,
+        rollback: @escaping @MainActor () -> Void,
+        toast: String
+    ) {
+        Task { @MainActor in
+            let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+            for await event in stream {
+                if case .exhausted = event {
+                    rollback()
+                    ToastManager.shared.showError(toast)
+                    HapticFeedback.error()
+                }
+            }
+        }
     }
 
     private static func checkIsBlocked(userId: String?, authManager: AuthManaging) -> Bool {

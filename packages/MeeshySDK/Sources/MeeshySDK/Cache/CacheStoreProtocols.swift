@@ -12,7 +12,15 @@ public protocol ReadableCacheStore<Key, Value> {
 }
 
 public protocol MutableCacheStore<Key, Value>: ReadableCacheStore {
-    func save(_ items: [Value], for key: Key) async
+    /// Persist a fresh snapshot of items for `key`. Throws on write failure
+    /// (e.g. encryption failure on an `encrypted: true` store) so callers
+    /// don't silently observe stale cache while data was never written.
+    ///
+    /// Strict semantics introduced by Task 1.1 of the iOS Local-First
+    /// Wave 1 plan — previously `save` was non-throwing and would silently
+    /// log + drop write errors.
+    func save(_ items: [Value], for key: Key) async throws
+
     func update(for key: Key, mutate: @Sendable ([Value]) -> [Value]) async
 
     /// Atomic read-modify-write that falls back to L2 or empty when L1 is cold.

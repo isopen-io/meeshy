@@ -24,6 +24,7 @@ final class OutboxRecordTests: XCTestCase {
                 id: "ob-1",
                 kind: .sendMessage,
                 conversationId: "c1",
+                clientMessageId: "cid_ob-1",
                 payload: Data("hello".utf8),
                 status: .pending,
                 attempts: 0,

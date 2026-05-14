@@ -585,7 +585,14 @@ export const ConversationSchemas = {
     type: CommonSchemas.conversationType,
     title: CommonSchemas.conversationTitle.optional(),
     description: CommonSchemas.description,
-    participantIds: z.array(z.string()).optional().default([]),
+    // Audit 2026-05-11 §H-Claim-3 — cap participantIds at 250.
+    // Without an upper bound, the gateway's CONVERSATION_NEW emission loop
+    // becomes a synchronous fanout amplifier (one io.to(...).emit() per
+    // participant inside a Fastify request handler). 250 is generous for
+    // any realistic group/public conversation creation flow; bulk-add
+    // beyond that should go through a separate paged participant-add
+    // endpoint that can yield to the event loop between batches.
+    participantIds: z.array(z.string()).max(250, { message: 'Au maximum 250 participants à la création — utiliser l\'ajout incrémental au-delà' }).optional().default([]),
     communityId: z.string().optional(),
     identifier: CommonSchemas.conversationIdentifier,
   }),

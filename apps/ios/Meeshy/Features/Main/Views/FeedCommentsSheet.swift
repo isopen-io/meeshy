@@ -25,6 +25,18 @@ struct ThreadedCommentSection: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
 
+    /// Show first 2 replies by default without requiring toggle
+    private var autoPreviewReplies: [FeedComment] {
+        Array(replies.prefix(2))
+    }
+
+    private var remainingRepliesCount: Int {
+        let loaded = replies.count
+        // Use the greater of server count or local count for accuracy
+        let total = max(comment.replies, loaded)
+        return max(0, total - autoPreviewReplies.count)
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             CommentRowView(
@@ -37,10 +49,30 @@ struct ThreadedCommentSection: View {
                 presenceState: presenceState
             )
 
-            if comment.replies > 0 {
+            // Auto-show first 2 replies (no toggle needed)
+            if !autoPreviewReplies.isEmpty && !isExpanded {
+                ForEach(autoPreviewReplies) { reply in
+                    CommentRowView(
+                        comment: reply,
+                        accentColor: accentColor,
+                        isReply: true,
+                        onReply: { onReply(reply) },
+                        onLikeComment: { onLikeComment(reply.id) },
+                        moodEmoji: replyMoodResolver?(reply.authorId),
+                        storyState: replyStoryResolver?(reply.authorId) ?? .none,
+                        presenceState: replyPresenceResolver?(reply.authorId) ?? .offline
+                    )
+                    .padding(.leading, 36)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+
+            // "Voir les autres réponses" toggle
+            if comment.replies > 2 {
                 threadToggleButton
             }
 
+            // Expanded — show ALL replies
             if isExpanded {
                 if isLoadingReplies && replies.isEmpty {
                     HStack {
@@ -49,24 +81,22 @@ struct ThreadedCommentSection: View {
                             .scaleEffect(0.8)
                         Spacer()
                     }
-                    .padding(.leading, 48)
+                    .padding(.leading, 36)
                     .padding(.vertical, 8)
                 }
 
                 ForEach(replies) { reply in
-                    HStack(spacing: 0) {
-                        threadLine
-                        CommentRowView(
-                            comment: reply,
-                            accentColor: accentColor,
-                            isReply: true,
-                            onReply: { onReply(reply) },
-                            onLikeComment: { onLikeComment(reply.id) },
-                            moodEmoji: replyMoodResolver?(reply.authorId),
-                            storyState: replyStoryResolver?(reply.authorId) ?? .none,
-                            presenceState: replyPresenceResolver?(reply.authorId) ?? .offline
-                        )
-                    }
+                    CommentRowView(
+                        comment: reply,
+                        accentColor: accentColor,
+                        isReply: true,
+                        onReply: { onReply(reply) },
+                        onLikeComment: { onLikeComment(reply.id) },
+                        moodEmoji: replyMoodResolver?(reply.authorId),
+                        storyState: replyStoryResolver?(reply.authorId) ?? .none,
+                        presenceState: replyPresenceResolver?(reply.authorId) ?? .offline
+                    )
+                    .padding(.leading, 36)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
@@ -80,28 +110,18 @@ struct ThreadedCommentSection: View {
             onToggleThread()
         } label: {
             HStack(spacing: 6) {
-                threadLine
-
                 Image(systemName: isExpanded ? "chevron.up" : "chevron.down")
                     .font(.system(size: 10, weight: .bold))
 
                 Text(isExpanded
                      ? "Masquer les r\u{00E9}ponses"
-                     : "Voir \(comment.replies) r\u{00E9}ponse\(comment.replies > 1 ? "s" : "")")
+                     : "Voir \(remainingRepliesCount) autre\(remainingRepliesCount > 1 ? "s" : "") r\u{00E9}ponse\(remainingRepliesCount > 1 ? "s" : "")")
                     .font(.system(size: 12, weight: .semibold))
             }
             .foregroundColor(Color(hex: accentColor))
-            .padding(.leading, 48)
+            .padding(.leading, 36)
             .padding(.vertical, 6)
         }
-    }
-
-    private var threadLine: some View {
-        Rectangle()
-            .fill(Color(hex: accentColor).opacity(0.2))
-            .frame(width: 2)
-            .padding(.leading, 30)
-            .padding(.trailing, 16)
     }
 }
 
@@ -217,12 +237,11 @@ struct CommentsSheetView: View {
                 parentId: parentId
             )
             if let parentId {
-                if expandedThreads.contains(parentId) {
-                    var existing = repliesMap[parentId] ?? []
-                    if !existing.contains(where: { $0.id == feedComment.id }) {
-                        existing.insert(feedComment, at: 0)
-                        repliesMap[parentId] = existing
-                    }
+                // Always insert into repliesMap so auto-preview stays live
+                var existing = repliesMap[parentId] ?? []
+                if !existing.contains(where: { $0.id == feedComment.id }) {
+                    existing.insert(feedComment, at: 0)
+                    repliesMap[parentId] = existing
                 }
                 var current = liveComments ?? post.comments
                 if let idx = current.firstIndex(where: { $0.id == parentId }) {
@@ -248,6 +267,14 @@ struct CommentsSheetView: View {
             .presentationDragIndicator(.visible)
         }
         .withStatusBubble()
+        .task {
+            // Auto-load replies for first 5 comments that have replies > 0
+            // so the auto-preview (first 2 replies) is populated on appear
+            let withReplies = topLevelComments.filter { $0.replies > 0 }
+            for comment in withReplies.prefix(5) {
+                await loadReplies(commentId: comment.id)
+            }
+        }
     }
 
     // MARK: - Thread Management

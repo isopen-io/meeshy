@@ -47,8 +47,10 @@ enum CallMediaType: Sendable {
 enum PeerConnectionState: String, Sendable {
     case new
     case connecting
+    case checking      // ICE checking — UX warning lors d'une nouvelle tentative de connexion
     case connected
     case disconnected
+    case reconnecting  // ICE restart en cours après perte de connectivité
     case failed
     case closed
 }
@@ -123,8 +125,12 @@ struct DataChannelTranscriptionMessage: Codable, Sendable {
 protocol WebRTCClientDelegate: AnyObject {
     func webRTCClient(_ client: any WebRTCClientProviding, didGenerateCandidate candidate: IceCandidate)
     func webRTCClient(_ client: any WebRTCClientProviding, didChangeConnectionState state: PeerConnectionState)
-    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: Any)
-    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: Any)
+    // `sending` lets the non-Sendable RTC track cross from the WebRTC framework's
+    // own thread into our `@MainActor` Task without a Swift 6 strict-concurrency
+    // diagnostic. The framework hands us a unique reference and never reads it
+    // again after the delegate fires, so exclusive transfer is sound.
+    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: sending Any)
+    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: sending Any)
     func webRTCClient(_ client: any WebRTCClientProviding, didReceiveDataChannelMessage data: Data)
 }
 
@@ -161,7 +167,10 @@ enum QualityThresholds {
     static let minBitrate: Int = 24_000
     static let defaultBitrate: Int = 64_000
 
-    static let statsIntervalSeconds: TimeInterval = 3.0
+    // Audit P2-iOS-12 — bumped from 3s to 5s. RTCPeerConnection.statistics
+    // walks the entire stats graph (~5–10ms CPU per call); 5s is the
+    // industry baseline (WhatsApp/Jitsi use 2–5s during reconnection only).
+    static let statsIntervalSeconds: TimeInterval = 5.0
     /// Phase 1 fix P1: cellular networks have RTT 800ms+ ; 5s heartbeat with
     /// 15s lost was too aggressive (false-positive reconnects). SOTA matches
     /// WhatsApp/Telegram with 10s/30s. Reference §5.12.
@@ -190,6 +199,16 @@ enum QualityThresholds {
     static let rtpGatePollIntervalSeconds: TimeInterval = 2.0
     static let rtpGateMaxAttempts: Int = 5
     static let rtpGateRequiredPackets: Int = 5
+
+    /// Caller-side ringing timeout. The gateway has its own 60s server-side
+    /// timeout (CallEventsHandler.ts §scheduleRingingTimeout) but a snappier
+    /// 45s client-side cutoff gives the user a faster fail path when:
+    ///   - the recipient is unreachable yet the gateway delays the no_answer
+    ///   - the network drops the call:ended event before we receive it
+    ///   - the server timeout misfires
+    /// Picked at 45s to align with WhatsApp/FaceTime UX while leaving 15s
+    /// headroom under the gateway's hard cap.
+    static let outgoingRingTimeoutSeconds: TimeInterval = 45.0
 }
 
 // MARK: - Video Quality Level (§4.8)

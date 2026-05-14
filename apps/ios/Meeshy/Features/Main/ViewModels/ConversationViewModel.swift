@@ -154,6 +154,13 @@ class ConversationViewModel: ObservableObject {
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
 
+    /// Updated by the MessageListViewController's scroll delegate via the
+    /// `onNearBottomChanged` callback. Drives the anticipatory prefetch:
+    /// when the user is NOT near the bottom (scrolling up into history),
+    /// `loadOlderMessages` eagerly prefetches the next page after each
+    /// successful load so older messages are ready before the user reaches them.
+    var isCurrentlyNearBottom: Bool = true
+
     /// Detailed reaction data for a specific message (used by reaction detail sheet)
     @Published var reactionDetails: [ReactionGroup] = []
     @Published var isLoadingReactions = false
@@ -209,6 +216,16 @@ class ConversationViewModel: ObservableObject {
 
     /// True when the user jumped to a search result and messages are loaded around that point
     @Published var isInJumpedState = false
+
+    /// True while the ViewModel is actively searching for a quoted message
+    /// that wasn't in the local collection when the user tapped its reply
+    /// reference. Drives a pulsing indicator on the scroll-to-bottom button
+    /// so the user knows the app is working to find the cited message.
+    @Published var isSearchingQuotedMessage = false
+    /// The message id the user is trying to jump to. Set alongside
+    /// `isSearchingQuotedMessage` and cleared once the jump completes
+    /// (or fails). Read by the scroll button to display contextual text.
+    @Published var quotedMessageSearchTarget: String? = nil
 
     // Permanent mapping `optimistic id → server id` for the lifetime of the
     // ViewModel. The optimistic id (`temp_…` / `offline_…` / `retry_…`) is
@@ -280,7 +297,7 @@ class ConversationViewModel: ObservableObject {
                 readCount: msg.readCount
             )
         }
-        await CacheCoordinator.shared.messages.save(rewritten, for: convId)
+        try? await CacheCoordinator.shared.messages.save(rewritten, for: convId)
     }
 
     // MARK: - O(1) Message Index
@@ -472,7 +489,7 @@ class ConversationViewModel: ObservableObject {
     private(set) var messagePersistence: MessagePersistenceActor
     private var lastOlderPaginationTime: Date = .distantPast
     private var lastNewerPaginationTime: Date = .distantPast
-    private static let paginationDebounceInterval: TimeInterval = 1.0
+    private static let paginationDebounceInterval: TimeInterval = 0.3
     private static let paginationRetryCount: Int = 3
     private static let paginationRetryDelay: UInt64 = 500_000_000
 
@@ -733,11 +750,15 @@ class ConversationViewModel: ObservableObject {
     }
 
     /// Reconcile optimistic messages with their server-assigned ids when the
-    /// OfflineQueue or MessageRetryQueue finally lands the send, and flip rows
-    /// to `.failed` when the retry budget is exhausted. Without this mapping a
+    /// unified `OfflineQueue` finally lands the send, and flip rows to
+    /// `.failed` when the retry budget is exhausted. Without this mapping a
     /// `message:new` socket broadcast arrives with an unknown id and the
     /// optimistic row would stay stuck in `.sending` forever while a duplicate
     /// appears.
+    ///
+    /// Wave 1 Task 3.6 — collapsed onto the unified `OfflineQueue.retrySucceeded` /
+    /// `.retryExhausted` / `.retryDropped` signals, replacing the legacy
+    /// per-queue publishers from `MessageRetryQueue` and `ReactionQueue`.
     // MARK: - MessageStore Observation (Task 1.3)
 
     /// Subscribes to `messageStore.messagesDidChange` so that GRDB-driven
@@ -774,10 +795,18 @@ class ConversationViewModel: ObservableObject {
     }
 
     private func subscribeToQueueReconciliation() {
+        // Wave 1 Task 3.6 — unified `OfflineQueue.retrySucceeded` covers both
+        // message-centric (sendMessage/edit/delete) and reaction
+        // (sendReaction) outbox kinds. We only act on `.sendMessage` here
+        // because that's the only kind that produces a server-assigned id
+        // worth reconciling with the optimistic local id. Reaction success
+        // is a no-op at the ViewModel level — the `reaction:added` /
+        // `reaction:removed` socket broadcast keeps every client in sync.
         OfflineQueue.shared.retrySucceeded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
+                guard payload.kind == .sendMessage else { return }
                 pendingServerIds[payload.tempId] = payload.serverId
                 let localId = payload.tempId
                 let serverId = payload.serverId
@@ -790,64 +819,54 @@ class ConversationViewModel: ObservableObject {
             }
             .store(in: &cancellables)
 
-        MessageRetryQueue.shared.retrySucceeded
+        // Unified terminal-failure signal — fires both for message sends
+        // exhausted by `OutboxFlusher` (5 attempts) and for reactions that
+        // the dispatcher rejected permanently (404/409/410). We dispatch on
+        // `kind` to apply the right rollback strategy.
+        OfflineQueue.shared.retryExhausted
             .receive(on: DispatchQueue.main)
             .sink { [weak self] payload in
                 guard let self, payload.conversationId == self.conversationId else { return }
-                pendingServerIds[payload.tempId] = payload.serverId
-                let localId = payload.tempId
-                let serverId = payload.serverId
-                Task { [weak self] in
-                    _ = try? await self?.messagePersistence.applyEvent(
-                        localId: localId,
-                        event: .serverAck(serverId: serverId, at: Date())
-                    )
-                }
-            }
-            .store(in: &cancellables)
-
-        MessageRetryQueue.shared.retryExhausted
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] payload in
-                guard let self, payload.conversationId == self.conversationId else { return }
-                let localId = payload.tempId
-                Task { [weak self] in
-                    _ = try? await self?.messagePersistence.applyEvent(
-                        localId: localId,
-                        event: .retryExhausted
-                    )
-                }
-            }
-            .store(in: &cancellables)
-
-        // ReactionQueue: roll back the optimistic heart/reaction if the
-        // server permanently rejects (404/409/410). We ignore `.succeeded`
-        // because the `reaction:added` / `reaction:removed` socket broadcast
-        // keeps every client in sync — nothing extra to do here.
-        ReactionQueue.shared.retryExhausted
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] payload in
-                guard let self, payload.conversationId == self.conversationId else { return }
-                let participantId = self._resolvedParticipantId ?? self.currentUserId
-                let localId = payload.messageId
-                let emoji = payload.emoji
-                switch payload.action {
-                case .add:
-                    // Optimistic add failed permanently — remove the reaction we wrote
+                switch payload.kind {
+                case .sendMessage:
+                    let localId = payload.tempId
                     Task { [weak self] in
-                        try? await self?.messagePersistence.removeReaction(
-                            localId: localId, emoji: emoji, participantId: participantId
+                        _ = try? await self?.messagePersistence.applyEvent(
+                            localId: localId,
+                            event: .retryExhausted
                         )
                     }
-                case .remove:
-                    // Optimistic remove failed permanently — restore the reaction we erased
-                    let remoteId = self.serverId(for: localId)
-                    Task { [weak self] in
-                        try? await self?.messagePersistence.appendReaction(
-                            localId: localId, reactionId: UUID().uuidString,
-                            messageId: remoteId, participantId: participantId, emoji: emoji
-                        )
+                case .sendReaction:
+                    guard let reaction = payload.reaction else { return }
+                    let participantId = self._resolvedParticipantId ?? self.currentUserId
+                    let localId = reaction.messageId
+                    let emoji = reaction.emoji
+                    switch reaction.action {
+                    case .add:
+                        // Optimistic add failed permanently — remove the
+                        // reaction we wrote.
+                        Task { [weak self] in
+                            try? await self?.messagePersistence.removeReaction(
+                                localId: localId, emoji: emoji, participantId: participantId
+                            )
+                        }
+                    case .remove:
+                        // Optimistic remove failed permanently — restore the
+                        // reaction we erased.
+                        let remoteId = self.serverId(for: localId)
+                        Task { [weak self] in
+                            try? await self?.messagePersistence.appendReaction(
+                                localId: localId, reactionId: UUID().uuidString,
+                                messageId: remoteId, participantId: participantId, emoji: emoji
+                            )
+                        }
                     }
+                default:
+                    // Other outbox kinds (edit, delete, blockUser, etc.)
+                    // surface their own exhausted paths through dedicated
+                    // ViewModels ; this conversation-level subscription is
+                    // scoped to the optimistic message+reaction lifecycle.
+                    break
                 }
             }
             .store(in: &cancellables)
@@ -921,16 +940,23 @@ class ConversationViewModel: ObservableObject {
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
         case .fresh:
-            // GRDB store already has data (loaded in init + kept warm by socket events).
-            // Let the store observation surface the current window — no direct assignment.
+            // Surface GRDB data immediately (fast path for returning to a conversation).
             await messageStore.loadInitial()
-            // The legacy CacheCoordinator can be in sync while GRDB is still cold for
-            // this conversation (first open after install / clear). Bootstrap GRDB
-            // from API so the user sees their messages instead of an empty bubble list.
-            if messageStore.messages.isEmpty {
-                await refreshMessagesFromAPI()
-            }
             await hydrateTranslationsFromCache()
+            hydrateMetadataFromGRDB()
+            // Always revalidate from API in background — the GRDB local store may only
+            // contain messages WE sent (optimistic inserts) while messages received from
+            // other participants while the conversation was closed are absent because
+            // `handleNewMessage` only buffers into GRDB when the socket handler is armed
+            // (i.e. the conversation is open). Without this background refresh, messages
+            // received offline (e.g. Belva's messages while the app was in background)
+            // never appear until the user manually scrolls up to trigger pagination.
+            isRevalidating = !messageStore.messages.isEmpty
+            Task { [weak self] in
+                guard let self else { return }
+                await self.refreshMessagesFromAPI()
+                await MainActor.run { self.isRevalidating = false }
+            }
 
         case .stale:
             // Surface GRDB data immediately, then revalidate in background.
@@ -941,6 +967,7 @@ class ConversationViewModel: ObservableObject {
                 await hydrateTranslationsFromCache()
             } else {
                 await hydrateTranslationsFromCache()
+                hydrateMetadataFromGRDB()
                 isRevalidating = true
                 Task { [weak self] in
                     guard let self else { return }
@@ -1005,6 +1032,7 @@ class ConversationViewModel: ObservableObject {
             let freshMessages = await processAPIMessages(response.data)
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
+            scheduleTranscriptionRetry(for: response.data)
             let snapshot = freshMessages
             await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
                 let snapshotIds = Set(snapshot.map(\.id))
@@ -1192,7 +1220,13 @@ class ConversationViewModel: ObservableObject {
     // MARK: - Load Older Messages (infinite scroll)
 
     func loadOlderMessages() async {
-        guard hasOlderMessages, !isLoadingOlder, !isLoadingInitial, !isProgrammaticScroll else { return }
+        // Defensive reset: isProgrammaticScroll can get stuck true when a
+        // programmatic scroll is interrupted (e.g. view transition cancellation).
+        // Since loadOlderMessages is only invoked by manual user scrolling,
+        // it is always safe to clear the flag here.
+        if isProgrammaticScroll { isProgrammaticScroll = false }
+
+        guard hasOlderMessages, !isLoadingOlder, !isLoadingInitial else { return }
         guard let oldestMsg = messages.first else { return }
         let oldestId = oldestMsg.id
         let oldestCreatedAt = oldestMsg.createdAt
@@ -1213,12 +1247,12 @@ class ConversationViewModel: ObservableObject {
             // ConversationSyncEngine.fetchOlderMessages because it only writes
             // to the legacy CacheCoordinator. MessageStore reads MessageRecord
             // rows from GRDB, so going through the sync engine would leave the
-            // GRDB window stuck on the initial 200 messages and latch
+            // GRDB window stuck on the initial load and latch
             // hasOlderMessages to false on the very first scroll trigger.
             let response = try await messageService.listBefore(
                 conversationId: conversationId,
                 before: beforeValue,
-                limit: 30,
+                limit: 50,
                 includeReplies: true
             )
 
@@ -1233,6 +1267,7 @@ class ConversationViewModel: ObservableObject {
 
             extractAttachmentTranscriptions(from: response.data)
             extractTextTranslations(from: response.data)
+            scheduleTranscriptionRetry(for: response.data)
             await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { existing in
                 let existingIds = Set(existing.map(\.id))
                 let newOnly = olderProcessed.filter { !existingIds.contains($0.id) }
@@ -1254,6 +1289,21 @@ class ConversationViewModel: ObservableObject {
         }
 
         isLoadingOlder = false
+
+        // Anticipatory prefetch: if the server has more pages AND the user
+        // is still scrolled away from the bottom (likely scrolling fast),
+        // immediately kick off the NEXT page in the background so it's
+        // ready by the time the scroll reaches the new edge. This eliminates
+        // the "hit the wall and wait" stutter on fast scrolls.
+        if hasOlderMessages, !isCurrentlyNearBottom {
+            Task { [weak self] in
+                // Small delay to let the current batch render and the
+                // scroll position stabilize before we start the next fetch.
+                try? await Task.sleep(nanoseconds: 150_000_000)
+                guard let self, !self.isLoadingOlder else { return }
+                await self.loadOlderMessages()
+            }
+        }
     }
 
     // MARK: - Decryption
@@ -1311,11 +1361,12 @@ class ConversationViewModel: ObservableObject {
         // by the `clientMessageId` coalescing rules.
 
         // Offline: enqueue for later delivery + show optimistic message.
-        // Phase 4 §6.1 — also branch offline when the socket is not currently
-        // connected (transient disconnect with NetworkMonitor still reporting
-        // online), since otherwise the POST would race against an unhealthy
-        // socket and the optimistic row would never reconcile.
-        if NetworkMonitor.shared.isOffline || !MessageSocketManager.shared.isConnected {
+        // NOTE: we only gate on network availability here — NOT on socket
+        // connection state. The send path is a plain REST POST which works
+        // regardless of socket status. Routing through the offline queue when
+        // the socket is still handshaking (common at startup) caused the clock
+        // indicator to stay visible for seconds while waiting for retryAll().
+        if NetworkMonitor.shared.isOffline {
             let offlineClientMessageId = existingTempId ?? ClientMessageId.generate()
             let queueItem = OfflineQueueItem(
                 conversationId: conversationId,
@@ -1473,6 +1524,11 @@ class ConversationViewModel: ObservableObject {
         // local id (online send, offline queue, retry queue) now flows through
         // `ClientMessageId.generate()`.
         let tempId = existingTempId ?? ClientMessageId.generate()
+        // Phase A real-time instrumentation: chronometer the send → ACK delta
+        // so we can correlate it with the gateway-side `perf:http.message.post`
+        // / `perf:messaging.handleMessage` logs through the same cmid.
+        let sendStartedAt = Date()
+        Logger.messages.info("perf:ios.send.start clientMessageId=\(tempId, privacy: .public) conversationId=\(self.conversationId, privacy: .public) existingTempId=\(existingTempId != nil, privacy: .public)")
         let resolvedAttachments = localAttachments ?? []
         let optimisticMessageType: Message.MessageType = {
             guard let first = resolvedAttachments.first else { return .text }
@@ -1588,6 +1644,8 @@ class ConversationViewModel: ObservableObject {
                 event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
             )
             print("[SendFlow] applyEvent serverAck tempId=\(tempId) → resultState=\(ackResult.map { String(describing: $0) } ?? "nil")")
+            let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
+            Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(responseData.id, privacy: .public) durationMs=\(ackElapsedMs, privacy: .public)")
 
             // Move conversation to top of list immediately (optimistic)
             let convId = conversationId
@@ -1625,6 +1683,8 @@ class ConversationViewModel: ObservableObject {
             isSending = false
             return true
         } catch {
+            let failElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
+            Logger.messages.warning("perf:ios.send.fail clientMessageId=\(tempId, privacy: .public) durationMs=\(failElapsedMs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
             // Apply sendFailed — state machine increments retryCount and transitions
             // to .queued (retries remaining) or .failed (budget exhausted).
             // The store observation surfaces the updated state to the view.
@@ -1633,18 +1693,22 @@ class ConversationViewModel: ObservableObject {
                 event: .sendFailed(error)
             )
 
-            // Enqueue for persistent auto-retry (5 attempts × 10s interval).
-            // Pass the optimistic tempId so `MessageRetryQueue.retrySucceeded`
-            // and `.retryExhausted` events match the exact row in memory.
-            let retryItem = RetryQueueItem(
+            // Enqueue for persistent auto-retry. The unified outbox
+            // (`OfflineQueue` + `OutboxFlusher`) owns the retry loop now —
+            // exponential backoff up to 5 attempts (`OutboxFlusher.maxAttempts`)
+            // with `retryExhausted` firing on the unified signal at the end.
+            // Wave 1 Task 3.6 — the deleted `MessageRetryQueue` used to own a
+            // parallel retry loop ; both paths converged on the same outbox
+            // table so behavior is preserved while LoC drops by ~600.
+            let retryItem = OfflineQueueItem(
                 conversationId: conversationId,
                 content: text,
+                clientMessageId: tempId,
                 originalLanguage: originalLanguage ?? "fr",
                 replyToId: replyToId,
-                attachmentIds: attachmentIds,
-                clientMessageId: tempId
+                attachmentIds: attachmentIds
             )
-            Task { try? await MessageRetryQueue.shared.enqueue(retryItem) }
+            Task { try? await OfflineQueue.shared.enqueue(retryItem) }
 
             isSending = false
             return false
@@ -1854,12 +1918,14 @@ class ConversationViewModel: ObservableObject {
                     localId: messageId, emoji: emoji, participantId: participantId
                 )
             }
-            let item = ReactionQueueItem(
-                messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
-            )
+            // Wave 1 Task 3.6 — unified outbox replaces the legacy
+            // ReactionQueue. `enqueueReaction` preserves the coalescing state
+            // machine (add+remove cancels, idempotent dedup) and the
+            // `OutboxFlusher` drives retry on the next reconnect tick.
             Task {
-                try? await ReactionQueue.shared.enqueue(item)
-                await ReactionQueue.shared.retryAll()
+                try? await OfflineQueue.shared.enqueueReaction(
+                    messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
+                )
             }
         } else {
             let reactionId = UUID().uuidString
@@ -1869,21 +1935,33 @@ class ConversationViewModel: ObservableObject {
                     messageId: remoteId, participantId: participantId, emoji: emoji
                 )
             }
-            let item = ReactionQueueItem(
-                messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
-            )
             Task {
-                try? await ReactionQueue.shared.enqueue(item)
-                await ReactionQueue.shared.retryAll()
+                try? await OfflineQueue.shared.enqueueReaction(
+                    messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
+                )
             }
         }
 
-        // Resolve participantId lazily for future reactions
+        // Resolve participantId lazily for future reactions.
+        //
+        // SWR: a fresh or stale cache hit is enough — participantId is an
+        // immutable mapping (userId × conversationId → participantId) so
+        // staleness has no impact. `.expired` / `.empty` means we have no
+        // cached members; the next reaction will retry naturally once
+        // `ensureConversationDetail` (or a socket join event) populates the
+        // participants cache.
         if _resolvedParticipantId == nil {
             let convId = conversationId
             let userId = currentUserId
             Task {
-                let cached = await CacheCoordinator.shared.participants.load(for: convId).value ?? []
+                let result = await CacheCoordinator.shared.participants.load(for: convId)
+                let cached: [PaginatedParticipant]
+                switch result {
+                case .fresh(let v, _), .stale(let v, _):
+                    cached = v
+                case .expired, .empty:
+                    cached = []
+                }
                 if let match = cached.first(where: { $0.userId == userId }) {
                     self._resolvedParticipantId = match.id
                 }
@@ -2120,9 +2198,23 @@ class ConversationViewModel: ObservableObject {
         NotificationCenter.default.post(name: .conversationMarkedRead, object: convId)
         // 3. Send to server in background (fire-and-forget, queue on failure)
         guard UserPreferencesManager.shared.privacy.showReadReceipts else { return }
+        // Wave 1 Phase C — route through the offline outbox so a read
+        // receipt produced while offline survives an app kill and replays
+        // on reconnect. The gateway route is naturally idempotent (read
+        // cursor only moves forward) so a replay is harmless ; we still
+        // tag it with a cmid for instrumentation parity with the other
+        // outbox kinds. Fall back to the legacy `PendingStatusQueue` if
+        // the outbox enqueue itself fails (e.g. pool not configured).
+        let lastMessageId = messages.last?.id ?? ""
         Task {
+            let cmid = ClientMutationId.generate()
+            let payload = MarkAsReadPayload(
+                clientMutationId: cmid,
+                conversationId: convId,
+                upToMessageId: lastMessageId
+            )
             do {
-                try await conversationService.markRead(conversationId: convId)
+                try await OfflineQueue.shared.enqueue(.markAsRead, payload: payload, conversationId: convId)
             } catch {
                 await PendingStatusQueue.shared.enqueue(.init(
                     conversationId: convId, type: "read", timestamp: Date()
@@ -2291,6 +2383,78 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    /// Outcome of `jumpToQuotedMessage`.
+    enum JumpResult {
+        /// The message was already present in the local store — caller should
+        /// perform an instant scroll + highlight.
+        case foundLocally
+        /// The message was fetched from the server and loaded into the store.
+        /// Caller should scroll + highlight after the snapshot settles.
+        case loadedFromServer
+        /// The message could not be found (deleted, not accessible, network error).
+        case notFound
+    }
+
+    /// High-level "jump to a quoted message" flow called when the user taps
+    /// a reply reference. If the message is already in the local store's
+    /// snapshot, returns `.foundLocally` immediately. Otherwise sets
+    /// `isSearchingQuotedMessage = true` (driving the pulsing scroll-button
+    /// indicator), fetches from the server via `loadMessagesAround`, and
+    /// returns `.loadedFromServer` or `.notFound`.
+    func jumpToQuotedMessage(messageId: String) async -> JumpResult {
+        // Fast path: message is already visible — instant scroll
+        if messageStore.messages.contains(where: {
+            $0.localId == messageId || $0.serverId == messageId
+        }) {
+            return .foundLocally
+        }
+
+        // Slow path: need to fetch from server
+        isSearchingQuotedMessage = true
+        quotedMessageSearchTarget = messageId
+
+        defer {
+            isSearchingQuotedMessage = false
+            quotedMessageSearchTarget = nil
+        }
+
+        do {
+            let response = try await messageService.listAround(
+                conversationId: conversationId, around: messageId, limit: limit, includeReplies: true
+            )
+
+            // Upsert the API batch into GRDB so the window has fresh content.
+            try? await messagePersistence.upsertFromAPIMessages(response.data)
+
+            // Check if the target message was in the response
+            let found = response.data.contains(where: { $0.id == messageId })
+            guard found else { return .notFound }
+
+            // Switch the store window to be centered on the target message.
+            let targetDate = response.data.first(where: { $0.id == messageId })?.createdAt
+                ?? response.data.last?.createdAt
+                ?? Date()
+            await messageStore.loadWindow(around: targetDate)
+
+            extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
+            nextMessageCursor = response.cursorPagination?.nextCursor
+            hasOlderMessages = response.cursorPagination?.hasMore ?? false
+            hasNewerMessages = response.hasNewer ?? false
+            isInJumpedState = true
+
+            // Small delay to let the diffable datasource apply the new snapshot
+            // before the caller triggers scroll — otherwise the index path
+            // won't exist yet.
+            try? await Task.sleep(nanoseconds: 150_000_000)
+
+            return .loadedFromServer
+        } catch {
+            Logger.messages.error("[JumpToQuoted] Failed to load messages around \(messageId): \(error.localizedDescription)")
+            return .notFound
+        }
+    }
+
     func loadNewerMessages() async {
         guard isInJumpedState, hasNewerMessages, !isLoadingNewer, !isProgrammaticScroll else { return }
         guard let lastMsg = messages.last else { return }
@@ -2383,8 +2547,9 @@ class ConversationViewModel: ObservableObject {
 
     private func hydrateTranslationsFromCache() async {
         let msgIds = messages.map(\.id)
+
+        // 1. In-memory CacheCoordinator (fast, volatile)
         let cached = await CacheCoordinator.shared.cachedTranslations(for: msgIds)
-        guard !cached.isEmpty else { return }
         for (msgId, translations) in cached {
             var existing = messageTranslations[msgId] ?? []
             for t in translations {
@@ -2396,6 +2561,40 @@ class ConversationViewModel: ObservableObject {
                     translatedContent: t.translatedContent,
                     translationModel: t.translationModel,
                     confidenceScore: t.confidenceScore
+                )
+                if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
+                    existing[idx] = mt
+                } else {
+                    existing.append(mt)
+                }
+            }
+            messageTranslations[msgId] = existing
+        }
+
+        // 2. GRDB fallback — for message IDs not covered by the volatile cache,
+        //    read persisted TranslationRecords so cold-start shows translations
+        //    instantly without waiting for a REST round-trip.
+        let uncoveredIds = msgIds.filter { messageTranslations[$0] == nil || messageTranslations[$0]?.isEmpty == true }
+        guard !uncoveredIds.isEmpty else { return }
+        let reader = messagePersistence.reader
+        let grdbTranslations: [String: [TranslationRecord]] = (try? await reader.read { db in
+            let records = try TranslationRecord
+                .filter(uncoveredIds.contains(Column("messageLocalId")))
+                .fetchAll(db)
+            return Dictionary(grouping: records, by: \.messageLocalId)
+        }) ?? [:]
+
+        for (msgId, records) in grdbTranslations {
+            var existing = messageTranslations[msgId] ?? []
+            for r in records {
+                let mt = MessageTranslation(
+                    id: r.id,
+                    messageId: msgId,
+                    sourceLanguage: r.sourceLanguage ?? "auto",
+                    targetLanguage: r.targetLanguage,
+                    translatedContent: r.translatedContent,
+                    translationModel: r.translationModel,
+                    confidenceScore: r.confidenceScore
                 )
                 if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
                     existing[idx] = mt
@@ -2467,6 +2666,52 @@ class ConversationViewModel: ObservableObject {
         return nil
     }
 
+    // MARK: - Transcription Retry for Audio Messages
+
+    /// When Whisper has not finished transcribing an audio attachment by the
+    /// time the REST response arrives, `attachment.transcription` is nil.
+    /// This method collects those message IDs and schedules a single retry
+    /// fetch after 5 seconds so the transcription is surfaced on the second
+    /// attempt (Whisper typically completes within 3–15 s).
+    private func scheduleTranscriptionRetry(for apiMessages: [APIMessage]) {
+        let audioMissingTranscription = apiMessages.filter { msg in
+            msg.attachments?.contains(where: { att in
+                guard let mime = att.mimeType, mime.hasPrefix("audio/") else { return false }
+                return att.transcription == nil
+            }) ?? false
+        }
+        guard !audioMissingTranscription.isEmpty else { return }
+
+        let msgIds = audioMissingTranscription.map(\.id)
+        let convId = conversationId
+        Logger.messages.info("[TranscriptionRetry] Scheduling retry for \(msgIds.count) audio message(s) missing transcription")
+
+        Task { [weak self, messageService] in
+            try? await Task.sleep(nanoseconds: 5_000_000_000) // 5 seconds
+            guard let self, !Task.isCancelled else { return }
+
+            // Re-fetch the same messages from REST; by now Whisper should have
+            // finished transcribing. We use `listAround` with the first message
+            // to get a window that includes the missing ones.
+            for msgId in msgIds {
+                guard !Task.isCancelled else { return }
+                do {
+                    let response = try await messageService.listAround(
+                        conversationId: convId,
+                        around: msgId,
+                        limit: 5,
+                        includeReplies: false
+                    )
+                    await MainActor.run {
+                        self.extractAttachmentTranscriptions(from: response.data)
+                    }
+                } catch {
+                    Logger.messages.warning("[TranscriptionRetry] Retry failed for \(msgId): \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
     // MARK: - Extract Transcription/Translation Data from REST Responses
 
     private func extractAttachmentTranscriptions(from apiMessages: [APIMessage]) {
@@ -2520,6 +2765,79 @@ class ConversationViewModel: ObservableObject {
                     }
                     if !audios.isEmpty {
                         messageTranslatedAudios[msg.id] = audios
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Hydrate metadata from GRDB (instant load)
+
+    /// Reads the embedded transcription/translation metadata from GRDB's
+    /// `attachmentsJson` blobs and populates `messageTranscriptions` and
+    /// `messageTranslatedAudios` dictionaries **before** any REST call.
+    /// This ensures that audio bubbles show transcriptions and language
+    /// buttons on the very first render frame.
+    private func hydrateMetadataFromGRDB() {
+        let decoder = JSONDecoder()
+        for record in messageStore.messages {
+            let msgId = record.serverId ?? record.localId
+            guard let data = record.attachmentsJson,
+                  let attachments = try? decoder.decode([MeeshyMessageAttachment].self, from: data)
+            else { continue }
+
+            for att in attachments {
+                // Hydrate transcription
+                if let t = att.transcription, messageTranscriptions[msgId] == nil {
+                    let segments = (t.segments ?? []).map {
+                        MessageTranscriptionSegment(
+                            text: $0.text,
+                            startTime: $0.startTime,
+                            endTime: $0.endTime,
+                            speakerId: $0.speakerId
+                        )
+                    }
+                    messageTranscriptions[msgId] = MessageTranscription(
+                        attachmentId: att.id,
+                        text: t.text,
+                        language: t.language,
+                        confidence: t.confidence,
+                        durationMs: t.durationMs,
+                        segments: segments,
+                        speakerCount: t.speakerCount
+                    )
+                }
+
+                // Hydrate audio translations
+                if let translations = att.audioTranslations, !translations.isEmpty,
+                   messageTranslatedAudios[msgId] == nil {
+                    var audios: [MessageTranslatedAudio] = []
+                    for (lang, trans) in translations {
+                        let segments = (trans.segments ?? []).map {
+                            MessageTranscriptionSegment(
+                                text: $0.text,
+                                startTime: $0.startTime,
+                                endTime: $0.endTime,
+                                speakerId: $0.speakerId
+                            )
+                        }
+                        audios.append(MessageTranslatedAudio(
+                            id: "\(att.id)_\(lang)",
+                            attachmentId: att.id,
+                            targetLanguage: lang,
+                            url: trans.url,
+                            transcription: trans.transcription ?? "",
+                            durationMs: trans.durationMs ?? 0,
+                            format: trans.format ?? "mp3",
+                            cloned: trans.cloned ?? false,
+                            quality: trans.quality ?? 0,
+                            voiceModelId: trans.voiceModelId,
+                            ttsModel: trans.ttsModel ?? "xtts",
+                            segments: segments
+                        ))
+                    }
+                    if !audios.isEmpty {
+                        messageTranslatedAudios[msgId] = audios
                     }
                 }
             }

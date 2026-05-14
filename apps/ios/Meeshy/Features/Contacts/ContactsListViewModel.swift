@@ -106,7 +106,7 @@ final class ContactsListViewModel: ObservableObject {
             }
 
             loadState = .loaded
-            await CacheCoordinator.shared.friends.save(friends, for: cacheKey)
+            try? await CacheCoordinator.shared.friends.save(friends, for: cacheKey)
         } catch {
             if friends.isEmpty {
                 loadState = .error("Erreur lors du chargement")

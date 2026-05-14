@@ -2,6 +2,9 @@ import Foundation
 import Combine
 import GRDB
 import UIKit
+#if canImport(BackgroundTasks)
+import BackgroundTasks
+#endif
 import os
 
 public actor CacheCoordinator {
@@ -20,12 +23,40 @@ public actor CacheCoordinator {
     public let shareLinks: GRDBCacheStore<String, MyShareLink>
     public let trackingLinks: GRDBCacheStore<String, TrackingLink>
     public let communityLinks: GRDBCacheStore<String, CommunityLink>
+    /// User communities list (the ones the current user is a member of).
+    /// Single key "list" stores the full ordered set; the conversation list
+    /// pulls from here cache-first so the Communities section renders
+    /// instantly on cold start instead of flashing through an empty state
+    /// while `/communities` round-trips the network.
+    public let communities: GRDBCacheStore<String, APICommunity>
+    /// Per-conversation message drafts. Key = conversationId, value = a single
+    /// `ConversationDraft` (wrapped in a single-element array to fit the
+    /// `GRDBCacheStore` `[Value]` shape). Local-only — drafts are never
+    /// synced to the server, so the cache IS the source of truth. Reads
+    /// always hit the `.fresh` branch (see `CachePolicy.drafts`).
+    public let drafts: GRDBCacheStore<String, ConversationDraft>
     public let statuses: GRDBCacheStore<String, StatusEntry>
     public let friends: GRDBCacheStore<String, FriendRequestUser>
     public let friendRequests: GRDBCacheStore<String, FriendRequest>
     public let blockedUsers: GRDBCacheStore<String, BlockedUser>
     public let userSearch: GRDBCacheStore<String, UserSearchResult>
     public let timeline: GRDBCacheStore<String, TimelinePoint>
+    /// User-defined conversation categories. Single key "list" stores the full
+    /// ordered set (typically <20 items). Stale-while-revalidate via
+    /// PreferenceService.loadCachedCategories so the conversation list shows
+    /// the right section grouping instantly on cold start instead of flashing
+    /// "Other" until the network fetch lands.
+    public let categories: GRDBCacheStore<String, ConversationCategory>
+    /// Distinct user-curated tags across all conversations. Single key "list".
+    public let userTags: GRDBCacheStore<String, ConversationTagEntry>
+    /// Top-level user preferences blob (translation prefs, theme, etc.).
+    /// Single key "all" stores the wrapped UserPreferences.
+    public let userPreferences: GRDBCacheStore<String, PreferenceValue<UserPreferences>>
+    /// Per-conversation user preferences (pin / mute / archive / customName /
+    /// tags / categoryId / mentionsOnly / reaction). Keyed by conversationId
+    /// so a sheet open hits the cache instantly while a background revalidate
+    /// keeps it fresh.
+    public let conversationPreferences: GRDBCacheStore<String, PreferenceValue<APIConversationPreferences>>
 
     public let images: DiskCacheStore
     public let audio: DiskCacheStore
@@ -150,12 +181,18 @@ public actor CacheCoordinator {
         self.shareLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "slinks")
         self.trackingLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "tlinks")
         self.communityLinks = GRDBCacheStore(policy: .linksAndTokens, db: db, namespace: "clinks")
+        self.communities = GRDBCacheStore(policy: .communities, db: db, namespace: "communities")
+        self.drafts = GRDBCacheStore(policy: .drafts, db: db, namespace: "drafts")
         self.statuses = GRDBCacheStore(policy: .statuses, db: db, namespace: "statuses")
         self.friends = GRDBCacheStore(policy: .participants, db: db, namespace: "friends")
         self.friendRequests = GRDBCacheStore(policy: .participants, db: db, namespace: "freq", encrypted: true)
         self.blockedUsers = GRDBCacheStore(policy: .participants, db: db, namespace: "blocked", encrypted: true)
         self.userSearch = GRDBCacheStore(policy: .userProfiles, db: db, namespace: "usearch")
         self.timeline = GRDBCacheStore(policy: .userStats, db: db, namespace: "timeline")
+        self.categories = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-cat")
+        self.userTags = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-tags")
+        self.userPreferences = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-user", encrypted: true)
+        self.conversationPreferences = GRDBCacheStore(policy: .preferences, db: db, namespace: "prefs-conv", encrypted: true)
 
         self.images = DiskCacheStore(policy: .mediaImages)
         self.audio = DiskCacheStore(policy: .mediaAudio)
@@ -185,7 +222,7 @@ public actor CacheCoordinator {
         let key = "meeshy.searchindex.backfillDone.v1"
         guard !UserDefaults.standard.bool(forKey: key) else { return }
 
-        if let cachedConversations = await conversations.load(for: "list").value,
+        if let cachedConversations = await conversations.load(for: "list").snapshot(),
            !cachedConversations.isEmpty {
             await SearchIndex.shared.indexConversations(cachedConversations)
         }
@@ -219,6 +256,8 @@ public actor CacheCoordinator {
         await shareLinks.invalidateAll()
         await trackingLinks.invalidateAll()
         await communityLinks.invalidateAll()
+        await communities.invalidateAll()
+        await drafts.invalidateAll()
         await statuses.invalidateAll()
         await friends.invalidateAll()
         await friendRequests.invalidateAll()
@@ -368,18 +407,26 @@ public actor CacheCoordinator {
             forName: UIApplication.willTerminateNotification,
             object: nil, queue: .main
         ) { [weak self] _ in
-            guard let self else { return }
-            // Terminate is synchronous from the OS perspective: we have ~5s
-            // before the process is killed. Hop into the actor and wait up
-            // to 4s for the flush to complete so critical writes land on
-            // disk. If the wait times out we still release — the OS will
-            // kill us either way, but we maximise persistence.
-            let semaphore = DispatchSemaphore(value: 0)
-            Task.detached {
-                await self.flushAll()
-                semaphore.signal()
+            // Task 1.3 — terminate flush: instead of a `DispatchSemaphore.wait`
+            // that could expire mid-write (semaphore times out before
+            // `flushAll()` reaches disk, dirty keys are lost), submit a
+            // `BGProcessingTask` so the OS can complete the work after the
+            // process is suspended, and fire a best-effort foreground flush
+            // with a 4s deadline in parallel. Whichever path wins the race
+            // persists the dirty set; the other becomes a no-op because
+            // `flushDirtyKeys` is idempotent.
+            #if canImport(BackgroundTasks)
+            let request = BGProcessingTaskRequest(identifier: CacheBackgroundFlushTask.identifier)
+            request.requiresNetworkConnectivity = false
+            request.requiresExternalPower = false
+            do {
+                try BGTaskScheduler.shared.submit(request)
+            } catch {
+                Logger.cache.warning("Failed to submit background flush task: \(error.localizedDescription, privacy: .public)")
             }
-            _ = semaphore.wait(timeout: .now() + 4)
+            #endif
+            guard let self else { return }
+            Task { await self.flushAll(deadline: Date().addingTimeInterval(4)) }
         }
 
         let memory = NotificationCenter.default.addObserver(
@@ -394,12 +441,36 @@ public actor CacheCoordinator {
     }
 
     public func flushAll() async {
-        await conversations.flushDirtyKeys()
-        await messages.flushDirtyKeys()
-        await participants.flushDirtyKeys()
-        await profiles.flushDirtyKeys()
-        await feed.flushDirtyKeys()
-        await stories.flushDirtyKeys()
+        await flushAll(deadline: nil)
+    }
+
+    /// Deadline-aware flush invoked by `CacheBackgroundFlushTask` and the
+    /// `willTerminate` lifecycle hook (Task 1.3 of the iOS Local-First
+    /// Wave 1 plan). Each store is asked to drain its dirty set, checking
+    /// the deadline between keys so a long-running flush can abandon
+    /// cleanly when the OS budget is about to run out. Stores not yet
+    /// drained stay dirty — the next foreground hop or scheduled BG task
+    /// picks them up. A `nil` deadline preserves the legacy unbounded
+    /// behaviour used by `evictUnderMemoryPressure` and the foreground
+    /// `BackgroundTransitionCoordinator` hook.
+    ///
+    /// Note: the GRDB writes are sequenced (one transaction per dirty key
+    /// per store) rather than batched into a single global transaction.
+    /// Option A in the plan — see the task notes for the trade-off.
+    public func flushAll(deadline: Date?) async {
+        if let deadline, Date() >= deadline { return }
+        await conversations.flushDirtyKeys(deadline: deadline)
+        if let deadline, Date() >= deadline { return }
+        await messages.flushDirtyKeys(deadline: deadline)
+        if let deadline, Date() >= deadline { return }
+        await participants.flushDirtyKeys(deadline: deadline)
+        if let deadline, Date() >= deadline { return }
+        await profiles.flushDirtyKeys(deadline: deadline)
+        if let deadline, Date() >= deadline { return }
+        await feed.flushDirtyKeys(deadline: deadline)
+        if let deadline, Date() >= deadline { return }
+        await stories.flushDirtyKeys(deadline: deadline)
+        if let deadline, Date() >= deadline { return }
         persistTranslationCaches()
     }
 
@@ -534,6 +605,8 @@ public actor CacheCoordinator {
         await friendRequests.invalidateAll()
         await blockedUsers.invalidateAll()
         await userSearch.invalidateAll()
+        await communities.invalidateAll()
+        await drafts.invalidateAll()
         await images.invalidateAll()
         await audio.invalidateAll()
         await video.invalidateAll()
@@ -551,5 +624,87 @@ public actor CacheCoordinator {
 
     private nonisolated func clearTranslationCacheDB() {
         try? db.write { db in try TranslationCacheRecord.deleteAll(db) }
+    }
+
+    /// Purge ciblée des 3 caches in-memory de traduction/transcription +
+    /// la table GRDB `TranslationCacheRecord`. Exposé publiquement pour
+    /// que le pull-to-refresh (ou tout autre flow voulant re-traduire)
+    /// puisse forcer un re-fetch des traductions sans toucher aux
+    /// stores principaux (conversations, messages, etc.).
+    ///
+    /// Cas d'usage : l'utilisateur tire-pour-rafraîchir et veut
+    /// récupérer les éventuelles re-traductions côté serveur (modèle
+    /// NLLB mis à jour, contenu édité, langue préférée changée).
+    public func invalidateTranslationCaches() {
+        translationCache.removeAll()
+        translationInsertionOrder.removeAll()
+        translationTimestamps.removeAll()
+        transcriptionCache.removeAll()
+        transcriptionInsertionOrder.removeAll()
+        audioTranslationCache.removeAll()
+        audioTranslationInsertionOrder.removeAll()
+        clearTranslationCacheDB()
+    }
+
+    // MARK: - Test Helpers (Task 1.3)
+    //
+    // The background flush test harness exercises the deadline-aware
+    // `flushAll(deadline:)` path against a coordinator instance bound to
+    // an in-memory database. These helpers seed and inspect the
+    // `conversations` store dirty set without going through the public
+    // `save()` path — which would flush synchronously via the L2 writer
+    // and leave the dirty set empty by the time the test pokes at it.
+    //
+    // Marked `public` so tests in a separate module can call them; the
+    // body is trivially side-effect-free for production callers (the
+    // returned count is just an introspection).
+
+    /// Synthesise `count` dirty conversation entries directly in the L1
+    /// cache + dirty set, bypassing `save()` so the L2 writer doesn't
+    /// drain the dirty bookkeeping before the flush path under test
+    /// runs. Used by `CacheBackgroundFlushTests`.
+    public func markDirtyForTest(count: Int) async throws {
+        let entries: [(String, [MeeshyConversation])] = (0..<count).map { idx in
+            let key = "test-key-\(idx)"
+            let conv = MeeshyConversation(
+                id: "conv-test-\(idx)",
+                identifier: "test-\(idx)",
+                type: .direct,
+                title: "Test \(idx)",
+                lastMessageAt: Date(),
+                unreadCount: 0
+            )
+            return (key, [conv])
+        }
+        await conversations.seedDirtyForTest(items: entries)
+    }
+
+    /// Total dirty key count across all GRDB-backed stores driven by the
+    /// deadline-aware flush. Mirrors the surfaces touched by
+    /// `flushAll(deadline:)` so a test can assert "no work left to do".
+    public func dirtyCountForTest() async -> Int {
+        var total = 0
+        total += await conversations.dirtyKeyCount()
+        total += await messages.dirtyKeyCount()
+        total += await participants.dirtyKeyCount()
+        total += await profiles.dirtyKeyCount()
+        total += await feed.dirtyKeyCount()
+        total += await stories.dirtyKeyCount()
+        return total
+    }
+}
+
+// MARK: - Test Seam — ProfileCacheWriting
+
+/// Narrow contract for persisting an updated user in the profile cache.
+/// EditProfileViewModel uses this after `AuthManager.applyLocalProfileChanges`
+/// so the optimistic state survives an app kill via GRDBCacheStore.
+public protocol ProfileCacheWriting: Sendable {
+    func saveProfile(_ user: MeeshyUser, for userId: String) async throws
+}
+
+extension CacheCoordinator: ProfileCacheWriting {
+    public func saveProfile(_ user: MeeshyUser, for userId: String) async throws {
+        try await profiles.save([user], for: userId)
     }
 }

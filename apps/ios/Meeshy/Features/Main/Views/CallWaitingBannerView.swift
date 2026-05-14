@@ -1,12 +1,32 @@
 import SwiftUI
 
 struct CallWaitingBannerView: View {
+    // Audit P2-iOS-11 — refactored from a `show()`-returning-a-new-View
+    // pattern (which mutated `@State` storage on a struct copy — fragile and
+    // not officially supported) to a parent-driven `@Binding isVisible`.
+    // The auto-dismiss Task is now actually scheduled (the previous
+    // `autoDismissSeconds` init parameter was accepted but never consumed).
     let callerName: String
+    let autoDismissSeconds: TimeInterval
     let onReject: () -> Void
     let onEndAndAnswer: () -> Void
 
-    @State private var isVisible = false
+    @Binding var isVisible: Bool
     @State private var autoDismissTask: Task<Void, Never>?
+
+    init(
+        callerName: String,
+        autoDismissSeconds: TimeInterval = 15,
+        isVisible: Binding<Bool>,
+        onReject: @escaping () -> Void,
+        onEndAndAnswer: @escaping () -> Void
+    ) {
+        self.callerName = callerName
+        self.autoDismissSeconds = autoDismissSeconds
+        self._isVisible = isVisible
+        self.onReject = onReject
+        self.onEndAndAnswer = onEndAndAnswer
+    }
 
     var body: some View {
         if isVisible {
@@ -64,27 +84,34 @@ struct CallWaitingBannerView: View {
             .transition(.move(edge: .top).combined(with: .opacity))
             .accessibilityElement(children: .contain)
             .accessibilityLabel("Appel entrant de \(callerName)")
+            .onAppear {
+                scheduleAutoDismiss()
+            }
+            .onDisappear {
+                autoDismissTask?.cancel()
+                autoDismissTask = nil
+            }
         }
     }
 
     private func dismiss() {
         autoDismissTask?.cancel()
+        autoDismissTask = nil
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             isVisible = false
         }
     }
 
-    func show() -> CallWaitingBannerView {
-        var view = self
-        view._isVisible = State(initialValue: true)
-        return view
-    }
-}
-
-extension CallWaitingBannerView {
-    init(callerName: String, autoDismissSeconds: TimeInterval = 15, onReject: @escaping () -> Void, onEndAndAnswer: @escaping () -> Void) {
-        self.callerName = callerName
-        self.onReject = onReject
-        self.onEndAndAnswer = onEndAndAnswer
+    private func scheduleAutoDismiss() {
+        guard autoDismissSeconds > 0 else { return }
+        autoDismissTask?.cancel()
+        let seconds = autoDismissSeconds
+        autoDismissTask = Task { @MainActor in
+            try? await Task.sleep(for: .seconds(seconds))
+            guard !Task.isCancelled else { return }
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isVisible = false
+            }
+        }
     }
 }

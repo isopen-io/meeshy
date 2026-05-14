@@ -191,12 +191,15 @@ export function useConversationMessagesRQ(
     store.setLatestOwnMessageId(conversationId, ownMessages[0].id);
 
     // Batch fetch read statuses for own messages (once per conversation load)
-    const fetchKey = `${conversationId}:${ownMessages[0].id}`;
+    // Use ObjectId from loaded messages, not the raw identifier/slug
+    const resolvedConvId = ownMessages[0]?.conversationId ?? conversationId;
+    const fetchKey = `${resolvedConvId}:${ownMessages[0].id}`;
     if (batchFetchedRef.current === fetchKey) return;
+    if (!/^[a-f\d]{24}$/i.test(resolvedConvId)) return;
     batchFetchedRef.current = fetchKey;
 
     const ownMessageIds = ownMessages.map(m => m.id).slice(0, 50);
-    messagesService.getReadStatuses(conversationId, ownMessageIds)
+    messagesService.getReadStatuses(resolvedConvId, ownMessageIds)
       .then(statusMap => {
         const batch: Record<string, { totalMembers: number; deliveredCount: number; readCount: number }> = {};
         for (const [msgId, status] of Object.entries(statusMap)) {

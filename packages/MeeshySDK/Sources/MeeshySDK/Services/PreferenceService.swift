@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 // MARK: - Protocol
 
@@ -12,6 +13,58 @@ public protocol PreferenceServiceProviding: Sendable {
     func resetPreferences(category: PreferenceCategory) async throws
     func createCategory(name: String, color: String?, icon: String?) async throws -> ConversationCategory
     func getMyConversationTags() async throws -> [String]
+
+    // MARK: - Cache-first accessors (added 2026-05-11)
+    //
+    // Each `loadCached…` returns the L2-cached snapshot synchronously (well,
+    // through the GRDB actor hop) so the caller can paint UI immediately.
+    // `revalidate…` re-fetches the network and persists the fresh result so
+    // the next cache load is up-to-date. Callers typically chain them:
+    // `if let c = await loadCachedCategories() { … apply … }
+    //  let fresh = try await revalidateCategories()`
+    // For mutations the caller persists explicitly via `persist…` after the
+    // POST/PUT/PATCH succeeds so the optimistic local state survives a
+    // subsequent revalidate.
+    func loadCachedCategories() async -> [ConversationCategory]?
+    func revalidateCategories() async throws -> [ConversationCategory]
+    func persistCategories(_ categories: [ConversationCategory]) async
+
+    func loadCachedConversationTags() async -> [String]?
+    func revalidateConversationTags() async throws -> [String]
+    func persistConversationTags(_ tags: [String]) async
+
+    func loadCachedAllPreferences() async -> UserPreferences?
+    func revalidateAllPreferences() async throws -> UserPreferences
+    func persistAllPreferences(_ prefs: UserPreferences) async
+
+    func loadCachedConversationPreferences(conversationId: String) async -> APIConversationPreferences?
+    func revalidateConversationPreferences(conversationId: String) async throws -> APIConversationPreferences
+    func persistConversationPreferences(conversationId: String, prefs: APIConversationPreferences) async
+}
+
+// Default no-op implementations so existing PreferenceServiceProviding
+// conformers (mocks, alternate implementations) don't have to be updated
+// in lock-step. Concrete `PreferenceService` overrides each to actually
+// hit the L2 cache via `CacheCoordinator.shared.{categories,userTags,
+// userPreferences,conversationPreferences}`.
+public extension PreferenceServiceProviding {
+    func loadCachedCategories() async -> [ConversationCategory]? { nil }
+    func revalidateCategories() async throws -> [ConversationCategory] { try await getCategories() }
+    func persistCategories(_ categories: [ConversationCategory]) async {}
+
+    func loadCachedConversationTags() async -> [String]? { nil }
+    func revalidateConversationTags() async throws -> [String] { try await getMyConversationTags() }
+    func persistConversationTags(_ tags: [String]) async {}
+
+    func loadCachedAllPreferences() async -> UserPreferences? { nil }
+    func revalidateAllPreferences() async throws -> UserPreferences { try await getAllPreferences() }
+    func persistAllPreferences(_ prefs: UserPreferences) async {}
+
+    func loadCachedConversationPreferences(conversationId: String) async -> APIConversationPreferences? { nil }
+    func revalidateConversationPreferences(conversationId: String) async throws -> APIConversationPreferences {
+        try await getConversationPreferences(conversationId: conversationId)
+    }
+    func persistConversationPreferences(conversationId: String, prefs: APIConversationPreferences) async {}
 }
 
 public final class PreferenceService: PreferenceServiceProviding, @unchecked Sendable {
@@ -103,5 +156,110 @@ public final class PreferenceService: PreferenceServiceProviding, @unchecked Sen
             }
         }
         return set.sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+    }
+
+    // MARK: - Cache-first overrides
+
+    private static let cacheKey = "list"
+    private static let allPrefsKey = "all"
+
+    public func loadCachedCategories() async -> [ConversationCategory]? {
+        let result = await CacheCoordinator.shared.categories.load(for: Self.cacheKey)
+        switch result {
+        case .fresh(let data, _), .stale(let data, _): return data
+        case .expired, .empty: return nil
+        }
+    }
+
+    public func revalidateCategories() async throws -> [ConversationCategory] {
+        let fresh = try await getCategories()
+        await persistCategories(fresh)
+        return fresh
+    }
+
+    public func persistCategories(_ categories: [ConversationCategory]) async {
+        do {
+            try await CacheCoordinator.shared.categories.save(categories, for: Self.cacheKey)
+        } catch {
+            Logger.cache.error("persistCategories failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    public func loadCachedConversationTags() async -> [String]? {
+        let result = await CacheCoordinator.shared.userTags.load(for: Self.cacheKey)
+        switch result {
+        case .fresh(let entries, _), .stale(let entries, _):
+            return entries.map(\.name).sorted { $0.localizedCaseInsensitiveCompare($1) == .orderedAscending }
+        case .expired, .empty:
+            return nil
+        }
+    }
+
+    public func revalidateConversationTags() async throws -> [String] {
+        let fresh = try await getMyConversationTags()
+        await persistConversationTags(fresh)
+        return fresh
+    }
+
+    public func persistConversationTags(_ tags: [String]) async {
+        let entries = tags.map { ConversationTagEntry(name: $0) }
+        do {
+            try await CacheCoordinator.shared.userTags.save(entries, for: Self.cacheKey)
+        } catch {
+            Logger.cache.error("persistConversationTags failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    public func loadCachedAllPreferences() async -> UserPreferences? {
+        let result = await CacheCoordinator.shared.userPreferences.load(for: Self.allPrefsKey)
+        switch result {
+        case .fresh(let entries, _), .stale(let entries, _):
+            return entries.first?.value
+        case .expired, .empty:
+            return nil
+        }
+    }
+
+    public func revalidateAllPreferences() async throws -> UserPreferences {
+        let fresh = try await getAllPreferences()
+        await persistAllPreferences(fresh)
+        return fresh
+    }
+
+    public func persistAllPreferences(_ prefs: UserPreferences) async {
+        let wrapped = PreferenceValue(id: Self.allPrefsKey, value: prefs)
+        do {
+            try await CacheCoordinator.shared.userPreferences.save([wrapped], for: Self.allPrefsKey)
+        } catch {
+            // Encrypted store: a failure here means the user's preferences
+            // were not persisted. Surface in the log so the user can be
+            // warned by a higher layer once Task 1.2 wires error UX.
+            Logger.cache.error("persistAllPreferences failed (encrypted store): \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    public func loadCachedConversationPreferences(conversationId: String) async -> APIConversationPreferences? {
+        let result = await CacheCoordinator.shared.conversationPreferences.load(for: conversationId)
+        switch result {
+        case .fresh(let entries, _), .stale(let entries, _):
+            return entries.first?.value
+        case .expired, .empty:
+            return nil
+        }
+    }
+
+    public func revalidateConversationPreferences(conversationId: String) async throws -> APIConversationPreferences {
+        let fresh = try await getConversationPreferences(conversationId: conversationId)
+        await persistConversationPreferences(conversationId: conversationId, prefs: fresh)
+        return fresh
+    }
+
+    public func persistConversationPreferences(conversationId: String, prefs: APIConversationPreferences) async {
+        let wrapped = PreferenceValue(id: conversationId, value: prefs)
+        do {
+            try await CacheCoordinator.shared.conversationPreferences.save([wrapped], for: conversationId)
+        } catch {
+            Logger.cache.error("persistConversationPreferences failed (encrypted store): \(error.localizedDescription, privacy: .public)")
+        }
     }
 }

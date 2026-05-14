@@ -29,7 +29,7 @@ struct StoryRepostEmbedCell: View {
             }
 
             if let repost = post.repost {
-                StoryCanvasReaderView(
+                StoryReaderRepresentable(
                     repost: repost,
                     preferredContentLanguages: preferredContentLanguages,
                     mute: true

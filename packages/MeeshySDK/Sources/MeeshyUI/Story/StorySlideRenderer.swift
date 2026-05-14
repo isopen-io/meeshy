@@ -35,10 +35,8 @@ public enum StorySlideRenderer {
             }
 
             // 3. Text overlays
-            if let textObjects = slide.effects.textObjects {
-                for textObj in textObjects {
-                    drawTextObject(textObj, in: size, ctx: cgCtx)
-                }
+            for textObj in slide.effects.textObjects {
+                drawTextObject(textObj, in: size, ctx: cgCtx)
             }
 
             // 4. Foreground media images
@@ -71,7 +69,7 @@ public enum StorySlideRenderer {
     // MARK: - Private Drawing
 
     private static func drawTextObject(_ textObj: StoryTextObject, in size: CGSize, ctx: CGContext) {
-        let fontSize = max(6, size.width * (textObj.resolvedSize / 390.0))  // Scale relative to 390pt screen width
+        let fontSize = max(6, size.width * CGFloat(textObj.resolvedSize / 390.0))  // Scale relative to 390pt screen width
         let textColor = UIColor(hex: textObj.textColor ?? "FFFFFF") ?? .white
 
         let style = NSMutableParagraphStyle()
@@ -94,8 +92,8 @@ public enum StorySlideRenderer {
         }
 
         let textWidth = size.width * 0.85
-        let centerX = size.width * textObj.x
-        let centerY = size.height * textObj.y
+        let centerX = size.width * CGFloat(textObj.x)
+        let centerY = size.height * CGFloat(textObj.y)
         let textRect = CGRect(
             x: centerX - textWidth / 2,
             y: centerY - fontSize,
@@ -103,7 +101,7 @@ public enum StorySlideRenderer {
             height: fontSize * 3
         )
 
-        (textObj.content as NSString).draw(in: textRect, withAttributes: attrs)
+        (textObj.text as NSString).draw(in: textRect, withAttributes: attrs)
     }
 
     private static func drawMediaObject(_ obj: StoryMediaObject, image: UIImage, in size: CGSize, ctx: CGContext) {

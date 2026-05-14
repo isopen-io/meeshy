@@ -13,6 +13,7 @@ import { Label } from '@/components/ui/label';
 import { useBotProtection } from '@/hooks/use-bot-protection';
 import { useAuthFormStore } from '@/stores/auth-form-store';
 import { requestBrowserGeolocation, getGeolocationHeaders } from '@/lib/geolocation';
+import { useAuth } from '@/hooks/use-auth';
 
 interface LoginFormProps {
   onSuccess?: (user: User, token: string) => void; // Optional callback for custom behavior
@@ -20,6 +21,7 @@ interface LoginFormProps {
 
 export function LoginForm({ onSuccess }: LoginFormProps) {
   const { t } = useI18n('auth');
+  const { login } = useAuth();
   const { identifier, setIdentifier } = useAuthFormStore();
   const [formData, setFormData] = useState({
     username: '',

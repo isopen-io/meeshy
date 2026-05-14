@@ -105,6 +105,46 @@ final class MockAuthManager: AuthManaging {
         savedAccounts.removeAll { $0.id == userId }
     }
 
+    // MARK: - Profile Mutation tracking (Phase 4 follow-up)
+
+    var appliedProfileChanges: [(displayName: String?, bio: String?, avatarUrl: String?)] = []
+    var restoredSnapshots: [ProfileSnapshot] = []
+    /// Optional override — when set, `applyLocalProfileChanges` returns this
+    /// snapshot instead of computing one from `currentUser`. Useful for
+    /// rollback symmetry tests.
+    var applyLocalProfileChangesReturn: ProfileSnapshot?
+
+    @discardableResult
+    func applyLocalProfileChanges(
+        displayName: String?,
+        bio: String?,
+        avatarUrl: String?
+    ) -> ProfileSnapshot {
+        appliedProfileChanges.append((displayName, bio, avatarUrl))
+        let snapshot = applyLocalProfileChangesReturn ?? ProfileSnapshot(
+            displayName: currentUser?.displayName,
+            bio: currentUser?.bio,
+            avatarUrl: currentUser?.avatar
+        )
+        if let user = currentUser {
+            currentUser = user.withProfileChanges(
+                displayName: displayName, bio: bio, avatar: avatarUrl
+            )
+        }
+        return snapshot
+    }
+
+    func restoreLocalProfileSnapshot(_ snapshot: ProfileSnapshot) {
+        restoredSnapshots.append(snapshot)
+        if let user = currentUser {
+            currentUser = user.withProfileChanges(
+                displayName: snapshot.displayName,
+                bio: snapshot.bio,
+                avatar: snapshot.avatarUrl
+            )
+        }
+    }
+
     // MARK: - Test Helpers
 
     func simulateLoggedIn(user: MeeshyUser, token: String = "mock-token") {
@@ -141,5 +181,8 @@ final class MockAuthManager: AuthManaging {
         passwordResetResult = true
         loginError = nil
         registerError = nil
+        appliedProfileChanges.removeAll()
+        restoredSnapshots.removeAll()
+        applyLocalProfileChangesReturn = nil
     }
 }

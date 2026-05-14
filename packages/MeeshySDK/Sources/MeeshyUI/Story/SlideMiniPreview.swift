@@ -113,7 +113,7 @@ struct SlideMiniPreview: View {
 
     @ViewBuilder
     private func textLayer(in size: CGSize) -> some View {
-        let texts = effects.textObjects ?? []
+        let texts = effects.textObjects
         ForEach(texts) { text in
             textItem(text, in: size)
         }
@@ -122,15 +122,15 @@ struct SlideMiniPreview: View {
     @ViewBuilder
     private func textItem(_ text: StoryTextObject, in size: CGSize) -> some View {
         // 393pt = design reference width (9:16 canvas on iPhone 14 Pro). Mini preview scales proportionally.
-        let fontSize = max(3, (text.textSize ?? 24) * size.width / 393)
-        Text(text.content.isEmpty ? " " : text.content)
+        let fontSize = CGFloat(max(3, text.fontSize * Double(size.width) / 393))
+        Text(text.text.isEmpty ? " " : text.text)
             .font(.system(size: fontSize, weight: .medium))
             .foregroundColor(Color(hex: text.textColor ?? "FFFFFF"))
             .lineLimit(1)
-            .scaleEffect(text.scale)
-            .rotationEffect(.degrees(Double(text.rotation)))
-            .position(x: text.x * size.width,
-                      y: text.y * size.height)
+            .scaleEffect(CGFloat(text.scale))
+            .rotationEffect(.degrees(text.rotation))
+            .position(x: CGFloat(text.x) * size.width,
+                      y: CGFloat(text.y) * size.height)
     }
 
     // MARK: - Sticker Layer

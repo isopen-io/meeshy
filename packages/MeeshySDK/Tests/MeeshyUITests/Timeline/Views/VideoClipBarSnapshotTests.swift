@@ -3,6 +3,22 @@ import SwiftUI
 import UIKit
 @testable import MeeshyUI
 
+// MARK: - Snapshot record workflow
+//
+// This file uses `swift-snapshot-testing` (v1.17.6) via `SnapshotHelpers`.
+// The library's default record mode is `.missing` : the first time a test
+// runs on a fresh checkout, the baseline PNG is written to `__Snapshots__/`
+// and the test reports a single failure (with the message
+// "Automatically recorded snapshot: …"). Re-run the test once and it now
+// asserts cleanly against the freshly recorded baseline. Commit the PNGs.
+//
+// To force re-recording after an intentional UI change, run :
+//   ./scripts/record-snapshot-baselines.sh
+// (this exports `SNAPSHOT_TESTING_RECORD=all` and runs the suite).
+//
+// Do NOT add `XCTSkipIf(true)` back to these tests — that yields zero
+// visual regression coverage and silently masks rendering bugs.
+
 @MainActor
 final class VideoClipBarSnapshotTests: XCTestCase {
 
@@ -47,8 +63,7 @@ final class VideoClipBarSnapshotTests: XCTestCase {
 
     // MARK: - Variant 1 : trimmed (short duration relative to slot)
 
-    func test_snapshot_videoClip_trimmed() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_videoClip_trimmed() {
         SnapshotHelpers.assertLightDarkSnapshot(
             of: makeBar(title: "trimmed.mp4", duration: 2, startTime: 1),
             named: "videoClip-trimmed"
@@ -57,8 +72,7 @@ final class VideoClipBarSnapshotTests: XCTestCase {
 
     // MARK: - Variant 2 : fade in active
 
-    func test_snapshot_videoClip_fadeIn() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_videoClip_fadeIn() {
         SnapshotHelpers.assertLightDarkSnapshot(
             of: makeBar(title: "fade_in.mp4", fadeIn: 0.8),
             named: "videoClip-fadeIn"
@@ -67,8 +81,7 @@ final class VideoClipBarSnapshotTests: XCTestCase {
 
     // MARK: - Variant 3 : fade out active
 
-    func test_snapshot_videoClip_fadeOut() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_videoClip_fadeOut() {
         SnapshotHelpers.assertLightDarkSnapshot(
             of: makeBar(title: "fade_out.mp4", fadeOut: 1.0),
             named: "videoClip-fadeOut"
@@ -77,8 +90,7 @@ final class VideoClipBarSnapshotTests: XCTestCase {
 
     // MARK: - Variant 4 : selected
 
-    func test_snapshot_videoClip_selected() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_videoClip_selected() {
         SnapshotHelpers.assertLightDarkSnapshot(
             of: makeBar(title: "selected.mp4", isSelected: true),
             named: "videoClip-selected"
@@ -87,8 +99,7 @@ final class VideoClipBarSnapshotTests: XCTestCase {
 
     // MARK: - Variant 5 : locked
 
-    func test_snapshot_videoClip_locked() throws {
-        try XCTSkipIf(true, "Snapshot baselines must be recorded locally — flip record: true in SnapshotHelpers + run once to generate, then commit __Snapshots__/")
+    func test_snapshot_videoClip_locked() {
         SnapshotHelpers.assertLightDarkSnapshot(
             of: makeBar(title: "locked.mp4", isLocked: true),
             named: "videoClip-locked"

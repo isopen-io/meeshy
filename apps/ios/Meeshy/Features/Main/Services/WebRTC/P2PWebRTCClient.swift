@@ -34,6 +34,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     private var peerConnection: RTCPeerConnection?
     private let factory: RTCPeerConnectionFactory
     private var localAudioTrack: RTCAudioTrack?
+    private var audioTransceiver: RTCRtpTransceiver?
+    private var videoTransceiver: RTCRtpTransceiver?
     private var localVideoTrack_: RTCVideoTrack?
     private var videoCapturer: RTCCameraVideoCapturer?
     private var videoFilterDelegate: VideoFilterCapturerDelegate?
@@ -137,7 +139,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     func startLocalMedia(type: CallMediaType) async throws {
         Logger.webrtc.info("[WEBRTC] startLocalMedia begin type=\(String(describing: type))")
-        guard peerConnection != nil else { throw WebRTCError.noPeerConnection }
+        guard let pc = peerConnection else { throw WebRTCError.noPeerConnection }
 
         let audioConstraints = RTCMediaConstraints(
             mandatoryConstraints: [
@@ -153,8 +155,22 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let audioTrack = factory.audioTrack(with: audioSource, trackId: "audio0")
         audioTrack.isEnabled = true
         localAudioTrack = audioTrack
-        Logger.webrtc.info("[WEBRTC] add audio track to PC")
-        peerConnection?.add(audioTrack, streamIds: ["meeshy-stream-0"])
+        Logger.webrtc.info("[WEBRTC] addTransceiver audio")
+        // Phase 2 — addTransceiver garantit la présence du transceiver dans
+        // pc.transceivers AVANT setLocalDescription, ce qui permet d'appliquer
+        // setCodecPreferences de manière fiable. add(track:streamIds:) crée
+        // un transceiver implicite mais la liste pc.transceivers peut rester
+        // vide jusqu'au premier setLocalDescription, rendant setCodecPreferences
+        // inopérant. Reference §3.8 + §7 E9/E12.
+        let audioInit = RTCRtpTransceiverInit()
+        audioInit.direction = .sendRecv
+        audioInit.streamIds = ["meeshy-stream-0"]
+        guard let audioTransceiver = pc.addTransceiver(of: .audio, init: audioInit) else {
+            throw WebRTCError.failedToCreatePeerConnection
+        }
+        audioTransceiver.sender.track = audioTrack
+        self.audioTransceiver = audioTransceiver
+        applyAudioCodecPreferences(audioTransceiver: audioTransceiver)
 
         guard type == .audioVideo else {
             Logger.webrtc.info("Local audio track started")
@@ -177,8 +193,16 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         let videoTrack = factory.videoTrack(with: videoSource, trackId: "video0")
         videoTrack.isEnabled = true
         localVideoTrack_ = videoTrack
-        Logger.webrtc.info("[WEBRTC] add video track to PC")
-        peerConnection?.add(videoTrack, streamIds: ["meeshy-stream-0"])
+        Logger.webrtc.info("[WEBRTC] addTransceiver video")
+        let videoInit = RTCRtpTransceiverInit()
+        videoInit.direction = .sendRecv
+        videoInit.streamIds = ["meeshy-stream-0"]
+        guard let videoTransceiver = pc.addTransceiver(of: .video, init: videoInit) else {
+            throw WebRTCError.failedToCreatePeerConnection
+        }
+        videoTransceiver.sender.track = videoTrack
+        self.videoTransceiver = videoTransceiver
+        applyVideoCodecPreferences(videoTransceiver: videoTransceiver)
 
         let filterDelegate = VideoFilterCapturerDelegate(target: videoSource, pipeline: videoFilterPipeline)
         videoFilterDelegate = filterDelegate
@@ -212,6 +236,150 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         #endif
     }
 
+    // Phase 2 — Apply audio codec preferences via libwebrtc 141 API.
+    // Order: Opus first (primary), RED second (RFC 2198 redundancy).
+    // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.8 + ADR-4
+    //
+    // RED was previously enabled via SDP munging (`addAudioRedundancy`) which
+    // triggered an iOS libwebrtc bug with `a=fmtp:63 PT/PT` (silent audio after
+    // ICE connected, commit 9e663039). Using setCodecPreferences avoids the
+    // SDP regex path entirely — libwebrtc 141 negotiates RED via the standard
+    // API correctly.
+    private func applyAudioCodecPreferences(audioTransceiver: RTCRtpTransceiver) {
+        let factory = WebRTCSharedFactory.factory
+        // Audit P1-5 — `setCodecPreferences` is validated against
+        // `RTCRtpSender.getCapabilities()` per the W3C WebRTC spec (and
+        // libwebrtc's internal RTPMediaSection::CreateMediaContent). For
+        // sendRecv transceivers we want the SENDER caps; using receiver caps
+        // matches in the common case but can leak codecs (notably RED) with
+        // asymmetric sender/receiver definitions, causing setCodecPreferences
+        // to throw "Invalid codec".
+        let capabilities = factory.rtpSenderCapabilities(forKind: kRTCMediaStreamTrackKindAudio)
+
+        let opusCodecs = capabilities.codecs.filter { $0.name.lowercased() == "opus" }
+        let redCodecs = capabilities.codecs.filter { $0.name.lowercased() == "red" }
+
+        // Opus primary, RED secondary. Drop CN, telephone-event, G722, PCMU.
+        let preferred = opusCodecs + redCodecs
+        guard !preferred.isEmpty else {
+            Logger.webrtc.warning("[WEBRTC] no Opus/RED codecs available — leaving default preferences")
+            return
+        }
+
+        // Audit 2026-05-11 — the previous typed-function-reference trick
+        // (`let setCodecs: ([X]) throws -> Void = transceiver.setCodecPreferences`)
+        // still selected the deprecated void overload at compile time —
+        // confirmed by the persistent deprecation warning emitted at the
+        // assignment site. With the deprecated variant, the catch block was
+        // unreachable and any setCodecPreferences error (codec list empty,
+        // transceiver stopped, peer rejected the preference) was silently
+        // swallowed. Force the throwing `setCodecPreferences:error:` selector
+        // via a dynamic ObjC dispatch that bypasses Swift's overload picker.
+        do {
+            try Self.invokeSetCodecPreferences(on: audioTransceiver, codecs: preferred)
+            let names = preferred.map { $0.name }.joined(separator: ", ")
+            Logger.webrtc.info("[WEBRTC] audio codec preferences applied: \(names, privacy: .public)")
+        } catch {
+            Logger.webrtc.warning("[WEBRTC] setCodecPreferences (audio) threw: \(error.localizedDescription, privacy: .public)")
+        }
+
+        // Phase 2 — apply Opus bitrate range via RTCRtpEncodingParameters.
+        // DTX in libwebrtc 141 iOS Objective-C binding is NOT exposed on
+        // RTCRtpEncodingParameters (the WebIDL `dtx` field has no ObjC analog
+        // in this xcframework — verified against
+        // WebRTC.xcframework/.../RTCRtpEncodingParameters.h). DTX therefore
+        // remains driven by `usedtx=1` injected into Opus fmtp via
+        // mungeOpusSDP. Bitrate min/max are honored by the encoder directly
+        // through RtpEncodingParameters.
+        // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.8 + ADR-4
+        let params = audioTransceiver.sender.parameters
+        for encoding in params.encodings {
+            // DTX: no native API — see comment above; handled via SDP fmtp `usedtx=1`.
+            encoding.maxBitrateBps = NSNumber(value: 64_000)
+            encoding.minBitrateBps = NSNumber(value: 16_000)
+        }
+        audioTransceiver.sender.parameters = params
+        let encodingsCount = params.encodings.count
+        if encodingsCount > 0 {
+            Logger.webrtc.info("[WEBRTC] audio bitrate range applied via RtpEncodingParameters (max=64kbps, min=16kbps, encodings=\(encodingsCount, privacy: .public))")
+        } else {
+            Logger.webrtc.warning("[WEBRTC] audio bitrate NOT applied — encodings array empty")
+        }
+    }
+
+    // Phase 2 — Apply video codec preferences via libwebrtc 141 API.
+    // Order H264 > VP8 > VP9 (cross-platform iOS↔Web compatibility — §6.7).
+    // AV1 excluded (uneven HW support across iOS/Chrome/Safari).
+    // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §3.8 + §6.7
+    //
+    // Priority rationale:
+    // - H264: hardware-accelerated on iOS (VideoToolbox), supported by Chrome 80+, Safari 13+
+    // - VP8: software but ubiquitous, fallback for clients without H264 HW
+    // - VP9: better compression, software-only on most iOS, optional fallback
+    private func applyVideoCodecPreferences(videoTransceiver: RTCRtpTransceiver) {
+        let factory = WebRTCSharedFactory.factory
+        // Audit P1-5 — see applyAudioCodecPreferences for rationale.
+        let capabilities = factory.rtpSenderCapabilities(forKind: kRTCMediaStreamTrackKindVideo)
+
+        let priorityOrder = ["H264", "VP8", "VP9"]
+        let preferred = priorityOrder.flatMap { name in
+            capabilities.codecs.filter { $0.name == name }
+        }
+        guard !preferred.isEmpty else {
+            Logger.webrtc.warning("[WEBRTC] no preferred video codecs available — leaving default")
+            return
+        }
+
+        // Same dynamic ObjC dispatch rationale as applyAudioCodecPreferences.
+        do {
+            try Self.invokeSetCodecPreferences(on: videoTransceiver, codecs: preferred)
+            let names = preferred.map { $0.name }.joined(separator: ", ")
+            Logger.webrtc.info("[WEBRTC] video codec preferences applied: \(names, privacy: .public)")
+        } catch {
+            Logger.webrtc.warning("[WEBRTC] setCodecPreferences (video) threw: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Calls the throwing `setCodecPreferences:error:` selector on the given
+    /// transceiver via the ObjC runtime, bypassing Swift's overload resolution
+    /// which silently prefers the deprecated void overload (see audit
+    /// 2026-05-11 §B-Claim-1). The function-pointer cast matches the real
+    /// ObjC method signature: `BOOL (*)(NSObject, Selector, NSArray, NSError**)`.
+    private static func invokeSetCodecPreferences(
+        on transceiver: RTCRtpTransceiver,
+        codecs: [RTCRtpCodecCapability]
+    ) throws {
+        typealias SetCodecsIMP = @convention(c) (
+            NSObject, Selector, NSArray, AutoreleasingUnsafeMutablePointer<NSError?>
+        ) -> Bool
+        // Use #selector with the typed protocol reference so the compiler
+        // verifies the selector exists at build time (Swift's recommendation
+        // over string-literal Selector). The Protocol-suffixed name is
+        // libwebrtc's auto-generated Swift name for the ObjC protocol.
+        let selector = #selector(RTCRtpTransceiverProtocol.setCodecPreferences(_:error:))
+        guard transceiver.responds(to: selector) else {
+            throw NSError(
+                domain: "MeeshyWebRTC", code: -1,
+                userInfo: [NSLocalizedDescriptionKey: "setCodecPreferences:error: selector not exposed by libwebrtc binding"]
+            )
+        }
+        guard let imp = transceiver.method(for: selector) else {
+            throw NSError(
+                domain: "MeeshyWebRTC", code: -2,
+                userInfo: [NSLocalizedDescriptionKey: "setCodecPreferences:error: IMP unavailable"]
+            )
+        }
+        let fn = unsafeBitCast(imp, to: SetCodecsIMP.self)
+        var nsError: NSError?
+        let ok = fn(transceiver, selector, codecs as NSArray, &nsError)
+        if !ok {
+            throw nsError ?? NSError(
+                domain: "MeeshyWebRTC", code: -3,
+                userInfo: [NSLocalizedDescriptionKey: "setCodecPreferences returned false with no error"]
+            )
+        }
+    }
+
     // MARK: - SDP Negotiation
 
     func createOffer() async throws -> SessionDescription {
@@ -240,12 +408,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
 
         var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
-        // DIAGNOSTIC: RED désactivé temporairement. Suspect du flux audio
-        // nul après ICE connected — `a=fmtp:63 PT/PT` (RFC 2198) peut être
-        // mal négocié par certains chemins du SDK iOS WebRTC, entraînant
-        // un drop silencieux des paquets audio à la décode. À ré-activer
-        // une fois la cause confirmée.
-        // mungedSDP = Self.addAudioRedundancy(mungedSDP)
+        // Phase 2 — RED is now negotiated via setCodecPreferences (libwebrtc 141 API).
+        // The previous SDP munging path (addAudioRedundancy) was disabled in 9e663039
+        // due to a PT/PT negotiation bug. The setCodecPreferences API avoids the
+        // regex entirely. addAudioRedundancy is kept as a static function for
+        // diagnostic comparison but MUST NOT be called.
+        // Reference §3.8 + ADR-4.
         mungedSDP = Self.addTransportCC(mungedSDP)
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
         let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
@@ -283,12 +451,12 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         }
 
         var mungedSDP = Self.mungeOpusSDP(sdp.sdp)
-        // DIAGNOSTIC: RED désactivé temporairement. Suspect du flux audio
-        // nul après ICE connected — `a=fmtp:63 PT/PT` (RFC 2198) peut être
-        // mal négocié par certains chemins du SDK iOS WebRTC, entraînant
-        // un drop silencieux des paquets audio à la décode. À ré-activer
-        // une fois la cause confirmée.
-        // mungedSDP = Self.addAudioRedundancy(mungedSDP)
+        // Phase 2 — RED is now negotiated via setCodecPreferences (libwebrtc 141 API).
+        // The previous SDP munging path (addAudioRedundancy) was disabled in 9e663039
+        // due to a PT/PT negotiation bug. The setCodecPreferences API avoids the
+        // regex entirely. addAudioRedundancy is kept as a static function for
+        // diagnostic comparison but MUST NOT be called.
+        // Reference §3.8 + ADR-4.
         mungedSDP = Self.addTransportCC(mungedSDP)
         mungedSDP = Self.addVideoBitrateHints(mungedSDP)
         let mungedDescription = RTCSessionDescription(type: sdp.type, sdp: mungedSDP)
@@ -325,6 +493,41 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     func toggleVideo(_ enabled: Bool) {
         localVideoTrack_?.isEnabled = enabled
         Logger.webrtc.info("Video \(enabled ? "enabled" : "disabled")")
+
+        // Audit P1-7 — also stop the capturer when video is disabled.
+        // Without this, AVCaptureSession keeps the camera LED on and delivers
+        // ~30fps frames at 720p (~44 MB/s NV12) through the filter pipeline
+        // even though the encoder is fed disabled frames. Stopping the
+        // capturer frees ~80–150 mA on iPhone 13. On re-enable we restart
+        // the capturer with the same camera/format/fps as the initial start.
+        Task { [weak self] in
+            guard let self else { return }
+            if enabled {
+                await self.restartCapturerIfStopped()
+            } else {
+                await self.videoCapturer?.stopCapture()
+            }
+        }
+    }
+
+    /// Restarts the existing capturer using the current camera selection
+    /// (front vs back) and the same format-selection logic as the initial
+    /// start. No-op if there is no capturer (audio-only call).
+    private func restartCapturerIfStopped() async {
+        guard let capturer = videoCapturer else { return }
+        let position: AVCaptureDevice.Position = usingFrontCamera ? .front : .back
+        guard let camera = RTCCameraVideoCapturer.captureDevices().first(where: { $0.position == position }),
+              let format = selectFormat(for: camera) else {
+            Logger.webrtc.warning("[WEBRTC] toggleVideo on — no camera/format available, skipping capturer restart")
+            return
+        }
+        let fps = targetFrameRate(for: format)
+        do {
+            try await capturer.startCapture(with: camera, format: format, fps: fps)
+            Logger.webrtc.info("[WEBRTC] capturer restarted on toggleVideo(true) (\(fps)fps)")
+        } catch {
+            Logger.webrtc.error("[WEBRTC] capturer restart failed: \(error.localizedDescription)")
+        }
     }
 
     func switchCamera() async throws {
@@ -351,7 +554,11 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
 
     func getStats() async -> CallStats? {
         guard let pc = peerConnection else { return nil }
-        return await withCheckedContinuation { continuation in
+        // Collect raw values inside the nonisolated pc.statistics callback,
+        // then build CallStats (which is @MainActor) after the continuation
+        // returns — avoiding an 'await' inside a synchronous closure.
+        typealias RawStats = (rtt: Double, packetsLost: Int, bytesSent: Int, packetsReceived: Int, codec: String?)
+        let raw: RawStats = await withCheckedContinuation { continuation in
             pc.statistics { report in
                 var rtt: Double = 0
                 var packetsLost: Int = 0
@@ -394,19 +601,19 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
                     }
                 }
 
-                // DIAGNOSTIC : log explicite des bytes/packets pour confirmer
-                // si l'audio circule réellement (vs juste ICE keepalives).
-                Logger.webrtc.info("[STATS] sent=\(bytesSent)B/\(packetsSent)pkt recv=\(bytesReceived)B/\(packetsReceived)pkt rtt=\(rtt)ms loss=\(packetsLost)")
-
-                continuation.resume(returning: CallStats(
-                    roundTripTimeMs: rtt,
-                    packetsLost: packetsLost,
-                    bandwidth: bytesSent,
-                    codec: codec,
-                    inboundPacketsReceived: packetsReceived
-                ))
+                Logger.webrtc.debug("[STATS] sent=\(bytesSent)B/\(packetsSent)pkt recv=\(bytesReceived)B/\(packetsReceived)pkt rtt=\(rtt)ms loss=\(packetsLost)")
+                continuation.resume(returning: (rtt, packetsLost, bytesSent, packetsReceived, codec))
             }
         }
+        // CallStats.init is @MainActor — safe here because getStats() is called
+        // on the main actor (P2PWebRTCClient is @MainActor-isolated).
+        return CallStats(
+            roundTripTimeMs: raw.rtt,
+            packetsLost: raw.packetsLost,
+            bandwidth: raw.bytesSent,
+            codec: raw.codec,
+            inboundPacketsReceived: raw.packetsReceived
+        )
     }
 
     // MARK: - DataChannel
@@ -457,6 +664,8 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         localVideoTrack_ = nil
         remoteVideoTrack_ = nil
         remoteAudioTrack_ = nil
+        audioTransceiver = nil
+        videoTransceiver = nil
         videoCapturer = nil
         Logger.webrtc.info("Peer connection disconnected and cleaned up")
     }
@@ -464,7 +673,14 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     deinit {
         // disconnect() is MainActor-isolated; callers must call it explicitly
         // before release. ARC handles per-property cleanup here.
-        RTCCleanupSSL()
+        //
+        // RTCCleanupSSL() must NOT be called here: `WebRTCSharedFactory.factory`
+        // initializes SSL exactly once for the whole process (PERF-001), and the
+        // factory keeps using the SSL context across every P2PWebRTCClient
+        // instance. Tearing it down per-deinit broke any 2nd call in the same
+        // app session (silent DTLS failure or crash on the next handshake).
+        // SSL state is reclaimed by the OS at process exit — that is correct
+        // on iOS, no explicit cleanup needed.
     }
 
     // MARK: - Private Helpers
@@ -524,16 +740,20 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
     }
 
     static func mungeOpusSDP(_ sdp: String) -> String {
-        // DIAGNOSTIC: `usedtx=1` était suspect du flux audio nul après ICE
-        // connected — DTX ne transmet aucun paquet quand le mic capture du
-        // silence (ex: simulator macOS sans permission micro). On le repasse
-        // à 0 pour forcer un flux RTP continu et confirmer/infirmer la
-        // cause. À ré-activer plus tard si le diagnostic remonte ailleurs.
+        // Phase 2 — `usedtx=1` enables Opus discontinuous transmission (silence
+        // suppression). libwebrtc 141 iOS ObjC binding does NOT expose a `dtx`
+        // property on RTCRtpEncodingParameters, so DTX remains driven via fmtp
+        // here. `useinbandfec=1` is similarly fmtp-only (no native API).
+        // maxaveragebitrate, stereo, maxplaybackrate remain as quality hints.
+        // The earlier diagnostic that toggled `usedtx=0` (suspected of silent
+        // audio after ICE) was disproven once RED munging was disabled in
+        // 9e663039 — the PT/PT bug was the real cause, not DTX.
+        // Reference §3.8 + ADR-4.
         let opusParams = [
-            "maxaveragebitrate=128000",
+            "maxaveragebitrate=64000",
             "stereo=1",
             "useinbandfec=1",
-            "usedtx=0",
+            "usedtx=1",
             "maxplaybackrate=48000"
         ]
         let paramString = opusParams.joined(separator: ";")
@@ -575,6 +795,7 @@ final class P2PWebRTCClient: NSObject, WebRTCClientProviding, @unchecked Sendabl
         return lines.joined(separator: "\r\n")
     }
 
+    @available(*, deprecated, message: "RED is now negotiated via setCodecPreferences. Calling this re-introduces the PT/PT silent-audio bug from 9e663039. Reference §3.8 + ADR-4.")
     static func addAudioRedundancy(_ sdp: String) -> String {
         var lines = sdp.components(separatedBy: "\r\n")
 

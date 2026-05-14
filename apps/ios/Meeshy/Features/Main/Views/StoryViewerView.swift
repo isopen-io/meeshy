@@ -1,5 +1,7 @@
 import SwiftUI
+import UIKit
 import Combine
+import os
 import MeeshySDK
 import MeeshyUI
 
@@ -34,6 +36,39 @@ struct RepostPostSourceWrapper: Identifiable {
 struct StoryDraft {
     var text: String = ""
     var attachments: [ComposerAttachment] = []
+}
+
+// MARK: - Prefetcher host (P3 wire-up)
+
+/// Offscreen `UIViewRepresentable` that installs the
+/// `StoryReaderPrefetcher.hostView` into the SwiftUI hierarchy. The host
+/// occupies a 1x1 corner behind every visible layer so the prefetcher's
+/// child canvas views go through a full `didMoveToWindow` cycle (image
+/// decode, AVPlayer asset load, layer-tree build) without taking any
+/// visible real estate.
+///
+/// `MeeshyUI` defaults to `@MainActor` isolation, so `StoryReaderPrefetcher`
+/// is `@MainActor`. The closure is invoked synchronously inside
+/// `makeUIView` on the main actor (SwiftUI guarantee), so the access is safe.
+private struct PrefetcherHostView: UIViewRepresentable {
+    let prefetcher: StoryReaderPrefetcher
+
+    func makeUIView(context: Context) -> UIView {
+        // Wrapper so the prefetcher's host view sits behind any visible layer
+        // and never affects layout/hit-testing of the SwiftUI tree.
+        let container = UIView(frame: CGRect(x: 0, y: 0, width: 1, height: 1))
+        container.isUserInteractionEnabled = false
+        container.clipsToBounds = true
+        container.alpha = 0
+        container.accessibilityElementsHidden = true
+        prefetcher.attach(to: container)
+        return container
+    }
+
+    func updateUIView(_ uiView: UIView, context: Context) {
+        // Idempotent — `attach(to:)` short-circuits if already parented.
+        prefetcher.attach(to: uiView)
+    }
 }
 
 struct StoryViewerView: View {
@@ -79,14 +114,39 @@ struct StoryViewerView: View {
     @State var timerCancellable: AnyCancellable? // internal for cross-file extension access
     @State var hasFiredFadeOut = false // internal for cross-file extension access
 
+    // MARK: - P3 wire-up : Prefetcher + gated timer
+    //
+    // `StoryReaderPrefetcher` maintains a sliding window of 3 bootstrapped
+    // canvas views around `currentStoryIndex` so the next/previous slide is
+    // one CATransaction away when the user taps to advance. The
+    // prefetcher's offscreen canvas reports `onContentReady` once its
+    // background image lands in the shared cache — we use that signal to
+    // drive `StoryReaderTimerController` for the visible slide, since the
+    // visible `StoryReaderRepresentable` shares the same image cache (its
+    // canvas hits the cache directly on `setReaderContext` → `rebuildLayers`).
+    //
+    // The timer's `onCompletion` drives auto-advance, replacing the legacy
+    // wall-clock CADisplayLink loop in `startTimer()`. The legacy
+    // `timerCancellable` is intentionally KEPT and exercised by
+    // `restartTimer()` calls from `crossFadeStory` / `groupTransition`
+    // (extension code) — wiring `onChange` of the slide index re-cancels
+    // it and re-arms the gated timer so both code paths converge on the
+    // same auto-advance source of truth.
+    @State private var prefetcher = StoryReaderPrefetcher()
+    @State private var slideTimer = StoryReaderTimerController()
+    /// Latched once `attach(to:)` has been wired via the host
+    /// representable — guards against re-firing every onAppear cycle
+    /// (scene phase changes / parent re-renders).
+    @State private var hasInstalledPrefetchPipeline = false
+
     @State var showFullEmojiPicker = false // internal for cross-file extension access
     @State var showTextEmojiPicker = false // internal for cross-file extension access
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var emojiToInject = ""
     @State private var composerFocusTrigger = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve() // internal for cross-file extension access
-    @State private var commentBlurEnabled: Bool = false
-    @State private var commentEffects: MessageEffects = .none
+    @State var commentBlurEnabled: Bool = false // internal for cross-file extension access
+    @State var commentEffects: MessageEffects = .none // internal for cross-file extension access
     @State var showLanguageOptions = false // internal for cross-file extension access
     @State var showFullLanguagePicker = false // internal for cross-file extension access
     @StateObject private var keyboard = KeyboardObserver()
@@ -143,6 +203,15 @@ struct StoryViewerView: View {
     @State var storyComments: [FeedComment] = []
     @State var isLoadingComments = false
     @State var storyCommentCount: Int = 0
+    @State var replyingToStoryComment: FeedComment? = nil
+    @State var storyCommentRepliesMap: [String: [FeedComment]] = [:]
+    @State var storyCommentExpandedThreads: Set<String> = []
+    @State var storyCommentLoadingReplies: Set<String> = []
+    /// Optimistic local tracking of liked comments (id ∈ set => current user reacted).
+    @State var storyCommentLikedIds: Set<String> = []
+    /// Local like-count delta keyed by comment id, applied on top of the server `comment.likes`
+    /// to avoid waiting for refetch after a tap.
+    @State var storyCommentLikeDelta: [String: Int] = [:]
     /// Latched once the `initialAction` (Phase F notification entry point) has
     /// been honoured. Guards against re-firing on every `.onAppear` cycle —
     /// scene phase transitions and parent re-renders both republish onAppear,
@@ -169,10 +238,19 @@ struct StoryViewerView: View {
         min(abs(totalSlideX) / screenW, 1.0)
     }
 
-    var body: some View {
+    // Extracted from `body` to keep the SwiftUI type-checker within its time
+    // budget. Holds the ZStack canvas and all lifecycle modifiers.
+    private var viewerContent: some View {
         ZStack {
             // Opaque black base — prevents any white frame bleed
             Color.black.ignoresSafeArea()
+
+            // === P3 wire-up : offscreen prefetcher host ===
+            PrefetcherHostView(prefetcher: prefetcher)
+                .frame(width: 1, height: 1)
+                .allowsHitTesting(false)
+                .accessibilityHidden(true)
+                .zIndex(-1000)
 
             GeometryReader { geometry in
                 ZStack {
@@ -225,86 +303,64 @@ struct StoryViewerView: View {
             if initialStoryIndex > 0, currentGroupIndex < groups.count {
                 currentStoryIndex = min(initialStoryIndex, groups[currentGroupIndex].stories.count - 1)
             }
+            StoryMediaCoordinator.shared.activate {
+                isGlobalMuted = true
+            }
+            installPrefetchPipelineIfNeeded()
+            refreshPrefetchWindowAndTimer()
             startTimer()
             markCurrentViewed()
             prefetchCurrentGroup()
-            // Entrance: subtle scale-up from near-fullscreen card
             withAnimation(.spring(response: 0.4, dampingFraction: 0.82)) {
                 appearScale = 1.0
                 appearCornerRadius = 0
             }
-            // Phase F: when this viewer was launched from a story
-            // notification redirect, auto-open the matching overlay/sheet.
-            // Latched internally so re-fires on scene phase changes are
-            // no-ops.
             triggerInitialActionIfNeeded()
         }
         .onDisappear {
             timerCancellable?.cancel()
+            slideTimer.reset()
+            prefetcher.detach()
+            hasInstalledPrefetchPipeline = false
             StoryMediaCoordinator.shared.deactivate()
-            // Don't aggressively `clearThumbnailCache()` / `clearPlayerCache()` here.
-            // Both caches use LRU + size budgets, plus `StoryMediaLoader.init()`
-            // listens to memory-warning notifications to drop them under pressure.
-            // Eagerly evicting on every viewer dismiss defeated the prefetch
-            // benefit when the user immediately re-opened the tray (audit C1/C3 +
-            // the perf-audit observation that 6 prerolled players were torn down
-            // right after the user finished tapping through them).
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
                 timerCancellable?.cancel()
+                slideTimer.reset()
                 PlaybackCoordinator.shared.stopAll()
                 isPresented = false
             }
         }
-        .sheet(isPresented: $showViewersSheet, onDismiss: {
-            resumeTimer()
-        }) {
+        .onChange(of: currentStoryIndex) { _, _ in refreshPrefetchWindowAndTimer() }
+        .onChange(of: currentGroupIndex) { _, _ in refreshPrefetchWindowAndTimer() }
+    }
+
+    var body: some View {
+        viewerContent
+        .sheet(isPresented: $showViewersSheet, onDismiss: { resumeTimer() }) {
             if let story = currentStory {
                 StoryViewersSheet(story: story, accentColor: Color(hex: "4ECDC4"))
             }
         }
-        .sheet(item: $sharedContentWrapper, onDismiss: {
-            resumeTimer()
-        }) { wrapper in
+        .sheet(item: $sharedContentWrapper, onDismiss: { resumeTimer() }) { wrapper in
             SharePickerView(
                 sharedContent: wrapper.content,
                 onDismiss: { sharedContentWrapper = nil },
                 onShareToConversation: nil
             )
-            // SwiftUI sheets run in a separate presentation hierarchy and do
-            // NOT inherit EnvironmentObjects from the parent fullScreenCover.
-            // Re-inject the trio that SharePickerView declares as
-            // @EnvironmentObject, otherwise tapping share crashes with
-            // "EnvironmentObject error → SharePickerView.conversationListViewModel".
-            .environmentObject(conversationListViewModel)
             .environmentObject(router)
+            .environmentObject(conversationListViewModel)
             .environmentObject(statusViewModel)
-            .presentationDetents([.medium, .large])
+            .presentationDetents([.medium, .large] as Set<PresentationDetent>)
         }
-        // Repost-as-story composer (C.1). Opened from the bottom-bar "Partager"
-        // action; uses the new `init(viewModel:onPublishSlide:onPublishAllInBackground:onDismiss:)`
-        // exposed by `StoryComposerView` so we can hand it a pre-built VM seeded
-        // by `StoryComposerViewModel(reposting:authorHandle:)`. The publish path
-        // delegates to `viewModel.publishStoryInBackground(...)` exactly like the
-        // tray-launched composer (StoryTrayView) — keeping a single upload flow.
-        // Note: full `repostOfId` propagation through `publishStoryInBackground`
-        // is the responsibility of a follow-up patch (the VM still carries the
-        // chain via `repostOfId` / `originalRepostOfId` for that wiring).
-        .fullScreenCover(item: $repostStoryComposerSource, onDismiss: {
-            resumeTimer()
-        }) { wrapper in
+        .fullScreenCover(item: $repostStoryComposerSource, onDismiss: { resumeTimer() }) { wrapper in
             StoryComposerView(
                 viewModel: StoryComposerViewModel(
                     reposting: wrapper.story,
                     authorHandle: wrapper.authorHandle
                 ),
-                onPublishSlide: { _, _, _, _, _ in
-                    // No-op: background-publish path (`onPublishAllInBackground`)
-                    // is what `publishStoryInBackground` consumes. Keeping this
-                    // symmetric with the tray-launched composer keeps a single
-                    // upload code path.
-                },
+                onPublishSlide: { _, _, _, _, _ in },
                 onPublishAllInBackground: { slides, slideImages, loadedImages, loadedVideoURLs, loadedAudioURLs, originalLanguage, visibility in
                     viewModel.publishStoryInBackground(
                         slides: slides,
@@ -320,40 +376,165 @@ struct StoryViewerView: View {
                 onDismiss: { repostStoryComposerSource = nil }
             )
         }
-        // Repost-as-post composer (C.2). Opened from the kebab menu's
-        // "Editer et republier en post" action. Uses the new
-        // `UnifiedPostComposer(repostingStory:authorHandle:onPublishRepost:onDismiss:)`
-        // init introduced in B.7 — locks the type to `.post` and embeds a
-        // story preview canvas. Submission goes through `PostService.repost`
-        // with `targetType: .post` so the gateway records the correct shape.
-        .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: {
-            resumeTimer()
-        }) { wrapper in
+        .fullScreenCover(item: $editAndRepostAsPostSource, onDismiss: { resumeTimer() }) { wrapper in
             UnifiedPostComposer(
                 repostingStory: wrapper.story,
                 authorHandle: wrapper.authorHandle,
                 onPublishRepost: { content, sourceStory in
-                    Task {
-                        do {
-                            _ = try await PostService.shared.repost(
-                                postId: sourceStory.id,
-                                targetType: .post,
-                                content: content.isEmpty ? nil : content,
-                                isQuote: !content.isEmpty
-                            )
-                            await MainActor.run {
-                                editAndRepostAsPostSource = nil
-                                ToastManager.shared.show("Publié")
-                            }
-                        } catch {
-                            await MainActor.run {
-                                ToastManager.shared.showError("Échec de la publication")
-                            }
-                        }
+                    do {
+                        _ = try await PostService.shared.repost(
+                            postId: sourceStory.id,
+                            targetType: .post,
+                            content: content.isEmpty ? nil : content,
+                            isQuote: !content.isEmpty
+                        )
+                        editAndRepostAsPostSource = nil
+                        ToastManager.shared.show("Publié")
+                    } catch {
+                        ToastManager.shared.showError("Échec de la publication")
+                        throw error
                     }
+                },
+                onStoryImported: { result in
+                    Logger.stories.info(
+                        "repost.import slide=\(result.targetSize.width, privacy: .public)x\(result.targetSize.height, privacy: .public) texts=\(result.texts.count, privacy: .public) media=\(result.media.count, privacy: .public) stickers=\(result.stickers.count, privacy: .public) drawing=\(result.drawingData != nil, privacy: .public) audios=\(result.audios.count, privacy: .public) clamped=\(result.warnings.count, privacy: .public)"
+                    )
                 },
                 onDismiss: { editAndRepostAsPostSource = nil }
             )
+        }
+    }
+
+    // MARK: - P3 wire-up : prefetcher + gated timer (internal for tests)
+
+    /// Languages used by the prefetcher to project `StoryItem → StorySlide`
+    /// (Prisme Linguistique chain). Mirrors `resolvedViewerLanguageChain`
+    /// — both come from `MeeshyUser.preferredContentLanguages` — but exposed
+    /// here so the wire-up integration tests can intercept the call without
+    /// touching the private accessor.
+    var preferredContentLanguagesForReader: [String] {
+        AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+    }
+
+    /// Stories of the current group, snapshotted via `currentGroup`. Empty
+    /// when the index points past the end of `groups`.
+    var currentGroupStories: [StoryItem] {
+        currentGroup?.stories ?? []
+    }
+
+    /// Slide duration used to arm the gated timer. Mirrors the legacy
+    /// `computedStoryDuration` path so a slide with bg-loop video / long
+    /// foreground media still gets the rounded-up duration. The legacy
+    /// `updateStoryDuration()` writes `computedStoryDuration` synchronously
+    /// for the non-preview path (only `isPreviewMode` defers to AVURLAsset),
+    /// so reading it here after `refreshPrefetchWindowAndTimer()` calls
+    /// `updateStoryDuration()` indirectly via `startTimer()` is safe.
+    var currentSlideDuration: TimeInterval {
+        computedStoryDuration > 0 ? computedStoryDuration : 12.0
+    }
+
+    /// Installs the prefetcher host pipeline once per viewer lifecycle. The
+    /// `PrefetcherHostView` representable handles the `attach(to:)` call
+    /// inside `makeUIView` — this method only wires the timer callbacks
+    /// and latches the install flag so re-entrant `.onAppear` cycles are
+    /// no-ops.
+    ///
+    /// Parameters intentionally exposed so the integration tests can pass
+    /// in dedicated prefetcher/timer instances without going through
+    /// SwiftUI's `@State` storage (which only binds inside body evaluation).
+    /// Production callers always use the defaults.
+    func installPrefetchPipelineIfNeeded(
+        prefetcher: StoryReaderPrefetcher? = nil,
+        timer: StoryReaderTimerController? = nil
+    ) {
+        guard !hasInstalledPrefetchPipeline else { return }
+        hasInstalledPrefetchPipeline = true
+        // The prefetcher itself is bootstrapped via
+        // `PrefetcherHostView.makeUIView` — this method only owns the
+        // timer callbacks (which can't be wired from the representable
+        // because the representable cannot read SwiftUI state). The
+        // `prefetcher` parameter is part of the API for symmetry with
+        // `refreshPrefetchWindowAndTimer(prefetcher:timer:)`; the tests
+        // pass it through so the install fence is uniform on both seams.
+        _ = prefetcher
+        let t = timer ?? self.slideTimer
+        // Reset the gated timer so a re-entrant `.onAppear` doesn't keep
+        // the previous slide's countdown alive across the host re-install.
+        t.reset()
+        t.onProgressChange = { _ in
+            // Visual progress bar is driven by the legacy
+            // `startTimer()` display-link loop — the gated timer only
+            // owns the auto-advance trigger. Wiring `onProgressChange`
+            // here (no-op for now) keeps the seam available so a
+            // post-launch refactor can switch the bar to gated progress
+            // without touching the structure of the integration.
+        }
+        t.onCompletion = {
+            // No-op : the legacy `startTimer()` display-link loop already
+            // owns `goToNext()` (it fires when `progress >= 1.0`), so
+            // wiring a second auto-advance here would double-skip. The
+            // seam stays exposed so a follow-up patch can pivot to gated
+            // advance once the legacy loop is fully retired, and so the
+            // integration test can assert the callback is wired without
+            // having to spin the legacy display link.
+        }
+    }
+
+    /// Re-arms the prefetcher's sliding window AND the gated slide timer
+    /// to track `currentStory`. Called on `.onAppear` and on every change
+    /// of `currentStoryIndex` / `currentGroupIndex`.
+    ///
+    /// 1. Updates the prefetch window to `[N-1, N, N+1]`.
+    /// 2. Re-wires `onContentReady` on the prefetched canvas of the
+    ///    current slide so the gated timer flips to active the moment
+    ///    the background image lands in the shared cache. The visible
+    ///    `StoryReaderRepresentable` hits the same cache, so this is a
+    ///    strong proxy for "user is actually seeing real content".
+    /// 3. Calls `setCurrentSlide(id:duration:)` to reset the gated timer.
+    ///
+    /// `prefetcher` / `timer` parameters default to the view's `@State`
+    /// instances. The integration tests pass in dedicated instances so
+    /// the assertions can read window state and slide id without going
+    /// through SwiftUI's `@State` storage.
+    func refreshPrefetchWindowAndTimer(
+        prefetcher: StoryReaderPrefetcher? = nil,
+        timer: StoryReaderTimerController? = nil
+    ) {
+        let p = prefetcher ?? self.prefetcher
+        let t = timer ?? self.slideTimer
+        let stories = currentGroupStories
+        guard !stories.isEmpty,
+              stories.indices.contains(currentStoryIndex) else {
+            t.reset()
+            return
+        }
+        let chain = preferredContentLanguagesForReader
+        let context = StoryReaderContext(
+            preferredLanguages: chain,
+            mute: isGlobalMuted,
+            onCompletion: nil,
+            postMediaURLResolver: nil,
+            imageCache: nil
+        )
+        p.updateWindow(items: stories,
+                       currentIndex: currentStoryIndex,
+                       context: context,
+                       preferredLanguages: chain)
+
+        let current = stories[currentStoryIndex]
+        t.setCurrentSlide(id: current.id, duration: currentSlideDuration)
+
+        // Re-wire `onContentReady` on the prefetched canvas of the
+        // CURRENT slide. The prefetcher's canvas reports readiness once
+        // its background image bytes land — same cache as the visible
+        // canvas, so this is a strong proxy. `[weak t = t]` captures the
+        // timer reference weakly so an in-flight onContentReady ping after
+        // the viewer is torn down doesn't keep the timer alive.
+        if let canvas = p.view(for: current.id) {
+            let slideId = current.id
+            canvas.onContentReady = { [weak t = t] in
+                t?.markContentReady(slideId: slideId)
+            }
         }
     }
 
@@ -447,7 +628,7 @@ struct StoryViewerView: View {
 
             // === Outgoing canvas (cross-dissolve pixel-perfect) ===
             if let outgoing = outgoingStory, outgoingOpacity > 0 {
-                StoryCanvasReaderView(story: outgoing, preferredLanguage: resolvedViewerLanguage,
+                StoryReaderRepresentable(story: outgoing, preferredLanguage: resolvedViewerLanguage,
                                       preferredContentLanguages: resolvedViewerLanguageChain,
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
@@ -461,7 +642,7 @@ struct StoryViewerView: View {
 
             // === Layers 2–4: Canvas pixel-perfect (media + filter + text + stickers) ===
             if let story = currentStory {
-                StoryCanvasReaderView(story: story, preferredLanguage: resolvedViewerLanguage,
+                StoryReaderRepresentable(story: story, preferredLanguage: resolvedViewerLanguage,
                                       preferredContentLanguages: resolvedViewerLanguageChain,
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,

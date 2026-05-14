@@ -9,7 +9,7 @@ export const MessageIdParamSchema = z.object({
 }).strict();
 
 export const ConversationIdParamSchema = z.object({
-  conversationId: mongoId
+  conversationId: z.string().min(1, 'conversationId is required')
 }).strict();
 
 export const ReadStatusesQuerySchema = z.object({

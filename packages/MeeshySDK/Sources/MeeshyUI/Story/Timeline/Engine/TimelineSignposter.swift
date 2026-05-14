@@ -4,9 +4,25 @@ import os.signpost
 
 /// SOTA wrapper around `OSSignposter` (iOS 16+) for hot-path instrumentation of
 /// `StoryTimelineEngine`. All intervals appear in Instruments under the
-/// `TimelineEngine` category, and are automatically aggregated in production via
+/// `TimelineEngine` category, and are aggregated in production via
 /// `MXSignpostMetric` MetricKit reports (24h rolling window, zero CPU overhead
 /// when no profiler is attached).
+///
+/// ## Aggregation wire-up
+///
+/// MetricKit only delivers `MXSignpostMetric` payloads to a registered
+/// `MXMetricManagerSubscriber`. The aggregation is provided by
+/// `MeeshyMetricsSubscriber` in the `MeeshySDK` target, which MUST be
+/// registered at app launch:
+///
+/// ```swift
+/// // apps/ios/Meeshy/MeeshyApp.swift — alongside CrashDiagnosticsManager.install()
+/// MeeshyMetricsSubscriber.shared.register()
+/// ```
+///
+/// Without that registration the signposts still surface in Instruments but
+/// no production payload ever arrives — see `MeeshyMetricsSubscriber` for
+/// details.
 public struct TimelineSignposter {
     private nonisolated static let log = OSLog(subsystem: "me.meeshy.app", category: "TimelineEngine")
     private nonisolated static let signposter = OSSignposter(logHandle: log)

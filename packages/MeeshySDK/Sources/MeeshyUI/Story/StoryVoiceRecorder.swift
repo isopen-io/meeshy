@@ -18,68 +18,88 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
 
     private let maxDuration: TimeInterval = 60
 
+    @Environment(\.colorScheme) private var colorScheme
+
     public init(recorder: Recorder, onRecordComplete: @escaping (URL) -> Void) {
         self.recorder = recorder
         self.onRecordComplete = onRecordComplete
     }
 
     public var body: some View {
-        VStack(spacing: 20) {
-            if let error = errorMessage {
-                Text(error)
-                    .font(.system(size: 13))
-                    .foregroundColor(Color(hex: "FF2E63"))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 20)
+        VStack(spacing: 0) {
+            // Panel header
+            HStack {
+                Image(systemName: "mic.fill")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(MeeshyColors.brandGradient)
+                Text(String(localized: "story.voiceRecorder.title", defaultValue: "Enregistrement", bundle: .module))
+                    .font(.system(size: 15, weight: .semibold, design: .rounded))
+                    .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                Spacer()
             }
+            .padding(.bottom, 12)
 
-            Spacer()
+            VStack(spacing: 20) {
+                if let error = errorMessage {
+                    Text(error)
+                        .font(.system(size: 13))
+                        .foregroundColor(MeeshyColors.error)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 20)
+                }
 
-            waveformView
-                .frame(height: 56)
-                .padding(.horizontal, 20)
-                .opacity(recorder.isRecording ? 1 : 0.3)
+                Spacer()
 
-            Text(recorder.isRecording
-                 ? String(format: "%.1fs / 60s", recorder.duration)
-                 : String(localized: "story.voiceRecorder.holdToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
-                .font(.system(size: 13, weight: .medium, design: .monospaced))
-                .foregroundColor(recorder.isRecording ? Color(hex: "FF2E63") : .white.opacity(0.5))
+                waveformView
+                    .frame(height: 56)
+                    .padding(.horizontal, 20)
+                    .opacity(recorder.isRecording ? 1 : 0.3)
 
-            Spacer()
+                Text(recorder.isRecording
+                     ? String(format: "%.1fs / 60s", recorder.duration)
+                     : String(localized: "story.voiceRecorder.holdToRecord", defaultValue: "Appuyez pour enregistrer", bundle: .module))
+                    .font(.system(size: 13, weight: .medium, design: .monospaced))
+                    .foregroundColor(recorder.isRecording ? MeeshyColors.brandPrimary : .white.opacity(0.5))
 
-            // Controls always at the bottom
-            HStack(spacing: 32) {
-                if recorder.isRecording {
-                    // Cancel
-                    Button {
-                        recorder.cancelRecording()
-                        stopPhaseTimer()
-                        HapticFeedback.light()
-                    } label: {
-                        ZStack {
-                            Circle()
-                                .fill(Color.white.opacity(0.08))
-                                .frame(width: 50, height: 50)
-                            Image(systemName: "xmark")
-                                .font(.system(size: 18, weight: .medium))
-                                .foregroundColor(.white.opacity(0.7))
+                Spacer()
+
+                // Controls always at the bottom
+                HStack(spacing: 32) {
+                    if recorder.isRecording {
+                        // Cancel
+                        Button {
+                            recorder.cancelRecording()
+                            stopPhaseTimer()
+                            HapticFeedback.light()
+                        } label: {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.white.opacity(0.08))
+                                    .frame(width: 50, height: 50)
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundColor(.white.opacity(0.7))
+                            }
                         }
                     }
-                }
 
-                recordButton
+                    recordButton
 
-                if recorder.isRecording {
-                    // Spacer for symmetry
-                    Circle()
-                        .fill(Color.clear)
-                        .frame(width: 50, height: 50)
+                    if recorder.isRecording {
+                        // Spacer for symmetry
+                        Circle()
+                            .fill(Color.clear)
+                            .frame(width: 50, height: 50)
+                    }
                 }
+                .padding(.bottom, 4)
             }
-            .padding(.bottom, 16)
+            .padding(.vertical, 8)
         }
-        .padding(.vertical, 16)
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
         .onDisappear {
             stopPhaseTimer()
         }
@@ -92,7 +112,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
             ForEach(0..<15, id: \.self) { i in
                 let level: CGFloat = i < recorder.audioLevels.count ? recorder.audioLevels[i] : 0
                 RoundedRectangle(cornerRadius: 2.5)
-                    .fill(Color(hex: "FF2E63").opacity(recorder.isRecording ? 0.9 : 0.4))
+                    .fill(MeeshyColors.brandPrimary.opacity(recorder.isRecording ? 0.9 : 0.4))
                     .frame(width: 5, height: recorder.isRecording ? max(6, 6 + 40 * level) : 6)
                     .animation(.spring(response: 0.08, dampingFraction: 0.6), value: level)
             }
@@ -104,7 +124,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     private var recordButton: some View {
         ZStack {
             Circle()
-                .fill(recorder.isRecording ? Color(hex: "FF2E63") : Color.white.opacity(0.12))
+                .fill(recorder.isRecording ? MeeshyColors.brandPrimary : Color.white.opacity(0.12))
                 .frame(width: 72, height: 72)
                 .scaleEffect(recorder.isRecording ? 1.1 : 1.0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.6), value: recorder.isRecording)
@@ -113,7 +133,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                 .font(.system(size: 26, weight: .semibold))
                 .foregroundColor(.white)
         }
-        .shadow(color: recorder.isRecording ? Color(hex: "FF2E63").opacity(0.5) : .clear, radius: 16)
+        .shadow(color: recorder.isRecording ? MeeshyColors.brandPrimary.opacity(0.5) : .clear, radius: 16)
         .onTapGesture {
             if recorder.isRecording {
                 stopRecording()

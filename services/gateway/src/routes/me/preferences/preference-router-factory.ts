@@ -9,6 +9,7 @@ import { ZodSchema } from 'zod';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { ConsentValidationService } from '../../../services/ConsentValidationService';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { withMutationLog } from '../../../utils/withMutationLog';
 
 type PreferenceCategory =
   | 'privacy'
@@ -175,23 +176,43 @@ export function createPreferenceRouter<T>(
             });
           }
 
-          const updated = await fastify.prisma.userPreferences.upsert({
-            where: { userId },
-            create: {
-              userId,
-              [category]: validated as any
+          // Idempotent via clientMutationId. The MutationLog row keys
+          // off (userId, cmid) so the same PUT replayed via the offline
+          // outbox doesn't fire the SocketIO `preferences:updated`
+          // broadcast twice.
+          const updated = await withMutationLog({
+            request,
+            fastify,
+            userId,
+            kind: `updateSettings:${category}`,
+            op: async () => {
+              const u = await fastify.prisma.userPreferences.upsert({
+                where: { userId },
+                create: {
+                  userId,
+                  [category]: validated as any
+                },
+                update: {
+                  [category]: validated as any
+                },
+                select: { [category]: true, id: true }
+              });
+              return u as typeof u & { id: string };
             },
-            update: {
-              [category]: validated as any
+            onDuplicate: async () => {
+              const u = await fastify.prisma.userPreferences.findUnique({
+                where: { userId },
+                select: { [category]: true, id: true }
+              });
+              return u as (typeof u & { id: string }) | null;
             },
-            select: { [category]: true }
           });
 
           emitPreferencesUpdated(userId);
 
           return reply.send({
             success: true,
-            data: updated[category] as T
+            data: (updated as any)[category] as T
           });
         } catch (error: any) {
           if (error.name === 'ZodError') {
@@ -288,23 +309,40 @@ export function createPreferenceRouter<T>(
             });
           }
 
-          const updated = await fastify.prisma.userPreferences.upsert({
-            where: { userId },
-            create: {
-              userId,
-              [category]: merged as any
+          // Idempotent via clientMutationId — same reasoning as PUT.
+          const updated = await withMutationLog({
+            request,
+            fastify,
+            userId,
+            kind: `updateSettings:${category}`,
+            op: async () => {
+              const u = await fastify.prisma.userPreferences.upsert({
+                where: { userId },
+                create: {
+                  userId,
+                  [category]: merged as any
+                },
+                update: {
+                  [category]: merged as any
+                },
+                select: { [category]: true, id: true }
+              });
+              return u as typeof u & { id: string };
             },
-            update: {
-              [category]: merged as any
+            onDuplicate: async () => {
+              const u = await fastify.prisma.userPreferences.findUnique({
+                where: { userId },
+                select: { [category]: true, id: true }
+              });
+              return u as (typeof u & { id: string }) | null;
             },
-            select: { [category]: true }
           });
 
           emitPreferencesUpdated(userId);
 
           return reply.send({
             success: true,
-            data: updated[category] as T
+            data: (updated as any)[category] as T
           });
         } catch (error: any) {
           if (error.name === 'ZodError') {

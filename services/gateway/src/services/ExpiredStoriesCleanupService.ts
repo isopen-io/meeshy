@@ -85,14 +85,36 @@ export class ExpiredStoriesCleanupService {
     }
 
     try {
-      const hardResult = await this.prisma.post.deleteMany({
+      // Find IDs of expired stories eligible for hard-delete.
+      const toDelete = await this.prisma.post.findMany({
         where: {
           type: 'STORY',
           isDeleted: true,
           expiresAt: { lt: hardDeleteCutoff },
         },
+        select: { id: true },
       });
-      hardDeleted = hardResult.count;
+
+      if (toDelete.length > 0) {
+        const ids = toDelete.map((p) => p.id);
+
+        // Cascade-delete reposts that reference these expired stories.
+        // A repost of a story that's been dead for 7+ days has no value —
+        // stories are ephemeral by design. Deleting the children first
+        // satisfies the PostReposts FK constraint (onDelete: NoAction).
+        const repostResult = await this.prisma.post.deleteMany({
+          where: { repostOfId: { in: ids } },
+        });
+        if (repostResult.count > 0) {
+          log.info('cascade-deleted reposts of expired stories', { count: repostResult.count });
+        }
+
+        // Now safe to delete the parent stories.
+        const hardResult = await this.prisma.post.deleteMany({
+          where: { id: { in: ids } },
+        });
+        hardDeleted = hardResult.count;
+      }
     } catch (err) {
       log.warn('hard-delete pass failed', { err });
     }

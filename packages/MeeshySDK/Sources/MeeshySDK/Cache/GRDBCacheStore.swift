@@ -2,6 +2,21 @@ import Foundation
 import GRDB
 import os
 
+/// Errors thrown by `GRDBCacheStore` write paths. Task 1.1 of the iOS
+/// Local-First Wave 1 plan introduces `.encryptionFailed` so the previous
+/// silent plaintext fallback (`encrypt(json) ?? json`) no longer leaks
+/// unencrypted data into SQLite when the Keychain key is corrupted or
+/// otherwise unavailable.
+///
+/// Decryption-on-read failures intentionally do NOT throw — `readFromL2`
+/// returns nil so the caller falls through to network (SWR alignment).
+/// Pool configuration is mandatory at construction time so no runtime
+/// `poolNotConfigured` case is needed here (cf. `OfflineQueueError` which
+/// owns its own variant).
+public enum GRDBCacheError: Error, Sendable {
+    case encryptionFailed
+}
+
 public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     where Key: Hashable & Sendable & CustomStringConvertible,
           Value: CacheIdentifiable & Codable
@@ -12,6 +27,7 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     private let maxL1Keys: Int
     private let namespace: String
     private let encrypted: Bool
+    private let encryption: any DatabaseEncryptionProviding
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "grdb-cache-store")
 
     private var memoryCache: [Key: L1Entry] = [:]
@@ -25,19 +41,27 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         var loadedAt: Date
     }
 
-    public init(policy: CachePolicy, db: any DatabaseWriter, namespace: String = "", maxL1Keys: Int = 20, encrypted: Bool = false) {
+    public init(
+        policy: CachePolicy,
+        db: any DatabaseWriter,
+        namespace: String = "",
+        maxL1Keys: Int = 20,
+        encrypted: Bool = false,
+        encryption: any DatabaseEncryptionProviding = DatabaseEncryption.shared
+    ) {
         self.policy = policy
         self.db = db
         self.namespace = namespace
         self.maxL1Keys = maxL1Keys
         self.encrypted = encrypted
+        self.encryption = encryption
     }
 
     private func namespacedKey(_ key: String) -> String {
         namespace.isEmpty ? key : "\(namespace):\(key)"
     }
 
-    public func save(_ items: [Value], for key: Key) async {
+    public func save(_ items: [Value], for key: Key) async throws {
         let trimmed: [Value]
         if let max = policy.maxItemCount, items.count > max {
             trimmed = Array(items.suffix(max))
@@ -45,10 +69,13 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
             trimmed = items
         }
 
+        // Write to L2 BEFORE mutating L1 so a failed write (e.g. encryption
+        // failure on an `encrypted: true` store) does not leave L1 caching
+        // data that never reached persistent storage.
+        try writeToL2(trimmed, for: namespacedKey(key.description))
+
         memoryCache[key] = L1Entry(items: trimmed, loadedAt: Date())
         touchKey(key)
-
-        writeToL2(trimmed, for: namespacedKey(key.description))
     }
 
     public func load(for key: Key) async -> CacheResult<[Value]> {
@@ -174,11 +201,22 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
     }
 
     public func flushDirtyKeys() async {
+        await flushDirtyKeys(deadline: nil)
+    }
+
+    /// Deadline-aware variant used by the BGProcessingTask path. When the
+    /// provided deadline elapses mid-iteration we stop scheduling new
+    /// `db.write` calls — keys that have not yet been flushed stay dirty
+    /// so the next opportunity (cold start or next background submission)
+    /// picks them up. A `nil` deadline matches the legacy unbounded
+    /// behavior (used by the 2-second debounce path).
+    public func flushDirtyKeys(deadline: Date?) async {
         guard !dirtyKeys.isEmpty else { return }
 
         let keysToFlush = dirtyKeys
 
         for key in keysToFlush {
+            if let deadline, Date() >= deadline { break }
             guard let l1 = memoryCache[key] else { continue }
             let keyStr = namespacedKey(key.description)
             let items = l1.items
@@ -191,6 +229,31 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
 
         if dirtyKeys.isEmpty {
             firstDirtyAt = nil
+        }
+    }
+
+    /// Number of dirty keys awaiting flush. Exposed for the background
+    /// flush test harness in `CacheBackgroundFlushTests`; production
+    /// callers should not need to introspect this.
+    public func dirtyKeyCount() -> Int {
+        dirtyKeys.count
+    }
+
+    /// Inject `count` synthetic dirty entries for tests. Each entry is a
+    /// fresh `L1Entry` keyed by its insertion index — the data shape is
+    /// irrelevant, only the bookkeeping (dirty set + access order) is
+    /// exercised by the flush path under test. Bypasses the `maxL1Keys`
+    /// LRU cap (which would otherwise evict the early seeds before the
+    /// flush observes them) — production callers should never need this.
+    public func seedDirtyForTest(items: [(Key, [Value])]) {
+        for (key, values) in items {
+            memoryCache[key] = L1Entry(items: values, loadedAt: Date())
+            removeFromAccessOrder(key)
+            accessOrder.append(key)
+            dirtyKeys.insert(key)
+        }
+        if firstDirtyAt == nil, !dirtyKeys.isEmpty {
+            firstDirtyAt = Date()
         }
     }
 
@@ -264,10 +327,13 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
 
     // MARK: - nonisolated DB operations
 
-    private nonisolated func writeToL2(_ items: [Value], for keyStr: String) {
+    private nonisolated func writeToL2(_ items: [Value], for keyStr: String) throws {
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         let encrypt = encrypted
+        let encryption = self.encryption
+        let namespace = self.namespace
+        let logger = self.logger
         do {
             try db.write { db in
                 try CacheEntry.filter(Column("key") == keyStr).deleteAll(db)
@@ -275,7 +341,16 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                 let now = Date()
                 for item in items {
                     let json = try encoder.encode(item)
-                    let data = encrypt ? (DatabaseEncryption.shared.encrypt(json) ?? json) : json
+                    let data: Data
+                    if encrypt {
+                        guard let encryptedData = encryption.encrypt(json) else {
+                            logger.error("Encryption failed for store \(namespace, privacy: .public), refusing to persist")
+                            throw GRDBCacheError.encryptionFailed
+                        }
+                        data = encryptedData
+                    } else {
+                        data = json
+                    }
                     let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
                     try entry.save(db)
                 }
@@ -293,8 +368,14 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                 )
                 try meta.save(db)
             }
+        } catch let cacheError as GRDBCacheError {
+            // Propagate the strict encryption error so callers can react
+            // (e.g. show a recovery flow). The DB write was rolled back by
+            // GRDB's transaction wrapper.
+            throw cacheError
         } catch {
-            logger.error("Failed to persist to L2 for key \(keyStr): \(error)")
+            self.logger.error("Failed to persist to L2 for key \(keyStr, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw error
         }
     }
 
@@ -302,6 +383,8 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         let decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
         let encrypt = encrypted
+        let encryption = self.encryption
+        let logger = self.logger
         do {
             return try db.read { db in
                 guard let meta = try DBCacheMetadata.filter(Column("key") == keyStr).fetchOne(db) else {
@@ -312,14 +395,28 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                 guard !entries.isEmpty else { return nil }
 
                 let items: [Value] = entries.compactMap { entry in
-                    let raw = encrypt ? (DatabaseEncryption.shared.decrypt(entry.encodedData) ?? entry.encodedData) : entry.encodedData
+                    // On encrypted stores, a `nil` decrypt result means the
+                    // row is unreadable (corrupted key, wrong-key tampering,
+                    // or a leftover row written under a previous identity).
+                    // Skip it instead of feeding garbage ciphertext to the
+                    // JSON decoder — the caller will treat the key as empty.
+                    let raw: Data
+                    if encrypt {
+                        guard let decrypted = encryption.decrypt(entry.encodedData) else {
+                            logger.warning("Decryption failed for key \(keyStr, privacy: .public), skipping entry")
+                            return nil
+                        }
+                        raw = decrypted
+                    } else {
+                        raw = entry.encodedData
+                    }
                     return try? decoder.decode(Value.self, from: raw)
                 }
 
                 return items.isEmpty ? nil : (items, meta.lastFetchedAt)
             }
         } catch {
-            logger.error("Failed to load from L2 for key \(keyStr): \(error)")
+            self.logger.error("Failed to load from L2 for key \(keyStr, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return nil
         }
     }
@@ -393,6 +490,9 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
         let encrypt = encrypted
+        let encryption = self.encryption
+        let namespace = self.namespace
+        let logger = self.logger
         do {
             try db.write { db in
                 let existingIds = try String.fetchAll(db, sql: "SELECT itemId FROM cache_entries WHERE key = ?", arguments: [keyStr])
@@ -406,7 +506,16 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
                 let now = Date()
                 for item in items {
                     let json = try encoder.encode(item)
-                    let data = encrypt ? (DatabaseEncryption.shared.encrypt(json) ?? json) : json
+                    let data: Data
+                    if encrypt {
+                        guard let encryptedData = encryption.encrypt(json) else {
+                            logger.error("Encryption failed for store \(namespace, privacy: .public) during flush, refusing to persist")
+                            throw GRDBCacheError.encryptionFailed
+                        }
+                        data = encryptedData
+                    } else {
+                        data = json
+                    }
                     let entry = CacheEntry(key: keyStr, itemId: item.id, encodedData: data, updatedAt: now)
                     try entry.save(db)
                 }
@@ -424,7 +533,11 @@ public actor GRDBCacheStore<Key, Value>: MutableCacheStore
             }
             return true
         } catch {
-            logger.error("Failed to flush dirty key \(keyStr): \(error)")
+            // Returning `false` keeps the dirty key in the set so the next
+            // flush window retries. On encryption failure this means the
+            // mutation stays in L1 (visible to the user) but never reaches
+            // disk — preferable to a silent plaintext leak.
+            self.logger.error("Failed to flush dirty key \(keyStr, privacy: .public): \(error.localizedDescription, privacy: .public)")
             return false
         }
     }

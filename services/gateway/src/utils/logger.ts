@@ -21,6 +21,15 @@ class MeeshyLogger implements Logger {
   }
 
   info(message: string, ...args: any[]): void {
+    // CRITICAL BUG FIX — the info() body was EMPTY, silently dropping every
+    // log line emitted via this logger (including the entire call subsystem
+    // that imports `../utils/logger` rather than `../utils/logger-enhanced`).
+    // Reason this matters today: production was completely blind to
+    // `call:initiate`, `call:signal`, `Signal forwarded`, etc., making it
+    // impossible to tell whether the SDP answer from the callee was being
+    // relayed or not. Restoring the standard console.log keeps the format
+    // consistent with error() and warn() and lights up the missing trail.
+    console.log(this.formatMessage('info', message, ...args));
   }
 
   error(message: string, ...args: any[]): void {
@@ -32,7 +41,10 @@ class MeeshyLogger implements Logger {
   }
 
   debug(message: string, ...args: any[]): void {
+    // Same root cause as info(): the body was empty — debug() was silently
+    // dropping every line even with NODE_ENV=development / DEBUG=true.
     if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
+      console.debug(this.formatMessage('debug', message, ...args));
     }
   }
 }

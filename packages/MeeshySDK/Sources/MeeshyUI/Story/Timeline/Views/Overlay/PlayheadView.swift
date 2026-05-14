@@ -17,18 +17,43 @@ public struct PlayheadView: View, Equatable {
     public let laneHeight: CGFloat
     public let isDark: Bool
     public let onScrub: (Float) -> Void
+    /// Called once when the drag starts. Hosts wire this to
+    /// `TimelineViewModel.beginScrub()` so continuous `onScrub` callbacks
+    /// forward `precise: false` to the engine (sub-50ms tolerance) and avoid
+    /// the AVPlayer GOP-decompression freeze.
+    public let onScrubBegan: () -> Void
+    /// Called once when the drag ends. Hosts wire this to
+    /// `TimelineViewModel.endScrub()` so the final seek is frame-accurate.
+    public let onScrubEnded: () -> Void
 
     public init(
         currentTime: Float, totalDuration: Float,
         geometry: TimelineGeometry, laneHeight: CGFloat,
-        isDark: Bool, onScrub: @escaping (Float) -> Void
+        isDark: Bool, onScrub: @escaping (Float) -> Void,
+        onScrubBegan: @escaping () -> Void = {},
+        onScrubEnded: @escaping () -> Void = {}
     ) {
         self.currentTime = currentTime; self.totalDuration = totalDuration
         self.geometry = geometry; self.laneHeight = laneHeight
         self.isDark = isDark; self.onScrub = onScrub
+        self.onScrubBegan = onScrubBegan; self.onScrubEnded = onScrubEnded
     }
 
     public var computedX: CGFloat { geometry.x(for: currentTime) }
+
+    /// Tracks whether the gesture's first `.onChanged` has fired in the
+    /// current drag — DragGesture has no `.onBegan`, so we synthesize it.
+    @State private var dragInFlight: Bool = false
+
+    /// P2 fix — anchor X captured once at drag start. During the drag we
+    /// derive the playhead position from `dragStartX + translation.width`
+    /// instead of `computedX + translation.width`. This prevents jitter when
+    /// `currentTime` is updated asynchronously by the engine (`onTimeUpdate`)
+    /// while a scrub is in flight: a fresh `currentTime` would otherwise
+    /// shift `computedX` and double-apply the translation.
+    ///
+    /// Mirrors `ClipSelectionState.ActiveDrag.originalStartTime` (P0-#5).
+    @State private var dragStartX: CGFloat = 0
 
     public var body: some View {
         ZStack(alignment: .top) {
@@ -47,9 +72,25 @@ public struct PlayheadView: View, Equatable {
         .gesture(
             DragGesture(minimumDistance: 0)
                 .onChanged { v in
-                    let raw = geometry.time(forX: max(0, computedX + v.translation.width))
-                    let clamped = max(0, min(raw, totalDuration))
+                    if !dragInFlight {
+                        dragInFlight = true
+                        dragStartX = computedX
+                        onScrubBegan()
+                    }
+                    let clamped = Self.scrubTime(
+                        dragStartX: dragStartX,
+                        translationX: v.translation.width,
+                        geometry: geometry,
+                        totalDuration: totalDuration
+                    )
                     onScrub(clamped)
+                }
+                .onEnded { _ in
+                    if dragInFlight {
+                        dragInFlight = false
+                        dragStartX = 0
+                        onScrubEnded()
+                    }
                 }
         )
         .accessibilityElement(children: .ignore)
@@ -65,6 +106,19 @@ public struct PlayheadView: View, Equatable {
             @unknown default: break
             }
         }
+    }
+
+    /// Pure projection of a drag translation into a clamped scrub time.
+    /// Exposed as a `nonisolated` static so unit tests can validate the math
+    /// without driving a SwiftUI `DragGesture`.
+    nonisolated public static func scrubTime(
+        dragStartX: CGFloat,
+        translationX: CGFloat,
+        geometry: TimelineGeometry,
+        totalDuration: Float
+    ) -> Float {
+        let raw = geometry.time(forX: max(0, dragStartX + translationX))
+        return max(0, min(raw, totalDuration))
     }
 }
 

@@ -18,7 +18,8 @@ import type {
 import type {
   TranscriptionReadyEventData,
   AudioTranslationsProgressiveEventData,
-  AudioTranslationsCompletedEventData
+  AudioTranslationsCompletedEventData,
+  PresenceSnapshotEventData
 } from '@meeshy/shared/types/socketio-events';
 import type { EncryptedPayload, EncryptionMode } from '@meeshy/shared/types/encryption';
 
@@ -40,6 +41,7 @@ export type AudioTranslationsCompletedListener = (data: AudioTranslationsComplet
 export type TranscriptionListener = (data: TranscriptionReadyEventData) => void;
 export type TypingListener = (event: TypingEvent) => void;
 export type UserStatusListener = (event: UserStatusEvent) => void;
+export type PresenceSnapshotListener = (event: PresenceSnapshotEventData) => void;
 export type ConversationStatsListener = (data: { conversationId: string; stats: Record<string, unknown> }) => void;
 export type OnlineStatsListener = (data: { conversationId: string; onlineUsers: readonly { userId: string; displayName?: string }[]; updatedAt: Date }) => void;
 export type ReactionListener = (data: { messageId: string; userId: string; emoji: string; conversationId: string }) => void;

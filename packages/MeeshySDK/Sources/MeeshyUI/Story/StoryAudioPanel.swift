@@ -74,13 +74,34 @@ public struct StoryAudioPanel: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            panelHeader
             tabSelector
             tabContent
         }
-        .frame(maxHeight: 320)
-        .background(Color.black.opacity(0.5))
+        .frame(maxHeight: 360)
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
         .onAppear { fetchLibrary() }
         .onDisappear { previewPlayer.stop() }
+    }
+
+    // MARK: - Panel Header
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    private var panelHeader: some View {
+        HStack {
+            Image(systemName: "music.note.list")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(MeeshyColors.brandGradient)
+            Text(String(localized: "story.audioPanel.title", defaultValue: "Audio", bundle: .module))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+            Spacer()
+        }
+        .padding(.bottom, 8)
     }
 
     // MARK: - Tab Selector
@@ -101,7 +122,7 @@ public struct StoryAudioPanel: View {
                         .overlay(alignment: .bottom) {
                             if activeTab == tab {
                                 Capsule()
-                                    .fill(Color(hex: "FF2E63"))
+                                    .fill(MeeshyColors.brandGradient)
                                     .frame(height: 2)
                                     .padding(.horizontal, 20)
                                     .transition(.opacity)
@@ -194,7 +215,7 @@ public struct StoryAudioPanel: View {
                 .font(.system(size: 12))
                 .foregroundColor(.white.opacity(0.5))
             Slider(value: $audioVolume, in: 0...1)
-                .tint(Color(hex: "FF2E63"))
+                .tint(MeeshyColors.indigo500)
             Image(systemName: "speaker.wave.3.fill")
                 .font(.system(size: 12))
                 .foregroundColor(.white.opacity(0.5))
@@ -245,7 +266,7 @@ public struct StoryAudioPanel: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(isSelected ? Color(hex: "FF2E63") : Color.white.opacity(0.1))
+                            .fill(isSelected ? MeeshyColors.brandPrimary : Color.white.opacity(0.1))
                             .frame(width: 36, height: 36)
                         Image(systemName: isPreviewing ? "pause.fill" : "play.fill")
                             .font(.system(size: 13, weight: .semibold))
@@ -257,7 +278,7 @@ public struct StoryAudioPanel: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(item.title)
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(isSelected ? Color(hex: "FF2E63") : .white)
+                        .foregroundColor(isSelected ? MeeshyColors.brandPrimary : .white)
                         .lineLimit(1)
                     HStack(spacing: 4) {
                         if let uploader = item.uploaderName {
@@ -275,13 +296,13 @@ public struct StoryAudioPanel: View {
 
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
-                        .foregroundColor(Color(hex: "FF2E63"))
+                        .foregroundColor(MeeshyColors.brandPrimary)
                         .font(.system(size: 16))
                 }
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 9)
-            .background(isSelected ? Color(hex: "FF2E63").opacity(0.08) : Color.clear)
+            .background(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.clear)
         }
         .buttonStyle(.plain)
     }

@@ -3,6 +3,34 @@ import Foundation
 import MeeshySDK
 import os
 
+// MARK: - OfflineToPublishBridging (test seam)
+
+/// Protocol bridging items dequeued from `StoryOfflineQueue` into the
+/// production `StoryPublishQueue`. The protocol exists purely as a test seam
+/// — production code wires the default implementation, tests inject a spy
+/// to assert what the bootstrap forwards on each flush attempt.
+public protocol OfflineToPublishBridging: Sendable {
+    /// Enqueues a publish-ready item into the downstream queue. Returns
+    /// `true` when the downstream queue accepted the item (so the offline
+    /// queue can drop it), `false` when the hand-off failed and the item
+    /// must remain queued for the next attempt.
+    func enqueueForPublish(_ item: StoryPublishQueueItem) async -> Bool
+}
+
+/// Default bridge that forwards to `StoryPublishQueue.shared`.
+///
+/// The publish queue is the production retry/upload pipeline owned by
+/// `StoryPublishService` in the app target. Once an item lands there the
+/// existing executor + exponential-backoff machinery takes over.
+struct DefaultOfflineToPublishBridge: OfflineToPublishBridging {
+    func enqueueForPublish(_ item: StoryPublishQueueItem) async -> Bool {
+        _ = await StoryPublishQueue.shared.enqueue(item)
+        return true
+    }
+}
+
+// MARK: - StoryOfflineQueueBootstrap
+
 /// Wires `StoryOfflineQueue` to its production publish handler and triggers
 /// `flush()` whenever `NetworkMonitor` reports the device is back online.
 ///
@@ -17,8 +45,18 @@ public final class StoryOfflineQueueBootstrap {
     private var cancellables: Set<AnyCancellable> = []
     private var didStart = false
     private let logger = Logger(subsystem: "me.meeshy.app", category: "media")
+    private let bridge: OfflineToPublishBridging
 
-    private init() {}
+    /// Production initialiser uses the default `StoryPublishQueue` bridge.
+    private convenience init() {
+        self.init(bridge: DefaultOfflineToPublishBridge())
+    }
+
+    /// Test seam: inject a custom bridge to assert hand-off behaviour without
+    /// touching the singleton `StoryPublishQueue`.
+    init(bridge: OfflineToPublishBridging) {
+        self.bridge = bridge
+    }
 
     /// Idempotent bootstrap. Wires the publish handler and observes network state.
     public func start() {
@@ -26,7 +64,7 @@ public final class StoryOfflineQueueBootstrap {
         didStart = true
 
         // Wire publish handler — when the queue flushes, forward each item to
-        // StoryPublishService (the production publish path).
+        // the publish queue (the production retry/upload pipeline).
         Task {
             await StoryOfflineQueue.shared.setOnPublish { [weak self] item in
                 guard let self else { return false }
@@ -46,24 +84,56 @@ public final class StoryOfflineQueueBootstrap {
             .store(in: &cancellables)
     }
 
-    // MARK: - Private
+    // MARK: - Bridge
 
-    /// Forwards a queued story item to the production publish service.
+    /// Forwards a queued story item to the production publish pipeline.
     ///
-    /// `StoryPublishService` is responsible for uploading slides + media.
-    /// Returns `true` when the item is published successfully (or permanently
-    /// rejected), `false` when a transient failure should keep it queued.
-    private func publish(item: StoryOfflineQueueItem) async -> Bool {
-        // TODO: forward to the concrete publish executor once it stabilises.
-        // StoryPublishService.shared.publishOfflineItem(item) is the intended
-        // final wiring — left as a stub until that API is merged.
-        logger.info("""
-            StoryOfflineQueueBootstrap: publish stub for item \
-            \(item.slideIds.first ?? "<none>", privacy: .public). \
-            Wire StoryPublishService.shared.publishOfflineItem(_:) here.
-            """)
-        // Return false so the item stays queued rather than being silently dropped
-        // before the real executor is wired in.
-        return false
+    /// Maps `StoryOfflineQueueItem` -> `StoryPublishQueueItem`:
+    ///   - `slidePayloadJSON` (UTF-8 string) -> `slidesPayload` (Data)
+    ///   - `mediaURLPaths` -> `[StoryMediaReference]` tagged as `image`
+    ///   - `audioURLPaths` -> `[StoryMediaReference]` tagged as `audio`
+    ///   - `visibility` is propagated verbatim
+    ///
+    /// Returns `true` when the publish queue accepts the item (so the offline
+    /// queue drops it), `false` when the payload cannot be re-encoded or the
+    /// bridge rejected the hand-off (so the item stays queued for the next
+    /// connectivity-triggered flush).
+    func publish(item: StoryOfflineQueueItem) async -> Bool {
+        guard let payload = item.slidePayloadJSON.data(using: .utf8),
+              !payload.isEmpty else {
+            logger.error("""
+                StoryOfflineQueueBootstrap: cannot encode slidePayloadJSON for \
+                item \(item.id, privacy: .public) — keeping item queued.
+                """)
+            return false
+        }
+
+        let mediaRefs = item.mediaURLPaths.map { (elementId, path) in
+            StoryMediaReference(elementId: elementId, mediaType: "image", localFilePath: path)
+        }
+        let audioRefs = item.audioURLPaths.map { (elementId, path) in
+            StoryMediaReference(elementId: elementId, mediaType: "audio", localFilePath: path)
+        }
+
+        let publishItem = StoryPublishQueueItem(
+            visibility: item.visibility,
+            slidesPayload: payload,
+            repostOfId: nil,
+            mediaReferences: mediaRefs + audioRefs
+        )
+
+        let accepted = await bridge.enqueueForPublish(publishItem)
+        if accepted {
+            logger.info("""
+                StoryOfflineQueueBootstrap: forwarded item \
+                \(item.id, privacy: .public) to publish queue.
+                """)
+        } else {
+            logger.warning("""
+                StoryOfflineQueueBootstrap: publish bridge rejected item \
+                \(item.id, privacy: .public) — keeping item queued.
+                """)
+        }
+        return accepted
     }
 }

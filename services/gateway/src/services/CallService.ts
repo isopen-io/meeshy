@@ -424,9 +424,9 @@ export class CallService {
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
     }
 
-    // Validate call is not ended
-    if (call.status === CallStatus.ended) {
-      logger.error('❌ Call has ended', { callId });
+    // Validate call is not in a terminal state (ended/missed/rejected/failed)
+    if (TERMINAL_STATUSES.includes(call.status)) {
+      logger.error('❌ Call is in terminal state', { callId, status: call.status });
       throw new Error(`${CALL_ERROR_CODES.CALL_ENDED}: This call has already ended`);
     }
 
@@ -555,6 +555,21 @@ export class CallService {
     const activeParticipants = call.participants.filter((p) => !p.leftAt && p.id !== callParticipant.id);
     const isLastParticipant = activeParticipants.length === 0;
 
+    // Audit P1-29 — distinguish "leave during ringing/connecting" (callee
+    // declined or initiator cancelled before media negotiation completed)
+    // from "leave during an active call". The pre-answer case must map to
+    // `missed` (with `endReason: missed`) so:
+    //   - the iOS UI surfaces a missed-call banner on the OTHER device,
+    //   - Recents shows "Missed" / "Cancelled" instead of "Ended",
+    //   - the gateway emits `call:missed` in addition to `call:ended` and
+    //     can create missed-call push notifications for offline callees.
+    const wasPreAnswered =
+      call.status === CallStatus.initiated ||
+      call.status === CallStatus.ringing ||
+      call.status === CallStatus.connecting;
+    const targetEndedStatus = wasPreAnswered ? CallStatus.missed : CallStatus.ended;
+    const targetEndReason = wasPreAnswered ? CallEndReason.missed : CallEndReason.completed;
+
     // Update in transaction
     await this.prisma.$transaction(async (tx) => {
       // Update participant left time
@@ -563,7 +578,7 @@ export class CallService {
         data: { leftAt }
       });
 
-      // If last participant, end the call
+      // If last participant, end the call (status depends on pre/post-answer).
       if (isLastParticipant) {
         const duration = Math.floor(
           (leftAt.getTime() - call.startedAt.getTime()) / 1000
@@ -572,17 +587,24 @@ export class CallService {
         await tx.callSession.update({
           where: { id: callId },
           data: {
-            status: CallStatus.ended,
+            status: targetEndedStatus,
+            endReason: targetEndReason,
             endedAt: leftAt,
             duration
           }
         });
 
-        logger.info('✅ Call ended - last participant left', { callId, duration });
+        logger.info('✅ Call closed - last participant left', {
+          callId,
+          duration,
+          status: targetEndedStatus,
+          endReason: targetEndReason,
+          wasPreAnswered
+        });
       }
     });
 
-    logger.info('✅ User left call successfully', { callId, userId });
+    logger.info('✅ User left call successfully', { callId, userId, wasPreAnswered });
 
     return this.getCallSession(callId);
   }
@@ -800,6 +822,19 @@ export class CallService {
     if (!callSession) {
       logger.error('❌ Call session not found', { callId });
       throw new Error(`${CALL_ERROR_CODES.CALL_NOT_FOUND}: Call session not found`);
+    }
+
+    // Audit P2-GW-3 — guard against non-ringing states. The ringing
+    // timeout callback already performs an atomic `updateMany` scoped to
+    // `[initiated, ringing]`, so when this path runs the row is typically
+    // already `missed`. Unconditionally re-writing it drifts `endedAt`
+    // (+a few ms) and `duration` (+a few seconds) on every retry.
+    if (callSession.status !== CallStatus.initiated && callSession.status !== CallStatus.ringing) {
+      logger.info('Call already in non-ringing state — skipping markCallAsMissed write', {
+        callId,
+        currentStatus: callSession.status
+      });
+      return this.getCallSession(callId);
     }
 
     // Mettre à jour le statut de l'appel

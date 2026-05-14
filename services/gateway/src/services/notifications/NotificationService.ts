@@ -389,6 +389,20 @@ export class NotificationService {
                 senderDisplayName: params.actor?.displayName || '',
                 senderAvatar: params.actor?.avatar || '',
                 imageURL: params.actor?.avatar || '',
+                // Phase A — message media inline (audio waveform, image preview, video thumb).
+                // L'extension iOS lit ces champs pour télécharger le fichier et l'attacher
+                // comme UNNotificationAttachment avec le bon UTI typeHint.
+                attachmentUrl: params.context.firstAttachmentUrl || '',
+                attachmentMimeType: params.context.firstAttachmentMimeType || '',
+                attachmentDurationMs: params.context.firstAttachmentDurationMs != null
+                  ? String(params.context.firstAttachmentDurationMs)
+                  : '',
+                // Phase B — reactions. Emoji used so the iOS extension can format
+                // the body as "<sender> a réagi <emoji> à votre message" while the
+                // INSendMessageIntent path still renders the reactor's avatar.
+                reactionEmoji: (params.metadata && 'reactionEmoji' in params.metadata
+                  ? String(params.metadata.reactionEmoji ?? '')
+                  : ''),
                 encryptedContent: params.context.encryptedContent || '',
                 notificationLocKey: params.context.notificationLocKey || '',
               },
@@ -567,6 +581,13 @@ export class NotificationService {
     firstAttachmentDuration?: number | null;
     firstAttachmentWidth?: number | null;
     firstAttachmentHeight?: number | null;
+    /** URL accessible publiquement pour le 1er attachment (image/audio/video).
+     *  L'extension iOS télécharge ce fichier et le rend en UNNotificationAttachment
+     *  natif (waveform pour audio, preview pour image, thumbnail pour video). */
+    firstAttachmentUrl?: string;
+    /** MIME type du 1er attachment, ex. `audio/m4a`, `image/jpeg`, `video/mp4`.
+     *  Utilisé par l'extension pour choisir le UTI typeHint correct. */
+    firstAttachmentMimeType?: string;
     encryptedContent?: string;
     notificationLocKey?: string;
   }): Promise<Notification | null> {
@@ -612,6 +633,12 @@ export class NotificationService {
         conversationTitle: conversation?.title,
         conversationType: conversation?.type as any,
         messageId: params.messageId,
+        // Phase A — propagation au payload APN pour rendu media inline iOS.
+        firstAttachmentUrl: params.firstAttachmentUrl,
+        firstAttachmentMimeType: params.firstAttachmentMimeType,
+        firstAttachmentDurationMs: params.firstAttachmentDuration != null
+          ? Math.round(params.firstAttachmentDuration * 1000)
+          : undefined,
         encryptedContent: params.encryptedContent,
         notificationLocKey: params.notificationLocKey,
       },
@@ -817,11 +844,17 @@ export class NotificationService {
       select: { title: true, type: true },
     });
 
+    // Phase C — prefix emoji icône d'appel pour rendu visuel rapide dans le banner.
+    // L'extension iOS expose en plus l'avatar du caller via INSendMessageIntent
+    // (missed_call est ajouté à communicationTypes côté extension dans la même PR).
+    const callIcon = params.callType === 'video' ? '📹' : '📞';
+    const callLabel = params.callType === 'video' ? 'vidéo' : 'audio';
+
     return this.createNotification({
       userId: params.recipientUserId,
       type: 'missed_call',
       priority: 'high',
-      content: `Appel ${params.callType === 'video' ? 'vidéo' : 'audio'} manqué`,
+      content: `${callIcon} Appel ${callLabel} manqué`,
 
       actor: {
         id: params.callerId,

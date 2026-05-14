@@ -1,0 +1,134 @@
+import XCTest
+@testable import MeeshyUI
+@testable import MeeshySDK
+
+@MainActor
+final class ComposerLayerActionsTests: XCTestCase {
+
+    // MARK: - bringForward / sendBackward
+
+    func test_bringForward_atTop_isNoOp() {
+        let vm = StoryComposerViewModel()
+        let _ = vm.addText()  // returns the new text object
+        let b = vm.addText()
+        vm.bringToFront(id: b.id)   // b is at top
+        let zBefore = vm.zIndex(for: b.id)
+        vm.bringForward(id: b.id)
+        XCTAssertEqual(vm.zIndex(for: b.id), zBefore)
+    }
+
+    func test_sendBackward_atBottom_isNoOp() {
+        let vm = StoryComposerViewModel()
+        let a = vm.addText()
+        _ = vm.addText()
+        vm.sendToBack(id: a.id)
+        let zBefore = vm.zIndex(for: a.id)
+        vm.sendBackward(id: a.id)
+        XCTAssertEqual(vm.zIndex(for: a.id), zBefore)
+    }
+
+    func test_bringForward_swapsWithNextHigher() {
+        let vm = StoryComposerViewModel()
+        let a = vm.addText()  // z=1
+        let b = vm.addText()  // z=2
+        let _ = vm.addText()  // z=3
+        vm.bringForward(id: a.id)
+        XCTAssertGreaterThan(vm.zIndex(for: a.id), vm.zIndex(for: b.id))
+    }
+
+    func test_bringForward_withGap_skipsDeletedZIndex() {
+        let vm = StoryComposerViewModel()
+        let a = vm.addText()  // z=1
+        let b = vm.addText()  // z=2
+        let c = vm.addText()  // z=3
+        vm.deleteElement(id: b.id)  // gap at z=2
+        vm.bringForward(id: a.id)
+        XCTAssertGreaterThan(vm.zIndex(for: a.id), vm.zIndex(for: c.id))
+    }
+
+    func test_sendBackward_acrossKinds() {
+        let vm = StoryComposerViewModel()
+        let textId = vm.addText().id  // z=1
+        let mediaId = "fake-media-1"
+        var effects = vm.currentEffects
+        var medias = effects.mediaObjects ?? []
+        medias.append(StoryMediaObject(
+            id: mediaId,
+            mediaType: "image",
+            aspectRatio: 1.0,
+            zIndex: 2
+        ))
+        effects.mediaObjects = medias
+        vm.currentEffects = effects
+        vm.bringToFront(id: textId)  // text now at top
+        vm.sendBackward(id: textId)   // should drop text below media
+        XCTAssertLessThan(vm.zIndex(for: textId), vm.zIndex(for: mediaId))
+    }
+
+    // MARK: - duplicateElement
+
+    func test_duplicateElement_text_createsCloneWithNewIdAndOffset() {
+        let vm = StoryComposerViewModel()
+        let original = vm.addText()
+        let originalCount = vm.currentEffects.textObjects.count
+        vm.duplicateElement(id: original.id)
+        XCTAssertEqual(vm.currentEffects.textObjects.count, originalCount + 1)
+        XCTAssertNotEqual(vm.currentEffects.textObjects.last?.id, original.id)
+        let clone = vm.currentEffects.textObjects.last!
+        XCTAssertEqual(clone.x, original.x + (20.0 / 1080.0), accuracy: 0.01)
+        XCTAssertEqual(clone.y, original.y + (20.0 / 1920.0), accuracy: 0.01) // Depending on implementation coordinates logic
+    }
+
+    func test_duplicateElement_media_addsToMediaObjects() {
+        let vm = StoryComposerViewModel()
+        let mediaId = "src-media"
+        var effects = vm.currentEffects
+        var medias = effects.mediaObjects ?? []
+        medias.append(StoryMediaObject(
+            id: mediaId, mediaType: "image",
+            aspectRatio: 1.0, zIndex: 1
+        ))
+        effects.mediaObjects = medias
+        vm.currentEffects = effects
+
+        vm.duplicateElement(id: mediaId)
+        XCTAssertEqual(vm.currentEffects.mediaObjects?.count ?? 0, 2)
+        XCTAssertNotNil(vm.currentEffects.mediaObjects?.last)
+        XCTAssertNotEqual(vm.currentEffects.mediaObjects?.last?.id, mediaId)
+    }
+
+    func test_duplicateElement_unknownId_isNoOp() {
+        let vm = StoryComposerViewModel()
+        let countBefore = vm.currentEffects.textObjects.count
+        vm.duplicateElement(id: "nonexistent")
+        XCTAssertEqual(vm.currentEffects.textObjects.count, countBefore)
+    }
+
+    // MARK: - deleteElement
+
+    func test_deleteElement_text_removesFromArray() {
+        let vm = StoryComposerViewModel()
+        let toDelete = vm.addText().id
+        let keep = vm.addText().id
+        vm.deleteElement(id: toDelete)
+        XCTAssertEqual(vm.currentEffects.textObjects.count, 1)
+        XCTAssertEqual(vm.currentEffects.textObjects.first?.id, keep)
+    }
+
+    func test_deleteElement_clearsZIndexMap() {
+        let vm = StoryComposerViewModel()
+        let id = vm.addText().id
+        vm.bringToFront(id: id)
+        XCTAssertNotEqual(vm.zIndex(for: id), 0)
+        vm.deleteElement(id: id)
+        XCTAssertEqual(vm.zIndex(for: id), 0)  // map cleared, zIndex(for:) returns default
+    }
+
+    func test_deleteElement_unknownId_isNoOp() {
+        let vm = StoryComposerViewModel()
+        let id = vm.addText().id
+        vm.deleteElement(id: "nonexistent")
+        XCTAssertEqual(vm.currentEffects.textObjects.count, 1)
+        XCTAssertEqual(vm.currentEffects.textObjects.first?.id, id)
+    }
+}

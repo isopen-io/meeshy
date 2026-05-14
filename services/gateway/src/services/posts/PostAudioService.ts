@@ -195,7 +195,7 @@ export class PostAudioService {
       await zmqClient.sendAudioProcessRequest({
         messageId: params.postMediaId,
         attachmentId: params.postMediaId,
-        conversationId: '',
+        conversationId: `post_${params.postId}`,
         senderId: params.authorId,
         audioPath,
         audioDurationMs: 0,

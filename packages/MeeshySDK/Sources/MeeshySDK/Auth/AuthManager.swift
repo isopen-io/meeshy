@@ -1,6 +1,23 @@
 import Foundation
 import Combine
 
+// MARK: - Profile Snapshot
+
+/// Immutable capture of the three profile-editable fields, returned by
+/// `AuthManaging.applyLocalProfileChanges` and consumed by
+/// `restoreLocalProfileSnapshot` for optimistic-rollback flows.
+public struct ProfileSnapshot: Sendable, Equatable {
+    public let displayName: String?
+    public let bio: String?
+    public let avatarUrl: String?
+
+    public init(displayName: String?, bio: String?, avatarUrl: String?) {
+        self.displayName = displayName
+        self.bio = bio
+        self.avatarUrl = avatarUrl
+    }
+}
+
 // MARK: - Protocol
 
 @MainActor
@@ -21,6 +38,23 @@ public protocol AuthManaging: AnyObject {
     func checkExistingSession() async
     func handleUnauthorized()
     func removeSavedAccount(userId: String)
+
+    /// Applies up to three profile field changes locally, without any
+    /// network call. `nil` for a field means "leave unchanged". Returns
+    /// a snapshot of the pre-mutation values for later rollback.
+    /// Publishes via `currentUser` so all subscribers refresh in the
+    /// same run-loop tick.
+    @discardableResult
+    func applyLocalProfileChanges(
+        displayName: String?,
+        bio: String?,
+        avatarUrl: String?
+    ) -> ProfileSnapshot
+
+    /// Restores the three profile fields from a snapshot. Used by
+    /// EditProfileViewModel when `OfflineQueue.outcomeStream` emits
+    /// `.exhausted` for the corresponding `updateProfile` row.
+    func restoreLocalProfileSnapshot(_ snapshot: ProfileSnapshot)
 }
 
 // MARK: - Implementation
@@ -75,7 +109,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         get { UserDefaults.standard.string(forKey: activeUserIdUDKey) }
         set {
             UserDefaults.standard.set(newValue, forKey: activeUserIdUDKey)
-            UserDefaults(suiteName: "group.me.meeshy.app")?.set(newValue, forKey: activeUserIdUDKey)
+            UserDefaults(suiteName: "group.me.meeshy.apps")?.set(newValue, forKey: activeUserIdUDKey)
         }
     }
 
@@ -527,5 +561,36 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         keychain.delete(forKey: legacyTokenKey)
         keychain.delete(forKey: legacyUserKey)
+    }
+
+    // MARK: - Local Profile Mutation (optimistic)
+
+    @discardableResult
+    public func applyLocalProfileChanges(
+        displayName: String?,
+        bio: String?,
+        avatarUrl: String?
+    ) -> ProfileSnapshot {
+        let snapshot = ProfileSnapshot(
+            displayName: currentUser?.displayName,
+            bio: currentUser?.bio,
+            avatarUrl: currentUser?.avatar
+        )
+        guard let user = currentUser else { return snapshot }
+        currentUser = user.withProfileChanges(
+            displayName: displayName,
+            bio: bio,
+            avatar: avatarUrl
+        )
+        return snapshot
+    }
+
+    public func restoreLocalProfileSnapshot(_ snapshot: ProfileSnapshot) {
+        guard let user = currentUser else { return }
+        currentUser = user.withProfileChanges(
+            displayName: snapshot.displayName,
+            bio: snapshot.bio,
+            avatar: snapshot.avatarUrl
+        )
     }
 }

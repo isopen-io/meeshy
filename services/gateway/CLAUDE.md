@@ -186,6 +186,18 @@ logger.info('message', { userId, conversationId }); // PII auto-redacted
 - Port 3000
 - Healthcheck: `curl http://localhost:${PORT}/health`
 
+## Static Audio Endpoint
+Story background audio files are served at:
+```
+GET /api/v1/static/:filename   (JWT-protected)
+```
+- Stored in `UPLOAD_DIR` (env var, default `/tmp/meeshy-uploads`)
+- Only audio extensions allowed: `.mp3`, `.mp4`, `.wav`, `.m4a`, `.aac`, `.ogg`
+- Path traversal is blocked via `path.basename()`
+- `Cache-Control: private, max-age=3600`
+- Route registered in `routes/posts/audio.ts` alongside the upload route
+- URL generated at upload time: `/api/v1/static/${filename}`
+
 ## Critical Gotchas
 - `emit()` does NOT await Promises - wrap async listeners in try/catch
 - Audio pipeline only via WS `message:send-with-attachments` (not REST)

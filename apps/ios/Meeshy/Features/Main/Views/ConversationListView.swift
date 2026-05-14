@@ -95,11 +95,20 @@ struct ConversationListView: View {
     @State private var hideSearchBar = false
 
     // Performance optimized scroll variables
-    @State private var isPullingToRefresh = false  // Track pull-to-refresh gesture
     @State private var selectedProfileUser: ProfileSheetUser? = nil
     @State private var headerScrollOffset: CGFloat = 0
     @State private var lastScrollDirectionChange: Date = .distantPast
-    
+
+    // Pull-to-refresh : delegue tout a `MeeshyRefreshableScroll` (wrapper
+    // brand-coherent qui combine `.refreshable` natif iOS + animation
+    // Meeshy custom : logo dashes, degrade indigo, haptic au seuil et au
+    // success). L'ancien state machine custom (pullPhase, peakPullDistance,
+    // simultaneousGesture, startPullRefresh, completePullRefresh) ne
+    // declenchait pas l'haptic ni le refresh sur device — `simultaneousGesture`
+    // ne firait pas systematiquement parce que le ScrollView consomme le
+    // drag vertical en priorite. Le wrapper utilise `.refreshable` qui est
+    // robuste.
+
     // UI states
     @State var blockTargetConversation: Conversation? = nil
     @State var showBlockConfirmation = false
@@ -691,20 +700,35 @@ struct ConversationListView: View {
     private var mainContentZStack: some View {
         ZStack(alignment: .bottom) {
             // Layer 1: Full-screen scroll content
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    // Scroll offset detector (MUST be first child)
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ScrollOffsetPreferenceKey.self,
-                            value: geo.frame(in: .named("scroll")).minY
-                        )
+            // Wrapper Meeshy : `.refreshable` natif iOS + indicator brand
+            // anime (logo dashes + degrade indigo). Le contenu est insere
+            // tel quel, le wrapper s'occupe du sentinel scrollOffset, du
+            // MeeshyPullIndicator au top, des haptics et de l'orchestration
+            // de la sequence pull -> armed -> refreshing -> completing -> idle.
+            MeeshyRefreshableScroll(
+                onRefresh: {
+                    async let convRefresh: Void = conversationViewModel.pullToRefresh()
+                    async let storyRefresh: Void = storyViewModel.loadStories(forceNetwork: true)
+                    async let statusRefresh: Void = statusViewModel.refresh()
+                    async let communitiesRefresh: Void = loadUserCommunities()
+                    _ = await (convRefresh, storyRefresh, statusRefresh, communitiesRefresh)
+                },
+                coordinateSpaceName: "scroll",
+                onScrollOffsetChange: { offset in
+                    headerScrollOffset = offset
+                    guard !isSearching, !showSearchOverlay else { return }
+                    let scrollingDown = offset < -30
+                    if scrollingDown != isScrollingDown {
+                        // Throttle direction changes to avoid rapid toggling during bounce/overscroll
+                        let now = Date()
+                        guard now.timeIntervalSince(lastScrollDirectionChange) > 0.15 else { return }
+                        lastScrollDirectionChange = now
+                        isScrollingDown = scrollingDown
                     }
-                    .frame(height: 0)
-
-                    // Header spacer — pushes content below the expanded header
-                    Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
-
+                },
+                topPadding: CollapsibleHeaderMetrics.expandedHeight
+            ) {
+                VStack(spacing: 0) {
                     // Story carousel
                     StoryTrayView(viewModel: storyViewModel, onViewStory: { userId in
                         onStoryViewRequest?(userId, true)
@@ -712,10 +736,17 @@ struct ConversationListView: View {
                         showStatusComposer = true
                     })
 
-                    // Sectioned conversation list (skeleton -> content -> empty/error)
-                    if conversationViewModel.isLoading && conversationViewModel.groupedConversations.isEmpty {
+                    // Sectioned conversation list (skeleton -> content -> empty/error).
+                    // Skeleton ONLY when cold-start with no cached groups —
+                    // cache-first principle: any cached/stale data must
+                    // render immediately, no skeleton on top of it.
+                    // Drive the gate from `loadState == .loading` (not the
+                    // legacy `isLoading` flag) so cachedStale/cachedFresh
+                    // paths bypass the placeholder even on first paint.
+                    if conversationViewModel.loadState == .loading
+                        && conversationViewModel.groupedConversations.isEmpty {
                         LazyVStack(spacing: 8) {
-                            ForEach(0..<8, id: \.self) { index in
+                            ForEach(0..<6, id: \.self) { index in
                                 SkeletonConversationRow()
                                     .staggeredAppear(index: index, baseDelay: 0.04)
                             }
@@ -782,37 +813,7 @@ struct ConversationListView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 120)
             }
-            .coordinateSpace(name: "scroll")
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
-                headerScrollOffset = offset
-                guard !isSearching, !showSearchOverlay else { return }
-                let scrollingDown = offset < -30
-                if scrollingDown != isScrollingDown {
-                    // Throttle direction changes to avoid rapid toggling during bounce/overscroll
-                    let now = Date()
-                    guard now.timeIntervalSince(lastScrollDirectionChange) > 0.15 else { return }
-                    lastScrollDirectionChange = now
-                    isScrollingDown = scrollingDown
-                }
-            }
             .scrollDismissesKeyboard(.interactively)
-            .refreshable {
-                HapticFeedback.medium()
-                // pullToRefresh resets the pagination cursor + hasMore
-                // before delegating to forceRefresh, so the next
-                // `loadMore` re-paginates from the top instead of
-                // continuing past the old tail.
-                async let convRefresh: Void = conversationViewModel.pullToRefresh()
-                async let storyRefresh: Void = storyViewModel.loadStories()
-                async let statusRefresh: Void = statusViewModel.refresh()
-                _ = await (convRefresh, storyRefresh, statusRefresh)
-
-                if isScrollingDown {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
-                        isScrollingDown = false
-                    }
-                }
-            }
 
             // Layer 2: Bottom overlay — Search bar + Communities & Filters
             VStack(spacing: 0) {
@@ -1005,17 +1006,61 @@ struct ConversationListView: View {
     }
 
     // MARK: - Load Communities
+    /// Cache-first community load (iOS Local-First Wave 1, Task 2.1).
+    ///
+    /// Flow:
+    /// - `.fresh` -> apply cache, no network call.
+    /// - `.stale` -> apply cache immediately, then revalidate silently;
+    ///   the fresh result replaces the cached one when it lands.
+    /// - `.expired`/`.empty` -> fetch the network, apply, persist.
+    ///
+    /// The cache key is the single bucket `"list"` because the conversation
+    /// list only ever calls `CommunityService.shared.list(offset: 0, limit: 10)`
+    /// (no search, fixed window). A different bucket / param-aware key would
+    /// be needed if the call surface grew to support pagination or search.
     private func loadUserCommunities() async {
-        do {
-            let response = try await CommunityService.shared.list(offset: 0, limit: 10)
-            userCommunities = response.data.map { $0.toCommunity() }
-            userCommunityLookup = Dictionary(uniqueKeysWithValues: userCommunities.map { ($0.id, $0) })
-        } catch {
-            Logger.messages.error("[ConversationListView] Error loading communities: \(error.localizedDescription)")
+        let cacheKey = "list"
+        let cacheResult = await CacheCoordinator.shared.communities.load(for: cacheKey)
+        switch cacheResult {
+        case .fresh(let cached, _):
+            applyCommunities(cached)
+        case .stale(let cached, _):
+            applyCommunities(cached)
+            Task {
+                do {
+                    let response = try await CommunityService.shared.list(offset: 0, limit: 10)
+                    applyCommunities(response.data)
+                    try? await CacheCoordinator.shared.communities.save(response.data, for: cacheKey)
+                } catch {
+                    Logger.cache.warning("[ConversationListView] Communities silent revalidate failed: \(error.localizedDescription)")
+                }
+            }
+        case .expired, .empty:
+            do {
+                let response = try await CommunityService.shared.list(offset: 0, limit: 10)
+                applyCommunities(response.data)
+                try? await CacheCoordinator.shared.communities.save(response.data, for: cacheKey)
+            } catch {
+                Logger.messages.error("[ConversationListView] Error loading communities: \(error.localizedDescription)")
+            }
         }
     }
 
+    /// Maps API payloads to the domain `MeeshyCommunity` type and updates
+    /// both the array and the id-keyed lookup the rows consume. Pulled out
+    /// so the cache-first switch in `loadUserCommunities` stays readable
+    /// and the same transform is reused across the fresh / stale / network
+    /// branches.
+    private func applyCommunities(_ apiCommunities: [APICommunity]) {
+        let mapped = apiCommunities.map { $0.toCommunity() }
+        userCommunities = mapped
+        userCommunityLookup = Dictionary(uniqueKeysWithValues: mapped.map { ($0.id, $0) })
+    }
+
     // See ConversationListView+Overlays.swift for communitiesSection, categoryFilters, themedSearchBar
+
+    // Pull-to-refresh entierement gere par MeeshyRefreshableScroll.
+    // Voir Layer 1 dans `mainContentZStack`.
 }
 
 // See ThemedConversationRow.swift

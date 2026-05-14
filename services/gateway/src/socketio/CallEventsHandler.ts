@@ -10,7 +10,7 @@
  */
 
 import { Socket } from 'socket.io';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, CallStatus, CallEndReason } from '@meeshy/shared/prisma/client';
 import { CallService } from '../services/CallService';
 import { NotificationService } from '../services/notifications/NotificationService';
 import { PushNotificationService } from '../services/PushNotificationService';
@@ -29,6 +29,7 @@ import {
   socketQualityReportSchema,
   socketReconnectingSchema,
   socketReconnectedSchema,
+  socketForceLeaveSchema,
   socketTranscriptionSegmentSchema
 } from '../validation/call-schemas';
 import { getSocketRateLimiter, checkSocketRateLimit, SOCKET_RATE_LIMITS } from '../utils/socket-rate-limiter';
@@ -48,7 +49,9 @@ import type {
   CallReconnectedEvent,
   CallInitiateAck,
   CallJoinAck,
-  CallEndReason,
+  // CallEndReason imported as value from @meeshy/shared/prisma/client above
+  // (the Prisma generated enum is both a value AND a type, so we don't
+  // need the type-only re-export from video-call.ts which duplicates it).
   CallTranscriptionSegmentEvent,
 } from '@meeshy/shared/types/video-call';
 
@@ -141,6 +144,29 @@ export class CallEventsHandler {
     getUserId: (socketId: string) => string | undefined,
     getUserInfo?: (socketId: string) => { id: string; isAnonymous: boolean } | undefined
   ): void {
+    // Audit P1-28 — Cache the userId at the moment we observe an authenticated
+    // call event so the disconnect handler can still recover it even if the
+    // upstream MeeshySocketIOManager has already deleted its socketToUser
+    // entry by the time our async cleanup runs.
+    let cachedUserId: string | undefined;
+    const rememberAuth = (uid: string) => { cachedUserId = uid; };
+    const recoverUserId = (): string | undefined => getUserId(socket.id) ?? cachedUserId;
+
+    // Audit P1-20 — Anonymous (X-Session-Token) users must NOT be able to
+    // initiate or join calls. The REST routes already enforce this with
+    // `allowAnonymous: false`; this socket gate aligns the WS surface.
+    const denyAnonymous = (): boolean => {
+      const info = getUserInfo?.(socket.id);
+      if (info?.isAnonymous) {
+        socket.emit(CALL_EVENTS.ERROR, {
+          code: CALL_ERROR_CODES.PERMISSION_DENIED,
+          message: 'Anonymous users cannot initiate or join calls'
+        } as CallError);
+        return true;
+      }
+      return false;
+    };
+
     /**
      * call:initiate - Client initiates a new call
      * CVE-002: Added rate limiting (5 req/min)
@@ -156,6 +182,8 @@ export class CallEventsHandler {
           } as CallError);
           return;
         }
+        if (denyAnonymous()) return;
+        rememberAuth(userId);
 
         // CVE-002: Rate limiting check
         const rateLimitPassed = await checkSocketRateLimit(
@@ -281,20 +309,25 @@ export class CallEventsHandler {
           memberUserIds
         });
 
-        // Send call:initiated to each member socket ONCE (excluding initiator
-        // to avoid the initiator treating their own call as an incoming call)
-        const allSockets = await io.fetchSockets();
+        // Audit P2-GW-1 — was `io.fetchSockets()` which scans EVERY connected
+        // socket on the server (O(N), prohibitive at 10k+ connections). Each
+        // callee user auto-joins `ROOMS.user(userId)` at auth (AuthHandler
+        // L121/L181), so a per-user `io.in(ROOMS.user(memberId)).fetchSockets()`
+        // is O(M) where M = the callee's online device count (typically 1–3).
         let notifiedSocketsCount = 0;
-
-        for (const memberSocket of allSockets) {
-          const socketUserId = getUserId(memberSocket.id);
-          if (socketUserId && socketUserId !== userId && memberUserIds.includes(socketUserId)) {
-            const memberIceServers = this.callService.generateIceServers(socketUserId);
+        const notifiedUserIds = new Set<string>();
+        for (const memberId of memberUserIds) {
+          if (memberId === userId) continue; // skip initiator
+          const memberSockets = await io.in(ROOMS.user(memberId)).fetchSockets();
+          if (memberSockets.length === 0) continue;
+          notifiedUserIds.add(memberId);
+          const memberIceServers = this.callService.generateIceServers(memberId);
+          for (const memberSocket of memberSockets) {
             memberSocket.emit(CALL_EVENTS.INITIATED, { ...initiatedEvent, iceServers: memberIceServers });
             notifiedSocketsCount++;
             logger.debug('📤 Sent call:initiated to member socket', {
               socketId: memberSocket.id,
-              userId: socketUserId
+              userId: memberId
             });
           }
         }
@@ -307,38 +340,71 @@ export class CallEventsHandler {
         });
 
         // Phase 1 fix P2 — schedule 60s ringing timeout. If no answer arrives,
-        // force transition to 'missed' and broadcast call:ended.
+        // force transition to 'missed' and broadcast call:ended + call:missed.
         // Reference: docs/superpowers/specs/2026-05-10-calls-sota-redesign-design.md §2.5
+        // Audit 2026-05-11 — multiple fixes applied:
+        //   - Use real CallStatus / CallEndReason enums (was 'no_answer' as
+        //     any which Prisma rejected at runtime, swallowed by .catch,
+        //     leaving the call in 'ringing' forever in the DB).
+        //   - Replace findUnique + updateCallStatus with atomic updateMany
+        //     scoped to the eligible source statuses, eliminating a TOCTOU
+        //     race where a concurrent call:join could promote the call to
+        //     'connecting' between read and write.
+        //   - Trigger handleMissedCall so offline callees actually receive
+        //     a missed-call push notification (the entire infrastructure
+        //     was already wired but never invoked from this path).
+        //   - Emit CALL_EVENTS.MISSED in addition to CALL_EVENTS.ENDED so
+        //     online clients can render an in-app missed-call banner
+        //     without round-tripping through push.
         this.callService.scheduleRingingTimeout(callSession.id, async () => {
           try {
-            const current = await this.prisma.callSession.findUnique({
-              where: { id: callSession.id },
-              select: { status: true, conversationId: true },
-            });
-            // Only force missed if still in initiated/ringing (not connecting/active/ended)
-            if (current && (current.status === 'initiated' || current.status === 'ringing')) {
-              const ended = await this.callService.updateCallStatus(
-                callSession.id,
-                'missed' as any,
-                'no_answer' as any
-              ).catch((err: any) => {
-                logger.warn('Ringing timeout: updateCallStatus failed', { callId: callSession.id, err: err?.message });
-                return null;
-              });
-              if (ended) {
-                const endedEvent = {
-                  callId: callSession.id,
-                  duration: 0,
-                  endedBy: undefined,
-                  reason: 'no_answer',
-                };
-                io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.ENDED, endedEvent);
-                io.to(ROOMS.conversation(current.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
-                logger.info('Ringing timeout fired — call marked as missed', {
-                  callId: callSession.id,
-                });
+            // Atomic conditional transition — count > 0 means we won the
+            // race; count === 0 means another path (call:join, call:end,
+            // call:leave) already moved the status off ringing/initiated.
+            const result = await this.prisma.callSession.updateMany({
+              where: {
+                id: callSession.id,
+                status: { in: [CallStatus.initiated, CallStatus.ringing] }
+              },
+              data: {
+                status: CallStatus.missed,
+                endReason: CallEndReason.missed,
+                endedAt: new Date()
               }
+            });
+            if (result.count === 0) {
+              return; // already transitioned
             }
+            const conversationId = (await this.prisma.callSession.findUnique({
+              where: { id: callSession.id },
+              select: { conversationId: true }
+            }))?.conversationId;
+            const endedEvent = {
+              callId: callSession.id,
+              duration: 0,
+              endedBy: undefined,
+              reason: 'missed',
+            };
+            io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.ENDED, endedEvent);
+            if (conversationId) {
+              io.to(ROOMS.conversation(conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
+            }
+            io.to(ROOMS.call(callSession.id)).emit(CALL_EVENTS.MISSED, {
+              callId: callSession.id
+            });
+
+            // Push notification for offline callees. The whole pipeline
+            // (createMissedCallNotifications) was already wired but never
+            // called from this path before audit 2026-05-11.
+            await this.handleMissedCall(callSession.id).catch((err: any) => {
+              logger.error('handleMissedCall failed for ringing timeout', {
+                callId: callSession.id, err: err?.message
+              });
+            });
+
+            logger.info('Ringing timeout fired — call marked as missed', {
+              callId: callSession.id,
+            });
           } catch (err) {
             logger.error('Ringing timeout handler error', err);
           }
@@ -352,14 +418,13 @@ export class CallEventsHandler {
           });
           const callerName = initiatorUser?.displayName || initiatorUser?.username || 'Unknown';
           const callerAvatar = initiatorUser?.avatar || undefined;
-          const notifiedSocketUserIds = new Set<string>();
-          for (const memberSocket of allSockets) {
-            const sid = getUserId(memberSocket.id);
-            if (sid) notifiedSocketUserIds.add(sid);
-          }
 
+          // Audit P2-GW-1 — reuse the `notifiedUserIds` set built above
+          // (filled during the per-user fanout); offline users are the
+          // conversation members for whom no socket was found in their
+          // user room.
           const offlineUserIds = memberUserIds.filter(
-            uid => uid !== userId && !notifiedSocketUserIds.has(uid)
+            uid => uid !== userId && !notifiedUserIds.has(uid)
           );
 
           for (const offlineUserId of offlineUserIds) {
@@ -432,6 +497,8 @@ export class CallEventsHandler {
           } as CallError);
           return;
         }
+        if (denyAnonymous()) return;
+        rememberAuth(userId);
 
         // CVE-002: Rate limiting check
         const rateLimitPassed = await checkSocketRateLimit(
@@ -470,7 +537,21 @@ export class CallEventsHandler {
           return;
         }
 
-        // CVE-005: Join call via service (returns dynamic ICE servers)
+        // CVE-005: Join call via service (returns dynamic ICE servers).
+        //
+        // Audit 2026-05-11 — race fix: joinCall transitions DB status to
+        // 'connecting' inside its Prisma transaction, then runs auxiliary
+        // work (TURN credential generation, participant enrichment) OUTSIDE
+        // that transaction. If anything in the auxiliary block throws, the
+        // outer catch fires and the previous explicit `clearRingingTimeout`
+        // at this site is skipped — leaving the 60s timer live against a
+        // call already in 'connecting'. With Phase 2's fixed timeout
+        // callback (atomic updateMany scoped to ringing/initiated only)
+        // the leaked timer is now harmless to the call state, but it would
+        // still spuriously emit call:ended/call:missed once the timeout
+        // window expires. Guarantee cleanup via try/finally below — the
+        // explicit call here is redundant once the finally block runs, so
+        // it's removed in favour of the single canonical cleanup site.
         const joinResult = await this.callService.joinCall({
           callId: data.callId,
           userId,
@@ -479,9 +560,6 @@ export class CallEventsHandler {
         });
 
         const { callSession, iceServers } = joinResult;
-
-        // Phase 1 fix P2 — callee answered, clear the 60s ringing timeout
-        this.callService.clearRingingTimeout(data.callId);
 
         // Join call room
         socket.join(ROOMS.call(data.callId));
@@ -546,6 +624,14 @@ export class CallEventsHandler {
           });
         }
 
+        // Audit P1-27 — notify the joining user's OTHER devices that the
+        // call was answered elsewhere, so they dismiss their ringing UI /
+        // CallKit incoming card. `socket.to(...)` excludes the answering
+        // socket automatically.
+        socket.to(ROOMS.user(userId)).emit(CALL_EVENTS.ALREADY_ANSWERED, {
+          callId: data.callId
+        });
+
         logger.info('✅ Socket: User joined call', {
           callId: data.callId,
           userId,
@@ -564,6 +650,14 @@ export class CallEventsHandler {
           code: errorCode,
           message
         } as CallError);
+      } finally {
+        // Audit 2026-05-11 — guarantee timer cleanup even if joinCall (or
+        // any of the post-transaction work above) throws. clearRingingTimeout
+        // is idempotent — safe to call when the timer was never scheduled
+        // (e.g. early auth/rate-limit/validation rejection above).
+        if (data?.callId) {
+          this.callService.clearRingingTimeout(data.callId);
+        }
       }
     });
 
@@ -665,8 +759,13 @@ export class CallEventsHandler {
         // Leave call room AFTER broadcasting
         socket.leave(ROOMS.call(data.callId));
 
-        // If call ended, broadcast to BOTH call room AND conversation room
-        if (callSession.status === 'ended') {
+        // Audit P1-29 — leaveCall service now maps pre-answer last-leave to
+        // `missed` (with endReason=missed). Handle both terminal statuses:
+        // emit `call:ended` always, plus `call:missed` + create missed-call
+        // notifications when the leave actually means "the call never
+        // connected".
+        const finalStatus = callSession.status as string;
+        if (finalStatus === 'ended' || finalStatus === 'missed') {
           const endedEvent: CallEndedEvent = {
             callId: callSession.id,
             duration: callSession.duration || 0,
@@ -677,9 +776,21 @@ export class CallEventsHandler {
           io.to(ROOMS.call(data.callId)).emit(CALL_EVENTS.ENDED, endedEvent);
           io.to(ROOMS.conversation(callSession.conversationId)).emit(CALL_EVENTS.ENDED, endedEvent);
 
-          logger.info('Call ended - last participant left', {
+          if (finalStatus === 'missed') {
+            // Reuse the same missed-call notification path as the ringing
+            // timeout so the UX is identical (push notification + in-app
+            // banner) regardless of whether the call was cancelled by the
+            // initiator or timed out server-side.
+            this.handleMissedCall(callSession.id).catch((err) => {
+              logger.error('❌ handleMissedCall failed after leave', { callId: data.callId, err });
+            });
+          }
+
+          logger.info('Call closed - last participant left', {
             callId: data.callId,
-            duration: callSession.duration
+            duration: callSession.duration,
+            status: finalStatus,
+            endReason: callSession.endReason
           });
         } else {
           logger.info('✅ Socket: User left call', {
@@ -717,6 +828,49 @@ export class CallEventsHandler {
           } as CallError);
           return;
         }
+        rememberAuth(userId);
+
+        // Audit P1-22 — Rate limit (reuse CALL_LEAVE budget — same intent).
+        const rateLimitPassed = await checkSocketRateLimit(
+          socket,
+          userId,
+          SOCKET_RATE_LIMITS.CALL_LEAVE,
+          this.rateLimiter,
+          CALL_EVENTS.ERROR
+        );
+        if (!rateLimitPassed) return;
+
+        // Audit P1-22 — Validate conversationId is a valid ObjectId before
+        // running an unbounded `findMany` against the conversation_id index.
+        const validation = validateSocketEvent(socketForceLeaveSchema, data);
+        if (!validation.success) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.VALIDATION_ERROR,
+            message: (validation as any).error,
+            details: (validation as any).details
+          } as any);
+          return;
+        }
+
+        // Audit P1-22 — Membership check: a user must belong to the
+        // conversation before they can list / terminate its active calls.
+        // Without this gate any authenticated user could iterate over guessed
+        // conversation IDs and force-end every active call on the platform.
+        const membership = await this.prisma.participant.findFirst({
+          where: {
+            conversationId: data.conversationId,
+            userId,
+            isActive: true
+          },
+          select: { id: true }
+        });
+        if (!membership) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this conversation'
+          } as CallError);
+          return;
+        }
 
         logger.info('📞 Socket: call:force-leave', {
           socketId: socket.id,
@@ -724,21 +878,36 @@ export class CallEventsHandler {
           conversationId: data.conversationId
         });
 
-        // Find any active calls in this conversation
+        // Find any active calls in this conversation.
+        //
+        // CRITICAL FIX (2026-05-12) — Audit force-leave participantId mismatch :
+        // le query ne chargeait que `participants: true` (=== CallParticipant
+        // sans la relation `participant`). En conséquence le find() suivant
+        // comparait `p.participantId` (= Participant.id ObjectId) avec
+        // `userId` (= User.id ObjectId distinct) → la comparaison était
+        // TOUJOURS FALSE et le handler force-leave silently no-op-ait.
+        // Symptôme : zombie call jamais nettoyé, `CALL_ALREADY_ACTIVE`
+        // bloquant tous les call:initiate suivants dans la conversation.
+        // On charge maintenant la relation imbriquée pour pouvoir comparer
+        // sur le vrai userId.
+        // Aussi élargi le filtre statuses pour couvrir `connecting` et
+        // `reconnecting` (cohérent avec ACTIVE_STATUSES dans CallService).
         const activeCalls = await this.prisma.callSession.findMany({
           where: {
             conversationId: data.conversationId,
-            status: { in: ['initiated', 'ringing', 'active'] }
+            status: { in: ['initiated', 'ringing', 'connecting', 'active', 'reconnecting'] }
           },
           include: {
-            participants: true
+            participants: {
+              include: { participant: true }
+            }
           }
         });
 
         // Force leave each active call where user is a participant
         for (const call of activeCalls) {
           const participant = call.participants.find(
-            (p: any) => ((p.participant?.userId || p.participantId) === userId) && !p.leftAt
+            (p) => p.participant?.userId === userId && !p.leftAt
           );
 
           if (participant) {
@@ -933,7 +1102,7 @@ export class CallEventsHandler {
         if (data.signal.type === 'answer') {
           // Phase 1 fix P2 — answer signal transitions ringing → active
           this.callService.clearRingingTimeout(data.callId);
-          await this.callService.updateCallStatus(data.callId, 'active' as any).catch(() => {});
+          await this.callService.updateCallStatus(data.callId, CallStatus.active).catch(() => {});
         }
 
         ack?.({ success: true });
@@ -999,10 +1168,21 @@ export class CallEventsHandler {
           enabled: data.enabled
         });
 
-        // Update participant media state
+        // Audit P2-GW-5 — `updateParticipantMedia` queries on
+        // `participantId` (Participant.id ObjectId), NOT userId. Passing
+        // userId here matched nothing and the toggle silently failed.
+        // Resolve to the real participantId before calling the service.
+        const audioParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!audioParticipantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this call'
+          } as CallError);
+          return;
+        }
         await this.callService.updateParticipantMedia(
           data.callId,
-          userId,
+          audioParticipantId,
           'audio',
           data.enabled
         );
@@ -1010,7 +1190,7 @@ export class CallEventsHandler {
         // Broadcast to all call participants
         const toggleEvent: CallMediaToggleEvent = {
           callId: data.callId,
-          participantId: userId,
+          participantId: audioParticipantId,
           mediaType: 'audio',
           enabled: data.enabled
         };
@@ -1079,10 +1259,18 @@ export class CallEventsHandler {
           enabled: data.enabled
         });
 
-        // Update participant media state
+        // Audit P2-GW-5 — see audio toggle handler for rationale.
+        const videoParticipantId = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!videoParticipantId) {
+          socket.emit(CALL_EVENTS.ERROR, {
+            code: CALL_ERROR_CODES.NOT_A_PARTICIPANT,
+            message: 'You are not a participant in this call'
+          } as CallError);
+          return;
+        }
         await this.callService.updateParticipantMedia(
           data.callId,
-          userId,
+          videoParticipantId,
           'video',
           data.enabled
         );
@@ -1090,7 +1278,7 @@ export class CallEventsHandler {
         // Broadcast to all call participants
         const toggleEvent: CallMediaToggleEvent = {
           callId: data.callId,
-          participantId: userId,
+          participantId: videoParticipantId,
           mediaType: 'video',
           enabled: data.enabled
         };
@@ -1268,11 +1456,18 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
+        rememberAuth(userId);
 
         const validation = validateSocketEvent(socketReconnectingSchema, data);
         if (!validation.success) return;
 
-        await this.callService.updateCallStatus(data.callId, 'reconnecting' as any).catch(() => {});
+        // Audit P1-21 — Authorization: only an active participant in this
+        // call can flip its status. Otherwise any authenticated user could
+        // toggle reconnecting/active on arbitrary callIds.
+        const membership = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!membership) return;
+
+        await this.callService.updateCallStatus(data.callId, CallStatus.reconnecting).catch(() => {});
 
         logger.info('Call reconnecting', {
           callId: data.callId,
@@ -1291,11 +1486,16 @@ export class CallEventsHandler {
       try {
         const userId = getUserId(socket.id);
         if (!userId) return;
+        rememberAuth(userId);
 
         const validation = validateSocketEvent(socketReconnectedSchema, data);
         if (!validation.success) return;
 
-        await this.callService.updateCallStatus(data.callId, 'active' as any).catch(() => {});
+        // Audit P1-21 — Authorization: see RECONNECTING handler above.
+        const membership = await this.resolveParticipantIdFromCall(userId, data.callId);
+        if (!membership) return;
+
+        await this.callService.updateCallStatus(data.callId, CallStatus.active).catch(() => {});
 
         logger.info('Call reconnected', {
           callId: data.callId,
@@ -1376,11 +1576,15 @@ export class CallEventsHandler {
 
     /**
      * Handle disconnect - auto-leave any active calls
+     *
+     * Audit P1-28 — `getUserId(socket.id)` may already return undefined here
+     * if MeeshySocketIOManager's own disconnect listener ran first and purged
+     * its socketToUser map. Fall back to the cached userId we captured during
+     * the last authenticated event handled by this socket.
      */
-    const originalDisconnect = socket.on.bind(socket);
-    originalDisconnect('disconnect', async () => {
+    socket.on('disconnect', async () => {
       try {
-        const userId = getUserId(socket.id);
+        const userId = recoverUserId();
         if (!userId) return;
 
         logger.info('📞 Socket: disconnect - checking for active calls', {
@@ -1557,13 +1761,18 @@ export class CallEventsHandler {
       const callerName = callSession.initiator.displayName || callSession.initiator.username;
       const callerAvatar = callSession.initiator.avatar || undefined;
 
+      // Audit P2-GW-2 — derive callType from metadata.type (set by
+      // initiateCall) instead of hardcoding 'video'. Misclassified
+      // notifications confuse users about what they actually missed.
+      const inferredCallType: 'audio' | 'video' =
+        ((callSession.metadata as any)?.type === 'video' ? 'video' : 'audio');
       for (const participantId of unrespondedParticipants) {
         await this.notificationService.createMissedCallNotification({
           recipientUserId: participantId,
           callerId: callSession.initiatorId,
           conversationId: callSession.conversationId,
           callSessionId: callSession.id,
-          callType: 'video', // TODO: Récupérer le type d'appel depuis les métadonnées
+          callType: inferredCallType,
         });
       }
 

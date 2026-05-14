@@ -25,7 +25,12 @@ public final class E2EAPI: @unchecked Sendable {
     /// Génère et publie le Bundle cryptographique public de l'utilisateur sur le Key Server
     public func uploadBundle(bundle: BackendPreKeyBundle) async throws {
         // endpoint backend: POST /api/v1/signal/keys
-        let _: APIResponse<String> = try await APIClient.shared.post(
+        // Le gateway repond avec `data: { registrationId, deviceId, preKeyId,
+        // signedPreKeyId, message }` (objet, pas string). Decoder en
+        // `[String: AnyCodable]` matche la forme reelle. Avant, `APIResponse<String>`
+        // declenchait `DecodingError: Type mismatch for type String at path data`
+        // a chaque cold start, ce qui empechait l'upload du bundle E2EE.
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
             endpoint: "/signal/keys",
             body: bundle
         )
@@ -48,7 +53,10 @@ public final class E2EAPI: @unchecked Sendable {
             let conversationId: String
         }
         let body = SessionBody(recipientUserId: recipientUserId, conversationId: conversationId)
-        let _: APIResponse<String> = try await APIClient.shared.post(
+        // Le gateway renvoie `data: { message: "..." }` ou
+        // `data: { preKeyId, preKeyPublic }` selon la branche — toujours
+        // un objet, jamais une string. Memo bug que uploadBundle.
+        let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.post(
             endpoint: "/signal/session/establish",
             body: body
         )

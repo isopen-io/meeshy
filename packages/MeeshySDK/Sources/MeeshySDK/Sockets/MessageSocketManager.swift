@@ -118,6 +118,19 @@ public struct UserStatusEvent: Decodable, Sendable {
     }
 }
 
+/// Snapshot émis par le gateway juste après l'authentification du socket. Liste tous
+/// les contacts (autres participants des conversations du nouvel arrivant) avec leur
+/// `isOnline` runtime calculé depuis la `connectedUsers` Map. Permet au client de seed
+/// son store de présence sans attendre des events `user:status` individuels. Voir
+/// `services/gateway/src/socketio/MeeshySocketIOManager.ts → _emitPresenceSnapshot`.
+public struct PresenceSnapshotEvent: Decodable, Sendable {
+    public let users: [UserStatusEvent]
+
+    public init(users: [UserStatusEvent]) {
+        self.users = users
+    }
+}
+
 // MARK: - Translation Event Data
 
 public struct TranslationData: Codable, Sendable, CacheIdentifiable {
@@ -406,10 +419,26 @@ public struct CallOfferData: Decodable, Sendable {
     public let type: String?
     public let initiator: CallInitiatorInfo
     public let iceServers: [SocketIceServer]?
+    /// Audit P1-26 — initial participant list emitted by the gateway in
+    /// `call:initiated`. Optional for backwards compat with older builds.
+    /// Lets the iOS UI show all participants during the ringing phase
+    /// rather than waiting for `call:participant-joined` events.
+    public let participants: [CallParticipantInfo]?
 
     public struct CallInitiatorInfo: Decodable, Sendable {
         public let userId: String
         public let username: String
+        public let displayName: String?
+        public let avatar: String?
+    }
+
+    public struct CallParticipantInfo: Decodable, Sendable {
+        public let id: String
+        public let userId: String?
+        public let role: String?
+        public let isAudioEnabled: Bool?
+        public let isVideoEnabled: Bool?
+        public let username: String?
         public let displayName: String?
         public let avatar: String?
     }
@@ -439,6 +468,31 @@ public struct CallEndData: Decodable, Sendable {
     public let callId: String
     public let duration: Int?
     public let endedBy: String?
+    /// Audit P1-24 — gateway emits `reason: CallEndReason` (`"missed"`,
+    /// `"rejected"`, `"completed"`, `"connectionLost"`, `"failed"`,
+    /// `"declined"`, `"answeredElsewhere"`). Without surfacing it on iOS,
+    /// every remote-end was indistinguishable and CallKit reported every
+    /// case as `.remoteEnded` — wrong for missed/declined/answeredElsewhere
+    /// (Recents UX) and for analytics.
+    public let reason: String?
+}
+
+/// Audit P1-25 — `call:missed` event payload. Gateway emits this on
+/// ringing-timeout to the callee's user-room sockets (in addition to
+/// `call:ended`). The dedicated event lets the iOS UI raise a missed-call
+/// banner without inferring it from `endedBy != self`.
+public struct CallMissedData: Decodable, Sendable {
+    public let callId: String
+    public let conversationId: String
+    public let callerId: String
+    public let callerName: String?
+}
+
+/// Audit P1-27 — `call:already-answered` event payload. Emitted by the
+/// gateway to the joining user's OTHER sockets when one of their devices
+/// answers a call, so the rest can dismiss CallKit + ringing UI.
+public struct CallAlreadyAnsweredData: Decodable, Sendable {
+    public let callId: String
 }
 
 public struct CallParticipantData: Decodable, Sendable {
@@ -575,6 +629,31 @@ public struct SocketNotificationAttachments: Decodable, Sendable {
     public let firstFilename: String?
 }
 
+public struct ConversationNewEvent: Decodable, Sendable {
+    public let conversationId: String
+    public let conversationType: String
+    public let title: String?
+    public let creatorId: String
+    public let participantIds: [String]
+    public let createdAt: String
+
+    public init(
+        conversationId: String,
+        conversationType: String,
+        title: String?,
+        creatorId: String,
+        participantIds: [String],
+        createdAt: String
+    ) {
+        self.conversationId = conversationId
+        self.conversationType = conversationType
+        self.title = title
+        self.creatorId = creatorId
+        self.participantIds = participantIds
+        self.createdAt = createdAt
+    }
+}
+
 public struct NotificationReadEvent: Decodable, Sendable {
     public let notificationId: String
 }
@@ -623,6 +702,10 @@ public protocol MessageSocketProviding: Sendable {
     var typingStopped: PassthroughSubject<TypingEvent, Never> { get }
     var unreadUpdated: PassthroughSubject<UnreadUpdateEvent, Never> { get }
     var userStatusChanged: PassthroughSubject<UserStatusEvent, Never> { get }
+    /// Bulk snapshot émis par le gateway après l'auth socket. Le client doit ingérer
+    /// chaque entrée comme un `user:status` individuel pour seed son store de présence
+    /// sans attendre une transition d'état spontanée.
+    var presenceSnapshotReceived: PassthroughSubject<PresenceSnapshotEvent, Never> { get }
     var readStatusUpdated: PassthroughSubject<ReadStatusUpdateEvent, Never> { get }
     var attachmentStatusUpdated: PassthroughSubject<AttachmentStatusUpdatedEvent, Never> { get }
     var conversationJoined: PassthroughSubject<ConversationParticipationEvent, Never> { get }
@@ -648,6 +731,15 @@ public protocol MessageSocketProviding: Sendable {
     var audioTranslationCompleted: PassthroughSubject<AudioTranslationEvent, Never> { get }
     var didReconnect: PassthroughSubject<Void, Never> { get }
     var notificationReceived: PassthroughSubject<SocketNotificationEvent, Never> { get }
+    /// Fired when the gateway emits SERVER_EVENTS.CONVERSATION_NEW (a fresh
+    /// conversation was created — the user is now a participant). Replaces
+    /// the previous overload of `notification:new` with type-string
+    /// discrimination. Carries the canonical conversation id so the list
+    /// view-model can fetch the enriched payload via getById and prepend
+    /// the row in real time. The legacy `notification:new` event is still
+    /// emitted in parallel by the gateway for ~3 months to support older
+    /// clients during rollout.
+    var conversationNew: PassthroughSubject<ConversationNewEvent, Never> { get }
     var notificationRead: PassthroughSubject<NotificationReadEvent, Never> { get }
     var notificationDeleted: PassthroughSubject<NotificationDeletedEvent, Never> { get }
     var notificationCounts: PassthroughSubject<NotificationCountsEvent, Never> { get }
@@ -657,6 +749,12 @@ public protocol MessageSocketProviding: Sendable {
     var callAnswerReceived: PassthroughSubject<CallAnswerData, Never> { get }
     var callICECandidateReceived: PassthroughSubject<CallICECandidateData, Never> { get }
     var callEnded: PassthroughSubject<CallEndData, Never> { get }
+    /// Audit P1-25 — dedicated `call:missed` event publisher (in addition to
+    /// `callEnded` which is emitted in parallel for backwards-compat).
+    var callMissed: PassthroughSubject<CallMissedData, Never> { get }
+    /// Audit P1-27 — `call:already-answered` publisher used by the user's
+    /// other devices to dismiss their ringing UI when one device answers.
+    var callAlreadyAnswered: PassthroughSubject<CallAlreadyAnsweredData, Never> { get }
     var callParticipantJoined: PassthroughSubject<CallParticipantData, Never> { get }
     var callParticipantLeft: PassthroughSubject<CallParticipantData, Never> { get }
     var callMediaToggled: PassthroughSubject<CallMediaToggleData, Never> { get }
@@ -688,6 +786,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitCallToggleAudio(callId: String, enabled: Bool)
     func emitCallToggleVideo(callId: String, enabled: Bool)
     func emitCallEnd(callId: String)
+    func emitCallEndWithAck(callId: String) async -> Bool
     func emitCallHeartbeat(callId: String)
 }
 
@@ -743,6 +842,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // Combine publishers — presence
     public let unreadUpdated = PassthroughSubject<UnreadUpdateEvent, Never>()
     public let userStatusChanged = PassthroughSubject<UserStatusEvent, Never>()
+    public let presenceSnapshotReceived = PassthroughSubject<PresenceSnapshotEvent, Never>()
 
     // Combine publishers — read status
     public let readStatusUpdated = PassthroughSubject<ReadStatusUpdateEvent, Never>()
@@ -794,6 +894,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // Combine publishers — notifications
     public let notificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
+    public let conversationNew = PassthroughSubject<ConversationNewEvent, Never>()
     public let notificationRead = PassthroughSubject<NotificationReadEvent, Never>()
     public let notificationDeleted = PassthroughSubject<NotificationDeletedEvent, Never>()
     public let notificationCounts = PassthroughSubject<NotificationCountsEvent, Never>()
@@ -807,6 +908,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     public let callAnswerReceived = PassthroughSubject<CallAnswerData, Never>()
     public let callICECandidateReceived = PassthroughSubject<CallICECandidateData, Never>()
     public let callEnded = PassthroughSubject<CallEndData, Never>()
+    public let callMissed = PassthroughSubject<CallMissedData, Never>()
+    public let callAlreadyAnswered = PassthroughSubject<CallAlreadyAnsweredData, Never>()
     public let callParticipantJoined = PassthroughSubject<CallParticipantData, Never>()
     public let callParticipantLeft = PassthroughSubject<CallParticipantData, Never>()
     public let callMediaToggled = PassthroughSubject<CallMediaToggleData, Never>()
@@ -1140,11 +1243,28 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Call Signaling Emission
 
-    public enum CallInitiateError: Error, Sendable {
+    public enum CallInitiateError: Error, Sendable, LocalizedError {
         case noSocket
         case timeout
         case serverError(String)
         case malformedResponse
+
+        // Conformance LocalizedError pour que les logs d'app et les UI surfaces
+        // exposent la cause réelle au lieu du fallback Swift "error N" peu
+        // discriminant (N étant l'index de case bridgé en NSError._code, qui
+        // peut différer entre les builds quand on ajoute/réordonne des cases).
+        public var errorDescription: String? {
+            switch self {
+            case .noSocket:
+                return "noSocket — MessageSocket non connecté lors de l'émission de call:initiate (vérifier login, connexion réseau, état du gateway)"
+            case .timeout:
+                return "timeout — Le gateway n'a pas répondu à call:initiate sous 10s (vérifier gateway up, latence réseau)"
+            case .serverError(let message):
+                return "serverError — Gateway a rejeté call:initiate: \(message)"
+            case .malformedResponse:
+                return "malformedResponse — La réponse ACK de call:initiate ne contient pas data.callId ou iceServers"
+            }
+        }
     }
 
     public struct CallInitiateAck: Sendable {
@@ -1211,6 +1331,17 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket?.emit("call:leave", ["callId": callId])
     }
 
+    /// Émet `call:force-leave` pour la conversation donnée. Le gateway
+    /// nettoie alors toute trace d'appel actif où l'utilisateur courant
+    /// était participant (CallParticipant.leftAt = null) sans nécessiter
+    /// le callId — utile en pré-flight avant `call:initiate` pour purger
+    /// les zombies laissés par un crash, un kill app, ou un test antérieur
+    /// dont le cleanup gateway n'a pas tourné. Idempotent : no-op si pas
+    /// de zombie côté DB.
+    public func emitCallForceLeave(conversationId: String) {
+        socket?.emit("call:force-leave", ["conversationId": conversationId])
+    }
+
     public func emitCallSignal(callId: String, type: String, payload: [String: Any]) {
         var signal: [String: Any] = ["type": type]
         for (key, value) in payload { signal[key] = value }
@@ -1255,6 +1386,30 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func emitCallEnd(callId: String) {
         socket?.emit("call:end", ["callId": callId])
+    }
+
+    /// Variante avec ACK : émet `call:end` et attend confirmation du gateway
+    /// (max 3s). Le gateway accepte et broadcast `call:ended` à tous les
+    /// participants. Sans ACK le client ne sait pas si le peer a été notifié
+    /// — symptôme : l'appelé reste bloqué en `.connecting` ou `.connected`
+    /// alors que l'appelant a raccroché. Utiliser cette variante quand le
+    /// client a un cycle de vie immédiat (raccrocher = vouloir confirmation
+    /// avant de fermer le socket / quitter l'écran).
+    public func emitCallEndWithAck(callId: String) async -> Bool {
+        guard let socket else { return false }
+        return await withCheckedContinuation { continuation in
+            var resumed = false
+            socket.emitWithAck("call:end", ["callId": callId]).timingOut(after: 3) { items in
+                guard !resumed else { return }
+                resumed = true
+                if let response = items.first as? [String: Any],
+                   let success = response["success"] as? Bool {
+                    continuation.resume(returning: success)
+                } else {
+                    continuation.resume(returning: false)
+                }
+            }
+        }
     }
 
     public func emitCallHeartbeat(callId: String) {
@@ -1335,6 +1490,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on("message:new") { [weak self] data, _ in
             guard let self else { return }
+            // Phase A real-time instrumentation — log the socket arrival
+            // BEFORE decoding so we capture the gateway → device delivery
+            // latency cleanly (decoding is observable separately if needed).
+            let recvAt = Date()
+            let firstId = (data.first as? [String: Any])?["id"] as? String
+            let firstCmid = (data.first as? [String: Any])?["clientMessageId"] as? String
+            Logger.socket.info("perf:ios.notif.socket.message-new receivedAt=\(recvAt.timeIntervalSince1970, privacy: .public) serverId=\(firstId ?? "nil", privacy: .public) clientMessageId=\(firstCmid ?? "nil", privacy: .public)")
             self.decode(APIMessage.self, from: data) { [weak self] msg in
                 self?.messageReceived.send(msg)
             }
@@ -1358,6 +1520,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on("reaction:added") { [weak self] data, _ in
             guard let self else { return }
+            let recvAt = Date()
+            let firstMsgId = (data.first as? [String: Any])?["messageId"] as? String
+            let firstEmoji = (data.first as? [String: Any])?["emoji"] as? String
+            Logger.socket.info("perf:ios.notif.socket.reaction-added receivedAt=\(recvAt.timeIntervalSince1970, privacy: .public) messageId=\(firstMsgId ?? "nil", privacy: .public) emoji=\(firstEmoji ?? "nil", privacy: .public)")
             self.decode(ReactionUpdateEvent.self, from: data) { [weak self] event in
                 self?.reactionAdded.send(event)
             }
@@ -1365,6 +1531,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket.on("reaction:removed") { [weak self] data, _ in
             guard let self else { return }
+            let recvAt = Date()
+            let firstMsgId = (data.first as? [String: Any])?["messageId"] as? String
+            Logger.socket.info("perf:ios.notif.socket.reaction-removed receivedAt=\(recvAt.timeIntervalSince1970, privacy: .public) messageId=\(firstMsgId ?? "nil", privacy: .public)")
             self.decode(ReactionUpdateEvent.self, from: data) { [weak self] event in
                 self?.reactionRemoved.send(event)
             }
@@ -1401,6 +1570,18 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(UserStatusEvent.self, from: data) { [weak self] event in
                 self?.userStatusChanged.send(event)
+            }
+        }
+
+        // --- Presence snapshot (emitted by gateway right after auth) ---
+        // Le gateway envoie un seul payload `{ users: [...] }` rassemblant tous
+        // les contacts du nouvel arrivant avec leur statut runtime. Le client
+        // doit hydrater son store en bulk plutôt que d'attendre des transitions
+        // d'état spontanées. Voir gateway `_emitPresenceSnapshot`.
+        socket.on("presence:snapshot") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(PresenceSnapshotEvent.self, from: data) { [weak self] event in
+                self?.presenceSnapshotReceived.send(event)
             }
         }
 
@@ -1586,6 +1767,15 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
+        // --- Conversation discovery events ---
+
+        socket.on("conversation:new") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(ConversationNewEvent.self, from: data) { [weak self] event in
+                self?.conversationNew.send(event)
+            }
+        }
+
         // --- Notification events ---
 
         socket.on("notification:new") { [weak self] data, _ in
@@ -1678,6 +1868,29 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             guard let self else { return }
             self.decode(CallEndData.self, from: data) { [weak self] event in
                 self?.callEnded.send(event)
+            }
+        }
+
+        // Audit P1-25 — register the dedicated `call:missed` listener.
+        // Gateway emits this event in addition to `call:ended` when the
+        // ringing timeout fires and the callee never answered, so the iOS
+        // UI can surface a missed-call state explicitly instead of having
+        // to infer it from `endedBy != self`.
+        socket.on("call:missed") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallMissedData.self, from: data) { [weak self] event in
+                self?.callMissed.send(event)
+            }
+        }
+
+        // Audit P1-27 — `call:already-answered` fires on the user's OTHER
+        // sockets when one of their devices joins the call. We surface this
+        // so the receiving devices can dismiss their ringing CallKit card
+        // with .answeredElsewhere instead of staying frozen indefinitely.
+        socket.on("call:already-answered") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(CallAlreadyAnsweredData.self, from: data) { [weak self] event in
+                self?.callAlreadyAnswered.send(event)
             }
         }
 

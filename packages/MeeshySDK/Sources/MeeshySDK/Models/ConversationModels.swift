@@ -71,7 +71,7 @@ public struct APIConversationLastMessage: Decodable, Sendable {
 @available(*, deprecated, renamed: "APIParticipant")
 public typealias APIConversationMember = APIParticipant
 
-public struct APIConversationPreferences: Decodable, Sendable {
+public struct APIConversationPreferences: Codable, Sendable {
     public var isPinned: Bool?
     public var isMuted: Bool?
     public var isArchived: Bool?

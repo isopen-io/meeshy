@@ -23,7 +23,7 @@ final class MessageServiceTests: XCTestCase {
 
     private func makeMessage(id: String = "msg456") -> APIMessage {
         APIMessage(
-            id: id, conversationId: "conv123", senderId: "user1",
+            id: id, clientMessageId: nil, conversationId: "conv123", senderId: "user1",
             content: "Hello", originalLanguage: "en",
             messageType: "text", messageSource: "user", isEdited: false,
             deletedAt: nil, replyToId: nil, storyReplyToId: nil,

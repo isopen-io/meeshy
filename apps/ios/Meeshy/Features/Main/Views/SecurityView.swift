@@ -9,7 +9,7 @@ struct SecurityView: View {
     @Environment(\.colorScheme) private var colorScheme
     private var isDark: Bool { colorScheme == .dark }
     private var theme: ThemeManager { ThemeManager.shared }
-    @ObservedObject private var authManager = AuthManager.shared
+    @EnvironmentObject private var authManager: AuthManager
 
     @State private var showChangePassword = false
     @State private var showActiveSessions = false

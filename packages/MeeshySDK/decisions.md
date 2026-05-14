@@ -76,3 +76,95 @@
 **Decision**: `MeeshyConfig` avec URLs de base (API, WebSocket, media), timeouts, feature flags
 **Alternatives rejet**: Hardcod (pas multi-env), xcconfig seul (pas accessible au runtime), UserDefaults (pas de dfauts types)
 **Cons**: Un seul point de configuration pour tout le SDK
+
+## 2026-05: Story Canvas — Cartographie GPU/Metal (NE PAS SUPPRIMER)
+
+**Statut**: Reference document — règle de préservation
+
+**Contexte**: Lors de l'audit 2026-05-11 plusieurs composants story-canvas étaient orphelins (0 référence production). Risque de suppression accidentelle d'optimisations Metal pendant cleanup. Spec mère D-6 (`docs/superpowers/specs/2026-05-08-story-canvas-fidelity-design.md`) précise les 4 hot paths GPU.
+
+**Inventaire Metal/GPU dans `Story/Canvas/`** :
+
+| Composant | Optimisation | Wiré ? | Règle |
+|---|---|---|---|
+| `Metal/StoryFilters.metal` + `Layers/StoryFilteredLayer.swift` | Custom Metal compute kernels (vintageFilter, bwContrastFilter) via CAMetalLayer | ✅ | KEEP — filter pipeline production |
+| `StoryBlurFilter.swift` | **MPSImageGaussianBlur** (Metal Performance Shaders, GPU) — 3× plus rapide que `CIGaussianBlur` | ❌ Orphelin actuellement | **🚨 NE PAS SUPPRIMER** — réservé glass UI / sticker glow (Phase 3 Task 3.2 spec). Wiring quand le modèle exposera `backgroundStyle: .glass` ou `glowRadius: Float`. |
+| `StoryMediaDecoder.swift` | VideoToolbox HW decode + MetalKit textures | ✅ Via `StoryMediaLoader` | KEEP — production |
+| `StoryRenderingContext.swift` | Singleton Metal device + command queue partagés | ✅ Partout | KEEP — fondamentale |
+| `StoryRendererCache.swift` (B3) | Cache CALayer (GPU via Core Animation render server) entre frames d'export | ✅ `StoryAVCompositor` | KEEP — Plan B production |
+| `StoryAVCompositor.swift` (Phase 4) | Custom `AVVideoCompositing` → render direct CALayer dans CVPixelBuffer | ❌ Pipeline export pas consommé par `StoryPublishService` actuellement | KEEP — feature post-launch (video story exports) |
+
+**Composants supprimés 2026-05-11** (commit `a1b58da8`) : `StoryComposerVC`, `StoryViewerVC`, `StoryComposerRepresentable`, `StoryModelMigration`. **AUCUN Metal/GPU**. C'étaient des wrappers UIKit/SwiftUI dev-time autour de `StoryCanvasUIView` qui n'ont jamais été branchés. La voie active est `StoryComposerCanvasView` (UIViewRepresentable direct sur `StoryCanvasUIView`).
+
+**Decision/règle** : Avant tout cleanup d'orphelin dans `Story/Canvas/`, vérifier :
+1. Le fichier importe-t-il `Metal` / `MetalKit` / `MetalPerformanceShaders` / `VideoToolbox` ? Si oui → préserver, ouvrir une issue "wire X feature".
+2. Sinon → safe à supprimer.
+
+**Alternatives rejetées** : Suppression aveugle des orphans aurait perdu `StoryBlurFilter` (39L) qui réutilise l'infrastructure Metal partagée et est pré-câblé pour des features glass UI futures.
+
+**Cons** : Carry-over de ~40L de code non-wiré. Acceptable — coût de maintenance < coût de re-implémenter l'optimisation Metal.
+
+## 2026-05-12: Story Publish Queue — Unification (StoryOfflineQueue → adapter)
+
+**Statut** : Accepté
+
+**Contexte** : Deux queues persistantes coexistaient pour les stories en attente de publish, chacune avec sa propre persistance disque et son propre handler :
+- `StoryPublishQueue` (`Documents/meeshy_cache/story_publish_queue.json`) : retry + backoff exponentiel (5 tentatives, 30s→2h), handler typé `(Item) async throws -> String`, drainage automatique sur reconnexion via `MessageSocketManager.isConnected`.
+- `StoryOfflineQueue` (`applicationSupportDirectory/StoryOfflineQueue/story_offline_queue.json`) : FIFO bounded 20, handler `(Item) async -> Bool`, drainage via `NetworkMonitor.isOffline` observé par `StoryOfflineQueueBootstrap`.
+
+Les call-sites étaient éparpillés : `StoryViewModel.publishOffline()` enqueuait dans `StoryPublishQueue.shared` ; `TimelineViewModel.handlePublishTap()` enqueuait dans `StoryOfflineQueue.shared` via le seam `OfflineQueueProviding`. Résultat : un item pouvait dormir dans une queue sans handler câblé (la prod ne wirait que `StoryOfflineQueue`, alors que `StoryPublishQueue.setPublishHandler` n'avait aucun call-site). Risque de double publish si un dev câblait les deux, ou de perte silencieuse si la mauvaise était drainée.
+
+**Décision** : consolider sur `StoryPublishQueue` comme unique source de vérité. `StoryOfflineQueue` devient un adapter fin qui forward toutes ses opérations (`enqueue`, `dequeue`, `pendingItems`, `flush`, `purge`, `setOnPublish`) vers `StoryPublishQueue` via le protocole de test seam `PublishQueueForwarding`. Le handler `Bool`-returning legacy est wrappé en `throws -> String` typé : `false` devient un throw `StoryOfflineRetryableError` (que `StoryPublishQueue` interprète comme retryable), `true` synthétise le `tempStoryId` comme `publishedStoryId`. La conversion `StoryOfflineQueueItem ↔ StoryPublishQueueItem` est pure et testable via `StoryQueueItemConverter.convert(_:)` / `.reverse(_:)`, en utilisant `tempStoryId` comme carrier pour l'id legacy (`StoryOfflineQueue.dequeue(itemId)` reste adressable).
+
+Une utility one-shot `StoryQueueMigrator.migrateLegacyOfflineQueue()` draine le fichier legacy `applicationSupportDirectory/StoryOfflineQueue/story_offline_queue.json` sur cold start : décodage, conversion item par item, forward via `PublishQueueForwarding`, puis suppression du fichier source. Idempotente (no-op si le fichier est absent) ; un JSON corrompu est renommé `.corrupted-<timestamp>` pour stopper le retry tout en préservant les octets pour forensic.
+
+**Alternatives rejetées** :
+- **Déprécier `StoryOfflineQueue`** (Option B) : breaking pour `TimelineViewModel+OfflinePublish` (4 call-sites) et `MockOfflineQueue` ; rejeté car coût de migration > coût de l'adapter (~120 LoC).
+- **Garder les deux queues + bridge dans Bootstrap** : continue de payer le double-store et la confusion ; rejeté car le bug architectural reste structurellement présent.
+- **Fold dans `OfflineQueue` (outbox)** : `OfflineQueue` est messaging-only, son schéma `OutboxRecord` ne fitte pas les payloads de slide + media. La fusion outbox est trackée séparément par `Mutations/MutationPayloads.PublishStoryPayload` (Tier C, post-launch).
+
+**Conséquences** :
+- Une seule queue persistée → plus de risque de perte d'item selon le call-site.
+- Retry + backoff exponentiel + max 5 tentatives + hash-check des média locaux → garanties uniformes pour tous les call-sites (`StoryViewModel`, `TimelineViewModel`, futurs composants).
+- `StoryOfflineQueueTests` actuels touchent à des invariants de stockage (path `applicationSupportDirectory`, `reloadFromDisk` semantics) qui ne s'appliquent plus à l'adapter ; ils seront mis à jour ou supprimés dans un follow-up.
+- `StoryQueueItemConverter.reverse(_:)` est lossy sur `originalLanguage` (non porté dans `StoryPublishQueueItem`). Acceptable : aucun call-site de production ne lit ce champ pour le moment ; si besoin, ajouter un champ optionnel sur `StoryPublishQueueItem` dans une révision ultérieure.
+
+**Fichiers concernés** :
+- `Sources/MeeshySDK/Persistence/StoryQueueMigrator.swift` (nouveau) : protocole `PublishQueueForwarding`, conformance `StoryPublishQueue`, enum `StoryQueueMigrator`, enum `StoryQueueItemConverter` (forward only ; `reverse` vit avec l'adapter).
+- `Sources/MeeshySDK/Persistence/StoryOfflineQueue.swift` (réécrit) : adapter actor, plus de fichier disque propre, conversion bidirectionnelle.
+- `Tests/MeeshySDKTests/Persistence/StoryQueueUnificationTests.swift` (nouveau) : forwarding, pendingItems round-trip, migration drainage, idempotence, JSON corrompu.
+
+## 2026-05-12: ThumbHash — alignement Wolt spec (encodeur + decodeur DCT complets)
+
+**Statut** : Accepté
+
+**Contexte** : Le pipeline placeholder image bout en bout était cassé. Côté gateway (`services/gateway/src/services/attachments/ThumbHashGenerator.ts`), `rgbaToThumbHash` du package npm `thumbhash@0.1.1` (Wolt spec, auteur Evan Wallace) produit des hashes ~22-30 octets : 5 octets de header (24-bit + 16-bit) + nibbles AC encodés via DCT, persistés dans `Attachment.thumbHash` / `StorySlideMedia.thumbHash`. Côté iOS, `packages/MeeshySDK/Sources/MeeshySDK/Utils/ThumbHash.swift` :
+- L'encodeur retournait seulement `[h0, h1, h2, h3, h4]` (5 octets DC), perdant tous les coefficients AC. Incompatibilité totale avec le format gateway.
+- Le décodeur (`thumbHashToRGBA`) ignorait les AC et remplissait toute la sortie avec la couleur moyenne ; le layout des helpers (`thumbHashToAverageRGBA`) était également incorrect (`header24` dérivé de 4 octets au lieu de 3 ; P/Q remappés sur [0,1] au lieu de [-1,+1]).
+- `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer.swift` : le seam `ThumbHashDecoder.decodeIfAvailable(_:size:)` était un no-op (`return nil`) malgré la présence de `Utils/ThumbHash.swift` dans le SDK.
+
+Conséquence : sur tout backdrop image de story (et tout `ProgressiveCachedImage`/`CachedAsyncImage` consommant `thumbHash`), l'utilisateur voyait un fond noir pendant le chargement réseau au lieu du blur preview "Instagram-like" promis par l'axe "optimistic preview" du brief.
+
+**Décision** : porter l'implémentation Swift de référence d'Evan Wallace (https://github.com/evanw/thumbhash/blob/main/swift/ThumbHash.swift, MIT) dans `Utils/ThumbHash.swift`. Le port :
+- **Encodeur** : DCT complet sur les canaux L/P/Q (et A si alpha présent), packing header 24 bits sur bytes [0..2], header 16 bits sur bytes [3..4], puis AC sur nibbles successifs (deux nibbles par byte). Largeur typique 25-28 octets — byte-compatible avec `thumbhash` npm.
+- **Décodeur** : lecture inverse des deux headers, extraction de `lScale`/`pScale`/`qScale`/`hasAlpha`/`isLandscape`/`lx`/`ly`, IDCT à 32 px sur le plus long côté. Retourne `(0, 0, [])` si le hash est tronqué (manque d'octets AC) au lieu de fabriquer des pixels.
+- **API publique inchangée** : `rgbaToThumbHash(w:h:rgba:)`, `thumbHashToRGBA(hash:)`, `thumbHashToAverageRGBA(hash:)`, `thumbHashToApproximateAspectRatio(hash:)`, `UIImage.toThumbHash()`, `UIImage.fromThumbHash(_:)`, `UIImage.thumbHashAverageColor(_:)`. Les call-sites (`StorySlideRenderer.computeThumbHash`, `StoryComposerView`, `ProgressiveCachedImage`, `CachedAsyncImage`, `InlineVideoPlayerView`) n'ont rien à changer.
+- **Seam UI** : `StoryBackgroundLayer.ThumbHashDecoder.decodeIfAvailable(_:size:)` devient `nonisolated static func` et délègue à `UIImage.fromThumbHash(_:)`. Le paramètre `size:` est volontairement ignoré : `CALayer` gère le resampling via `contentsGravity = .resizeAspectFill`, pré-scaler ici gaspille du CPU et dégrade la qualité sur retina.
+
+**Alternatives rejetées** :
+- **Option B — "couleur moyenne floutée"** : renommer en `AverageColorHash`, garder 5 octets, ajouter `@available(*, deprecated, renamed:)`. Incompatible avec la prod : tous les hashes existants en MongoDB ont été générés par le gateway au format Wolt complet. Les 5 premiers octets sont juste un préfixe — interpréter le reste comme alpha DC + nibbles serait incorrect et produirait des couleurs fausses. De plus, l'UX "fond noir → image" est strictement pire que "blur preview → image".
+- **Ajouter un package SPM `evanw/thumbhash`** : pas de `Package.swift` publié dans le repo de référence (un seul fichier `ThumbHash.swift` standalone). Le coût de vendoring + maintenance license MIT est négligeable vs. ajouter une dépendance SPM exotique.
+- **Demander au gateway d'émettre un format compact 5 octets** : casse le contrat avec `apps/web` (consomme `thumbHash` via la lib npm officielle pour ses placeholders Next.js) et avec d'éventuels clients tiers/forward-compat.
+
+**Conséquences** :
+- Le décodeur strict refuse les hashes tronqués (≥ 5 octets de header sans AC). Les anciens tests qui forgeaient un 5-byte hash artificiel ont été remplacés par des roundtrip tests utilisant des buffers RGBA réels — l'intent (valider qu'un hash décode) est mieux servi par cette approche.
+- Coût CPU encodeur : ~5-15 ms sur une image 100×100 (vs. ~2-5 ms pour l'ancien encodeur DC-only). Acceptable : appelé une seule fois par slide à la publication (`StorySlideRenderer.computeThumbHash`), jamais sur chemin de rendu. Décodeur : ~1-3 ms (IDCT 32px), bien sous le budget frame 16 ms.
+- Le hash passe d'environ 8 caractères base64 (5 octets) à ~36-40 caractères (25-28 octets). Toujours sous le seuil "tiny string" — la colonne MongoDB `thumbHash` est déjà dimensionnée pour `~33 chars` (cf. commentaire schema `attachments` ligne 725 / `storySlideMedia` ligne 2805).
+- `nonisolated` sur `ThumbHashDecoder.decodeIfAvailable` requis car `MeeshyUI` applique `.defaultIsolation(MainActor)` (SE-0466) et le seam doit être appelable sans hop d'actor depuis les chemins de `Task { @MainActor in ... }` de `StoryBackgroundLayer.configure`. Pure CPU + `UIImage` immutable = sûr sans isolation.
+
+**Fichiers concernés** :
+- `Sources/MeeshySDK/Utils/ThumbHash.swift` (réécrit, ~450 LoC) : port Wolt complet, licence MIT vendored en en-tête, helper `clampNibble` privé pour borner les quantizations.
+- `Sources/MeeshyUI/Story/Canvas/Layers/StoryBackgroundLayer.swift` (lignes 174-191) : `ThumbHashDecoder.decodeIfAvailable` → `UIImage.fromThumbHash(_:)`, marqué `nonisolated static`.
+- `Tests/MeeshySDKTests/Utils/ThumbHashTests.swift` : remplacement de `test_fromThumbHash_validBase64_createsImage` par un test de roundtrip + ajout `test_fromThumbHash_truncatedFiveByteHeader_returnsNil` ; remplacement de `test_thumbHashToRGBA_validHash_returnsNonEmptyPixels` par un roundtrip + ajout `test_thumbHashToRGBA_truncatedAfterHeader_returnsEmpty`.
+- `Tests/MeeshySDKTests/Utils/ThumbHashPipelineTests.swift` (nouveau) : roundtrip simple, roundtrip avec alpha, landscape preserve aspect, négatifs (invalid/empty/truncated), simulation gateway 100×100, préservation couleur dominante.
+- `Tests/MeeshyUITests/Story/Canvas/ThumbHashDecoderIntegrationTests.swift` (nouveau) : seam `ThumbHashDecoder` (empty/invalid/valid) ; `StoryBackgroundLayer.configure(kind: .image(...))` assigne ou non `CALayer.contents` selon la validité du hash.

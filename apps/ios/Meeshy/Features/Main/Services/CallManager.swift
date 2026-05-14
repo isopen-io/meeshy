@@ -76,10 +76,46 @@ final class CallManager: ObservableObject {
     private var durationTask: Task<Void, Never>?
     private var heartbeatTask: Task<Void, Never>?
     private var rtpGateTask: Task<Void, Never>?
+    /// Phase 2 fix — Bug 2 (caller stays ringing while callee shows Connecting).
+    /// Tracks the startLocalMedia Task so that:
+    ///   1. `emitCallJoin` can be sent IMMEDIATELY (decoupled from media init)
+    ///      → the caller receives PARTICIPANT_JOINED in <100ms instead of after
+    ///      the callee's camera/mic warmup (0.5–3s on real devices).
+    ///   2. `answerCall`, `answerCallReady`, and `handleSignalOffer(.connecting)`
+    ///      can `await` this task before invoking `createAnswer` — guaranteeing
+    ///      the audio/video transceivers exist before SDP answer negotiation.
+    private var localMediaTask: Task<Void, Never>?
+    /// Caller-side ringing timeout — ends the call as `.missed` if the recipient
+    /// hasn't joined within `outgoingRingTimeoutSeconds`. Cancelled when the
+    /// state leaves `.ringing(isOutgoing: true)` (offering / connecting / ended).
+    private var outgoingRingTimeoutTask: Task<Void, Never>?
+    /// Task de setup d'un appel sortant (force-leave + ACK + media + listen).
+    /// Auparavant un Task non-tracké : si endCallInternal fire pendant le
+    /// setup (ex: CallKit teardown), le Task continuait à tourner — gardant
+    /// la connexion WebRTC active hors-vue. On le stocke pour pouvoir le
+    /// cancel proprement dans endCallInternal. Le Task vérifie aussi
+    /// `Task.isCancelled` aux points clés en plus du guard `activeCallUUID`.
+    private var setupCallTask: Task<Void, Never>?
+    /// Audit P1-2 — token bumped each time we leave `.ended`. The 1.5s settle
+    /// task captures the token at scheduling time and bails if it has changed
+    /// (i.e. a new call already grabbed `currentCallId`/`remoteUserId` between
+    /// the ended transition and the timer firing).
+    private var settleToken: UUID?
+    /// Audit P1-12 — direction tracking for CallKit timer reporting.
+    /// `reportOutgoingCall(_:connectedAt:)` is for the caller side only;
+    /// the callee's elapsed timer is started by CallKit when CXAnswerCallAction
+    /// is fulfilled. Calling reportOutgoingCall on the callee silently no-ops
+    /// and the Phone-app Recents entry shows no duration.
+    private var lastCallWasOutgoing: Bool = false
     private var callStartDate: Date?
     private var reconnectAttempt = 0
     private var participantJoinedCancellable: AnyCancellable?
-    private var signalOfferCancellable: AnyCancellable?
+    /// Audit P3 — replaces the never-assigned `signalOfferCancellable`
+    /// (AnyCancellable, dead) with a properly typed Task slot. Two callers
+    /// (`answerCall` and `answerCallReady`) schedule a 30s SDP-offer
+    /// timeout; both now store the Task here so `endCallInternal` can
+    /// cancel it cleanly instead of leaking it for the remaining sleep.
+    private var sdpOfferTimeoutTask: Task<Void, Never>?
     private var pendingRemoteOffer: SessionDescription?
     private var cancellables = Set<AnyCancellable>()
     private let audioSessionQueue = DispatchQueue(label: "me.meeshy.callmanager.audiosession")
@@ -106,6 +142,14 @@ final class CallManager: ObservableObject {
         let config = CXProviderConfiguration()
         config.supportsVideo = true
         config.maximumCallsPerCallGroup = 1
+        // Restauré à 2 (rollback audit P2-iOS-5 qui l'avait baissé à 1) :
+        // entre commits 4dbb387e (état fonctionnel) et HEAD, lowering this
+        // value à 1 a coïncidé avec la régression "CallKit teardown autonome
+        // à ~3s sur appels sortants". Le couple maximumCallGroups=1 +
+        // supportsHolding=false était valide en théorie mais a confondu
+        // l'iOS runtime au point de tuer l'appel avant que
+        // provider:didActivate:audioSession ne se déclenche. 2 est la valeur
+        // par défaut (sans config) et celle utilisée par FaceTime/WhatsApp.
         config.maximumCallGroups = 2
         config.supportedHandleTypes = [.generic]
         config.includesCallsInRecents = true
@@ -134,7 +178,64 @@ final class CallManager: ObservableObject {
 
         setupSocketListeners()
         startNetworkMonitoring()
+        startAudioInterruptionMonitoring()
         Logger.calls.info("CallManager initialized")
+    }
+
+    /// Audit P1-31 — observe `AVAudioSession.interruptionNotification`
+    /// throughout the singleton's lifetime. When iOS interrupts a VoIP call
+    /// for a system event (cellular GSM call, alarm, Siri), CallKit suspends
+    /// the audio session via `provider:didDeactivate:` (which sets
+    /// `RTCAudioSession.isAudioEnabled = false`) but iOS does NOT
+    /// automatically call `didActivate` on resume — it waits for a user
+    /// action. Without an explicit interruption-end observer, the VoIP
+    /// audio path stayed silent indefinitely after the interrupting event
+    /// ended, even though WebRTC ICE was still connected.
+    @MainActor
+    private func startAudioInterruptionMonitoring() {
+        // Swift 6 : Notification n'est pas Sendable, donc on extrait les
+        // valeurs primitives (UInt? sont Sendable) AVANT de traverser la
+        // frontière Task. Le closure d'observateur exécute déjà sur .main
+        // (queue: .main), l'extraction est donc synchrone et sûre.
+        NotificationCenter.default.addObserver(
+            forName: AVAudioSession.interruptionNotification,
+            object: nil,
+            queue: .main
+        ) { [weak self] notification in
+            let info = notification.userInfo
+            let typeRaw = info?[AVAudioSessionInterruptionTypeKey] as? UInt
+            let optionsRaw = info?[AVAudioSessionInterruptionOptionKey] as? UInt
+            Task { @MainActor [weak self] in
+                self?.handleAudioInterruption(typeRaw: typeRaw, optionsRaw: optionsRaw)
+            }
+        }
+    }
+
+    @MainActor
+    private func handleAudioInterruption(typeRaw: UInt?, optionsRaw: UInt?) {
+        guard callState.isActive else { return }
+        guard let typeRaw,
+              let type = AVAudioSession.InterruptionType(rawValue: typeRaw) else {
+            return
+        }
+        switch type {
+        case .began:
+            Logger.calls.info("Audio interruption began (call active)")
+        case .ended:
+            let options = AVAudioSession.InterruptionOptions(rawValue: optionsRaw ?? 0)
+            guard options.contains(.shouldResume) else {
+                Logger.calls.info("Audio interruption ended without shouldResume hint — skipping resume")
+                return
+            }
+            Logger.calls.info("Audio interruption ended (shouldResume) — re-enabling RTCAudioSession")
+            let rtc = RTCAudioSession.sharedInstance()
+            rtc.lockForConfiguration()
+            rtc.audioSessionDidActivate(AVAudioSession.sharedInstance())
+            rtc.isAudioEnabled = true
+            rtc.unlockForConfiguration()
+        @unknown default:
+            break
+        }
     }
 
     private var callKitDelegate: CallKitDelegateProxy?
@@ -147,6 +248,9 @@ final class CallManager: ObservableObject {
     /// "already in state ended(...)" — le signal disparaît côté user.
     @MainActor
     private func resetEndedStateForNewCall() {
+        // Audit P1-2 — bump the settle token so any pending 1.5s settle Task
+        // bails out instead of clobbering the new call's identity fields.
+        settleToken = nil
         if case .ended = callState {
             callState = .idle
             currentCallId = nil
@@ -174,11 +278,32 @@ final class CallManager: ObservableObject {
         isVideoEnabled = isVideo
         isMuted = false
         isSpeaker = isVideo
+        // Force displayMode = .fullScreen pour que RootView présente le
+        // `.fullScreenCover { CallView() }`. Sans ça, displayMode peut être
+        // resté à `.pip` après le dismiss d'un appel précédent (le binding
+        // setter de fullScreenCover passe à .pip quand isPresented passe à
+        // false), et tous les appels suivants n'affichent que le mini-PiP
+        // `FloatingCallPillView` au lieu de la vue plein écran.
+        displayMode = .fullScreen
         callState = .ringing(isOutgoing: true)
+        lastCallWasOutgoing = true
 
-        // Phase 1.5 — start ringback tone immediately when caller initiates.
-        // The tone plays until state transitions to .connected or .ended.
-        ringbackPlayer.start()
+        // Phase 1.5 — Ringback tone démarré dans `provider:didActivate:audioSession`
+        // (PAS ici). Démarrer AVAudioPlayer AVANT que CallKit ait posé sa
+        // catégorie `.playAndRecord / .voiceChat` activait implicitement la
+        // session en `.soloAmbient` (la default iOS pour AVAudioPlayer) —
+        // CallKit voyait alors la session « already active in wrong category »
+        // et NE firait PAS `provider:didActivate:audioSession`, ce qui
+        // déclenchait son timeout autonome ~3-5s avec un CXEndCallAction
+        // (le fameux « calls drop after 2-4 seconds » + le « wont be a UI
+        // to host the call » sur simulateur, qui sont en réalité le même
+        // symptôme : CallKit rejette le lifecycle).
+        // Le ringback démarre maintenant après que CallKit confirme l'audio
+        // session activée — `playPendingRingback()` est appelé depuis
+        // `CallKitDelegateProxy.provider(_:didActivate:)`. Si CallKit ne
+        // fire jamais didActivate (cas d'erreur), `outgoingRingTimeoutTask`
+        // de 45s prend le relais comme avant.
+        startOutgoingRingTimeout()
 
         let uuid = UUID()
         activeCallUUID = uuid
@@ -200,19 +325,65 @@ final class CallManager: ObservableObject {
                 update.localizedCallerName = displayName
                 update.hasVideo = isVideo
                 provider.reportCall(with: uuid, updated: update)
+
+                // Audit P2-iOS-CALLKIT-OUTGOING-TIMEOUT —
+                // CallKit autonomously fires `CXEndCallAction` (~4-5 seconds
+                // after `CXStartCallAction.fulfill()`) on outgoing calls that
+                // never report progress, which surfaced in production as
+                // "calls drop after 2-4 seconds" before the SDP answer round-
+                // trip completes. Reporting `startedConnectingAt` here as
+                // soon as the transaction is accepted signals to CallKit
+                // that the call is making progress, so it waits for our
+                // explicit `outgoingRingTimeoutSeconds` budget (45 s) instead
+                // of killing the call out from under us. The later call from
+                // `handleRemoteAnswer` (P1-12) still fires once the real
+                // answer lands — CallKit accepts that as a refresh of the
+                // connecting timestamp and uses it to drive the system UI.
+                provider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
             }
         }
 
         // Await call:initiate ACK to obtain the real callId + per-user ICE
         // servers. WebRTC MUST be configured with these BEFORE local media or
         // SDP offer creation, otherwise the offer carries STUN-only candidates.
-        Task { [weak self] in
+        //
+        // Audit P1-1 — capture `uuid` and re-check `activeCallUUID == uuid`
+        // after every `await`. If the user tapped end (or another call took
+        // its place) while the ACK was in flight, `endCallInternal` has
+        // already cleared `activeCallUUID`; without this guard the Task would
+        // resurrect the call by re-arming `currentCallId`, configuring
+        // WebRTC, and starting microphone capture on a call the user has
+        // already cancelled.
+        setupCallTask?.cancel()
+        setupCallTask = Task { [weak self, uuid] in
             guard let self else { return }
             do {
+                // Pré-flight zombie cleanup : émettre `call:force-leave`
+                // AVANT `call:initiate` pour purger toute trace persistante
+                // d'un appel précédent où l'utilisateur courant aurait été
+                // participant sans avoir `leftAt` peuplé (crash, kill app,
+                // simulator teardown, audit du gateway pas exécuté à temps).
+                // Sans ça, `call:initiate` retourne `CALL_ALREADY_ACTIVE` —
+                // le gateway considère qu'il y a déjà un appel actif avec
+                // au moins un participant non-leftAt. Le force-leave est
+                // idempotent (no-op si pas de zombie côté DB).
+                // Petit délai (250ms) pour laisser le gateway commiter le
+                // cleanup MongoDB avant qu'on émette call:initiate.
+                MessageSocketManager.shared.emitCallForceLeave(conversationId: conversationId)
+                try? await Task.sleep(for: .milliseconds(250))
+                guard self.activeCallUUID == uuid else {
+                    Logger.calls.info("[CALL_SETUP] force-leave wait — uuid changed, discarding")
+                    return
+                }
+
                 let ack = try await MessageSocketManager.shared.emitCallInitiate(
                     conversationId: conversationId,
                     isVideo: isVideo
                 )
+                guard self.activeCallUUID == uuid else {
+                    Logger.calls.info("[CALL_SETUP] ACK arrived after end — discarding (uuid changed)")
+                    return
+                }
                 let dynamicServers = ack.iceServers.map { server in
                     IceServer(urls: server.urls.asArray, username: server.username, credential: server.credential)
                 }
@@ -224,15 +395,23 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("[CALL_SETUP] outgoing 3/4 startLocalMedia begin (isVideo=\(isVideo))")
                 do {
                     try await self.webRTCService.startLocalMedia(isVideo: isVideo)
+                    guard self.activeCallUUID == uuid else {
+                        Logger.calls.info("[CALL_SETUP] startLocalMedia completed after end — discarding")
+                        return
+                    }
                     if isVideo { self.hasLocalVideoTrack = true }
                 } catch WebRTCError.simulatorVideoUnsupported {
                     // Phase 1 fix E7/B4: simulator can't run video — degrade to audio-only
                     Logger.calls.warning("Simulator video unsupported — continuing audio-only")
+                    guard self.activeCallUUID == uuid else { return }
                     self.isVideoEnabled = false
                     try? await self.webRTCService.startLocalMedia(isVideo: false)
+                    guard self.activeCallUUID == uuid else { return }
                 } catch {
                     Logger.calls.error("startLocalMedia failed: \(error.localizedDescription)")
-                    self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
+                    if self.activeCallUUID == uuid {
+                        self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
+                    }
                     return
                 }
                 Logger.calls.info("[CALL_SETUP] outgoing 4/4 startLocalMedia done")
@@ -240,7 +419,9 @@ final class CallManager: ObservableObject {
                 Logger.calls.info("Outgoing call initiated: \(ack.callId) to \(displayName), waiting for participant joined (\(dynamicServers.count) ICE servers)")
             } catch {
                 Logger.calls.error("call:initiate ACK failed: \(error.localizedDescription)")
-                self.endCallInternal(reason: .failed("Failed to initiate call"))
+                if self.activeCallUUID == uuid {
+                    self.endCallInternal(reason: .failed("Failed to initiate call"))
+                }
             }
         }
 
@@ -251,6 +432,7 @@ final class CallManager: ObservableObject {
 
     func reportIncomingVoIPCall(callId: String, callerUserId: String, callerName: String, isVideo: Bool, iceServers: [IceServer]? = nil) {
         resetEndedStateForNewCall()
+        lastCallWasOutgoing = false
         let uuid = UUID()
         let update = CXCallUpdate()
         // Use the callerUserId as the CXHandle.value so Recents stays stable
@@ -280,6 +462,8 @@ final class CallManager: ObservableObject {
         isVideoEnabled = isVideo
         isMuted = false
         isSpeaker = isVideo
+        // Force displayMode = .fullScreen (cf. startCall pour le rationale).
+        displayMode = .fullScreen
         callState = .ringing(isOutgoing: false)
         activeCallUUID = uuid
 
@@ -291,6 +475,23 @@ final class CallManager: ObservableObject {
             }
         }
 
+        // Bug D — Push VoIP décalé : APNs peut livrer la push plusieurs minutes
+        // après l'émission (queueing iOS, app suspendue, latence réseau). Si
+        // l'appelant a déjà raccroché entre-temps, on présenterait une fausse
+        // UI d'appel entrant qui ne sonnera jamais réellement (sans ce check).
+        //
+        // Apple exige `reportNewIncomingCall` SYNCHRONE sous 5s du push (sous
+        // peine de révocation du token APNs), donc on report d'abord puis on
+        // vérifie en background. Si le gateway répond avec un statut terminal
+        // (ended/missed/rejected/failed) ou 404, on end immédiatement l'appel
+        // CallKit avec `.unanswered` — la lock-screen flash brièvement puis
+        // disparaît, l'entrée Recents reste neutre.
+        let capturedUuid = uuid
+        let capturedCallId = callId
+        Task { [weak self] in
+            await self?.checkVoIPCallFreshness(uuid: capturedUuid, callId: capturedCallId)
+        }
+
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing.
         // The VoIP push payload carries the per-user ICE servers (TURN credentials)
         // so RTCPeerConnection is built with TURN BEFORE the offer is set.
@@ -298,7 +499,17 @@ final class CallManager: ObservableObject {
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
         Logger.calls.info("[CALL_SETUP] incoming 2/4 configureAudioSession begin")
         configureAudioSession()
-        Task { [weak self] in
+
+        // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY (before awaiting
+        // startLocalMedia) so the caller receives PARTICIPANT_JOINED without
+        // waiting for our camera/mic warmup. Media init runs in parallel; the
+        // answer creation paths (answerCall*, handleSignalOffer .connecting)
+        // await `localMediaTask` before invoking createAnswer.
+        MessageSocketManager.shared.emitCallJoin(callId: callId)
+        Logger.calls.info("VoIP push — emitted call:join early; starting media in parallel: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
+
+        localMediaTask?.cancel()
+        localMediaTask = Task { [weak self] in
             guard let self else { return }
             Logger.calls.info("[CALL_SETUP] incoming 3/4 startLocalMedia begin (isVideo=\(isVideo))")
             do {
@@ -315,12 +526,73 @@ final class CallManager: ObservableObject {
                 return
             }
             Logger.calls.info("[CALL_SETUP] incoming 4/4 startLocalMedia done")
-            MessageSocketManager.shared.emitCallJoin(callId: callId)
-            Logger.calls.info("VoIP push — auto-joined room, awaiting SDP offer: \(callId) (\(iceServers?.count ?? 0) ICE servers)")
         }
 
         Logger.calls.info("VoIP push incoming call reported: \(callId) from \(callerName)")
         HapticFeedback.medium()
+    }
+
+    // MARK: - VoIP Push Freshness Check (Bug D)
+
+    /// Vérifie via REST `GET /api/v1/calls/:callId` que l'appel pour lequel
+    /// on a reçu un push VoIP est toujours actif sur le gateway. Si non,
+    /// end immédiatement l'appel CallKit qu'on vient de reporter — utile
+    /// quand APNs livre la push plusieurs minutes après l'émission (l'app
+    /// suspendue, le device offline, latence réseau).
+    @MainActor
+    private func checkVoIPCallFreshness(uuid: UUID, callId: String) async {
+        // Récupérer le token JWT pour authentifier la requête.
+        guard let token = AuthManager.shared.authToken else {
+            Logger.calls.warning("[VOIP_FRESHNESS] no auth token — cannot verify, assuming fresh")
+            return
+        }
+        let urlString = "\(MeeshyConfig.shared.apiBaseURL)/calls/\(callId)"
+        guard let url = URL(string: urlString) else { return }
+
+        var request = URLRequest(url: url, timeoutInterval: 4.0)
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        do {
+            let (data, response) = try await URLSession.shared.data(for: request)
+            guard let httpResponse = response as? HTTPURLResponse else { return }
+
+            // 404 ou autre erreur → push stale, end l'appel
+            if httpResponse.statusCode == 404 {
+                Logger.calls.warning("[VOIP_FRESHNESS] callId \(callId) introuvable (404) — push stale, ending phantom call")
+                if activeCallUUID == uuid {
+                    callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+                    endCallInternal(reason: .missed)
+                }
+                return
+            }
+
+            // Parser la réponse pour voir le statut
+            guard httpResponse.statusCode == 200,
+                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                  let success = json["success"] as? Bool, success,
+                  let callData = json["data"] as? [String: Any],
+                  let status = callData["status"] as? String else {
+                Logger.calls.info("[VOIP_FRESHNESS] response opaque — assuming fresh")
+                return
+            }
+
+            // Statuts terminaux = push stale, l'appel est fini
+            let terminalStatuses: Set<String> = ["ended", "missed", "rejected", "failed"]
+            if terminalStatuses.contains(status.lowercased()) {
+                Logger.calls.warning("[VOIP_FRESHNESS] callId \(callId) status=\(status) (terminal) — push stale, ending phantom call")
+                if activeCallUUID == uuid {
+                    callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+                    endCallInternal(reason: .missed)
+                }
+            } else {
+                Logger.calls.info("[VOIP_FRESHNESS] callId \(callId) status=\(status) — push fresh, continuing")
+            }
+        } catch {
+            // Network error — on assume fresh (preferable de présenter un
+            // faux appel rare plutôt que de rater un vrai appel).
+            Logger.calls.warning("[VOIP_FRESHNESS] check failed (\(error.localizedDescription)) — assuming fresh")
+        }
     }
 
     // MARK: - Phantom VoIP Call (defense-in-depth)
@@ -331,13 +603,23 @@ final class CallManager: ObservableObject {
     /// phantom call and immediately end it so the user never sees the call UI.
     func reportPhantomVoIPCall(uuid: UUID, update: CXCallUpdate) {
         callProvider.reportNewIncomingCall(with: uuid, update: update) { _ in }
-        callProvider.reportCall(with: uuid, endedAt: Date(), reason: .failed)
+        // Audit P3 — was `.failed` which Recents shows as a "Failed call"
+        // entry. `.unanswered` is the documented phantom-call idiom on
+        // iOS 17+ — the lock-screen flash is suppressed and Recents shows
+        // a neutral "Missed" entry instead of a hard failure.
+        callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
     }
 
     // MARK: - Update Incoming Call Name
 
     func updateIncomingCallName(_ name: String) {
         guard let uuid = activeCallUUID else { return }
+        // Audit P3 — skip the CallKit update if the user has already
+        // answered/declined. The cache-resolution Task that calls this
+        // method can finish AFTER the user has acted; updating the CallKit
+        // card at that point either flashes a stale name or no-ops with a
+        // log noise.
+        guard case .ringing = callState else { return }
         remoteUsername = name
         let update = CXCallUpdate()
         update.localizedCallerName = name
@@ -365,6 +647,8 @@ final class CallManager: ObservableObject {
         isVideoEnabled = isVideo
         isMuted = false
         isSpeaker = isVideo
+        // Force displayMode = .fullScreen (cf. startCall pour le rationale).
+        displayMode = .fullScreen
         callState = .ringing(isOutgoing: false)
 
         let uuid = UUID()
@@ -386,7 +670,15 @@ final class CallManager: ObservableObject {
         // Auto-join call room + configure WebRTC so SDP offer can be received while ringing
         webRTCService.configure(isVideo: isVideo, iceServers: iceServers)
         configureAudioSession()
-        Task { [weak self] in
+
+        // Phase 2 fix — Bug 2: emit call:join IMMEDIATELY so the caller receives
+        // PARTICIPANT_JOINED while we initialize media in parallel. See
+        // `localMediaTask` property doc for rationale and downstream contract.
+        MessageSocketManager.shared.emitCallJoin(callId: callId)
+        Logger.calls.info("Incoming call — emitted call:join early; starting media in parallel: \(callId)")
+
+        localMediaTask?.cancel()
+        localMediaTask = Task { [weak self] in
             guard let self else { return }
             do {
                 try await self.webRTCService.startLocalMedia(isVideo: isVideo)
@@ -401,8 +693,7 @@ final class CallManager: ObservableObject {
                 self.endCallInternal(reason: .failed(String(localized: "call.error.media")))
                 return
             }
-            MessageSocketManager.shared.emitCallJoin(callId: callId)
-            Logger.calls.info("Incoming call — auto-joined room, awaiting SDP offer: \(callId)")
+            Logger.calls.info("Incoming call — local media ready: \(callId)")
         }
 
         Logger.calls.info("Incoming call notification from \(fromUsername): \(callId)")
@@ -428,6 +719,9 @@ final class CallManager: ObservableObject {
             // User already accepted but SDP arrived late — create answer immediately
             Task { [weak self] in
                 guard let self else { return }
+                // Phase 2 fix — Bug 2: wait for local media transceivers before
+                // createAnswer (called concurrently with emitCallJoin).
+                await self.localMediaTask?.value
                 guard let answer = await self.webRTCService.createAnswer(from: sdp) else {
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                     return
@@ -467,6 +761,9 @@ final class CallManager: ObservableObject {
             // SDP offer already received while ringing — create answer immediately
             Task { [weak self] in
                 guard let self else { return }
+                // Phase 2 fix — Bug 2: wait for local media transceivers
+                // (emitCallJoin is now decoupled from startLocalMedia).
+                await self.localMediaTask?.value
                 guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
                     self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                     return
@@ -478,11 +775,11 @@ final class CallManager: ObservableObject {
         } else {
             // SDP offer not yet received — wait for it via handleSignalOffer with 30s timeout
             Logger.calls.info("Call answered but SDP offer not yet received, waiting: \(callId)")
-            signalOfferCancellable?.cancel()
-            signalOfferCancellable = nil
-            Task { @MainActor [weak self] in
+            sdpOfferTimeoutTask?.cancel()
+            sdpOfferTimeoutTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(30))
-                guard let self, case .connecting = self.callState, self.currentCallId == callId else { return }
+                guard let self, !Task.isCancelled else { return }
+                guard case .connecting = self.callState, self.currentCallId == callId else { return }
                 Logger.calls.error("SDP offer timeout after 30s for call: \(callId)")
                 self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
             }
@@ -502,6 +799,10 @@ final class CallManager: ObservableObject {
 
         if let remoteOffer = pendingRemoteOffer {
             self.pendingRemoteOffer = nil
+            // Phase 2 fix — Bug 2: wait for local media transceivers before
+            // createAnswer. CallKit gives ample time for CXAnswerCallAction
+            // (10s+), so awaiting camera/mic warmup here is safe.
+            await self.localMediaTask?.value
             guard let answer = await self.webRTCService.createAnswer(from: remoteOffer) else {
                 self.endCallInternal(reason: .failed("Failed to create SDP answer"))
                 return
@@ -513,9 +814,11 @@ final class CallManager: ObservableObject {
             Logger.calls.info("Call answered (CallKit) with buffered SDP offer: \(callId)")
         } else {
             Logger.calls.info("Call answered (CallKit), awaiting SDP offer: \(callId)")
-            Task { @MainActor [weak self] in
+            sdpOfferTimeoutTask?.cancel()
+            sdpOfferTimeoutTask = Task { @MainActor [weak self] in
                 try? await Task.sleep(for: .seconds(30))
-                guard let self, case .connecting = self.callState, self.currentCallId == callId else { return }
+                guard let self, !Task.isCancelled else { return }
+                guard case .connecting = self.callState, self.currentCallId == callId else { return }
                 Logger.calls.error("SDP offer timeout after 30s for call: \(callId)")
                 self.endCallInternal(reason: .failed(String(localized: "call.error.timeout")))
             }
@@ -528,9 +831,9 @@ final class CallManager: ObservableObject {
 
     func rejectCall() {
         guard case .ringing(isOutgoing: false) = callState else { return }
-        guard let callId = currentCallId, let userId = remoteUserId else { return }
+        guard let callId = currentCallId, remoteUserId != nil else { return }
 
-        emitCallReject(callId: callId, toUserId: userId)
+        emitCallReject(callId: callId)
 
         if let uuid = activeCallUUID {
             let endAction = CXEndCallAction(call: uuid)
@@ -548,9 +851,43 @@ final class CallManager: ObservableObject {
 
     func endCall() {
         guard callState.isActive else { return }
-        guard let callId = currentCallId, let userId = remoteUserId else { return }
 
-        emitCallEnd(callId: callId, toUserId: userId)
+        // Le second guard historique (`guard let callId = currentCallId`)
+        // retournait early si l'ACK call:initiate n'avait pas encore
+        // atterri — laissant `activeCallUUID` non-cleared et le Task de
+        // setup tournant pour rien. Or CallKit peut fire `CXEndCallAction`
+        // AVANT l'ACK (cas du simulateur iOS 18+ qui disconnect les
+        // hosted calls « because there wont be a UI to host the call »,
+        // mais aussi en prod sur certaines race conditions). On rend les
+        // identifiants OPTIONNELS et on garantit `endCallInternal` dans
+        // tous les cas pour nettoyer l'état local + cancel les Tasks.
+        let callId = currentCallId
+        let userId = remoteUserId
+
+        // Phase finale — émettre `call:end` avec ACK garanti pour que le
+        // gateway broadcast `call:ended` au peer. Avant : emit fire-and-forget
+        // sans confirmation → si le socket était saturé / déconnecté au
+        // moment du raccroché, l'appelé restait bloqué en `.connecting` /
+        // `.connected` indéfiniment sans aucun signal d'arrêt. On utilise
+        // `emitCallEndWithAck` (3s timeout, retry interne au gateway) en
+        // Task détaché : ne bloque pas le cleanup local mais garantit que
+        // le gateway sait que l'appel est fini.
+        if let callId, let userId {
+            Task.detached {
+                let acked = await MessageSocketManager.shared.emitCallEndWithAck(callId: callId)
+                if !acked {
+                    // Fallback : si le socket ack failed (timeout / déco),
+                    // re-emit fire-and-forget. Le gateway a ses propres
+                    // safeguards (CallCleanupService cron) qui finiront par
+                    // ramasser le zombie après 60s.
+                    MessageSocketManager.shared.emitCallEnd(callId: callId)
+                    await MainActor.run {
+                        Logger.calls.warning("call:end ACK failed pour \(callId) — fallback fire-and-forget émis, gateway cron cleanup dans 60s")
+                    }
+                }
+            }
+            _ = userId  // Référencé pour cohérence avec l'API legacy emitCallEnd(callId:toUserId:)
+        }
 
         if let uuid = activeCallUUID {
             let endAction = CXEndCallAction(call: uuid)
@@ -560,19 +897,34 @@ final class CallManager: ObservableObject {
         }
 
         endCallInternal(reason: .local)
-        Logger.calls.info("Call ended by local: \(callId)")
+        Logger.calls.info("Call ended by local: \(callId ?? "(pre-ACK)")")
     }
 
     // MARK: - Media Controls
 
     func toggleMute() {
+        // Audit P1-13 — keep optimistic UX (instant local flip) but rollback
+        // local state + WebRTC if CallKit refuses the transaction. Without
+        // the rollback, the app's `isMuted` and the WebRTC track were
+        // permanently out of sync with CallKit's system mute UI — once
+        // diverged, only a call hangup recovered it.
+        let previous = isMuted
         isMuted.toggle()
         webRTCService.muteAudio(isMuted)
 
-        if let uuid = activeCallUUID {
-            let muteAction = CXSetMutedCallAction(call: uuid, muted: isMuted)
-            callController.request(CXTransaction(action: muteAction)) { error in
-                if let error { Logger.calls.error("CallKit mute failed: \(error.localizedDescription)") }
+        guard let uuid = activeCallUUID else {
+            HapticFeedback.light()
+            return
+        }
+        let muteAction = CXSetMutedCallAction(call: uuid, muted: isMuted)
+        callController.request(CXTransaction(action: muteAction)) { [weak self] error in
+            if let error {
+                Logger.calls.error("CallKit mute failed (rolling back local state): \(error.localizedDescription)")
+                Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    self.isMuted = previous
+                    self.webRTCService.muteAudio(self.isMuted)
+                }
             }
         }
 
@@ -677,6 +1029,13 @@ final class CallManager: ObservableObject {
             // bridge .offering → .connecting here.
             if case .offering = self.callState {
                 self.callState = .connecting
+                // Audit P1-12 — surface the "Connecting…" state to CallKit
+                // so the caller's system UI shows the connecting indicator
+                // instead of staying frozen on "Calling…" until ICE
+                // completes.
+                if let uuid = self.activeCallUUID {
+                    self.callProvider.reportOutgoingCall(with: uuid, startedConnectingAt: Date())
+                }
             }
             Logger.calls.info("Remote answer received for: \(callId), awaiting ICE connected")
         }
@@ -689,27 +1048,96 @@ final class CallManager: ObservableObject {
 
     func handleRemoteReject(callId: String) {
         guard currentCallId == callId else { return }
+        // Audit P2-iOS-6 — was .remoteEnded which Recents displays as
+        // "Ended". The semantically correct CXCallEndedReason for an
+        // explicit decline by the remote is .declinedElsewhere (Recents
+        // shows "Declined" — better UX + analytics).
         if let uuid = activeCallUUID {
-            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
+            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .declinedElsewhere)
         }
         endCallInternal(reason: .rejected)
         HapticFeedback.error()
         Logger.calls.info("Call rejected by remote: \(callId)")
     }
 
-    func handleRemoteEnd(callId: String) {
+    func handleRemoteEnd(callId: String, rawReason: String? = nil) {
         guard currentCallId == callId else { return }
         // Dedup : le serveur peut émettre `call:ended` plusieurs fois
         // (e.g. CXEndCallAction côté peer + cleanup serveur), et le user
         // local peut aussi avoir déjà raccroché en local. Si l'état est
         // déjà `.ended`, on ignore les doublons.
         if case .ended = callState { return }
-        if let uuid = activeCallUUID {
-            callProvider.reportCall(with: uuid, endedAt: Date(), reason: .remoteEnded)
+
+        // Audit P1-24 — map the gateway's `reason` string to the right
+        // CXCallEndedReason (drives Recents UX) and CallEndReason (drives
+        // local analytics + UI). Without this, every remote end was reported
+        // as `.remoteEnded`, which Recents displays as "Ended" — wrong for
+        // missed/declined/answered-elsewhere.
+        let cxReason: CXCallEndedReason
+        let localReason: CallEndReason
+        switch rawReason?.lowercased() {
+        case "missed", "no_answer", "unanswered":
+            cxReason = .unanswered
+            localReason = .missed
+        case "rejected", "declined":
+            cxReason = .declinedElsewhere
+            localReason = .rejected
+        case "answeredelsewhere":
+            cxReason = .answeredElsewhere
+            localReason = .remote
+        case "failed", "connectionlost":
+            cxReason = .failed
+            localReason = .connectionLost
+        default:
+            cxReason = .remoteEnded
+            localReason = .remote
         }
-        endCallInternal(reason: .remote)
+
+        if let uuid = activeCallUUID {
+            callProvider.reportCall(with: uuid, endedAt: Date(), reason: cxReason)
+        }
+        endCallInternal(reason: localReason)
         playNotificationHaptic(.warning)
-        Logger.calls.info("Call ended by remote: \(callId)")
+        Logger.calls.info("Call ended by remote: \(callId) (rawReason=\(rawReason ?? "nil"), cx=\(cxReason.rawValue))")
+    }
+
+    // MARK: - Private: Outgoing Ring Timeout
+
+    /// Schedules a defensive `outgoingRingTimeoutSeconds` cutoff for the caller.
+    /// If the recipient hasn't joined within the window, ends the call as
+    /// `.missed`. The gateway has its own 60s timeout but this guards against
+    /// dropped `call:ended` events and gives the user a snappier failure path.
+    @MainActor
+    private func startOutgoingRingTimeout() {
+        outgoingRingTimeoutTask?.cancel()
+        let timeout = QualityThresholds.outgoingRingTimeoutSeconds
+        outgoingRingTimeoutTask = Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .seconds(timeout))
+            guard let self else { return }
+            guard !Task.isCancelled else { return }
+            guard case .ringing(isOutgoing: true) = self.callState else { return }
+            Logger.calls.warning("Outgoing call ring timeout after \(timeout)s — no answer; ending call")
+            if let uuid = self.activeCallUUID {
+                self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .unanswered)
+            }
+            self.endCallInternal(reason: .missed)
+        }
+    }
+
+    @MainActor
+    private func cancelOutgoingRingTimeout() {
+        outgoingRingTimeoutTask?.cancel()
+        outgoingRingTimeoutTask = nil
+    }
+
+    /// Démarre le ringback tone si l'appel est toujours en .ringing(outgoing).
+    /// Appelé depuis `provider:didActivate:audioSession` — voir le commentaire
+    /// long là-bas pour le rationale (AVAudioPlayer ne doit PAS être démarré
+    /// avant que CallKit ait posé sa catégorie `.playAndRecord`).
+    @MainActor
+    func startRingbackIfNeeded() {
+        guard case .ringing(isOutgoing: true) = callState else { return }
+        ringbackPlayer.start()
     }
 
     // MARK: - Private: State Transitions
@@ -719,7 +1147,22 @@ final class CallManager: ObservableObject {
         rtpGateTask?.cancel()
         rtpGateTask = Task { @MainActor [weak self] in
             guard let self else { return }
-            for attempt in 1...QualityThresholds.rtpGateMaxAttempts {
+            // Le RTP gate poll en boucle jusqu'à recevoir les premiers paquets
+            // RTP du peer (signal d'établissement média effectif). Auparavant
+            // il y avait un timeout (5 tentatives x 2s = 10s) qui tuait
+            // l'appel en `.failed("media path broken")` si pas de RTP — c'est
+            // PRÉCISÉMENT le comportement que l'utilisateur veut SUPPRIMER :
+            // en phase `.connecting`, on doit attendre la connexion, pas
+            // l'arrêter automatiquement. Les vraies coupures restent :
+            //   - WebRTC peerConnection state → .failed (cause via delegate)
+            //   - call:ended remote (peer raccroche)
+            //   - User raccroche via CallKit / UI app
+            //   - outgoingRingTimeoutSeconds 45s en `.ringing(outgoing)`
+            //     (avant l'offer SDP — pas pendant .connecting)
+            // On poll donc indéfiniment (jusqu'à cancel par endCallInternal).
+            var attempt = 0
+            while !Task.isCancelled {
+                attempt += 1
                 let nanos = UInt64(QualityThresholds.rtpGatePollIntervalSeconds * 1_000_000_000)
                 try? await Task.sleep(nanoseconds: nanos)
                 guard !Task.isCancelled else { return }
@@ -732,17 +1175,53 @@ final class CallManager: ObservableObject {
                     return
                 }
                 Logger.calls.debug(
-                    "RTP gate attempt \(attempt)/\(QualityThresholds.rtpGateMaxAttempts) — packets=\(stats.inboundPacketsReceived) (need \(QualityThresholds.rtpGateRequiredPackets))"
+                    "RTP gate attempt \(attempt) — packets=\(stats.inboundPacketsReceived) (need \(QualityThresholds.rtpGateRequiredPackets)) — patiente, pas de timeout auto"
                 )
             }
-            Logger.calls.error(
-                "RTP gate timeout after \(QualityThresholds.rtpGateMaxAttempts) attempts — ICE connected but no media. Ending call."
-            )
-            self.endCallInternal(reason: .failed("media path broken (no inbound RTP)"))
         }
     }
 
     private func transitionToConnected() {
+        // Idempotent : si déjà .connected, no-op. Cette fonction peut être
+        // appelée par 2 chemins après le fix RTP-gate-non-bloquant :
+        //   1) webRTCServiceDidConnect → immédiat sur ICE connected
+        //   2) RTP gate poll qui détecte les premiers packets entrants
+        // On évite ainsi de relancer durationTask / heartbeat / haptics.
+        if case .connected = callState { return }
+
+        // Audio fallback CRITIQUE — si CallKit `provider:didActivate:audioSession`
+        // n'a JAMAIS firé (bug iOS connu sur certaines configs : simulateur,
+        // fresh app launch sur 1er incoming, etc.), `RTCAudioSession.isAudioEnabled`
+        // reste `false` → libwebrtc ne démarre PAS son audio engine →
+        // CONNEXION ICE ÉTABLIE MAIS AUCUNE VOIX (symptôme rapporté par
+        // l'user : "compteur visible mais pas de voix").
+        //
+        // On vérifie ici si la session est active. Si non, on l'active
+        // manuellement avant de passer en `.connected`. Sur device avec
+        // CallKit qui fonctionne normalement, didActivate a déjà firé et
+        // ce code est no-op. Sur simulateur ou edge cases, ça sauve la
+        // voix.
+        let rtc = RTCAudioSession.sharedInstance()
+        if !rtc.isAudioEnabled {
+            Logger.calls.warning("[AUDIO_FALLBACK] CallKit didActivate n'a pas firé — activation manuelle de RTCAudioSession pour transmettre l'audio")
+            rtc.lockForConfiguration()
+            do {
+                // Configurer la session pour VoIP avant d'activer.
+                let configuration = RTCAudioSessionConfiguration.webRTC()
+                configuration.category = AVAudioSession.Category.playAndRecord.rawValue
+                configuration.mode = (isVideoEnabled ? AVAudioSession.Mode.videoChat : AVAudioSession.Mode.voiceChat).rawValue
+                configuration.categoryOptions = [.allowBluetoothHFP, .duckOthers]
+                try rtc.setConfiguration(configuration, active: true)
+                rtc.isAudioEnabled = true
+                Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession activée manuellement (mode=\(configuration.mode), category=\(configuration.category))")
+            } catch {
+                Logger.calls.error("[AUDIO_FALLBACK] échec activation manuelle: \(error.localizedDescription)")
+            }
+            rtc.unlockForConfiguration()
+        } else {
+            Logger.calls.info("[AUDIO_FALLBACK] RTCAudioSession déjà active (CallKit didActivate a firé normalement)")
+        }
+
         ringbackPlayer.stop()
         callState = .connected
         // Audio session was configured ONCE at peer-connection setup; CallKit
@@ -768,7 +1247,12 @@ final class CallManager: ObservableObject {
         startThermalMonitoring()
         startBackgroundMonitoring()
 
-        if let uuid = activeCallUUID {
+        // Audit P1-12 — `reportOutgoingCall(_:connectedAt:)` is the caller-
+        // side timer trigger. On the callee side, CallKit starts its own
+        // timer when CXAnswerCallAction is fulfilled — calling
+        // reportOutgoingCall here would silently no-op and leave the
+        // Recents entry with zero duration.
+        if lastCallWasOutgoing, let uuid = activeCallUUID {
             callProvider.reportOutgoingCall(with: uuid, connectedAt: Date())
         }
     }
@@ -937,6 +1421,17 @@ final class CallManager: ObservableObject {
         durationTask = nil
         rtpGateTask?.cancel()
         rtpGateTask = nil
+        localMediaTask?.cancel()
+        localMediaTask = nil
+        outgoingRingTimeoutTask?.cancel()
+        outgoingRingTimeoutTask = nil
+        // Cancel le Task de setup outgoing (force-leave + ACK + media +
+        // listenForParticipantJoined). Sans ça, après endCallInternal, ce
+        // Task continuait à tourner et pouvait re-armer la connexion, faire
+        // des emit/setup sur un appel déjà clos, ou laisser des observables
+        // attachés.
+        setupCallTask?.cancel()
+        setupCallTask = nil
         stopHeartbeat()
         stopScreenCaptureMonitoring()
         stopBackgroundMonitoring()
@@ -945,8 +1440,8 @@ final class CallManager: ObservableObject {
         }
         participantJoinedCancellable?.cancel()
         participantJoinedCancellable = nil
-        signalOfferCancellable?.cancel()
-        signalOfferCancellable = nil
+        sdpOfferTimeoutTask?.cancel()
+        sdpOfferTimeoutTask = nil
         pendingRemoteOffer = nil
         thermalMonitor.stopMonitoring()
         activeAudioEffect = nil
@@ -959,6 +1454,12 @@ final class CallManager: ObservableObject {
         callState = .ended(reason: reason)
         connectionQuality = .new
         activeCallUUID = nil
+        // Audit P2-iOS-1 — drop any pending "busy" incoming call. If a 2nd
+        // call arrived while this one was active and got immediately ended
+        // (.unanswered), the banner kept pointing at a callId that the
+        // gateway has already torn down — tapping it joined a phantom room.
+        pendingIncomingCall = nil
+        showCallWaitingBanner = false
 
         // L'UI se base sur `callState == .ended` pour afficher le panneau de
         // fin d'appel ; on garde l'état visible 1.5s avant de reset à `.idle`
@@ -970,10 +1471,17 @@ final class CallManager: ObservableObject {
         // entrant ou sortant suivant un ended remote était rejeté avec
         // "already in state ended(...)" pendant 3s — le user voyait le
         // signal d'appel disparaître. 1.5s suffit pour le feedback UI.
+        // Audit P1-2 — stamp this settle window with a token. If a new call
+        // arrives within 1.5s, `resetEndedStateForNewCall` nils the token and
+        // we must NOT clobber its freshly-assigned identity.
+        let token = UUID()
+        settleToken = token
         Task { @MainActor [weak self] in
             try? await Task.sleep(for: .milliseconds(1500))
             guard let self else { return }
+            guard self.settleToken == token else { return }
             if case .ended = self.callState {
+                self.settleToken = nil
                 self.callState = .idle
                 self.currentCallId = nil
                 self.remoteUserId = nil
@@ -1143,7 +1651,55 @@ final class CallManager: ObservableObject {
         socket.callEnded
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
-                self?.handleRemoteEnd(callId: event.callId)
+                self?.handleRemoteEnd(callId: event.callId, rawReason: event.reason)
+            }
+            .store(in: &cancellables)
+
+        // Audit P1-25 — surface missed calls explicitly. The gateway emits
+        // both `call:ended` and `call:missed` for ringing-timeout scenarios;
+        // listening here lets future UX (banner, badge) react to missed
+        // calls without the ambiguity of `endedBy != self`.
+        socket.callMissed
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                Logger.calls.info("call:missed received: callId=\(event.callId), caller=\(event.callerName ?? "?")")
+                if self.currentCallId == event.callId {
+                    self.handleRemoteEnd(callId: event.callId, rawReason: "missed")
+                }
+            }
+            .store(in: &cancellables)
+
+        // Audit P1-30 — on Socket.IO reconnect, re-emit `call:join` so the
+        // gateway puts us back in the call's room. Without this rejoin, ICE
+        // continued via NWPathMonitor restart but every gateway-relayed
+        // event targeting `ROOMS.call(callId)` (ICE candidates from peer,
+        // re-offer on ICE restart, `call:ended`) was silently dropped — the
+        // call became a zombie.
+        socket.didReconnect
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                guard let self else { return }
+                guard self.callState.isActive, let callId = self.currentCallId else { return }
+                Logger.calls.info("Socket reconnected — re-joining call room \(callId)")
+                MessageSocketManager.shared.emitCallJoin(callId: callId)
+            }
+            .store(in: &cancellables)
+
+        // Audit P1-27 — fired when another device of the same user answered.
+        // Dismiss the local ringing UI with .answeredElsewhere so CallKit
+        // displays "Answered on another device" in Recents.
+        socket.callAlreadyAnswered
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                guard self.currentCallId == event.callId,
+                      case .ringing = self.callState else { return }
+                Logger.calls.info("call:already-answered received — dismissing local ring (callId=\(event.callId))")
+                if let uuid = self.activeCallUUID {
+                    self.callProvider.reportCall(with: uuid, endedAt: Date(), reason: .answeredElsewhere)
+                }
+                self.endCallInternal(reason: .remote)
             }
             .store(in: &cancellables)
     }
@@ -1171,6 +1727,7 @@ final class CallManager: ObservableObject {
                 // Phase 1 fix E5: distinct .offering state. We're no longer ringing
                 // (peer joined) but not yet connecting (no answer received). This
                 // makes the FSM observable and matches the SOTA spec §2.2.
+                self.cancelOutgoingRingTimeout()
                 self.callState = .offering
                 Task { [weak self] in
                     guard let self else { return }
@@ -1213,7 +1770,10 @@ final class CallManager: ObservableObject {
         return acked
     }
 
-    private func emitCallReject(callId: String, toUserId: String) {
+    // Audit P3 — `toUserId` was accepted by the previous signature and
+    // never used. Dropped for clarity — `call:leave` is server-routed via
+    // the call room, no recipient field needed.
+    private func emitCallReject(callId: String) {
         MessageSocketManager.shared.emitCallLeave(callId: callId)
     }
 
@@ -1294,18 +1854,45 @@ extension CallManager: WebRTCServiceDelegate {
     nonisolated func webRTCServiceDidConnect(_ service: WebRTCService) {
         Task { @MainActor [weak self] in
             guard let self else { return }
+            // FIX 2026-05-12 — transition directe à `.connected` sur ICE
+            // connected, plus de gate RTP bloquant.
+            //
+            // Symptôme rapporté : "l'appelé se connecte mais pas l'appelant".
+            // Cause racine : le caller envoyait son RTP mais ne recevait pas
+            // celui du callee (NAT asymétrique, codec mismatch, ou simplement
+            // 1ère seconde après ICE négociée — pas encore de packets entrants).
+            // L'ancien RTP gate exigeait ≥5 inbound packets pour transitionner
+            // à .connected, ce qui pour le caller pouvait ne JAMAIS arriver
+            // → caller restait en .connecting indéfiniment pendant que le
+            // callee (qui recevait bien le RTP du caller) passait à .connected.
+            //
+            // Nouvelle politique :
+            // - ICE connected = call établi du point de vue signaling → on
+            //   transitionne à .connected immédiatement
+            // - Le RTP gate continue de tourner en parallèle MAIS uniquement
+            //   pour informer la qualité (log debug si pas de RTP). Il
+            //   n'affecte plus le state machine
+            // - Si vraiment aucun RTP n'arrive jamais, l'utilisateur entend
+            //   du silence — c'est un signal métier (mute, mic off, network)
+            //   pas une raison de couper l'appel.
             switch self.callState {
             case .connecting:
-                // Phase 1 fix E6: ICE connected does not guarantee media flows.
-                // Poll stats every 2s up to 5 attempts (10s budget). Require
-                // ≥5 inbound RTP packets before declaring .connected. If no
-                // RTP after 10s, end with .failed("media path broken").
+                Logger.calls.info("[CallFSM] ICE connected — transition à .connected (RTP gate informational)")
+                self.transitionToConnected()
                 self.startRTPGatePolling()
             case .reconnecting:
-                Logger.calls.info("Reconnection successful — running RTP gate")
+                Logger.calls.info("Reconnection successful — transition à .connected")
+                self.transitionToConnected()
+                self.startRTPGatePolling()
+            case .offering:
+                // ICE connected en .offering : handleRemoteAnswer n'a pas
+                // tourné mais ICE a réussi. Catch-up direct à .connected.
+                Logger.calls.warning("[CallFSM] ICE connected while state=.offering — direct catch-up à .connected")
+                self.callState = .connecting
+                self.transitionToConnected()
                 self.startRTPGatePolling()
             default:
-                break
+                Logger.calls.debug("[CallFSM] webRTCServiceDidConnect ignored in state \(String(describing: self.callState))")
             }
         }
     }
@@ -1415,10 +2002,30 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
     }
 
     func provider(_ provider: CXProvider, perform action: CXEndCallAction) {
+        // Diagnostic — `CXEndCallAction` is the only path through which the
+        // system asks us to hang up. It fires from:
+        //   1. Lock-screen / in-call "End" button taps (user action),
+        //   2. our own `callController.request(CXEndCallAction)` call from
+        //      `endCall()` (loop-back: we asked CallKit to end the call,
+        //      not the other way around),
+        //   3. CallKit autonomously deciding an outgoing call is stuck
+        //      (e.g. no `reportOutgoingCall(_:startedConnectingAt:)` within
+        //      its internal grace window) — this is the case we suspect for
+        //      the "calls drop after 2-4 seconds" symptom.
+        // Logging the call's UUID and current state here distinguishes (1)/(3)
+        // from the in-app loop-back: in (2), `callState` is already `.ended`
+        // by the time this delegate fires because `endCall()` calls
+        // `endCallInternal` BEFORE requesting the transaction, so the log
+        // will show `state=ended(.local)`. In (1)/(3), state is still
+        // `.ringing` / `.offering` / `.connecting` / `.connected`.
         Task { @MainActor [weak self] in
+            let stateAtEntry = self?.manager?.callState
+            Logger.calls.info(
+                "CallKit -> CXEndCallAction received (callUUID=\(action.callUUID), state=\(String(describing: stateAtEntry)))"
+            )
             self?.manager?.endCall()
+            action.fulfill()
         }
-        action.fulfill()
     }
 
     func provider(_ provider: CXProvider, perform action: CXSetMutedCallAction) {
@@ -1451,11 +2058,37 @@ private class CallKitDelegateProxy: NSObject, CXProviderDelegate, @unchecked Sen
         rtc.isAudioEnabled = true
         rtc.unlockForConfiguration()
 
-        Task { @MainActor [weak self] in self?.manager?.applySpeakerRoute() }
+        // Audit P2-iOS-2 — `overrideOutputAudioPort` is only honored once
+        // RTCAudioSession's audio engine has actually started. Calling it
+        // synchronously from `didActivate` races the engine start; the
+        // speaker toggle would silently fall back to earpiece. Defer by
+        // ~200ms so the engine is up by the time we override.
+        Task { @MainActor [weak self] in
+            try? await Task.sleep(for: .milliseconds(200))
+            self?.manager?.applySpeakerRoute()
+        }
         let outputs = audioSession.currentRoute.outputs
             .map { $0.portType.rawValue }
             .joined(separator: ",")
         Logger.calls.info("CallKit audio session activated; RTCAudioSession enabled (route=\(outputs), category=\(audioSession.category.rawValue), mode=\(audioSession.mode.rawValue))")
+
+        // Phase 1.5 — démarrer le ringback tone APRÈS que CallKit ait
+        // activé la session audio. Démarrer AVAudioPlayer avant ce point
+        // (comme le faisait `startCall` originel) activait implicitement
+        // la session en `.soloAmbient` (default iOS), ce qui pré-emptait
+        // la catégorie `.playAndRecord` de CallKit et empêchait CallKit
+        // de fire `didActivate` — déclenchant son timeout autonome ~3-5s
+        // (le « calls drop after 2-4 seconds » + « wont be a UI to host
+        // the call » sur simulateur).
+        // ⚠️ Sortie .ringing(isOutgoing:true) UNIQUEMENT : sur incoming le
+        // ringback caller-side n'a pas lieu (CallKit gère son propre
+        // ringtone via `ringtoneSound`).
+        Task { @MainActor [weak self] in
+            guard let manager = self?.manager else { return }
+            if case .ringing(isOutgoing: true) = manager.callState {
+                manager.startRingbackIfNeeded()
+            }
+        }
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {

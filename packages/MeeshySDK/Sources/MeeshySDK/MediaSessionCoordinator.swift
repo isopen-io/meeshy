@@ -56,8 +56,12 @@ public actor MediaSessionCoordinator {
         case .record:
             try session.setCategory(.record, mode: .default)
         case .playAndRecord:
+            // Audit P2-iOS-3 — `.allowBluetooth` is the deprecated alias for
+            // HFP. Use `.allowBluetoothHFP` explicitly to align with the
+            // call-path policy (CallManager L1081 / PERF-010) and remove
+            // the deprecation warning.
             try session.setCategory(.playAndRecord, mode: .default,
-                                    options: [.defaultToSpeaker, .allowBluetooth])
+                                    options: [.defaultToSpeaker, .allowBluetoothHFP])
         }
         try session.setActive(true)
         activationCount += 1

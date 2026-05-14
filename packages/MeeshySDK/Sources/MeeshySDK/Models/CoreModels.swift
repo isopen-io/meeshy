@@ -96,7 +96,9 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     public var title: String?
     public var description: String?
     public var avatar: String?
+    public var avatarThumbHash: String?
     public var banner: String?
+    public var bannerThumbHash: String?
     public var communityId: String?
     public var isActive: Bool = true
     public var memberCount: Int = 0
@@ -207,7 +209,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
     }
 
     public init(id: String = UUID().uuidString, identifier: String, type: ConversationType = .direct,
-                title: String? = nil, description: String? = nil, avatar: String? = nil, banner: String? = nil,
+                title: String? = nil, description: String? = nil, avatar: String? = nil, avatarThumbHash: String? = nil, banner: String? = nil, bannerThumbHash: String? = nil,
                 communityId: String? = nil, isActive: Bool = true, memberCount: Int = 2,
                 lastMessageAt: Date = Date(), encryptionMode: String? = nil,
                 createdAt: Date = Date(), updatedAt: Date = Date(),
@@ -229,7 +231,7 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
                 theme: ConversationContext.ConversationTheme = .general,
                 colorPalette: ConversationColorPalette? = nil) {
         self.id = id; self.identifier = identifier; self.type = type
-        self.title = title; self.description = description; self.avatar = avatar; self.banner = banner
+        self.title = title; self.description = description; self.avatar = avatar; self.avatarThumbHash = avatarThumbHash; self.banner = banner; self.bannerThumbHash = bannerThumbHash
         self.communityId = communityId; self.isActive = isActive; self.memberCount = memberCount
         self.lastMessageAt = lastMessageAt; self.encryptionMode = encryptionMode
         self.createdAt = createdAt; self.updatedAt = updatedAt
@@ -269,7 +271,9 @@ public struct MeeshyCommunity: Identifiable, Hashable, Sendable {
     public let name: String
     public var description: String?
     public var avatar: String?
+    public var avatarThumbHash: String?
     public var banner: String?
+    public var bannerThumbHash: String?
     public var isPrivate: Bool = true
     public var isActive: Bool = true
     public var deletedAt: Date?
@@ -284,7 +288,7 @@ public struct MeeshyCommunity: Identifiable, Hashable, Sendable {
     public var language: ConversationContext.ConversationLanguage = .french
 
     public init(id: String = UUID().uuidString, identifier: String, name: String,
-                description: String? = nil, avatar: String? = nil, banner: String? = nil,
+                description: String? = nil, avatar: String? = nil, avatarThumbHash: String? = nil, banner: String? = nil, bannerThumbHash: String? = nil,
                 isPrivate: Bool = true, isActive: Bool = true, deletedAt: Date? = nil,
                 createdBy: String = "", createdAt: Date = Date(), updatedAt: Date = Date(),
                 memberCount: Int = 0, conversationCount: Int = 0,
@@ -292,7 +296,7 @@ public struct MeeshyCommunity: Identifiable, Hashable, Sendable {
                 theme: ConversationContext.ConversationTheme = .general,
                 language: ConversationContext.ConversationLanguage = .french) {
         self.id = id; self.identifier = identifier; self.name = name
-        self.description = description; self.avatar = avatar; self.banner = banner
+        self.description = description; self.avatar = avatar; self.avatarThumbHash = avatarThumbHash; self.banner = banner; self.bannerThumbHash = bannerThumbHash
         self.isPrivate = isPrivate; self.isActive = isActive; self.deletedAt = deletedAt
         self.createdBy = createdBy; self.createdAt = createdAt; self.updatedAt = updatedAt
         self.memberCount = memberCount; self.conversationCount = conversationCount
@@ -645,6 +649,41 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var longitude: Double?
     public var thumbnailColor: String = "4ECDC4"
 
+    // Persisted transcription/translation metadata so GRDB load surfaces
+    // these fields instantly without waiting for a REST round-trip.
+    public var transcription: EmbeddedTranscription?
+    public var audioTranslations: [String: EmbeddedAudioTranslation]?
+
+    /// Lightweight Codable transcription embedded in attachmentsJson.
+    public struct EmbeddedTranscription: Codable, Sendable {
+        public var text: String
+        public var language: String
+        public var confidence: Double?
+        public var durationMs: Int?
+        public var speakerCount: Int?
+        public var segments: [TranscriptionSegmentData]?
+
+        public struct TranscriptionSegmentData: Codable, Sendable {
+            public var text: String
+            public var startTime: Double?
+            public var endTime: Double?
+            public var speakerId: String?
+        }
+    }
+
+    /// Lightweight Codable audio translation embedded in attachmentsJson.
+    public struct EmbeddedAudioTranslation: Codable, Sendable {
+        public var url: String
+        public var transcription: String?
+        public var durationMs: Int?
+        public var format: String?
+        public var cloned: Bool?
+        public var quality: Double?
+        public var voiceModelId: String?
+        public var ttsModel: String?
+        public var segments: [EmbeddedTranscription.TranscriptionSegmentData]?
+    }
+
     public var type: AttachmentType {
         if mimeType.starts(with: "image/") { return .image }
         if mimeType.starts(with: "video/") { return .video }
@@ -669,7 +708,9 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 fps: Float? = nil, videoCodec: String? = nil, pageCount: Int? = nil, lineCount: Int? = nil,
                 uploadedBy: String = "", isAnonymous: Bool = false, createdAt: Date = Date(),
                 isEncrypted: Bool = false, encryptionMode: String? = nil,
-                latitude: Double? = nil, longitude: Double? = nil, thumbnailColor: String = "4ECDC4") {
+                latitude: Double? = nil, longitude: Double? = nil, thumbnailColor: String = "4ECDC4",
+                transcription: EmbeddedTranscription? = nil,
+                audioTranslations: [String: EmbeddedAudioTranslation]? = nil) {
         self.id = id; self.messageId = messageId; self.fileName = fileName; self.originalName = originalName
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
@@ -682,6 +723,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.uploadedBy = uploadedBy; self.isAnonymous = isAnonymous; self.createdAt = createdAt
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.latitude = latitude; self.longitude = longitude; self.thumbnailColor = thumbnailColor
+        self.transcription = transcription; self.audioTranslations = audioTranslations
     }
 
     public static func image(color: String = "4ECDC4") -> MeeshyMessageAttachment {

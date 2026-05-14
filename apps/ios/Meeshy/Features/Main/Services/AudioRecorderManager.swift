@@ -24,9 +24,21 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
     }
 
     func startRecording() {
+        // Audit P1-10 — refuse to start a voice-message recording while a
+        // VoIP call is active: AVAudioRecorder activation overrides the
+        // call's audio session and silences the WebRTC microphone path.
+        if CallManager.shared.callState.isActive {
+            return
+        }
+
         let session = AVAudioSession.sharedInstance()
         do {
-            try session.setCategory(.playAndRecord, mode: .default, options: [.defaultToSpeaker, .allowBluetoothA2DP])
+            // Audit P1-10 — `.voiceChat` enables the system EC/AGC/NS chain
+            // that `.default` skips (better captured speech for voice
+            // messages). Drop `.allowBluetoothA2DP`: A2DP is output-only and
+            // forces the OS to flap to HFP for the mic, producing the same
+            // ~200ms audio glitches that PERF-010 removed from the call path.
+            try session.setCategory(.playAndRecord, mode: .voiceChat, options: [.defaultToSpeaker, .allowBluetoothHFP])
             try session.setActive(true)
         } catch {
             return
@@ -89,6 +101,13 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         recorder = nil
         duration = 0
         audioLevels = Array(repeating: 0, count: 15)
+
+        // Audit P2-iOS-4 — deactivate the AVAudioSession so the mic indicator
+        // turns off. Without this, cancelling a voice message left the
+        // session active indefinitely (drained battery + kept mic icon on).
+        if !CallManager.shared.callState.isActive {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     func result() -> AudioRecordingResult? {

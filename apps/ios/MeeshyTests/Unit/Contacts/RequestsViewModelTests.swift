@@ -134,6 +134,28 @@ final class RequestsViewModelTests: XCTestCase {
         XCTAssertEqual(sut.sentRequests.count, 1)
     }
 
+    // MARK: - Outcome Observer Rollback (Phase 4 Task 4.9)
+    //
+    // `accept` / `reject` subscribe to `OfflineQueue.outcomeStream(for: cmid)`
+    // and roll back `receivedRequests` if the OutboxFlusher escalates the
+    // row to `.exhausted`. The cmid is generated internally so we assert the
+    // contract on the primitive: outcome-stream + publishOutcome must
+    // round-trip the terminal event exactly once.
+
+    func test_acceptReject_outcomeStream_exhaustedFires_rollbackContract() async {
+        let cmid = "requests-rollback-001"
+        let stream = await OfflineQueue.shared.outcomeStream(for: cmid)
+        await OfflineQueue.shared.publishOutcome(.exhausted(cmid: cmid))
+
+        var collected: [OutboxOutcome] = []
+        for await event in stream {
+            collected.append(event)
+        }
+
+        XCTAssertEqual(collected.count, 1)
+        XCTAssertEqual(collected.first, .exhausted(cmid: cmid))
+    }
+
     // MARK: - Pagination
 
     func test_loadMoreReceived_appendsResults() async {

@@ -13,6 +13,39 @@ private struct StoryPreviewAssets: Identifiable {
     let audioURLs: [String: URL]
 }
 
+// MARK: - Upload Phase Label
+
+/// Sprint 8 Phase 6 — publish→exporter wiring (spec §3.5).
+///
+/// Returns the localized row label shown beneath the "Moi" avatar in the
+/// story tray for an in-flight upload. Currently only `.exporting`
+/// surfaces a dedicated copy ("Export en cours… 67%") — the other phases
+/// keep the legacy avatar caption ("Moi") so existing UX is unchanged for
+/// static slides that bypass the exporter entirely.
+///
+/// Exposed at file scope (no `private`) so
+/// `StoryTrayView_ExportingPhaseTests` can drive each phase through a
+/// single pure function rather than asserting on rendered SwiftUI text.
+/// The view consumes this helper and renders the result with `Text` if
+/// non-nil.
+func storyTrayUploadLabel(
+    phase: StoryViewModel.StoryUploadState.UploadPhase,
+    progress: Double
+) -> String? {
+    switch phase {
+    case .exporting:
+        let clamped = max(0.0, min(1.0, progress))
+        let percent = Int(clamped * 100)
+        let format = String(
+            localized: "story.tray.upload.exporting",
+            defaultValue: "Export en cours… %lld%%"
+        )
+        return String(format: format, locale: .current, percent)
+    case .uploading, .publishing, .failed:
+        return nil
+    }
+}
+
 struct StoryTrayView: View {
     @ObservedObject var viewModel: StoryViewModel
     var onViewStory: (String) -> Void
@@ -37,8 +70,15 @@ struct StoryTrayView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            if viewModel.isLoading && viewModel.storyGroups.isEmpty {
-                shimmerPlaceholder
+            // Cache-first: only show the skeleton row when the carousel
+            // has no cached groups AND a load is in flight. Once any
+            // story arrives (even from a stale cache) we drop straight
+            // into the live scroll view so the row never jumps.
+            if SkeletonVisibilityResolver.shouldShowSkeleton(
+                isLoading: viewModel.isLoading,
+                hasCachedData: !viewModel.storyGroups.isEmpty
+            ) {
+                SkeletonStoryTrayRow()
             } else {
                 storyScrollView
             }
@@ -104,12 +144,9 @@ struct StoryTrayView: View {
                     preloadedVideoURLs: assets.videoURLs,
                     preloadedAudioURLs: assets.audioURLs
                 )
-                // Re-inject env objects required by StoryViewerView for its
-                // internal SharePickerView sheet. fullScreenCover does NOT
-                // inherit EnvironmentObjects automatically.
                 .environmentObject(router)
-                .environmentObject(statusViewModel)
                 .environmentObject(conversationListViewModel)
+                .environmentObject(statusViewModel)
             }
         }
         .fullScreenCover(isPresented: $showOwnStoryViewer) {
@@ -119,12 +156,9 @@ struct StoryTrayView: View {
                 isPresented: $showOwnStoryViewer,
                 singleGroup: true
             )
-            // Re-inject env objects required by StoryViewerView for its
-            // internal SharePickerView sheet. fullScreenCover does NOT
-            // inherit EnvironmentObjects automatically.
             .environmentObject(router)
-            .environmentObject(statusViewModel)
             .environmentObject(conversationListViewModel)
+            .environmentObject(statusViewModel)
         }
         .withStatusBubble()
     }
@@ -219,32 +253,6 @@ struct StoryTrayView: View {
         }
     }
 
-    // MARK: - Shimmer Placeholder
-
-    private var shimmerPlaceholder: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 12) {
-                ForEach(0..<6, id: \.self) { _ in
-                    VStack(spacing: 4) {
-                        Circle()
-                            .fill(Color.white.opacity(0.06))
-                            .frame(width: 44, height: 44)
-                            .overlay(
-                                Circle()
-                                    .stroke(Color.white.opacity(0.08), lineWidth: 2)
-                                    .frame(width: 50, height: 50)
-                            )
-                        RoundedRectangle(cornerRadius: 3)
-                            .fill(Color.white.opacity(0.06))
-                            .frame(width: 36, height: 7)
-                    }
-                    .shimmer()
-                }
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-        }
-    }
 }
 
 // MARK: - My Story Button (extracted struct to avoid PAC issues with @ViewBuilder + @EnvironmentObject)
@@ -268,6 +276,15 @@ private struct MyStoryButton: View {
         let accentColor = DynamicColorGenerator.colorForName(currentUser?.username ?? "")
         let storyState: StoryRingState = myGroup.map { $0.hasUnviewed ? .unread : .read } ?? .none
         let myMoodEmoji = statusViewModel.statusForUser(userId: userId)?.moodEmoji
+        // Sprint 8 Phase 6 — when the publish pipeline is baking an MP4 via
+        // `StoryVideoExportService`, swap the avatar caption from "Moi" to
+        // "Export en cours… X%" so the user understands the (potentially
+        // multi-second) delay is the local export step, not a network
+        // upload. The label resolves to nil for non-exporting phases so
+        // existing uploading/publishing/failed renders are untouched.
+        let exportingLabel: String? = viewModel.activeUpload.flatMap { upload in
+            storyTrayUploadLabel(phase: upload.phase, progress: upload.progress)
+        }
 
         VStack(spacing: 5) {
             ZStack {
@@ -325,6 +342,34 @@ private struct MyStoryButton: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .overlay(alignment: .topLeading) {
+                    // Composer entry badge — discoverable affordance for adding
+                    // a new story without going through long-press menu. Hidden
+                    // during an active upload (the upload overlay already
+                    // covers the avatar). The plus sign uses brand gradient
+                    // matching the published `MeeshyColors.brandGradient`.
+                    if viewModel.activeUpload == nil {
+                        Button {
+                            guard viewModel.activeUpload == nil else { return }
+                            viewModel.showStoryComposer = true
+                            HapticFeedback.medium()
+                        } label: {
+                            Image(systemName: "plus")
+                                .font(.system(size: 11, weight: .bold))
+                                .foregroundStyle(Color.white)
+                                .frame(width: 20, height: 20)
+                                .background(
+                                    Circle()
+                                        .fill(MeeshyColors.brandGradient)
+                                        .overlay(Circle().stroke(theme.backgroundPrimary, lineWidth: 2))
+                                )
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(String(localized: "story.tray.addStory",
+                                                   defaultValue: "Ajouter une story"))
+                        .offset(x: -2, y: -2)
+                    }
+                }
                 .overlay {
                     if let upload = viewModel.activeUpload {
                         StoryUploadOverlay(
@@ -353,9 +398,18 @@ private struct MyStoryButton: View {
                 }
             }
 
-            Text("Moi")
-                .font(.system(size: 10, weight: .semibold))
-                .foregroundColor(.white.opacity(0.8))
+            if let label = exportingLabel {
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.8))
+                    .lineLimit(1)
+                    .frame(width: 72)
+                    .accessibilityLabel(label)
+            } else {
+                Text("Moi")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.8))
+            }
         }
         .accessibilityLabel(hasMyStory ? "Ma story" : "Changer mon mood")
     }

@@ -13,7 +13,7 @@ import { EncryptionService } from '../EncryptionService';
 import { NotificationService } from '../notifications/NotificationService';
 import { MessageTranslationService } from '../message-translation/MessageTranslationService';
 import { AttachmentService } from '../attachments';
-import { enhancedLogger } from '../../utils/logger-enhanced';
+import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { MESSAGE_EFFECT_FLAGS } from '@meeshy/shared/types/message-effect-flags';
 
 // Logger dédié pour MessageProcessor
@@ -315,12 +315,22 @@ export class MessageProcessor {
     expiresAt?: Date;
     clientMessageId?: string;
   }): Promise<Message> {
+    const corr: Record<string, any> = {
+      clientMessageId: data.clientMessageId,
+      conversationId: data.conversationId,
+      senderId: data.senderId
+    };
+
     // ÉTAPE 1: Traiter les liens AVANT de sauvegarder le message
-    const processedContent = await this.processLinksInContent(
-      data.content,
-      data.conversationId,
-      data.senderId,
-      undefined
+    const processedContent = await performanceLogger.withTiming(
+      'messaging.processLinks',
+      () => this.processLinksInContent(
+        data.content,
+        data.conversationId,
+        data.senderId,
+        undefined
+      ),
+      corr
     );
 
     // ÉTAPE 2: Get encryption context for this message
@@ -335,10 +345,14 @@ export class MessageProcessor {
         encryptionMetadata: data.encryptionMetadata
       };
     } else {
-      encryptionContext = await this.getEncryptionContext(
-        data.conversationId,
-        processedContent.trim(),
-        data.messageType || 'text'
+      encryptionContext = await performanceLogger.withTiming(
+        'messaging.encryptionContext',
+        () => this.getEncryptionContext(
+          data.conversationId,
+          processedContent.trim(),
+          data.messageType || 'text'
+        ),
+        corr
       );
     }
 
@@ -380,31 +394,10 @@ export class MessageProcessor {
     let message: Message;
     let isDuplicate = false;
     try {
-      message = await this.prisma.message.create({
-        data: messageData,
-      include: {
-        sender: {
-          select: {
-            id: true,
-            displayName: true,
-            avatar: true,
-            type: true,
-            nickname: true,
-            userId: true,
-            user: {
-              select: {
-                id: true,
-                username: true,
-                displayName: true,
-                firstName: true,
-                lastName: true,
-                avatar: true
-              }
-            }
-          }
-        },
-        attachments: true,
-        replyTo: {
+      message = await performanceLogger.withTiming(
+        'messaging.prismaMessageCreate',
+        () => this.prisma.message.create({
+          data: messageData,
           include: {
             sender: {
               select: {
@@ -425,11 +418,36 @@ export class MessageProcessor {
                   }
                 }
               }
+            },
+            attachments: true,
+            replyTo: {
+              include: {
+                sender: {
+                  select: {
+                    id: true,
+                    displayName: true,
+                    avatar: true,
+                    type: true,
+                    nickname: true,
+                    userId: true,
+                    user: {
+                      select: {
+                        id: true,
+                        username: true,
+                        displayName: true,
+                        firstName: true,
+                        lastName: true,
+                        avatar: true
+                      }
+                    }
+                  }
+                }
+              }
             }
           }
-        }
-      }
-    });
+        }),
+        corr
+      );
     } catch (e) {
       const isP2002 =
         typeof e === 'object' && e !== null
@@ -443,43 +461,47 @@ export class MessageProcessor {
       // a Prisma `@@unique` directive — so the `findUnique` compound
       // type is not generated. The compound `@@index` declared in the
       // schema still backs this query for performance.
-      const existing = await this.prisma.message.findFirst({
-        where: {
-          conversationId: data.conversationId,
-          clientMessageId: data.clientMessageId
-        },
-        include: {
-          sender: {
-            select: {
-              id: true, displayName: true, avatar: true, type: true,
-              nickname: true, userId: true,
-              user: {
-                select: {
-                  id: true, username: true, displayName: true,
-                  firstName: true, lastName: true, avatar: true
+      const existing = await performanceLogger.withTiming(
+        'messaging.dedupFindFirst',
+        () => this.prisma.message.findFirst({
+          where: {
+            conversationId: data.conversationId,
+            clientMessageId: data.clientMessageId
+          },
+          include: {
+            sender: {
+              select: {
+                id: true, displayName: true, avatar: true, type: true,
+                nickname: true, userId: true,
+                user: {
+                  select: {
+                    id: true, username: true, displayName: true,
+                    firstName: true, lastName: true, avatar: true
+                  }
                 }
               }
-            }
-          },
-          attachments: true,
-          replyTo: {
-            include: {
-              sender: {
-                select: {
-                  id: true, displayName: true, avatar: true, type: true,
-                  nickname: true, userId: true,
-                  user: {
-                    select: {
-                      id: true, username: true, displayName: true,
-                      firstName: true, lastName: true, avatar: true
+            },
+            attachments: true,
+            replyTo: {
+              include: {
+                sender: {
+                  select: {
+                    id: true, displayName: true, avatar: true, type: true,
+                    nickname: true, userId: true,
+                    user: {
+                      select: {
+                        id: true, username: true, displayName: true,
+                        firstName: true, lastName: true, avatar: true
+                      }
                     }
                   }
                 }
               }
             }
           }
-        }
-      });
+        }),
+        corr
+      );
       if (!existing) {
         // Race condition we cannot reconcile — bubble up the original error.
         logger.error('P2002 raised but no existing record found for clientMessageId', {
@@ -513,8 +535,14 @@ export class MessageProcessor {
       } as Message;
     }
 
+    const corrWithMsg = { ...corr, messageId: message.id };
+
     // ÉTAPE 4: Gérer les attachments (Lier ou Copier pour forward)
-    await this.handleAttachments(data, message);
+    await performanceLogger.withTiming(
+      'messaging.handleAttachments',
+      () => this.handleAttachments(data, message),
+      corrWithMsg
+    );
 
     // ÉTAPE 4 bis: Rafraîchir les attachments en mémoire. `prisma.message.create`
     // a capturé `attachments: []` AVANT que `handleAttachments` ne fasse le
@@ -527,18 +555,30 @@ export class MessageProcessor {
       (data.attachmentIds && data.attachmentIds.length > 0) ||
       Boolean(data.forwardedFromId);
     if (hasAttachmentLinks) {
-      const refreshedAttachments = await this.prisma.messageAttachment.findMany({
-        where: { messageId: message.id }
-      });
+      const refreshedAttachments = await performanceLogger.withTiming(
+        'messaging.refreshAttachments',
+        () => this.prisma.messageAttachment.findMany({
+          where: { messageId: message.id }
+        }),
+        corrWithMsg
+      );
       (message as Message & { attachments: unknown[] }).attachments = refreshedAttachments;
     }
 
     // ÉTAPE 5: Mettre à jour les liens de tracking avec le messageId
-    await this.updateTrackingLinksWithMessageId(processedContent, data, message.id);
+    await performanceLogger.withTiming(
+      'messaging.trackingLinks',
+      () => this.updateTrackingLinksWithMessageId(processedContent, data, message.id),
+      corrWithMsg
+    );
 
     // ÉTAPE 6: Traiter les mentions et déclencher TOUTES les notifications
     // (Mentions, Réponses, Messages réguliers)
-    await this.handleMentionsAndNotifications(data, message, processedContent);
+    await performanceLogger.withTiming(
+      'messaging.mentionsAndNotifications',
+      () => this.handleMentionsAndNotifications(data, message, processedContent),
+      corrWithMsg
+    );
 
     return {
       ...message,
@@ -910,9 +950,12 @@ export class MessageProcessor {
       }
 
       // 4. Préparer les infos d'attachments
+      // Phase A — fileUrl + transcription added to the select so iOS rich-push
+      // can attach the media inline (audio waveform, image preview, video thumb)
+      // and use the transcription as the body for audio messages when available.
       const attachments = await this.prisma.messageAttachment.findMany({
         where: { messageId: message.id },
-        select: { mimeType: true, fileName: true, fileSize: true, duration: true, width: true, height: true }
+        select: { mimeType: true, fileName: true, fileSize: true, duration: true, width: true, height: true, fileUrl: true, transcription: true }
       });
 
       const first = attachments[0];
@@ -927,7 +970,21 @@ export class MessageProcessor {
         firstAttachmentDuration: first?.duration,
         firstAttachmentWidth: first?.width,
         firstAttachmentHeight: first?.height,
+        // Phase A — rich-push fields propagated to APN payload via NotificationService.
+        firstAttachmentUrl: first?.fileUrl || undefined,
+        firstAttachmentMimeType: first?.mimeType || undefined,
       };
+
+      // Phase A — if the first attachment is audio and already has a transcription
+      // (pre-transcribed upload path, or transcription already completed by the
+      // time the notification fan-out runs), use the transcript text as the
+      // push body so the recipient sees the content immediately on the lock
+      // screen — the audio file is still attached for inline playback.
+      const firstAttachmentTranscript =
+        first?.mimeType?.startsWith('audio/')
+          ? extractTranscriptionText(first as { transcription?: unknown })
+          : undefined;
+      const notificationPreviewForPush = firstAttachmentTranscript ?? notificationPreview;
 
       // 5. Notification de RÉPONSE (prioritaire sur message régulier)
       if (originalMessageAuthorUserId &&
@@ -988,7 +1045,7 @@ export class MessageProcessor {
             senderId: senderUserId,
             messageId: message.id,
             conversationId: data.conversationId,
-            messagePreview: notificationPreview,
+            messagePreview: notificationPreviewForPush,
             encryptedContent: message.encryptedContent || undefined,
             notificationLocKey: notificationLocKey,
             ...attachmentInfo as any
@@ -1046,4 +1103,26 @@ export class MessageProcessor {
       return [];
     }
   }
+}
+
+/**
+ * Best-effort plain-text extraction from an AttachmentTranscription blob.
+ * Returns undefined if the structure isn't recognized — caller falls back
+ * to the original preview. Used to inline voice-message transcripts in the
+ * push body for Phase A rich notifications (Communication Notifications iOS).
+ */
+function extractTranscriptionText(att: { transcription?: unknown } | null | undefined): string | undefined {
+  if (!att?.transcription || typeof att.transcription !== 'object') return undefined;
+  const t = att.transcription as Record<string, unknown>;
+  if (typeof t.text === 'string' && t.text.trim().length > 0) return t.text.trim();
+  if (Array.isArray(t.segments)) {
+    const joined = t.segments
+      .map(seg => (typeof seg === 'object' && seg && typeof (seg as Record<string, unknown>).text === 'string'
+        ? (seg as Record<string, unknown>).text as string
+        : ''))
+      .join(' ')
+      .trim();
+    if (joined.length > 0) return joined;
+  }
+  return undefined;
 }

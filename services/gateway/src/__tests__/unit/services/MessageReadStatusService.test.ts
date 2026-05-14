@@ -435,6 +435,59 @@ describe('MessageReadStatusService', () => {
       expect(result.readCount).toBe(1);
       expect(result.receivedBy[0].participantId).toBe(testParticipantId2);
     });
+
+    // Regression: a cursor whose participant has been deleted/banned/marked
+    // inactive must be silently skipped instead of crashing the endpoint.
+    // Production was returning HTTP 500 with
+    //   PrismaClientUnknownRequestError: Inconsistent query result: Field
+    //   participant is required to return data, got `null` instead
+    // before we stopped relying on a strict `include` and started joining
+    // participants in JS.
+    it('should skip cursors whose participant no longer exists or is inactive', async () => {
+      const messageCreatedAt = new Date('2025-01-01T10:00:00Z');
+      const mockMessage = {
+        id: testMessageId,
+        createdAt: messageCreatedAt,
+        senderId: testParticipantId,
+        anonymousSenderId: null,
+        conversationId: testConversationId
+      };
+
+      // Only User2 is active; orphan-cursor participant ID has no matching row.
+      const mockMembers = [
+        { id: testParticipantId, displayName: 'User1', avatar: null, user: null },
+        { id: testParticipantId2, displayName: 'User2', avatar: 'av2.jpg', user: null }
+      ];
+
+      const mockCursors = [
+        // Valid cursor — User2
+        {
+          participantId: testParticipantId2,
+          lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
+          lastReadAt: new Date('2025-01-01T10:10:00Z'),
+        },
+        // Orphan cursor — points at a participant that no longer exists
+        {
+          participantId: 'orphan-participant-id',
+          lastDeliveredAt: new Date('2025-01-01T10:05:00Z'),
+          lastReadAt: new Date('2025-01-01T10:10:00Z'),
+        }
+      ];
+
+      mockPrisma.message.findUnique.mockResolvedValue(mockMessage);
+      mockPrisma.participant.findMany.mockResolvedValue(mockMembers);
+      mockPrisma.conversationReadCursor.findMany.mockResolvedValue(mockCursors);
+
+      const result = await service.getMessageReadStatus(testMessageId, testConversationId);
+
+      // Orphan cursor must be skipped, not throw
+      expect(result.receivedCount).toBe(1);
+      expect(result.readCount).toBe(1);
+      expect(result.receivedBy).toHaveLength(1);
+      expect(result.readBy).toHaveLength(1);
+      expect(result.receivedBy[0].participantId).toBe(testParticipantId2);
+      expect(result.receivedBy[0].avatarURL).toBe('av2.jpg');
+    });
   });
 
   // ==============================================

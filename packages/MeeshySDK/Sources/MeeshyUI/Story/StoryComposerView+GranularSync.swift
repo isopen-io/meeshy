@@ -1,0 +1,25 @@
+import SwiftUI
+
+/// Modifieur de vue pour décharger le type-checker SwiftUI (qui a un 
+/// budget d'exécution limité) du `body` géant de `StoryComposerView`. 
+/// Au lieu de calculer un "Fingerprint" artificiel (qui itérait sur 
+/// tous les stickers à chaque rendu), ce helper permet un tracking 
+/// granulaire en O(1).
+extension View {
+    @ViewBuilder
+    func granularCanvasSync(
+        filter: String?,
+        hasImage: Bool,
+        stickersCount: Int,
+        drawingCount: Int,
+        bgColor: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        self
+            .onChange(of: filter) { _, _ in action() }
+            .onChange(of: hasImage) { _, _ in action() }
+            .onChange(of: stickersCount) { _, _ in action() }
+            .onChange(of: drawingCount) { _, _ in action() }
+            .onChange(of: bgColor) { _, _ in action() }
+    }
+}

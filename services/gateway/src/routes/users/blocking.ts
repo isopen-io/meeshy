@@ -3,6 +3,7 @@ import { logError } from '../../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { isValidMongoId } from '@meeshy/shared/utils/conversation-helpers';
 import type { AuthenticatedRequest } from './types';
+import { withMutationLog } from '../../utils/withMutationLog';
 
 export async function blockUser(fastify: FastifyInstance) {
   fastify.post<{ Params: { userId: string } }>('/users/:userId/block', {
@@ -89,11 +90,25 @@ export async function blockUser(fastify: FastifyInstance) {
         });
       }
 
-      await fastify.prisma.user.update({
-        where: { id: currentUserId },
-        data: {
-          blockedUserIds: { push: targetUserId }
-        }
+      // Idempotent via clientMutationId. The `id` recorded in the
+      // MutationLog row is the target user's id — there is no single
+      // canonical record produced by a block, but using the target id
+      // lets a replay confirm the same action was previously applied.
+      await withMutationLog({
+        request,
+        fastify,
+        userId: currentUserId!,
+        kind: 'blockUser',
+        op: async () => {
+          await fastify.prisma.user.update({
+            where: { id: currentUserId },
+            data: {
+              blockedUserIds: { push: targetUserId }
+            }
+          });
+          return { id: targetUserId };
+        },
+        onDuplicate: async () => ({ id: targetUserId }),
       });
 
       return reply.send({
@@ -175,13 +190,25 @@ export async function unblockUser(fastify: FastifyInstance) {
         });
       }
 
-      await fastify.prisma.user.update({
-        where: { id: currentUserId },
-        data: {
-          blockedUserIds: {
-            set: currentUser.blockedUserIds.filter(id => id !== targetUserId)
-          }
-        }
+      // Idempotent via clientMutationId. The MutationLog row records
+      // the target user id so replays are observably no-ops.
+      await withMutationLog({
+        request,
+        fastify,
+        userId: currentUserId!,
+        kind: 'unblockUser',
+        op: async () => {
+          await fastify.prisma.user.update({
+            where: { id: currentUserId },
+            data: {
+              blockedUserIds: {
+                set: currentUser.blockedUserIds.filter(id => id !== targetUserId)
+              }
+            }
+          });
+          return { id: targetUserId };
+        },
+        onDuplicate: async () => ({ id: targetUserId }),
       });
 
       return reply.send({

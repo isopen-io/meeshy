@@ -4,44 +4,70 @@ import SwiftUI
 @testable import MeeshySDK
 
 /// Task 59 — Every interactive element has a non-empty VoiceOver label.
-/// Tests the static accessibility label helpers on TransportBar and TimelineToolbar
-/// (pure-logic methods that the views use for their `.accessibilityLabel()` modifiers).
-/// This approach is unit-testable without a running simulator UI.
+///
+/// Strategy: each key referenced by `TransportBar` / `TimelineToolbar` via
+/// `.accessibilityLabel(LocalizedStringKey(...))` is resolved through
+/// `Bundle.module` (the MeeshyUI resource bundle that ships
+/// `Localizable.xcstrings`). If the bundle has no translation for a key,
+/// `String(localized:)` returns the key string itself raw — so asserting that
+/// the resolved value differs from the key proves a translation exists.
+///
+/// `Bundle.module` is `@MainActor`-isolated under MeeshyUI's
+/// `defaultIsolation(MainActor)`; the test class is therefore `@MainActor`.
 @MainActor
 final class VoiceOverLabelTests: XCTestCase {
+
+    // MARK: - Helpers
+
+    /// Resolve `key` through `Bundle.module` and assert the bundle returned a
+    /// real translation (i.e. the returned string is not just the key echoed
+    /// back). Catches keys that exist in source but are missing from
+    /// `Localizable.xcstrings`.
+    private func assertLocalized(
+        _ key: String,
+        file: StaticString = #filePath,
+        line: UInt = #line
+    ) {
+        let resolved = String(
+            localized: String.LocalizationValue(key),
+            bundle: .module
+        )
+        XCTAssertNotEqual(
+            resolved,
+            key,
+            "Key '\(key)' should be resolved by Bundle.module, but returned itself raw — translation missing in Localizable.xcstrings",
+            file: file,
+            line: line
+        )
+        XCTAssertFalse(
+            resolved.isEmpty,
+            "Key '\(key)' resolved to an empty string",
+            file: file,
+            line: line
+        )
+    }
 
     // MARK: - TransportBar static label helpers
 
     func test_transportBar_playLabel_nonEmpty() {
-        // The play/pause label is a localized key — we verify the key is non-empty
-        // (SwiftUI resolves it at runtime from the bundle; the key itself is the contract).
-        let playKey = "story.timeline.transport.play"
-        let pauseKey = "story.timeline.transport.pause"
-        XCTAssertFalse(playKey.isEmpty)
-        XCTAssertFalse(pauseKey.isEmpty)
+        assertLocalized("story.timeline.transport.play")
+        assertLocalized("story.timeline.transport.pause")
     }
 
     func test_transportBar_zoomLabels_nonEmpty() {
-        let zoomOut = "story.timeline.transport.zoomOut"
-        let zoomIn = "story.timeline.transport.zoomIn"
-        let zoomReset = "story.timeline.transport.zoomReset"
-        XCTAssertFalse(zoomOut.isEmpty)
-        XCTAssertFalse(zoomIn.isEmpty)
-        XCTAssertFalse(zoomReset.isEmpty)
+        assertLocalized("story.timeline.transport.zoomOut")
+        assertLocalized("story.timeline.transport.zoomIn")
+        assertLocalized("story.timeline.transport.zoomReset")
     }
 
     func test_transportBar_muteLabels_nonEmpty() {
-        let mute = "story.timeline.transport.mute"
-        let unmute = "story.timeline.transport.unmute"
-        XCTAssertFalse(mute.isEmpty)
-        XCTAssertFalse(unmute.isEmpty)
+        assertLocalized("story.timeline.transport.mute")
+        assertLocalized("story.timeline.transport.unmute")
     }
 
     func test_transportBar_modeLabels_nonEmpty() {
-        let toPro = "story.timeline.mode.switchToPro"
-        let toQuick = "story.timeline.mode.switchToQuick"
-        XCTAssertFalse(toPro.isEmpty)
-        XCTAssertFalse(toQuick.isEmpty)
+        assertLocalized("story.timeline.mode.switchToPro")
+        assertLocalized("story.timeline.mode.switchToQuick")
     }
 
     // MARK: - TimelineToolbar static label helpers
@@ -49,20 +75,19 @@ final class VoiceOverLabelTests: XCTestCase {
     func test_toolbar_snapAccessibilityKey_nonEmpty() {
         let onKey = TimelineToolbar.snapAccessibilityKey(isOn: true)
         let offKey = TimelineToolbar.snapAccessibilityKey(isOn: false)
-        XCTAssertFalse(onKey.isEmpty, "Snap-on accessibility key must be non-empty")
-        XCTAssertFalse(offKey.isEmpty, "Snap-off accessibility key must be non-empty")
         // Keys must differ so VoiceOver conveys state change
         XCTAssertNotEqual(onKey, offKey)
+        // And both keys must resolve to real localized strings
+        assertLocalized(onKey)
+        assertLocalized(offKey)
     }
 
     func test_toolbar_undoRedoKeys_nonEmpty() {
-        // These keys are embedded as StaticString literals in the view.
-        // We validate the string constants referenced by the view.
         let undoKey = "story.timeline.toolbar.undo"
         let redoKey = "story.timeline.toolbar.redo"
-        XCTAssertFalse(undoKey.isEmpty)
-        XCTAssertFalse(redoKey.isEmpty)
         XCTAssertNotEqual(undoKey, redoKey)
+        assertLocalized(undoKey)
+        assertLocalized(redoKey)
     }
 
     // MARK: - TransportBar body renders without crash (smoke)

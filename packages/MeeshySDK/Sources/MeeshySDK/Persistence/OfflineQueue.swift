@@ -124,18 +124,139 @@ public struct OfflineDeletePayload: Codable, Sendable {
 /// reconnection. Downstream ViewModels map the optimistic `clientMessageId`
 /// to the authoritative `serverId` so the incoming `message:new` socket event
 /// reconciles instead of duplicating.
+///
+/// Wave 1 Task 3.6 — unified success payload covering both message-centric
+/// (sendMessage, editMessage, deleteMessage) and reaction (sendReaction) outbox
+/// kinds. ViewModels read `kind` to filter the subset they care about. The
+/// `serverId` is non-nil only for `.sendMessage` (the only kind that produces
+/// a new server-side id worth reconciling) — `.editMessage` / `.deleteMessage`
+/// / `.sendReaction` deliveries return `nil` since the gateway emits its own
+/// authoritative socket broadcast (`message:edited` / `message:deleted` /
+/// `reaction:added`-`reaction:removed`) that the rest of the app already
+/// consumes.
 public struct OfflineRetrySuccess: Sendable {
+    public let kind: OutboxKind
     public let clientMessageId: String
     public let serverId: String
     public let conversationId: String
+    /// Populated when the success refers to a reaction mutation
+    /// (`kind == .sendReaction`). Nil for message-centric kinds. Lets reaction
+    /// subscribers filter on `(messageId, emoji)` without re-decoding the
+    /// outbox payload.
+    public let reaction: ReactionContext?
+
     /// Backwards-compatible alias kept for existing call sites that reference
     /// `tempId`. Always equal to `clientMessageId` post-Phase-4.
     public var tempId: String { clientMessageId }
 
-    public init(clientMessageId: String, serverId: String, conversationId: String) {
+    public init(
+        clientMessageId: String,
+        serverId: String,
+        conversationId: String,
+        kind: OutboxKind = .sendMessage,
+        reaction: ReactionContext? = nil
+    ) {
+        self.kind = kind
         self.clientMessageId = clientMessageId
         self.serverId = serverId
         self.conversationId = conversationId
+        self.reaction = reaction
+    }
+
+    /// Reaction-specific metadata surfaced alongside the unified signal so
+    /// reaction subscribers (UI cells, indicators) can reconcile without
+    /// rehydrating `ReactionOutboxPayload` from the outbox table.
+    public struct ReactionContext: Sendable, Equatable {
+        public let messageId: String
+        public let emoji: String
+        public let action: ReactionAction
+
+        public init(messageId: String, emoji: String, action: ReactionAction) {
+            self.messageId = messageId
+            self.emoji = emoji
+            self.action = action
+        }
+    }
+}
+
+// MARK: - Retry Exhausted / Dropped Payloads (Wave 1 Task 3.6)
+
+/// Emitted when an outbox record exceeds its retry budget (5 attempts by
+/// default — see `OutboxFlusher.maxAttempts`) or is permanently rejected by
+/// the dispatcher (server replied with a terminal 4xx that won't change on
+/// replay). Lets ViewModels flip the optimistic row to `.failed` and surface
+/// a "tap to retry" affordance instead of leaving it stuck in `.sending`.
+///
+/// Replaces the per-queue `MessageRetryQueue.retryExhausted` +
+/// `ReactionQueue.retryExhausted` signals — subscribers filter by `kind` to
+/// pick the subset they care about.
+public struct OfflineRetryExhausted: Sendable {
+    public let kind: OutboxKind
+    public let clientMessageId: String
+    public let conversationId: String
+    /// Populated when the failure refers to a reaction mutation
+    /// (`kind == .sendReaction`). Nil otherwise.
+    public let reaction: OfflineRetrySuccess.ReactionContext?
+    /// Last error string captured on the outbox row at exhaustion time —
+    /// useful for surfacing diagnostics in admin builds. Nil if the row
+    /// never recorded an error (e.g. dispatcher returned a permanent reject
+    /// directly).
+    public let lastError: String?
+
+    /// Backwards-compatible alias kept for existing call sites that reference
+    /// `tempId`. Always equal to `clientMessageId` post-Phase-4.
+    public var tempId: String { clientMessageId }
+
+    /// Reaction-shape accessors so legacy reaction subscribers can still read
+    /// `payload.messageId / .emoji / .action` without unwrapping
+    /// `reaction` explicitly. Force-unwrap is safe at the call site because
+    /// the subscriber already filtered `kind == .sendReaction`.
+    public var messageId: String { reaction?.messageId ?? "" }
+    public var emoji: String { reaction?.emoji ?? "" }
+    public var action: ReactionAction { reaction?.action ?? .add }
+
+    public init(
+        kind: OutboxKind,
+        clientMessageId: String,
+        conversationId: String,
+        reaction: OfflineRetrySuccess.ReactionContext? = nil,
+        lastError: String? = nil
+    ) {
+        self.kind = kind
+        self.clientMessageId = clientMessageId
+        self.conversationId = conversationId
+        self.reaction = reaction
+        self.lastError = lastError
+    }
+}
+
+/// Emitted when an outbox enqueue is dropped at write time by the coalescing
+/// state machine — e.g. an `add` followed by a `remove` on the same
+/// `(messageId, emoji)` cancels both records, so neither will reach the
+/// server. ViewModels can use this to clear any "pending" hint they had
+/// surfaced for the original optimistic action.
+///
+/// Replaces `ReactionQueue.retryDropped`.
+public struct OfflineRetryDropped: Sendable {
+    public let kind: OutboxKind
+    public let clientMessageId: String
+    public let conversationId: String
+    public let reaction: OfflineRetrySuccess.ReactionContext?
+
+    public var messageId: String { reaction?.messageId ?? "" }
+    public var emoji: String { reaction?.emoji ?? "" }
+    public var action: ReactionAction { reaction?.action ?? .add }
+
+    public init(
+        kind: OutboxKind,
+        clientMessageId: String,
+        conversationId: String,
+        reaction: OfflineRetrySuccess.ReactionContext? = nil
+    ) {
+        self.kind = kind
+        self.clientMessageId = clientMessageId
+        self.conversationId = conversationId
+        self.reaction = reaction
     }
 }
 
@@ -150,7 +271,53 @@ public enum OfflineQueueError: Error, Sendable {
     case payloadCodingFailed(underlying: Error)
     /// The GRDB write transaction itself failed.
     case writeFailed(underlying: Error)
+    /// `retryItem(_:)` was called with an `outboxId` that no longer exists in
+    /// the outbox table — either it succeeded, was manually cleared, or the
+    /// caller passed a stale id.
+    case itemNotFound
 }
+
+// MARK: - Outcome
+
+/// Terminal outcome of a queued mutation, observed via `outcomeStream(for:)`.
+///
+/// - `.applied(cmid)` is emitted when the outbox row for `cmid` is removed
+///   after a successful flush (either via `retryAll`'s sendMessage path or via
+///   `OutboxFlusher`'s generic dispatch path).
+/// - `.exhausted(cmid)` is emitted when the retry budget is exhausted
+///   (`attempts >= maxAttempts`) and the row's status is flipped to
+///   `.exhausted`. The row stays in the table for manual `retryItem(_:)`.
+public enum OutboxOutcome: Sendable, Equatable {
+    case applied(cmid: String)
+    case exhausted(cmid: String)
+
+    /// The `clientMessageId` / `clientMutationId` this outcome describes,
+    /// regardless of variant — convenient for routing observers.
+    public var cmid: String {
+        switch self {
+        case .applied(let cmid), .exhausted(let cmid):
+            return cmid
+        }
+    }
+}
+
+// MARK: - Test Seam
+
+/// Subset of `OfflineQueue`'s public surface that consumers
+/// (EditProfileViewModel + other Phase 4 VMs) depend on. Lets tests
+/// inject a mock without faking the full actor.
+public protocol OfflineQueueing: Sendable {
+    @discardableResult
+    func enqueue<P: Codable & Sendable>(
+        _ kind: OutboxKind,
+        payload: P,
+        conversationId: String?
+    ) async throws -> String
+
+    func outcomeStream(for cmid: String) async -> AsyncStream<OutboxOutcome>
+}
+
+extension OfflineQueue: OfflineQueueing {}
 
 // MARK: - Offline Queue
 
@@ -158,6 +325,28 @@ public actor OfflineQueue {
     public static let shared = OfflineQueue()
 
     public nonisolated let retrySucceeded = SendablePassthrough<OfflineRetrySuccess>()
+    /// Wave 1 Task 3.6 — unified terminal-failure signal. `OutboxFlusher`
+    /// emits here when a record hits `maxAttempts`, and `OutboxDispatcher`
+    /// emits here when it raises a permanent rejection (404/410/409 conflict
+    /// for reactions) that the flusher would otherwise replay forever.
+    public nonisolated let retryExhausted = SendablePassthrough<OfflineRetryExhausted>()
+    /// Wave 1 Task 3.6 — emitted at enqueue time when the coalescing state
+    /// machine collapses a reaction toggle (add+remove cancels). Lets the UI
+    /// revert any "pending" hint without waiting for a server roundtrip.
+    public nonisolated let retryDropped = SendablePassthrough<OfflineRetryDropped>()
+
+    /// Backing subject for `pendingCountPublisher`. `nonisolated` so callers can
+    /// read the publisher synchronously from any context (e.g. SwiftUI views)
+    /// without awaiting the actor.
+    private nonisolated let pendingCountSubject = SendableCurrentValueSubject<Int>(0)
+
+    /// Publishes the current pending outbox count and every subsequent update.
+    /// Emits the latest value immediately on subscription (Combine
+    /// `CurrentValueSubject` semantics) so SwiftUI bindings render correctly
+    /// on first connect.
+    public nonisolated var pendingCountPublisher: AnyPublisher<Int, Never> {
+        pendingCountSubject.publisher
+    }
 
     private static let maxQueueSize = 100
 
@@ -174,6 +363,10 @@ public actor OfflineQueue {
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
     /// Outbox pool — injected at boot via `configure(pool:)`. Nil until wired.
     private var outboxPool: (any DatabaseWriter)?
+    /// Per-`cmid` outcome subscribers (AsyncStream continuations). A single
+    /// cmid may have multiple observers (e.g. one ViewModel + one banner) ;
+    /// each receives the same terminal event before the stream finishes.
+    private var outcomeContinuations: [String: [AsyncStream<OutboxOutcome>.Continuation]] = [:]
 
     private let encoder: JSONEncoder = {
         let e = JSONEncoder()
@@ -202,10 +395,141 @@ public actor OfflineQueue {
     /// Must be called once at boot before any `enqueue` calls.
     public func configure(pool: any DatabaseWriter) {
         outboxPool = pool
+        Task { await self.refreshPendingCount() }
     }
 
     private init() {
         Task { await self.observeConnection() }
+    }
+
+    // MARK: - Outcome Observation (Phase 4 prereq)
+
+    /// Returns an `AsyncStream` that emits the terminal `OutboxOutcome` for
+    /// the given `cmid` (clientMessageId or clientMutationId) — exactly one
+    /// `.applied` or `.exhausted` event, then the stream completes.
+    ///
+    /// Callers that subscribe AFTER the outcome has already fired receive an
+    /// empty stream that terminates immediately. The expected lifecycle is :
+    /// subscribe BEFORE issuing the mutation, then `await` the next iterator
+    /// element to observe completion.
+    public func outcomeStream(for cmid: String) -> AsyncStream<OutboxOutcome> {
+        AsyncStream { continuation in
+            self.outcomeContinuations[cmid, default: []].append(continuation)
+            continuation.onTermination = { [weak self] _ in
+                guard let self else { return }
+                Task { await self.dropContinuation(for: cmid) }
+            }
+        }
+    }
+
+    /// Emits an outcome to every observer registered for `outcome.cmid`,
+    /// finishes their streams, and clears the registry slot.
+    ///
+    /// Called from `retryAll()` (sendMessage success), from the
+    /// `OutboxFlusher.onOutcome` callback (generic dispatch success /
+    /// exhaustion), and from `retryItem(_:)` if the row is missing.
+    public func publishOutcome(_ outcome: OutboxOutcome) {
+        guard let observers = outcomeContinuations.removeValue(forKey: outcome.cmid) else {
+            return
+        }
+        for continuation in observers {
+            continuation.yield(outcome)
+            continuation.finish()
+        }
+    }
+
+    /// Internal: removes a single continuation that was cancelled by its
+    /// consumer (Task cancellation, scope exit). Idempotent — if the slot was
+    /// already cleared by `publishOutcome`, this is a no-op.
+    private func dropContinuation(for cmid: String) {
+        outcomeContinuations.removeValue(forKey: cmid)
+    }
+
+    // MARK: - Manual Retry (Phase 4 prereq)
+
+    /// Manually retries an outbox row that has previously failed or exhausted
+    /// its retry budget. Resets `attempts` to 0, clears `lastError`, flips
+    /// `status` back to `.pending`, and schedules `nextAttemptAt` for
+    /// immediate retry on the flusher's next pass.
+    ///
+    /// Throws `OfflineQueueError.itemNotFound` if no row exists for
+    /// `outboxId`. Throws `OfflineQueueError.poolNotConfigured` if
+    /// `configure(pool:)` was never called.
+    public func retryItem(_ outboxId: String) async throws {
+        guard let pool = outboxPool else {
+            throw OfflineQueueError.poolNotConfigured
+        }
+
+        let exists = (try? await pool.read { db in
+            try OutboxRecord.fetchOne(db, key: outboxId)
+        }) ?? nil
+
+        guard exists != nil else {
+            throw OfflineQueueError.itemNotFound
+        }
+
+        let now = Date()
+        do {
+            try await pool.write { db in
+                try db.execute(sql: """
+                    UPDATE outbox
+                    SET status = ?, attempts = 0, lastError = NULL,
+                        updatedAt = ?, nextAttemptAt = ?
+                    WHERE id = ?
+                    """, arguments: [
+                        OutboxStatus.pending.rawValue,
+                        now,
+                        now,
+                        outboxId
+                    ])
+            }
+        } catch {
+            logger.error("retryItem write failed: \(error.localizedDescription, privacy: .public)")
+            throw OfflineQueueError.writeFailed(underlying: error)
+        }
+
+        await refreshPendingCount()
+    }
+
+    /// Convenience wrapper for UI surfaces (e.g. failed-message bubbles) that
+    /// only know the `clientMessageId` of the optimistic message and not the
+    /// underlying outbox row id. Resolves the latest matching row by
+    /// `clientMessageId`, then delegates to `retryItem(_:)`.
+    ///
+    /// Throws `OfflineQueueError.itemNotFound` if no row exists for `cmid`.
+    public func retryByClientMessageId(_ cmid: String) async throws {
+        guard let pool = outboxPool else {
+            throw OfflineQueueError.poolNotConfigured
+        }
+        let row: OutboxRecord? = (try? await pool.read { db in
+            try OutboxRecord
+                .filter(Column("clientMessageId") == cmid)
+                .order(Column("createdAt").desc)
+                .fetchOne(db)
+        }) ?? nil
+        guard let row else {
+            throw OfflineQueueError.itemNotFound
+        }
+        try await retryItem(row.id)
+    }
+
+    // MARK: - Pending Count
+
+    /// Counts rows currently in `.pending` or `.inflight` state and updates
+    /// `pendingCountSubject`. Called after every enqueue/dequeue/retryItem
+    /// touchpoint. Falls back to the in-memory mirror if no pool is wired.
+    private func refreshPendingCount() async {
+        guard let pool = outboxPool else {
+            pendingCountSubject.send(items.count)
+            return
+        }
+        let count: Int = (try? await pool.read { db in
+            try OutboxRecord
+                .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue]
+                    .contains(Column("status")))
+                .fetchCount(db)
+        }) ?? items.count
+        pendingCountSubject.send(count)
     }
 
     // MARK: - Queue Operations
@@ -298,6 +622,25 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: createdAt
                     ).insert(db)
+
+                default:
+                    // Wave 1 Task 3.2 extended `OutboxKind` with 14 non-message
+                    // kinds. They should never share a `clientMessageId` with a
+                    // message row (different id-space: `cid_*` vs `cmid_*`), but
+                    // if a collision happens, fall through to a clean INSERT and
+                    // surface the anomaly in logs for diagnostics.
+                    Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                        .error("sendMessage collides with non-message outbox kind \(String(describing: existing?.kind), privacy: .public) on \(clientMessageId, privacy: .public) — inserting alongside")
+                    try OutboxRecord(
+                        id: outboxId,
+                        kind: .sendMessage,
+                        conversationId: conversationId,
+                        messageLocalId: clientMessageId,
+                        clientMessageId: clientMessageId,
+                        payload: payload,
+                        status: .pending,
+                        createdAt: createdAt
+                    ).insert(db)
                 }
             }
         } catch let error as OfflineQueueError {
@@ -312,6 +655,110 @@ public actor OfflineQueue {
         }
         items.append(item)
         logger.info("Enqueued offline message for conversation \(item.conversationId, privacy: .public), queue size: \(self.items.count)")
+        await refreshPendingCount()
+    }
+
+    // MARK: - Non-message mutation enqueue (Wave 1 Task 3.x)
+
+    /// Sentinel `conversationId` used for outbox rows that don't belong to a
+    /// specific conversation (profile updates, block/unblock, friend requests,
+    /// settings, etc.). The schema requires a non-null value ; a stable
+    /// sentinel keeps queries that filter by conversation from accidentally
+    /// matching these rows.
+    public static let globalConversationSentinel = "_global"
+
+    /// Generic enqueue path for non-message outbox kinds (block, friend
+    /// request, profile update, settings, etc.). Encodes the typed payload
+    /// once, writes a single `OutboxRecord` to the outbox table, and returns
+    /// immediately — the `OutboxFlusher` picks the record up on its next
+    /// drain pass and routes it to the corresponding `OutboxDispatcher` arm.
+    ///
+    /// Unlike `enqueue(_:)` (sendMessage path) this method does NOT apply
+    /// the message-coalescing state machine. Each call inserts a fresh row ;
+    /// dedup is the gateway's job via `clientMutationId` + `MutationLog`.
+    ///
+    /// `clientMutationId` is extracted from the payload by encoding-then-
+    /// decoding through a minimal envelope. This keeps the call site simple
+    /// (`enqueue(.blockUser, payload: BlockUserPayload(...))`) without
+    /// requiring a new protocol on every payload struct.
+    ///
+    /// - Parameters:
+    ///   - kind: the outbox kind ; MUST be one of the non-message kinds.
+    ///     Calling with `.sendMessage`/`.editMessage`/etc. is a programming
+    ///     error and asserts in debug builds.
+    ///   - payload: any `Codable & Sendable` mutation payload that carries
+    ///     a `clientMutationId` field.
+    ///   - conversationId: optional anchor conversation. Pass `nil` (the
+    ///     default) to use the `_global` sentinel.
+    /// - Returns: the outbox record id, so callers can correlate with
+    ///   downstream events.
+    @discardableResult
+    public func enqueue<P: Codable & Sendable>(
+        _ kind: OutboxKind,
+        payload: P,
+        conversationId: String? = nil
+    ) async throws -> String {
+        switch kind {
+        case .sendMessage, .editMessage, .deleteMessage, .sendReaction:
+            assertionFailure("enqueue(kind:payload:) is for non-message outbox kinds. Use the dedicated enqueue/enqueueEdit/enqueueDelete paths for \(kind).")
+        default:
+            break
+        }
+
+        guard let pool = outboxPool else {
+            logger.error("enqueue(kind:payload:) called before configure(pool:) — refusing to drop the mutation silently")
+            throw OfflineQueueError.poolNotConfigured
+        }
+
+        let encoded: Data
+        do {
+            encoded = try encoder.encode(payload)
+        } catch {
+            logger.error("Failed to encode payload for \(kind.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw OfflineQueueError.payloadCodingFailed(underlying: error)
+        }
+
+        // Extract clientMutationId from the encoded payload — every non-message
+        // mutation payload carries one (see `MutationPayloads.swift`). We avoid
+        // a new protocol by reading the JSON object directly. If extraction
+        // fails or the value is malformed, we still write the row but with a
+        // freshly minted cmid so the row remains observable in the outbox.
+        let cmid = Self.extractClientMutationId(from: encoded) ?? ClientMutationId.generate()
+        let outboxId = "ofqm_\(cmid)"
+        let anchor = conversationId ?? Self.globalConversationSentinel
+        let now = Date()
+
+        do {
+            try await pool.write { db in
+                try OutboxRecord(
+                    id: outboxId,
+                    kind: kind,
+                    conversationId: anchor,
+                    messageLocalId: nil,
+                    clientMessageId: cmid,
+                    payload: encoded,
+                    status: .pending,
+                    createdAt: now
+                ).insert(db)
+            }
+        } catch {
+            logger.error("Outbox write failed for \(kind.rawValue, privacy: .public): \(error.localizedDescription, privacy: .public)")
+            throw OfflineQueueError.writeFailed(underlying: error)
+        }
+
+        logger.info("Enqueued \(kind.rawValue, privacy: .public) outbox row \(outboxId, privacy: .public)")
+        await refreshPendingCount()
+        return outboxId
+    }
+
+    /// Reads the top-level `clientMutationId` field from a JSON-encoded
+    /// payload without requiring the payload type to expose a protocol.
+    private static func extractClientMutationId(from payload: Data) -> String? {
+        guard let object = try? JSONSerialization.jsonObject(with: payload) as? [String: Any],
+              let cmid = object["clientMutationId"] as? String else {
+            return nil
+        }
+        return ClientMutationId.isValid(cmid) ? cmid : nil
     }
 
     // MARK: - Audio offline (write-ahead 2-step)
@@ -457,6 +904,7 @@ public actor OfflineQueue {
         }
         items.append(item)
         logger.info("Enqueued audio for conversation \(conversationId, privacy: .public), path \(relativePath, privacy: .public)")
+        await refreshPendingCount()
 
         return EnqueueAudioResult(outboxId: outboxId, localAudioPath: relativePath)
     }
@@ -552,11 +1000,28 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: now
                     ).insert(db)
+
+                case .some(let other):
+                    // Wave 1 Task 3.2 — non-message outbox kinds. Should not
+                    // share a message `clientMessageId` ; if it ever does,
+                    // insert alongside and log so the inconsistency surfaces.
+                    log.error("editMessage collides with non-message outbox kind \(String(describing: other), privacy: .public) on \(clientMessageId, privacy: .public) — inserting alongside")
+                    try OutboxRecord(
+                        id: recordId,
+                        kind: .editMessage,
+                        conversationId: conversationId,
+                        messageLocalId: clientMessageId,
+                        clientMessageId: clientMessageId,
+                        payload: encoded,
+                        status: .pending,
+                        createdAt: now
+                    ).insert(db)
                 }
             }
         } catch {
             throw OfflineQueueError.writeFailed(underlying: error)
         }
+        await refreshPendingCount()
     }
 
     /// Persists a `deleteMessage` request. If a pending `sendMessage` or
@@ -632,6 +1097,23 @@ public actor OfflineQueue {
                         status: .pending,
                         createdAt: now
                     ).insert(db)
+
+                case .some(let other):
+                    // Wave 1 Task 3.2 — non-message outbox kinds. Should not
+                    // share a message `clientMessageId` ; if collision happens,
+                    // INSERT the delete alongside and log for diagnostics.
+                    Logger(subsystem: "com.meeshy.sdk", category: "offlinequeue")
+                        .error("deleteMessage collides with non-message outbox kind \(String(describing: other), privacy: .public) on \(clientMessageId, privacy: .public) — inserting alongside")
+                    try OutboxRecord(
+                        id: recordId,
+                        kind: .deleteMessage,
+                        conversationId: conversationId,
+                        messageLocalId: clientMessageId,
+                        clientMessageId: clientMessageId,
+                        payload: encoded,
+                        status: .pending,
+                        createdAt: now
+                    ).insert(db)
                 }
             }
         } catch {
@@ -644,12 +1126,16 @@ public actor OfflineQueue {
         // a logically-deleted message until the next app restart. The gateway
         // dedup catches the duplicate but the optimistic row would flicker.
         items.removeAll { $0.clientMessageId == clientMessageId }
+        await refreshPendingCount()
     }
 
     public func dequeue(_ itemId: String) async {
         let outboxId = "ofq_\(itemId)"
         items.removeAll { $0.id == itemId }
-        guard let pool = outboxPool else { return }
+        guard let pool = outboxPool else {
+            await refreshPendingCount()
+            return
+        }
         do {
             try await pool.write { db in
                 _ = try OutboxRecord.deleteOne(db, key: outboxId)
@@ -657,6 +1143,208 @@ public actor OfflineQueue {
         } catch {
             logger.error("dequeue failed: \(error.localizedDescription, privacy: .public)")
         }
+        await refreshPendingCount()
+    }
+
+    // MARK: - Reaction Enqueue (Wave 1 Task 3.6 — ports ReactionQueue.enqueue)
+
+    /// Persists a reaction mutation as an `OutboxRecord` of kind
+    /// `.sendReaction`, applying the same coalescing state machine that
+    /// previously lived in `ReactionQueue.enqueue`:
+    ///
+    /// - `(none)` + `add`/`remove` → INSERT
+    /// - `add` already pending + `remove` → DELETE existing (round-trip avoided)
+    /// - `remove` already pending + `add` → DELETE existing (round-trip avoided)
+    /// - same action already pending → DROP the new record (idempotent dedup)
+    ///
+    /// The SELECT-existing read and the INSERT/DELETE write happen in the
+    /// same GRDB transaction — there is no race between detection and merge.
+    /// Drop / cancel outcomes fire `retryDropped` so optimistic UI hints can
+    /// be reverted without a server roundtrip.
+    ///
+    /// Wave 1 Task 3.6 — this method replaces the actor-private
+    /// `ReactionQueue.enqueue` ; behavior is preserved byte-for-byte, only the
+    /// signaling target changes (unified `retryDropped` instead of the legacy
+    /// per-queue `ReactionQueue.retryDropped`).
+    public func enqueueReaction(
+        messageId: String,
+        emoji: String,
+        action: ReactionAction,
+        conversationId: String,
+        clientMessageId: String? = nil
+    ) async throws {
+        guard let pool = outboxPool else {
+            logger.error("enqueueReaction called before configure(pool:) — refusing to drop the reaction silently")
+            throw OfflineQueueError.poolNotConfigured
+        }
+
+        let cid = clientMessageId ?? ClientMessageId.generate()
+        // Match the legacy `rxq_<uuid>` namespace so any in-flight rows
+        // written by the deleted `ReactionQueue` continue to be drained
+        // correctly by the existing dispatcher (which routes by `kind`, not
+        // by id prefix). The UUID is generated fresh per call ; collisions
+        // on the same `(messageId, emoji)` are caught by the coalescing
+        // state machine below.
+        let outboxId = "rxq_\(UUID().uuidString)"
+        let createdAt = Date()
+        let payloadStruct = ReactionOutboxPayload(
+            messageId: messageId,
+            emoji: emoji,
+            action: action,
+            conversationId: conversationId,
+            clientMessageId: cid
+        )
+
+        let payloadData: Data
+        do {
+            payloadData = try encoder.encode(payloadStruct)
+        } catch {
+            logger.error("Failed to encode ReactionOutboxPayload: \(error.localizedDescription, privacy: .public)")
+            throw OfflineQueueError.payloadCodingFailed(underlying: error)
+        }
+
+        let dec = decoder
+        let log = logger
+
+        // Drop reasons emitted after the transaction commits. Inside the
+        // closure we cannot emit Combine values without re-entering the actor;
+        // we collect the snapshot and fire it post-commit.
+        enum CoalesceOutcome: Sendable {
+            case inserted
+            case droppedNew(matched: ReactionOutboxPayload)
+            case cancelledBoth(matched: ReactionOutboxPayload)
+        }
+
+        let outcome: CoalesceOutcome
+        do {
+            outcome = try await pool.write { db in
+                // Find any pending sendReaction record on the same conversation
+                // that matches `(messageId, emoji)`. Pending reaction queues are
+                // typically tiny so decoding the payloads inline stays fast.
+                let candidates = try OutboxRecord
+                    .filter(Column("conversationId") == conversationId)
+                    .filter(Column("kind") == OutboxKind.sendReaction.rawValue)
+                    .filter(Column("status") == OutboxStatus.pending.rawValue)
+                    .order(Column("createdAt").asc)
+                    .fetchAll(db)
+
+                let match: (record: OutboxRecord, payload: ReactionOutboxPayload)? = candidates.lazy
+                    .compactMap { record -> (OutboxRecord, ReactionOutboxPayload)? in
+                        guard let decoded = try? dec.decode(ReactionOutboxPayload.self, from: record.payload),
+                              decoded.messageId == messageId,
+                              decoded.emoji == emoji
+                        else { return nil }
+                        return (record, decoded)
+                    }
+                    .first
+
+                if let match {
+                    if match.payload.action == action {
+                        // Idempotent re-enqueue (same direction). Drop the new
+                        // record, keep the existing one untouched.
+                        log.info("Reaction \(action.rawValue, privacy: .public) \(emoji, privacy: .public) on \(messageId, privacy: .public) already pending — deduped")
+                        return .droppedNew(matched: match.payload)
+                    } else {
+                        // Opposite directions cancel. Delete the existing
+                        // pending record so neither hits the server.
+                        _ = try OutboxRecord.deleteOne(db, key: match.record.id)
+                        log.info("Reaction toggle cancelled in queue: \(match.payload.action.rawValue, privacy: .public) + \(action.rawValue, privacy: .public) on \(emoji, privacy: .public)/\(messageId, privacy: .public)")
+                        return .cancelledBoth(matched: match.payload)
+                    }
+                }
+
+                try OutboxRecord(
+                    id: outboxId,
+                    kind: .sendReaction,
+                    conversationId: conversationId,
+                    messageLocalId: cid,
+                    clientMessageId: cid,
+                    payload: payloadData,
+                    status: .pending,
+                    createdAt: createdAt
+                ).insert(db)
+                return .inserted
+            }
+        } catch {
+            logger.error("Outbox write failed for reaction: \(error.localizedDescription, privacy: .public)")
+            throw OfflineQueueError.writeFailed(underlying: error)
+        }
+
+        switch outcome {
+        case .inserted:
+            logger.info("Enqueued reaction \(action.rawValue, privacy: .public) \(emoji, privacy: .public) for message \(messageId, privacy: .public)")
+        case .droppedNew(let matched):
+            // Surface the duplicate as a drop so optimistic UI can reconcile
+            // (e.g. if the caller had already painted a "pending" badge for
+            // this very tap, the existing pending record will resolve it).
+            retryDropped.send(OfflineRetryDropped(
+                kind: .sendReaction,
+                clientMessageId: cid,
+                conversationId: conversationId,
+                reaction: OfflineRetrySuccess.ReactionContext(
+                    messageId: messageId, emoji: emoji, action: action
+                )
+            ))
+            _ = matched
+        case .cancelledBoth(let matched):
+            // Both the existing pending record and the new mutation are gone:
+            // emit a drop for each side so callers can revert optimistic
+            // visuals. The existing record is keyed off `matched`, the new one
+            // off the freshly built payload.
+            retryDropped.send(OfflineRetryDropped(
+                kind: .sendReaction,
+                clientMessageId: matched.clientMessageId,
+                conversationId: matched.conversationId,
+                reaction: OfflineRetrySuccess.ReactionContext(
+                    messageId: matched.messageId,
+                    emoji: matched.emoji,
+                    action: matched.action
+                )
+            ))
+            retryDropped.send(OfflineRetryDropped(
+                kind: .sendReaction,
+                clientMessageId: cid,
+                conversationId: conversationId,
+                reaction: OfflineRetrySuccess.ReactionContext(
+                    messageId: messageId, emoji: emoji, action: action
+                )
+            ))
+        }
+    }
+
+    /// Convenience accessor for tests / ViewModels that want to read the
+    /// current pending reaction backlog without going through the generic
+    /// outbox query. Decodes each `.sendReaction` payload and surfaces the
+    /// `(messageId, emoji, action)` triple plus the outbox row id.
+    public var pendingReactions: [ReactionOutboxPayload] {
+        get async {
+            guard let pool = outboxPool else { return [] }
+            do {
+                let dec = decoder
+                return try await pool.read { db in
+                    let records = try OutboxRecord
+                        .filter(Column("kind") == OutboxKind.sendReaction.rawValue)
+                        .filter(Column("status") == OutboxStatus.pending.rawValue)
+                        .order(Column("createdAt").asc)
+                        .fetchAll(db)
+                    return records.compactMap { record -> ReactionOutboxPayload? in
+                        try? dec.decode(ReactionOutboxPayload.self, from: record.payload)
+                    }
+                }
+            } catch {
+                logger.error("pendingReactions read failed: \(error.localizedDescription, privacy: .public)")
+                return []
+            }
+        }
+    }
+
+    /// Internal helper used by the dispatcher (and the unified retry path) to
+    /// emit a `retryExhausted` event without re-entering the actor. Lives on
+    /// `OfflineQueue` itself so the signal stays a `nonisolated let` accessed
+    /// from anywhere (including `OutboxFlusher` and `OutboxDispatcher`) with
+    /// no actor-hop overhead.
+    public nonisolated func emitRetryExhausted(_ payload: OfflineRetryExhausted) {
+        retryExhausted.send(payload)
     }
 
     public var pendingItems: [OfflineQueueItem] {
@@ -792,7 +1480,10 @@ public actor OfflineQueue {
 
         for (index, item) in items.enumerated() {
             if index > 0 {
-                let jitter = UInt64(Double.random(in: 100...500) * 1_000_000)
+                // Brief jitter to avoid a thundering-herd on the gateway when
+                // draining a large backlog — kept short so the user sees their
+                // messages confirmed quickly (was 100–500 ms, now 50–150 ms).
+                let jitter = UInt64(Double.random(in: 50...150) * 1_000_000)
                 try? await Task.sleep(nanoseconds: jitter)
             }
             if let serverId = await retrySend(item) {
@@ -833,11 +1524,13 @@ public actor OfflineQueue {
                 cached.filter { $0.id != payload.clientMessageId }
             }
             retrySucceeded.send(payload)
+            publishOutcome(.applied(cmid: payload.clientMessageId))
         }
 
         if !successIds.isEmpty {
             logger.info("Successfully retried \(successIds.count) messages, \(self.items.count) remaining")
         }
+        await refreshPendingCount()
     }
 
     // MARK: - Connection Observer
@@ -851,8 +1544,10 @@ public actor OfflineQueue {
             .sink { [weak self] _ in
                 guard let self else { return }
                 Task {
-                    // Small delay to let the connection stabilize
-                    try? await Task.sleep(nanoseconds: 2_000_000_000)
+                    // Brief delay to let the socket handshake complete before
+                    // draining the outbox — avoids sending on an unhealthy pipe
+                    // while keeping the UX snappy (was 2 000 ms, now 200 ms).
+                    try? await Task.sleep(nanoseconds: 200_000_000)
                     await self.retryAll()
                 }
             }
@@ -864,7 +1559,10 @@ public actor OfflineQueue {
     public func clearAll() async {
         let ids = items.map { $0.id }
         items.removeAll()
-        guard let pool = outboxPool else { return }
+        guard let pool = outboxPool else {
+            await refreshPendingCount()
+            return
+        }
         do {
             try await pool.write { db in
                 for id in ids {
@@ -874,6 +1572,7 @@ public actor OfflineQueue {
         } catch {
             logger.error("clearAll failed: \(error.localizedDescription, privacy: .public)")
         }
+        await refreshPendingCount()
     }
 
     // MARK: - Outbox Migration (utility / testing)
@@ -918,11 +1617,23 @@ public actor OfflineQueue {
 
     // MARK: - Legacy JSON File Deletion
 
-    /// Deletes the legacy JSON persistence file from disk.
+    /// Deletes the legacy JSON persistence files from disk.
     /// Called once on first boot after migration to the outbox pipeline.
+    ///
+    /// Wave 1 Task 3.6 — also sweeps `message_retry_queue.json` and
+    /// `reaction_queue.json`, the abandoned files owned by the deleted
+    /// `MessageRetryQueue` and `ReactionQueue` actors. Failures are silent
+    /// because the worst case is a few stale KB on disk that the next
+    /// container migration will reclaim.
     public static func deleteLegacyFile() {
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        let url = documents.appendingPathComponent("meeshy_cache/\(legacyFileName)")
-        try? FileManager.default.removeItem(at: url)
+        for name in [
+            legacyFileName,
+            "message_retry_queue.json",
+            "reaction_queue.json"
+        ] {
+            let url = documents.appendingPathComponent("meeshy_cache/\(name)")
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 }

@@ -340,19 +340,24 @@ struct FeedView: View {
     // MARK: - Feed Scroll View
     private var feedScrollView: some View {
         ScrollViewReader { scrollProxy in
-            ScrollView(showsIndicators: false) {
+            // Wrapper Meeshy : `.refreshable` natif iOS + indicator brand
+            // anime (logo dashes + degrade indigo). Meme experience que la
+            // liste de conversations — UX coherente cross-screen.
+            MeeshyRefreshableScroll(
+                onRefresh: {
+                    await viewModel.refresh()
+                },
+                coordinateSpaceName: "feedScroll",
+                onScrollOffsetChange: { offset in
+                    headerScrollOffset = offset
+                },
+                topPadding: CollapsibleHeaderMetrics.expandedHeight
+            ) {
                 LazyVStack(spacing: 16) {
-                    // Scroll offset detector
-                    GeometryReader { geo in
-                        Color.clear.preference(
-                            key: ScrollOffsetPreferenceKey.self,
-                            value: geo.frame(in: .named("feedScroll")).minY
-                        )
-                    }
-                    .frame(height: 0)
-                    .id("feed-top")
-
-                    Color.clear.frame(height: CollapsibleHeaderMetrics.expandedHeight)
+                    // Anchor pour le banner "nouveaux posts" → scroll vers
+                    // le haut. L'id est attache a un Color.clear de hauteur 0
+                    // au sommet du contenu.
+                    Color.clear.frame(height: 0).id("feed-top")
 
                     // Composer placeholder
                     composerPlaceholder
@@ -394,6 +399,18 @@ struct FeedView: View {
                         }
                     }
 
+                    // Cold-start skeleton list: only when no cached posts
+                    // AND a load is in flight. Mirrors the height of the
+                    // real cards so the surrounding layout never jumps
+                    // when the first batch arrives.
+                    if SkeletonVisibilityResolver.shouldShowSkeleton(
+                        isLoading: viewModel.isLoading,
+                        hasCachedData: !viewModel.posts.isEmpty
+                    ) {
+                        SkeletonFeedList()
+                            .transition(.opacity)
+                    }
+
                     // Posts with infinite scroll
                     ForEach(posts) { post in
                         feedPostCardView(for: post)
@@ -414,13 +431,6 @@ struct FeedView: View {
                 }
                 .padding(.top, 12)
                 .padding(.bottom, 100)
-            }
-            .coordinateSpace(name: "feedScroll")
-            .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
-                headerScrollOffset = offset
-            }
-            .refreshable {
-                await viewModel.refresh()
             }
             .overlay(alignment: .top) {
                 // "New posts" banner

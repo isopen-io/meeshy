@@ -5,7 +5,7 @@ import PencilKit
 
 // MARK: - Tool Modes
 
-enum StoryToolMode: String, CaseIterable {
+public enum StoryToolMode: String, CaseIterable, Sendable {
     // Contenu
     case media      // Images, videos, audio (foreground + background)
     case drawing
@@ -38,10 +38,24 @@ enum CanvasElementType {
     case text, image, video, audio
 }
 
-protocol CanvasElement: Identifiable {
+// Protocol is @MainActor to match the module's defaultIsolation(MainActor).
+// Identifiable is intentionally NOT inherited here — inheriting a non-isolated
+// stdlib protocol would cause the conformance to "cross" actor boundaries.
+// AnyCanvasElement conforms to Identifiable directly as a @MainActor type.
+@MainActor
+protocol CanvasElement {
     var id: String { get }
     var elementType: CanvasElementType { get }
     var zIndex: Int { get set }
+}
+
+// Explicit @MainActor matches the protocol's isolation and the module default.
+// Separate Identifiable conformance avoids the stdlib witness-mismatch issue.
+@MainActor
+struct AnyCanvasElement: CanvasElement, Identifiable {
+    var id: String
+    var elementType: CanvasElementType
+    var zIndex: Int
 }
 
 // MARK: - Media Asset
@@ -52,19 +66,223 @@ enum MediaAsset {
     case audioURL(URL)
 }
 
+// MARK: - StoryComposerProviding (Testability Seam — Sprint 6 #61)
+//
+// Protocol surface that mirrors the public + internal API the composer host
+// view (`StoryComposerView`, toolbar, timeline panel, canvas) consumes from
+// `StoryComposerViewModel`. The concrete view model conforms trivially —
+// every member below matches an existing property or method on the class
+// verbatim, so the conformance is a single `: StoryComposerProviding` on the
+// class declaration with no shim layer.
+//
+// Why a protocol? The host view's smoke / behavior tests need a way to drive
+// the composer surface without standing up the real `@Observable` class
+// (which transitively pulls `AuthManager.shared`, `CacheCoordinator.shared`,
+// `StoryTimelineEngine`, `TimelineViewModel`, `PencilKit`, etc.). A protocol
+// existential lets the tests inject `MockStoryComposerViewModel` with
+// preconfigured state and assert that user gestures end up flipping the
+// expected setters / call counters.
+//
+// Isolation: `@MainActor` matches the concrete view model's annotation. The
+// `MeeshyUI` target enables `defaultIsolation(MainActor)` (SE-0466) so any
+// adopter inherits that anyway — keeping the explicit `@MainActor` here also
+// documents the contract for adopters defined in other modules.
+//
+// `AnyObject` constrains adopters to reference types: the composer is a
+// long-lived `@Observable final class` that views hold via `@State` /
+// `@Bindable`. Mocks use the same identity-based bookkeeping.
+//
+// Members intentionally omitted (documented mismatches with earlier design):
+//   - selectElement(id:) / deselectElement() — selection happens via
+//     `selectedElementId` setter + `deselectAll()`.
+//   - setStoryDuration(_:) — duration is per-slide via `currentSlideDuration`.
+//   - attachAudioTrack(_:to:) / removeAudioTrack(from:) — handled by
+//     `addAudioObject()` + `deleteElement(id:)`.
+//   - validateForPublish() — host view callback (`onPublishSlide`), not VM.
+//   - clearFilter(slideId:) — `applyFilter(nil)` is the single path.
+@MainActor
+protocol StoryComposerProviding: AnyObject {
+
+    // MARK: Slides
+    var slides: [StorySlide] { get set }
+    var currentSlideIndex: Int { get set }
+    var slideImages: [String: UIImage] { get set }
+    var currentSlide: StorySlide { get set }
+    var currentEffects: StoryEffects { get set }
+    var canAddSlide: Bool { get }
+
+    // MARK: Repost chain (Patch B.6)
+    var repostOfId: String? { get set }
+    var originalRepostOfId: String? { get set }
+
+    // MARK: Selection + Active Tool
+    var selectedElementId: String? { get set }
+    var activeTool: StoryToolMode? { get set }
+    var isContentToolActive: Bool { get }
+
+    // MARK: Drawing
+    var drawingData: Data? { get set }
+    var drawingColor: Color { get set }
+    var drawingWidth: CGFloat { get set }
+    var isDrawingActive: Bool { get }
+
+    // MARK: Background
+    var backgroundColor: String { get set }
+    var backgroundTransform: StoryComposerViewModel.BackgroundTransform { get set }
+    func saveBackgroundTransform()
+    func restoreBackgroundTransform()
+
+    // MARK: Media Storage (pre-publication)
+    var loadedImages: [String: UIImage] { get set }
+    var loadedVideoURLs: [String: URL] { get set }
+    var loadedAudioURLs: [String: URL] { get set }
+    var mediaAspectRatios: [String: CGFloat] { get set }
+    func setAspectRatio(_ ratio: CGFloat, for mediaId: String)
+
+    // MARK: Active Drag (alignment guides + warnings)
+    var activeDrag: StoryComposerViewModel.ActiveDrag? { get set }
+    func beginDrag(elementId: String, position: CGPoint, size: CGSize)
+    func updateDrag(position: CGPoint)
+    func endDrag()
+
+    // MARK: Timeline (V1 state + V2 wiring)
+    var isTimelineVisible: Bool { get set }
+    var timelinePlaybackTime: Float { get set }
+    var isTimelinePlaying: Bool { get set }
+    var timelineZoomScale: CGFloat { get set }
+    var timelineScrollOffset: CGFloat { get set }
+    var timelineAdvanced: Bool { get set }
+    var isMuted: Bool { get set }
+    var hasBackgroundImage: Bool { get set }
+    var timelineViewModel: TimelineViewModel { get }
+    func loadCurrentSlideIntoTimeline()
+    func commitTimelineToCurrentSlide()
+
+    // MARK: Filter
+    var selectedFilter: String? { get set }
+    var filterIntensity: Double { get set }
+    var filterAppliesToEntireSlide: Bool { get set }
+    func applyFilter(_ name: String?)
+    func updateFilterIntensity(_ value: Double)
+
+    // MARK: Slide Duration
+    var currentSlideDuration: Float { get set }
+    func autoExtendDuration(forElementEnd end: Float, slideId: String?)
+
+    // MARK: Canvas Viewport
+    var canvasScale: CGFloat { get set }
+    var canvasOffset: CGSize { get set }
+    var canvasSize: CGSize { get set }
+    var isCanvasZoomed: Bool { get }
+    func resetCanvasZoom()
+    func viewportCenter() -> CGPoint
+
+    // MARK: UI State (pickers, publish progress, alerts)
+    var showPhotoPicker: Bool { get set }
+    var showVideoPicker: Bool { get set }
+    var showAudioPicker: Bool { get set }
+    var publishProgress: (current: Int, total: Int)? { get set }
+    var errorMessage: String? { get set }
+    var showDraftAlert: Bool { get set }
+
+    // MARK: Limits
+    var textCount: Int { get }
+    var mediaCount: Int { get }
+    var canAddText: Bool { get }
+    var canAddMedia: Bool { get }
+    var canAddImage: Bool { get }
+    var canAddVideo: Bool { get }
+    var canAddAudio: Bool { get }
+
+    // MARK: Slide Management
+    func addSlide()
+    func removeSlide(at index: Int)
+    func duplicateSlide(at index: Int)
+    func selectSlide(at index: Int)
+    func moveSlide(from source: Int, to destination: Int)
+
+    // MARK: Element Management
+    @discardableResult
+    func addText() -> StoryTextObject?
+    @discardableResult
+    func addMediaObject(kind: StoryMediaKind, toSlideId: String?) -> StoryMediaObject?
+    func setMediaDuration(id: String, duration: Float, slideId: String?)
+    func setMediaURL(id: String, url: String, slideId: String?)
+    @discardableResult
+    func addAudioObject() -> StoryAudioPlayerObject?
+    func deleteElement(id: String)
+    func updateElementLanguage(elementId: String, language: String)
+    func duplicateElement(id: String)
+
+    // MARK: Background toggle
+    func toggleBackground(id: String)
+    func isBackground(id: String) -> Bool
+
+    // MARK: Z-Order
+    func zIndex(for id: String) -> Int
+    func bringToFront(id: String)
+    func sendToBack(id: String)
+    func bringForward(id: String)
+    func sendBackward(id: String)
+
+    // MARK: Media Reorder
+    func moveMedia(from source: IndexSet, to destination: Int)
+
+    // MARK: Tool Actions
+    func selectTool(_ tool: StoryToolMode?)
+    func deselectAll()
+
+    // MARK: Memory Pressure & Cleanup
+    func startMemoryObserver()
+    func stopMemoryObserver()
+    func evictNonVisibleSlideMedia()
+    func cleanupTempFiles()
+
+    // MARK: Slide Image Management
+    func setImage(_ image: UIImage?, for slideId: String)
+    func imageForCurrentSlide() -> UIImage?
+
+    // MARK: Reset
+    func reset()
+}
+
 // MARK: - ViewModel
 
 @Observable
 @MainActor
-public final class StoryComposerViewModel {
+public final class StoryComposerViewModel: StoryComposerProviding {
 
-    // MARK: - Keyboard Language Detection
+    // MARK: - Source Language Resolution (Prisme Linguistique)
+
+    /// Pure resolver for the composer's source language.
+    ///
+    /// Per CLAUDE.md "Prisme Linguistique", the source language assigned to a
+    /// newly authored story element (text, media, audio) MUST come from the
+    /// user's in-app content preferences (`systemLanguage` then
+    /// `regionalLanguage`), NEVER from the device locale or the active
+    /// keyboard. A French speaker typing on an English keyboard still produces
+    /// French content; using `UITextInputMode.primaryLanguage` here would
+    /// mislabel that content as English and poison the translation pipeline.
+    ///
+    /// Resolution order matches `MeeshyUser.preferredContentLanguages` and the
+    /// gateway's `resolveUserLanguage()`:
+    /// 1. `systemLanguage` (primary in-app language)
+    /// 2. `regionalLanguage` (secondary in-app language)
+    /// 3. Hardcoded `"fr"` fallback.
+    nonisolated public static func resolveComposerSourceLanguage(
+        user: MeeshyUser?
+    ) -> String {
+        if let sys = user?.systemLanguage, !sys.isEmpty {
+            return sys
+        }
+        if let reg = user?.regionalLanguage, !reg.isEmpty {
+            return reg
+        }
+        return "fr"
+    }
 
     private var detectedKeyboardLanguage: String {
-        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
-            return String(kbd.prefix(2))
-        }
-        return AuthManager.shared.currentUser?.systemLanguage ?? "fr"
+        Self.resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)
     }
 
     // MARK: - Slides
@@ -259,13 +477,14 @@ public final class StoryComposerViewModel {
             postMediaId: "_bg_image_\(slide.id)",
             mediaType: StoryMediaKind.image.rawValue,
             placement: "media",
+            aspectRatio: 1.0, // TODO Phase 2/3: compute real aspectRatio from asset
             x: 0.5, y: 0.5,
             scale: 1.0,
             rotation: 0,
             volume: 0,
             isBackground: true,
             startTime: 0,
-            duration: slide.effects.slideDuration ?? Float(slide.duration)
+            duration: Double(slide.effects.slideDuration ?? Float(slide.duration))
         )
     }
 
@@ -471,7 +690,7 @@ public final class StoryComposerViewModel {
 
     // MARK: - Limits
 
-    var textCount: Int { currentEffects.textObjects?.count ?? 0 }
+    var textCount: Int { currentEffects.textObjects.count }
     var mediaCount: Int {
         (currentEffects.mediaObjects?.count ?? 0) +
         (currentEffects.audioPlayerObjects?.count ?? 0)
@@ -525,11 +744,93 @@ public final class StoryComposerViewModel {
         reorderSlides()
     }
 
+    /// Duplicate slide at `index`. The visual identity of the duplicated slide
+    /// MUST match the original at duplication time — same background image,
+    /// same media bitmaps, same video/audio URLs, same drawing, same filter.
+    ///
+    /// `StorySlide` itself is a value type, so the struct-level state (effects,
+    /// duration, content) clones via `var copy = slides[index]`. But the
+    /// composer holds side caches keyed by element/slide id (`loadedImages`,
+    /// `loadedVideoURLs`, `loadedAudioURLs`, `mediaAspectRatios`, `slideImages`,
+    /// `backgroundTransformCache`); these MUST be re-keyed under the freshly-
+    /// generated ids so the new slide renders with its own bitmaps instead of
+    /// landing on empty placeholders. Without this, the original slide's media
+    /// stayed visible while the duplicate showed placeholders — and any later
+    /// deletion of the original would orphan the bitmaps the duplicate was
+    /// silently still pointing at via the shared old key.
+    ///
+    /// Mirrors the per-element id reassignment performed by `duplicateElement`.
     func duplicateSlide(at index: Int) {
         guard canAddSlide, slides.indices.contains(index) else { return }
+        let originalSlideId = slides[index].id
         var copy = slides[index]
-        copy.id = UUID().uuidString
+        let newSlideId = UUID().uuidString
+        copy.id = newSlideId
         copy.order = slides.count
+
+        // Re-key per-element side caches by generating a new id for every child
+        // object and copying its bitmap / URL / aspect-ratio entry under the new
+        // key. The mutations happen on `copy.effects` (a value type) before the
+        // copy is inserted into `slides`, so the original slide is untouched.
+        var effects = copy.effects
+
+        // Text objects: ids are referenced by zIndex bookkeeping but carry no
+        // side-cache. New id keeps future selection / persistZIndex from
+        // clobbering the original text object's z value.
+        effects.textObjects = effects.textObjects.map { text in
+            var clone = text
+            clone.id = UUID().uuidString
+            return clone
+        }
+
+        // Media objects (image / video on canvas): the id keys
+        // `loadedImages` (UIImage), `loadedVideoURLs` (URL) and
+        // `mediaAspectRatios` (CGFloat). Walk the array, mint a new id for each
+        // entry, and copy the side-cache rows over to the new key.
+        if let medias = effects.mediaObjects {
+            effects.mediaObjects = medias.map { media in
+                var clone = media
+                let newId = UUID().uuidString
+                clone.id = newId
+                if let img = loadedImages[media.id] { loadedImages[newId] = img }
+                if let url = loadedVideoURLs[media.id] { loadedVideoURLs[newId] = url }
+                if let ratio = mediaAspectRatios[media.id] { mediaAspectRatios[newId] = ratio }
+                return clone
+            }
+        }
+
+        // Audio player objects: the id keys `loadedAudioURLs`.
+        if let audios = effects.audioPlayerObjects {
+            effects.audioPlayerObjects = audios.map { audio in
+                var clone = audio
+                let newId = UUID().uuidString
+                clone.id = newId
+                if let url = loadedAudioURLs[audio.id] { loadedAudioURLs[newId] = url }
+                return clone
+            }
+        }
+
+        // Stickers: no side cache, but their ids are still referenced by the
+        // composer's z-order bookkeeping (`zIndexMap`, `persistZIndex`). New
+        // id avoids accidental id collisions on subsequent edits.
+        if let stickers = effects.stickerObjects {
+            effects.stickerObjects = stickers.map { sticker in
+                var clone = sticker
+                clone.id = UUID().uuidString
+                return clone
+            }
+        }
+
+        copy.effects = effects
+
+        // Slide-level side caches keyed by slideId.
+        if let bgImage = slideImages[originalSlideId] {
+            slideImages[newSlideId] = bgImage
+        }
+        if let transform = backgroundTransformCache[originalSlideId] {
+            backgroundTransformCache[newSlideId] = transform
+        }
+
         slides.insert(copy, at: index + 1)
         currentSlideIndex = index + 1
         reorderSlides()
@@ -554,17 +855,17 @@ public final class StoryComposerViewModel {
         var map: [String: Int] = [:]
         var maxZ = 0
         let effects = currentEffects
-        for obj in (effects.textObjects ?? []) {
-            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+        for obj in effects.textObjects {
+            map[obj.id] = obj.zIndex; maxZ = max(maxZ, obj.zIndex)
         }
         for obj in (effects.mediaObjects ?? []) {
-            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+            map[obj.id] = obj.zIndex; maxZ = max(maxZ, obj.zIndex)
         }
         for obj in (effects.audioPlayerObjects ?? []) {
             if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
         }
         for obj in (effects.stickerObjects ?? []) {
-            if let z = obj.zIndex { map[obj.id] = z; maxZ = max(maxZ, z) }
+            map[obj.id] = obj.zIndex; maxZ = max(maxZ, obj.zIndex)
         }
         zIndexMap = map
         nextZIndex = maxZ + 1
@@ -593,19 +894,19 @@ public final class StoryComposerViewModel {
         guard canAddText else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
         let obj = StoryTextObject(
-            content: "",
+            text: "",
             x: center.x,
             y: center.y,
             scale: 1.0,
             rotation: 0,
-            sourceLanguage: detectedKeyboardLanguage,
+            fontSize: 24,
             textStyle: "classic",
             textColor: "FFFFFF",
-            textSize: 24,
-            textAlign: "center"
+            textAlign: "center",
+            sourceLanguage: detectedKeyboardLanguage
         )
         var effects = currentEffects
-        var texts = effects.textObjects ?? []
+        var texts = effects.textObjects
         texts.append(obj)
         effects.textObjects = texts
         currentEffects = effects
@@ -639,12 +940,13 @@ public final class StoryComposerViewModel {
             postMediaId: "",
             kind: kind,
             placement: "media",
+            aspectRatio: 1.0, // TODO Phase 2/3: compute real aspectRatio from asset
             x: center.x,
             y: center.y,
             scale: 1.0,
             rotation: 0,
             volume: 1.0,
-            isBackground: shouldBeBackground ? true : nil,
+            isBackground: shouldBeBackground,
             sourceLanguage: detectedKeyboardLanguage
         )
         var medias = targetEffects.mediaObjects ?? []
@@ -674,7 +976,28 @@ public final class StoryComposerViewModel {
         var effects = slides[targetIndex].effects
         guard var medias = effects.mediaObjects,
               let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
-        medias[mediaIdx].duration = duration
+        medias[mediaIdx].duration = Double(duration)
+        effects.mediaObjects = medias
+        slides[targetIndex].effects = effects
+    }
+
+    /// Set the `mediaURL` on a `StoryMediaObject`. Called after persisting
+    /// a composer-loaded UIImage to a temp file so the CALayer canvas
+    /// (`StoryMediaLayer.configureImage`) can load it via `file://` URL.
+    /// Without this bridge the media object's `mediaURL` stays `nil` and the
+    /// layer renders a black rectangle.
+    func setMediaURL(id: String, url: String, slideId: String? = nil) {
+        let targetIndex: Int = {
+            if let slideId, let idx = slides.firstIndex(where: { $0.id == slideId }) {
+                return idx
+            }
+            return currentSlideIndex
+        }()
+        guard slides.indices.contains(targetIndex) else { return }
+        var effects = slides[targetIndex].effects
+        guard var medias = effects.mediaObjects,
+              let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
+        medias[mediaIdx].mediaURL = url
         effects.mediaObjects = medias
         slides[targetIndex].effects = effects
     }
@@ -712,11 +1035,11 @@ public final class StoryComposerViewModel {
         // any path — context menu, timeline panel, contextual toolbar, etc.
         // The UI already hides these affordances on locked elements, but a
         // central refusal here closes any future call site we might miss.
-        if currentEffects.textObjects?.first(where: { $0.id == id })?.isLocked == true {
+        if currentEffects.textObjects.first(where: { $0.id == id })?.isLocked == true {
             return
         }
         var effects = currentEffects
-        effects.textObjects?.removeAll { $0.id == id }
+        effects.textObjects.removeAll { $0.id == id }
         effects.mediaObjects?.removeAll { $0.id == id }
         effects.audioPlayerObjects?.removeAll { $0.id == id }
         effects.stickerObjects?.removeAll { $0.id == id }
@@ -732,10 +1055,8 @@ public final class StoryComposerViewModel {
     func updateElementLanguage(elementId: String, language: String) {
         var effects = currentEffects
 
-        if var texts = effects.textObjects,
-           let idx = texts.firstIndex(where: { $0.id == elementId }) {
-            texts[idx].sourceLanguage = language
-            effects.textObjects = texts
+        if let idx = effects.textObjects.firstIndex(where: { $0.id == elementId }) {
+            effects.textObjects[idx].sourceLanguage = language
         }
 
         if var medias = effects.mediaObjects,
@@ -755,7 +1076,7 @@ public final class StoryComposerViewModel {
 
     func duplicateElement(id: String) {
         var effects = currentEffects
-        if var text = effects.textObjects?.first(where: { $0.id == id }) {
+        if var text = effects.textObjects.first(where: { $0.id == id }) {
             // Locked text objects (repost-attribution badge) are not duplicable —
             // duplicating would create a second editable copy that strips intent.
             if text.isLocked == true { return }
@@ -763,7 +1084,7 @@ public final class StoryComposerViewModel {
             text.id = UUID().uuidString
             text.x = min(1.0, text.x + 0.05)
             text.y = min(1.0, text.y + 0.05)
-            effects.textObjects?.append(text)
+            effects.textObjects.append(text)
             selectedElementId = text.id
         } else if var media = effects.mediaObjects?.first(where: { $0.id == id }) {
             guard canAddMedia else { return }
@@ -843,6 +1164,16 @@ public final class StoryComposerViewModel {
         return false
     }
 
+    // MARK: - Media Reorder
+
+    func moveMedia(from source: IndexSet, to destination: Int) {
+        var effects = currentEffects
+        guard var medias = effects.mediaObjects else { return }
+        medias.move(fromOffsets: source, toOffset: destination)
+        effects.mediaObjects = medias
+        currentEffects = effects
+    }
+
     // MARK: - Z-Order
 
     private var zIndexMap: [String: Int] = [:]
@@ -869,10 +1200,64 @@ public final class StoryComposerViewModel {
         persistZIndex(0, for: id)
     }
 
+    func bringForward(id: String) {
+        let all = allElementsSortedByZ()
+        guard let index = all.firstIndex(where: { $0.id == id }) else { return }
+        guard index < all.count - 1 else { return }
+
+        let next = all[index + 1]
+        let currentZ = zIndexMap[id] ?? zIndex(for: id)
+        let nextZ = zIndexMap[next.id] ?? zIndex(for: next.id)
+        
+        let newCurrentZ = currentZ == nextZ ? nextZ + 1 : nextZ
+        let newNextZ = currentZ == nextZ ? currentZ : currentZ
+        
+        persistZIndex(newCurrentZ, for: id)
+        persistZIndex(newNextZ, for: next.id)
+        zIndexMap[id] = newCurrentZ
+        zIndexMap[next.id] = newNextZ
+    }
+
+    func sendBackward(id: String) {
+        let all = allElementsSortedByZ()
+        guard let index = all.firstIndex(where: { $0.id == id }) else { return }
+        guard index > 0 else { return }
+
+        let prev = all[index - 1]
+        let currentZ = zIndexMap[id] ?? zIndex(for: id)
+        let prevZ = zIndexMap[prev.id] ?? zIndex(for: prev.id)
+        
+        let newCurrentZ = currentZ == prevZ ? prevZ : prevZ
+        let newPrevZ = currentZ == prevZ ? currentZ + 1 : currentZ
+        
+        persistZIndex(newCurrentZ, for: id)
+        persistZIndex(newPrevZ, for: prev.id)
+        zIndexMap[id] = newCurrentZ
+        zIndexMap[prev.id] = newPrevZ
+    }
+
+    func allElementsSortedByZ() -> [AnyCanvasElement] {
+        var elements: [AnyCanvasElement] = []
+        let effects = currentEffects
+        for t in effects.textObjects {
+            elements.append(AnyCanvasElement(id: t.id, elementType: .text, zIndex: zIndexMap[t.id] ?? t.zIndex ?? 0))
+        }
+        for m in effects.mediaObjects ?? [] {
+            elements.append(AnyCanvasElement(id: m.id, elementType: m.kind == .video ? .video : .image, zIndex: zIndexMap[m.id] ?? m.zIndex ?? 0))
+        }
+        for a in effects.audioPlayerObjects ?? [] {
+            elements.append(AnyCanvasElement(id: a.id, elementType: .audio, zIndex: zIndexMap[a.id] ?? a.zIndex ?? 0))
+        }
+        for s in effects.stickerObjects ?? [] {
+            elements.append(AnyCanvasElement(id: s.id, elementType: .image, zIndex: zIndexMap[s.id] ?? s.zIndex ?? 0))
+        }
+        return elements.sorted { $0.zIndex < $1.zIndex }
+    }
+
     private func persistZIndex(_ z: Int, for id: String) {
         var effects = currentEffects
-        if var texts = effects.textObjects, let i = texts.firstIndex(where: { $0.id == id }) {
-            texts[i].zIndex = z; effects.textObjects = texts
+        if let i = effects.textObjects.firstIndex(where: { $0.id == id }) {
+            effects.textObjects[i].zIndex = z
         } else if var medias = effects.mediaObjects, let i = medias.firstIndex(where: { $0.id == id }) {
             medias[i].zIndex = z; effects.mediaObjects = medias
         } else if var audios = effects.audioPlayerObjects, let i = audios.firstIndex(where: { $0.id == id }) {
@@ -883,6 +1268,18 @@ public final class StoryComposerViewModel {
             return  // Sticker handled by view-level state — caller patches via onUpdate
         }
         currentEffects = effects
+    }
+
+    // MARK: - Phase 3 real implementation
+
+    /// Returns true if the timeline has been customized away from defaults.
+    public var timelineHasCustomizations: Bool {
+        let p = timelineViewModel.project
+        let hasKeyframes = p.mediaObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) }) ||
+                           p.textObjects.contains(where: { !($0.keyframes?.isEmpty ?? true) })
+        let hasTransitions = !p.clipTransitions.isEmpty
+        let hasNonDefaultDuration = abs(p.slideDuration - 12.0) > 0.01
+        return hasKeyframes || hasTransitions || hasNonDefaultDuration
     }
 
     // MARK: - Tool Actions
@@ -1072,18 +1469,18 @@ public final class StoryComposerViewModel {
         let badgeText = "Reposté de @\(authorHandle)"
         let badge = StoryTextObject(
             id: UUID().uuidString,
-            content: badgeText,
+            text: badgeText,
             x: 0.5, y: 0.92,
             scale: 1.0, rotation: 0,
+            fontSize: 14,
             textStyle: "bold",
             textColor: "FFFFFF",
-            textSize: 14,
             textAlign: "center",
             textBg: "6366F1",
             isLocked: true
         )
         var effects = cloned.effects
-        var texts = effects.textObjects ?? []
+        var texts = effects.textObjects
         texts.append(badge)
         effects.textObjects = texts
         cloned.effects = effects

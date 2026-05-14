@@ -146,7 +146,7 @@ final class ConversationListViewModelTests: XCTestCase {
     func test_loadConversations_skipsFetchWhenCacheIsFresh() async {
         // Pre-populate cache so second call finds fresh data
         let conversation = makeConversation(id: "000000000000000000000001")
-        await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        try? await CacheCoordinator.shared.conversations.save([conversation], for: "list")
 
         let syncEngine = MockConversationSyncEngine()
         let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
@@ -160,7 +160,7 @@ final class ConversationListViewModelTests: XCTestCase {
     func test_loadConversations_refetchesAfterCacheInvalidation() async {
         // Pre-populate cache
         let conversation = makeConversation(id: "000000000000000000000001")
-        await CacheCoordinator.shared.conversations.save([conversation], for: "list")
+        try? await CacheCoordinator.shared.conversations.save([conversation], for: "list")
 
         let syncEngine = MockConversationSyncEngine()
         let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
@@ -1508,6 +1508,320 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertEqual(conversationService.getByIdCallCount, 0,
                        "Non-conversation-creation notifications must not fetch")
         XCTAssertTrue(sut.conversations.isEmpty)
+    }
+
+    // MARK: - conversation:new socket event (creator + invitee unified path)
+
+    /// Primary discovery path: gateway emits `conversation:new` to user-rooms
+    /// of EVERY participant — creator AND invitees. The VM fetches enriched
+    /// payload and prepends, regardless of whether self was the creator.
+    func test_conversationNewSocketEvent_unknownId_fetchesAndPrepends() async throws {
+        let messageSocket = MockMessageSocket()
+        let conversationService = MockConversationService()
+        let newConvId = "69fe2a7726e040042fd28b01"
+        let newConvJSON = """
+        {"id":"\(newConvId)","type":"direct","title":null,
+         "lastMessageAt":"2026-05-11T12:00:00.000Z",
+         "createdAt":"2026-05-11T12:00:00.000Z"}
+        """
+        conversationService.getByIdResult = .success(JSONStub.decode(newConvJSON))
+        let (sut, _, _, _, _, _, _) = makeSUT(
+            conversationService: conversationService,
+            messageSocket: messageSocket
+        )
+        sut.setConversations([
+            makeConversation(id: "a", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        ])
+
+        let event = ConversationNewEvent(
+            conversationId: newConvId,
+            conversationType: "direct",
+            title: nil,
+            creatorId: "u1",
+            participantIds: ["u1", "u2"],
+            createdAt: "2026-05-11T12:00:00.000Z"
+        )
+        messageSocket.conversationNew.send(event)
+
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if sut.conversations.first?.id == newConvId { break }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+
+        XCTAssertEqual(conversationService.getByIdCallCount, 1,
+                       "conversation:new for unknown id must trigger a getById fetch")
+        XCTAssertEqual(conversationService.lastGetByIdConversationId, newConvId)
+        XCTAssertEqual(sut.conversations.first?.id, newConvId,
+                       "Fetched conversation must be prepended at index 0")
+        XCTAssertEqual(sut.conversations.count, 2)
+    }
+
+    /// Already-known id (rare race where cache load surfaced it before the
+    /// socket event arrives) must be a no-op.
+    func test_conversationNewSocketEvent_knownId_doesNotFetch() async throws {
+        let messageSocket = MockMessageSocket()
+        let conversationService = MockConversationService()
+        let knownId = "69fe2a7726e040042fd28b02"
+        let (sut, _, _, _, _, _, _) = makeSUT(
+            conversationService: conversationService,
+            messageSocket: messageSocket
+        )
+        sut.setConversations([makeConversation(id: knownId)])
+
+        let event = ConversationNewEvent(
+            conversationId: knownId,
+            conversationType: "direct",
+            title: nil,
+            creatorId: "u1",
+            participantIds: ["u1", "u2"],
+            createdAt: "2026-05-11T12:00:00.000Z"
+        )
+        messageSocket.conversationNew.send(event)
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        XCTAssertEqual(conversationService.getByIdCallCount, 0,
+                       "Already-known conversation must NOT trigger a refetch")
+        XCTAssertEqual(sut.conversations.count, 1)
+    }
+
+    /// Critical regression guard: during the rollout window the gateway emits
+    /// BOTH `conversation:new` (typed) and `notification:new` (legacy with
+    /// type=new_conversation_direct) for the same brand-new id. The
+    /// `pendingMissingFetches` dedup must coalesce both signals into a
+    /// single getById call so we don't double-fetch or duplicate the row.
+    func test_conversationNewSocketEvent_burstWithLegacyNotification_dedupsToSingleFetch() async throws {
+        let messageSocket = MockMessageSocket()
+        let conversationService = MockConversationService()
+        let newConvId = "69fe2a7726e040042fd28b03"
+        let newConvJSON = """
+        {"id":"\(newConvId)","type":"direct","title":null,
+         "createdAt":"2026-05-11T12:00:00.000Z"}
+        """
+        conversationService.getByIdResult = .success(JSONStub.decode(newConvJSON))
+        let (sut, _, _, _, _, _, _) = makeSUT(
+            conversationService: conversationService,
+            messageSocket: messageSocket
+        )
+
+        let typedEvent = ConversationNewEvent(
+            conversationId: newConvId,
+            conversationType: "direct",
+            title: nil,
+            creatorId: "u1",
+            participantIds: ["u1", "u2"],
+            createdAt: "2026-05-11T12:00:00.000Z"
+        )
+        messageSocket.conversationNew.send(typedEvent)
+
+        let notifJSON = """
+        {"id":"notif-burst","userId":"u1","type":"new_conversation_direct",
+         "content":"legacy echo",
+         "context":{"conversationId":"\(newConvId)","conversationType":"direct"}}
+        """
+        let legacyEvent: SocketNotificationEvent = JSONStub.decode(notifJSON)
+        messageSocket.notificationReceived.send(legacyEvent)
+
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if sut.conversations.first?.id == newConvId { break }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+
+        XCTAssertEqual(conversationService.getByIdCallCount, 1,
+                       "Typed + legacy events for same id must dedup to single fetch")
+        XCTAssertEqual(sut.conversations.filter { $0.id == newConvId }.count, 1,
+                       "Single row must be prepended, not duplicated")
+    }
+
+    // MARK: - loadCategories: cache-first
+
+    /// Cache-first guarantees the section grouping has the right buckets
+    /// the very first frame after cold start. Without it the
+    /// CombineLatest4 grouping pipeline fires with userCategories=[] and
+    /// every row lands in "Other" until the network fetch completes,
+    /// causing the visible "category flash".
+    func test_loadCategories_warmCache_appliesCachedBeforeNetwork() async throws {
+        let cachedCat = ConversationCategory(id: "cat-1", name: "Work", color: "FF0000", icon: "briefcase.fill", order: 0, isExpanded: true)
+        let preferenceService = MockPreferenceService()
+        preferenceService.cachedCategoriesStub = [cachedCat]
+        preferenceService.getCategoriesResult = .success([cachedCat])  // network returns same
+        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
+
+        await sut.loadCategories()
+
+        XCTAssertEqual(sut.userCategories.count, 1, "Cached category must populate userCategories")
+        XCTAssertEqual(sut.userCategories.first?.id, "cat-1")
+        XCTAssertEqual(preferenceService.loadCachedCategoriesCallCount, 1)
+        XCTAssertEqual(preferenceService.revalidateCategoriesCallCount, 1,
+                       "Revalidate must run in background even when cache hit")
+    }
+
+    /// Cold cache: VM still must populate via network and persist for next
+    /// session. No flash because there's nothing to flash from.
+    func test_loadCategories_emptyCache_fetchesAndPersists() async throws {
+        let fresh = ConversationCategory(id: "cat-1", name: "Family", color: "00FF00", icon: "house.fill", order: 0, isExpanded: true)
+        let preferenceService = MockPreferenceService()
+        preferenceService.cachedCategoriesStub = nil
+        preferenceService.getCategoriesResult = .success([fresh])
+        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
+
+        await sut.loadCategories()
+
+        XCTAssertEqual(sut.userCategories.first?.id, "cat-1")
+        XCTAssertEqual(preferenceService.persistCategoriesCallCount, 1,
+                       "Empty-cache path must persist the fresh fetch for next session")
+        XCTAssertEqual(preferenceService.lastPersistedCategories?.first?.id, "cat-1")
+    }
+
+    /// Network failure on revalidate must NOT clobber the already-painted
+    /// cached state. Stale-while-revalidate trustfall: cached value lives
+    /// until next successful refresh, never replaced with empty.
+    func test_loadCategories_networkFailure_keepsCachedValue() async throws {
+        struct StubError: Error {}
+        let cachedCat = ConversationCategory(id: "cat-1", name: "Friends", color: "0000FF", icon: "person.2.fill", order: 0, isExpanded: true)
+        let preferenceService = MockPreferenceService()
+        preferenceService.cachedCategoriesStub = [cachedCat]
+        preferenceService.getCategoriesResult = .failure(StubError())
+        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
+
+        await sut.loadCategories()
+
+        XCTAssertEqual(sut.userCategories.first?.id, "cat-1",
+                       "Cached value must survive a revalidate failure")
+        XCTAssertEqual(preferenceService.persistCategoriesCallCount, 0,
+                       "Failed revalidate must NOT persist (no fresh value to write)")
+    }
+
+    /// Server-truth race: cache says 1 category, server now has 2 (user
+    /// added one on web). The fresh value must override the cached one and
+    /// also persist for next session.
+    func test_loadCategories_warmCache_freshFetchOverridesAndPersists() async throws {
+        let cachedCat = ConversationCategory(id: "cat-1", name: "Work", color: "FF0000", icon: "briefcase.fill", order: 0, isExpanded: true)
+        let newCat = ConversationCategory(id: "cat-2", name: "Travel", color: "00FFFF", icon: "airplane", order: 1, isExpanded: true)
+        let preferenceService = MockPreferenceService()
+        preferenceService.cachedCategoriesStub = [cachedCat]
+        preferenceService.getCategoriesResult = .success([cachedCat, newCat])
+        let (sut, _, _, _, _, _, _) = makeSUT(preferenceService: preferenceService)
+
+        await sut.loadCategories()
+
+        XCTAssertEqual(sut.userCategories.count, 2,
+                       "Fresh fetch with new category must replace stale cached value")
+        XCTAssertEqual(sut.userCategories.map(\.id).sorted(), ["cat-1", "cat-2"])
+        XCTAssertEqual(preferenceService.persistCategoriesCallCount, 1)
+        XCTAssertEqual(preferenceService.lastPersistedCategories?.count, 2)
+    }
+
+    // MARK: - recentlyCreatedAt merge protection
+
+    /// Race scenario: creator just made a conversation (broadcaster →
+    /// fetchAndPrepend tagged it in recentlyCreatedAt). A foreground delta
+    /// sync immediately runs and returns a snapshot from the gateway
+    /// aggregate that doesn't yet include the new row (eventual
+    /// consistency). Without this guard, setConversations would clobber
+    /// the new row and the user would see it disappear within seconds.
+    func test_setConversations_preservesRecentlyCreatedRowMissingFromIncoming() {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let oldA = makeConversation(id: "a", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        let oldB = makeConversation(id: "b", lastMessageAt: Date(timeIntervalSince1970: 4_000))
+        let fresh = makeConversation(id: "fresh", lastMessageAt: Date(timeIntervalSince1970: 9_000))
+        sut.setConversations([oldA, oldB, fresh])
+        sut.recentlyCreatedAt["fresh"] = Date()
+
+        // Server snapshot doesn't include "fresh" yet (aggregate lag).
+        sut.setConversations([oldA, oldB])
+
+        XCTAssertTrue(sut.conversations.contains(where: { $0.id == "fresh" }),
+                      "Recently-created row must survive a snapshot that omits it")
+        XCTAssertEqual(sut.conversations.first?.id, "fresh",
+                       "Sort order must keep the fresh (newest lastMessageAt) row at index 0")
+    }
+
+    /// After the TTL window expires, the protection MUST drop so a legitimate
+    /// cross-device delete (or aggregate purge) can take effect.
+    func test_setConversations_dropsRecentlyCreatedAfterTTLExpires() {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let t0 = Date(timeIntervalSince1970: 10_000)
+        sut.dateProvider = { t0 }
+        let oldA = makeConversation(id: "a", lastMessageAt: Date(timeIntervalSince1970: 5_000))
+        let stale = makeConversation(id: "stale", lastMessageAt: Date(timeIntervalSince1970: 9_000))
+        sut.setConversations([oldA, stale])
+        sut.recentlyCreatedAt["stale"] = t0
+
+        // Advance past TTL (30s + safety).
+        sut.dateProvider = { t0.addingTimeInterval(60) }
+        sut.setConversations([oldA])
+
+        XCTAssertFalse(sut.conversations.contains(where: { $0.id == "stale" }),
+                       "Expired recently-created entry must NOT preserve the row")
+        XCTAssertEqual(sut.conversations.map(\.id), ["a"])
+    }
+
+    /// fetchAndPrependMissingConversation must tag the inserted id so the
+    /// recentlyCreatedAt protection kicks in immediately for downstream
+    /// snapshots (no gap window between insert and tag).
+    func test_fetchAndPrependMissingConversation_tagsRecentlyCreated() async throws {
+        let conversationService = MockConversationService()
+        let newConvId = "69fe2a7726e040042fd28b04"
+        let newConvJSON = """
+        {"id":"\(newConvId)","type":"direct","title":null,
+         "createdAt":"2026-05-11T12:00:00.000Z"}
+        """
+        conversationService.getByIdResult = .success(JSONStub.decode(newConvJSON))
+        let (sut, _, _, _, _, _, _) = makeSUT(conversationService: conversationService)
+
+        sut.fetchAndPrependMissingConversation(id: newConvId)
+
+        let deadline = Date().addingTimeInterval(2)
+        while Date() < deadline {
+            if sut.recentlyCreatedAt[newConvId] != nil { break }
+            try? await Task.sleep(nanoseconds: 30_000_000)
+        }
+
+        XCTAssertNotNil(sut.recentlyCreatedAt[newConvId],
+                        "Inserted conversation must be tagged in recentlyCreatedAt")
+    }
+
+    // MARK: - schedulePersist: coalesced cache writes
+
+    /// 5 rapid mutations within the debounce window MUST collapse to a
+    /// single GRDB write. Without this, a noisy socket (e.g. group chat
+    /// where 5 participants change presence in 100 ms) would write the
+    /// entire ~50 KB conversations blob 5 times back-to-back, hammering
+    /// the disk for no benefit.
+    func test_schedulePersist_burstWithinDebounceWindow_coalesces() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.setConversations([makeConversation(id: "a")])
+        sut.persistCallCount = 0
+
+        // 5 calls within 50 ms — all should cancel each other.
+        for _ in 0..<5 {
+            sut.schedulePersist(debounce: 0.1)
+            try? await Task.sleep(nanoseconds: 10_000_000)
+        }
+
+        // Wait long enough for the LAST scheduled persist to complete.
+        try? await Task.sleep(nanoseconds: 250_000_000)
+
+        XCTAssertEqual(sut.persistCallCount, 1,
+                       "5 rapid schedulePersist calls within debounce must collapse to 1 save")
+    }
+
+    /// Spaced calls (each beyond the debounce window) must each persist —
+    /// proves the debounce is a coalesce, not a "throttle / drop after one".
+    func test_schedulePersist_spacedBeyondDebounceWindow_persistsEach() async {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        sut.setConversations([makeConversation(id: "a")])
+        sut.persistCallCount = 0
+
+        sut.schedulePersist(debounce: 0.05)
+        try? await Task.sleep(nanoseconds: 120_000_000)
+        sut.schedulePersist(debounce: 0.05)
+        try? await Task.sleep(nanoseconds: 120_000_000)
+
+        XCTAssertEqual(sut.persistCallCount, 2,
+                       "Two persists separated by > debounce window must each save")
     }
 
     // MARK: - loadMore: cursor-based pagination

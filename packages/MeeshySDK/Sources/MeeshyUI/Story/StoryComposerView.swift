@@ -26,12 +26,17 @@ public enum StoryBackgroundPalette {
     ]
 
     public static func randomBackgroundColor() -> String {
+        // Soft pastel palette : low saturation + very high brightness keeps
+        // each pick desaturated enough that the picker tiles + text overlays
+        // stay clearly legible on top. Higher saturation (>0.25) tinted the
+        // canvas too strongly and washed out the tile contents. Aligned with
+        // the glass-aesthetic shift (commit `59b90364`).
         let existingSet = Set(colors.map { $0.uppercased() })
         var hex: String
         repeat {
             let hue = Double.random(in: 0...1)
-            let saturation = Double.random(in: 0.5...0.9)
-            let brightness = Double.random(in: 0.2...0.7)
+            let saturation = Double.random(in: 0.14...0.24)
+            let brightness = Double.random(in: 0.93...0.98)
             let color = UIColor(hue: hue, saturation: saturation, brightness: brightness, alpha: 1.0)
             var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0
             color.getRed(&r, green: &g, blue: &b, alpha: nil)
@@ -71,6 +76,10 @@ public struct StoryComposerView: View {
 
     @State private var viewModel = StoryComposerViewModel()
 
+    // MARK: - System environment
+
+    @Environment(\.colorScheme) private var colorScheme
+
     // MARK: - Canvas-local state (PKCanvasView must be @State)
 
     @State private var drawingCanvas = PKCanvasView()
@@ -91,6 +100,13 @@ public struct StoryComposerView: View {
 
     @State private var fgMediaItem: PhotosPickerItem?
 
+    // MARK: - Empty-state picker selection animation
+    //
+    // Briefly latched when the user taps a tile in `emptyStateLargePicker`,
+    // before the selection propagates to `viewModel.selectTool(_:)`. Drives
+    // the highlight + fade-others animation in `largeToolTile`.
+    @State private var pickerSelectedTool: StoryToolMode?
+
     // MARK: - Media editor (triggered by edit button on canvas elements)
 
     @State private var editingBgImage: UIImage?
@@ -101,12 +117,12 @@ public struct StoryComposerView: View {
 
     @State private var showAudioDocumentPicker = false
     @State private var showVoiceRecorderSheet = false
-    @State private var storyLanguage: String = {
-        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
-            return String(kbd.prefix(2))
-        }
-        return AuthManager.shared.currentUser?.systemLanguage ?? "fr"
-    }()
+    // Prisme Linguistique: the story's source language comes from the user's
+    // in-app content preferences (systemLanguage → regionalLanguage → "fr"),
+    // NEVER from the keyboard locale. See `StoryComposerViewModel
+    // .resolveComposerSourceLanguage(user:)` for the canonical resolver.
+    @State private var storyLanguage: String = StoryComposerViewModel
+        .resolveComposerSourceLanguage(user: AuthManager.shared.currentUser)
     @State private var showFilterSheet = false
     @State private var showTransitionSheet = false
     @State private var audioEditorItem: AudioEditorItemWrapper?
@@ -164,10 +180,19 @@ public struct StoryComposerView: View {
     /// Top bar hides during free canvas manipulation (zoomed, no tool/selection)
     /// to reveal canvas controls underneath. Reappears when activating a tool or selecting media.
     private var showTopBar: Bool {
-        !viewModel.isCanvasZoomed || viewModel.activeTool != nil || viewModel.selectedElementId != nil
+        (!viewModel.isCanvasZoomed && areFabsVisible) || viewModel.activeTool != nil || viewModel.selectedElementId != nil
+    }
+
+    // MARK: - Pickers
+    private var transitionPicker: some View {
+        Text("Transitions")
+            .foregroundColor(.white)
     }
 
     // MARK: - UI state
+
+    @State private var areFabsVisible: Bool = true
+    @State private var bandStateMachine: BandStateMachine = BandStateMachine()
 
     @State private var showDiscardAlert = false
     @State private var showRestoreDraftAlert = false
@@ -234,87 +259,14 @@ public struct StoryComposerView: View {
 
     // MARK: - Body
 
-    public var body: some View {
+    private var mainContent: some View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            // Canvas with viewport pan/zoom (2 fingers)
-            StoryCanvasView(
-                viewModel: viewModel,
-                drawingCanvas: $drawingCanvas,
-                drawingTool: $drawingTool,
-                selectedFilter: $selectedFilter,
-                selectedImage: $selectedImage,
-                stickerObjects: $stickerObjects,
-                onEditText: { id in
-                    viewModel.selectedElementId = id
-                    viewModel.activeTool = .text
-                },
-                onEditMedia: { id in
-                    viewModel.selectedElementId = id
-                    openMediaEditor(elementId: id)
-                }
-            )
-            .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
-            .offset(
-                x: viewModel.canvasOffset.width + viewportDragDelta.width,
-                y: viewModel.canvasOffset.height + viewportDragDelta.height
-            )
-            // .gesture (not .highPriority/.simultaneous) — child element gestures
-            // naturally take priority. Canvas gestures only fire on empty areas.
-            .gesture(isCanvasGestureEnabled ? viewportPinchGesture : nil)
-            .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
-            .overlay {
-                if isLoadingMedia {
-                    Color.black.opacity(0.4)
-                        .overlay {
-                            VStack(spacing: 12) {
-                                ZStack {
-                                    Circle()
-                                        .stroke(Color.white.opacity(0.2), lineWidth: 4)
-                                        .frame(width: 56, height: 56)
-                                    Circle()
-                                        .trim(from: 0, to: mediaLoadProgress)
-                                        .stroke(MeeshyColors.brandGradient, style: StrokeStyle(lineWidth: 4, lineCap: .round))
-                                        .frame(width: 56, height: 56)
-                                        .rotationEffect(.degrees(-90))
-                                        .animation(.easeInOut(duration: 0.3), value: mediaLoadProgress)
-                                    Text("\(Int(mediaLoadProgress * 100))%")
-                                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                                        .foregroundColor(.white)
-                                }
-                                if !mediaLoadLabel.isEmpty {
-                                    Text(mediaLoadLabel)
-                                        .font(.system(size: 12, weight: .medium))
-                                        .foregroundColor(.white.opacity(0.8))
-                                }
-                            }
-                        }
-                        .allowsHitTesting(false)
-                        .transition(.opacity)
-                }
-            }
-            .overlay(alignment: .topTrailing) {
-                if viewModel.isCanvasZoomed {
-                    Button {
-                        withAnimation(.spring(response: 0.3)) {
-                            viewModel.resetCanvasZoom()
-                        }
-                    } label: {
-                        Image(systemName: "arrow.uturn.backward")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .frame(width: 30, height: 30)
-                            .background(Circle().fill(.black.opacity(0.5)))
-                    }
-                    // When top bar is hidden, move button up to safe area top
-                    .padding(.top, showTopBar ? 70 : 16)
-                    .padding(.trailing, 12)
-                    .transition(.scale.combined(with: .opacity))
-                    .animation(.spring(response: 0.3), value: showTopBar)
-                }
-            }
-            .ignoresSafeArea()
+            // Canvas core (CALayer) + drawing overlay + viewport modifiers,
+            // extracted into `canvasComposerLayer` so the SwiftUI type-checker
+            // doesn't time out on this body's full modifier chain.
+            canvasComposerLayer
 
             // Top bar — auto-hides during canvas zoom to reveal canvas controls
             VStack(spacing: 0) {
@@ -326,19 +278,31 @@ public struct StoryComposerView: View {
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showTopBar)
 
-            // Bottom: toolbar + active panel
-            VStack(spacing: 0) {
-                Spacer()
-                bottomOverlay
-            }
+            // Bottom: toolbar + active panel.
+            // When the composer is empty (no content + no tool selected) we
+            // swap the compact toolbar for `emptyStateLargePicker` — large
+            // rectangular tiles in a horizontal carousel taking the bottom
+            // half of the screen. The compact toolbar comes back as soon as
+            // a tool is selected OR a slide has any content.
+            bottomRegion
         }
         .statusBarHidden()
         .onAppear {
             viewModel.startMemoryObserver()
             viewModel.loadCurrentSlideIntoTimeline()
+            // Apply the random pastel background (initialised on VM) to the
+            // current slide right away so the canvas previews the chosen
+            // color instead of staying black until the user touches anything.
+            // Without this, `slide.effects.background` is nil and the canvas
+            // falls back to opaque black.
+            if viewModel.currentSlide.effects.background == nil {
+                syncCurrentSlideEffects()
+            }
         }
         .onChange(of: viewModel.currentSlideIndex) { _, _ in
             viewModel.loadCurrentSlideIntoTimeline()
+            bandStateMachine.reset()
+            areFabsVisible = true
         }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
@@ -349,6 +313,27 @@ public struct StoryComposerView: View {
             // Cleanup happens after upload completes in StoryViewModel.launchUploadTask.
         }
         .onChange(of: fgMediaItem) { _, item in handleForegroundMediaSelection(from: item) }
+        // Real-time canvas sync — Task 2.18 migration. Toolbars + sheets
+        // mutate composer-local @State (`selectedFilter`, `stickerObjects`,
+        // `selectedImage`, …); the CALayer canvas reads from
+        // `viewModel.currentSlide.effects` exclusively, so re-serialize on
+        // each toolbar mutation. Five separate `.onChange` modifiers tipped
+        // the type-checker over the time-out threshold, so we collapse them
+        // into a single extension modifier to maintain performance in O(1).
+        .granularCanvasSync(
+            filter: selectedFilter?.rawValue,
+            hasImage: selectedImage != nil,
+            stickersCount: stickerObjects.count,
+            drawingCount: viewModel.drawingData?.count ?? 0,
+            bgColor: viewModel.backgroundColor,
+            action: { syncCurrentSlideEffects() }
+        )
+    }
+
+    // Sheets and full-screen covers are extracted here to keep `body` small
+    // enough for the SwiftUI type-checker to handle within its time budget.
+    private var sheetModifiers: some View {
+        mainContent
         .fileImporter(isPresented: $showAudioDocumentPicker, allowedContentTypes: [.audio], allowsMultipleSelection: false) { result in
             if case .success(let urls) = result, let url = urls.first {
                 mediaAudioEditorItem = AudioEditorItemWrapper(url: url)
@@ -393,27 +378,14 @@ public struct StoryComposerView: View {
         }
         .sheet(isPresented: $viewModel.isTimelineVisible,
                onDismiss: { viewModel.commitTimelineToCurrentSlide() }) {
-            timelineSection
-                // `.fraction(0.45)` ≈ enough to surface the toolbar + transport
-                // + ruler + 2 tracks without obscuring the canvas; users can
-                // drag up to .large for full Pro layout. Removing `.medium`
-                // (which is OS-defined, ~50%) and replacing with a hand-tuned
-                // fraction gives a tighter "tools strip" feel.
+            TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
                 .presentationDetents([.fraction(0.45), .large])
                 .presentationDragIndicator(.visible)
-                // Glass background — the canvas behind shows through, giving
-                // the editor a "floating tools" feel rather than a flat sheet
-                // that hides the slide. Keeps the user's mental model: "I'm
-                // editing this slide" instead of "I'm in a separate screen."
                 .presentationBackground(.ultraThinMaterial)
                 .presentationContentInteraction(.scrolls)
                 .presentationCornerRadius(28)
         }
         .onChange(of: viewModel.isTimelineVisible) { _, isVisible in
-            // Refresh the timeline whenever the sheet opens so any media
-            // added between mount and sheet-open (e.g. a background image
-            // dropped via the composer toolbar) is reflected immediately
-            // instead of only on next slide change.
             if isVisible { viewModel.loadCurrentSlideIntoTimeline() }
         }
         .sheet(isPresented: $showFilterSheet) {
@@ -482,6 +454,10 @@ public struct StoryComposerView: View {
                 onCancel: { editingElementVideo = nil }
             )
         }
+    }
+
+    public var body: some View {
+        sheetModifiers
         .alert(String(localized: "story.composer.resumeStory", defaultValue: "Reprendre votre story ?", bundle: .module), isPresented: $showRestoreDraftAlert) {
             Button(String(localized: "story.composer.resume", defaultValue: "Reprendre", bundle: .module)) { restoreDraft() }
             Button(String(localized: "story.composer.clearDraft", defaultValue: "Effacer le brouillon", bundle: .module), role: .destructive) { clearAllDrafts() }
@@ -519,6 +495,35 @@ public struct StoryComposerView: View {
         .onAppear { checkForDraft() }
     }
 
+    private var bottomRegion: some View {
+        VStack(spacing: 0) {
+            Spacer()
+            if shouldShowEmptyStateLargePicker {
+                emptyStateLargePicker
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                ComposerControlsLayer(
+                    viewModel: viewModel,
+                    bandStateMachine: $bandStateMachine,
+                    areFabsVisible: $areFabsVisible,
+                    drawingCanvas: $drawingCanvas,
+                    drawingTool: $drawingTool,
+                    selectedFilter: $selectedFilter,
+                    fgMediaItem: $fgMediaItem,
+                    showAudioDocumentPicker: $showAudioDocumentPicker,
+                    showVoiceRecorderSheet: $showVoiceRecorderSheet,
+                    onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
+                    onOpenFilterForElement: { id in
+                        viewModel.selectedElementId = id
+                        viewModel.activeTool = .filters
+                    }
+                )
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.85),
+                   value: shouldShowEmptyStateLargePicker)
+    }
+
     // MARK: - Top Bar
 
     private var topBar: some View {
@@ -537,9 +542,9 @@ public struct StoryComposerView: View {
             .padding(.trailing, 16)
         }
         .frame(height: 60)
-        .background(
-            Color.black.opacity(0.45)
-                .background(.ultraThinMaterial.opacity(0.6))
+        .background(.ultraThinMaterial)
+        .clipShape(
+            RoundedRectangle(cornerRadius: 0)
         )
     }
 
@@ -635,7 +640,18 @@ public struct StoryComposerView: View {
                 Label(String(localized: "story.composer.visibility", defaultValue: "Visibilite", bundle: .module), systemImage: "eye")
             }
             Divider()
-            Button(role: .destructive) { viewModel.reset() } label: {
+            Button(role: .destructive) {
+                // Bug fix: viewModel.reset() wipes ViewModel data (slides, effects,
+                // images), but composer-local @State (stickerObjects, selectedFilter,
+                // openingEffect, closingEffect, selectedImage, audio inputs, drawing
+                // canvas, picker scratch) survives. The canvasSyncFingerprint chain
+                // (.onChange → syncCurrentSlideEffects → buildEffects) re-injects
+                // those stale local values into the fresh empty slide, making
+                // "deleted" elements reappear. resetLocalState() clears them in
+                // lock-step so the sync writes back a truly empty effects payload.
+                viewModel.reset()
+                resetLocalState()
+            } label: {
                 Label(String(localized: "story.composer.deleteAllSlides", defaultValue: "Supprimer tous les slides", bundle: .module), systemImage: "trash")
             }
         } label: {
@@ -716,33 +732,401 @@ public struct StoryComposerView: View {
         }
     }
 
-    // MARK: - Bottom Overlay
+    // MARK: - Empty-State Large Picker
+    //
+    // Shown in place of the compact toolbar when the composer canvas is empty
+    // (no media, no text, no sticker, no drawing, no background) AND no tool
+    // is currently active. Surface a roomy carousel of large rectangular
+    // tiles so the user discovers the available creation modes immediately
+    // — better space utilization than ~70% black canvas + tiny pills row.
+    // The current compact toolbar comes back the moment a tool is selected
+    // OR any content is added.
 
-    private var bottomOverlay: some View {
-        VStack(spacing: 0) {
-            ContextualToolbar(viewModel: viewModel)
-                .padding(.top, 6)
-                .padding(.bottom, viewModel.activeTool != nil ? 4 : 0)
-
-            if viewModel.activeTool != nil {
-                Rectangle().fill(Color.white.opacity(0.06)).frame(height: 0.5)
-                activeToolPanel
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+    /// True when the entire composer carries no authoring state yet — used
+    /// to decide whether to surface the discovery-mode large picker.
+    ///
+    /// `slide.effects.background` is intentionally NOT in the check because
+    /// it is always auto-populated with a random pastel on composer open
+    /// (see `.onAppear` → `syncCurrentSlideEffects`). The background being
+    /// set therefore tells us nothing about user intent — only explicit
+    /// content additions (text / media / sticker / drawing) flip the slide
+    /// out of empty state.
+    private var isComposerEmpty: Bool {
+        let slidesEmpty = viewModel.slides.allSatisfy { slide in
+            slide.content == nil
+                && viewModel.slideImages[slide.id] == nil
+                && slide.effects.textObjects.isEmpty
+                && (slide.effects.mediaObjects ?? []).isEmpty
+                && (slide.effects.stickerObjects ?? []).isEmpty
+                && slide.effects.drawingData == nil
         }
-        .padding(.bottom, safeAreaBottomInset)
-        .background(
-            Group {
-                if viewModel.activeTool != nil {
-                    Color.black.opacity(0.55)
-                        .background(.ultraThinMaterial.opacity(0.7))
-                } else {
-                    Color.clear
-                }
+        return slidesEmpty
+            && stickerObjects.isEmpty
+            && viewModel.drawingData == nil
+    }
+
+    private var shouldShowEmptyStateLargePicker: Bool {
+        // Le picker grand format n'est montré QUE quand :
+        //  - aucun outil n'est sélectionné côté viewModel,
+        //  - le bandeau d'outils est complètement masqué (.hidden — le
+        //    `bandStateMachine` peut être pré-ouvert via empty-state → tile,
+        //    auquel cas le panel doit prendre toute la place),
+        //  - et le slide n'a aucun contenu réel.
+        // Sans le check `state == .hidden`, le picker pouvait persister visuellement
+        // derrière le bandeau pendant les transitions (le band est animé via spring
+        // et le if/else était insuffisant pendant le mid-transition).
+        viewModel.activeTool == nil
+            && isComposerEmpty
+            && bandStateMachine.state == .hidden
+    }
+
+    /// Pastel accent color per tile. Picks a distinct hue so the carousel
+    /// feels lively without breaking from the brand palette. Each accent is
+    /// applied at low opacity behind the icon glyph (soft tinted card).
+    private func tileAccent(for tool: StoryToolMode) -> Color {
+        switch tool {
+        case .media:    return MeeshyColors.coral          // peachy red
+        case .text:     return MeeshyColors.indigo400      // soft lavender
+        case .drawing:  return MeeshyColors.success        // mint green
+        case .texture:  return MeeshyColors.warning        // butter yellow
+        case .filters:  return MeeshyColors.info           // sky blue
+        case .timeline: return MeeshyColors.indigo300      // pale indigo
+        }
+    }
+
+    @ViewBuilder
+    private var emptyStateLargePicker: some View {
+        VStack(spacing: 8) {
+            VStack(spacing: 2) {
+                Text(String(localized: "story.composer.empty.title",
+                            defaultValue: "Commencez votre story",
+                            bundle: .module))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundStyle(MeeshyColors.brandGradient)
+                Text(String(localized: "story.composer.empty.subtitle",
+                            defaultValue: "Choisissez un outil pour démarrer",
+                            bundle: .module))
+                    .font(.system(size: 11))
+                    .foregroundColor((colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.7))
             }
+            .padding(.top, 8)
+            .opacity(pickerSelectedTool == nil ? 1 : 0)
+            .scaleEffect(pickerSelectedTool == nil ? 1 : 0.95)
+
+            // 4 tiles in a 2-column grid fit comfortably without scrolling.
+            // The grid sizes to its content (~190pt) so the picker stays at
+            // the bottom and leaves ≥ 80 % of the screen for the top bar +
+            // canvas pastel preview, per the empty-state UX brief.
+            LazyVGrid(
+                columns: [
+                    GridItem(.flexible(), spacing: 10),
+                    GridItem(.flexible(), spacing: 10)
+                ],
+                spacing: 10
+            ) {
+                    largeToolTile(
+                        .media,
+                        icon: "play.rectangle.fill",
+                        title: String(localized: "story.composer.empty.tile.media",
+                                      defaultValue: "Médias",
+                                      bundle: .module),
+                        subtitle: String(localized: "story.composer.empty.tile.media.sub",
+                                         defaultValue: "Photos, vidéos, audio",
+                                         bundle: .module)
+                    )
+                    largeToolTile(
+                        .text,
+                        icon: "textformat",
+                        title: String(localized: "story.composer.empty.tile.text",
+                                      defaultValue: "Texte",
+                                      bundle: .module),
+                        subtitle: String(localized: "story.composer.empty.tile.text.sub",
+                                         defaultValue: "Style, couleur, verre",
+                                         bundle: .module)
+                    )
+                    largeToolTile(
+                        .drawing,
+                        icon: "pencil.tip",
+                        title: String(localized: "story.composer.empty.tile.drawing",
+                                      defaultValue: "Dessin",
+                                      bundle: .module),
+                        subtitle: String(localized: "story.composer.empty.tile.drawing.sub",
+                                         defaultValue: "Pencil et couleurs",
+                                         bundle: .module)
+                    )
+                largeToolTile(
+                    .texture,
+                    icon: "paintpalette.fill",
+                    title: String(localized: "story.composer.empty.tile.texture",
+                                  defaultValue: "Fond",
+                                  bundle: .module),
+                    subtitle: String(localized: "story.composer.empty.tile.texture.sub",
+                                     defaultValue: "Couleur, dégradé",
+                                     bundle: .module)
+                )
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 8)
+        }
+        .padding(.bottom, safeAreaBottomInset + 12)
+        .frame(maxWidth: .infinity)
+        .background(
+            UnevenRoundedRectangle(
+                topLeadingRadius: 24,
+                bottomLeadingRadius: 0,
+                bottomTrailingRadius: 0,
+                topTrailingRadius: 24,
+                style: .continuous
+            )
+            // Aligné sur la même charte que `ComposerBottomBand` : un tint
+            // opaque adaptatif (blanc en light / indigo950 en dark) pour rester
+            // lisible quelle que soit la couleur du canvas (pastel/photo) en
+            // arrière-plan. Avant: `.ultraThinMaterial` qui se faisait teinter
+            // par la slide et écrasait le contraste des sous-titres.
+            .fill(colorScheme == .dark
+                ? MeeshyColors.indigo950.opacity(0.92)
+                : Color.white.opacity(0.92))
+            .overlay(
+                UnevenRoundedRectangle(
+                    topLeadingRadius: 24,
+                    bottomLeadingRadius: 0,
+                    bottomTrailingRadius: 0,
+                    topTrailingRadius: 24,
+                    style: .continuous
+                )
+                .stroke(
+                    (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.08),
+                    lineWidth: 0.5
+                )
+            )
+            .shadow(color: .black.opacity(0.20), radius: 14, y: -6)
             .ignoresSafeArea(edges: .bottom)
         )
-        .animation(.spring(response: 0.3, dampingFraction: 0.85), value: viewModel.activeTool)
+    }
+
+    @ViewBuilder
+    private func largeToolTile(
+        _ tool: StoryToolMode,
+        icon: String,
+        title: String,
+        subtitle: String
+    ) -> some View {
+        let accent = tileAccent(for: tool)
+        let isSelected = pickerSelectedTool == tool
+        let isOtherSelected = pickerSelectedTool != nil && pickerSelectedTool != tool
+
+        Button {
+            // Selection animation : briefly highlight the tapped tile + fade
+            // the others before propagating to viewModel.selectTool. The
+            // resulting activeTool change flips `shouldShowEmptyStateLargePicker`
+            // to false and the outer spring animates the picker out, revealing
+            // the compact toolbar + active panel beneath. ~220ms total before
+            // the swap fires so the highlight is perceivable.
+            HapticFeedback.medium()
+            withAnimation(.spring(response: 0.22, dampingFraction: 0.6)) {
+                pickerSelectedTool = tool
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.22) {
+                // For the Text tile, jump straight into the inline editor :
+                // viewModel.addText() itself spawns a fresh text + sets
+                // selectedElementId + sets activeTool = .text, so calling
+                // selectTool(.text) before it would toggle activeTool off
+                // when addText then re-sets it back — and the @Observable
+                // re-render race could leave activeTool nil at the end.
+                // Adopt the simpler invariant : addText is the sole entry
+                // point for the .text tool when the slide has no text yet.
+                if tool == .text,
+                   viewModel.currentEffects.textObjects.isEmpty {
+                    _ = viewModel.addText()
+                } else {
+                    viewModel.selectTool(tool)
+                }
+                // Auto-open the band to the selected tool's category + panel
+                // so controls appear immediately when the empty-state picker
+                // transitions out. Without this, the band stayed .hidden and
+                // the user had to manually tap a FAB to reveal controls.
+                bandStateMachine.tapFAB(tool.bandCategory)
+                bandStateMachine.tapTile(tool)
+                pickerSelectedTool = nil
+            }
+        } label: {
+            HStack(spacing: 10) {
+                ZStack {
+                    Circle()
+                        .fill(accent.opacity(isSelected ? 0.55 : 0.30))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: icon)
+                        .font(.system(size: 22, weight: .semibold))
+                        .foregroundStyle(accent)
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    // Couleur adaptée au mode système — sur fond pastel clair
+                    // le blanc sur clair était illisible. On utilise indigo950
+                    // en light mode (contraste sur pastel) et blanc en dark.
+                    Text(title)
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+                        .lineLimit(1)
+                    Text(subtitle)
+                        .font(.system(size: 11))
+                        .foregroundColor((colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.75))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity)
+            .frame(height: 72)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    // Uniform pastel tint matching the tile's accent — replaces
+                    // the previous .ultraThinMaterial gray fill so each tile
+                    // reads as its own color instead of a generic glass card.
+                    .fill(accent.opacity(0.20))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18, style: .continuous)
+                            .stroke(accent.opacity(isSelected ? 0.75 : 0.40), lineWidth: isSelected ? 2 : 1)
+                    )
+            )
+            .shadow(color: accent.opacity(isSelected ? 0.45 : 0), radius: 14, y: 4)
+            .scaleEffect(isSelected ? 1.05 : 1.0)
+            .opacity(isOtherSelected ? 0.30 : 1.0)
+            // Outer padding gives the scale-up animation room to breathe
+            // without being clipped by the grid cell — without it, the
+            // selected tile's enlarged corners touch neighbouring tiles
+            // and shadow gets cropped.
+            .padding(6)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityHint(subtitle)
+    }
+
+    // MARK: - Canvas + Drawing Layer (Task 2.18)
+
+    /// CALayer-based canvas + drawing overlay + viewport transform/gestures
+    /// + loading + zoom-reset overlays. Extracted so the SwiftUI type-checker
+    /// doesn't time out on the parent body.
+    @ViewBuilder
+    private var canvasComposerLayer: some View {
+        canvasCore
+            .scaleEffect(viewModel.canvasScale * viewportPinchDelta)
+            .offset(
+                x: viewModel.canvasOffset.width + viewportDragDelta.width,
+                y: viewModel.canvasOffset.height + viewportDragDelta.height
+            )
+            .gesture(isCanvasGestureEnabled ? viewportPinchGesture : nil)
+            .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
+            .overlay { mediaLoadingOverlay }
+            .overlay(alignment: .topTrailing) { canvasZoomResetButton }
+            .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private var canvasCore: some View {
+        StoryComposerCanvasView(
+            slide: $viewModel.currentSlide,
+            onItemDoubleTapped: { id, kind in
+                HapticFeedback.medium()
+                viewModel.selectedElementId = id
+                switch kind {
+                case .text:
+                    // Open inline text editing
+                    bandStateMachine.openFormatPanel(.text, id: id)
+                case .media:
+                    // Open dedicated full-screen media editor (image crop / video editor)
+                    openMediaEditor(elementId: id)
+                case .sticker:
+                    break
+                }
+            },
+            onItemDuplicated: { oldId, newId, kind in
+                // Context-menu "Dupliquer" path mutates the slide directly inside
+                // StoryCanvasUIView, but the ephemeral preview caches (loadedImages /
+                // loadedVideoURLs) live on the viewModel. Mirror them under the new
+                // UUID so the duplicated row shows its thumbnail immediately and
+                // CALayer media rendering picks it up on the next rebuild.
+                if kind == .media {
+                    if let img = viewModel.loadedImages[oldId] {
+                        viewModel.loadedImages[newId] = img
+                    }
+                    if let url = viewModel.loadedVideoURLs[oldId] {
+                        viewModel.loadedVideoURLs[newId] = url
+                    }
+                }
+            }
+        )
+        .allowsHitTesting(!viewModel.isDrawingActive)
+        .overlay {
+            if viewModel.isDrawingActive {
+                DrawingOverlayView(
+                    drawingData: $viewModel.drawingData,
+                    isActive: .constant(true),
+                    canvasView: $drawingCanvas,
+                    toolColor: $viewModel.drawingColor,
+                    toolWidth: $viewModel.drawingWidth,
+                    toolType: $drawingTool
+                )
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var mediaLoadingOverlay: some View {
+        if isLoadingMedia {
+            Color.black.opacity(0.4)
+                .overlay {
+                    VStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .stroke(Color.white.opacity(0.2), lineWidth: 4)
+                                .frame(width: 56, height: 56)
+                            Circle()
+                                .trim(from: 0, to: mediaLoadProgress)
+                                .stroke(MeeshyColors.brandGradient, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                                .frame(width: 56, height: 56)
+                                .rotationEffect(.degrees(-90))
+                                .animation(.easeInOut(duration: 0.3), value: mediaLoadProgress)
+                            Text("\(Int(mediaLoadProgress * 100))%")
+                                .font(.system(size: 13, weight: .bold, design: .rounded))
+                                .foregroundColor(.white)
+                        }
+                        if !mediaLoadLabel.isEmpty {
+                            Text(mediaLoadLabel)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                }
+                .allowsHitTesting(false)
+                .transition(.opacity)
+        }
+    }
+
+
+
+    @ViewBuilder
+    private var canvasZoomResetButton: some View {
+        if viewModel.isCanvasZoomed {
+            Button {
+                withAnimation(.spring(response: 0.3)) {
+                    viewModel.resetCanvasZoom()
+                }
+            } label: {
+                Image(systemName: "arrow.uturn.backward")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 30, height: 30)
+                    .background(Circle().fill(.black.opacity(0.5)))
+            }
+            .padding(.top, showTopBar ? 70 : 16)
+            .padding(.trailing, 12)
+            .transition(.scale.combined(with: .opacity))
+            .animation(.spring(response: 0.3), value: showTopBar)
+        }
     }
 
     // MARK: - Timeline Section
@@ -754,548 +1138,7 @@ public struct StoryComposerView: View {
         TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
     }
 
-    // MARK: - Active Tool Panel
 
-    @ViewBuilder
-    private var activeToolPanel: some View {
-        switch viewModel.activeTool {
-        case .media:
-            mediaPanel
-        case .texture:
-            texturePanel
-        case .drawing:
-            drawingPanel
-        case .text:
-            textPanel.padding(.bottom, 8)
-        case .filters:
-            StoryFilterGridView(viewModel: viewModel, previewImage: selectedImage)
-        case .timeline:
-            timelineSection
-        case .none:
-            EmptyView()
-        }
-    }
-
-    // MARK: - Drawing Panel
-
-    private var drawingPanel: some View {
-        DrawingToolbarPanel(
-            toolColor: $viewModel.drawingColor,
-            toolWidth: $viewModel.drawingWidth,
-            toolType: $drawingTool,
-            onUndo: {
-                drawingCanvas.undoManager?.undo()
-                viewModel.drawingData = drawingCanvas.drawing.dataRepresentation()
-                HapticFeedback.light()
-            },
-            onRedo: {
-                drawingCanvas.undoManager?.redo()
-                viewModel.drawingData = drawingCanvas.drawing.dataRepresentation()
-                HapticFeedback.light()
-            },
-            onClear: {
-                drawingCanvas.drawing = PKDrawing()
-                viewModel.drawingData = nil
-                HapticFeedback.medium()
-            }
-        )
-        .padding(.bottom, 8)
-    }
-
-    // MARK: - Background Audio Panel
-
-    private var bgAudioPanel: some View {
-        VStack(spacing: 0) {
-        StoryAudioPanel(
-            selectedAudioId: $selectedAudioId,
-            selectedAudioTitle: $selectedAudioTitle,
-            audioVolume: $audioVolume,
-            onRecordingReady: { url in
-                audioEditorItem = AudioEditorItemWrapper(url: url)
-            }
-        )
-        .frame(maxHeight: 280)
-
-        audioElementList()
-        } // VStack bgAudioPanel
-    }
-
-    // MARK: - Text Panel
-
-    @ViewBuilder
-    private var textPanel: some View {
-        VStack(spacing: 0) {
-            if let selectedId = viewModel.selectedElementId,
-               let binding = textObjectBinding(for: selectedId) {
-                StoryTextEditorView(
-                    textObject: binding,
-                    onDelete: { viewModel.deleteElement(id: selectedId) }
-                )
-            }
-
-            // Add text button — always visible when under limit
-            if viewModel.canAddText {
-                Button {
-                    viewModel.addText()
-                    HapticFeedback.light()
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.system(size: 14, weight: .medium))
-                        Text(viewModel.selectedElementId != nil ? String(localized: "story.composer.anotherText", defaultValue: "Autre texte", bundle: .module) : String(localized: "story.composer.addText", defaultValue: "Ajouter du texte", bundle: .module))
-                            .font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(MeeshyColors.brandPrimary)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                }
-            }
-
-            textElementList()
-        }
-    }
-
-    // MARK: - Unified Media Panel (images, videos, audio — flat list)
-    // Background vs foreground is decided automatically by `addMediaObject`
-    // (first media → isBackground=true, rest → foreground). The element list
-    // below shows a "Fond" badge on whichever object currently holds the
-    // background flag, so users still see the distinction without needing
-    // a separate UI section for it.
-
-    private var mediaPanel: some View {
-        VStack(spacing: 10) {
-            HStack {
-                Label(String(localized: "story.composer.fgMedia", defaultValue: "Medias", bundle: .module),
-                      systemImage: "square.stack.3d.up")
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.6))
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-
-            HStack(spacing: 8) {
-                if viewModel.canAddMedia {
-                    PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
-                        mediaPillLabel(icon: "photo.on.rectangle.angled", text: String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module))
-                    }
-                }
-                if viewModel.canAddAudio {
-                    Button { showAudioDocumentPicker = true } label: {
-                        mediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module))
-                    }
-                    Button { showVoiceRecorderSheet = true } label: {
-                        mediaPillLabel(icon: "mic.fill", text: String(localized: "story.composer.record", defaultValue: "Enregistrer", bundle: .module))
-                    }
-                }
-            }
-            .padding(.horizontal, 16)
-
-            // Element list (all media + audio objects, with "Fond" badge on
-            // whichever entry currently holds the background flag).
-            mediaElementList()
-            audioElementList()
-        }
-        .padding(.vertical, 10)
-    }
-
-    private func mediaPillLabel(icon: String, text: String, destructive: Bool = false) -> MediaPillLabel {
-        MediaPillLabel(icon: icon, text: text, destructive: destructive)
-    }
-
-    // MARK: - Texture Panel (background color / patterns)
-
-
-    private var texturePanel: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Label(String(localized: "story.composer.bgColor", defaultValue: "Couleur de fond", bundle: .module),
-                      systemImage: "paintpalette")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundColor(.white.opacity(0.7))
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-
-            // Color grid — large touch targets (50pt circles, 56pt hit area)
-            LazyVGrid(columns: [GridItem(.adaptive(minimum: 56), spacing: 10)], spacing: 10) {
-                ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
-                    Button {
-                        viewModel.backgroundColor = "#\(hex)"
-                        selectedImage = nil
-                        viewModel.hasBackgroundImage = false
-                        HapticFeedback.light()
-                    } label: {
-                        Circle().fill(Color(hex: hex))
-                            .frame(width: 50, height: 50)
-                            .overlay(
-                                Circle().stroke(Color.white, lineWidth: viewModel.backgroundColor == "#\(hex)" && selectedImage == nil ? 3 : 0)
-                                    .padding(2)
-                            )
-                            .shadow(color: Color(hex: hex).opacity(viewModel.backgroundColor == "#\(hex)" ? 0.5 : 0), radius: 6)
-                    }
-                    .frame(width: 56, height: 56)
-                    .contentShape(Circle())
-                }
-            }
-            .padding(.horizontal, 16)
-        }
-        .padding(.vertical, 14)
-    }
-
-    // MARK: - Foreground Audio Panel (legacy — kept for voice recorder sheet wiring)
-
-    private var fgAudioPanel: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 10) {
-                Button { showAudioDocumentPicker = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "waveform").font(.system(size: 14, weight: .medium))
-                        Text(String(localized: "story.composer.library", defaultValue: "Bibliotheque", bundle: .module)).font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
-                }
-
-                Button { showVoiceRecorderSheet = true } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "mic").font(.system(size: 14, weight: .medium))
-                        Text(String(localized: "story.composer.recordAudio", defaultValue: "Enregistrer", bundle: .module)).font(.system(size: 13, weight: .medium))
-                    }
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity).padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(Color.white.opacity(0.1)))
-                }
-            }
-            .padding(.horizontal, 16)
-
-            audioElementList()
-        }
-        .padding(.vertical, 10)
-    }
-
-    // MARK: - Element Lists
-
-    @ViewBuilder
-    private func mediaElementList() -> some View {
-        let items = viewModel.currentEffects.mediaObjects ?? []
-        return Group {
-            if !items.isEmpty {
-                VStack(spacing: 4) {
-                    ForEach(items, id: \.id) { obj in
-                        mediaElementRow(obj: obj)
-                    }
-                }
-                .padding(.horizontal, 12)
-            }
-        }
-    }
-
-    private func mediaElementRow(obj: StoryMediaObject) -> some View {
-        let isSelected = viewModel.selectedElementId == obj.id
-        let isBackground = viewModel.isBackground(id: obj.id)
-        return HStack(spacing: 8) {
-            mediaElementThumbnail(obj: obj)
-            Text(obj.kind == .video ? String(localized: "story.composer.videoLabel", defaultValue: "Video", bundle: .module) : String(localized: "story.composer.imageLabel", defaultValue: "Image", bundle: .module))
-                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
-            if isBackground {
-                Text(String(localized: "story.composer.backgroundBadge", defaultValue: "Fond", bundle: .module))
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(MeeshyColors.indigo950)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Capsule().fill(MeeshyColors.indigo300))
-            }
-            Spacer()
-            // Edit button
-            Button {
-                openMediaEditor(elementId: obj.id)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: obj.kind == .video ? "film" : "crop")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.brandPrimary)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.brandPrimary.opacity(0.15)))
-            }
-            .accessibilityLabel(String(localized: "story.composer.editMedia", defaultValue: "Editer", bundle: .module))
-            // Background/foreground toggle
-            Button {
-                viewModel.toggleBackground(id: obj.id)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: isBackground ? "square.filled.on.square" : "square.on.square")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(isBackground ? MeeshyColors.indigo200 : MeeshyColors.indigo400)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.indigo400.opacity(isBackground ? 0.25 : 0.15)))
-            }
-            .accessibilityLabel(isBackground
-                ? String(localized: "story.composer.moveToForeground", defaultValue: "Mettre en premier plan", bundle: .module)
-                : String(localized: "story.composer.moveToBackground", defaultValue: "Mettre en fond", bundle: .module))
-            // Timeline
-            Button {
-                viewModel.selectedElementId = obj.id
-                viewModel.activeTool = .timeline
-            } label: {
-                Image(systemName: "timer")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.indigo400)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
-            }
-            // Delete
-            Button {
-                viewModel.deleteElement(id: obj.id)
-                HapticFeedback.medium()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MeeshyColors.error)
-                    .frame(width: 28, height: 28)
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
-        .onTapGesture {
-            viewModel.selectedElementId = obj.id
-            viewModel.bringToFront(id: obj.id)
-        }
-    }
-
-    // MARK: - Text list (tap row → select + edit in place on canvas)
-
-    @ViewBuilder
-    private func textElementList() -> some View {
-        let items = viewModel.currentEffects.textObjects ?? []
-        if !items.isEmpty {
-            VStack(spacing: 4) {
-                ForEach(items, id: \.id) { obj in
-                    textElementRow(obj: obj)
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 4)
-        }
-    }
-
-    private func textElementRow(obj: StoryTextObject) -> some View {
-        let isSelected = viewModel.selectedElementId == obj.id
-        let preview = obj.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            ? String(localized: "story.composer.emptyText", defaultValue: "Texte vide", bundle: .module)
-            : obj.content
-        return HStack(spacing: 8) {
-            Image(systemName: "textformat")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(MeeshyColors.indigo400)
-                .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
-            Text(preview)
-                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
-                .lineLimit(1)
-                .truncationMode(.tail)
-            Spacer()
-            Button {
-                viewModel.selectedElementId = obj.id
-                viewModel.isTimelineVisible = true
-            } label: {
-                Image(systemName: "timeline.selection")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.indigo400)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
-            }
-            Button {
-                viewModel.deleteElement(id: obj.id)
-                HapticFeedback.medium()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MeeshyColors.error)
-                    .frame(width: 28, height: 28)
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
-        .contentShape(Rectangle())
-        .onTapGesture {
-            // Sélection → édition en place sur canvas : handles de drag visibles
-            // + StoryTextEditorView ouvert au-dessus via textPanel.
-            viewModel.selectedElementId = obj.id
-            viewModel.bringToFront(id: obj.id)
-            viewModel.activeTool = .text
-            HapticFeedback.light()
-        }
-    }
-
-    @ViewBuilder
-    private func mediaElementThumbnail(obj: StoryMediaObject) -> some View {
-        if let img = viewModel.loadedImages[obj.id] {
-            Image(uiImage: img)
-                .resizable().scaledToFill()
-                .frame(width: 32, height: 32)
-                .clipShape(RoundedRectangle(cornerRadius: 6))
-        } else {
-            Image(systemName: obj.kind == .video ? "video.fill" : "photo")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(MeeshyColors.indigo400)
-                .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
-        }
-    }
-
-    private func audioElementList() -> some View {
-        let items = viewModel.currentEffects.audioPlayerObjects ?? []
-        return Group {
-            if !items.isEmpty {
-                VStack(spacing: 4) {
-                    ForEach(items, id: \.id) { obj in
-                        audioElementRow(obj: obj)
-                    }
-                }
-                .padding(.horizontal, 12)
-            }
-        }
-    }
-
-    private func audioElementRow(obj: StoryAudioPlayerObject) -> some View {
-        let isSelected = viewModel.selectedElementId == obj.id
-        let isBackground = viewModel.isBackground(id: obj.id)
-        return HStack(spacing: 8) {
-            Image(systemName: "waveform")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(MeeshyColors.indigo400)
-                .frame(width: 32, height: 32)
-                .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.06)))
-            Text(String(localized: "story.composer.audioLabel", defaultValue: "Audio", bundle: .module))
-                .font(.system(size: 12, weight: isSelected ? .bold : .medium))
-                .foregroundStyle(isSelected ? MeeshyColors.brandPrimary : .white)
-            if isBackground {
-                Text(String(localized: "story.composer.backgroundBadge", defaultValue: "Fond", bundle: .module))
-                    .font(.system(size: 9, weight: .bold))
-                    .foregroundStyle(MeeshyColors.indigo950)
-                    .padding(.horizontal, 6).padding(.vertical, 2)
-                    .background(Capsule().fill(MeeshyColors.indigo300))
-            }
-            Spacer()
-            // Edit (timeline for audio)
-            Button {
-                viewModel.selectedElementId = obj.id
-                viewModel.activeTool = .timeline
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: "waveform.and.magnifyingglass")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.brandPrimary)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.brandPrimary.opacity(0.15)))
-            }
-            .accessibilityLabel(String(localized: "story.composer.editAudio", defaultValue: "Editer l'audio", bundle: .module))
-            // Background/foreground toggle
-            Button {
-                viewModel.toggleBackground(id: obj.id)
-                HapticFeedback.light()
-            } label: {
-                Image(systemName: isBackground ? "square.filled.on.square" : "square.on.square")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(isBackground ? MeeshyColors.indigo200 : MeeshyColors.indigo400)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.indigo400.opacity(isBackground ? 0.25 : 0.15)))
-            }
-            .accessibilityLabel(isBackground
-                ? String(localized: "story.composer.moveToForeground", defaultValue: "Mettre en premier plan", bundle: .module)
-                : String(localized: "story.composer.moveToBackground", defaultValue: "Mettre en fond", bundle: .module))
-            // Timeline
-            Button {
-                viewModel.selectedElementId = obj.id
-                viewModel.activeTool = .timeline
-            } label: {
-                Image(systemName: "timer")
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundStyle(MeeshyColors.indigo400)
-                    .frame(width: 28, height: 28)
-                    .background(Circle().fill(MeeshyColors.indigo400.opacity(0.15)))
-            }
-            // Delete
-            Button {
-                viewModel.deleteElement(id: obj.id)
-                HapticFeedback.medium()
-            } label: {
-                Image(systemName: "trash")
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MeeshyColors.error)
-                    .frame(width: 28, height: 28)
-            }
-        }
-        .padding(.horizontal, 14).padding(.vertical, 6)
-        .background(RoundedRectangle(cornerRadius: 8).fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.08) : Color.white.opacity(0.04)))
-        .onTapGesture {
-            viewModel.selectedElementId = obj.id
-            viewModel.bringToFront(id: obj.id)
-        }
-    }
-
-    // MARK: - Transition Picker
-
-    private var transitionPicker: some View {
-        VStack(spacing: 12) {
-            Text(String(localized: "story.composer.openingEffect", defaultValue: "Effet d'ouverture", bundle: .module))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.6))
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    effectButton(effect: nil, label: String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module), icon: "minus.circle", isOpening: true)
-                    ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
-                        effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: true)
-                    }
-                }
-                .padding(.horizontal, 2)
-            }
-            Text(String(localized: "story.composer.closingEffect", defaultValue: "Effet de fermeture", bundle: .module))
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundColor(.white.opacity(0.6))
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 12) {
-                    effectButton(effect: nil, label: String(localized: "story.composer.noEffect", defaultValue: "Aucun", bundle: .module), icon: "minus.circle", isOpening: false)
-                    ForEach(StoryTransitionEffect.allCases, id: \.self) { effect in
-                        effectButton(effect: effect, label: effect.label, icon: effect.iconName, isOpening: false)
-                    }
-                }
-                .padding(.horizontal, 2)
-            }
-        }
-        .padding(.vertical, 12)
-        .padding(.horizontal, 16)
-    }
-
-    private func effectButton(effect: StoryTransitionEffect?, label: String, icon: String, isOpening: Bool) -> some View {
-        let isSelected = isOpening ? (openingEffect == effect) : (closingEffect == effect)
-        return Button {
-            withAnimation(.spring(response: 0.25)) {
-                if isOpening { openingEffect = effect } else { closingEffect = effect }
-            }
-            HapticFeedback.light()
-        } label: {
-            VStack(spacing: 4) {
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                    .foregroundColor(isSelected ? MeeshyColors.brandPrimary : .white.opacity(0.6))
-                Text(label)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(isSelected ? MeeshyColors.brandPrimary : .white.opacity(0.4))
-            }
-            .frame(width: 60, height: 54)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(isSelected ? MeeshyColors.brandPrimary.opacity(0.15) : Color.white.opacity(0.06))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(isSelected ? MeeshyColors.brandPrimary.opacity(0.5) : Color.clear, lineWidth: 1)
-                    )
-            )
-        }
-    }
 
     // MARK: - Helpers
 
@@ -1306,16 +1149,16 @@ public struct StoryComposerView: View {
     }
 
     private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
-        guard viewModel.currentEffects.textObjects?.contains(where: { $0.id == id }) == true else { return nil }
+        guard viewModel.currentEffects.textObjects.contains(where: { $0.id == id }) else { return nil }
         return Binding(
             get: {
-                viewModel.currentEffects.textObjects?.first(where: { $0.id == id })
-                    ?? StoryTextObject(content: "")
+                viewModel.currentEffects.textObjects.first(where: { $0.id == id })
+                    ?? StoryTextObject(text: "")
             },
             set: { newObj in
                 var effects = viewModel.currentEffects
-                if let i = effects.textObjects?.firstIndex(where: { $0.id == id }) {
-                    effects.textObjects?[i] = newObj
+                if let i = effects.textObjects.firstIndex(where: { $0.id == id }) {
+                    effects.textObjects[i] = newObj
                     viewModel.currentEffects = effects
                 }
             }
@@ -1326,6 +1169,45 @@ public struct StoryComposerView: View {
 
     private func syncCurrentSlideEffects() {
         viewModel.currentEffects = buildEffects()
+    }
+
+    /// Resets every composer-local `@State` that feeds `buildEffects()` or
+    /// otherwise mirrors slide content. Must be called immediately after
+    /// `viewModel.reset()` (or any other operation that drops all slides)
+    /// to prevent the `granularCanvasSync` sync modifiers from re-injecting
+    /// orphaned local state into the fresh empty slide.
+    ///
+    /// Scope: covers every `@State` read by `buildEffects()` plus the
+    /// transient picker / editor scratch state. Intentionally does NOT
+    /// touch user preferences (`storyLanguage`, `visibility`), the
+    /// in-flight loading indicators, or sheet-presentation booleans.
+    private func resetLocalState() {
+        // Canvas-local state (read by buildEffects via canvasSyncFingerprint)
+        selectedFilter = nil
+        selectedImage = nil
+        stickerObjects = []
+        drawingCanvas = PKCanvasView()
+        drawingTool = .pen
+
+        // Transitions (read by buildEffects)
+        openingEffect = nil
+        closingEffect = nil
+
+        // Background audio panel (read by buildEffects)
+        selectedAudioId = nil
+        selectedAudioTitle = nil
+        audioVolume = 0.7
+        audioTrimStart = 0
+        audioTrimEnd = 0
+
+        // Picker / editor scratch state — would otherwise resurrect
+        // half-finished media flows on the freshly reset canvas.
+        fgMediaItem = nil
+        editingBgImage = nil
+        editingElementImage = nil
+        editingElementVideo = nil
+        confirmedMediaAudioURL = nil
+        lostMediaCount = 0
     }
 
     private func restoreCanvas(from slide: StorySlide) {
@@ -1452,6 +1334,10 @@ public struct StoryComposerView: View {
                         if let obj = viewModel.addMediaObject(kind: .video, toSlideId: targetSlideId) {
                             viewModel.loadedVideoURLs[obj.id] = tempURL
                             if let thumbnail { viewModel.loadedImages[obj.id] = thumbnail }
+                            // Set mediaURL so StoryMediaLayer.configureVideo can find
+                            // the file. Same bridge as the image path — without this,
+                            // media.mediaURL is nil and the video layer has no source.
+                            viewModel.setMediaURL(id: obj.id, url: tempURL.absoluteString, slideId: targetSlideId)
                             if obj.id != objectId {
                                 viewModel.loadedVideoURLs.removeValue(forKey: objectId)
                                 viewModel.loadedImages.removeValue(forKey: objectId)
@@ -1477,10 +1363,25 @@ public struct StoryComposerView: View {
                 mediaLoadProgress = 0.3
                 guard let data = try? await item.loadTransferable(type: Data.self),
                       let image = await StoryMediaLoader.shared.loadImage(data: data, maxDimension: 1080) else { return }
+                mediaLoadProgress = 0.7
+                // Persist the image to a temp file so StoryMediaLayer.configureImage
+                // can load it via its file:// URL. Without this, media.mediaURL stays
+                // nil and the CALayer canvas renders a black rectangle.
+                let tempImageURL = FileManager.default.temporaryDirectory
+                    .appendingPathComponent(objectId + ".jpg")
+                let jpegData = image.jpegData(compressionQuality: 0.92)
+                try? jpegData?.write(to: tempImageURL)
+                let imageFileURL = jpegData != nil ? tempImageURL : nil
                 mediaLoadProgress = 1.0
                 await MainActor.run {
                     if let obj = viewModel.addMediaObject(kind: .image, toSlideId: targetSlideId) {
                         viewModel.loadedImages[obj.id] = image
+                        // Set mediaURL on the StoryMediaObject so the canvas renderer
+                        // can load the image from disk. This is the critical bridge
+                        // between the in-memory UIImage and the CALayer pipeline.
+                        if let fileURL = imageFileURL {
+                            viewModel.setMediaURL(id: obj.id, url: fileURL.absoluteString, slideId: targetSlideId)
+                        }
                     }
                 }
             }
@@ -1586,7 +1487,7 @@ public struct StoryComposerView: View {
             slide.content != nil
                 || viewModel.slideImages[slide.id] != nil
                 || slide.effects.background != nil
-                || !(slide.effects.textObjects ?? []).isEmpty
+                || !slide.effects.textObjects.isEmpty
                 || !(slide.effects.mediaObjects ?? []).isEmpty
         } || !stickerObjects.isEmpty || viewModel.drawingData != nil
 
@@ -1775,16 +1676,35 @@ struct MediaPillLabel: View {
     let text: String
     var destructive: Bool = false
 
+    @Environment(\.colorScheme) private var colorScheme
+
     var body: some View {
-        HStack(spacing: 5) {
+        // Le bandeau composer a un fond opaque adaptatif (blanc en light,
+        // indigo950 en dark). Les pills hardcodés en `.white` étaient
+        // invisibles sur fond clair (blanc sur blanc). On adapte foreground
+        // et background fill au mode.
+        let fgBase: Color = colorScheme == .dark ? .white : MeeshyColors.indigo950
+        let foreground: Color = destructive ? MeeshyColors.error : fgBase.opacity(0.88)
+        let bgFill: Color = destructive
+            ? MeeshyColors.error.opacity(0.15)
+            : fgBase.opacity(0.10)
+        let strokeColor: Color = destructive
+            ? MeeshyColors.error.opacity(0.35)
+            : fgBase.opacity(0.18)
+
+        return HStack(spacing: 5) {
             Image(systemName: icon).font(.system(size: 12, weight: .medium))
             Text(text).font(.system(size: 11, weight: .medium))
         }
-        .foregroundColor(destructive ? MeeshyColors.error : .white.opacity(0.8))
+        .foregroundColor(foreground)
         .padding(.horizontal, 10).padding(.vertical, 7)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(destructive ? MeeshyColors.error.opacity(0.15) : Color.white.opacity(0.08))
+                .fill(bgFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(strokeColor, lineWidth: 0.5)
+                )
         )
     }
 }

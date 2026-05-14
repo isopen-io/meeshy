@@ -124,7 +124,7 @@ class FeedViewModel: ObservableObject {
                 prefetchMedia(around: 0)
 
                 Task.detached(priority: .utility) { [fetched] in
-                    await CacheCoordinator.shared.feed.save(fetched, for: "main-feed")
+                    try? await CacheCoordinator.shared.feed.save(fetched, for: "main-feed")
                 }
 
                 // Persist to GRDB alongside cache
@@ -249,7 +249,7 @@ class FeedViewModel: ObservableObject {
                         originalLanguage: c.originalLanguage, translatedContent: translatedContent
                     )
                 }
-                await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+                try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
             } catch {
                 // Silent fail on prefetch — user-triggered open will retry the network.
             }
@@ -309,13 +309,26 @@ class FeedViewModel: ObservableObject {
         // Optimistic: insert into the local "bookmarks" cache so opening the
         // Favoris tab shows the post immediately. Mirror BookmarksViewModel's
         // snapshot/rollback pattern on failure.
+        //
+        // SWR: an in-cache list (fresh or stale) is the rollback target; an
+        // expired/empty cache means there is nothing to roll back to and we
+        // simply seed the bookmarks list with this post. The bookmarks list
+        // itself is revalidated by `BookmarksViewModel` when the user opens
+        // the Favoris tab, so we do NOT trigger a remote refresh here.
         let bookmarksKey = "bookmarks"
-        let cachedBookmarks = await CacheCoordinator.shared.feed.load(for: bookmarksKey).value ?? []
+        let result = await CacheCoordinator.shared.feed.load(for: bookmarksKey)
+        let cachedBookmarks: [FeedPost]
+        switch result {
+        case .fresh(let v, _), .stale(let v, _):
+            cachedBookmarks = v
+        case .expired, .empty:
+            cachedBookmarks = []
+        }
         let snapshot = cachedBookmarks
         if !cachedBookmarks.contains(where: { $0.id == postId }) {
             var updated = cachedBookmarks
             updated.insert(post, at: 0)
-            await CacheCoordinator.shared.feed.save(updated, for: bookmarksKey)
+            try? await CacheCoordinator.shared.feed.save(updated, for: bookmarksKey)
         }
         ToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
 
@@ -326,7 +339,7 @@ class FeedViewModel: ObservableObject {
             )
         } catch {
             // Rollback the optimistic cache insertion.
-            await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
+            try? await CacheCoordinator.shared.feed.save(snapshot, for: bookmarksKey)
             ToastManager.shared.showError("Erreur lors de l'enregistrement")
         }
     }
@@ -393,15 +406,19 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    /// Wave 1 Phase C — comment like flows through the offline outbox.
+    /// `emoji` is currently fixed to `❤️` server-side ; until the route
+    /// accepts custom emojis the parameter is ignored at the wire layer
+    /// but still threaded through here for API stability with the view.
     func likeComment(postId: String, commentId: String, emoji: String = "❤️") async {
-        let body: [String: String] = ["emoji": emoji]
+        let cmid = ClientMutationId.generate()
+        let payload = ToggleLikeCommentPayload(
+            clientMutationId: cmid,
+            commentId: commentId,
+            liked: true
+        )
         do {
-            let bodyData = try JSONSerialization.data(withJSONObject: body)
-            let _: SimpleAPIResponse = try await api.request(
-                endpoint: "/posts/\(postId)/comments/\(commentId)/like",
-                method: "POST",
-                body: bodyData
-            )
+            try await OfflineQueue.shared.enqueue(.toggleLikeComment, payload: payload, conversationId: postId)
         } catch {
             ToastManager.shared.showError("Erreur lors du like")
         }
@@ -752,7 +769,7 @@ class FeedViewModel: ObservableObject {
         cacheSaveTask = Task {
             try? await Task.sleep(for: .seconds(2))
             guard !Task.isCancelled else { return }
-            await CacheCoordinator.shared.feed.save(snapshot, for: "main-feed")
+            try? await CacheCoordinator.shared.feed.save(snapshot, for: "main-feed")
         }
     }
 }

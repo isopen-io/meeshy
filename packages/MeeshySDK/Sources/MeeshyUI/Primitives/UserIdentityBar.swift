@@ -16,7 +16,7 @@ public enum IdentityBarElement: Identifiable {
     case memberSince(String)
     case actionButton(String, action: () -> Void)
     case actionMenu(String, items: [ActionMenuItem])
-    case text(String)
+    case text(String, tag: String? = nil)
 
     public var id: String {
         switch self {
@@ -31,7 +31,9 @@ public enum IdentityBarElement: Identifiable {
         case .memberSince(let value): return "memberSince:\(value)"
         case .actionButton(let label, _): return "action:\(label)"
         case .actionMenu(let label, _): return "menu:\(label)"
-        case .text(let value): return "text:\(value)"
+        case .text(let value, let tag):
+            if let tag { return "text:\(value):\(tag)" }
+            return "text:\(value)"
         }
     }
 }
@@ -279,7 +281,7 @@ public struct UserIdentityBar: View {
                 )
             }
 
-        case .text(let value):
+        case .text(let value, _):
             Text(value)
                 .font(.system(size: 11))
                 .foregroundColor(theme.textSecondary)
@@ -423,11 +425,11 @@ extension UserIdentityBar {
             leading1.append(.roleBadge(role))
         }
         if inlineTime, !time.isEmpty {
-            leading1.append(.text("·"))
+            leading1.append(.text("·", tag: "time"))
             leading1.append(.time(time))
         }
         if !flags.isEmpty || onTranslateTap != nil {
-            leading1.append(.text("·"))
+            leading1.append(.text("·", tag: "flags"))
         }
         if !flags.isEmpty {
             leading1.append(.flags(flags, active: activeFlag, onTap: onFlagTap))

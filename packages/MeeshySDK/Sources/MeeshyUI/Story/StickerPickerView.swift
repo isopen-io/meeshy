@@ -8,6 +8,7 @@ public struct StickerPickerView: View {
 
     @State private var selectedCategory: StickerCategory = .smileys
     @State private var searchText = ""
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(onStickerSelected: @escaping (String) -> Void) {
         self.onStickerSelected = onStickerSelected
@@ -23,11 +24,31 @@ public struct StickerPickerView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            panelHeader
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 8)
             categoryTabs
             emojiGrid
         }
-        .background(Color.black.opacity(0.5))
-        .cornerRadius(20, corners: [.topLeft, .topRight])
+        .padding(16)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: - Panel Header
+
+    private var panelHeader: some View {
+        HStack {
+            Image(systemName: "face.smiling")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(MeeshyColors.brandGradient)
+            Text(String(localized: "story.sticker.title", defaultValue: "Stickers", bundle: .module))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+            Spacer()
+        }
     }
 
     // MARK: - Category Tabs

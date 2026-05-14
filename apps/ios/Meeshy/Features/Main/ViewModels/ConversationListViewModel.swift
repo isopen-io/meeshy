@@ -73,11 +73,19 @@ class ConversationListViewModel: ObservableObject {
     private let authManager: AuthManaging
     private let storyService: StoryServiceProviding
     private let syncEngine: ConversationSyncEngineProviding
-    /// Number of conversations fetched per `loadMore` page. Tuned at
-    /// 30 to match the spec's 30-row windows: large enough to fill a
-    /// screen on most devices without scrolling, small enough that the
-    /// cursor request stays under ~50KB even with rich metadata.
-    private let pageLimit = 30
+    /// Number of conversations fetched per `loadMore` page.
+    ///
+    /// Tuned at 100 (gateway max) so the first paginated page after the
+    /// cold cache covers the long tail of the user's conversation list
+    /// in a SINGLE request — empirically every user falls under this
+    /// ceiling, so the second `loadMore` call returns hasMore=false and
+    /// the infinite-scroll sentinel goes silent. Keeping it at 30 forced
+    /// the sentinel to fire 4-5 times for a 100-row account, every onAppear
+    /// re-trigger amplifying any pagination glitch (cf. the May 2026
+    /// `cursorPagination` schema strip bug that turned this into an
+    /// uncapped loop). The payload at limit=100 stays well under 200 KB
+    /// even with rich metadata.
+    private let pageLimit = 100
     private var cancellables = Set<AnyCancellable>()
     var storyPrefetchTask: Task<Void, Never>?
 
@@ -101,12 +109,97 @@ class ConversationListViewModel: ObservableObject {
     // narrow case of mutating a SINGLE row's property (unread count,
     // pin, mute, etc.) where the order doesn't change.
 
-    /// Replace the entire list with `items` re-sorted by lastMessageAt DESC.
-    /// Use this when you've fetched a fresh snapshot (cache reload, REST
-    /// page, full sync result). Internal so unit tests can drive it without
-    /// reflection while keeping the surface invisible to view layers.
+    /// Replace the entire list with `items` re-sorted by lastMessageAt DESC,
+    /// preserving any entry created locally within `recentlyCreatedTTL` that
+    /// the incoming snapshot doesn't yet contain. Without this protection,
+    /// a foreground delta sync that races a fresh creation can clobber the
+    /// new row because the gateway aggregate has eventual-consistency lag
+    /// (the conv was inserted server-side a few hundred ms ago but the
+    /// `/conversations` aggregate hasn't caught up yet). The TTL bounds the
+    /// "force-keep" window so a legitimate cross-device delete still applies
+    /// after 30 s.
     func setConversations(_ items: [Conversation]) {
-        conversations = items.sorted { $0.lastMessageAt > $1.lastMessageAt }
+        let merged = mergePreservingRecentlyCreated(incoming: items, current: conversations, now: dateProvider())
+        conversations = merged.sorted { $0.lastMessageAt > $1.lastMessageAt }
+    }
+
+    /// Local-creation registry: maps conversationId → insertion timestamp.
+    /// Populated by `fetchAndPrependMissingConversation` whenever a fresh
+    /// row lands locally (any discovery source — `conversation:new`,
+    /// `notification:new` legacy, or `conversation:updated` for unknown id).
+    /// Read by `setConversations` to defend the row against same-window
+    /// destructive snapshots that race the gateway aggregate's eventual
+    /// consistency. `internal` so tests can inspect / drive directly.
+    var recentlyCreatedAt: [String: Date] = [:]
+    /// Window during which a freshly-inserted row is force-preserved across
+    /// destructive snapshots. Sized to comfortably cover the worst-case
+    /// gateway aggregate-replication lag we've observed (~3 s) plus the
+    /// debounced cache persist (~200 ms) plus a safety margin.
+    let recentlyCreatedTTL: TimeInterval = 30
+    /// Injectable `now()` for deterministic TTL tests. Production code uses
+    /// the system clock; tests stub it to advance time synthetically.
+    var dateProvider: () -> Date = { Date() }
+
+    /// Pure helper: returns the merged set of `incoming` plus any `current`
+    /// row whose id is in `recentlyCreatedAt` (after pruning expired
+    /// entries) and absent from `incoming`. Order/sort handled by the
+    /// caller.
+    /// - Note: mutates `recentlyCreatedAt` to drop expired entries — done
+    ///   here so we get a single pass over the map instead of one per
+    ///   `setConversations` call.
+    private func mergePreservingRecentlyCreated(
+        incoming: [Conversation],
+        current: [Conversation],
+        now: Date
+    ) -> [Conversation] {
+        recentlyCreatedAt = recentlyCreatedAt.filter { now.timeIntervalSince($0.value) < recentlyCreatedTTL }
+        let incomingIds = Set(incoming.map(\.id))
+        let preserved = current.filter { conv in
+            recentlyCreatedAt[conv.id] != nil && !incomingIds.contains(conv.id)
+        }
+        return incoming + preserved
+    }
+
+    /// Test-only counter: incremented every time `schedulePersist`'s task
+    /// actually completes a save (i.e. survived the debounce window). Used
+    /// by unit tests to assert coalescing without mocking the GRDB-backed
+    /// `CacheCoordinator` actor. Production code never reads this.
+    #if DEBUG
+    var persistCallCount = 0
+    #endif
+
+    /// Coalesced persistence: saves the current `conversations` snapshot
+    /// + pagination cursor + hasMore flag to the L2 cache after a short
+    /// debounce so a burst of mutations (a `fetchAndPrependMissingConversation`
+    /// followed immediately by a `bumpToTop`, or N rapid socket events on
+    /// the same conversation) produces ONE GRDB write rather than N.
+    ///
+    /// Cancels any prior in-flight persist task so the latest snapshot
+    /// always wins — same discipline as `loadMore`'s inline persist
+    /// (line 841) and `pullToRefresh`'s pre-invalidate cancel (line 873).
+    /// Callers MUST be on the MainActor (snapshot is read here, before
+    /// the detached Task captures it).
+    func schedulePersist(debounce: TimeInterval = 0.2) {
+        persistTask?.cancel()
+        let snapshot = conversations
+        let cursor = nextCursor
+        let more = hasMore
+        persistTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(debounce * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            // Cache .save() est devenu throwing (Wave 1 Local-First) :
+            // utilise try? pour preserver le comportement historique
+            // best-effort. Une defaillance d'ecriture (encryption, disque
+            // plein) est loggee par GRDBCacheStore et ne doit pas casser
+            // le persist debounce.
+            try? await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
+            await CacheCoordinator.shared.conversations.saveCursor(
+                nextCursor: cursor, hasMore: more, for: "list"
+            )
+            #if DEBUG
+            await MainActor.run { self?.persistCallCount += 1 }
+            #endif
+        }
     }
 
     /// Append paginated rows to the existing list, deduplicating by id and
@@ -135,6 +228,7 @@ class ConversationListViewModel: ObservableObject {
         updated.lastMessageAt = newLastMessageAt
         conversations.remove(at: idx)
         conversations.insert(updated, at: 0)
+        schedulePersist()
     }
 
     /// Track in-flight `getById` fetches launched by `conversationUpdated` so
@@ -143,15 +237,34 @@ class ConversationListViewModel: ObservableObject {
     /// `fetchAndPrependMissingConversation`.
     private var pendingMissingFetches: Set<String> = []
 
+    /// Where a conversation discovery signal originated. Used purely for
+    /// structured logging so a production support ticket "I created a DM
+    /// and don't see it" can be traced to the path that should have
+    /// surfaced it (or proven that none did). The categories mirror the
+    /// real wire-up sites — ADD a case rather than reusing one if a new
+    /// surface starts firing prepends.
+    enum ConversationDiscoverySource: String {
+        case socketNew              // conversation:new (typed event, primary path)
+        case socketNotification     // notification:new legacy fallback (~3-month deprecation window)
+        case socketUpdated          // CONVERSATION_UPDATED (first activity on unknown id)
+        case syncDelta              // syncSinceLastCheckpoint (foreground / reconnect)
+        case pullRefresh            // user pulled to refresh
+        case coldCache              // initial cache load on app start
+    }
+
     /// Fetch a conversation that the gateway just told us about via
     /// `CONVERSATION_UPDATED` but that we don't have locally — typically a
     /// brand-new direct message where the user hasn't joined
     /// `ROOMS.conversation(id)` yet (so they never received `MESSAGE_NEW`).
     /// Mirrors the SyncEngine pattern for missing-conversation prepends so
     /// the row appears in real time without forcing a pull-to-refresh.
-    func fetchAndPrependMissingConversation(id: String) {
-        guard !pendingMissingFetches.contains(id) else { return }
+    func fetchAndPrependMissingConversation(id: String, source: ConversationDiscoverySource = .socketUpdated) {
+        guard !pendingMissingFetches.contains(id) else {
+            Logger.messages.info("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=skip-dedup")
+            return
+        }
         pendingMissingFetches.insert(id)
+        Logger.messages.info("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=fetch-start")
         let userId = currentUserId
         let service = conversationService
         Task { [weak self] in
@@ -168,9 +281,16 @@ class ConversationListViewModel: ObservableObject {
                         self.conversations.remove(at: existing)
                     }
                     self.conversations.insert(domain, at: 0)
+                    // Mark this id as recently-created so the next destructive
+                    // snapshot (foreground delta sync, cache reload after
+                    // fullSync, etc.) doesn't clobber it during the gateway
+                    // aggregate's eventual-consistency window.
+                    self.recentlyCreatedAt[domain.id] = self.dateProvider()
+                    self.schedulePersist()
+                    Logger.messages.info("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=insert")
                 }
             } catch {
-                Logger.messages.error("[ConversationListVM] Failed to fetch missing conversation \(id, privacy: .public): \(error.localizedDescription, privacy: .public)")
+                Logger.messages.error("[Discovery] source=\(source.rawValue, privacy: .public) id=\(id, privacy: .public) action=fetch-error error=\(error.localizedDescription, privacy: .public)")
             }
         }
     }
@@ -381,12 +501,10 @@ class ConversationListViewModel: ObservableObject {
 
         conversations[idx] = conv
 
-        // Persist the in-memory mutation to the list snapshot so a fresh
-        // launch (cold cache load) reflects the up-to-date prefs.
-        let snapshot = conversations
-        Task.detached {
-            await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
-        }
+        // Persist the in-memory mutation through the unified coalescing
+        // path so a burst of preference toggles (pin + mute + tag in
+        // quick succession) collapses to one GRDB write rather than three.
+        schedulePersist()
     }
 
     private func reloadFromCache() async {
@@ -448,6 +566,7 @@ class ConversationListViewModel: ObservableObject {
                         }
                     }
                     conversations[idx] = conv
+                    schedulePersist()
                 }
             }
             .store(in: &cancellables)
@@ -465,7 +584,7 @@ class ConversationListViewModel: ObservableObject {
                     // ROOMS.conversation(id) avant ce moment). Sans fetch
                     // d'appoint la conversation reste invisible jusqu'à un
                     // pull-to-refresh manuel.
-                    self.fetchAndPrependMissingConversation(id: event.conversationId)
+                    self.fetchAndPrependMissingConversation(id: event.conversationId, source: .socketUpdated)
                     return
                 }
                 // Apply the in-place metadata updates first; the gateway
@@ -490,18 +609,46 @@ class ConversationListViewModel: ObservableObject {
                 if let newLastAt = event.lastMessageAt,
                    newLastAt > self.conversations[index].lastMessageAt {
                     self.bumpToTop(conversationId: event.conversationId, newLastMessageAt: newLastAt)
+                } else {
+                    // Metadata-only mutation (rename, avatar swap, broadcast
+                    // toggle) still needs to land in L2 so a cold restart
+                    // doesn't show the pre-event title for a frame. bumpToTop
+                    // already calls schedulePersist when it runs.
+                    self.schedulePersist()
                 }
             }
             .store(in: &cancellables)
 
-        // A new conversation (DM or group) appears in the user's list as soon
-        // as the gateway emits NOTIFICATION_NEW for it — without this hook,
-        // the list stays stale until the FIRST message lands (which is what
-        // currently triggers CONVERSATION_UPDATED → fetchAndPrepend) or until
-        // the user pulls to refresh. The gateway already creates these
-        // notifications in NotificationService.createConversationInviteNotification
-        // and pushes them via SERVER_EVENTS.NOTIFICATION_NEW, so we just have
-        // to forward them to the same prepend path.
+        // Primary discovery path for newly-created conversations.
+        //
+        // Per the 2026-05-11 socket-event audit (see
+        // tasks/socketio-events-cleanup.md), the gateway now emits a typed
+        // `conversation:new` event to the user-rooms of EVERY participant —
+        // creator included — when a conversation is created. Before this,
+        // the creator received no socket signal at all (the legacy
+        // notification:new loop in core.ts:922 only iterated over
+        // `uniqueParticipantIds`, excluding `userId`), and invitees relied
+        // on a string-discriminated `notification:new` with type
+        // `new_conversation_*`. The typed event removes both quirks.
+        //
+        // We still subscribe to the legacy `notification:new` block below
+        // as a fallback for ~3 months while older clients/server versions
+        // are in production. `pendingMissingFetches` dedups the two paths
+        // when both fire for the same id within a few hundred ms.
+        messageSocket.conversationNew
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self,
+                      self.convIndex(for: event.conversationId) == nil else { return }
+                self.fetchAndPrependMissingConversation(id: event.conversationId, source: .socketNew)
+            }
+            .store(in: &cancellables)
+
+        // Legacy path: pre-CONVERSATION_NEW gateway sends a generic
+        // `notification:new` with `type=new_conversation_direct|group|added_to_conversation`.
+        // Kept active during the ~3-month rollout window so older gateways
+        // still surface fresh conversations. Once min-deployed-server-version
+        // ships CONVERSATION_NEW everywhere, this branch can be removed.
         messageSocket.notificationReceived
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
@@ -512,7 +659,7 @@ class ConversationListViewModel: ObservableObject {
                      "added_to_conversation":
                     guard let convId = event.context?.conversationId,
                           self.convIndex(for: convId) == nil else { return }
-                    self.fetchAndPrependMissingConversation(id: convId)
+                    self.fetchAndPrependMissingConversation(id: convId, source: .socketNotification)
                 default:
                     break
                 }
@@ -524,6 +671,7 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
                 self.conversations[index].memberCount -= 1
+                self.schedulePersist()
             }
             .store(in: &cancellables)
 
@@ -532,6 +680,7 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
                 self.conversations[index].memberCount -= 1
+                self.schedulePersist()
             }
             .store(in: &cancellables)
 
@@ -540,30 +689,20 @@ class ConversationListViewModel: ObservableObject {
             .sink { [weak self] event in
                 guard let self, let index = self.convIndex(for: event.conversationId) else { return }
                 self.conversations[index].memberCount += 1
+                self.schedulePersist()
             }
             .store(in: &cancellables)
 
-        // On socket reconnection, pull the delta so the list reflects anything
-        // that changed while the socket was down (renames, new conversations,
-        // archived/deleted, unread counts). Without this the user lands on a
-        // stale list after coming back from background until they pull to
-        // refresh manually.
-        messageSocket.didReconnect
-            .receive(on: DispatchQueue.main)
-            .sink { [weak self] _ in
-                guard let self else { return }
-                // Random 0-500ms jitter before firing the delta sync so that
-                // a server blip that drops every client simultaneously
-                // doesn't produce a thundering herd of `/conversations?updatedSince=…`
-                // requests the instant the gateway comes back online.
-                let jitter = UInt64.random(in: 0...500_000_000)
-                Task { [weak self] in
-                    try? await Task.sleep(nanoseconds: jitter)
-                    await self?.syncEngine.syncSinceLastCheckpoint()
-                    await self?.reloadFromCache()
-                }
-            }
-            .store(in: &cancellables)
+        // NOTE: `messageSocket.didReconnect` is intentionally NOT observed here.
+        // `ConversationSyncEngine.startSocketRelay()` already handles the
+        // reconnect → `syncSinceLastCheckpoint()` chain at the SDK boundary,
+        // and any resulting list mutation flows back into this view-model
+        // through `syncEngine.conversationsDidChange` (subscribed in
+        // `observeSync()` above) which triggers `reloadFromCache()`.
+        // Subscribing twice produced N× delta-sync calls per flap — the
+        // 2026-05-11 audit traced a `/conversations` request burst back to
+        // exactly this duplication. Keeping the relay in the engine keeps
+        // one and only one delta sync per reconnect.
     }
 
     // MARK: - Typing Cleanup
@@ -606,23 +745,47 @@ class ConversationListViewModel: ObservableObject {
     }
 
     // MARK: - Load Categories
+    //
+    // Cache-first per the architecture bible (Pattern I1). Without this the
+    // grouping pipeline (CombineLatest4 line 230) fires immediately after
+    // setConversations and groups every row into the "Other" bucket because
+    // `userCategories = []` at that point — then 100-300ms later the API
+    // response arrives, userCategories repopulates, the grouping re-runs,
+    // and the user sees the section headers flash in. With cache-first the
+    // categories are populated synchronously on cold start (sub-100ms via
+    // the GRDB actor hop) and the grouping has the right buckets from the
+    // very first frame.
 
     func loadCategories() async {
-        do {
-            let categories = try await preferenceService.getCategories()
-            userCategories = categories.map { cat in
-                ConversationSection(
-                    id: cat.id,
-                    name: cat.name,
-                    icon: cat.icon ?? "folder.fill",
-                    color: cat.color?.replacingOccurrences(of: "#", with: "") ?? "45B7D1",
-                    isExpanded: cat.isExpanded ?? true,
-                    order: cat.order ?? 0
-                )
-            }.sorted { $0.order < $1.order }
-        } catch {
-            // Categories are optional, keep empty
+        if let cached = await preferenceService.loadCachedCategories() {
+            applyCategories(cached)
         }
+        // Background revalidate so the next session picks up server-truth
+        // changes (new category created on web, color renamed, etc.).
+        // Errors here are non-fatal — we keep whatever cached snapshot we
+        // already painted.
+        do {
+            let fresh = try await preferenceService.revalidateCategories()
+            applyCategories(fresh)
+        } catch {
+            // Network blip or unauthorized: cached value (if any) stays.
+        }
+    }
+
+    /// Convert + sort the API model into the section model the grouping
+    /// pipeline consumes. Idempotent — calling with the same input twice
+    /// produces the same `userCategories` array.
+    private func applyCategories(_ categories: [ConversationCategory]) {
+        userCategories = categories.map { cat in
+            ConversationSection(
+                id: cat.id,
+                name: cat.name,
+                icon: cat.icon ?? "folder.fill",
+                color: cat.color?.replacingOccurrences(of: "#", with: "") ?? "45B7D1",
+                isExpanded: cat.isExpanded ?? true,
+                order: cat.order ?? 0
+            )
+        }.sorted { $0.order < $1.order }
     }
 
     // MARK: - Load Conversations
@@ -672,8 +835,11 @@ class ConversationListViewModel: ObservableObject {
             loadFailed = false
             loadState = .loading
             let succeeded = await syncEngine.fullSync()
+            // Post-sync snapshot: the sync engine just wrote the canonical
+            // list to cache, so a freshness-aware switch would add no signal.
+            // `snapshot()` is the explicit-intent read for this pattern.
             let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
-            if let data = reloaded.value {
+            if let data = reloaded.snapshot() {
                 setConversations(data)
                 // Full sync just completed: snapshot is authoritative, so reconcile
                 // overrides anything the coordinator tracked from earlier socket events.
@@ -708,8 +874,10 @@ class ConversationListViewModel: ObservableObject {
         loadFailed = false
         loadState = .loading
         let succeeded = await syncEngine.fullSync()
+        // Pull-to-refresh: the sync engine just wrote the canonical list to
+        // cache; `snapshot()` is the explicit-intent read for that.
         let reloaded = await CacheCoordinator.shared.conversations.load(for: "list")
-        if let data = reloaded.value {
+        if let data = reloaded.snapshot() {
             setConversations(data)
             // User-triggered full sync: snapshot is authoritative, reconcile counts.
             NotificationCoordinator.shared.reconcileConversationUnreads(data)
@@ -763,6 +931,8 @@ class ConversationListViewModel: ObservableObject {
 
         do {
             let userId = currentUserId
+            let previousCursor = nextCursor
+            let knownIds = Set(conversations.map(\.id))
             let page = try await conversationService.listPage(
                 before: nextCursor,
                 limit: pageLimit,
@@ -774,6 +944,46 @@ class ConversationListViewModel: ObservableObject {
             // isOnline flags) because the domain model strips them.
             PresenceManager.shared.seed(from: page.rawItems, currentUserId: userId)
             appendConversations(page.items)
+
+            // Loop guard 1 : zero-progress detection. If the gateway
+            // returned items but ALL of them were already known locally,
+            // or if the cursor did not advance, we are looping. This
+            // happened in May 2026 when `fast-json-stringify` stripped
+            // `cursorPagination` from the response (schema didn't
+            // declare it), so `page.nextCursor` came back nil despite
+            // the server having more rows — the sentinel kept refiring
+            // `loadMore`, every page request returned the same first 30
+            // rows, and the user saw a runaway burst of GET /conversations
+            // until the socket-driven render eventually unblocked things.
+            let newIds = Set(page.items.map(\.id)).subtracting(knownIds)
+            let cursorAdvanced = page.nextCursor != nil && page.nextCursor != previousCursor
+            let madeProgress = !newIds.isEmpty && cursorAdvanced
+            if !madeProgress, !page.items.isEmpty {
+                Logger.messages.error("[ConversationListVM] loadMore zero-progress (cursor=\(self.nextCursor ?? "nil") → \(page.nextCursor ?? "nil"), newIds=\(newIds.count)) — forcing exhausted to break loop")
+                nextCursor = page.nextCursor
+                hasMore = false
+                paginationState = .exhausted
+                // PERSIST the exhausted state. Without this, every
+                // `reloadFromCache()` triggered by a socket event
+                // (`syncEngine.conversationsDidChange` fires on each
+                // message/preference update) reads the cached cursor
+                // back as `hasMore=true`, flips `paginationState = .idle`,
+                // and the pagination footer sentinel re-fires `loadMore`.
+                // That re-loop was visible as 3-4 consecutive
+                // `forcing exhausted` lines in the May 2026 device log
+                // even though the in-memory guard was working correctly.
+                let exhaustedSnapshot = conversations
+                Task {
+                    await CacheCoordinator.shared.conversations.saveCursor(
+                        nextCursor: nil,
+                        hasMore: false,
+                        for: "list"
+                    )
+                    try? await CacheCoordinator.shared.conversations.save(exhaustedSnapshot, for: "list")
+                }
+                return
+            }
+
             nextCursor = page.nextCursor
             hasMore = page.hasMore
             paginationState = page.hasMore ? .idle : .exhausted
@@ -793,7 +1003,9 @@ class ConversationListViewModel: ObservableObject {
             // always the one that should win.
             persistTask?.cancel()
             persistTask = Task {
-                await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
+                // try? : Wave 1 Local-First a rendu .save() throwing.
+                // Best-effort persist — l'erreur est loggee en aval.
+                try? await CacheCoordinator.shared.conversations.save(snapshot, for: "list")
                 await CacheCoordinator.shared.conversations.saveCursor(
                     nextCursor: persistedCursor,
                     hasMore: persistedHasMore,
@@ -817,6 +1029,13 @@ class ConversationListViewModel: ObservableObject {
     /// down both clears the pagination cursor (otherwise the next
     /// `loadMore` would page from the old tail) and triggers the
     /// usual cache-first reload.
+    ///
+    /// Pull-to-refresh invalide AUSSI les caches transverses utilisés
+    /// par la home : préférences utilisateur/conversation, catégories
+    /// et tags personnalisés, profils (mood, last seen) et assets
+    /// visuels (avatars + bannières). La logique reset+fullSync ensuite
+    /// repeuple uniquement la listing — les autres stores se
+    /// rehydratent paresseusement à la prochaine lecture, cache-first.
     func pullToRefresh() async {
         // Cancel any in-flight persist BEFORE we reset the cursor or
         // invalidate the cache. Otherwise a `loadMore` save scheduled
@@ -827,11 +1046,66 @@ class ConversationListViewModel: ObservableObject {
         nextCursor = nil
         hasMore = true
         paginationState = .idle
-        // The forceRefresh() below calls invalidateCache() which wipes
-        // both items AND cache_metadata via invalidateAll, so the
-        // persisted cursor is cleared along the way — no separate
-        // saveCursor(nil, true, …) call needed.
+        await invalidatePullRefreshScope()
+        // forceRefresh() rappelle invalidateCache() (conversations) sur
+        // sa propre piste — l'idempotence d'invalidateAll garantit que
+        // ce double appel est gratuit (L1 vide → no-op, L2 already
+        // dropped → no-op).
         await forceRefresh()
+    }
+
+    /// Périmètre d'invalidation déclenché par le pull-to-refresh sur la
+    /// home. Sépare l'orchestration de cache du fetch reseau qui suit
+    /// (forceRefresh), pour que les tests unitaires puissent vérifier
+    /// la liste exacte des stores touchés.
+    ///
+    /// Couvre 11 caches pertinents pour la home :
+    /// - Listing + pagination (re-fetché immédiatement par forceRefresh)
+    /// - Stories (re-fetché actif par StoryViewModel.loadStories forceNetwork)
+    /// - Messages cached par conversation (l'ouverture d'une conv après
+    ///   refresh re-fetchera depuis le serveur)
+    /// - Préférences user/conversation, catégories, tags
+    /// - Profils (mood, presence, last seen)
+    /// - Assets visuels (avatars, bannières, thumbs)
+    /// - Caches mémoire de traduction/transcription : re-traduction
+    ///   garantie après refresh (utile si modèle NLLB côté serveur a
+    ///   été mis à jour ou si l'utilisateur a changé sa langue préférée)
+    ///
+    /// Stores intentionnellement laissés intacts (autres écrans ou
+    /// coût bande passante prohibitif) : feed, comments, stats,
+    /// notifications, friends, friendRequests, blockedUsers, userSearch,
+    /// timeline, audio, video, affiliateTokens, shareLinks,
+    /// trackingLinks, communityLinks.
+    private func invalidatePullRefreshScope() async {
+        // Listing + pagination (re-fetché immédiatement par forceRefresh)
+        await CacheCoordinator.shared.conversations.invalidateAll()
+        // Messages cached par conversation. Les previews dans la listing
+        // viennent de l'API (forceRefresh), mais l'historique cached est
+        // re-fetché à l'ouverture de la conv pour avoir le dernier état.
+        await CacheCoordinator.shared.messages.invalidateAll()
+        // Participants / membres des conversations (groupes, communautés)
+        await CacheCoordinator.shared.participants.invalidateAll()
+        // Stories : redondant avec StoryViewModel.loadStories(forceNetwork:)
+        // qui écrase via .save, mais explicite garantit que si le fetch
+        // échoue le cache stale ne persiste pas.
+        await CacheCoordinator.shared.stories.invalidateAll()
+        // Préférences (re-fetch lazy au prochain accès paramètres conv)
+        await CacheCoordinator.shared.conversationPreferences.invalidateAll()
+        await CacheCoordinator.shared.userPreferences.invalidateAll()
+        // Filtrage métadonnées (catégories + tags)
+        await CacheCoordinator.shared.categories.invalidateAll()
+        await CacheCoordinator.shared.userTags.invalidateAll()
+        // Profils (mood, presence cachée, dernière vue)
+        await CacheCoordinator.shared.profiles.invalidateAll()
+        // Assets visuels (avatars + bannières partagent le store images,
+        // les thumbs de message ont leur propre store). Re-download au
+        // prochain rendu des AsyncImage.
+        await CacheCoordinator.shared.images.invalidateAll()
+        await CacheCoordinator.shared.thumbnails.invalidateAll()
+        // Caches in-memory de traduction/transcription/audio + DB. Force
+        // une retraduction si le serveur a publié de nouvelles versions
+        // ou si l'utilisateur a changé sa langue préférée entre temps.
+        await CacheCoordinator.shared.invalidateTranslationCaches()
     }
 
     // MARK: - Persist Category Expansion
@@ -1045,8 +1319,19 @@ class ConversationListViewModel: ObservableObject {
             await withTaskGroup(of: Void.self) { group in
                 for conversation in topConversations {
                     let conversationId = conversation.id
-                    let cached = await CacheCoordinator.shared.messages.load(for: conversationId).value ?? []
-                    if !cached.isEmpty { continue }
+                    // SWR: prefetch only when the cache cannot already serve a
+                    // preview. `.fresh` / `.stale` both surface usable data
+                    // (the row's preview path reads them directly), so we
+                    // skip the network round-trip. `.expired` / `.empty`
+                    // mean the row would render an empty preview — fetch.
+                    let result = await CacheCoordinator.shared.messages.load(for: conversationId)
+                    switch result {
+                    case .fresh(let cached, _) where !cached.isEmpty,
+                         .stale(let cached, _) where !cached.isEmpty:
+                        continue
+                    case .fresh, .stale, .expired, .empty:
+                        break
+                    }
 
                     group.addTask {
                         do {
@@ -1060,7 +1345,7 @@ class ConversationListViewModel: ObservableObject {
                                 let messages = response.data.reversed().map {
                                     $0.toMessage(currentUserId: userId, currentUsername: username)
                                 }
-                                await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
+                                try? await CacheCoordinator.shared.messages.save(Array(messages), for: conversationId)
                             }
                         } catch { }
                     }
@@ -1132,7 +1417,7 @@ class ConversationListViewModel: ObservableObject {
                     }
                 }
 
-                await CacheCoordinator.shared.stories.save(storyGroups, for: "recent_tray")
+                try? await CacheCoordinator.shared.stories.save(storyGroups, for: "recent_tray")
                 Logger.messages.info("[ConversationListVM] Stories prefetched: \(storyGroups.count) groups, \(uniqueImageURLs.count) images, \(uniqueVideoURLs.count) videos")
             } catch {
                 Logger.messages.error("[ConversationListVM] Story prefetch failed: \(error.localizedDescription)")

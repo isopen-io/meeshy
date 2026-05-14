@@ -42,7 +42,6 @@ import { cn } from '@/lib/utils';
 import { useReplyStore } from '@/stores/reply-store';
 import { toast } from 'sonner';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
-import { useUserStatusRealtime } from '@/hooks/use-user-status-realtime';
 import { useUserStore } from '@/stores/user-store';
 import { useSocketCacheSync, useInvalidateOnReconnect } from '@/hooks/queries';
 import { useAutoRetryFailedMessages } from '@/hooks/use-auto-retry-failed-messages';
@@ -216,9 +215,6 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
 
   // Volatile state ref for handleSendMessage stabilization (consumed by B1 when it rewrites handleSendMessage)
   const volatileStateRef = useRef({ newMessage: '', attachmentIds: [] as string[], attachmentMimeTypes: [] as string[], selectedLanguage: '', isTyping: false });
-
-  // Activer les mises à jour de statut utilisateur en temps réel
-  useUserStatusRealtime();
 
   // Activer les notifications push FCM
   useFCMNotifications({ autoSyncToken: true });

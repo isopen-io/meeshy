@@ -288,3 +288,161 @@ final class CallManagerRTPGateTests: XCTestCase {
         XCTAssertEqual(stats.inboundPacketsReceived, 42)
     }
 }
+
+@MainActor
+final class CallManagerEarlyJoinTests: XCTestCase {
+    /// Bug 2 — Caller stays ringing while callee shows "Connecting".
+    ///
+    /// Root cause: `emitCallJoin` used to be gated behind `await startLocalMedia(...)`,
+    /// which on real devices can take 0.5-3s for video (camera startup). During
+    /// that window, the gateway has no participant-joined event to broadcast, so
+    /// the caller stays in `.ringing(true)` while the callee already shows
+    /// `.connecting`. If `startLocalMedia` hangs or throws, the caller never
+    /// progresses.
+    ///
+    /// Fix: emit `call:join` IMMEDIATELY after `configureAudioSession`, before
+    /// the media-startup Task. Subsequent answer-creation paths await the
+    /// `localMediaTask` to guarantee the audio/video transceivers exist before
+    /// `createAnswer`.
+
+    private func sourceText() throws -> String {
+        let url = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .deletingLastPathComponent()
+            .appendingPathComponent("Meeshy/Features/Main/Services/CallManager.swift")
+        return try String(contentsOf: url, encoding: .utf8)
+    }
+
+    private func body(of funcSignature: String, in source: String) -> String? {
+        guard let funcRange = source.range(of: funcSignature) else { return nil }
+        // Heuristic: bound the function body to the next `func ` (private or
+        // not), or to the next MARK section. Good enough for guard-style tests.
+        let upper = source.index(funcRange.upperBound, offsetBy: 0)
+        let nextFunc = source.range(of: "\n    func ", range: upper..<source.endIndex)?.lowerBound
+        let nextPrivate = source.range(of: "\n    private func ", range: upper..<source.endIndex)?.lowerBound
+        let nextMark = source.range(of: "\n    // MARK:", range: upper..<source.endIndex)?.lowerBound
+        let candidates = [nextFunc, nextPrivate, nextMark].compactMap { $0 }
+        let blockEnd = candidates.min() ?? source.endIndex
+        return String(source[funcRange.lowerBound..<blockEnd])
+    }
+
+    func test_handleIncomingCallNotification_emitsCallJoinBeforeStartLocalMedia() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func handleIncomingCallNotification", in: source) else {
+            XCTFail("handleIncomingCallNotification not found")
+            return
+        }
+        guard let emitJoinIdx = body.range(of: "emitCallJoin(callId: callId)")?.lowerBound,
+              let startMediaIdx = body.range(of: "startLocalMedia(isVideo:")?.lowerBound else {
+            XCTFail("Expected emitCallJoin and startLocalMedia call sites in handleIncomingCallNotification")
+            return
+        }
+        XCTAssertLessThan(
+            emitJoinIdx,
+            startMediaIdx,
+            "Bug 2 guard: emitCallJoin MUST be called before awaiting startLocalMedia in handleIncomingCallNotification, " +
+            "otherwise the caller stays in .ringing(true) until the callee's camera/mic warmup completes."
+        )
+    }
+
+    func test_reportIncomingVoIPCall_emitsCallJoinBeforeStartLocalMedia() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func reportIncomingVoIPCall", in: source) else {
+            XCTFail("reportIncomingVoIPCall not found")
+            return
+        }
+        guard let emitJoinIdx = body.range(of: "emitCallJoin(callId: callId)")?.lowerBound,
+              let startMediaIdx = body.range(of: "startLocalMedia(isVideo:")?.lowerBound else {
+            XCTFail("Expected emitCallJoin and startLocalMedia call sites in reportIncomingVoIPCall")
+            return
+        }
+        XCTAssertLessThan(
+            emitJoinIdx,
+            startMediaIdx,
+            "Bug 2 guard: emitCallJoin MUST be called before awaiting startLocalMedia in reportIncomingVoIPCall."
+        )
+    }
+
+    func test_localMediaTask_isStored_inIncomingPaths() throws {
+        let source = try sourceText()
+        XCTAssertTrue(
+            source.contains("private var localMediaTask: Task<Void, Never>?"),
+            "Bug 2 guard: CallManager must hold a `localMediaTask` reference so answer-creation paths can await it."
+        )
+        // Both incoming paths must assign to localMediaTask
+        let incomingBody = body(of: "func handleIncomingCallNotification", in: source) ?? ""
+        let voipBody = body(of: "func reportIncomingVoIPCall", in: source) ?? ""
+        XCTAssertTrue(incomingBody.contains("localMediaTask = Task"), "handleIncomingCallNotification must store the local media Task in localMediaTask.")
+        XCTAssertTrue(voipBody.contains("localMediaTask = Task"), "reportIncomingVoIPCall must store the local media Task in localMediaTask.")
+    }
+
+    func test_answerCall_awaitsLocalMediaBeforeCreateAnswer() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func answerCall()", in: source) else {
+            XCTFail("answerCall() not found")
+            return
+        }
+        guard let awaitIdx = body.range(of: "await self.localMediaTask?.value")?.lowerBound,
+              let createAnswerIdx = body.range(of: "webRTCService.createAnswer(from: remoteOffer)")?.lowerBound else {
+            XCTFail("Expected `await self.localMediaTask?.value` and `createAnswer` in answerCall")
+            return
+        }
+        XCTAssertLessThan(
+            awaitIdx,
+            createAnswerIdx,
+            "Bug 2 guard: answerCall must await localMediaTask before createAnswer to guarantee audio/video transceivers exist."
+        )
+    }
+
+    func test_answerCallReady_awaitsLocalMediaBeforeCreateAnswer() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func answerCallReady()", in: source) else {
+            XCTFail("answerCallReady() not found")
+            return
+        }
+        guard let awaitIdx = body.range(of: "await self.localMediaTask?.value")?.lowerBound,
+              let createAnswerIdx = body.range(of: "webRTCService.createAnswer(from: remoteOffer)")?.lowerBound else {
+            XCTFail("Expected `await self.localMediaTask?.value` and `createAnswer` in answerCallReady")
+            return
+        }
+        XCTAssertLessThan(
+            awaitIdx,
+            createAnswerIdx,
+            "Bug 2 guard: answerCallReady must await localMediaTask before createAnswer."
+        )
+    }
+
+    func test_handleSignalOffer_connecting_awaitsLocalMediaBeforeCreateAnswer() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func handleSignalOffer", in: source) else {
+            XCTFail("handleSignalOffer not found")
+            return
+        }
+        // The .connecting branch contains both the await and createAnswer(from: sdp)
+        guard let connectingIdx = body.range(of: "case .connecting:")?.lowerBound,
+              let awaitIdx = body.range(of: "await self.localMediaTask?.value", range: connectingIdx..<body.endIndex)?.lowerBound,
+              let createAnswerIdx = body.range(of: "webRTCService.createAnswer(from: sdp)", range: connectingIdx..<body.endIndex)?.lowerBound else {
+            XCTFail("Expected await + createAnswer inside `.connecting` branch of handleSignalOffer")
+            return
+        }
+        XCTAssertLessThan(
+            awaitIdx,
+            createAnswerIdx,
+            "Bug 2 guard: handleSignalOffer `.connecting` branch must await localMediaTask before createAnswer."
+        )
+    }
+
+    func test_endCallInternal_cancelsLocalMediaTask() throws {
+        let source = try sourceText()
+        guard let body = body(of: "func endCallInternal", in: source) else {
+            XCTFail("endCallInternal not found")
+            return
+        }
+        XCTAssertTrue(
+            body.contains("localMediaTask?.cancel()"),
+            "Cleanup guard: endCallInternal must cancel localMediaTask to avoid leaking the in-flight startLocalMedia coroutine."
+        )
+    }
+}

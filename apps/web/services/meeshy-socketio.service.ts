@@ -295,6 +295,15 @@ class MeeshySocketIOService {
     return this.orchestrator.onUserStatus(listener);
   }
 
+  /**
+   * Subscribe to the one-shot presence snapshot emitted by the gateway right after
+   * socket authentication. Carries the list of userIds online among the user's
+   * contacts so the client can seed its store without waiting for state changes.
+   */
+  public onPresenceSnapshot(listener: (event: { users: ReadonlyArray<{ userId: string; username: string; isOnline: boolean; lastActiveAt?: Date | string | null }> }) => void): () => void {
+    return this.orchestrator.onPresenceSnapshot(listener);
+  }
+
   public onConversationStats(listener: (data: { conversationId: string; stats: any }) => void): () => void {
     return this.orchestrator.onConversationStats(listener);
   }

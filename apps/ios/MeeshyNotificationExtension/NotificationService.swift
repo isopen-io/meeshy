@@ -40,6 +40,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         // E2EE decryption: if the push payload contains encrypted content,
         // attempt to decrypt it locally using the shared Keychain session key.
         // On success, replace the notification body with the decrypted plaintext.
+        var didDecrypt = false
         if let encryptedContent = userInfo["encryptedContent"] as? String,
            let senderId = userInfo["senderId"] as? String,
            !encryptedContent.isEmpty {
@@ -48,58 +49,115 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
                 senderUserId: senderId
             ) {
                 bestAttemptContent.body = decrypted
+                didDecrypt = true
             }
         }
 
         // Localize protected message placeholders. The gateway sends a
-        // notificationLocKey (e.g. "notification.encrypted_message") and a
-        // plain-English fallback body. If the loc-key is present and the body
-        // was NOT already overridden by the E2EE decryptor above, resolve the
-        // localized string from the NSE bundle's Localizable.xcstrings.
-        if let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
+        // notificationLocKey (e.g. "notification.encrypted_message") AND a
+        // plain placeholder body for EVERY E2EE message. Without the
+        // `didDecrypt` guard the localized "Message chiffré" string would
+        // unconditionally clobber the just-decrypted plaintext from the
+        // E2EE block above, defeating the entire E2EE rich-push feature
+        // for every user on a localized device. Only fall back to the
+        // localized placeholder when decryption did NOT succeed (or was
+        // not applicable because the push wasn't encrypted at all).
+        if !didDecrypt,
+           let locKey = userInfo["notificationLocKey"] as? String, !locKey.isEmpty {
             let localized = NSLocalizedString(locKey, comment: "")
             if localized != locKey {
                 bestAttemptContent.body = localized
             }
         }
 
+        // Phase B — for `message_reaction`, the gateway sends body = "❤️" (emoji alone).
+        // Reformat it to "<sender> a réagi <emoji> à votre message" so the banner is
+        // self-explanatory. Done BEFORE applyCommunicationIntent so INSendMessageIntent
+        // sees the final body. The avatar of the reactor is still rendered via the
+        // standard Communication Notifications path (INPerson.image from `imageURL`).
+        if (userInfo["type"] as? String) == "message_reaction" {
+            let emoji = (userInfo["reactionEmoji"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                ?? bestAttemptContent.body
+            let senderName = (userInfo["senderDisplayName"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                ?? (userInfo["senderUsername"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                ?? ""
+            let template = NSLocalizedString(
+                "notification.message_reaction.body",
+                value: "%@ a réagi %@ à votre message",
+                comment: "Push body for a message reaction: sender name + emoji"
+            )
+            bestAttemptContent.body = senderName.isEmpty
+                ? String(format: NSLocalizedString(
+                    "notification.message_reaction.body.no_sender",
+                    value: "A réagi %@ à votre message",
+                    comment: "Fallback when no sender name is available"
+                ), emoji)
+                : String(format: template, senderName, emoji)
+        }
+
         let isCommunicationType = Self.communicationTypes.contains(
             userInfo["type"] as? String ?? ""
         )
 
-        if let imageURLString = userInfo["imageURL"] as? String,
-           let imageURL = URL(string: imageURLString) {
-            downloadAvatarData(from: imageURL) { [weak self] avatarData in
-                guard let self else {
-                    contentHandler(bestAttemptContent)
-                    return
-                }
+        // Phase A — separate concerns:
+        //   1. `imageURL`  → sender's avatar — ONLY fed to INPerson.image so the
+        //      Communication Notification renders it on the left of the banner
+        //      with the app icon as a badge bottom-right (WhatsApp/Telegram style).
+        //      NEVER attached as UNNotificationAttachment — that slot is for
+        //      message media, and feeding the avatar there made iOS render it as
+        //      the message preview while the banner kept showing the default
+        //      app icon on the left.
+        //   2. `attachmentUrl` + `attachmentMimeType` → media of the message
+        //      itself (audio/image/video). Downloaded and attached with a UTI
+        //      typeHint so iOS picks the native inline renderer (audio waveform
+        //      with play button, image preview, video thumbnail with tap-to-play).
+        let group = DispatchGroup()
+        var avatarData: Data?
+        nonisolated(unsafe) var messageAttachment: UNNotificationAttachment?
 
-                if let avatarData {
-                    let attachment = self.createAttachment(from: avatarData, fileExtension: imageURL.pathExtension)
-                    if let attachment {
-                        bestAttemptContent.attachments = [attachment]
-                    }
-                }
-
-                if isCommunicationType {
-                    let finalContent = self.applyCommunicationIntent(
-                        to: bestAttemptContent,
-                        avatarData: avatarData
-                    )
-                    contentHandler(finalContent)
-                } else {
-                    contentHandler(bestAttemptContent)
-                }
+        if let avatarURLString = userInfo["imageURL"] as? String,
+           !avatarURLString.isEmpty,
+           let avatarURL = URL(string: avatarURLString) {
+            group.enter()
+            downloadData(from: avatarURL) { data in
+                avatarData = data
+                group.leave()
             }
-            return
         }
 
-        if isCommunicationType {
-            let finalContent = applyCommunicationIntent(to: bestAttemptContent, avatarData: nil)
-            contentHandler(finalContent)
-        } else {
-            contentHandler(bestAttemptContent)
+        if let attachmentURLString = userInfo["attachmentUrl"] as? String,
+           !attachmentURLString.isEmpty,
+           let attachmentURL = URL(string: attachmentURLString) {
+            let mime = userInfo["attachmentMimeType"] as? String ?? ""
+            group.enter()
+            downloadData(from: attachmentURL) { [weak self] data in
+                defer { group.leave() }
+                guard let self, let data else { return }
+                messageAttachment = self.createMessageAttachment(
+                    from: data,
+                    originalURL: attachmentURL,
+                    mimeType: mime
+                )
+            }
+        }
+
+        group.notify(queue: .global(qos: .userInitiated)) { [weak self] in
+            guard let self else {
+                contentHandler(bestAttemptContent)
+                return
+            }
+            if let messageAttachment {
+                bestAttemptContent.attachments = [messageAttachment]
+            }
+            if isCommunicationType {
+                let finalContent = self.applyCommunicationIntent(
+                    to: bestAttemptContent,
+                    avatarData: avatarData
+                )
+                contentHandler(finalContent)
+            } else {
+                contentHandler(bestAttemptContent)
+            }
         }
     }
 
@@ -215,12 +273,14 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
               let messageId = userInfo["messageId"] as? String,
               !conversationId.isEmpty, !messageId.isEmpty else { return }
 
-        let apiBase = (userInfo["apiBaseURL"] as? String) ?? "https://gate.meeshy.me"
-
+        // Audit 2026-05-11: NSEDataSync now resolves the API base URL
+        // internally from a strict allowlist + App Group UserDefaults.
+        // We deliberately stop reading `userInfo["apiBaseURL"]` — that
+        // path was an SSRF / JWT exfiltration vector for any attacker
+        // who could deliver a push payload.
         NSEDataSync.syncMessage(
             conversationId: conversationId,
-            messageId: messageId,
-            apiBaseURL: apiBase
+            messageId: messageId
         ) { _ in }
     }
 
@@ -233,8 +293,9 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     /// This is a best-effort, fire-and-forget operation. Any failure is silently
     /// swallowed; the main app will fetch the message from the REST API on resume.
     private static let sharedPool: DatabasePool? = {
+        guard let path = appGroupDatabasePath() else { return nil }
         do {
-            let pool = try DatabasePool(path: appGroupDatabasePath())
+            let pool = try DatabasePool(path: path)
             try MessageDatabaseMigrations.runAll(on: pool)
             return pool
         } catch { return nil }
@@ -247,17 +308,37 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
               let pool = Self.sharedPool
         else { return }
 
+        // Audit 2026-05-11: For E2EE messages we deliberately skip the
+        // pre-persist path. The push payload's plaintext `content` field
+        // is just the placeholder ("Encrypted message"), and writing
+        // `isEncrypted: false` would let attacker-controlled push content
+        // render in the bubble until NSEDataSync.syncMessage's API
+        // response overwrites it. NSEDataSync already fetches the
+        // canonical record from the gateway and writes it via the
+        // pending-messages path — that's the trustworthy source.
+        let isEncryptedPush = (userInfo["encryptedContent"] as? String).map { !$0.isEmpty } ?? false
+        if isEncryptedPush { return }
+
         let content = userInfo["content"] as? String ?? ""
 
         do {
-
             let now = Date()
             let record = MessageRecord(
                 localId: messageId, serverId: messageId,
                 conversationId: conversationId, senderId: senderId,
-                content: content, originalLanguage: "fr",
+                // Don't hardcode "fr" — read from push payload if present, else
+                // default to "en" (the safer fake for an unknown language than
+                // the previous "fr" which guaranteed wrong Prisme Linguistique
+                // resolution for non-French speakers). The NSEDataSync API
+                // fetch will overwrite with the canonical value seconds later.
+                content: content,
+                originalLanguage: (userInfo["originalLanguage"] as? String) ?? "en",
                 messageType: "text", messageSource: "user", contentType: "text",
-                state: .sent, retryCount: 0, lastError: nil,
+                // Incoming messages are .delivered (received by us), not
+                // .sent (which means "sent BY us and acked by server").
+                // The previous .sent value broke any GRDB query that
+                // partitions by sender ownership.
+                state: .delivered, retryCount: 0, lastError: nil,
                 isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
                 replyToId: nil, storyReplyToId: nil,
                 forwardedFromId: nil, forwardedFromConversationId: nil,
@@ -288,12 +369,17 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         }
     }
 
-    /// Returns the path to the shared App Group SQLite database.
-    /// Mirrors `DependencyContainer.databasePath()` from the main app target.
-    private static func appGroupDatabasePath() -> String {
-        let container = FileManager.default.containerURL(
+    /// Returns the path to the shared App Group SQLite database, or nil if
+    /// the App Group entitlement is not available (misconfigured signing,
+    /// stripped entitlement on Ad Hoc builds, etc.). Audit 2026-05-11
+    /// removed the prior `containerURL!` force-unwrap which crashed the
+    /// extension via EXC_BREAKPOINT on the very first push when the
+    /// entitlement was absent — invisible to users, hard to diagnose
+    /// without a sysdiagnose.
+    private static func appGroupDatabasePath() -> String? {
+        guard let container = FileManager.default.containerURL(
             forSecurityApplicationGroupIdentifier: "group.me.meeshy.apps"
-        )!
+        ) else { return nil }
         let dbDir = container.appendingPathComponent("Database")
         try? FileManager.default.createDirectory(at: dbDir, withIntermediateDirectories: true)
         return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
@@ -302,9 +388,21 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
     // MARK: - Communication Notifications
 
     /// Notification types that should use iOS Communication Notification style.
+    /// Phase C — call notifications (APN non-VoIP path) are also routed through
+    /// INSendMessageIntent so the banner shows the caller's avatar on the left
+    /// with the app badge bottom-right. The VoIP `incoming_call` push is NOT
+    /// in this set — it goes through PushKit (PKPushRegistry) and uses CallKit's
+    /// own UI, so the notification extension never sees it.
+    /// Phase D+E — social events (likes, comments, reposts, story reactions)
+    /// and friend requests all carry the actor's avatar in `imageURL`, so the
+    /// Communication path renders them with the same WhatsApp/Telegram style.
     private static let communicationTypes: Set<String> = [
-        "new_message", "message_reply", "reply",
-        "message_reaction", "mention", "user_mentioned"
+        "new_message", "message_reply", "reply", "message_forwarded",
+        "new_conversation", "new_conversation_direct", "new_conversation_group", "added_to_conversation",
+        "message_reaction", "mention", "user_mentioned",
+        "missed_call", "call_ended", "call_declined", "call_recording_ready",
+        "post_like", "post_comment", "post_repost", "story_reaction", "comment_like", "comment_reply",
+        "friend_request", "contact_request"
     ]
 
     /// Creates an `INSendMessageIntent` and returns updated notification content
@@ -378,8 +476,9 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
 
     // MARK: - Attachments
 
-    /// Downloads image data (raw bytes) for use as both attachment and INImage.
-    private func downloadAvatarData(
+    /// Generic data download for any push payload URL (avatar or message media).
+    /// Fire-and-forget — completion is invoked exactly once, with nil on any failure.
+    private func downloadData(
         from url: URL,
         completion: @escaping (Data?) -> Void
     ) {
@@ -394,21 +493,74 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         task.resume()
     }
 
-    /// Creates a `UNNotificationAttachment` from raw image data.
-    private func createAttachment(from data: Data, fileExtension: String) -> UNNotificationAttachment? {
-        let tempDir = FileManager.default.temporaryDirectory
-        let ext = fileExtension.isEmpty ? "jpg" : fileExtension
-        let tempFile = tempDir.appendingPathComponent(UUID().uuidString + "." + ext)
-
+    /// Creates a UNNotificationAttachment from raw bytes for a message media.
+    /// Picks the right file extension + UTI typeHint so iOS renders the attachment
+    /// in its native style (image preview, audio waveform with play button, video
+    /// thumbnail with tap-to-play).
+    private func createMessageAttachment(
+        from data: Data,
+        originalURL: URL,
+        mimeType: String
+    ) -> UNNotificationAttachment? {
+        let (ext, typeHint) = Self.fileHints(
+            mimeType: mimeType,
+            fallbackPathExtension: originalURL.pathExtension
+        )
+        let tempFile = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString + "." + ext)
         do {
             try data.write(to: tempFile)
+            var options: [String: Any] = [:]
+            if let typeHint {
+                options[UNNotificationAttachmentOptionsTypeHintKey] = typeHint
+            }
             return try UNNotificationAttachment(
                 identifier: UUID().uuidString,
                 url: tempFile,
-                options: nil
+                options: options.isEmpty ? nil : options
             )
         } catch {
             return nil
         }
+    }
+
+    /// Maps a payload mime type (or a URL path extension fallback) to a UTI typeHint
+    /// and a sensible file extension. Returns ("m4a", "public.audio") for unknown
+    /// audio etc. so iOS still treats the attachment as a media of the right family.
+    private static func fileHints(
+        mimeType: String,
+        fallbackPathExtension: String
+    ) -> (ext: String, typeHint: String?) {
+        let normalized = mimeType.lowercased()
+        if normalized.hasPrefix("image/") {
+            if normalized.contains("png") { return ("png", "public.png") }
+            if normalized.contains("gif") { return ("gif", "com.compuserve.gif") }
+            if normalized.contains("webp") { return ("webp", "org.webmproject.webp") }
+            if normalized.contains("heic") { return ("heic", "public.heic") }
+            return ("jpg", "public.jpeg")
+        }
+        if normalized.hasPrefix("audio/") {
+            if normalized.contains("m4a") || normalized.contains("mp4a") || normalized.contains("aac") {
+                return ("m4a", "com.apple.m4a-audio")
+            }
+            if normalized.contains("mp3") || normalized.contains("mpeg") {
+                return ("mp3", "public.mp3")
+            }
+            if normalized.contains("wav") {
+                return ("wav", "com.microsoft.waveform-audio")
+            }
+            if normalized.contains("ogg") {
+                return ("ogg", "public.audio")
+            }
+            return ("m4a", "public.audio")
+        }
+        if normalized.hasPrefix("video/") {
+            if normalized.contains("quicktime") || normalized.contains("mov") {
+                return ("mov", "com.apple.quicktime-movie")
+            }
+            return ("mp4", "public.mpeg-4")
+        }
+        let ext = fallbackPathExtension.isEmpty ? "bin" : fallbackPathExtension
+        return (ext, nil)
     }
 }

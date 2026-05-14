@@ -99,6 +99,7 @@ export function ConversationParticipantsDrawer({
   // Store global des utilisateurs (mis à jour en temps réel par useUserStatusRealtime)
   const storeParticipants = useUserStore(state => state.participants);
   const setStoreParticipants = useUserStore(state => state.setParticipants);
+  const getUserByIdFn = useUserStore(state => state.getUserById);
 
   // Initialiser le store avec les participants au montage
   useEffect(() => {

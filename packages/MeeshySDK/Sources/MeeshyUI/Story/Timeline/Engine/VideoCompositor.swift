@@ -73,10 +73,24 @@ public struct VideoCompositor: Sendable {
 
         let segments = computeSegments(clips: videoClips, slideDuration: slideDuration)
 
+        // Build clipId → trackID map by pairing video clips with composition video
+        // tracks in insertion order. `StoryTimelineEngine.insertVideoTracks` uses
+        // the exact same filter + iteration order as `videoClips` above, so the
+        // pairing is deterministic. When the caller hasn't inserted tracks yet
+        // (e.g. unit tests that skip asset loading), the map is empty and we emit
+        // empty `layerInstructions` arrays — preserving the previous behaviour.
+        let trackIDsByClip = makeTrackIDMap(videoClips: videoClips, composition: composition)
+
         let instructions: [AVVideoCompositionInstructionProtocol] = segments.map { segment in
             let instruction = AVMutableVideoCompositionInstruction()
             instruction.timeRange = segment.timeRange
-            instruction.layerInstructions = []
+            instruction.layerInstructions = makeSegmentLayerInstructions(
+                segment: segment,
+                videoClips: videoClips,
+                clipTransitions: project.clipTransitions,
+                slideDuration: slideDuration,
+                trackIDsByClip: trackIDsByClip
+            )
             return instruction
         }
 
@@ -86,6 +100,14 @@ public struct VideoCompositor: Sendable {
         // Priority: non-built-in kinds → CustomTransitionCompositor (forward compat)
         //           dissolve only      → DissolveVideoCompositor (CIDissolveTransition)
         //           crossfade only     → no custom compositor (native opacity ramp)
+        //
+        // When a custom compositor is registered, AVFoundation reads the per-track
+        // `sourceTrackIDs` from each layer instruction to feed `startRequest`.
+        // `makeSegmentLayerInstructions` always emits layer instructions for active
+        // clips (when track IDs are known), so the dissolve / custom paths receive
+        // the source frames they need. Opacity ramps are still attached — the
+        // custom compositor ignores them when it overrides per-pixel blending, but
+        // the ramps remain authoritative for the native crossfade path.
         let hasDissolve = project.clipTransitions.contains { $0.kind == .dissolve }
         let usesCustomKind = project.clipTransitions.contains { transition in
             switch transition.kind {
@@ -110,20 +132,21 @@ public struct VideoCompositor: Sendable {
         clips: [StoryMediaObject],
         slideDuration: Float
     ) -> [CompositionSegment] {
-        var boundaries = Set<Float>()
+        let slideDurationD = Double(slideDuration)
+        var boundaries = Set<Double>()
         boundaries.insert(0)
-        boundaries.insert(slideDuration)
+        boundaries.insert(slideDurationD)
         for clip in clips {
             let start = clip.startTime ?? 0
-            let duration = clip.duration ?? slideDuration
+            let duration = clip.duration ?? slideDurationD
             boundaries.insert(max(0, start))
-            boundaries.insert(min(slideDuration, start + duration))
+            boundaries.insert(min(slideDurationD, start + duration))
         }
         let sorted = boundaries.sorted()
         guard sorted.count >= 2 else {
             let full = CMTimeRange(
                 start: .zero,
-                duration: CMTime(seconds: Double(slideDuration), preferredTimescale: 600)
+                duration: CMTime(seconds: slideDurationD, preferredTimescale: 600)
             )
             return [CompositionSegment(timeRange: full, activeClipIds: [])]
         }
@@ -134,13 +157,13 @@ public struct VideoCompositor: Sendable {
             guard to > from else { continue }
             let active = clips.compactMap { clip -> String? in
                 let s = clip.startTime ?? 0
-                let d = clip.duration ?? slideDuration
+                let d = clip.duration ?? slideDurationD
                 let e = s + d
                 return (s <= from + 0.0001 && e >= to - 0.0001) ? clip.id : nil
             }
             let range = CMTimeRange(
-                start: CMTime(seconds: Double(from), preferredTimescale: 600),
-                duration: CMTime(seconds: Double(to - from), preferredTimescale: 600)
+                start: CMTime(seconds: from, preferredTimescale: 600),
+                duration: CMTime(seconds: to - from, preferredTimescale: 600)
             )
             segments.append(CompositionSegment(timeRange: range, activeClipIds: active))
         }
@@ -245,6 +268,73 @@ public struct VideoCompositor: Sendable {
                 fromStartOpacity: ramp.fromOpacity,
                 toEndOpacity: ramp.toOpacity,
                 timeRange: ramp.timeRange
+            )
+        }
+    }
+
+    /// Pair the project's video clips with the composition's video tracks by
+    /// insertion order. Returns an empty map when the composition has no video
+    /// tracks (test contexts that skip asset loading) — callers MUST tolerate
+    /// missing entries and fall back to empty `layerInstructions`.
+    nonisolated private static func makeTrackIDMap(
+        videoClips: [StoryMediaObject],
+        composition: AVMutableComposition
+    ) -> [String: CMPersistentTrackID] {
+        let videoTracks = composition.tracks(withMediaType: .video)
+        guard !videoTracks.isEmpty, !videoClips.isEmpty else { return [:] }
+        var map: [String: CMPersistentTrackID] = [:]
+        let pairCount = min(videoClips.count, videoTracks.count)
+        for i in 0..<pairCount {
+            map[videoClips[i].id] = videoTracks[i].trackID
+        }
+        return map
+    }
+
+    /// Compute the clip's own time range in composition time, used as the basis
+    /// for fadeIn/fadeOut/transition ramp placement. Falls back to a full-slide
+    /// range when `startTime` / `duration` are nil (legacy clips).
+    nonisolated private static func clipTimeRange(
+        clip: StoryMediaObject,
+        slideDuration: Float
+    ) -> CMTimeRange {
+        let start = clip.startTime ?? 0
+        let duration = clip.duration ?? Double(slideDuration)
+        return CMTimeRange(
+            start: CMTime(seconds: max(0, start), preferredTimescale: 600),
+            duration: CMTime(seconds: duration, preferredTimescale: 600)
+        )
+    }
+
+    /// Build the list of `AVMutableVideoCompositionLayerInstruction` to attach
+    /// to a single segment's parent instruction. One layer instruction per active
+    /// clip whose track ID is known. Each instruction carries:
+    /// - `setOpacityRamp` for `fadeIn` / `fadeOut` (per-clip envelope) and
+    ///   `.crossfade` transitions (native AVFoundation blending)
+    /// - no opacity ramp for `.dissolve` (the custom `DissolveVideoCompositor`
+    ///   computes the per-pixel blend itself; ramps would double-up the fade)
+    /// - the source `trackID`, required by both native blending AND the custom
+    ///   compositors which read `sourceTrackIDs` to fetch source frames
+    nonisolated private static func makeSegmentLayerInstructions(
+        segment: CompositionSegment,
+        videoClips: [StoryMediaObject],
+        clipTransitions: [StoryClipTransition],
+        slideDuration: Float,
+        trackIDsByClip: [String: CMPersistentTrackID]
+    ) -> [AVMutableVideoCompositionLayerInstruction] {
+        guard !segment.activeClipIds.isEmpty else { return [] }
+        let clipsByID = Dictionary(uniqueKeysWithValues: videoClips.map { ($0.id, $0) })
+        return segment.activeClipIds.compactMap { clipID -> AVMutableVideoCompositionLayerInstruction? in
+            guard let clip = clipsByID[clipID],
+                  let trackID = trackIDsByClip[clipID] else { return nil }
+            let outgoing = clipTransitions.first { $0.fromClipId == clipID }
+            let incoming = clipTransitions.first { $0.toClipId == clipID }
+            return makeLayerInstruction(
+                trackID: trackID,
+                timeRange: clipTimeRange(clip: clip, slideDuration: slideDuration),
+                fadeIn: Float(clip.fadeIn ?? 0),
+                fadeOut: Float(clip.fadeOut ?? 0),
+                outgoingTransition: outgoing,
+                incomingTransition: incoming
             )
         }
     }

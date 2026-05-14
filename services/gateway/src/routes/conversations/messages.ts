@@ -23,7 +23,7 @@ import type {
   SendMessageBody,
   MessagesQuery
 } from './types';
-import { enhancedLogger } from '../../utils/logger-enhanced';
+import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 import { sendSuccess, sendBadRequest, sendUnauthorized, sendForbidden, sendNotFound, sendInternalError } from '../../utils/response';
 import { z } from 'zod';
 import { CommonSchemas } from '@meeshy/shared/utils/validation';
@@ -686,7 +686,10 @@ export function registerMessagesRoutes(
           where: whereClause,
           select: messageSelect,
           orderBy: { createdAt: 'desc' },
-          take: isAroundMode ? limit + 1 : limit, // +1 in around mode to include the target message
+          // Cursor-based pagination (before): fetch limit+1 to detect hasMore
+          // without an extra COUNT query. The extra row is trimmed before
+          // returning to the client.
+          take: isAroundMode ? limit + 1 : (before ? limit + 1 : limit),
           skip: (before || isAroundMode) ? 0 : offset
         }),
         // 3. Récupérer les préférences linguistiques (si authentifié)
@@ -836,7 +839,12 @@ export function registerMessagesRoutes(
           // Identifiants
           id: message.id,
           conversationId: message.conversationId,
-          senderId: message.senderId,
+          // CORRECTION senderId: en DB, senderId = Participant.id (FK).
+          // Les clients (iOS/Web) comparent senderId avec leur userId (User.id).
+          // On résout ici : senderId devient sender.userId si disponible.
+          senderId: message.sender?.userId ?? message.sender?.user?.id ?? message.senderId,
+          // Conserver le participantId brut pour debug/internal usage
+          senderParticipantId: message.senderId,
           
 
           // Contenu
@@ -1038,8 +1046,22 @@ export function registerMessagesRoutes(
       timings.markAsReceived = performance.now() - t0;
 
       // Construire les métadonnées de cursor pagination
+      // When using cursor-based pagination (before), we fetched limit+1 rows.
+      // If we got more than `limit`, there are definitely more messages.
+      // Trim the extra row before returning to the client.
+      let cursorHasMore: boolean;
+      if (before && messages.length > limit) {
+        cursorHasMore = true;
+        messages.splice(limit); // trim to exactly `limit` rows
+      } else {
+        cursorHasMore = before ? false : messages.length === limit;
+      }
       const lastMessageId = messages.length > 0 ? String((messages[messages.length - 1] as any).id) : null;
-      const cursorPaginationMeta = buildCursorPaginationMeta(limit, messages.length, lastMessageId);
+      const cursorPaginationMeta = {
+        limit,
+        hasMore: cursorHasMore,
+        nextCursor: messages.length > 0 ? lastMessageId : null
+      };
 
       // Format optimisé: data directement = Message[], meta pour userLanguage
       // Aligné avec MessagesListResponse de @meeshy/shared/types
@@ -1288,6 +1310,12 @@ export function registerMessagesRoutes(
         mentionedUserIds
       } = bodyResult.data as SendMessageBody;
 
+      // Resolve identifier (e.g. "meeshy") → ObjectId, same as GET route
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return sendNotFound(reply, 'Conversation not found');
+      }
+
       // Compute effectFlags from legacy fields if not provided
       const { MESSAGE_EFFECT_FLAGS } = await import('@meeshy/shared/types/message-effect-flags');
       let effectFlags = (bodyResult.data as any).effectFlags ?? 0;
@@ -1300,7 +1328,7 @@ export function registerMessagesRoutes(
         participantId = authRequest.authContext.participantId!;
       } else {
         const participant = await prisma.participant.findFirst({
-          where: { userId, conversationId: id, isActive: true },
+          where: { userId, conversationId, isActive: true },
           select: { id: true }
         });
         if (!participant) {
@@ -1313,6 +1341,17 @@ export function registerMessagesRoutes(
         return sendForbidden(reply, 'Participant identification failed');
       }
 
+      const corr: Record<string, any> = {
+        clientMessageId,
+        conversationId,
+        participantId,
+        route: 'POST /conversations/:id/messages'
+      };
+      const routeStart = Date.now();
+      logger.info('perf:http.message.post', {
+        ...corr, step: 'http.message.post', phase: 'start'
+      });
+
       // Utiliser le MessagingService unifié
       const { MessagingService } = await import('../../services/messaging/MessagingService');
       const messagingService = new MessagingService(
@@ -1322,7 +1361,7 @@ export function registerMessagesRoutes(
       );
 
       const messageRequest = {
-        conversationId: id,
+        conversationId,
         content: content || '',
         clientMessageId,
         originalLanguage,
@@ -1349,18 +1388,29 @@ export function registerMessagesRoutes(
       const result = await messagingService.handleMessage(messageRequest, participantId);
 
       if (!result.success) {
+        logger.info('perf:http.message.post', {
+          ...corr, step: 'http.message.post', phase: 'end',
+          durationMs: Date.now() - routeStart, success: false,
+          error: result.error
+        });
         return sendBadRequest(reply, result.error || 'Invalid message request');
       }
 
       // Broadcaster via socket (async)
       if (socketIOHandler && result.data) {
-        const conversationId = result.data.conversationId;
+        const broadcastConvId = result.data.conversationId || conversationId;
         setImmediate(() => {
-          socketIOHandler.broadcastMessage(result.data as any, conversationId).catch((err: any) => {
+          socketIOHandler.broadcastMessage(result.data as any, broadcastConvId).catch((err: any) => {
             logger.error('⚠️ [REST] Socket broadcast failed', err);
           });
         });
       }
+
+      logger.info('perf:http.message.post', {
+        ...corr, step: 'http.message.post', phase: 'end',
+        durationMs: Date.now() - routeStart, success: true,
+        messageId: result.data?.id
+      });
 
       return reply.send(result);
 

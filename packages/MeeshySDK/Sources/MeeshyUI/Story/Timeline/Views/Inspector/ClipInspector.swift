@@ -3,6 +3,17 @@ import SwiftUI
 /// Per-clip editor surface. Stateless on its own — receives a snapshot, emits
 /// callbacks for every field commit. The owning container (`QuickTimelineView`
 /// or `ProTimelineView`) wires those callbacks back to `TimelineViewModel`.
+///
+/// ### State sync contract
+/// The inspector holds local `@State` for the slider/toggle values to keep
+/// in-flight gestures smooth (a single drag must not be interrupted by an
+/// external snapshot push). However, when the upstream `clip` changes for
+/// non-edit reasons — most importantly **undo/redo** — the local `@State`
+/// MUST resync to the new snapshot, otherwise the UI shows stale values.
+///
+/// SwiftUI does NOT re-run `init` when only `clip` changes (the view's
+/// identity is preserved), so the resync is implemented via `.onChange(of:)`
+/// inside `body`. See `test_inspector_clipChanges_stateResyncs`.
 public struct ClipInspector: View {
 
     // MARK: - Snapshot
@@ -81,6 +92,21 @@ public struct ClipInspector: View {
         onVolumeChanged(min(1, max(0, value)))
     }
 
+    /// Test-only read of the current local `@State` values. Used by
+    /// `ClipInspector_StateSyncTests` to verify that `.onChange(of: clip)`
+    /// successfully resyncs after an external snapshot change (e.g. undo).
+    public struct _StateProbe: Sendable, Equatable {
+        public let volume: Float
+        public let fadeIn: Float
+        public let fadeOut: Float
+        public let loop: Bool
+        public let background: Bool
+    }
+
+    public var _stateSnapshot: _StateProbe {
+        _StateProbe(volume: volume, fadeIn: fadeIn, fadeOut: fadeOut, loop: loop, background: background)
+    }
+
     public static func formatTime(seconds: Float) -> String {
         let total = max(0, seconds)
         let minutes = Int(total) / 60
@@ -88,11 +114,48 @@ public struct ClipInspector: View {
         return String(format: "%d:%06.3f", minutes, remainder)
     }
 
+    /// True when the clip's media carries audio playback (`.video` or `.audio`).
+    /// Image clips have no audio track — exposing the volume slider or loop
+    /// toggle for them would surface controls that have no underlying effect.
+    /// Exposed at type-level so tests can assert kind→affordance gating
+    /// without driving the SwiftUI view body.
+    public static func hasAudioAffordances(kind: ClipSnapshot.Kind) -> Bool {
+        switch kind {
+        case .video, .audio: return true
+        case .image, .text:  return false
+        }
+    }
+
+    /// True when looping a clip makes sense. Audio + video can loop; still
+    /// images and text overlays cannot (no playback to wrap around).
+    public static func supportsLoop(kind: ClipSnapshot.Kind) -> Bool {
+        switch kind {
+        case .video, .audio: return true
+        case .image, .text:  return false
+        }
+    }
+
+    /// VoiceOver label for the inspector container, resolved per clip kind.
+    /// Prior to this helper, the label was hardcoded to "Video clip" for every
+    /// kind — audio/image/text clips were mis-announced. Exposed at type-level
+    /// so tests can assert the kind→label mapping without driving the SwiftUI
+    /// view body. See `ClipInspector_AccessibilityKindTests`.
+    public static func accessibilityLabel(for kind: ClipSnapshot.Kind) -> String {
+        switch kind {
+        case .video: return String(localized: "story.timeline.a11y.clip.video", bundle: .module)
+        case .audio: return String(localized: "story.timeline.a11y.clip.audio", bundle: .module)
+        case .image: return String(localized: "story.timeline.a11y.clip.image", bundle: .module)
+        case .text:  return String(localized: "story.timeline.a11y.clip.text",  bundle: .module)
+        }
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
             metadataRow
-            volumeSlider
+            if Self.hasAudioAffordances(kind: clip.kind) {
+                volumeSlider
+            }
             fadeSliders
             togglesRow
             actionsRow
@@ -104,7 +167,14 @@ public struct ClipInspector: View {
         )
         .frame(maxWidth: presentation == .popover ? 360 : .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "story.timeline.a11y.clip.video", bundle: .module))
+        .accessibilityLabel(Self.accessibilityLabel(for: clip.kind))
+        .onChange(of: clip) { _, newClip in
+            volume = newClip.volume
+            fadeIn = newClip.fadeInDuration
+            fadeOut = newClip.fadeOutDuration
+            loop = newClip.isLooping
+            background = newClip.isBackground
+        }
     }
 
     // MARK: - Sub-views
@@ -189,16 +259,19 @@ public struct ClipInspector: View {
         }
     }
 
+    @ViewBuilder
     private var togglesRow: some View {
         HStack(spacing: 24) {
-            Toggle(isOn: Binding(
-                get: { loop },
-                set: { loop = $0; onLoopToggled($0) }
-            )) {
-                Text(String(localized: "story.timeline.inspector.loop", bundle: .module))
+            if Self.supportsLoop(kind: clip.kind) {
+                Toggle(isOn: Binding(
+                    get: { loop },
+                    set: { loop = $0; onLoopToggled($0) }
+                )) {
+                    Text(String(localized: "story.timeline.inspector.loop", bundle: .module))
+                }
+                .toggleStyle(.switch)
+                .tint(MeeshyColors.indigo500)
             }
-            .toggleStyle(.switch)
-            .tint(MeeshyColors.indigo500)
 
             Toggle(isOn: Binding(
                 get: { background },

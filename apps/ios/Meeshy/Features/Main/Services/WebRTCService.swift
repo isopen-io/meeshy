@@ -16,7 +16,18 @@ protocol WebRTCServiceDelegate: AnyObject {
 
 // MARK: - WebRTC Service
 
-final class WebRTCService: @unchecked Sendable {
+// Audit P1-3 — marked `@MainActor` so all mutable state (`connectionState`,
+// `iceCandidateBuffer`, `hasRemoteDescription`, `currentBitrate`,
+// `currentQualityLevel`, `lastStats`, `qualityMonitorTask`, etc.) is
+// accessed from a single isolation domain. Was `@unchecked Sendable` with
+// no lock — TSAN-detectable data race because `webRTCClient(_:didChangeConnectionState:)`
+// mutated `connectionState` from `DispatchQueue.main.async` while other
+// callers read it from arbitrary actors. The delegate extension below is
+// `nonisolated` and hops via `Task { @MainActor in }` so callers from
+// P2PWebRTCClient (which dispatches to main queue but not to the MainActor
+// isolation domain) keep working unchanged.
+@MainActor
+final class WebRTCService {
     weak var delegate: WebRTCServiceDelegate?
 
     let videoFilterPipeline = VideoFilterPipeline()
@@ -33,7 +44,11 @@ final class WebRTCService: @unchecked Sendable {
 
     private(set) var currentBitrate: Int = QualityThresholds.defaultBitrate
     private(set) var currentQualityLevel: VideoQualityLevel = .excellent
-    private var qualityMonitorTimer: Timer?
+    // Audit P1-4 — replace Timer.scheduledTimer with cancellable Task to
+    // align with PERF-011 (heartbeat / duration migrated; this monitor was
+    // missed). Timers run on RunLoop.main, are App-Nap-unfriendly, and have
+    // no structured cancellation hand-off.
+    private var qualityMonitorTask: Task<Void, Never>?
     private var lastStats: CallStats?
     private var comfortNoiseEnabled = true
     private var qualityLevelDebounceDate: Date?
@@ -157,24 +172,26 @@ final class WebRTCService: @unchecked Sendable {
 
     func startQualityMonitor() {
         stopQualityMonitor()
-        qualityMonitorTimer = Timer.scheduledTimer(
-            withTimeInterval: QualityThresholds.statsIntervalSeconds,
-            repeats: true
-        ) { [weak self] _ in
-            guard self != nil else { return }
-            Task { @MainActor [weak self] in
-                guard let self else { return }
-                guard let stats = await self.client.getStats() else { return }
-                self.lastStats = stats
-                self.adjustBitrate(basedOn: stats)
+        let interval = QualityThresholds.statsIntervalSeconds
+        qualityMonitorTask = Task { [weak self] in
+            while !Task.isCancelled {
+                let nanos = UInt64(interval * 1_000_000_000)
+                try? await Task.sleep(nanoseconds: nanos)
+                if Task.isCancelled { break }
+                await Task { @MainActor [weak self] in
+                    guard let self else { return }
+                    guard let stats = await self.client.getStats() else { return }
+                    self.lastStats = stats
+                    self.adjustBitrate(basedOn: stats)
+                }.value
             }
         }
-        Logger.webrtc.info("Quality monitor started (interval: \(QualityThresholds.statsIntervalSeconds)s)")
+        Logger.webrtc.info("Quality monitor started (interval: \(interval)s, task-based)")
     }
 
     func stopQualityMonitor() {
-        qualityMonitorTimer?.invalidate()
-        qualityMonitorTimer = nil
+        qualityMonitorTask?.cancel()
+        qualityMonitorTask = nil
     }
 
     private func adjustBitrate(basedOn stats: CallStats) {
@@ -290,35 +307,52 @@ final class WebRTCService: @unchecked Sendable {
 // MARK: - WebRTCClientDelegate
 
 extension WebRTCService: WebRTCClientDelegate {
-    func webRTCClient(_ client: any WebRTCClientProviding, didGenerateCandidate candidate: IceCandidate) {
-        delegate?.webRTCService(self, didGenerateCandidate: candidate)
-    }
-
-    func webRTCClient(_ client: any WebRTCClientProviding, didChangeConnectionState state: PeerConnectionState) {
-        connectionState = state
-        delegate?.webRTCService(self, didChangeConnectionState: state)
-
-        switch state {
-        case .connected:
-            delegate?.webRTCServiceDidConnect(self)
-        case .disconnected, .failed, .closed:
-            delegate?.webRTCServiceDidDisconnect(self)
-        default:
-            break
+    // Audit P1-3 — every delegate method is `nonisolated` (because the
+    // protocol is not @MainActor and the caller — P2PWebRTCClient — invokes
+    // these from `DispatchQueue.main.async`, not from the MainActor
+    // isolation domain). They hop to MainActor via `Task` to mutate state
+    // safely.
+    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didGenerateCandidate candidate: IceCandidate) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.webRTCService(self, didGenerateCandidate: candidate)
         }
     }
 
-    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: Any) {
-        Logger.webrtc.info("Remote video track received")
-        delegate?.webRTCService(self, didReceiveRemoteVideoTrack: track)
+    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didChangeConnectionState state: PeerConnectionState) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.connectionState = state
+            self.delegate?.webRTCService(self, didChangeConnectionState: state)
+
+            switch state {
+            case .connected:
+                self.delegate?.webRTCServiceDidConnect(self)
+            case .disconnected, .failed, .closed:
+                self.delegate?.webRTCServiceDidDisconnect(self)
+            default:
+                break
+            }
+        }
     }
 
-    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: Any) {
+    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteVideoTrack track: sending Any) {
+        Logger.webrtc.info("Remote video track received")
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.webRTCService(self, didReceiveRemoteVideoTrack: track)
+        }
+    }
+
+    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didReceiveRemoteAudioTrack track: sending Any) {
         Logger.webrtc.info("Remote audio track received")
     }
 
-    func webRTCClient(_ client: any WebRTCClientProviding, didReceiveDataChannelMessage data: Data) {
-        delegate?.webRTCService(self, didReceiveTranscriptionData: data)
+    nonisolated func webRTCClient(_ client: any WebRTCClientProviding, didReceiveDataChannelMessage data: Data) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            self.delegate?.webRTCService(self, didReceiveTranscriptionData: data)
+        }
     }
 }
 

@@ -34,9 +34,21 @@ final class RingbackTonePlayer {
             player.numberOfLoops = -1   // infinite loop
             player.volume = 0.6         // softer than the caller's voice
             player.prepareToPlay()
-            player.play()
+            // Audit 2026-05-11 §A-Claim-4 — capture and log the play() Bool.
+            // It silently returns false if the AVAudioSession is not yet
+            // active (we're called from `startCall` which runs BEFORE
+            // `configureAudioSession` AND BEFORE CallKit's `didActivate`).
+            // Without this log we can't tell from a sysdiagnose whether the
+            // user heard the ringback or just silence — and a `false` here
+            // is the actual root cause of "I started a call but heard
+            // nothing for 2-3 seconds" reports.
+            let started = player.play()
             self.player = player
-            logger.info("Ringback tone started")
+            if started {
+                logger.info("Ringback tone started")
+            } else {
+                logger.warning("Ringback tone play() returned false — audio session likely not active yet (caller may hear silence until didActivate)")
+            }
         } catch {
             logger.error("Failed to start ringback tone: \(error.localizedDescription)")
         }

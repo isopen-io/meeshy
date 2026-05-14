@@ -11,6 +11,7 @@ public struct StoryTextEditorView: View {
 
     @FocusState private var isFocused: Bool
     @State private var expandedSection: TextEditorSection?
+    @Environment(\.colorScheme) private var colorScheme
 
     public init(textObject: Binding<StoryTextObject>, onDelete: (() -> Void)? = nil) {
         self._textObject = textObject
@@ -19,10 +20,32 @@ public struct StoryTextEditorView: View {
 
     public var body: some View {
         VStack(spacing: 0) {
+            editorHeader
+                .padding(.horizontal, 14)
+                .padding(.top, 12)
+                .padding(.bottom, 4)
             textInputRow
             quickActions
             sectionPicker
             expandedSectionContent
+        }
+        .padding(.bottom, 4)
+        .background(.ultraThinMaterial)
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: - Editor Header
+
+    private var editorHeader: some View {
+        HStack {
+            Image(systemName: "textformat")
+                .font(.system(size: 16, weight: .semibold))
+                .foregroundStyle(MeeshyColors.brandGradient)
+            Text(String(localized: "story.textEditor.title", defaultValue: "Texte", bundle: .module))
+                .font(.system(size: 15, weight: .semibold, design: .rounded))
+                .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+            Spacer()
         }
     }
 
@@ -294,27 +317,27 @@ public struct StoryTextEditorView: View {
     // MARK: - Bindings
 
     private var contentBinding: Binding<String> {
-        Binding(get: { textObject.content }, set: { textObject.content = $0 })
+        Binding(get: { textObject.text }, set: { textObject.text = $0 })
     }
 
     private var sizeBinding: Binding<CGFloat> {
-        Binding(get: { textObject.resolvedSize }, set: { textObject.textSize = $0 })
+        Binding(get: { CGFloat(textObject.resolvedSize) }, set: { textObject.fontSize = Double($0) })
     }
 
     private var startTimeBinding: Binding<Float> {
-        Binding(get: { textObject.startTime ?? 0 }, set: { textObject.startTime = $0 > 0 ? $0 : nil })
+        Binding(get: { Float(textObject.startTime ?? 0) }, set: { textObject.startTime = $0 > 0 ? Double($0) : nil })
     }
 
     private var durationBinding: Binding<Float> {
-        Binding(get: { textObject.displayDuration ?? 0 }, set: { textObject.displayDuration = $0 > 0 ? $0 : nil })
+        Binding(get: { Float(textObject.duration ?? 0) }, set: { textObject.duration = $0 > 0 ? Double($0) : nil })
     }
 
     private var fadeInBinding: Binding<Float> {
-        Binding(get: { textObject.fadeIn ?? 0 }, set: { textObject.fadeIn = $0 > 0 ? $0 : nil })
+        Binding(get: { Float(textObject.fadeIn ?? 0) }, set: { textObject.fadeIn = $0 > 0 ? Double($0) : nil })
     }
 
     private var fadeOutBinding: Binding<Float> {
-        Binding(get: { textObject.fadeOut ?? 0 }, set: { textObject.fadeOut = $0 > 0 ? $0 : nil })
+        Binding(get: { Float(textObject.fadeOut ?? 0) }, set: { textObject.fadeOut = $0 > 0 ? Double($0) : nil })
     }
 
     // MARK: - Helpers

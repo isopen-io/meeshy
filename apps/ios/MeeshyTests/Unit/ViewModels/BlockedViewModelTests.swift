@@ -127,7 +127,7 @@ final class BlockedViewModelTests: XCTestCase {
     /// has data" promise from the architecture bible.
     func test_loadBlocked_withCachedFreshData_skipsNetworkAndAppliesCache() async {
         let cached = [Self.makeBlockedUser(id: "cached-1", username: "cached")]
-        await CacheCoordinator.shared.blockedUsers.save(cached, for: "blocked:list")
+        try? await CacheCoordinator.shared.blockedUsers.save(cached, for: "blocked:list")
 
         let (sut, mock) = makeSUT()
         mock.listBlockedUsersResult = .success([Self.makeBlockedUser(id: "fresh-1", username: "fresh")])
