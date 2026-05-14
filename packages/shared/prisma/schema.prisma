@@ -267,11 +267,12 @@ model User {
   sharedConversations ConversationShare[] @relation("ConversationSharer")
 
   // Social (Posts, Stories, Status/Moods)
-  posts             Post[]           @relation("UserPosts")
-  postComments      PostComment[]    @relation("UserPostComments")
-  postViews         PostView[]       @relation("UserPostViews")
-  postImpressions   PostImpression[] @relation("UserPostImpressions")
-  postBookmarks     PostBookmark[]   @relation("UserPostBookmarks")
+  posts              Post[]            @relation("UserPosts")
+  postComments       PostComment[]     @relation("UserPostComments")
+  commentReactions   CommentReaction[] @relation("UserPostCommentReactions")
+  postViews          PostView[]        @relation("UserPostViews")
+  postImpressions    PostImpression[]  @relation("UserPostImpressions")
+  postBookmarks      PostBookmark[]    @relation("UserPostBookmarks")
 
   // Story audio library
   storyAudioUploads StoryBackgroundAudio[] @relation("StoryAudioUploads")
@@ -1075,6 +1076,24 @@ model Reaction {
   @@unique([messageId, participantId, emoji], name: "participant_reaction_unique")
   @@index([messageId])
   @@index([participantId])
+  @@index([emoji])
+}
+
+/// Réaction emoji sur un commentaire de post par un utilisateur
+model CommentReaction {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  commentId String   @db.ObjectId
+  userId    String   @db.ObjectId
+  emoji     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  comment PostComment @relation("PostCommentReactions", fields: [commentId], references: [id], onDelete: Cascade)
+  user    User        @relation("UserPostCommentReactions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, userId, emoji], name: "comment_user_reaction_unique")
+  @@index([commentId])
+  @@index([userId])
   @@index([emoji])
 }
 
@@ -2877,8 +2896,9 @@ model PostComment {
   translations     Json?
 
   /// Compteurs dénormalisés
-  likeCount  Int @default(0)
-  replyCount Int @default(0)
+  likeCount     Int @default(0)
+  replyCount    Int @default(0)
+  reactionCount Int @default(0)
 
   /// Réactions embedded: { "❤️": 3, "😂": 1 }
   reactionSummary Json?
@@ -2892,10 +2912,11 @@ model PostComment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  post    Post         @relation(fields: [postId], references: [id], onDelete: Cascade)
-  author  User         @relation("UserPostComments", fields: [authorId], references: [id])
-  parent  PostComment? @relation("CommentReplies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  replies PostComment[] @relation("CommentReplies")
+  post      Post             @relation(fields: [postId], references: [id], onDelete: Cascade)
+  author    User             @relation("UserPostComments", fields: [authorId], references: [id])
+  parent    PostComment?     @relation("CommentReplies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  replies   PostComment[]    @relation("CommentReplies")
+  reactions CommentReaction[] @relation("PostCommentReactions")
 
   @@index([postId, createdAt])
   @@index([parentId])
