@@ -26,7 +26,7 @@ struct ComposerTilesGrid: View, Equatable {
                 tile(.text,     icon: "textformat",          title: "Texte",   accent: MeeshyColors.indigo400,  badge: textCount)
                 tile(.texture,  icon: "paintpalette.fill",   title: "Fond",    accent: MeeshyColors.warning,    badge: 0)
             case .effets:
-                tile(.filters,  icon: "camera.filters",       title: "Filtres", accent: MeeshyColors.info,       badge: filterCount)
+                tile(.filters,  icon: "camera.filters",       title: "Effets",  accent: MeeshyColors.info,       badge: filterCount)
                 tile(.timeline, icon: "timer",                title: "Timeline",accent: MeeshyColors.indigo300,  badge: timelineCount)
             }
         }

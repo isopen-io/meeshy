@@ -562,6 +562,7 @@ extension StoryViewerView {
         || showTextEmojiPicker
         || showLanguageOptions
         || showFullLanguagePicker
+        || showCommentsOverlay
         || isTransitioning
         || isDismissing
     }
@@ -1152,24 +1153,137 @@ struct StoryViewersSheet: View {
     }
 }
 
-// MARK: - Story Comments Overlay (live-chat style)
+// MARK: - Story Comments Overlay (live-chat style with replies)
 
 extension StoryViewerView {
 
-    /// Instagram-style live comment overlay: scrolls up, fades out at mid-screen.
+    /// Full-featured comment overlay: occupies bottom half of screen with
+    /// infinite scroll, reply threading (simple indentation), inline
+    /// UniversalComposerBar, and timer pause. All other controls except
+    /// the composer are hidden.
     var storyCommentsOverlay: some View {
         let userLang = AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr"
+        let topLevelComments = storyComments.filter { $0.parentId == nil }
 
         return VStack(spacing: 0) {
-            Spacer()
+            // Tap-to-dismiss upper half
+            Color.black.opacity(0.3)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        showCommentsOverlay = false
+                        replyingToStoryComment = nil
+                    }
+                }
+                .frame(maxHeight: .infinity)
 
-            ZStack(alignment: .bottom) {
+            // Comment panel — bottom half
+            VStack(spacing: 0) {
+                // Header
+                HStack {
+                    Text("\(storyCommentCount) commentaire\(storyCommentCount > 1 ? "s" : "")")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.white)
+
+                    Spacer()
+
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showCommentsOverlay = false
+                            replyingToStoryComment = nil
+                        }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white.opacity(0.6))
+                            .frame(width: 28, height: 28)
+                            .background(Circle().fill(Color.white.opacity(0.1)))
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+
+                Divider()
+                    .background(Color.white.opacity(0.1))
+
+                // Scrollable comments
                 ScrollViewReader { proxy in
                     ScrollView(.vertical, showsIndicators: false) {
-                        LazyVStack(alignment: .leading, spacing: 10) {
-                            ForEach(storyComments) { comment in
+                        LazyVStack(alignment: .leading, spacing: 2) {
+                            ForEach(topLevelComments) { comment in
+                                // Top-level comment
                                 storyCommentRow(comment: comment, userLang: userLang)
                                     .id(comment.id)
+                                    .onTapGesture {
+                                        // Tap a comment to reply to it
+                                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                            replyingToStoryComment = comment
+                                        }
+                                        HapticFeedback.light()
+                                    }
+
+                                // Auto-show first 2 replies
+                                let replies = storyCommentRepliesMap[comment.id] ?? []
+                                let autoPreview = Array(replies.prefix(2))
+                                if !autoPreview.isEmpty && !storyCommentExpandedThreads.contains(comment.id) {
+                                    ForEach(autoPreview) { reply in
+                                        storyCommentRow(comment: reply, userLang: userLang)
+                                            .padding(.leading, 28)
+                                            .id(reply.id)
+                                            .onTapGesture {
+                                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                                    replyingToStoryComment = reply
+                                                }
+                                                HapticFeedback.light()
+                                            }
+                                    }
+                                }
+
+                                // Show more replies toggle
+                                if comment.replies > 2 {
+                                    Button {
+                                        HapticFeedback.light()
+                                        Task { await toggleStoryCommentThread(comment.id) }
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Image(systemName: storyCommentExpandedThreads.contains(comment.id) ? "chevron.up" : "chevron.down")
+                                                .font(.system(size: 9, weight: .bold))
+                                            let remaining = max(0, comment.replies - 2)
+                                            Text(storyCommentExpandedThreads.contains(comment.id)
+                                                 ? "Masquer"
+                                                 : "Voir \(remaining) autre\(remaining > 1 ? "s" : "") r\u{00E9}ponse\(remaining > 1 ? "s" : "")")
+                                                .font(.system(size: 11, weight: .semibold))
+                                        }
+                                        .foregroundColor(MeeshyColors.indigo400)
+                                        .padding(.leading, 36)
+                                        .padding(.vertical, 4)
+                                    }
+                                }
+
+                                // Expanded all replies
+                                if storyCommentExpandedThreads.contains(comment.id) {
+                                    if storyCommentLoadingReplies.contains(comment.id) && replies.isEmpty {
+                                        HStack {
+                                            Spacer()
+                                            ProgressView().tint(.white.opacity(0.5)).scaleEffect(0.7)
+                                            Spacer()
+                                        }
+                                        .padding(.leading, 28)
+                                        .padding(.vertical, 4)
+                                    }
+
+                                    ForEach(replies) { reply in
+                                        storyCommentRow(comment: reply, userLang: userLang)
+                                            .padding(.leading, 28)
+                                            .id(reply.id)
+                                            .onTapGesture {
+                                                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                                    replyingToStoryComment = reply
+                                                }
+                                                HapticFeedback.light()
+                                            }
+                                    }
+                                }
                             }
 
                             if isLoadingComments {
@@ -1182,11 +1296,10 @@ extension StoryViewerView {
                                 .padding(.vertical, 8)
                             }
                         }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 20)
-                        .padding(.bottom, 8)
+                        .padding(.horizontal, 12)
+                        .padding(.top, 8)
+                        .padding(.bottom, 12)
                     }
-                    .frame(maxHeight: UIScreen.main.bounds.height * 0.4)
                     .onChange(of: storyComments.count) { _, _ in
                         if let last = storyComments.last {
                             withAnimation(.easeOut(duration: 0.3)) {
@@ -1195,23 +1308,130 @@ extension StoryViewerView {
                         }
                     }
                 }
-                .mask(
-                    VStack(spacing: 0) {
-                        LinearGradient(
-                            stops: [
-                                .init(color: .clear, location: 0),
-                                .init(color: .black, location: 1)
-                            ],
-                            startPoint: .top, endPoint: .bottom
-                        )
-                        .frame(height: 60)
 
-                        Color.black
+                // Reply banner
+                if let reply = replyingToStoryComment {
+                    HStack(spacing: 8) {
+                        RoundedRectangle(cornerRadius: 2)
+                            .fill(Color(hex: reply.authorColor))
+                            .frame(width: 3, height: 28)
+
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(reply.author)
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundColor(Color(hex: reply.authorColor))
+                            Text(reply.displayContent)
+                                .font(.system(size: 11))
+                                .foregroundColor(.white.opacity(0.6))
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        Button {
+                            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                                replyingToStoryComment = nil
+                            }
+                        } label: {
+                            Image(systemName: "xmark")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white.opacity(0.5))
+                                .frame(width: 20, height: 20)
+                                .background(Circle().fill(Color.white.opacity(0.1)))
+                        }
                     }
-                )
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 6)
+                    .background(Color.white.opacity(0.08))
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
+
+                // Inline composer for story comments
+                storyCommentComposerBar
+            }
+            .frame(maxHeight: UIScreen.main.bounds.height * 0.5)
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 20, style: .continuous)
+                            .fill(Color.black.opacity(0.6))
+                    )
+                    .ignoresSafeArea(edges: .bottom)
+            )
+        }
+    }
+
+    // MARK: - Story Comment Composer
+
+    private var storyCommentComposerBar: some View {
+        UniversalComposerBar(
+            style: .dark,
+            mode: .comment,
+            accentColor: currentGroup?.avatarColor ?? "6366F1",
+            selectedLanguage: composerLanguage,
+            onLanguageChange: { composerLanguage = $0 },
+            onSend: { text in
+                let effects = commentEffects
+                let blur = commentBlurEnabled
+                commentEffects = .none
+                commentBlurEnabled = false
+                let flags = effects.flags.rawValue | (blur ? MessageEffectFlags.blurred.rawValue : 0)
+                let effectFlags = flags > 0 ? Int(flags) : nil
+                let parentId = replyingToStoryComment?.id
+                replyingToStoryComment = nil
+                sendComment(text: text, effectFlags: effectFlags, parentId: parentId)
+            },
+            replyBanner: nil, // Reply banner is handled above
+            isBlurEnabled: $commentBlurEnabled,
+            pendingEffects: $commentEffects
+        )
+        .padding(.horizontal, 8)
+        .padding(.bottom, 4)
+    }
+
+    // MARK: - Story Comment Thread Management
+
+    func toggleStoryCommentThread(_ commentId: String) async {
+        if storyCommentExpandedThreads.contains(commentId) {
+            storyCommentExpandedThreads.remove(commentId)
+        } else {
+            storyCommentExpandedThreads.insert(commentId)
+            if storyCommentRepliesMap[commentId] == nil {
+                await loadStoryCommentReplies(commentId: commentId)
             }
         }
-        .padding(.bottom, 70)
+    }
+
+    func loadStoryCommentReplies(commentId: String) async {
+        guard let story = currentStory,
+              !storyCommentLoadingReplies.contains(commentId),
+              storyCommentRepliesMap[commentId] == nil else { return }
+        storyCommentLoadingReplies.insert(commentId)
+        defer { storyCommentLoadingReplies.remove(commentId) }
+        do {
+            let response = try await PostService.shared.getCommentReplies(
+                postId: story.id, commentId: commentId
+            )
+            let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+            let replies = response.data.map { c -> FeedComment in
+                let translated = PostDetailViewModel.resolveCommentTranslation(
+                    translations: c.translations, originalLanguage: c.originalLanguage,
+                    preferredLanguages: langs
+                )
+                return FeedComment(
+                    id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorAvatarURL: c.author.avatar,
+                    content: c.content, timestamp: c.createdAt,
+                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                    parentId: commentId,
+                    originalLanguage: c.originalLanguage, translatedContent: translated
+                )
+            }
+            storyCommentRepliesMap[commentId] = replies
+        } catch {
+            storyCommentExpandedThreads.remove(commentId)
+        }
     }
 
     func storyCommentRow(comment: FeedComment, userLang: String) -> some View {
@@ -1334,7 +1554,15 @@ extension StoryViewerView {
                         )
                     }
                     storyComments = comments
-                    storyCommentCount = comments.count
+                    storyCommentCount = comments.filter { $0.parentId == nil }.count
+
+                    // Auto-fetch first 2 replies for comments that have replies
+                    let topLevel = comments.filter { $0.parentId == nil && $0.replies > 0 }
+                    for comment in topLevel.prefix(5) { // Limit to first 5 to avoid burst
+                        Task {
+                            await loadStoryCommentReplies(commentId: comment.id)
+                        }
+                    }
                 }
             } catch {}
             isLoadingComments = false

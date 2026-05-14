@@ -762,7 +762,18 @@ public struct StoryComposerView: View {
     }
 
     private var shouldShowEmptyStateLargePicker: Bool {
-        viewModel.activeTool == nil && isComposerEmpty
+        // Le picker grand format n'est montré QUE quand :
+        //  - aucun outil n'est sélectionné côté viewModel,
+        //  - le bandeau d'outils est complètement masqué (.hidden — le
+        //    `bandStateMachine` peut être pré-ouvert via empty-state → tile,
+        //    auquel cas le panel doit prendre toute la place),
+        //  - et le slide n'a aucun contenu réel.
+        // Sans le check `state == .hidden`, le picker pouvait persister visuellement
+        // derrière le bandeau pendant les transitions (le band est animé via spring
+        // et le if/else était insuffisant pendant le mid-transition).
+        viewModel.activeTool == nil
+            && isComposerEmpty
+            && bandStateMachine.state == .hidden
     }
 
     /// Pastel accent color per tile. Picks a distinct hue so the carousel
@@ -1002,6 +1013,21 @@ public struct StoryComposerView: View {
                     openMediaEditor(elementId: id)
                 case .sticker:
                     break
+                }
+            },
+            onItemDuplicated: { oldId, newId, kind in
+                // Context-menu "Dupliquer" path mutates the slide directly inside
+                // StoryCanvasUIView, but the ephemeral preview caches (loadedImages /
+                // loadedVideoURLs) live on the viewModel. Mirror them under the new
+                // UUID so the duplicated row shows its thumbnail immediately and
+                // CALayer media rendering picks it up on the next rebuild.
+                if kind == .media {
+                    if let img = viewModel.loadedImages[oldId] {
+                        viewModel.loadedImages[newId] = img
+                    }
+                    if let url = viewModel.loadedVideoURLs[oldId] {
+                        viewModel.loadedVideoURLs[newId] = url
+                    }
                 }
             }
         )

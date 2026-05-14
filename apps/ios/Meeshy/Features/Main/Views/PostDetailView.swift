@@ -451,48 +451,236 @@ struct PostDetailView: View {
 
     // MARK: - Repost Embed
 
+    @State private var repostSecondaryLangCode: String? = nil
+    @State private var repostActiveDisplayLangCode: String? = nil
+
     @ViewBuilder
     private func repostEmbed(_ repost: RepostContent) -> some View {
-        Button {
-            HapticFeedback.light()
-            router.push(.postDetail(repost.id))
-        } label: {
-            VStack(alignment: .leading, spacing: 6) {
-                HStack(spacing: 6) {
+        let isStoryRepost = (repost.type ?? "").uppercased() == "STORY"
+
+        VStack(alignment: .leading, spacing: 0) {
+            // Author header — always tappable to navigate
+            Button {
+                HapticFeedback.light()
+                router.push(.postDetail(repost.id))
+            } label: {
+                HStack(spacing: 8) {
                     MeeshyAvatar(
                         name: repost.author,
                         context: .postComment,
                         accentColor: repost.authorColor,
                         avatarURL: repost.authorAvatarURL
                     )
-                    Text(repost.author)
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(theme.accentText(repost.authorColor))
-                    Text("·").foregroundColor(theme.textMuted)
-                    Text(repost.timestamp, style: .relative)
-                        .font(.system(size: 10))
-                        .foregroundColor(theme.textMuted)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(repost.author)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(theme.accentText(repost.authorColor))
+                        HStack(spacing: 4) {
+                            Text(repost.timestamp, style: .relative)
+                                .font(.system(size: 11))
+                                .foregroundColor(theme.textMuted)
+                            // Language flags for repost translations
+                            if let translations = repost.translations, !translations.isEmpty {
+                                repostLanguageFlags(repost)
+                            }
+                        }
+                    }
+                    Spacer()
                 }
-                Text(repost.content)
-                    .font(.system(size: 13))
-                    .foregroundColor(theme.textSecondary)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
             }
-            .padding(10)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(theme.surfaceGradient(tint: repost.authorColor))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(theme.border(tint: repost.authorColor, intensity: 0.2), lineWidth: 1)
-                    )
-            )
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 12)
+            .padding(.top, 10)
+            .padding(.bottom, 6)
+
+            // Text content with translation support
+            if !repost.content.isEmpty {
+                let repostDisplayContent = repostEffectiveContent(repost)
+                Text(repostDisplayContent)
+                    .font(.system(size: 14))
+                    .foregroundColor(theme.textPrimary)
+                    .lineLimit(6)
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 6)
+
+                // Inline secondary translation for repost
+                if let code = repostSecondaryLangCode,
+                   let secondaryText = repostSecondaryContent(repost, code: code) {
+                    let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
+                    let display = LanguageDisplay.from(code: code)
+                    VStack(spacing: 0) {
+                        HStack(spacing: 6) {
+                            Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
+                            Circle().fill(langColor).frame(width: 3, height: 3)
+                            Rectangle().fill(langColor.opacity(0.4)).frame(height: 1)
+                        }
+                        VStack(alignment: .leading, spacing: 3) {
+                            if let display {
+                                HStack(spacing: 3) {
+                                    Text(display.flag).font(.system(size: 10))
+                                    Text(display.name)
+                                        .font(.system(size: 9, weight: .semibold))
+                                        .foregroundColor(langColor)
+                                }
+                            }
+                            Text(secondaryText)
+                                .font(.system(size: 13))
+                                .foregroundColor(theme.textPrimary.opacity(0.8))
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .padding(.vertical, 6)
+                        .padding(.horizontal, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(langColor.opacity(0.08))
+                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 6)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+
+            // Story-type repost — render the canvas
+            if isStoryRepost {
+                StoryReaderRepresentable(
+                    repost: repost,
+                    preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages,
+                    mute: true
+                )
+                .aspectRatio(9.0 / 16.0, contentMode: .fit)
+                .frame(maxWidth: .infinity)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+            } else if !repost.media.isEmpty {
+                // Standard media attachments
+                detailMediaSection(repost.media)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+            }
+
+            // Audio URL (legacy story audio)
+            if let audioUrl = repost.audioUrl, !audioUrl.isEmpty, !isStoryRepost {
+                AudioPlayerView(
+                    attachment: MeeshyMessageAttachment(
+                        id: "repost-audio-\(repost.id)",
+                        fileName: "audio.mp3",
+                        originalName: "audio.mp3",
+                        mimeType: "audio/mpeg",
+                        fileSize: 0,
+                        fileUrl: audioUrl,
+                        thumbnailColor: repost.authorColor
+                    ),
+                    context: .feedPost,
+                    accentColor: repost.authorColor,
+                    transcription: nil
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+            }
+
+            // Stats row
+            HStack(spacing: 12) {
+                if repost.likes > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "heart.fill")
+                            .font(.system(size: 10))
+                        Text("\(repost.likes)")
+                            .font(.system(size: 11, weight: .medium))
+                    }
+                    .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
+                }
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 8)
         }
-        .buttonStyle(PlainButtonStyle())
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(theme.surfaceGradient(tint: repost.authorColor))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 14)
+                        .stroke(theme.border(tint: repost.authorColor, intensity: 0.2), lineWidth: 1)
+                )
+        )
         .padding(.horizontal, 16)
         .padding(.top, 8)
+    }
+
+    // MARK: - Repost Language Support
+
+    private func repostEffectiveContent(_ repost: RepostContent) -> String {
+        let code = repostActiveDisplayLangCode ?? AuthManager.shared.currentUser?.preferredContentLanguages.first(where: { lang in
+            repost.translations?.keys.contains(where: { $0.caseInsensitiveCompare(lang) == .orderedSame }) ?? false
+        })?.lowercased() ?? repost.originalLanguage?.lowercased() ?? "fr"
+        if code == repost.originalLanguage?.lowercased() { return repost.content }
+        if let translation = repost.translations?[code] ?? repost.translations?.first(where: { $0.key.lowercased() == code })?.value {
+            return translation.text
+        }
+        return repost.content
+    }
+
+    private func repostSecondaryContent(_ repost: RepostContent, code: String) -> String? {
+        if code == repost.originalLanguage?.lowercased() { return repost.content }
+        return repost.translations?.first(where: { $0.key.lowercased() == code })?.value.text
+    }
+
+    @ViewBuilder
+    private func repostLanguageFlags(_ repost: RepostContent) -> some View {
+        let origLang = repost.originalLanguage?.lowercased() ?? ""
+        let activeLang = repostActiveDisplayLangCode ?? origLang
+        let user = AuthManager.shared.currentUser
+        let flags: [String] = {
+            var all: [String] = origLang.isEmpty ? [] : [origLang]
+            var seen = Set(all)
+            for lang in user?.preferredContentLanguages ?? [] {
+                let l = lang.lowercased()
+                if !seen.contains(l), repost.translations?.keys.contains(where: { $0.lowercased() == l }) == true {
+                    all.append(l); seen.insert(l)
+                }
+            }
+            return all.filter { $0 != activeLang }
+        }()
+
+        if !flags.isEmpty {
+            Text("·").font(.system(size: 10)).foregroundColor(theme.textMuted)
+            ForEach(flags, id: \.self) { code in
+                let display = LanguageDisplay.from(code: code)
+                let isActive = code == repostSecondaryLangCode
+                VStack(spacing: 1) {
+                    Text(display?.flag ?? "?")
+                        .font(.system(size: isActive ? 11 : 9))
+                        .scaleEffect(isActive ? 1.05 : 1.0)
+                    if isActive {
+                        RoundedRectangle(cornerRadius: 1)
+                            .fill(Color(hex: display?.color ?? LanguageDisplay.defaultColor))
+                            .frame(width: 8, height: 1.5)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: isActive)
+                .onTapGesture {
+                    let isOriginal = code == origLang
+                    if isOriginal {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            repostActiveDisplayLangCode = code
+                            repostSecondaryLangCode = nil
+                        }
+                    } else {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            repostSecondaryLangCode = repostSecondaryLangCode == code ? nil : code
+                        }
+                    }
+                    HapticFeedback.light()
+                }
+            }
+            Image(systemName: "translate")
+                .font(.system(size: 9, weight: .medium))
+                .foregroundColor(MeeshyColors.indigo400)
+        }
     }
 
     // MARK: - Actions Bar

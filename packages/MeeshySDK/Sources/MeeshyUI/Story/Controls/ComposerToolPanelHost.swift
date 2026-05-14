@@ -16,6 +16,17 @@ struct ComposerToolPanelHost: View {
     var onEditMedia: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
 
+    @Environment(\.colorScheme) private var colorScheme
+
+    // Texte adaptatif. Le bandeau étant désormais opaque (tint indigo950@92% dark
+    // / white@92% light), on peut viser de vrais ratios de contraste WCAG-AA :
+    //   primary   ≥ 4.5:1 → couleur pleine (indigo950 / white)
+    //   secondary ≈ 4.5:1 → opacity 0.78
+    //   muted     ≈ 3:1   → opacity 0.55
+    private var primaryText: Color { colorScheme == .dark ? .white : MeeshyColors.indigo950 }
+    private var secondaryText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.78) }
+    private var mutedText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.55) }
+
     var body: some View {
         VStack(spacing: 8) {
             HStack {
@@ -24,7 +35,7 @@ struct ComposerToolPanelHost: View {
                         .font(.system(size: 14, weight: .semibold))
                     Text(toolTitle).font(.system(size: 14, weight: .semibold))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(primaryText)
                 .buttonStyle(.plain)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
@@ -41,7 +52,9 @@ struct ComposerToolPanelHost: View {
                 .padding(.bottom, 8)
         }
         .frame(maxWidth: .infinity)
-        .background(.ultraThinMaterial)
+        // Pas de material ici — le bandeau parent fournit déjà le tint opaque
+        // sous-jacent. Une seconde couche material ici sur-saturait le contraste
+        // et rendait certaines icônes ultra pâles.
     }
 
     private var toolTitle: String {
@@ -50,7 +63,7 @@ struct ComposerToolPanelHost: View {
         case .drawing:  return "Dessin"
         case .text:     return "Texte"
         case .texture:  return "Fond"
-        case .filters:  return "Filtres"
+        case .filters:  return "Effets"
         case .timeline: return "Timeline"
         }
     }
@@ -106,23 +119,20 @@ struct ComposerToolPanelHost: View {
                 Spacer()
             }
 
-            // List of existing media items — drag to reorder changes layer order
+            // List of existing media items. Layer order is changed via the
+            // long-press context menu ("Mettre au premier plan / arrière") on
+            // the canvas — so the legacy drag-to-reorder handle from `List`
+            // (which required `editMode = .active` and displayed an "≡" glyph
+            // in every row) has been removed to keep the row UI clean.
             if let mediaObjects = viewModel.currentEffects.mediaObjects, !mediaObjects.isEmpty {
-                List {
-                    ForEach(mediaObjects) { media in
-                        mediaItemRow(media)
-                            .listRowBackground(Color.clear)
-                            .listRowInsets(EdgeInsets(top: 2, leading: 0, bottom: 2, trailing: 0))
-                            .listRowSeparator(.hidden)
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 4) {
+                        ForEach(mediaObjects) { media in
+                            mediaItemRow(media)
+                        }
                     }
-                    .onMove { source, destination in
-                        viewModel.moveMedia(from: source, to: destination)
-                        HapticFeedback.light()
-                    }
+                    .padding(.horizontal, 12)
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .environment(\.editMode, .constant(.active))
                 .frame(maxHeight: 150)
             }
         }
@@ -132,6 +142,10 @@ struct ComposerToolPanelHost: View {
     private func mediaItemRow(_ media: StoryMediaObject) -> some View {
         let isBg = viewModel.isBackground(id: media.id)
         let isImage = media.kind == .image
+        let actionTint: Color = secondaryText
+        let rowBgFill: Color = isBg
+            ? MeeshyColors.indigo400.opacity(0.18)
+            : (colorScheme == .dark ? Color.white.opacity(0.07) : MeeshyColors.indigo950.opacity(0.05))
         HStack(spacing: 8) {
             // Thumbnail
             Group {
@@ -141,10 +155,10 @@ struct ComposerToolPanelHost: View {
                         .scaledToFill()
                 } else {
                     ZStack {
-                        Color.white.opacity(0.1)
+                        (colorScheme == .dark ? Color.white.opacity(0.1) : MeeshyColors.indigo950.opacity(0.08))
                         Image(systemName: isImage ? "photo" : "video")
                             .font(.system(size: 12))
-                            .foregroundColor(.white.opacity(0.5))
+                            .foregroundColor(mutedText)
                     }
                 }
             }
@@ -155,10 +169,10 @@ struct ComposerToolPanelHost: View {
             VStack(alignment: .leading, spacing: 1) {
                 Text(isImage ? "Image" : "Vidéo")
                     .font(.system(size: 11, weight: .semibold))
-                    .foregroundColor(.white)
+                    .foregroundColor(primaryText)
                 Text(isBg ? "Fond" : "Premier plan")
                     .font(.system(size: 9, weight: .medium))
-                    .foregroundColor(isBg ? MeeshyColors.indigo300 : .white.opacity(0.5))
+                    .foregroundColor(isBg ? MeeshyColors.indigo400 : secondaryText)
             }
 
             Spacer(minLength: 4)
@@ -168,30 +182,30 @@ struct ComposerToolPanelHost: View {
                 // Toggle front/back
                 mediaActionBtn(
                     icon: isBg ? "square.3.layers.3d.top.filled" : "square.3.layers.3d.bottom.filled",
-                    color: isBg ? MeeshyColors.indigo300 : .white.opacity(0.6),
+                    color: isBg ? MeeshyColors.indigo400 : actionTint,
                     tip: isBg ? "Premier plan" : "Fond"
                 ) {
                     viewModel.toggleBackground(id: media.id)
                 }
 
                 // Edit
-                mediaActionBtn(icon: "pencil", color: .white.opacity(0.6), tip: "Éditer") {
+                mediaActionBtn(icon: "pencil", color: actionTint, tip: "Éditer") {
                     onEditMedia?(media.id)
                 }
 
                 // Timeline
-                mediaActionBtn(icon: "timeline.selection", color: .white.opacity(0.6), tip: "Timeline") {
+                mediaActionBtn(icon: "timeline.selection", color: actionTint, tip: "Timeline") {
                     viewModel.selectedElementId = media.id
                     onShowInTimeline?()
                 }
 
                 // Duplicate
-                mediaActionBtn(icon: "doc.on.doc", color: .white.opacity(0.6), tip: "Dupliquer") {
+                mediaActionBtn(icon: "doc.on.doc", color: actionTint, tip: "Dupliquer") {
                     viewModel.duplicateElement(id: media.id)
                 }
 
                 // Delete
-                mediaActionBtn(icon: "trash", color: .red.opacity(0.7), tip: "Supprimer") {
+                mediaActionBtn(icon: "trash", color: .red.opacity(0.8), tip: "Supprimer") {
                     viewModel.deleteElement(id: media.id)
                     HapticFeedback.medium()
                 }
@@ -201,7 +215,7 @@ struct ComposerToolPanelHost: View {
         .padding(.vertical, 5)
         .background(
             RoundedRectangle(cornerRadius: 8)
-                .fill(isBg ? MeeshyColors.indigo400.opacity(0.15) : Color.white.opacity(0.05))
+                .fill(rowBgFill)
         )
     }
 
@@ -272,6 +286,7 @@ struct ComposerToolPanelHost: View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(StoryBackgroundPalette.colors, id: \.self) { hex in
+                    let isSelected = viewModel.backgroundColor == "#\(hex)"
                     Button {
                         viewModel.backgroundColor = "#\(hex)"
                         viewModel.hasBackgroundImage = false
@@ -280,11 +295,15 @@ struct ComposerToolPanelHost: View {
                         Circle().fill(Color(hex: hex))
                             .frame(width: 44, height: 44)
                             .overlay(
-                                Circle().stroke(Color.white, lineWidth: viewModel.backgroundColor == "#\(hex)" ? 3 : 0)
+                                Circle().stroke(Color.white, lineWidth: isSelected ? 3 : 0)
                                     .padding(2)
                             )
-                            .shadow(color: Color(hex: hex).opacity(viewModel.backgroundColor == "#\(hex)" ? 0.5 : 0), radius: 6)
+                            .shadow(color: Color(hex: hex).opacity(isSelected ? 0.5 : 0), radius: 6)
                     }
+                    .accessibilityLabel(String(localized: "story.background.swatch", defaultValue: "Couleur de fond", bundle: .module))
+                    .accessibilityValue("#\(hex)")
+                    .accessibilityHint(String(localized: "story.background.swatch.hint", defaultValue: "Touchez pour appliquer ce fond.", bundle: .module))
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
             .padding(.horizontal, 2)

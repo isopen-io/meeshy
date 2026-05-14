@@ -3091,7 +3091,9 @@ Expected: BUILD SUCCEEDED.
 
 - [ ] **Step 3: Manual smoke tests (checklist from spec Section 12)**
 
-Run the app and validate each item from the spec:
+Run the app and validate each item from the spec.
+
+**A. Comportements heureux (happy path)** :
 
 ```
 - [ ] Ouverture slide vide → empty-state picker visible
@@ -3116,6 +3118,35 @@ Run the app and validate each item from the spec:
 - [ ] Reset/publish slide → bandStateMachine state == .hidden
 - [ ] Swipe to next slide while formatPanel open → resets to .hidden + FABs visible
 ```
+
+**B. Régressions des bugs identifiés en audit deep (2026-05-14)** :
+
+```
+- [ ] T22. addText() produit un élément visible interactif sur le canvas (pas un texte vide invisible : éviter régression du bug `text: ""` ligne 897 de StoryComposerViewModel.swift)
+- [ ] T23. Après ouverture .formatPanel(.text, id), le bandeau présente un éditeur de texte fonctionnel (pas un Color.clear stub : éviter régression du stub vide dans ComposerBottomBand.swift case .formatPanel(.text, _))
+- [ ] T24. Long-press sur sticker → menu réduit avec UNIQUEMENT "Dupliquer" + "Supprimer" (pas les 4 options z-order — décision spec Section 13.1)
+```
+
+**C. Tests UX et a11y (gaps observés en audit)** :
+
+```
+- [ ] T25. Locale switch FR↔EN : bascule Settings simulateur, toutes les strings du composer (tuiles, boutons retour, panels) reflètent la nouvelle locale (pas de chaîne hardcodée en EN)
+- [ ] T26. VoiceOver lit les labels custom des FABs ("Ouvrir les outils de contenu" / "Ouvrir les outils d'effets") et PAS les SF Symbol names ("Grid 2x2" / "wand.and.stars") — vérifier que le wrapper UIKit n'écrase pas l'a11y SwiftUI
+- [ ] T27. Empty-state respecte la règle "uniquement à l'ouverture" : empty-state au lancement → tap tuile → édition → fermer slide (X) → ré-ouvrir composer sur ce même slide vide → empty-state doit re-apparaître
+- [ ] T28. VoiceOver navigation linéaire complète : balayer right-to-left dans tout le composer (top bar → canvas → FABs → bandeau → tuiles → panels). Aucun élément ne doit être inaccessible ou sans label
+- [ ] T29. Touch target ≥ 44×44pt (Apple HIG) : mesurer tous les boutons : FABs (✅ 56pt), tuiles (✅ 78pt), bouton retour bandeau, boutons action liste média (28pt — actuellement NON conforme dans ComposerToolPanelHost.swift l.219, à corriger)
+```
+
+**D. Tests de robustesse (cas limites manquants)** :
+
+```
+- [ ] T30. Dynamic Type 200% : Settings > Accessibilité > Texte plus grand → max. Les labels "Médias", "Filtres", "Timeline" ne doivent pas se tronquer. Le bandeau reste utilisable
+- [ ] T31. Reduce Motion : Settings > Accessibilité > Réduire le mouvement → ON. Les animations spring (response 0.3s) du bandeau doivent être instantanées ou très réduites (pas de bounce, pas de slide-in 300ms)
+- [ ] T32. Bandeau format + canvas zoom : ouvrir .formatPanel sur un élément → pincer pour zoomer le canvas. Comportement attendu (à définir) : (a) reset formatPanel + zoom OK, ou (b) zoom désactivé pendant formatPanel ouvert, ou (c) format panel reste visible mais éléments format désactivés
+- [ ] T33. Taps rapides multiples sur FAB : 3 taps consécutifs en <500ms sur FAB Contenu → vérifier que l'animation reste cohérente (pas de saut visuel, pas de state machine désynchronisé entre band visible/hidden)
+```
+
+**Total smoke checklist** : 21 (happy path A) + 12 (régression+UX+robustesse B/C/D) = **33 tests**.
 
 - [ ] **Step 4: Commit final adjustments (if any from smoke test) + open PR**
 
@@ -3346,15 +3377,17 @@ ComposerToolPanelHost.onEditMedia/onShowInTimeline
 
 ### Canvas — Drag / Move
 
+**Smoke 2026-05-14**
+
 ```
-- [ ] Ajouter 1 image de fond + 1 image de premier plan → déplacer l'image de premier plan au doigt : mouvement fluide et instantané, pas de saccade
-- [ ] Ajouter 3+ médias (images/vidéos) → déplacer chacun individuellement : performance identique quel que soit le nombre d'éléments
-- [ ] Pendant le drag d'un élément, les autres éléments restent parfaitement stables (pas de flicker/rebuild)
-- [ ] Lâcher le doigt après un drag → l'élément conserve sa position finale exacte (pas de saut au relâchement)
-- [ ] Déplacer l'image de fond (background) → elle se déplace comme tout élément (drag fluide)
-- [ ] Ajouter un texte → le déplacer → mouvement fluide
-- [ ] Guides de snap apparaissent à 0.5/0.25/0.75 (centre, quarts) pendant le drag
-- [ ] Guides disparaissent au relâchement du doigt
+- [x] Drag d'1 image (avec duplicate) → mouvement fluide, position finale exacte
+- [ ] 3+ médias avec drag individuel — NON TESTÉ (manque média supplémentaire)
+- [x] Pendant le drag, autres éléments stables — vérifié avec 2 images (orig + dup)
+- [x] Lâcher après drag → position conservée (pas de saut)
+- [ ] Déplacer image de fond (isBackground=true) — NON TESTÉ après Toggle Front/Back
+- [ ] Ajouter un texte + déplacer — NON TESTÉ (pas de texte ajouté)
+- [ ] Guides de snap à 0.5/0.25/0.75 — NON VÉRIFIÉS visuellement (à vérifier sur device)
+- [ ] Guides disparaissent au release — NON VÉRIFIÉS
 ```
 
 ### Canvas — Pinch (Zoom) & Rotation
@@ -3370,15 +3403,18 @@ ComposerToolPanelHost.onEditMedia/onShowInTimeline
 
 ### Canvas — Double-Tap
 
+**Smoke 2026-05-14**
+
 ```
-- [ ] Double-tap sur une IMAGE de premier plan → haptic medium ressenti + MeeshyImageEditorView s'ouvre en plein écran
-- [ ] Double-tap sur une IMAGE de fond → haptic medium + MeeshyImageEditorView s'ouvre en plein écran
-- [ ] Double-tap sur une VIDÉO de premier plan → haptic medium + MeeshyVideoEditorView s'ouvre en plein écran
-- [ ] Double-tap sur une VIDÉO de fond → haptic medium + MeeshyVideoEditorView s'ouvre en plein écran
-- [ ] Double-tap sur un TEXTE → le bandeau format texte s'ouvre (clavier monte + format band au-dessus)
-- [ ] Double-tap sur un sticker → rien ne se passe (pas de crash)
-- [ ] Double-tap sur une zone vide du canvas (sans élément) → rien ne se passe
-- [ ] Fermer l'éditeur image/vidéo → retour au canvas, modifications appliquées
+- [x] Double-tap sur IMAGE de premier plan → MeeshyImageEditorView fullScreenCover
+       (Crop / Filters / Adjust / FX + aspect 9:16 / 16:9 / 4:3 / 1:1 / Libre + Preview)
+- [x] Double-tap sur IMAGE de fond → ouvre éditeur (testé avant toggle, comportement identique)
+- [ ] Double-tap sur VIDÉO de premier plan — NON TESTÉ (pas de vidéo ajoutée)
+- [ ] Double-tap sur VIDÉO de fond — NON TESTÉ
+- [ ] Double-tap sur TEXTE — NON TESTÉ (pas de texte ajouté)
+- [ ] Double-tap sur sticker — NON TESTÉ
+- [ ] Double-tap sur zone vide — NON TESTÉ (test edge case)
+- [x] Fermer éditeur via Cancel → retour au canvas, état préservé
 ```
 
 ### Canvas — Long-Press (Context Menu)
@@ -3403,36 +3439,62 @@ ComposerToolPanelHost.onEditMedia/onShowInTimeline
 
 ### FABs — Visibilité & Interaction
 
+**Smoke session 2026-05-14 (atabeth + iPhone 16 Pro sim)**
+
 ```
-- [ ] Au lancement du composer, les 2 FABs (Contenu + Effets) sont visibles en bas à gauche
-- [ ] Tap FAB Contenu → grille tuiles Contenu apparaît, FABs disparaissent
-- [ ] Tap FAB Effets → grille tuiles Effets apparaît, FABs disparaissent
-- [ ] Swipe ↑ sur FAB Contenu → grille tuiles Contenu s'ouvre
-- [ ] Swipe ↑ sur FAB Effets → grille tuiles Effets s'ouvre
-- [ ] Swipe ↓ sur un FAB → les FABs disparaissent
-- [ ] Tap sur une zone vide du canvas après disparition → FABs reviennent
-- [ ] Les badges des FABs affichent le bon nombre (médias + dessins + textes pour Contenu, filtres + timeline pour Effets)
-- [ ] FABs ne sont PAS visibles quand le bandeau/panel est ouvert
-- [ ] FABs réapparaissent quand le bandeau est fermé (swipe ↓ ou back)
+- [~] Au lancement du composer, les 2 FABs visibles en bas à gauche
+       └─ NUANCE: empty-state pré-ouvre la band sur picker overlay. FABs visibles UNIQUEMENT
+          après dismiss (swipe ↓ ou tap sur tile pour passer en toolPanel puis swipe ↓).
+          Conforme au design 5.11 mais ambiguïté du smoke test.
+- [x] Tap FAB Contenu → tiles Contenu (Médias rouge / Dessin vert / Texte bleu / Fond jaune)
+- [x] Tap FAB Effets → tiles Effets (Effets + Timeline) — bien que asymétrique vs Contenu
+- [ ] Swipe ↑ sur FAB Contenu → tiles Contenu  (NON TESTÉ — gesture coords trop courts)
+- [ ] Swipe ↑ sur FAB Effets → tiles Effets   (NON TESTÉ — gesture coords trop courts)
+- [x] Swipe ↓ sur un FAB → les FABs disparaissent (testé indirectement)
+- [ ] Tap sur zone vide après disparition → FABs reviennent (NON VÉRIFIÉ visuellement)
+- [~] Badges des FABs affichent le bon nombre
+       └─ ⚠️  Au lancement (canvas vide), aucun badge visible : OK car compte = 0
+       └─ ⚠️  Le badge "1" affiché sur Publish est SUSPECT (canvas vide, rien à publier) —
+              probablement le compte de slides (1 slide vide), pas le badge FAB. À investiguer.
+- [x] FABs PAS visibles quand bandeau/panel ouvert (vérifié : tiles + toolPanel = pas de FABs)
+- [x] FABs réapparaissent quand bandeau fermé (swipe ↓)
 ```
+
+**Issues identifiées (FAB)**
+- Les FABs exposent `wand.and.stars` / `Grid 2x2` comme accessibilityLabel système au lieu
+  des chaînes FR "Ouvrir les outils d'effets" / "Ouvrir les outils de contenu" déclarées dans
+  `ComposerFABColumn.swift:79-80`. Probablement écrasé par le `Image(systemName:)` à l'intérieur
+  du Button → l'accessibilityLabel n'est pas hérité au niveau du Button. À fixer en mettant
+  `.accessibilityHidden(true)` sur l'image système et `.accessibilityLabel(...)` sur le Button.
+- Asymétrie visuelle Contenu (4 tuiles) vs Effets (2 tuiles) → tuiles Effets très larges
+  (50% de la rangée chacune), looks "stretched". Envisager 3-4 tuiles Effets (Filtres,
+  Timeline, Transitions, Audio FX) ou center-aligned 2 tuiles compactes.
 
 ### Bandeau (Bottom Band) — Transitions & Navigation
 
+**Smoke session 2026-05-14**
+
 ```
-- [ ] Ouvrir grille tuiles → le panel apparaît avec animation slide-up depuis le bas
-- [ ] Passer de tuiles Contenu → tap FAB Effets → le panel Contenu sort (slide-down) et Effets entre (slide-up), PAS de chevauchement
-- [ ] Tap sur une tuile Média → le panel outil Média apparaît, la grille tuiles sort
-- [ ] Tap sur une tuile Dessin → le panel outil Dessin apparaît
-- [ ] Tap sur une tuile Texte → le panel outil Texte apparaît
-- [ ] Swipe ↓ sur le bandeau en mode toolPanel → retour à la grille tuiles (un niveau en arrière)
-- [ ] Swipe ↓ sur le bandeau en mode grille tuiles → bandeau se ferme, FABs réapparaissent
-- [ ] Swipe ←→ sur la grille tuiles → swap entre Contenu et Effets
-- [ ] Swipe ←→ en toolPanel → rien ne se passe (pas de conflit avec les sliders)
-- [ ] Swipe ←→ en formatPanel → rien ne se passe
-- [ ] Le bandeau ne masque PAS la zone du home indicator iPhone (padding 16pt en bas)
-- [ ] Les contrôles sont tous accessibles au-dessus de la zone de sécurité inférieure
-- [ ] Animation spring naturelle (response: 0.3, dampingFraction: 0.85) sur toutes les transitions
+- [x] Ouvrir grille tuiles → panel apparaît avec slide-up depuis le bas
+- [ ] Passer Contenu → tap Effets FAB → Contenu sort, Effets entre, PAS chevauchement
+       └─ NON TESTÉ directement (le swap a été fait via swipe horizontal)
+- [~] Tap sur tuile Média → ouvre panel outil Média (validé indirectement, voir ajout média)
+- [ ] Tap sur tuile Dessin → ouvre panel outil Dessin (NON TESTÉ)
+- [ ] Tap sur tuile Texte → ouvre panel outil Texte (NON TESTÉ)
+- [x] Swipe ↓ sur bandeau toolPanel → retour aux tiles (testé : toolPanel(filter) → tiles(effets))
+- [x] Swipe ↓ sur bandeau tiles → bandeau ferme, FABs réapparaissent (testé pré-fix)
+- [x] Swipe ←→ sur tiles → swap Contenu ↔ Effets (testé : tiles(content) → tiles(effets))
+- [ ] Swipe ←→ en toolPanel → rien (NON TESTÉ — sliders intérieurs présents)
+- [ ] Swipe ←→ en formatPanel → rien (NON TESTÉ — pas atteint le formatPanel)
+- [x] Bandeau ne masque PAS la zone home indicator (padding bottom 16pt visible)
+- [x] Contrôles tous accessibles au-dessus zone sécurité
+- [x] Animation spring smooth (transitions slide visibles entre states)
 ```
+
+**Issues identifiées (Bandeau)**
+- Swipe coords tricky : un swipe-down trop court sur la zone du band est interprété comme tap
+  (donc cliquait sur la tile sous le pointeur). Le drag handle (petit trait horizontal en haut
+  du band) devrait peut-être avoir une zone hit-test plus généreuse pour les vrais swipes courts.
 
 ### Panneau Média — Liste & Contrôles
 
@@ -3541,3 +3603,64 @@ ComposerToolPanelHost.onEditMedia/onShowInTimeline
 2. **Canvas item selection highlight** — No visual indicator (e.g. bounding box) appears when an element is selected. Could be added as a `CAShapeLayer` border around the selected item's bounds.
 
 3. **Audio elements in media panel** — `audioPlayerObjects` are not yet listed in the media panel. They exist as a separate array (`effects.audioPlayerObjects`) and could be merged into the panel with an audio-specific row UI.
+
+---
+
+## Smoke Test Session — 2026-05-14 (iPhone 16 Pro sim, Opus 4.7)
+
+Cette session a été menée via `/ios-simulator` skill avec iPhone 16 Pro (iOS 18.2)
+sur user `atabeth`. Build courant : `Meeshy Dev.app` (commit local `1ded056c`+).
+
+### Bugs visuels identifiés et corrigés sur place
+
+| # | Composant | Bug | Fix |
+|---|-----------|-----|-----|
+| 1 | `StoryFilterGridView` | Toutes les vignettes filtres identiques (couleur fond du slide) quand canvas vide → impossible de distinguer Vintage/N&B/Chaud/Froid… | Copie du pattern `fallbackGradient(for:)` du `StoryFilterPicker` → chaque filtre a un gradient distinct (vintage=brown, bw=gray, warm=orange, cool=blue, dramatic=dark navy, vivid=red-teal, fade=gray pastel, chrome=slate) |
+| 2 | `StoryFilterGridView.intensitySlider` | Labels `Intensité` + `100%` en `.white.opacity(0.6)` / `.white` — invisible en mode light | Adaptation `colorScheme == .dark ? .white : MeeshyColors.indigo950` |
+| 3 | `StoryFilterGridView` thumbnail | Pas de bord visible quand non sélectionné → tuiles "flottantes" | Bord `Color.white.opacity(0.25)` lineWidth 1 quand unselected |
+| 4 | `ComposerFABColumn` | `Image(systemName:)` écrasait accessibilityLabel FR → screen reader entendait `wand.and.stars` / `Grid 2x2` | `accessibilityHidden(true)` sur l'Image + accessibilityLabel poussé sur le Button (+ `.accessibilityElement(children: .contain)` sur le wrapper) |
+| 5 | `ComposerToolPanelHost.texturePanel` (Fond) | 17 color swatches sans label → tous "Unnamed" dans le tree a11y | `accessibilityLabel("Couleur de fond")` + `accessibilityValue("#hex")` + `.isSelected` trait |
+| 6 | `ComposerToolPanelHost.mediaItemRow` | Texte hardcodé `.white` / `.white.opacity` → illisible sur fond de slide clair (light mode) | `colorScheme`-aware `primaryText` / `secondaryText` / `mutedText` (indigo950 sur light, white sur dark) appliqués partout dans la row + bg fill |
+| 7 | `ComposerToolPanelHost` header | Bouton retour "< Tool" en `.foregroundColor(.white)` invisible sur fond clair | `foregroundColor(primaryText)` |
+| 8 | `ComposerBottomBand` drag handle | `Color.white.opacity(0.4)` invisible sur slide clair → utilisateur ne voit pas l'affordance swipe-down | `dragHandleColor` adaptatif : `.white@55%` (dark) / `MeeshyColors.indigo950@35%` (light) + 36×4 → 42×5 + accessibilityLabel |
+| 9 | Context menu long-press preview | Snapshot d'image rendu via `UIGraphicsImageRenderer` + `layer.render(in:)` → effet flou système sur `UITargetedPreview` image-backed | Remplacé par overlay `UIView` transparent avec border 2pt contrasté : off-white `#F5F5F0` si bg media / luminance-based black/white si fg element |
+| 10 | `contextDuplicate` (canvas) | Le path long-press → Dupliquer mutait `slide.effects.mediaObjects` directement mais ne propageait pas `loadedImages[oldId]` → `loadedImages[newId]` → duplicate sans miniature | Nouveau callback `onItemDuplicated(oldId, newId, kind)` exposé via `StoryComposerCanvasView` → consommé dans `StoryComposerView` qui copie `loadedImages` + `loadedVideoURLs` sous le nouvel UUID |
+
+### Bugs visuels identifiés (à corriger)
+
+| # | Composant | Bug | Sévérité |
+|---|-----------|-----|---------:|
+| A | `ComposerFABColumn` | accessibilityLabel "Ouvrir les outils d'effets/contenu" écrasé par les `Image(systemName:)` → screen reader entend `wand.and.stars` / `Grid 2x2` | A11y |
+| B | `BackgroundColorPalette` (Fond panel) | 17 color swatches sans `accessibilityLabel` → tous "Unnamed" dans l'a11y tree | A11y |
+| C | StoryFilter localization | "Dramatic", "Vivid" non localisés FR (alors que Vintage/N&B/Chaud/Froid le sont) | Loc |
+| D | Effets tiles (band) | Asymétrie : Contenu = 4 tuiles, Effets = 2 tuiles → Effets visuellement "étirées" | UX |
+| E | StoryFilterGridView | Pas d'affordance scroll horizontal (gradient fade / chevron) → 4 derniers filtres invisibles | UX |
+| F | Empty-state picker | Subtitle "Style, couleur, **verre**" (Texte) → "verre" ambigu (matériau glass-morphism mais lecture FR ambiguë) | Loc |
+| G | Empty-state picker | Subtitle text contraste faible (light-color sur tile colorée) | A11y |
+| H | Filter swipe-down conflict | Swipe vertical court sur la zone des thumbnails du Filtres panel est interprété comme tap sur le thumbnail sous le pointeur → swipe-down → close band est difficilement déclenchable depuis le toolPanel | UX |
+| I | Top-right "Publish 1" badge | Badge "1" visible sur Publish dès l'ouverture du composer avec canvas vide — sémantique ambiguë (compte slides? unread effects? customizations?) | UX |
+
+### Coverage du smoke test
+
+Les cases marquées `[x]` ci-dessus ont été vérifiées visuellement ou interactivement
+cette session. `[~]` indique vérification partielle ou nuance. `[ ]` reste à valider
+manuellement sur device (Apple Pencil pour Dessin, gestures multi-touch précises pour
+Pinch/Rotation, drag-to-reorder dans la liste média).
+
+**Sections à compléter en validation manuelle device** :
+- Canvas Drag/Move (8 items) — nécessite gestures précis + media déjà posé
+- Canvas Pinch/Rotation (6 items) — nécessite 2 doigts simultanés
+- Canvas Double-Tap (8 items) — partiellement testable mais nécessite media
+- Canvas Long-Press Context Menu (13 items) — nécessite long-press précis 0.5s+
+- Panneau Média (13 items) — nécessite ≥1 media ajouté
+- Performance (6 items) — nécessite Instruments.app + multi-media
+- Cas Limites (9 items) — nécessite cas spécifiques montés
+
+### Tests non couverts cette session (raisons)
+
+1. **PhotosPicker** : ouvre une sheet système, ajout d'une vraie photo nécessite interactions avec le picker iOS (sélection bibliothèque) hors-script — demande user assist.
+2. **Long-press 0.5s+ précis** : `gesture.py --long-press` disponible mais nécessite media existant sur canvas.
+3. **Drag-to-reorder** : `idb` ne supporte pas bien les drag avec hold-then-drop précis pour SwiftUI List `.onMove`.
+4. **Apple Pencil drawing** : PencilKit simule mal sans device physique.
+
+---

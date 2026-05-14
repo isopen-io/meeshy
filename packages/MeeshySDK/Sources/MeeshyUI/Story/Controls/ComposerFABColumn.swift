@@ -59,6 +59,7 @@ struct ComposerFABColumn: View, Equatable {
                     Image(systemName: icon)
                         .font(.system(size: 22, weight: .semibold))
                         .foregroundStyle(isActive ? .white : accent)
+                        .accessibilityHidden(true)
                 }
                 .frame(width: 56, height: 56)
                 .overlay(alignment: .topTrailing) {
@@ -70,12 +71,17 @@ struct ComposerFABColumn: View, Equatable {
                             .background(MeeshyColors.indigo400)
                             .clipShape(Capsule())
                             .offset(x: 6, y: -6)
+                            .accessibilityHidden(true)
                     }
                 }
             }
             .buttonStyle(.plain)
+            .accessibilityLabel(category == .contenu ? "Ouvrir les outils de contenu" : "Ouvrir les outils d'effets")
+            .accessibilityValue(badge > 0 ? "\(badge) éléments actifs" : "Aucun élément")
+            .accessibilityHint(isActive ? "Touchez deux fois pour fermer. Faites glisser vers le bas pour masquer la barre." : "Touchez deux fois pour ouvrir les outils. Faites glisser vers le haut pour forcer l'ouverture.")
         }
         .frame(width: 56, height: 56)
+        .accessibilityElement(children: .contain)
         .accessibilityLabel(category == .contenu ? "Ouvrir les outils de contenu" : "Ouvrir les outils d'effets")
         .accessibilityValue(badge > 0 ? "\(badge) éléments actifs" : "Aucun élément")
         .accessibilityHint(isActive ? "Touchez deux fois pour fermer. Faites glisser vers le bas pour masquer la barre." : "Touchez deux fois pour ouvrir les outils. Faites glisser vers le haut pour forcer l'ouverture.")

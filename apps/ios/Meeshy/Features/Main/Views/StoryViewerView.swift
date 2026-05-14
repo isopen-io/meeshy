@@ -203,6 +203,10 @@ struct StoryViewerView: View {
     @State var storyComments: [FeedComment] = []
     @State var isLoadingComments = false
     @State var storyCommentCount: Int = 0
+    @State var replyingToStoryComment: FeedComment? = nil
+    @State var storyCommentRepliesMap: [String: [FeedComment]] = [:]
+    @State var storyCommentExpandedThreads: Set<String> = []
+    @State var storyCommentLoadingReplies: Set<String> = []
     /// Latched once the `initialAction` (Phase F notification entry point) has
     /// been honoured. Guards against re-firing on every `.onAppear` cycle —
     /// scene phase transitions and parent re-renders both republish onAppear,

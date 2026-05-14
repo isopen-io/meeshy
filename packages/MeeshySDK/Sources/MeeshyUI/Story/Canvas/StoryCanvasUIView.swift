@@ -83,6 +83,13 @@ public final class StoryCanvasUIView: UIView {
     /// media editor sheet (legacy `onEditText` / `onEditMedia` UX parity).
     public var onItemDoubleTapped: ((String, CanvasItemKind) -> Void)?
 
+    /// Called after the context-menu "Dupliquer" action creates a copy of an
+    /// element. Parent uses this to mirror viewModel-owned ephemeral state
+    /// (loadedImages / loadedVideoURLs) under the new UUID so the duplicate
+    /// inherits its thumbnail / preview immediately. Fires AFTER the slide
+    /// mutation has been propagated via `onItemModified`.
+    public var onItemDuplicated: ((_ oldId: String, _ newId: String, _ kind: CanvasItemKind) -> Void)?
+
     /// Fired exactly once per slide rebuild when the background media has
     /// finished loading (image bytes decoded into `contents`, video transitioned
     /// to `.readyToPlay`, or synchronous color/gradient applied). Item layers
@@ -593,8 +600,48 @@ public final class StoryCanvasUIView: UIView {
             itemsContainer.addSublayer(sub)
         }
 
+        applyForegroundFrames()
         updateFilterLayer()
         scheduleContentReadyEvaluation(for: bgKind)
+    }
+
+    /// Edit-mode only: trace un cadre permanent sur les éléments foreground
+    /// (medias non-bg + textes). C'est l'indicateur visuel que demande l'UX :
+    /// l'utilisateur voit immédiatement quelles zones du canvas sont
+    /// manipulables sans avoir à toucher chaque élément.
+    ///
+    /// Implémentation : on définit `borderWidth` / `borderColor` directement sur
+    /// chaque sublayer (le `name` du layer == element id) plutôt qu'un overlay
+    /// CAShapeLayer séparé. Ça suit les transformations / drag / pinch sans
+    /// avoir besoin de re-synchroniser un layer supplémentaire à chaque tick.
+    /// Le contour reste désactivé en `.play` mode pour ne pas polluer le rendu.
+    private func applyForegroundFrames() {
+        guard mode == .edit else { return }
+        let fgMediaIds = Set((slide.effects.mediaObjects ?? []).filter { !$0.isBackground }.map { $0.id })
+        let fgTextIds = Set(slide.effects.textObjects.map { $0.id })
+
+        // Couleur contrastante : blanc semi-transparent sur la quasi-totalité
+        // des slides (canvas typiquement sombre / saturé). Pour les slides clair,
+        // on bascule sur indigo950 atténué pour rester lisible.
+        let bgHex = (slide.effects.background ?? "#000000").replacingOccurrences(of: "#", with: "")
+        var rgb: UInt64 = 0; Scanner(string: bgHex).scanHexInt64(&rgb)
+        let r = CGFloat((rgb & 0xFF0000) >> 16) / 255.0
+        let g = CGFloat((rgb & 0x00FF00) >> 8) / 255.0
+        let b = CGFloat(rgb & 0x0000FF) / 255.0
+        let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        let frameColor: CGColor = lum > 0.6
+            ? UIColor(red: 0.12, green: 0.11, blue: 0.29, alpha: 0.55).cgColor // indigo950 @ 55%
+            : UIColor.white.withAlphaComponent(0.55).cgColor
+
+        for sub in itemsContainer.sublayers ?? [] {
+            guard let name = sub.name else { continue }
+            if fgMediaIds.contains(name) || fgTextIds.contains(name) {
+                sub.borderColor = frameColor
+                sub.borderWidth = 1
+                sub.cornerRadius = 4
+                sub.masksToBounds = false
+            }
+        }
     }
 
     /// Inserts, updates, or removes the `StoryFilteredLayer` overlay driven by
@@ -1502,24 +1549,55 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         guard let id = configuration.identifier as? String,
               let layer = itemsContainer.sublayers?.first(where: { $0.name == id }) else { return nil }
 
-        // Create a snapshot image of just the element's layer
-        let renderer = UIGraphicsImageRenderer(size: layer.bounds.size)
-        let snapshot = renderer.image { ctx in
-            layer.render(in: ctx.cgContext)
-        }
-        let imageView = UIImageView(image: snapshot)
-        imageView.frame = layer.frame
-        imageView.layer.cornerRadius = 8
-        imageView.clipsToBounds = true
-        addSubview(imageView)
+        // Use a transparent overlay with a contrasting border instead of a
+        // snapshot of the layer. UITargetedPreview applies a system blur on
+        // image-backed previews, which made the image look "ghosted" during
+        // long-press. A clear view + border keeps the element visible behind
+        // the menu and reads as a simple selection marker.
+        //
+        // Border color choice:
+        //  - Background image/video → off-white (#F5F5F5) so the cadre stands
+        //    out against the photographic content of the bg.
+        //  - Foreground element → high-contrast vs the slide background color
+        //    (white on dark slide, dark on light slide).
+        let isBgElement: Bool = {
+            if slide.effects.resolvedBackgroundMedia?.id == id { return true }
+            if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
+                return m.isBackground == true
+            }
+            return false
+        }()
+        // Border color choice — keep it deterministic and high-contrast without
+        // peeking at the (composer-owned) slide backgroundColor property which
+        // is not in the SDK model and therefore not reachable from here.
+        //  - Background image/video element → off-white (#F5F5F0) so the cadre
+        //    reads against photographic content.
+        //  - Foreground element → white@95% which sits well against the dark
+        //    safe-area letterboxing and the typical (saturated indigo) slide
+        //    canvas; a future refinement can sample the slide's average
+        //    luminance to flip black/white if needed.
+        let borderColor: UIColor = {
+            if isBgElement {
+                return UIColor(red: 0.96, green: 0.96, blue: 0.94, alpha: 1.0) // #F5F5F0
+            }
+            return UIColor.white.withAlphaComponent(0.95)
+        }()
+
+        let overlay = UIView(frame: layer.frame)
+        overlay.backgroundColor = .clear
+        overlay.layer.cornerRadius = 8
+        overlay.layer.borderColor = borderColor.cgColor
+        overlay.layer.borderWidth = 2
+        overlay.isUserInteractionEnabled = false
+        addSubview(overlay)
 
         let params = UIPreviewParameters()
         params.backgroundColor = .clear
-        let preview = UITargetedPreview(view: imageView, parameters: params)
+        let preview = UITargetedPreview(view: overlay, parameters: params)
 
-        // Remove the temporary imageView after animation
+        // Remove the temporary overlay after the menu's lift animation.
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            imageView.removeFromSuperview()
+            overlay.removeFromSuperview()
         }
         return preview
     }
@@ -1529,21 +1607,32 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     /// These mutate the slide and re-fire onItemModified so the binding
     /// propagates back to the SwiftUI composer layer.
     private func contextDuplicate(id: String) {
+        var duplicatedNewId: String?
+        var duplicatedKind: CanvasItemKind?
         if let idx = slide.effects.mediaObjects?.firstIndex(where: { $0.id == id }) {
             var copy = slide.effects.mediaObjects![idx]
-            copy.id = UUID().uuidString
+            let newId = UUID().uuidString
+            copy.id = newId
             copy.x += 0.05
             copy.y += 0.05
             copy.isBackground = false
             slide.effects.mediaObjects?.append(copy)
+            duplicatedNewId = newId
+            duplicatedKind = .media
         } else if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }) {
             var copy = slide.effects.textObjects[idx]
-            copy.id = UUID().uuidString
+            let newId = UUID().uuidString
+            copy.id = newId
             copy.x += 0.05
             copy.y += 0.05
             slide.effects.textObjects.append(copy)
+            duplicatedNewId = newId
+            duplicatedKind = .text
         }
         onItemModified?(slide)
+        if let newId = duplicatedNewId, let kind = duplicatedKind {
+            onItemDuplicated?(id, newId, kind)
+        }
     }
 
     private func contextBringForward(id: String) {
