@@ -755,8 +755,30 @@ do_release() {
         bundle install || return 1
     fi
 
+    # Match needs MATCH_PASSWORD to decrypt the certificates Git repo. The password
+    # was chosen the first time `fastlane match init` ran. We accept it via :
+    #   1. MATCH_PASSWORD env var (already supported by fastlane itself)
+    #   2. apps/ios/.env file with MATCH_PASSWORD=… (sourced here if present)
+    #   3. macOS keychain entry "fastlane-match" (auto-discovered by fastlane match)
+    if [ -z "${MATCH_PASSWORD:-}" ] && [ -f ".env" ]; then
+        # shellcheck disable=SC1091
+        set -a; source .env; set +a
+    fi
+    if [ -z "${MATCH_PASSWORD:-}" ] && ! security find-generic-password -l "fastlane-match" >/dev/null 2>&1; then
+        err "MATCH_PASSWORD is unset and the keychain has no 'fastlane-match' entry."
+        echo ""
+        echo -e "  ${DIM}fastlane match needs the password chosen at 'fastlane match init' time.${NC}"
+        echo -e "  ${DIM}Options :${NC}"
+        echo -e "  ${DIM}  1. Pass inline      :${NC} MATCH_PASSWORD=xxx ./meeshy.sh release"
+        echo -e "  ${DIM}  2. Store in .env    :${NC} echo 'MATCH_PASSWORD=xxx' >> apps/ios/.env"
+        echo -e "  ${DIM}  3. Save to keychain :${NC} cd apps/ios && bundle exec fastlane match appstore --readonly  ${DIM}(prompts once)${NC}"
+        echo -e "  ${DIM}  4. Lost the password:${NC} cd apps/ios && bundle exec fastlane match nuke distribution ${DIM}+ recreate (irreversible)${NC}"
+        return 1
+    fi
+
     log "Release → $lane_label via fastlane (lane: $lane)"
     log "ASC API Key : $(basename "$key_file") (key_id from Fastfile: 5542B6LVNL)"
+    [ -n "${MATCH_PASSWORD:-}" ] && log "MATCH_PASSWORD : sourced (env or .env)"
 
     local fastlane_args=()
     [ "${SKIP_TESTS:-}" = "true" ] && fastlane_args+=("skip_tests:true")
