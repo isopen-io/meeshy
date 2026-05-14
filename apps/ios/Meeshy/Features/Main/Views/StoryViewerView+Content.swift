@@ -840,6 +840,8 @@ extension StoryViewerView {
             if let idx = storyComments.firstIndex(where: { $0.id == parentId }) {
                 storyComments[idx].replies += 1
             }
+            // Counter now sums top-level + replies, so it must also bump here.
+            storyCommentCount += 1
         } else {
             // Top-level comment
             storyComments.append(optimisticComment)
@@ -1315,6 +1317,14 @@ extension StoryViewerView {
                             withAnimation(.easeOut(duration: 0.3)) {
                                 proxy.scrollTo(last.id, anchor: .bottom)
                             }
+                        }
+                    }
+                    .onChange(of: replyingToStoryComment?.id) { _, newId in
+                        // Bring the target into view so the user sees what they're
+                        // replying to even if it was off-screen.
+                        guard let id = newId else { return }
+                        withAnimation(.easeOut(duration: 0.3)) {
+                            proxy.scrollTo(id, anchor: .center)
                         }
                     }
                 }
