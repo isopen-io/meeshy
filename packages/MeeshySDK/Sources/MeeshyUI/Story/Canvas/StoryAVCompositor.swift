@@ -134,6 +134,7 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                 do {
                     let backdropCapture = self.sharedBackdropCapture()
                     try Self.renderFrame(slide: instruction.slide,
+                                         languages: instruction.languages,
                                          at: request.compositionTime,
                                          renderSize: renderContext.size,
                                          into: buffer,
@@ -164,8 +165,20 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// Per-frame render entry point. Exposed `internal` so tests can drive it
     /// directly with a counting `BackdropCapturing` fake without standing up
     /// the full AVFoundation request pipeline.
+    ///
+    /// Renders into the pixel buffer in three layers (back to front) :
+    ///   1. **Background** — resolved via `StoryRenderer.renderBackground`.
+    ///      Solid color is painted directly; image background is drawn
+    ///      `aspectFill`. Video backgrounds are supplied by the composition's
+    ///      video track and the renderer leaves the substrate untouched.
+    ///   2. **Foreground items** — `StoryRenderer.render` produces the layer
+    ///      tree (text, media, stickers, persisted drawing).
+    ///   3. **Opening transition** — `StoryRenderer.applyOpening` overlays
+    ///      the slide's opening effect during the first 0.5s of playback so
+    ///      the baked MP4 mirrors the live viewer/preview.
     @MainActor
     internal static func renderFrame(slide: StorySlide,
+                                     languages: [String] = [],
                                      at time: CMTime,
                                      renderSize: CGSize,
                                      into buffer: CVPixelBuffer,
@@ -173,42 +186,38 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                                      backdropCapture: any BackdropCapturing) throws {
         // Scope check: flush the cache if the slide / languages / mode this
         // compositor is now processing differs from the previous frame's
-        // scope. For a single export session this is true only on the first
-        // frame, so the cache is a no-op miss-then-hit-forever steady state.
-        cache.invalidateIfNeeded(slideId: slide.id, languages: [], mode: .play)
+        // scope.
+        cache.invalidateIfNeeded(slideId: slide.id, languages: languages, mode: .play)
 
         let geometry = CanvasGeometry(renderSize: renderSize)
 
-        // Per-frame backdrop reset: drop the previous frame's
-        // `MTLTexture` snapshot so `captureCanvasBackdrop` rebuilds against
-        // the current `time` / slide state. The capture *instance itself* is
-        // shared across all frames of the export (see `_backdropCapture`),
-        // which collapses peak shared-memory footprint from
-        // O(frames × renderSize) to O(renderSize). The capture is a no-op
-        // when the slide has no glass-style text — common path remains
-        // untouched.
         backdropCapture.invalidate()
         _ = backdropCapture.captureCanvasBackdrop(slide: slide,
                                                   geometry: geometry,
                                                   time: time,
                                                   mode: .play,
-                                                  languages: [])
+                                                  languages: languages)
 
-        // Export path: pin `contentsScale` to 1.0 so the render output stays
-        // 1:1 with the design pixel grid (e.g. 1080×1920) instead of being
-        // upsampled by `UIScreen.main.scale` (3× on Pro devices), which would
-        // produce a 3240×5760 raster fed back through a 1080×1920 pixel
-        // buffer and sub-sample text into the final MP4.
+        // Foreground layer tree (text/media/stickers/drawing).
         let layer = StoryRenderer.render(slide: slide,
                                           into: geometry,
                                           at: time,
                                           mode: .play,
-                                          languages: [],
+                                          languages: languages,
                                           cache: cache,
                                           backdropProvider: { frame in
                                               backdropCapture.cropRegion(frame)
                                           },
                                           contentsScale: 1.0)
+
+        // Opening transition — only visible during the first 0.5s. The
+        // live canvas uses `CABasicAnimation`, but `layer.render(in:)`
+        // doesn't run the animation engine — it renders the model layer
+        // as-is. So we apply the static state of the opening at the
+        // current playhead directly on the model layer.
+        if let opening = slide.effects.opening, time.seconds < 0.5 {
+            applyStaticOpening(opening, rootLayer: layer, elapsed: time.seconds)
+        }
 
         CVPixelBufferLockBaseAddress(buffer, [])
         defer { CVPixelBufferUnlockBaseAddress(buffer, []) }
@@ -221,9 +230,6 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
                           userInfo: [NSLocalizedDescriptionKey: "No base address"])
         }
 
-        // 32BGRA = byte order little-endian + premultiplied first alpha.
-        // Without `byteOrder32Little`, CoreGraphics interprets bytes in big-endian
-        // order (ARGB) and channels come out swapped (red↔blue).
         let bitmapInfo = CGImageByteOrderInfo.order32Little.rawValue
             | CGImageAlphaInfo.premultipliedFirst.rawValue
 
@@ -243,24 +249,148 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
         cg.translateBy(x: 0, y: CGFloat(height))
         cg.scaleBy(x: 1, y: -1)
 
+        // Paint the slide background BEFORE the foreground tree so the
+        // baked MP4 matches the live preview exactly. For video backgrounds
+        // we leave the AVFoundation-supplied substrate frame untouched
+        // (StoryExporter wires the bg video into the composition's video
+        // track). For static (color/image) backgrounds the substrate is the
+        // synthetic transparent track encoded as opaque black — we OVERPAINT
+        // it with the slide's background.
+        let bgKind = StoryRenderer.renderBackground(slide: slide, languages: languages)
+        switch bgKind {
+        case .video:
+            // Substrate already carries video frames — nothing to overpaint.
+            break
+        case .solidColor(let color):
+            cg.saveGState()
+            cg.setFillColor(color.cgColor)
+            cg.fill(CGRect(origin: .zero, size: CGSize(width: width, height: height)))
+            cg.restoreGState()
+        case .image:
+            // Image backgrounds resolve through `StoryBackgroundLayer.configure`
+            // which reads the media object's local file URL OR fetches via
+            // CacheCoordinator. We replicate the `aspectFill` paint here so the
+            // export matches the live canvas. The lookup is best-effort —
+            // missing media leaves the substrate (black) intact rather than
+            // failing the export.
+            if let bgImage = resolveBackgroundImage(for: slide) {
+                paintAspectFill(image: bgImage,
+                                in: cg,
+                                size: CGSize(width: width, height: height))
+            }
+        }
+
         layer.render(in: cg)
+    }
+
+    /// Applies the static state of an opening transition to `rootLayer` at
+    /// playback position `elapsed`. Mirrors `StoryRenderer.applyOpening` but
+    /// without CABasicAnimation — `layer.render(in:)` doesn't run the
+    /// animation engine, so we compute the model-layer state by hand each
+    /// frame. Progress is `elapsed / 0.5` clamped to `[0, 1]`.
+    @MainActor
+    private static func applyStaticOpening(_ effect: StoryTransitionEffect,
+                                           rootLayer: CALayer,
+                                           elapsed: Double) {
+        let progress = max(0.0, min(1.0, elapsed / 0.5))
+        switch effect {
+        case .fade:
+            rootLayer.opacity = Float(progress)
+        case .reveal:
+            let mask = CAShapeLayer()
+            mask.frame = rootLayer.bounds
+            let center = CGPoint(x: rootLayer.bounds.midX, y: rootLayer.bounds.midY)
+            let maxRadius = hypot(rootLayer.bounds.width, rootLayer.bounds.height) / 2
+            let radius = max(1, maxRadius * CGFloat(progress))
+            mask.path = UIBezierPath(arcCenter: center,
+                                     radius: radius,
+                                     startAngle: 0,
+                                     endAngle: .pi * 2,
+                                     clockwise: true).cgPath
+            rootLayer.mask = mask
+        case .zoom, .slide:
+            break
+        }
+    }
+
+    /// Resolves the bitmap for a slide whose background is an image. Looks
+    /// for the first `mediaObjects` entry with `isBackground == true &&
+    /// kind == .image`. Tries the local file URL first (composer in-memory
+    /// case) then falls back to `mediaURL` as a file path. Returns `nil` if
+    /// the image can't be loaded — caller leaves the substrate untouched.
+    @MainActor
+    private static func resolveBackgroundImage(for slide: StorySlide) -> UIImage? {
+        guard let bg = slide.effects.mediaObjects?.first(where: {
+            $0.isBackground && $0.kind == .image
+        }) else { return nil }
+        if let urlString = bg.mediaURL,
+           let url = URL(string: urlString),
+           url.isFileURL,
+           let image = UIImage(contentsOfFile: url.path) {
+            return image
+        }
+        if let path = bg.mediaURL, let image = UIImage(contentsOfFile: path) {
+            return image
+        }
+        return nil
+    }
+
+    /// Paints `image` in `cg` to fill `size`, preserving aspect ratio
+    /// (`UIView.ContentMode.scaleAspectFill`). Used by `renderFrame` to bake
+    /// the slide's background image before the foreground tree renders on top.
+    @MainActor
+    private static func paintAspectFill(image: UIImage, in cg: CGContext, size: CGSize) {
+        guard let cgImage = image.cgImage else { return }
+        let imageSize = CGSize(width: cgImage.width, height: cgImage.height)
+        let imageAspect = imageSize.width / imageSize.height
+        let targetAspect = size.width / size.height
+        let drawRect: CGRect
+        if imageAspect > targetAspect {
+            // image is wider — match height, crop horizontally
+            let scaledWidth = size.height * imageAspect
+            drawRect = CGRect(x: (size.width - scaledWidth) / 2,
+                              y: 0,
+                              width: scaledWidth,
+                              height: size.height)
+        } else {
+            // image is taller — match width, crop vertically
+            let scaledHeight = size.width / imageAspect
+            drawRect = CGRect(x: 0,
+                              y: (size.height - scaledHeight) / 2,
+                              width: size.width,
+                              height: scaledHeight)
+        }
+        cg.saveGState()
+        // The caller flipped the context so CALayer.render(in:) consumes
+        // a UIKit-style top-down space. `CGContext.draw(_:in:)` draws
+        // bottom-up natively, so we re-flip locally around `drawRect`
+        // before drawing the CGImage — otherwise the background appears
+        // upside-down vs. the live canvas.
+        cg.translateBy(x: drawRect.origin.x, y: drawRect.origin.y + drawRect.size.height)
+        cg.scaleBy(x: 1, y: -1)
+        cg.draw(cgImage, in: CGRect(origin: .zero, size: drawRect.size))
+        cg.restoreGState()
     }
 }
 
 /// Composition instruction carrying the `StorySlide` whose frame at any given
 /// `CMTime` is delegated to `StoryRenderer.render` by `StoryAVCompositor`.
+/// `languages` is threaded so the baked MP4 reflects the author's chosen
+/// export language (Prisme Linguistique).
 public final class StoryCompositionInstruction: NSObject,
                                                  AVVideoCompositionInstructionProtocol,
                                                  @unchecked Sendable {
     public let slide: StorySlide
+    public let languages: [String]
     public let timeRange: CMTimeRange
     public let enablePostProcessing: Bool = false
     public let containsTweening: Bool = true
     public let requiredSourceTrackIDs: [NSValue]? = nil
     public let passthroughTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid
 
-    public nonisolated init(slide: StorySlide, timeRange: CMTimeRange) {
+    public nonisolated init(slide: StorySlide, languages: [String] = [], timeRange: CMTimeRange) {
         self.slide = slide
+        self.languages = languages
         self.timeRange = timeRange
         super.init()
     }

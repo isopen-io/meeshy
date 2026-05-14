@@ -387,6 +387,9 @@
 		SP3400000000002F34 /* SharePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SP3400000000001F34 /* SharePickerView.swift */; };
 		SPS2800000000002F28 /* StoryPublishService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPS2800000000001F28 /* StoryPublishService.swift */; };
 		SVES000000000002F28 /* StoryVideoExportService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVES000000000001F28 /* StoryVideoExportService.swift */; };
+		SESH000000000002F28 /* StoryExportShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = SESH000000000001F28 /* StoryExportShareSheet.swift */; };
+		SESVM00000000002F28 /* StoryExportShareViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = SESVM00000000001F28 /* StoryExportShareViewModel.swift */; };
+		SESVT00000000002F28 /* StoryExportShareViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SESVT00000000001F28 /* StoryExportShareViewModelTests.swift */; };
 		SREMB001A001A001A001A0001 /* StoryRepostEmbedCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = SREMB001A001A001A001A0002 /* StoryRepostEmbedCell.swift */; };
 		SRFT001A001A001A001A0002 /* StoryRepostFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRFT001A001A001A001A0001 /* StoryRepostFlowTests.swift */; };
 		SRPT02002002002002001 /* SearchPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRPT01001001001001001 /* SearchPerformanceTests.swift */; };
@@ -870,6 +873,9 @@
 		SP3400000000001F34 /* SharePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePickerView.swift; sourceTree = "<group>"; };
 		SPS2800000000001F28 /* StoryPublishService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishService.swift; sourceTree = "<group>"; };
 		SVES000000000001F28 /* StoryVideoExportService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryVideoExportService.swift; sourceTree = "<group>"; };
+		SESH000000000001F28 /* StoryExportShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExportShareSheet.swift; sourceTree = "<group>"; };
+		SESVM00000000001F28 /* StoryExportShareViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExportShareViewModel.swift; sourceTree = "<group>"; };
+		SESVT00000000001F28 /* StoryExportShareViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExportShareViewModelTests.swift; sourceTree = "<group>"; };
 		SREMB001A001A001A001A0002 /* StoryRepostEmbedCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryRepostEmbedCell.swift; sourceTree = "<group>"; };
 		SRFT001A001A001A001A0001 /* StoryRepostFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryRepostFlowTests.swift; sourceTree = "<group>"; };
 		SRPT01001001001001001 /* SearchPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPerformanceTests.swift; sourceTree = "<group>"; };
@@ -1206,6 +1212,7 @@
 				BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */,
 				C8B729437578B76EC6727BF0 /* StoryViewerContainer.swift */,
 				BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */,
+				SESH000000000001F28 /* StoryExportShareSheet.swift */,
 				BB22CC33DD44EE55FF660066 /* StatusBarView.swift */,
 				CC44DD55EE66FF7788990011 /* AudioPostComposerView.swift */,
 				BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */,
@@ -1365,6 +1372,7 @@
 				E4A4562A9E8160E9EF7098B7 /* StatusViewModelTests.swift */,
 				CSVT470B470B470B470B4701 /* ConnectionStatusViewModelTests.swift */,
 				19B9EAF13A41EDB150DBC0DB /* StoryViewModelTests.swift */,
+				SESVT00000000001F28 /* StoryExportShareViewModelTests.swift */,
 				4FF8351314E9A302F775DBCE /* UserProfileViewModelTests.swift */,
 				TFA0VT01B001B001B001B001 /* TwoFactorViewModelTests.swift */,
 				BKMK0001000100010001000 /* BookmarksViewModelTests.swift */,
@@ -1390,6 +1398,7 @@
 				AA00BB11CC22DD33EE440083 /* PostDetailViewModel.swift */,
 				AA00BB11CC22DD33EE440084 /* BookmarksViewModel.swift */,
 				BB22CC33DD44EE55FF660022 /* StoryViewModel.swift */,
+				SESVM00000000001F28 /* StoryExportShareViewModel.swift */,
 				BB22CC33DD44EE55FF660033 /* StatusViewModel.swift */,
 				GS3300000000001F33 /* GlobalSearchViewModel.swift */,
 				7B489B1DA15CF189E770686F /* UserProfileViewModel.swift */,
@@ -2166,6 +2175,8 @@
 				TM2800000000002F28 /* ToastManager.swift in Sources */,
 				SPS2800000000002F28 /* StoryPublishService.swift in Sources */,
 				SVES000000000002F28 /* StoryVideoExportService.swift in Sources */,
+				SESH000000000002F28 /* StoryExportShareSheet.swift in Sources */,
+				SESVM00000000002F28 /* StoryExportShareViewModel.swift in Sources */,
 				STNI0001000100010001002 /* StoryNotificationIntent.swift in Sources */,
 				STNV0001000100010001002 /* StoryNotificationTargetViewModel.swift in Sources */,
 				STEC0001000100010001002 /* StoryExpiredContent.swift in Sources */,
@@ -2405,6 +2416,7 @@
 				IFRFT001000100010001001 /* FriendRequestFlowTests.swift in Sources */,
 				ISPFT001000100010001001 /* StoryPublishFlowTests.swift in Sources */,
 				SRFT001A001A001A001A0002 /* StoryRepostFlowTests.swift in Sources */,
+				SESVT00000000002F28 /* StoryExportShareViewModelTests.swift in Sources */,
 				ICFLT001000100010001001 /* CallFlowTests.swift in Sources */,
 				91664E56C9958BA865B3A608 /* MockFriendService.swift in Sources */,
 				443B3C791B4DDEDC517D35DF /* MockCacheService.swift in Sources */,

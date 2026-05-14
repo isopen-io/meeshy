@@ -198,6 +198,8 @@ struct StoryViewerView: View {
     @State var horizontalDrag: CGFloat = 0 // internal for cross-file extension access
     @State var gestureAxis: Int = 0 // internal for cross-file extension access  // 0=undecided, 1=horizontal, 2=vertical
     @State var showViewersSheet = false
+    @State var showExportShareSheet = false
+    @StateObject var exportShareViewModel = StoryExportShareViewModel()
     @State var showCommentsOverlay = false
     @State var storyReactionCount: Int = 0
     @State var storyComments: [FeedComment] = []
@@ -207,6 +209,11 @@ struct StoryViewerView: View {
     @State var storyCommentRepliesMap: [String: [FeedComment]] = [:]
     @State var storyCommentExpandedThreads: Set<String> = []
     @State var storyCommentLoadingReplies: Set<String> = []
+    /// Optimistic local tracking of liked comments (id ∈ set => current user reacted).
+    @State var storyCommentLikedIds: Set<String> = []
+    /// Local like-count delta keyed by comment id, applied on top of the server `comment.likes`
+    /// to avoid waiting for refetch after a tap.
+    @State var storyCommentLikeDelta: [String: Int] = [:]
     /// Latched once the `initialAction` (Phase F notification entry point) has
     /// been honoured. Guards against re-firing on every `.onAppear` cycle —
     /// scene phase transitions and parent re-renders both republish onAppear,
@@ -336,6 +343,19 @@ struct StoryViewerView: View {
         .sheet(isPresented: $showViewersSheet, onDismiss: { resumeTimer() }) {
             if let story = currentStory {
                 StoryViewersSheet(story: story, accentColor: Color(hex: "4ECDC4"))
+            }
+        }
+        .sheet(isPresented: $showExportShareSheet, onDismiss: {
+            exportShareViewModel.cancel()
+            resumeTimer()
+        }) {
+            if let story = currentStory {
+                StoryExportShareSheet(
+                    story: story,
+                    viewModel: exportShareViewModel
+                )
+                .presentationDetents([.medium, .large] as Set<PresentationDetent>)
+                .presentationDragIndicator(.visible)
             }
         }
         .sheet(item: $sharedContentWrapper, onDismiss: { resumeTimer() }) { wrapper in
@@ -846,6 +866,16 @@ struct StoryViewerView: View {
         currentGroup?.id == AuthManager.shared.currentUser?.id
     }
 
+    /// Whether the currently shown story has time-evolving content worth
+    /// baking into an MP4 (animated text, background video, voice
+    /// attachment, opening transition, etc.). Reconstructs the
+    /// renderable slide via the same path the live canvas consumes so the
+    /// gate matches the export's own routing in `prepareExport`.
+    private var currentStoryNeedsVideoExport: Bool {
+        guard let story = currentStory else { return false }
+        return story.toRenderableSlide(preferredLanguages: preferredLanguages).needsVideoExport
+    }
+
     private var storyActionSidebar: some View {
         VStack(spacing: 20) {
             // 1. Reaction (heart) — primary action, brand-colored when active
@@ -954,6 +984,21 @@ struct StoryViewerView: View {
                     HapticFeedback.light()
                     pauseTimer()
                     showViewersSheet = true
+                }
+            }
+
+            // Author-only export — bakes a fidèle-au-preview MP4 the user
+            // can share to Photos / Messages / WhatsApp. NEVER uploads to
+            // the Meeshy backend (stories publish RAW, see CLAUDE.md
+            // "Story Architecture").
+            if isOwnStory, currentStoryNeedsVideoExport {
+                storyActionButton(
+                    icon: "square.and.arrow.up.fill",
+                    label: "Exporter"
+                ) {
+                    HapticFeedback.light()
+                    pauseTimer()
+                    showExportShareSheet = true
                 }
             }
 

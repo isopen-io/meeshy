@@ -53,6 +53,9 @@ public enum StoryExporter {
     /// - Parameters:
     ///   - slide: The slide to render through the AV compositor.
     ///   - outputURL: Destination MP4 path. Overwritten if it already exists.
+    ///   - languages: Preferred languages threaded to `StoryRenderer.render`
+    ///     so text overlays bake in the chosen language (Prisme Linguistique).
+    ///     Empty array bakes the slide's original source text.
     ///   - progress: Optional callback receiving the export progress fraction
     ///     in `0.0...1.0`. Polled at ~10Hz against
     ///     `AVAssetExportSession.progress` while the export is running, then
@@ -66,6 +69,7 @@ public enum StoryExporter {
     /// is required for UI bars.
     public static func export(_ slide: StorySlide,
                               to outputURL: URL,
+                              languages: [String] = [],
                               progress: (@Sendable (Double) -> Void)? = nil) async throws {
         let composition = AVMutableComposition()
         let effective = slide.effectiveSlideDuration()
@@ -155,6 +159,7 @@ public enum StoryExporter {
         videoComposition.instructions = [
             StoryCompositionInstruction(
                 slide: slide,
+                languages: languages,
                 timeRange: CMTimeRange(start: .zero, duration: totalDuration)
             )
         ]
