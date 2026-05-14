@@ -671,6 +671,55 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM
 
+# ─── Release Check (mirror Xcode Cloud) ─────────────────────────────────────
+# Catches Release/-O/-whole-module-optimization compiler regressions BEFORE
+# Xcode Cloud archives. Uses the project's own Release config — never override
+# SWIFT_VERSION / SWIFT_OPTIMIZATION_LEVEL via CLI (it would force settings on
+# SwiftPM packages like GRDB/Starscream that are not Swift 6 ready and break
+# them; Xcode Cloud doesn't do this either).
+do_release_check() {
+    log "Release check — mirror Xcode Cloud archive optimizer (no signing)"
+
+    local check_derived="$DERIVED_DATA/ReleaseCheck"
+    mkdir -p "$check_derived"
+
+    log "Project Release settings :"
+    xcodebuild -showBuildSettings -project "$PROJECT" -scheme "$SCHEME" -configuration Release 2>/dev/null \
+        | grep -E "^\s+(SWIFT_OPTIMIZATION_LEVEL|SWIFT_COMPILATION_MODE|SWIFT_VERSION) =" \
+        | sed 's/^/    /' || true
+
+    log "Building Release for generic iOS (this exercises -O -wmo)…"
+    set +e
+    xcodebuild \
+        -project "$PROJECT" \
+        -scheme "$SCHEME" \
+        -configuration Release \
+        -destination 'generic/platform=iOS' \
+        -derivedDataPath "$check_derived" \
+        -skipPackagePluginValidation \
+        -skipMacroValidation \
+        CODE_SIGNING_ALLOWED=NO \
+        CODE_SIGNING_REQUIRED=NO \
+        build 2>&1 \
+        | tee "$check_derived/build.log" \
+        | grep -E "error:|warning:.*deprecated|PLEASE submit|Stack dump|Command SwiftCompile failed|\*\* BUILD" \
+        | head -40
+    local rc=${PIPESTATUS[0]}
+    set -e
+
+    echo ""
+    if [ "$rc" -eq 0 ]; then
+        ok "Release check PASSED — Xcode Cloud archive should compile cleanly"
+        return 0
+    else
+        err "Release check FAILED (exit $rc) — full log: $check_derived/build.log"
+        echo ""
+        echo -e "  ${DIM}If the failure is a swift-frontend crash on a generic class deinit,${NC}"
+        echo -e "  ${DIM}see memory/feedback_swift_632_generic_class_deinit_crash.md${NC}"
+        return "$rc"
+    fi
+}
+
 # ─── Archive + IPA ───────────────────────────────────────────────────────────
 do_archive() {
     local archive_config="${CONFIGURATION:-Release}"
@@ -1067,6 +1116,7 @@ usage() {
     echo -e "    ${GREEN}status${NC}       Show simulator/app status"
     echo -e "    ${GREEN}clean${NC}        Clean build artifacts ${DIM}(add --deep for global caches)${NC}"
     echo -e "    ${GREEN}archive${NC}      Create archive + IPA for distribution"
+    echo -e "    ${GREEN}release-check${NC} Mirror Xcode Cloud Release build locally ${DIM}(catch -O/-wmo crashes before push)${NC}"
     echo -e "    ${GREEN}distribute${NC}   App Store build ${DIM}(auto: signing, aps-environment, preflight)${NC}"
     echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(add --ui for UI tests)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
@@ -1095,6 +1145,7 @@ usage() {
     echo -e "    ${DIM}./meeshy.sh build --release${NC}          ${DIM}# Release build only${NC}"
     echo -e "    ${DIM}./meeshy.sh build --ipad${NC}             ${DIM}# Build for iPad sim${NC}"
     echo -e "    ${DIM}./meeshy.sh archive -m ad-hoc${NC}        ${DIM}# Ad-hoc IPA${NC}"
+    echo -e "    ${DIM}./meeshy.sh release-check${NC}            ${DIM}# Mirror Xcode Cloud Release build (no signing)${NC}"
     echo -e "    ${DIM}./meeshy.sh distribute${NC}               ${DIM}# App Store / TestFlight build${NC}"
     echo -e "    ${DIM}./meeshy.sh test --ui --coverage${NC}     ${DIM}# All tests + coverage${NC}"
     echo -e "    ${DIM}./meeshy.sh clean --deep${NC}             ${DIM}# Nuke all caches${NC}"
@@ -1108,7 +1159,7 @@ DEEP_CLEAN=false
 
 # Check if first arg is a known command
 case "$COMMAND" in
-    run|build|stop|restart|logs|status|clean|archive|distribute|test|setup|screenshot|device|help|-h|--help)
+    run|build|stop|restart|logs|status|clean|archive|release-check|distribute|test|setup|screenshot|device|help|-h|--help)
         shift || true
         ;;
     -*)
@@ -1235,6 +1286,10 @@ case "$COMMAND" in
 
     archive)
         do_archive
+        ;;
+
+    release-check)
+        do_release_check
         ;;
 
     distribute)
