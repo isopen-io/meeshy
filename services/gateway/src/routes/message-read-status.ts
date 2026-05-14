@@ -5,6 +5,7 @@ import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema } from '../validation/message-read-status-schemas.js';
+import { resolveConversationId } from '../utils/conversation-id-cache.js';
 
 interface MessageParams {
   messageId: string;
@@ -109,10 +110,19 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     preHandler: [validateParams(ConversationIdParamSchema), validateQuery(ReadStatusesQuerySchema)]
   }, async (request, reply) => {
     try {
-      const { conversationId } = request.params;
+      const { conversationId: rawId } = request.params;
       const { messageIds } = request.query;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
+
+      // Resolve identifier (e.g. "meeshy") → ObjectId
+      const conversationId = await resolveConversationId(prisma, rawId);
+      if (!conversationId) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Conversation non trouvée'
+        });
+      }
 
       // Vérifier l'accès à la conversation
       const membership = await prisma.participant.findFirst({
@@ -175,9 +185,18 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     preHandler: [validateParams(ConversationIdParamSchema)]
   }, async (request, reply) => {
     try {
-      const { conversationId } = request.params;
+      const { conversationId: rawId } = request.params;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
+
+      // Resolve identifier (e.g. "meeshy") → ObjectId
+      const conversationId = await resolveConversationId(prisma, rawId);
+      if (!conversationId) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Conversation non trouvée'
+        });
+      }
 
       // Vérifier l'accès à la conversation
       const membership = await prisma.participant.findFirst({
@@ -246,9 +265,18 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
     preHandler: [validateParams(ConversationIdParamSchema)]
   }, async (request, reply) => {
     try {
-      const { conversationId } = request.params;
+      const { conversationId: rawId } = request.params;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
+
+      // Resolve identifier (e.g. "meeshy") → ObjectId
+      const conversationId = await resolveConversationId(prisma, rawId);
+      if (!conversationId) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Conversation non trouvée'
+        });
+      }
 
       // Vérifier l'accès à la conversation
       const membership = await prisma.participant.findFirst({

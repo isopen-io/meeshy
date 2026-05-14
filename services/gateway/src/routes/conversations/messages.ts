@@ -1310,6 +1310,12 @@ export function registerMessagesRoutes(
         mentionedUserIds
       } = bodyResult.data as SendMessageBody;
 
+      // Resolve identifier (e.g. "meeshy") → ObjectId, same as GET route
+      const conversationId = await resolveConversationId(prisma, id);
+      if (!conversationId) {
+        return sendNotFound(reply, 'Conversation not found');
+      }
+
       // Compute effectFlags from legacy fields if not provided
       const { MESSAGE_EFFECT_FLAGS } = await import('@meeshy/shared/types/message-effect-flags');
       let effectFlags = (bodyResult.data as any).effectFlags ?? 0;
@@ -1322,7 +1328,7 @@ export function registerMessagesRoutes(
         participantId = authRequest.authContext.participantId!;
       } else {
         const participant = await prisma.participant.findFirst({
-          where: { userId, conversationId: id, isActive: true },
+          where: { userId, conversationId, isActive: true },
           select: { id: true }
         });
         if (!participant) {
@@ -1337,7 +1343,7 @@ export function registerMessagesRoutes(
 
       const corr: Record<string, any> = {
         clientMessageId,
-        conversationId: id,
+        conversationId,
         participantId,
         route: 'POST /conversations/:id/messages'
       };
@@ -1355,7 +1361,7 @@ export function registerMessagesRoutes(
       );
 
       const messageRequest = {
-        conversationId: id,
+        conversationId,
         content: content || '',
         clientMessageId,
         originalLanguage,
@@ -1392,9 +1398,9 @@ export function registerMessagesRoutes(
 
       // Broadcaster via socket (async)
       if (socketIOHandler && result.data) {
-        const conversationId = result.data.conversationId;
+        const broadcastConvId = result.data.conversationId || conversationId;
         setImmediate(() => {
-          socketIOHandler.broadcastMessage(result.data as any, conversationId).catch((err: any) => {
+          socketIOHandler.broadcastMessage(result.data as any, broadcastConvId).catch((err: any) => {
             logger.error('⚠️ [REST] Socket broadcast failed', err);
           });
         });

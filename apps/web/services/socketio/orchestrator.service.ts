@@ -337,6 +337,17 @@ export class SocketIOOrchestrator {
       conversationId = getConversationApiId(conversationOrId);
     }
 
+    // Resolve identifier (e.g. "meeshy") → ObjectId using the normalized ID
+    // from the CONVERSATION_JOINED event. Without this, the REST fallback
+    // would POST to /conversations/meeshy/messages and get a 500.
+    const isObjectId = /^[0-9a-fA-F]{24}$/.test(conversationId);
+    if (!isObjectId) {
+      const normalizedId = this.getCurrentConversationId();
+      if (normalizedId) {
+        conversationId = normalizedId;
+      }
+    }
+
     // Generate a clientMessageId before queueing/sending so the same id is
     // used whether we hit the WS fast path or the offline queue, and so the
     // gateway dedup contract (`(conversationId, clientMessageId)`) survives

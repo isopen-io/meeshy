@@ -174,13 +174,18 @@ public enum AvatarKind: Sendable {
 // MARK: - Avatar Context Menu Item
 
 public struct AvatarContextMenuItem: Identifiable {
-    public let id = UUID()
+    /// Stable identity derived from label+icon so SwiftUI can diff items
+    /// across re-evaluations instead of tearing down / recreating them.
+    /// Using UUID() caused identity churn → use-after-free when the
+    /// AttributeGraph held stale closure references during view transitions.
+    public let id: String
     public let label: String
     public let icon: String
     public var role: ButtonRole? = nil
     public let action: () -> Void
 
     public init(label: String, icon: String, role: ButtonRole? = nil, action: @escaping () -> Void) {
+        self.id = "\(label)_\(icon)"
         self.label = label; self.icon = icon; self.role = role; self.action = action
     }
 }
@@ -278,8 +283,8 @@ public struct MeeshyAvatar: View {
         return items
     }
 
-    private var hasContextMenu: Bool {
-        context.isTappable && !effectiveContextMenuItems.isEmpty
+    private func hasContextMenu(resolvedItems: [AvatarContextMenuItem]) -> Bool {
+        context.isTappable && !resolvedItems.isEmpty
     }
 
     private func handleTap() {
@@ -292,6 +297,15 @@ public struct MeeshyAvatar: View {
     // MARK: - Body
 
     public var body: some View {
+        // Eagerly resolve the menu items ONCE per body evaluation so the
+        // contextMenu closure captures a single, stable array. Previously
+        // the computed property was called lazily inside the closure,
+        // creating a new array (with new closures) on each SwiftUI
+        // attribute-graph pass — the old closures could be deallocated
+        // while the graph still referenced them (EXC_BAD_ACCESS).
+        let resolvedMenuItems = effectiveContextMenuItems
+        let showContextMenu = hasContextMenu(resolvedItems: resolvedMenuItems)
+
         let visual = ZStack {
             storyRing
             avatarBody
@@ -333,10 +347,10 @@ public struct MeeshyAvatar: View {
             } else { visual }
         }
 
-        if hasContextMenu {
+        if showContextMenu {
             tappable
                 .contextMenu {
-                    ForEach(effectiveContextMenuItems) { item in
+                    ForEach(resolvedMenuItems) { item in
                         Button(role: item.role) {
                             item.action()
                         } label: {
