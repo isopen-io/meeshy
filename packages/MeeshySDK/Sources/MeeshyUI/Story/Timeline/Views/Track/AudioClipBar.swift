@@ -79,6 +79,7 @@ public struct AudioClipBar: View, Equatable {
             Rectangle()
                 .fill(MeeshyColors.warning.opacity(isDark ? 0.32 : 0.22))
             waveform
+            titleOverlay
             if isMuted { muteBadge }
             if isSelected {
                 RoundedRectangle(cornerRadius: 6).stroke(MeeshyColors.indigo400, lineWidth: 2)
@@ -100,6 +101,35 @@ public struct AudioClipBar: View, Equatable {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityComposed)
         .accessibilityValue(accessibilityValueDescription)
+    }
+
+    /// In-clip name chip — parity with `VideoClipBar.titleLabel` so audio
+    /// clips also surface their content name without opening the inspector.
+    /// Hidden under ~44pt to avoid colliding with the waveform on very
+    /// short clips. Title typically arrives localised ("Audio") from the
+    /// caller — the postMediaId UUID it used to receive was useless to
+    /// users at the clip level.
+    @ViewBuilder
+    private var titleOverlay: some View {
+        let width = geometry.width(for: duration)
+        if width >= 44 && !title.isEmpty {
+            HStack(spacing: 4) {
+                Image(systemName: "waveform")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .accessibilityHidden(true)
+                Text(title)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundStyle(.white)
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                    .shadow(color: .black.opacity(0.45), radius: 1, y: 0.5)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .allowsHitTesting(false)
+        }
     }
 
     private var waveform: some View {
