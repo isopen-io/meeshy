@@ -96,7 +96,43 @@ struct ComposerFABColumn: View, Equatable {
 
 // MARK: - UIPanGestureRecognizer wrapper for swipe ↑/↓ detection
 
+// Coordinator is intentionally non-nested and non-generic: nesting it inside
+// `FABPanGestureWrapper<Content>` made it implicitly parameterized by `Content`,
+// which triggered a swift-frontend SIGSEGV in the `EarlyPerfInliner` pass
+// (`isCallerAndCalleeLayoutConstraintsCompatible`) when compiling its deinit
+// under `-O`. See Xcode Cloud build #389.
+final class FABPanGestureCoordinator: NSObject, UIGestureRecognizerDelegate {
+    var onSwipeUp: () -> Void
+    var onSwipeDown: () -> Void
+    var hostingController: UIViewController?
+
+    init(onSwipeUp: @escaping () -> Void, onSwipeDown: @escaping () -> Void) {
+        self.onSwipeUp = onSwipeUp
+        self.onSwipeDown = onSwipeDown
+    }
+
+    @objc func handlePan(_ recognizer: UIPanGestureRecognizer) {
+        guard recognizer.state == .ended else { return }
+        let translation = recognizer.translation(in: recognizer.view)
+        guard abs(translation.y) > abs(translation.x), abs(translation.y) > 20 else { return }
+        if translation.y < 0 {
+            onSwipeUp()
+        } else {
+            onSwipeDown()
+        }
+    }
+
+    func gestureRecognizer(
+        _ gestureRecognizer: UIGestureRecognizer,
+        shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
+    ) -> Bool {
+        return false
+    }
+}
+
 struct FABPanGestureWrapper<Content: View>: UIViewRepresentable {
+    typealias Coordinator = FABPanGestureCoordinator
+
     let onSwipeUp: () -> Void
     let onSwipeDown: () -> Void
     let content: () -> Content
@@ -129,7 +165,7 @@ struct FABPanGestureWrapper<Content: View>: UIViewRepresentable {
         context.coordinator.hostingController = host
 
         let pan = UIPanGestureRecognizer(target: context.coordinator,
-                                         action: #selector(Coordinator.handlePan(_:)))
+                                         action: #selector(FABPanGestureCoordinator.handlePan(_:)))
         pan.maximumNumberOfTouches = 1
         pan.delegate = context.coordinator
         container.addGestureRecognizer(pan)
@@ -139,43 +175,10 @@ struct FABPanGestureWrapper<Content: View>: UIViewRepresentable {
     func updateUIView(_ uiView: UIView, context: Context) {
         context.coordinator.onSwipeUp = onSwipeUp
         context.coordinator.onSwipeDown = onSwipeDown
-        context.coordinator.hostingController?.rootView = content()
+        (context.coordinator.hostingController as? UIHostingController<Content>)?.rootView = content()
     }
 
-    func makeCoordinator() -> Coordinator {
-        Coordinator(onSwipeUp: onSwipeUp, onSwipeDown: onSwipeDown)
-    }
-
-    final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var onSwipeUp: () -> Void
-        var onSwipeDown: () -> Void
-        var hostingController: UIHostingController<Content>?
-
-        init(onSwipeUp: @escaping () -> Void, onSwipeDown: @escaping () -> Void) {
-            self.onSwipeUp = onSwipeUp
-            self.onSwipeDown = onSwipeDown
-        }
-
-        @objc func handlePan(_ recognizer: UIPanGestureRecognizer) {
-            guard recognizer.state == .ended else { return }
-            let translation = recognizer.translation(in: recognizer.view)
-            let velocity = recognizer.velocity(in: recognizer.view)
-            // Only react if predominantly vertical
-            guard abs(translation.y) > abs(translation.x), abs(translation.y) > 20 else { return }
-            if translation.y < 0 {
-                onSwipeUp()
-            } else {
-                onSwipeDown()
-            }
-            _ = velocity
-        }
-
-        // Don't recognize simultaneously with the canvas pinch/pan beneath.
-        func gestureRecognizer(
-            _ gestureRecognizer: UIGestureRecognizer,
-            shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer
-        ) -> Bool {
-            return false
-        }
+    func makeCoordinator() -> FABPanGestureCoordinator {
+        FABPanGestureCoordinator(onSwipeUp: onSwipeUp, onSwipeDown: onSwipeDown)
     }
 }
