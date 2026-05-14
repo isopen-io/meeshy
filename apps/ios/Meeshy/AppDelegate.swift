@@ -438,6 +438,22 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
             return
         }
 
+        // Friend events fly through TWO parallel channels by design on the
+        // gateway: a Socket.IO `notification:new` event (drives the in-app
+        // toast via NotificationManager) AND an APNs push (drives the
+        // native banner + list entry). In foreground that doubles the
+        // visual surface — the user sees the Meeshy toast AND the system
+        // banner for the same event. Suppress the system banner here when
+        // the socket is connected; the in-app toast already covers the
+        // user. Sound + badge stay so the event still feels notified.
+        // When the socket is disconnected, fall through to the default so
+        // the user still sees the banner — that's the only signal left.
+        let isFriendEvent = type == "friend_request" || type == "friend_accepted"
+        if isFriendEvent && MessageSocketManager.shared.isConnected {
+            completionHandler([.sound, .badge])
+            return
+        }
+
         completionHandler([.banner, .list, .sound, .badge])
     }
 
