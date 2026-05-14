@@ -15,6 +15,13 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "friendship-cache")
     private let lock = NSLock()
 
+    /// Monotonic version bumped on every mutation. Use `@ObservedObject` on
+    /// `FriendshipCache.shared` and observe `version` (or `$version` via
+    /// Combine) to react to cache changes without manually subscribing to
+    /// `objectWillChange`. ViewModels that already expose their own
+    /// `objectWillChange` should subscribe to `$version` and re-emit.
+    @Published public private(set) var version: Int = 0
+
     private var _friendIds: Set<String> = []
     private var _sentPending: [String: String] = [:]      // receiverId -> requestId
     private var _receivedPending: [String: String] = [:]   // senderId -> requestId
@@ -152,7 +159,7 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
             return
         }
 
-        await MainActor.run { objectWillChange.send() }
+        await MainActor.run { self.version &+= 1 }
 
         // Capture counts as plain Int locals BEFORE the log interpolation.
         // Letting os_log interpolate `\(self._friendIds.count)` directly was
@@ -230,14 +237,14 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         lock.lock()
         _sentPending[receiverId] = requestId
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func didCancelRequest(to receiverId: String) {
         lock.lock()
         _sentPending.removeValue(forKey: receiverId)
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func didAcceptRequest(from senderId: String) {
@@ -245,21 +252,31 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         _receivedPending.removeValue(forKey: senderId)
         _friendIds.insert(senderId)
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func didRejectRequest(from senderId: String) {
         lock.lock()
         _receivedPending.removeValue(forKey: senderId)
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func didReceiveRequest(from senderId: String, requestId: String) {
         lock.lock()
         _receivedPending[senderId] = requestId
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
+    }
+
+    /// Used when a friendship is severed from the contacts list (e.g. the
+    /// "Remove friend" action) — drops the user from the accepted set so the
+    /// resolver returns `.none` everywhere immediately.
+    public func didRemoveFriend(_ userId: String) {
+        lock.lock()
+        _friendIds.remove(userId)
+        lock.unlock()
+        notifyChange()
     }
 
     // MARK: - Rollback
@@ -268,7 +285,7 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         lock.lock()
         _sentPending.removeValue(forKey: receiverId)
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func rollbackAccept(senderId: String, requestId: String) {
@@ -276,14 +293,24 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         _friendIds.remove(senderId)
         _receivedPending[senderId] = requestId
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func rollbackReject(senderId: String, requestId: String) {
         lock.lock()
         _receivedPending[senderId] = requestId
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
+    }
+
+    // MARK: - Change notification
+
+    /// Bump the version on the main actor. `@Published` will fire
+    /// `objectWillChange` automatically, so any `@ObservedObject` view or any
+    /// Combine subscriber on `$version` reacts. We hop to the main actor
+    /// because `@Published` mutations must originate there.
+    private func notifyChange() {
+        Task { @MainActor in self.version &+= 1 }
     }
 
     // MARK: - Clear
@@ -305,6 +332,6 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         _isHydrated = false
         lock.unlock()
         inflight?.cancel()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 }

@@ -128,11 +128,23 @@ final class RequestsViewModel: ObservableObject {
     func accept(requestId: String) async {
         let snapshot = receivedRequests
         let cmid = ClientMutationId.generate()
+        // Capture the senderId BEFORE we remove the row — we need it to flip
+        // the FriendshipCache state so other screens (Contacts, Discover)
+        // immediately see this user as a friend, not a pending request.
+        let senderId = receivedRequests.first(where: { $0.id == requestId })?.senderId
         receivedRequests.removeAll { $0.id == requestId }
+        if let senderId {
+            FriendshipCache.shared.didAcceptRequest(from: senderId)
+        }
         HapticFeedback.success()
         observeOutcome(
             cmid: cmid,
-            rollback: { [weak self] in self?.receivedRequests = snapshot },
+            rollback: { [weak self] in
+                self?.receivedRequests = snapshot
+                if let senderId {
+                    FriendshipCache.shared.rollbackAccept(senderId: senderId, requestId: requestId)
+                }
+            },
             toast: "Impossible d'accepter cette demande"
         )
         let payload = RespondFriendRequestPayload(
@@ -145,6 +157,9 @@ final class RequestsViewModel: ObservableObject {
             ToastManager.shared.showSuccess("Connexion acceptee")
         } catch {
             receivedRequests = snapshot
+            if let senderId {
+                FriendshipCache.shared.rollbackAccept(senderId: senderId, requestId: requestId)
+            }
             HapticFeedback.error()
             ToastManager.shared.showError("Impossible d'accepter")
         }
@@ -153,11 +168,20 @@ final class RequestsViewModel: ObservableObject {
     func reject(requestId: String) async {
         let snapshot = receivedRequests
         let cmid = ClientMutationId.generate()
+        let senderId = receivedRequests.first(where: { $0.id == requestId })?.senderId
         receivedRequests.removeAll { $0.id == requestId }
+        if let senderId {
+            FriendshipCache.shared.didRejectRequest(from: senderId)
+        }
         HapticFeedback.medium()
         observeOutcome(
             cmid: cmid,
-            rollback: { [weak self] in self?.receivedRequests = snapshot },
+            rollback: { [weak self] in
+                self?.receivedRequests = snapshot
+                if let senderId {
+                    FriendshipCache.shared.rollbackReject(senderId: senderId, requestId: requestId)
+                }
+            },
             toast: "Impossible de refuser cette demande"
         )
         let payload = RespondFriendRequestPayload(
@@ -170,6 +194,9 @@ final class RequestsViewModel: ObservableObject {
             ToastManager.shared.showSuccess("Demande refusee")
         } catch {
             receivedRequests = snapshot
+            if let senderId {
+                FriendshipCache.shared.rollbackReject(senderId: senderId, requestId: requestId)
+            }
             HapticFeedback.error()
             ToastManager.shared.showError("Impossible de refuser")
         }
@@ -202,13 +229,22 @@ final class RequestsViewModel: ObservableObject {
 
     func cancel(requestId: String) async {
         let snapshot = sentRequests
+        // Capture receiverId before removing so we can flip cache state and
+        // roll back on failure.
+        let receiverId = sentRequests.first(where: { $0.id == requestId })?.receiverId
         sentRequests.removeAll { $0.id == requestId }
+        if let receiverId {
+            FriendshipCache.shared.didCancelRequest(to: receiverId)
+        }
         HapticFeedback.medium()
         do {
             try await friendService.deleteRequest(requestId: requestId)
             ToastManager.shared.showSuccess("Demande annulee")
         } catch {
             sentRequests = snapshot
+            if let receiverId {
+                FriendshipCache.shared.didSendRequest(to: receiverId, requestId: requestId)
+            }
             HapticFeedback.error()
             ToastManager.shared.showError("Impossible d'annuler")
         }
