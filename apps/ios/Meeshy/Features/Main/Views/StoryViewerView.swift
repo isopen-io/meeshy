@@ -145,8 +145,8 @@ struct StoryViewerView: View {
     @State private var emojiToInject = ""
     @State private var composerFocusTrigger = false
     @State var composerLanguage: String = DefaultComposerLanguage.resolve() // internal for cross-file extension access
-    @State private var commentBlurEnabled: Bool = false
-    @State private var commentEffects: MessageEffects = .none
+    @State var commentBlurEnabled: Bool = false // internal for cross-file extension access
+    @State var commentEffects: MessageEffects = .none // internal for cross-file extension access
     @State var showLanguageOptions = false // internal for cross-file extension access
     @State var showFullLanguagePicker = false // internal for cross-file extension access
     @StateObject private var keyboard = KeyboardObserver()

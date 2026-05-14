@@ -572,6 +572,10 @@ extension StoryViewerView {
         progress = 0
         hasFiredFadeOut = false
         showCommentsOverlay = false
+        replyingToStoryComment = nil
+        storyCommentRepliesMap = [:]
+        storyCommentExpandedThreads = []
+        storyCommentLoadingReplies = []
         loadStoryCommentCount()
         storyReactionCount = currentStory?.reactionCount ?? 0
         updateStoryDuration()
@@ -1308,6 +1312,22 @@ extension StoryViewerView {
                                 }
                                 .padding(.vertical, 8)
                             }
+
+                            if topLevelComments.isEmpty && !isLoadingComments {
+                                VStack(spacing: 8) {
+                                    Image(systemName: "bubble.left.and.bubble.right")
+                                        .font(.system(size: 28))
+                                        .foregroundColor(.white.opacity(0.3))
+                                    Text("Pas encore de commentaires")
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .foregroundColor(.white.opacity(0.5))
+                                    Text("Soyez le premier \u{00E0} commenter !")
+                                        .font(.system(size: 11))
+                                        .foregroundColor(.white.opacity(0.3))
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 32)
+                            }
                         }
                         .padding(.horizontal, 12)
                         .padding(.top, 8)
@@ -1567,10 +1587,11 @@ extension StoryViewerView {
                     storyComments = comments
                     storyCommentCount = comments.filter { $0.parentId == nil }.count
 
-                    // Auto-fetch first 2 replies for comments that have replies
+                    // Auto-fetch replies for top-level comments that have replies
+                    // Sequential to avoid burst of concurrent requests
                     let topLevel = comments.filter { $0.parentId == nil && $0.replies > 0 }
-                    for comment in topLevel.prefix(5) { // Limit to first 5 to avoid burst
-                        Task {
+                    Task {
+                        for comment in topLevel.prefix(5) {
                             await loadStoryCommentReplies(commentId: comment.id)
                         }
                     }
