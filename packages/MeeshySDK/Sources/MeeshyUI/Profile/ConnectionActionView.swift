@@ -190,6 +190,7 @@ public struct ConnectionActionView: View {
         do {
             let request = try await friendService.sendFriendRequest(receiverId: userId, message: nil)
             friendshipCache.didSendRequest(to: userId, requestId: request.id)
+            await friendshipCache.invalidatePersistedFriendCaches()
             onSuccess?(String(localized: "connection.toast.requestSent", defaultValue: "Demande envoyée", bundle: .module))
         } catch {
             HapticFeedback.error()
@@ -202,6 +203,7 @@ public struct ConnectionActionView: View {
         isBusy = true
         defer { isBusy = false }
         friendshipCache.didAcceptRequest(from: userId)
+        await friendshipCache.invalidatePersistedFriendCaches()
         HapticFeedback.success()
         do {
             _ = try await friendService.respond(requestId: requestId, accepted: true)
@@ -218,6 +220,7 @@ public struct ConnectionActionView: View {
         isBusy = true
         defer { isBusy = false }
         friendshipCache.didRejectRequest(from: userId)
+        await friendshipCache.invalidatePersistedFriendCaches()
         HapticFeedback.medium()
         do {
             _ = try await friendService.respond(requestId: requestId, accepted: false)
@@ -235,6 +238,7 @@ public struct ConnectionActionView: View {
         isBusy = true
         defer { isBusy = false }
         friendshipCache.didCancelRequest(to: userId)
+        await friendshipCache.invalidatePersistedFriendCaches()
         HapticFeedback.medium()
         do {
             try await friendService.deleteRequest(requestId: requestId)

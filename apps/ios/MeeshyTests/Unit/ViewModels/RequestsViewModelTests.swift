@@ -137,4 +137,62 @@ final class RequestsViewModelTests: XCTestCase {
         )
         XCTAssertEqual(sut.sentRequests.count, 1, "Sent list must rollback too")
     }
+
+    // MARK: - SQLite Persistence
+
+    /// Acceptance must propagate to the GRDB `friends_list` cache so the
+    /// Contacts tab sees the new contact on its next cold load — even if
+    /// the ContactsListViewModel was never alive during the accept.
+    func test_accept_persistsNewFriendToGRDBCache() async {
+        let (sut, _) = makeSUT()
+        let request = FriendRequestFixture.make(
+            id: "req-persist",
+            senderId: "eve",
+            receiverId: "me",
+            senderUsername: "eve"
+        )
+        sut.receivedRequests = [request]
+
+        await sut.accept(requestId: "req-persist")
+        // Give the persist Task time to land in GRDB.
+        for _ in 0..<10 { await Task.yield() }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        let cached = await CacheCoordinator.shared.friends.load(for: FriendshipCache.PersistenceKeys.friendsList)
+        let ids = (cached.value ?? []).map(\.id)
+        XCTAssertTrue(
+            ids.contains("eve"),
+            "Accepted sender must be merged into the friends_list GRDB cache so it survives an app relaunch"
+        )
+    }
+
+    /// Acceptance must also invalidate the persistent received-requests
+    /// cache so the next `loadReceived()` from any consumer round-trips
+    /// the gateway instead of serving the accepted request from a still-
+    /// fresh GRDB entry.
+    func test_accept_invalidatesReceivedRequestsCache() async {
+        // Prime the received-requests cache so it's `.fresh` at start.
+        let stale = FriendRequestFixture.make(id: "req-stale", senderId: "frank", receiverId: "me")
+        try? await CacheCoordinator.shared.friendRequests.save(
+            [stale],
+            for: FriendshipCache.PersistenceKeys.receivedRequests
+        )
+
+        let (sut, _) = makeSUT()
+        sut.receivedRequests = [stale]
+
+        await sut.accept(requestId: "req-stale")
+        for _ in 0..<5 { await Task.yield() }
+        try? await Task.sleep(nanoseconds: 30_000_000)
+
+        let cached = await CacheCoordinator.shared.friendRequests.load(
+            for: FriendshipCache.PersistenceKeys.receivedRequests
+        )
+        switch cached {
+        case .expired, .empty:
+            break  // expected — the cache was invalidated
+        case .fresh, .stale:
+            XCTFail("Received-requests cache must be invalidated after accept so next load round-trips the gateway")
+        }
+    }
 }

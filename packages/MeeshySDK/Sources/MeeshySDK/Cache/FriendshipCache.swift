@@ -313,6 +313,38 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         Task { @MainActor in self.version &+= 1 }
     }
 
+    // MARK: - Persistence Invalidation
+    //
+    // Every mutation flips the in-memory cache instantly, but downstream
+    // GRDB stores (the persistent contacts list, the persistent received /
+    // sent request lists) keep their own copy. If those caches are still
+    // `.fresh` (within TTL) when the next consumer loads them, the consumer
+    // would serve stale data without revalidating — masking the mutation.
+    //
+    // `invalidatePersistedFriendCaches()` marks the three friendship-derived
+    // GRDB entries as expired so the next `loadFriends()` / `loadReceived()`
+    // / `loadSent()` is forced to round-trip the gateway and refresh the
+    // persistent store. Called fire-and-forget from action sites alongside
+    // the FriendshipCache mutation.
+
+    /// Cache keys for the friendship-derived persistent stores.
+    /// Kept here so RequestsViewModel and ContactsListViewModel use a single
+    /// source of truth instead of duplicating string literals.
+    public enum PersistenceKeys {
+        public static let friendsList = "friends_list"
+        public static let receivedRequests = "requests:received"
+        public static let sentRequests = "requests:sent"
+    }
+
+    /// Invalidate the three friendship-derived GRDB caches so the next load
+    /// forces a fresh server fetch. Safe to call from any actor.
+    public func invalidatePersistedFriendCaches() async {
+        let coord = CacheCoordinator.shared
+        await coord.friends.invalidate(for: PersistenceKeys.friendsList)
+        await coord.friendRequests.invalidate(for: PersistenceKeys.receivedRequests)
+        await coord.friendRequests.invalidate(for: PersistenceKeys.sentRequests)
+    }
+
     // MARK: - Clear
 
     public func clear() {

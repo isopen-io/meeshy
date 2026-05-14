@@ -89,6 +89,43 @@ final class ContactsListViewModelTests: XCTestCase {
         )
     }
 
+    // MARK: - Fresh cache + lag detection
+
+    /// Guarantee: even when the GRDB cache reports `.fresh`, if the in-memory
+    /// FriendshipCache disagrees (because another screen flipped the state
+    /// while this ViewModel was asleep), we must force a background fetch.
+    /// Otherwise a freshly-accepted friend from Discover would never reach
+    /// the Contacts list until the 5-minute staleTTL elapses.
+    func test_loadFriends_freshCacheLaggingBehindFriendshipCache_triggersRevalidate() async {
+        let knownFriend = FriendRequestFixture.make(senderId: "old", receiverId: "me").sender!
+        try? await CacheCoordinator.shared.friends.save([knownFriend], for: FriendshipCache.PersistenceKeys.friendsList)
+
+        // FriendshipCache has TWO friends (one of which the GRDB cache
+        // doesn't know about yet) — that's the "lag" we want detected.
+        FriendshipCache.shared.didAcceptRequest(from: "old")
+        FriendshipCache.shared.didAcceptRequest(from: "new")
+        await yieldMainActor()
+
+        let (sut, friendService) = makeSUT()
+        friendService.receivedRequestsResult = .success(
+            FriendRequestFixture.makePaginated(requests: [])
+        )
+        friendService.sentRequestsResult = .success(
+            FriendRequestFixture.makePaginated(requests: [])
+        )
+
+        await sut.loadFriends()
+        // Yield enough times for the background revalidate Task to land.
+        for _ in 0..<10 { await Task.yield() }
+        try? await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertGreaterThanOrEqual(
+            friendService.receivedRequestsCallCount,
+            1,
+            "A fresh cache that lags behind FriendshipCache must trigger a background revalidate"
+        )
+    }
+
     // MARK: - Helper
 
     private func yieldMainActor() async {
