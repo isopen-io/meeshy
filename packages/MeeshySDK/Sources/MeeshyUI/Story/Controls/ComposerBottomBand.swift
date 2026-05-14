@@ -20,6 +20,8 @@ struct ComposerBottomBand: View {
     let onOpenMediaCrop: (String) -> Void
     let onOpenFilterForElement: (String) -> Void
     var onEditMedia: ((String) -> Void)? = nil
+    var onEditText: ((String) -> Void)? = nil
+    var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
@@ -42,6 +44,28 @@ struct ComposerBottomBand: View {
         case .toolPanel(let t): return "tool-\(t)"
         case .formatPanel(let k, let id): return "format-\(k)-\(id)"
         }
+    }
+
+    /// Binding pour un `StoryTextObject` identifié, dérivée à la volée de
+    /// `viewModel.currentEffects.textObjects`. Le setter remplace l'élément
+    /// dans le tableau, ce qui propage aux observateurs `@Bindable` du modèle
+    /// (canvas, slideStrip, badges) et déclenche la re-sérialisation slide
+    /// via le pipeline `granularCanvasSync`.
+    private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
+        guard viewModel.currentEffects.textObjects.contains(where: { $0.id == id }) else { return nil }
+        return Binding(
+            get: {
+                viewModel.currentEffects.textObjects.first(where: { $0.id == id })
+                    ?? StoryTextObject(text: "")
+            },
+            set: { newValue in
+                var effects = viewModel.currentEffects
+                if let i = effects.textObjects.firstIndex(where: { $0.id == id }) {
+                    effects.textObjects[i] = newValue
+                    viewModel.currentEffects = effects
+                }
+            }
+        )
     }
 
     var body: some View {
@@ -87,11 +111,29 @@ struct ComposerBottomBand: View {
                         showVoiceRecorderSheet: $showVoiceRecorderSheet,
                         onBack: onBackFromToolPanel,
                         onEditMedia: onEditMedia,
+                        onEditText: onEditText,
+                        onDeleteText: onDeleteText,
                         onShowInTimeline: onShowInTimeline
                     )
                 case .formatPanel(.text, let elementId):
-                    Color.clear.frame(height: 110)
-                        .onAppear { _ = elementId }
+                    if let binding = textObjectBinding(for: elementId) {
+                        StoryTextEditorView(
+                            textObject: binding,
+                            onDelete: {
+                                HapticFeedback.medium()
+                                // Fermer AVANT de supprimer : sinon le binding
+                                // bascule sur nil pendant le frame courant et
+                                // SwiftUI rend un Color.clear flickering avant
+                                // que le fallback onAppear ne ferme le panel.
+                                onCloseFormatPanel()
+                                viewModel.deleteElement(id: elementId)
+                            }
+                        )
+                    } else {
+                        // Element disappeared (slide switch / delete race) — close panel.
+                        Color.clear
+                            .onAppear { onCloseFormatPanel() }
+                    }
                 case .formatPanel(.media, let elementId):
                     ComposerMediaFormatBand(
                         elementId: elementId,

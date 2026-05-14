@@ -236,6 +236,28 @@ MessageDetailSheet (onglet Language)
 - La resolution automatique de langue doit etre instantanee (pas de loading pour les traductions deja cachees)
 - L'onglet Language du MessageDetailSheet est le SEUL point d'entree pour explorer les traductions (pas de sheet separee)
 
+## Story Architecture — RAW publish + author-only export
+
+Stories Meeshy se publient **RAW** au backend :
+- Assets individuels et réutilisables (background video / image, voice, foreground images / videos, audio) via TUS pre-upload
+- `StoryEffects` JSON (texte, keyframes, transitions, filtres, opening, clipTransitions)
+
+Le backend **ne stocke jamais** de MP4 baked composite. Les viewers re-rendent localement en suivant le **Prisme Linguistique** (texte / audio retraduits par viewer dans sa langue préférée).
+
+Le MP4 export (`StoryVideoExportService` + `StoryExporter`) est une feature **auteur-only**, partage externe via `UIActivityViewController` (Photos / Messages / WhatsApp / AirDrop) — **NE TOUCHE JAMAIS LE BACKEND MEESHY**.
+
+### Entry point
+- `StoryViewerView` → bouton "Exporter" dans `storyActionSidebar`, visible uniquement si :
+  - `currentGroup?.id == currentUser.id` (l'utilisateur est l'auteur)
+  - `slide.needsVideoExport == true` (contenu animé / video / audio à graver)
+- Le tap présente `StoryExportShareSheet` driven par `StoryExportShareViewModel`
+- Le sheet expose un picker de langue d'export (Prisme Linguistique) → la langue choisie est gravée dans le MP4 (texte des overlays)
+
+### Règle absolue
+`StoryViewModel.runStoryUpload` NE DOIT JAMAIS invoquer `prepareExport` ou `StoryExporter.export`. Toute future tentative d'optimisation "bake en amont du publish" doit être rejetée — elle détruit la réutilisabilité et la retraduction par viewer.
+
+Source : `docs/superpowers/plans/2026-05-14-story-export-realignment-plan.md`
+
 ## TDD & Testing Standards
 
 ### Test Organization

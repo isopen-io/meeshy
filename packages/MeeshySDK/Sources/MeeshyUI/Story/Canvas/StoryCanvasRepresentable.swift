@@ -8,13 +8,16 @@ import MeeshySDK
 /// `StoryCanvasView` SwiftUI canvas in `StoryComposerView`.
 public struct StoryComposerCanvasView: UIViewRepresentable {
     @Binding public var slide: StorySlide
+    public var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDuplicated: ((_ oldId: String, _ newId: String, _ kind: StoryCanvasUIView.CanvasItemKind) -> Void)?
 
     public init(slide: Binding<StorySlide>,
+                onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 onItemDuplicated: ((String, String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil) {
         self._slide = slide
+        self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
         self.onItemDuplicated = onItemDuplicated
     }
@@ -24,6 +27,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onItemModified = { modified in
             DispatchQueue.main.async { self.slide = modified }
         }
+        view.onItemTapped = onItemTapped
         view.onItemDoubleTapped = onItemDoubleTapped
         view.onItemDuplicated = onItemDuplicated
         return view
@@ -33,6 +37,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // Refresh the latest closure on every update so closures captured by
         // the SwiftUI parent see the freshest @State (mutating viewModel,
         // pushing sheets, etc.). This is cheap — just a property assignment.
+        uiView.onItemTapped = onItemTapped
         uiView.onItemDoubleTapped = onItemDoubleTapped
         uiView.onItemDuplicated = onItemDuplicated
 

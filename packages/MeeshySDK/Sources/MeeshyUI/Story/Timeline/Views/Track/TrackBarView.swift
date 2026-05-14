@@ -11,6 +11,11 @@ public struct TrackBarView<Content: View>: View {
     public let isDark: Bool
     public let laneWidth: CGFloat
     public let laneHeight: CGFloat
+    /// SF Symbol prefixed to the sticky label. Optional for backwards
+    /// compatibility — callers that omit it keep the legacy text-only
+    /// label. Used to give each track a modern, instantly recognisable
+    /// type marker (waveform / photo / video / textformat).
+    public let iconName: String?
     private let lane: () -> Content
 
     public init(
@@ -21,6 +26,7 @@ public struct TrackBarView<Content: View>: View {
         isDark: Bool,
         laneWidth: CGFloat,
         laneHeight: CGFloat,
+        iconName: String? = nil,
         @ViewBuilder lane: @escaping () -> Content
     ) {
         self.title = title
@@ -30,6 +36,7 @@ public struct TrackBarView<Content: View>: View {
         self.isDark = isDark
         self.laneWidth = laneWidth
         self.laneHeight = laneHeight
+        self.iconName = iconName
         self.lane = lane
     }
 
@@ -57,12 +64,25 @@ public struct TrackBarView<Content: View>: View {
     }
 
     private var label: some View {
-        HStack(spacing: 4) {
+        HStack(spacing: 5) {
             if isLocked {
                 Image(systemName: "lock.fill")
                     .font(.caption2)
                     .foregroundStyle(MeeshyColors.warning)
                     .accessibilityHidden(true)
+            } else if let iconName {
+                // Tinted chip wrapping the type icon — picks up the lane tint
+                // so audio (warning), text (indigo400), video/image (indigo500)
+                // each get their own colour cue at a glance.
+                ZStack {
+                    RoundedRectangle(cornerRadius: 4, style: .continuous)
+                        .fill(Color(hex: tintHex).opacity(isDark ? 0.30 : 0.18))
+                        .frame(width: 18, height: 18)
+                    Image(systemName: iconName)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color(hex: tintHex))
+                }
+                .accessibilityHidden(true)
             }
             Text(title)
                 .font(.caption2.weight(isSelected ? .semibold : .regular))

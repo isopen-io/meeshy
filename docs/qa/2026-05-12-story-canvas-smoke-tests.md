@@ -42,9 +42,11 @@ Pour exécuter les scénarios restants :
 
 **Feature delivered post-smoke** : commit `ca4bf8f0` ajoute un badge "+" top-left sur l'avatar utilisateur dans le carousel (`MyStoryButton`) pour rendre l'entry composer découvrable sans long-press. Le tap unique sur le badge ouvre `viewModel.showStoryComposer`. Recommandation issue de la session smoke test (Belva Tano vs atabeth carousel confusion).
 
-## ⚠️ Path actuellement non testable depuis l'UI
+## ⚠️ Export pipeline — author-only, jamais publish
 
-**Export video pipeline (Phase 4 + Plan B + Step 2 backdrop côté export)** est wired dans le code mais **aucun call site UI ne l'invoque**. Concrètement :
+**Réalignement 2026-05-14** : les stories publient RAW (assets + JSON effects) pour préserver le Prisme Linguistique. Le MP4 baked est UNIQUEMENT déclenché par l'auteur depuis le viewer (bouton "Exporter"), pour partage hors Meeshy. **Le publish path n'invoque jamais le baker.** Scénario QA : §13.
+
+**Note historique (obsolète)** : la Phase 4 (publish→exporter wiring) :
 
 - Aucun bouton "Exporter en vidéo" n'existe dans le composer ou le menu story
 - `StoryPublishService` n'appelle pas `StoryExporter.export()` — toutes les stories sont publiées via le path asset legacy (snapshot PNG + JSON effects)
@@ -306,29 +308,29 @@ Tant que ce sprint n'est pas exécuté : ne pas chercher de bouton "Export" ou d
 
 **Attendu** : cohérence visuelle complète entre story chromes et call menu
 
-### 13. Video export end-to-end
+### 13. Author export — share an MP4 hors-Meeshy
 
-**Objectif** : valider le wiring publish→exporter livré au Sprint 8 (P1..P7, spec `docs/superpowers/specs/2026-05-12-story-publish-exporter-wiring-design.md`). Remplace la limitation "non testable depuis l'UI" notée en haut de ce document.
+**Objectif** : valider le bouton "Exporter en vidéo" du viewer (visible uniquement pour l'auteur de la story) introduit par le réalignement export (`docs/superpowers/plans/2026-05-14-story-export-realignment-plan.md`). Le publish path NE bake JAMAIS un MP4 — il publie les assets RAW pour préserver le Prisme Linguistique. L'export est une feature **auteur-only** pour partage externe (Photos / Messages / WhatsApp / AirDrop).
 
-**Setup** : story avec background video (idéalement 5-10s clip MP4 dans la photothèque)
+**Setup** : story avec contenu animé (background video, texte animé, ou voice attachment).
 
 **Steps** :
-1. Composer → Importer video → background activé
-2. Publish (tap Send)
-3. Observer phase chain dans StoryTrayView :
-   - "Préparation…" (.preparingMedia)
-   - "Export en cours… X%" (.exporting) [NEW]
-   - "Upload en cours…" (.uploadingMedia)
-   - "Publication…" (.publishingStory)
-   - "Terminé" (.completed)
-4. Vérifier Console.app : log `Logger.stories` "export.complete duration=...s"
-5. Ouvrir la story publiée depuis le feed → vérifier rendu identique au composer preview (background video + overlays)
+1. Composer → publier la story (assets RAW uniquement, aucun MP4)
+2. Ouvrir la story depuis le tray → vérifier la présence du bouton "Exporter" dans le sidebar droit (icône `square.and.arrow.up.fill`)
+3. Tap "Exporter" → sheet "Exporter en vidéo" apparaît
+4. Choisir une langue dans le picker (si la story a des traductions) ou laisser "Texte original"
+5. Tap "Exporter en vidéo" → progress bar 0 → 100%
+6. UIActivityViewController apparaît → "Enregistrer dans Photos"
+7. Vérifier dans Photos : MP4 fidèle au preview (background + overlays texte dans la langue choisie + transitions)
+8. Reproduire avec "Annuler" depuis UIActivityViewController → pas de fichier dans Photos, le temp MP4 est nettoyé (Console.app : `Cleaned up export temp at`)
 
 **Pass criteria** :
-- ✅ Phase .exporting visible >0.5s pour story 5s
-- ✅ Progress numérique progresse 0→100%
-- ✅ MP4 généré (vérifier mediaUrl Network Inspector)
-- ✅ Story publiée play correctement
+- ✅ Bouton "Exporter" présent UNIQUEMENT sur sa propre story
+- ✅ Bouton absent quand la story n'a aucun contenu animé (`needsVideoExport == false`)
+- ✅ Le MP4 baked reflète la langue sélectionnée (texte gravé en FR/EN/ES selon le picker)
+- ✅ Le MP4 est fidèle au preview : background color/gradient/image/video tous bakés, overlays texte, opening transition
+- ✅ Aucune requête réseau vers le backend Meeshy pendant l'export (pas de TUS, pas de POST /posts)
+- ✅ Temp file nettoyé après share success OU annulation
 
 ---
 

@@ -1,7 +1,13 @@
 # Story Publish → Exporter Wiring — Design
 
+> **SUPERSEDED (2026-05-14)** : la direction prise par ce spec (wirer
+> l'export dans le publish path) était incorrecte vis-à-vis du **Prisme
+> Linguistique**. Les stories publient désormais RAW (assets + JSON
+> effects) ; le MP4 baked est une feature **auteur-only**, partage hors
+> Meeshy uniquement. Plan de remédiation appliqué : `docs/superpowers/plans/2026-05-14-story-export-realignment-plan.md`.
+
 **Date** : 2026-05-12
-**Status** : Approved (design phase) — Ready for implementation plan
+**Status** : ~~Approved (design phase)~~ → **Superseded**
 **Worktree (recommended)** : `.claude/worktrees/feat+story-publish-exporter`
 **Related** :
 - `docs/superpowers/specs/2026-05-08-story-canvas-fidelity-design.md` (spec mère — Phase 4 export pipeline)

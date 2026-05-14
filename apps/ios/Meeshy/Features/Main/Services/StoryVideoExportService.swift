@@ -3,26 +3,12 @@ import os
 import MeeshySDK
 import MeeshyUI
 
-// MARK: - StoryUploadPhase (P3 placeholder)
-//
-// Spec : docs/superpowers/specs/2026-05-12-story-publish-exporter-wiring-design.md §3.5
-//
-// Minimal placeholder enum so P3 can publish a `.exporting` signal to its
-// caller before P6 wires the full `StoryUploadPhase` lifecycle into
-// `StoryViewModel.StoryUploadState` and `StoryTrayView`. P6 will move this
-// declaration to the SDK side (alongside `StoryUploadState`) and add the
-// remaining cases (`.preparingMedia`, `.uploadingMedia`, `.publishingStory`,
-// `.completed`, `.failed`) per the spec. Until then, only the case this
-// service actually emits is declared — keeping the surface area small
-// avoids speculative API churn we'd have to migrate again at P6 time.
-//
-// TODO (P6) : promote to SDK, add remaining lifecycle cases, reconcile with
-// `StoryViewModel.StoryUploadState.UploadPhase`.
+// MARK: - StoryExportPhase
 
-/// Coarse-grained phase emitted by `StoryVideoExportService` so callers
-/// (StoryViewModel, future StoryTrayView badge) can surface "Export en
-/// cours …" feedback without coupling to AVAssetExportSession internals.
-public enum StoryUploadPhase: Sendable, Equatable {
+/// Coarse-grained phase emitted by `StoryVideoExportService` so the
+/// author-only share UI can surface "Export en cours …" feedback without
+/// coupling to AVAssetExportSession internals.
+public enum StoryExportPhase: Sendable, Equatable {
     /// Running `StoryExporter.export(_:to:progress:)`. Progress fraction
     /// is delivered separately via `onProgress` so consumers can drive a
     /// `ProgressView` without re-creating one phase per percentage point.
@@ -51,71 +37,73 @@ enum StoryVideoExportServiceError: Error, LocalizedError {
 
 // MARK: - Protocol
 
-/// Decision orchestrator + cleanup owner for the Story video export
-/// pipeline. Wraps `StoryExporter.export` with three responsibilities the
-/// raw exporter must not carry :
+/// Orchestrator for the **author-only** Story export flow. Wraps
+/// `StoryExporter.export` with three responsibilities :
 ///
 ///   1. **Routing** — inspects `slide.needsVideoExport` and returns `nil`
-///      for static slides so callers stay on the legacy asset path
-///      without a separate `if` at every call site.
+///      for static slides so the share UI can hint "rien à exporter".
 ///   2. **Fallback** — when the underlying export throws, swallows the
-///      error (logged) and returns `nil` so the publish flow degrades
-///      gracefully to the asset path rather than failing the whole story.
+///      error (logged) and returns `nil` so the share UI can surface a
+///      friendly toast rather than AVFoundation noise.
 ///   3. **Tmp-file lifecycle** — generates a unique temp MP4 URL per
 ///      invocation, cleans it on internal failure, and exposes
-///      `cleanupTempExport(at:)` for the caller to invoke after the TUS
-///      upload either succeeds (delete) or terminally fails. On a
-///      resume-eligible failure (e.g. TUS chunk uploaded but app killed)
-///      the caller deliberately does NOT call cleanup so the queue can
-///      replay the MP4 from disk on relaunch (spec §3.4).
+///      `cleanupExport(at:)` for the caller to invoke after the
+///      `UIActivityViewController` flow either completes (delete) or is
+///      cancelled (delete). The caller is responsible for keeping the
+///      file alive while the share sheet holds the URL.
 ///
-/// The protocol exists to enable test-side substitution from
-/// `StoryViewModel` once P4 wires this in — the production singleton
-/// uses the real `StoryExporter`, tests pass a `MockStoryExporter` via
-/// `init(exporter:)`.
+/// The service is NOT wired into the publish path : stories publish RAW
+/// (assets + JSON effects) so the Prisme Linguistique can retranslate
+/// text/audio per viewer. The baked MP4 is only ever surfaced through
+/// `UIActivityViewController` for partage externe (Photos, Messages,
+/// WhatsApp, AirDrop). See `docs/superpowers/plans/2026-05-14-story-export-realignment-plan.md`.
 @MainActor
 protocol StoryVideoExportServiceProviding {
-    /// Decides export vs asset path. If `slide.needsVideoExport == false`,
-    /// returns `nil` IMMEDIATELY without touching disk. Otherwise drives
-    /// `StoryExporter.export` against a fresh temp MP4 URL and returns the
-    /// URL on success, or `nil` on failure (fall back to legacy path).
+    /// Drives `StoryExporter.export` for an author-triggered share. If
+    /// `slide.needsVideoExport == false`, returns `nil` IMMEDIATELY
+    /// without touching disk so the caller can hint "rien à exporter".
     ///
     /// - Parameters:
     ///   - slide: Slide to inspect + export. Read-only.
+    ///   - languages: Preferred languages threaded to `StoryRenderer.render`
+    ///     so the baked MP4 reflects the author's chosen export language
+    ///     (Prisme Linguistique). Empty array bakes the original source
+    ///     text.
     ///   - onProgress: Optional callback receiving export progress
     ///     `0.0...1.0` at ~10Hz (forwarded from `StoryExporter`). Invoked
     ///     on the `@MainActor` so consumers can mutate `@Published`
     ///     properties directly without a hop.
     ///   - onPhaseChange: Optional callback signalling phase transitions
     ///     (currently only `.exporting` once at the start of an actual
-    ///     export — static slides emit nothing). Invoked on the
-    ///     `@MainActor`.
+    ///     export). Invoked on the `@MainActor`.
     /// - Returns: Local file URL to the baked MP4, or `nil` if the slide
     ///   doesn't need an export OR the export failed.
     func prepareExport(
         slide: StorySlide,
+        languages: [String],
         onProgress: ((Double) -> Void)?,
-        onPhaseChange: ((StoryUploadPhase) -> Void)?
+        onPhaseChange: ((StoryExportPhase) -> Void)?
     ) async -> URL?
 
     /// Deletes the temp MP4 at `url` if it exists. Safe to call multiple
-    /// times. No-op if the file is already gone. Use this after a
-    /// successful TUS upload (or a terminal upload failure where the user
-    /// is told to retry from a fresh draft) — NOT after a resumable
-    /// failure where the queue may need to replay the MP4.
-    func cleanupTempExport(at url: URL)
+    /// times. No-op if the file is already gone. Called by the share VM
+    /// after `UIActivityViewController` either completes (success) or
+    /// is dismissed (cancel).
+    func cleanupExport(at url: URL)
 }
 
 // MARK: - StoryVideoExportService
 
-/// Production singleton. Routes through `StoryExporter` for the real
-/// export, with the routing/fallback/cleanup responsibilities above.
+/// Production singleton driving the author-only "Export to share" flow.
+/// Routes through `StoryExporter` for the real bake, with the
+/// routing/fallback/cleanup responsibilities above. Never invoked from
+/// the publish path — see CLAUDE.md "Story Architecture".
 ///
-/// Concurrency : `@MainActor` matches the surrounding Service pattern
-/// (`AttachmentSendService`, `StoryPublishService`). The actual heavy
-/// lifting (`AVAssetExportSession`) runs inside `StoryExporter.export`,
-/// which is async and explicitly NOT main-actor-bound. The progress
-/// callback hops back to the main actor via the wrapped closure below.
+/// Concurrency : `@MainActor` matches the surrounding Service pattern.
+/// The actual heavy lifting (`AVAssetExportSession`) runs inside
+/// `StoryExporter.export`, which is async and explicitly NOT
+/// main-actor-bound. The progress callback hops back to the main actor
+/// via the wrapped closure below.
 @MainActor
 final class StoryVideoExportService: StoryVideoExportServiceProviding {
     static let shared = StoryVideoExportService()
@@ -136,8 +124,9 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
 
     func prepareExport(
         slide: StorySlide,
+        languages: [String] = [],
         onProgress: ((Double) -> Void)? = nil,
-        onPhaseChange: ((StoryUploadPhase) -> Void)? = nil
+        onPhaseChange: ((StoryExportPhase) -> Void)? = nil
     ) async -> URL? {
         guard slide.needsVideoExport else {
             logger.debug("StoryVideoExportService : slide \(slide.id, privacy: .public) does not need video export — skipping")
@@ -182,26 +171,23 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
         }
 
         do {
-            // `StoryExporter` itself throttles `progress` at ~10Hz
-            // (cf. exporter docstring §3.6). We forward the fraction
-            // verbatim — no further throttling/smoothing here.
+            // `StoryExporter` itself throttles `progress` at ~10Hz.
             try await exporter.export(
                 slide: slide,
                 to: outputURL,
+                languages: languages,
                 progress: progressTrampoline
             )
             logger.info("StoryVideoExportService : export complete for slide \(slide.id, privacy: .public)")
             return outputURL
         } catch {
-            // Spec §3.7 / D-7 : transparent fallback. Caller stays on
-            // the legacy asset path and the story still publishes.
-            logger.error("StoryVideoExportService : export FAILED for slide \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public) — falling back to asset path")
-            cleanupTempExport(at: outputURL)
+            logger.error("StoryVideoExportService : export FAILED for slide \(slide.id, privacy: .public) — \(error.localizedDescription, privacy: .public)")
+            cleanupExport(at: outputURL)
             return nil
         }
     }
 
-    func cleanupTempExport(at url: URL) {
+    func cleanupExport(at url: URL) {
         guard fileManager.fileExists(atPath: url.path) else { return }
         do {
             try fileManager.removeItem(at: url)
@@ -250,6 +236,7 @@ protocol StoryExporting: Sendable {
     func export(
         slide: StorySlide,
         to outputURL: URL,
+        languages: [String],
         progress: (@Sendable (Double) -> Void)?
     ) async throws
 }
@@ -262,8 +249,9 @@ struct SystemStoryExporter: StoryExporting {
     func export(
         slide: StorySlide,
         to outputURL: URL,
+        languages: [String],
         progress: (@Sendable (Double) -> Void)?
     ) async throws {
-        try await StoryExporter.export(slide, to: outputURL, progress: progress)
+        try await StoryExporter.export(slide, to: outputURL, languages: languages, progress: progress)
     }
 }
