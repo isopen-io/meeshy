@@ -140,13 +140,17 @@ final class RequestsViewModel: ObservableObject {
         if let senderId {
             FriendshipCache.shared.didAcceptRequest(from: senderId)
         }
-        // Persist the optimistic state to SQLite so Contacts shows the new
-        // friend immediately on its next appearance (even if Contacts is
-        // currently asleep and never observes the in-memory cache mutation).
+        // Invalidate FIRST so any stale `.fresh` entries don't mask the
+        // mutation; then persist the optimistic friend record. The save
+        // re-stamps the entry as fresh, so the next cold-load (e.g. user
+        // closes/relaunches the app offline) sees the new contact without
+        // hitting the gateway. If we persisted first and invalidated after,
+        // the invalidation would mark our optimistic write as expired —
+        // defeating the whole point of the persist.
+        await FriendshipCache.shared.invalidatePersistedFriendCaches()
         if let acceptedSender {
             await Self.persistAcceptedFriend(acceptedSender)
         }
-        await FriendshipCache.shared.invalidatePersistedFriendCaches()
         HapticFeedback.success()
         observeOutcome(
             cmid: cmid,

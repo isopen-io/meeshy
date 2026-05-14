@@ -309,6 +309,14 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     /// `objectWillChange` automatically, so any `@ObservedObject` view or any
     /// Combine subscriber on `$version` reacts. We hop to the main actor
     /// because `@Published` mutations must originate there.
+    ///
+    /// Persistence invalidation is NOT triggered from here on purpose:
+    /// callers (RequestsViewModel, ConnectionActionView, NotificationManager)
+    /// often need to interleave invalidation with an optimistic `save()`
+    /// into the same GRDB entry, and a fire-and-forget Task here would race
+    /// against that save. Each mutation site invokes
+    /// `invalidatePersistedFriendCaches()` explicitly so the order is
+    /// deterministic.
     private func notifyChange() {
         Task { @MainActor in self.version &+= 1 }
     }
@@ -324,8 +332,10 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     // `invalidatePersistedFriendCaches()` marks the three friendship-derived
     // GRDB entries as expired so the next `loadFriends()` / `loadReceived()`
     // / `loadSent()` is forced to round-trip the gateway and refresh the
-    // persistent store. Called fire-and-forget from action sites alongside
-    // the FriendshipCache mutation.
+    // persistent store. Called automatically from `notifyChange()` so every
+    // mutation cascades; also exposed `public` so call sites can await it
+    // explicitly when they need the invalidation to complete before
+    // continuing (e.g. before reading the cache again).
 
     /// Cache keys for the friendship-derived persistent stores.
     /// Kept here so RequestsViewModel and ContactsListViewModel use a single

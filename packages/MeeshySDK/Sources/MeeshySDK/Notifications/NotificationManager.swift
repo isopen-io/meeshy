@@ -168,16 +168,29 @@ public final class NotificationManager: ObservableObject {
     }
 
     private func updateFriendshipCacheIfNeeded(_ event: SocketNotificationEvent) {
+        let cacheChanged: Bool
         switch event.notificationType {
         case .friendRequest:
             guard let senderId = event.senderId,
                   let requestId = event.context?.friendRequestId else { return }
             FriendshipCache.shared.didReceiveRequest(from: senderId, requestId: requestId)
+            cacheChanged = true
         case .friendAccepted:
             guard let accepterId = event.senderId else { return }
             FriendshipCache.shared.didAcceptRequest(from: accepterId)
+            cacheChanged = true
         default:
-            break
+            cacheChanged = false
+        }
+        // Real-time mutations from the gateway flip the in-memory FriendshipCache
+        // but the persistent GRDB stores (friends list, received / sent requests)
+        // would still serve `.fresh` data without the new state, masking the
+        // event until the natural TTL elapses. Invalidate them so the next
+        // `loadFriends()` / `loadReceived()` round-trips the gateway and writes
+        // the freshly-mutated truth to SQLite. Fire-and-forget — the local
+        // optimistic state in `FriendshipCache` already drives the UI.
+        if cacheChanged {
+            Task { await FriendshipCache.shared.invalidatePersistedFriendCaches() }
         }
     }
 

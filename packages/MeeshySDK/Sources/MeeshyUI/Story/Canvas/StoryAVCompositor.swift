@@ -249,15 +249,23 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
 
 /// Composition instruction carrying the `StorySlide` whose frame at any given
 /// `CMTime` is delegated to `StoryRenderer.render` by `StoryAVCompositor`.
+///
+/// `nonisolated AVVideoCompositionInstructionProtocol` mirrors the same
+/// modifier on `StoryAVCompositor`'s `AVVideoCompositing` conformance:
+/// AVFoundation reads these properties from its own worker queue, so under
+/// MeeshyUI's `defaultIsolation(MainActor)` the conformance must opt out of
+/// the global MainActor isolation. Properties are `nonisolated let` (value
+/// types or Sendable references), which makes them safe to read from any
+/// actor without an explicit hop.
 public final class StoryCompositionInstruction: NSObject,
-                                                 AVVideoCompositionInstructionProtocol,
+                                                 nonisolated AVVideoCompositionInstructionProtocol,
                                                  @unchecked Sendable {
-    public let slide: StorySlide
-    public let timeRange: CMTimeRange
-    public let enablePostProcessing: Bool = false
-    public let containsTweening: Bool = true
-    public let requiredSourceTrackIDs: [NSValue]? = nil
-    public let passthroughTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid
+    public nonisolated let slide: StorySlide
+    public nonisolated let timeRange: CMTimeRange
+    public nonisolated let enablePostProcessing: Bool = false
+    public nonisolated let containsTweening: Bool = true
+    public nonisolated let requiredSourceTrackIDs: [NSValue]? = nil
+    public nonisolated let passthroughTrackID: CMPersistentTrackID = kCMPersistentTrackID_Invalid
 
     public nonisolated init(slide: StorySlide, timeRange: CMTimeRange) {
         self.slide = slide
