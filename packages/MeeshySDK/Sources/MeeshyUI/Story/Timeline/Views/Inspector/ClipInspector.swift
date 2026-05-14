@@ -135,6 +135,20 @@ public struct ClipInspector: View {
         }
     }
 
+    /// VoiceOver label for the inspector container, resolved per clip kind.
+    /// Prior to this helper, the label was hardcoded to "Video clip" for every
+    /// kind — audio/image/text clips were mis-announced. Exposed at type-level
+    /// so tests can assert the kind→label mapping without driving the SwiftUI
+    /// view body. See `ClipInspector_AccessibilityKindTests`.
+    public static func accessibilityLabel(for kind: ClipSnapshot.Kind) -> String {
+        switch kind {
+        case .video: return String(localized: "story.timeline.a11y.clip.video", bundle: .module)
+        case .audio: return String(localized: "story.timeline.a11y.clip.audio", bundle: .module)
+        case .image: return String(localized: "story.timeline.a11y.clip.image", bundle: .module)
+        case .text:  return String(localized: "story.timeline.a11y.clip.text",  bundle: .module)
+        }
+    }
+
     public var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
@@ -153,7 +167,7 @@ public struct ClipInspector: View {
         )
         .frame(maxWidth: presentation == .popover ? 360 : .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
-        .accessibilityLabel(String(localized: "story.timeline.a11y.clip.video", bundle: .module))
+        .accessibilityLabel(Self.accessibilityLabel(for: clip.kind))
         .onChange(of: clip) { _, newClip in
             volume = newClip.volume
             fadeIn = newClip.fadeInDuration
