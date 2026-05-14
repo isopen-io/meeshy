@@ -79,4 +79,38 @@ On calque **exactement** sur `Reaction` (modèle MongoDB des reactions sur les m
 - **`likeCount` field** : on garde pour rétro-compat mais on ne s'en sert plus côté heart (utiliser `reactionCount` + `currentUserReactions`).
 
 ## Review section
-À compléter à la fin de l'exécution.
+
+**Status** : Phase 1 livrée (6 commits sur `claude/design-story-comments-ouk2s`, tous poussés).
+
+### Commits
+| Phase | Commit | Description | Tests |
+|-------|--------|-------------|-------|
+| 1A | `8cb1e61` | Prisma `CommentReaction` + `CommentReactionService` (mirror exact de `ReactionService`) | 63 ✓ |
+| 1C | `5f199fd` | `currentUserReactions` batch query dans `GET /posts/:postId/comments` + replies | 12 ✓ |
+| 1B | `c12333b` | Socket.IO events (`comment:reaction-added/removed/sync`, `post:join/leave`) + `CommentReactionHandler` + `ROOMS.post(id)` | 14 ✓ |
+| 1E | `4830be2` | SDK Swift : `APIPostComment.currentUserReactions`, `Socket{Comment}Reaction{Update/Sync}Event`, publishers + emit méthodes | 6 (Swift, non vérifiés sur Linux) |
+| 1D | `dca4080` | Fan-out notifications new-comment (author `STORY_NEW_COMMENT` + friends `FRIEND_STORY_COMMENT` + prior commenters `STORY_THREAD_REPLY`, dedup priorité auteur > commenter > friend) | 15 ✓ |
+| 1F | `a601e20` | iOS heart toggle persistant via socket (plus de REST), seed `storyCommentLikedIds` depuis `currentUserReactions`, join/leave `post:{storyId}` room | 4 (Swift) |
+
+**Total** : 6 commits, 104 tests gateway verts, TypeScript `tsc --noEmit` clean.
+
+### Vérifications restantes (non exécutables depuis Linux)
+- [ ] `./apps/ios/meeshy.sh build` (macOS requis)
+- [ ] `./apps/ios/meeshy.sh test` (macOS requis)
+- [ ] `cd packages/MeeshySDK && swift test --filter "(PostModelsTests|SocialSocketEventTests)"` (macOS requis)
+
+### Follow-ups identifiés (hors scope)
+1. **Mentions Phase 2** (PR suivante)
+   - Généraliser `/mentions/suggestions` pour accepter `postId`
+   - `MentionService.createMentions` + `createMentionNotificationsBatch` dans comment POST
+   - Web `CommentComposer`/`PostComposer` + iOS `FeedCommentsSheet` consomment l'autocomplete
+2. **SDK protocol extension** : ajouter `joinPostRoom/leavePostRoom/addCommentReaction/removeCommentReaction` au protocole `SocialSocketProviding` pour faciliter le mocking iOS
+3. **UX iOS** : indicateur in-flight pendant l'ack socket + toast d'erreur sur rollback
+4. **Web** : `useCommentReactionsQuery` (mirror de `useReactionsQuery`) + consommation des nouveaux events dans `CommentItem`
+5. **Refacto idempotency** : `addReaction`/`addCommentReaction` actuellement `findFirst + create` séparés — passer en `upsert` avec transaction si on rencontre des races en prod
+
+### Décisions notables
+- **`likeCount` field** : conservé sur `PostComment` pour rétro-compat affichage, mais le heart ne s'en sert plus (utilise `reactionCount` + `currentUserReactions`). Cleanup futur possible.
+- **`reactionSummary` JSON** : maintenu denormalisé (économie d'1 requête au render), mais la source de vérité reste la table `CommentReaction`.
+- **Broadcast targeting** : `ROOMS.post(postId)` pour les viewers actifs (live sync) + `user:{commentAuthorId}` pour la notification — les deux comme demandé.
+- **Migration** : pas de backfill, les anciens `likeCount` denormalisés ne migrent pas vers `CommentReaction`. Acceptable (stories TTL courte).
