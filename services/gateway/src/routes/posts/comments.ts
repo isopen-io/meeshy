@@ -25,7 +25,10 @@ export function registerCommentRoutes(
       const query = FeedQuerySchema.safeParse(request.query);
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
-      const result = await commentService.getComments(postId, cursor, limit);
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const currentUserId = authContext.type === 'user' && !authContext.isAnonymous ? authContext.userId : undefined;
+
+      const result = await commentService.getComments(postId, cursor, limit, currentUserId);
 
       const commentContents = result.items
         .map((c: any) => c.content as string)
@@ -53,7 +56,10 @@ export function registerCommentRoutes(
       const query = FeedQuerySchema.safeParse(request.query);
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
-      const result = await commentService.getReplies(commentId, cursor, limit);
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const currentUserId = authContext.type === 'user' && !authContext.isAnonymous ? authContext.userId : undefined;
+
+      const result = await commentService.getReplies(commentId, cursor, limit, currentUserId);
 
       const replyContents = result.items
         .map((c: any) => c.content as string)
