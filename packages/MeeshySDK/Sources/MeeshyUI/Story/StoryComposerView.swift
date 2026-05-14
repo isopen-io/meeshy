@@ -1029,6 +1029,24 @@ public struct StoryComposerView: View {
     private var canvasCore: some View {
         StoryComposerCanvasView(
             slide: $viewModel.currentSlide,
+            onItemTapped: { id, kind in
+                // Tap simple = ouverture du format panel pour TOUT type d'élément.
+                // Reproduit la sémantique « toucher = révéler les contrôles »
+                // demandée pour les textes et déjà acquise pour les médias.
+                // Le double-tap reste réservé à l'édition avancée (cropper /
+                // video editor) ; sur un texte il ouvre simplement le même
+                // panel — c'est volontaire et idempotent.
+                HapticFeedback.light()
+                viewModel.selectedElementId = id
+                switch kind {
+                case .text:
+                    bandStateMachine.openFormatPanel(.text, id: id)
+                case .media:
+                    bandStateMachine.openFormatPanel(.media, id: id)
+                case .sticker:
+                    break
+                }
+            },
             onItemDoubleTapped: { id, kind in
                 HapticFeedback.medium()
                 viewModel.selectedElementId = id

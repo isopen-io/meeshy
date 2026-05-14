@@ -113,6 +113,13 @@ public struct ComposerControlsLayer: View {
                         bandStateMachine.openFormatPanel(.media, id: mediaId)
                         viewModel.selectedElementId = mediaId
                     },
+                    onEditText: { textId in
+                        // Action « éditer » depuis la liste des textes :
+                        // sélectionne l'élément et bascule le band sur le
+                        // format panel — même chemin que le single-tap canvas.
+                        viewModel.selectedElementId = textId
+                        bandStateMachine.openFormatPanel(.text, id: textId)
+                    },
                     onShowInTimeline: {
                         viewModel.isTimelineVisible = true
                     }
