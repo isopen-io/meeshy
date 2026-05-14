@@ -264,7 +264,8 @@ public struct QuickTimelineView: View {
                             tintHex: tint(for: track.kind),
                             isDark: colorScheme == .dark,
                             laneWidth: laneWidth,
-                            laneHeight: 36
+                            laneHeight: 36,
+                            iconName: Self.iconName(for: track.kind)
                         ) {
                             ZStack(alignment: .leading) {
                                 ForEach(track.clipIds, id: \.self) { clipId in
@@ -332,6 +333,19 @@ public struct QuickTimelineView: View {
         }
     }
 
+    /// Type icon for the sticky lane label — gives each track row a modern,
+    /// instantly recognisable marker (waveform = audio, photo = image,
+    /// video = video, textformat = text). Pure helper, mirrored by the Pro
+    /// timeline so both modes carry the same visual language.
+    static func iconName(for kind: CompactTrack.Kind) -> String {
+        switch kind {
+        case .bgVideo, .video: return "video.fill"
+        case .bgImage, .image: return "photo.fill"
+        case .bgAudio, .audio: return "waveform"
+        case .text:            return "textformat"
+        }
+    }
+
     @ViewBuilder
     private func clipBar(for clipId: String, geometry: TimelineGeometry, laneHeight: CGFloat) -> some View {
         if let media = viewModel.project.mediaObjects.first(where: { $0.id == clipId }) {
@@ -392,7 +406,11 @@ public struct QuickTimelineView: View {
         } else if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == clipId }) {
             AudioClipBar(
                 clipId: audio.id,
-                title: audio.postMediaId,
+                // postMediaId is a UUID — unusable as a user-facing label.
+                // Show a localised type tag instead; the lane label
+                // already provides the per-track index ("Audio 1").
+                title: String(localized: "story.timeline.clip.audio",
+                              defaultValue: "Audio", bundle: .module),
                 startTime: audio.startTime ?? 0,
                 duration: audio.duration ?? 0,
                 volume: audio.volume,
