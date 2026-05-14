@@ -85,10 +85,7 @@ export class ExpiredStoriesCleanupService {
     }
 
     try {
-      // Find IDs to hard-delete first so we can dissolve FK relations.
-      // The `PostReposts` relation uses onDelete: NoAction, so Prisma / MongoDB
-      // will reject deleteMany if any other Post still references these via
-      // `repostOfId`. We null out those references before deleting.
+      // Find IDs of expired stories eligible for hard-delete.
       const toDelete = await this.prisma.post.findMany({
         where: {
           type: 'STORY',
@@ -101,13 +98,18 @@ export class ExpiredStoriesCleanupService {
       if (toDelete.length > 0) {
         const ids = toDelete.map((p) => p.id);
 
-        // Nullify repostOfId on any Post that reposts one of the to-be-deleted stories.
-        await this.prisma.post.updateMany({
+        // Cascade-delete reposts that reference these expired stories.
+        // A repost of a story that's been dead for 7+ days has no value —
+        // stories are ephemeral by design. Deleting the children first
+        // satisfies the PostReposts FK constraint (onDelete: NoAction).
+        const repostResult = await this.prisma.post.deleteMany({
           where: { repostOfId: { in: ids } },
-          data: { repostOfId: null },
         });
+        if (repostResult.count > 0) {
+          log.info('cascade-deleted reposts of expired stories', { count: repostResult.count });
+        }
 
-        // Now safe to delete.
+        // Now safe to delete the parent stories.
         const hardResult = await this.prisma.post.deleteMany({
           where: { id: { in: ids } },
         });
