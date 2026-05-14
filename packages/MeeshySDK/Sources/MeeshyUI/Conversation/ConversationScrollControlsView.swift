@@ -11,6 +11,7 @@ public struct ConversationScrollControlsView: View {
     public var unreadAttachmentIsAudio: Bool
     public var isAudioPlaying: Bool
     public var isOffline: Bool
+    public var isSearchingQuotedMessage: Bool
     public var typingDotPhase: Int
     public var accentColor: String
     public var secondaryColor: String
@@ -29,6 +30,7 @@ public struct ConversationScrollControlsView: View {
         unreadAttachmentIsAudio: Bool,
         isAudioPlaying: Bool,
         isOffline: Bool,
+        isSearchingQuotedMessage: Bool = false,
         typingDotPhase: Int,
         accentColor: String,
         secondaryColor: String,
@@ -45,6 +47,7 @@ public struct ConversationScrollControlsView: View {
         self.unreadAttachmentIsAudio = unreadAttachmentIsAudio
         self.isAudioPlaying = isAudioPlaying
         self.isOffline = isOffline
+        self.isSearchingQuotedMessage = isSearchingQuotedMessage
         self.typingDotPhase = typingDotPhase
         self.accentColor = accentColor
         self.secondaryColor = secondaryColor
@@ -69,12 +72,17 @@ public struct ConversationScrollControlsView: View {
         }
     }
     
+    @State private var searchPulse: Bool = false
+
     public var body: some View {
         Button {
             onScrollToBottom()
         } label: {
             Group {
-                if hasUnreadContent {
+                if isSearchingQuotedMessage {
+                    // Pulsing search indicator while loading quoted message
+                    quotedMessageSearchContent
+                } else if hasUnreadContent {
                     // Rich button with preview
                     unreadPreviewContent
                 } else if isOffline {
@@ -97,7 +105,7 @@ public struct ConversationScrollControlsView: View {
                 }
             }
             .background(
-                RoundedRectangle(cornerRadius: (hasUnreadContent || isOffline) ? 16 : 20)
+                RoundedRectangle(cornerRadius: (hasUnreadContent || isOffline || isSearchingQuotedMessage) ? 16 : 20)
                     .fill(
                         LinearGradient(
                             colors: [
@@ -111,6 +119,50 @@ public struct ConversationScrollControlsView: View {
                     .shadow(color: isOffline ? MeeshyColors.neutral400.opacity(0.4) : Color(hex: accentColor).opacity(0.4), radius: 8, y: 4)
             )
         }
+        .allowsHitTesting(!isSearchingQuotedMessage)
+    }
+
+    // MARK: - Quoted Message Search Indicator
+
+    private var quotedMessageSearchContent: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 14, weight: .bold))
+                .scaleEffect(searchPulse ? 1.15 : 0.85)
+                .opacity(searchPulse ? 1.0 : 0.6)
+
+            Text("Recherche…")
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(1)
+
+            Spacer(minLength: 0)
+
+            // Animated dots to show activity
+            HStack(spacing: 3) {
+                ForEach(0..<3, id: \.self) { i in
+                    Circle()
+                        .fill(Color.white.opacity(searchPulse ? 1.0 : 0.4))
+                        .frame(width: 4, height: 4)
+                        .scaleEffect(searchPulse ? 1.2 : 0.7)
+                        .animation(
+                            .easeInOut(duration: 0.6)
+                                .repeatForever(autoreverses: true)
+                                .delay(Double(i) * 0.15),
+                            value: searchPulse
+                        )
+                }
+            }
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .frame(maxWidth: 180)
+        .onAppear { searchPulse = true }
+        .onDisappear { searchPulse = false }
+        .animation(
+            .easeInOut(duration: 0.8).repeatForever(autoreverses: true),
+            value: searchPulse
+        )
     }
     
     private var unreadPreviewContent: some View {

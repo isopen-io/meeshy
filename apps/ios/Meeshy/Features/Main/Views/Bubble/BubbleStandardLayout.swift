@@ -428,6 +428,13 @@ struct BubbleStandardLayout: View {
                 emojiOnlyContent
             } else if content.hasTextOrNonMediaContent || content.reply != nil {
                 textBubbleContent
+            } else if !audioAttachments.isEmpty {
+                // Audio-only messages (no text, no reply) skip textBubbleContent
+                // and emojiOnlyContent — but still need the identityBarSection so
+                // the user can access translation flags and the translate button
+                // on every audio bubble, not just the last one in a group.
+                identityBarSection
+                    .fixedSize(horizontal: true, vertical: false)
             }
         }
         .blur(radius: shouldBlur ? 20 : 0)

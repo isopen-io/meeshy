@@ -22,10 +22,10 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 jest.mock('../../../services/PostService', () => ({
   PostService: jest.fn().mockImplementation(() => ({
     createPost: jest.fn(),
-    getPostById: jest.fn().mockResolvedValue(null),
+    getPostById: jest.fn<() => Promise<null>>().mockResolvedValue(null),
     updatePost: jest.fn(),
     deletePost: jest.fn(),
-    likePost: jest.fn().mockResolvedValue(null),
+    likePost: jest.fn<() => Promise<null>>().mockResolvedValue(null),
     sharePost: jest.fn(),
     pinPost: jest.fn(),
     unpinPost: jest.fn(),
@@ -40,21 +40,21 @@ jest.mock('../../../services/PostService', () => ({
 
 jest.mock('../../../services/PostFeedService', () => ({
   PostFeedService: jest.fn().mockImplementation(() => ({
-    getFeed: jest.fn().mockResolvedValue({ items: [], hasMore: false }),
-    getStories: jest.fn().mockResolvedValue([]),
-    getStatuses: jest.fn().mockResolvedValue({ items: [], hasMore: false }),
-    getDiscoverStatuses: jest.fn().mockResolvedValue({ items: [], hasMore: false }),
-    getUserPosts: jest.fn().mockResolvedValue({ items: [], hasMore: false }),
-    getCommunityFeed: jest.fn().mockResolvedValue({ items: [], hasMore: false }),
-    getBookmarks: jest.fn().mockResolvedValue({ items: [], hasMore: false }),
+    getFeed: jest.fn<() => Promise<{ items: unknown[]; hasMore: boolean }>>().mockResolvedValue({ items: [], hasMore: false }),
+    getStories: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+    getStatuses: jest.fn<() => Promise<{ items: unknown[]; hasMore: boolean }>>().mockResolvedValue({ items: [], hasMore: false }),
+    getDiscoverStatuses: jest.fn<() => Promise<{ items: unknown[]; hasMore: boolean }>>().mockResolvedValue({ items: [], hasMore: false }),
+    getUserPosts: jest.fn<() => Promise<{ items: unknown[]; hasMore: boolean }>>().mockResolvedValue({ items: [], hasMore: false }),
+    getCommunityFeed: jest.fn<() => Promise<{ items: unknown[]; hasMore: boolean }>>().mockResolvedValue({ items: [], hasMore: false }),
+    getBookmarks: jest.fn<() => Promise<{ items: unknown[]; hasMore: boolean }>>().mockResolvedValue({ items: [], hasMore: false }),
   })),
 }));
 
 jest.mock('../../../services/PostCommentService', () => ({
   PostCommentService: jest.fn().mockImplementation(() => ({
-    getComments: jest.fn().mockResolvedValue({ items: [], hasMore: false }),
-    getReplies: jest.fn().mockResolvedValue({ items: [], hasMore: false }),
-    addComment: jest.fn().mockResolvedValue(null),
+    getComments: jest.fn<() => Promise<{ items: unknown[]; hasMore: boolean }>>().mockResolvedValue({ items: [], hasMore: false }),
+    getReplies: jest.fn<() => Promise<{ items: unknown[]; hasMore: boolean }>>().mockResolvedValue({ items: [], hasMore: false }),
+    addComment: jest.fn<() => Promise<null>>().mockResolvedValue(null),
     likeComment: jest.fn(),
     unlikeComment: jest.fn(),
     deleteComment: jest.fn(),
@@ -62,11 +62,11 @@ jest.mock('../../../services/PostCommentService', () => ({
 }));
 
 jest.mock('../../../services/MentionService', () => ({
-  resolveMentionedUsers: jest.fn().mockResolvedValue([]),
+  resolveMentionedUsers: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
 }));
 
 jest.mock('../../../middleware/rate-limiter', () => ({
-  createPostRouteRateLimitConfig: jest.fn().mockReturnValue({}),
+  createPostRouteRateLimitConfig: jest.fn<() => Record<string, unknown>>().mockReturnValue({}),
 }));
 
 jest.mock('../../../utils/withMutationLog', () => ({
@@ -78,8 +78,8 @@ jest.mock('../../../services/MediaService', () => ({
 }));
 
 const buildMockPrisma = (): PrismaClient => ({
-  post: { findUnique: jest.fn().mockResolvedValue(null) },
-  postComment: { findUnique: jest.fn().mockResolvedValue(null) },
+  post: { findUnique: jest.fn<() => Promise<null>>().mockResolvedValue(null) },
+  postComment: { findUnique: jest.fn<() => Promise<null>>().mockResolvedValue(null) },
   postImpression: { create: jest.fn(), createMany: jest.fn() },
   storyBackgroundAudio: { create: jest.fn(), findMany: jest.fn(), update: jest.fn() },
 } as unknown as PrismaClient);

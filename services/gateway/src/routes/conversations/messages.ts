@@ -686,7 +686,10 @@ export function registerMessagesRoutes(
           where: whereClause,
           select: messageSelect,
           orderBy: { createdAt: 'desc' },
-          take: isAroundMode ? limit + 1 : limit, // +1 in around mode to include the target message
+          // Cursor-based pagination (before): fetch limit+1 to detect hasMore
+          // without an extra COUNT query. The extra row is trimmed before
+          // returning to the client.
+          take: isAroundMode ? limit + 1 : (before ? limit + 1 : limit),
           skip: (before || isAroundMode) ? 0 : offset
         }),
         // 3. Récupérer les préférences linguistiques (si authentifié)
@@ -1043,8 +1046,22 @@ export function registerMessagesRoutes(
       timings.markAsReceived = performance.now() - t0;
 
       // Construire les métadonnées de cursor pagination
+      // When using cursor-based pagination (before), we fetched limit+1 rows.
+      // If we got more than `limit`, there are definitely more messages.
+      // Trim the extra row before returning to the client.
+      let cursorHasMore: boolean;
+      if (before && messages.length > limit) {
+        cursorHasMore = true;
+        messages.splice(limit); // trim to exactly `limit` rows
+      } else {
+        cursorHasMore = before ? false : messages.length === limit;
+      }
       const lastMessageId = messages.length > 0 ? String((messages[messages.length - 1] as any).id) : null;
-      const cursorPaginationMeta = buildCursorPaginationMeta(limit, messages.length, lastMessageId);
+      const cursorPaginationMeta = {
+        limit,
+        hasMore: cursorHasMore,
+        nextCursor: messages.length > 0 ? lastMessageId : null
+      };
 
       // Format optimisé: data directement = Message[], meta pour userLanguage
       // Aligné avec MessagesListResponse de @meeshy/shared/types

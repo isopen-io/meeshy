@@ -10,8 +10,8 @@
 
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import Fastify, { FastifyInstance } from 'fastify';
-import { PostTranslationService } from '../../services/posts/PostTranslationService';
-import { StoryTextObjectTranslationService } from '../../services/posts/StoryTextObjectTranslationService';
+import { PostTranslationService } from '../../../services/posts/PostTranslationService';
+import { StoryTextObjectTranslationService } from '../../../services/posts/StoryTextObjectTranslationService';
 import { registerCoreRoutes } from '../core';
 
 // ---------------------------------------------------------------------------
@@ -49,11 +49,11 @@ function buildMockPostService(createdPost: Record<string, unknown>) {
 // Mocks — module-level so they are applied before imports resolve
 // ---------------------------------------------------------------------------
 
-jest.mock('../../services/PostService', () => ({
+jest.mock('../../../services/PostService', () => ({
   PostService: jest.fn(),
 }));
 
-jest.mock('../../services/posts/PostTranslationService', () => {
+jest.mock('../../../services/posts/PostTranslationService', () => {
   const translatePostMock = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const sharedInstance = { translatePost: translatePostMock };
   return {
@@ -64,7 +64,7 @@ jest.mock('../../services/posts/PostTranslationService', () => {
   };
 });
 
-jest.mock('../../services/posts/StoryTextObjectTranslationService', () => {
+jest.mock('../../../services/posts/StoryTextObjectTranslationService', () => {
   const handleMock = jest.fn<() => Promise<void>>().mockResolvedValue(undefined);
   const sharedInstance = { handleTranslationCompleted: handleMock };
   return {
@@ -75,19 +75,19 @@ jest.mock('../../services/posts/StoryTextObjectTranslationService', () => {
   };
 });
 
-jest.mock('../../services/MentionService', () => ({
+jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
 }));
 
-jest.mock('../../utils/withMutationLog', () => ({
+jest.mock('../../../utils/withMutationLog', () => ({
   withMutationLog: jest.fn(({ op }: { op: () => Promise<unknown> }) => op()),
 }));
 
-jest.mock('../../middleware/rate-limiter', () => ({
+jest.mock('../../../middleware/rate-limiter', () => ({
   createPostRouteRateLimitConfig: jest.fn(() => ({})),
 }));
 
-jest.mock('../../utils/logger-enhanced', () => ({
+jest.mock('../../../utils/logger-enhanced', () => ({
   enhancedLogger: {
     child: jest.fn(() => ({
       info: jest.fn(),
@@ -103,8 +103,8 @@ jest.mock('../../utils/logger-enhanced', () => ({
 // ---------------------------------------------------------------------------
 
 async function buildApp(postServiceImpl: ReturnType<typeof buildMockPostService>): Promise<FastifyInstance> {
-  const { PostService } = await import('../../services/PostService') as { PostService: jest.MockedClass<typeof import('../../services/PostService').PostService> };
-  (PostService as jest.MockedClass<unknown>).mockImplementation(() => postServiceImpl);
+  const { PostService } = await import('../../../services/PostService') as { PostService: jest.MockedClass<typeof import('../../../services/PostService').PostService> };
+  (PostService as jest.MockedClass<any>).mockImplementation(() => postServiceImpl);
 
   const app = Fastify({ logger: false });
 
@@ -136,14 +136,14 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
   let handleStoryTextMock: StoryTranslateSpy;
 
   beforeEach(async () => {
-    const { PostTranslationService: pts } = await import('../../services/posts/PostTranslationService') as {
+    const pts = (await import('../../../services/posts/PostTranslationService')) as unknown as {
       PostTranslationService: { _translatePostMock: TranslatePostSpy };
     };
-    const { StoryTextObjectTranslationService: stots } = await import('../../services/posts/StoryTextObjectTranslationService') as {
+    const stots = (await import('../../../services/posts/StoryTextObjectTranslationService')) as unknown as {
       StoryTextObjectTranslationService: { _handleMock: StoryTranslateSpy };
     };
-    translatePostMock = pts._translatePostMock;
-    handleStoryTextMock = stots._handleMock;
+    translatePostMock = pts.PostTranslationService._translatePostMock;
+    handleStoryTextMock = stots.StoryTextObjectTranslationService._handleMock;
     translatePostMock.mockClear();
     handleStoryTextMock.mockClear();
   });

@@ -649,6 +649,41 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
     public var longitude: Double?
     public var thumbnailColor: String = "4ECDC4"
 
+    // Persisted transcription/translation metadata so GRDB load surfaces
+    // these fields instantly without waiting for a REST round-trip.
+    public var transcription: EmbeddedTranscription?
+    public var audioTranslations: [String: EmbeddedAudioTranslation]?
+
+    /// Lightweight Codable transcription embedded in attachmentsJson.
+    public struct EmbeddedTranscription: Codable, Sendable {
+        public var text: String
+        public var language: String
+        public var confidence: Double?
+        public var durationMs: Int?
+        public var speakerCount: Int?
+        public var segments: [TranscriptionSegmentData]?
+
+        public struct TranscriptionSegmentData: Codable, Sendable {
+            public var text: String
+            public var startTime: Double?
+            public var endTime: Double?
+            public var speakerId: String?
+        }
+    }
+
+    /// Lightweight Codable audio translation embedded in attachmentsJson.
+    public struct EmbeddedAudioTranslation: Codable, Sendable {
+        public var url: String
+        public var transcription: String?
+        public var durationMs: Int?
+        public var format: String?
+        public var cloned: Bool?
+        public var quality: Double?
+        public var voiceModelId: String?
+        public var ttsModel: String?
+        public var segments: [EmbeddedTranscription.TranscriptionSegmentData]?
+    }
+
     public var type: AttachmentType {
         if mimeType.starts(with: "image/") { return .image }
         if mimeType.starts(with: "video/") { return .video }
@@ -673,7 +708,9 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
                 fps: Float? = nil, videoCodec: String? = nil, pageCount: Int? = nil, lineCount: Int? = nil,
                 uploadedBy: String = "", isAnonymous: Bool = false, createdAt: Date = Date(),
                 isEncrypted: Bool = false, encryptionMode: String? = nil,
-                latitude: Double? = nil, longitude: Double? = nil, thumbnailColor: String = "4ECDC4") {
+                latitude: Double? = nil, longitude: Double? = nil, thumbnailColor: String = "4ECDC4",
+                transcription: EmbeddedTranscription? = nil,
+                audioTranslations: [String: EmbeddedAudioTranslation]? = nil) {
         self.id = id; self.messageId = messageId; self.fileName = fileName; self.originalName = originalName
         self.mimeType = mimeType; self.fileSize = fileSize; self.filePath = filePath; self.fileUrl = fileUrl
         self.title = title; self.alt = alt; self.caption = caption
@@ -686,6 +723,7 @@ public struct MeeshyMessageAttachment: Identifiable, Codable, Sendable {
         self.uploadedBy = uploadedBy; self.isAnonymous = isAnonymous; self.createdAt = createdAt
         self.isEncrypted = isEncrypted; self.encryptionMode = encryptionMode
         self.latitude = latitude; self.longitude = longitude; self.thumbnailColor = thumbnailColor
+        self.transcription = transcription; self.audioTranslations = audioTranslations
     }
 
     public static func image(color: String = "4ECDC4") -> MeeshyMessageAttachment {
