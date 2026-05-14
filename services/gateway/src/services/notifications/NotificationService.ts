@@ -202,6 +202,9 @@ export class NotificationService {
       case 'status_reaction':   return prefs.storyReactionEnabled ?? true;
       case 'comment_like':      return prefs.commentLikeEnabled ?? false;
       case 'comment_reply':     return prefs.commentReplyEnabled ?? true;
+      case 'story_new_comment':
+      case 'friend_story_comment':
+      case 'story_thread_reply': return prefs.postCommentEnabled ?? true;
       case 'new_conversation_direct':
       case 'new_conversation_group':
       case 'new_conversation':  return prefs.conversationEnabled;
@@ -864,6 +867,166 @@ export class NotificationService {
         reactionEmoji: params.reactionEmoji,
       },
     });
+  }
+
+  // ==============================================
+  // STORY COMMENT FAN-OUT (Phase 1D)
+  // ==============================================
+
+  /**
+   * Resolves the three recipient buckets for story comment notifications.
+   *
+   * Priority order (a user appears in EXACTLY ONE bucket):
+   *   1. storyAuthorId  → STORY_NEW_COMMENT
+   *   2. previousCommenterIds (prior commenters on this post, excl. commenter & author)
+   *                     → STORY_THREAD_REPLY
+   *   3. friendIds (friends of the author, excl. commenter, author, and prior commenters)
+   *                     → FRIEND_STORY_COMMENT
+   */
+  async getStoryNotificationRecipients(
+    postId: string,
+    authorId: string,
+    commenterId: string
+  ): Promise<{ authorId: string; friendIds: string[]; previousCommenterIds: string[] }> {
+    const [previousComments, friendRequests] = await Promise.all([
+      this.prisma.postComment.findMany({
+        where: {
+          postId,
+          isDeleted: false,
+          NOT: { authorId: commenterId },
+        },
+        distinct: ['authorId'],
+        select: { authorId: true },
+      }),
+      this.prisma.friendRequest.findMany({
+        where: {
+          status: 'accepted',
+          OR: [{ senderId: authorId }, { receiverId: authorId }],
+        },
+        select: { senderId: true, receiverId: true },
+      }),
+    ]);
+
+    const rawPreviousCommenterIds = previousComments
+      .map((c: { authorId: string }) => c.authorId)
+      .filter((id: string) => id !== authorId);
+
+    const previousCommenterSet = new Set(rawPreviousCommenterIds);
+
+    const allFriendIds = friendRequests.flatMap(
+      (fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId]
+    ).filter((id: string) => id !== authorId);
+
+    const friendIds = Array.from(new Set(allFriendIds)).filter(
+      (id: string) =>
+        id !== commenterId &&
+        id !== authorId &&
+        !previousCommenterSet.has(id)
+    );
+
+    const previousCommenterIds = rawPreviousCommenterIds.filter(
+      (id: string) => id !== commenterId
+    );
+
+    return { authorId, friendIds, previousCommenterIds };
+  }
+
+  /**
+   * Fan-out notifications when a new top-level comment is added to a story.
+   *
+   *  - Story author        → STORY_NEW_COMMENT  (priority: normal)
+   *  - Previous commenters → STORY_THREAD_REPLY (priority: low)
+   *  - Friends of author   → FRIEND_STORY_COMMENT (priority: low)
+   *
+   * Commenter never receives a notification.
+   */
+  async createStoryCommentNotificationsBatch(params: {
+    postId: string;
+    commentId: string;
+    storyAuthorId: string;
+    commenterId: string;
+    commentExcerpt?: string;
+  }): Promise<void> {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: params.commenterId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+
+    if (!actor) return;
+
+    const { authorId, friendIds, previousCommenterIds } =
+      await this.getStoryNotificationRecipients(
+        params.postId,
+        params.storyAuthorId,
+        params.commenterId
+      );
+
+    const content = params.commentExcerpt
+      ? this.truncateMessage(params.commentExcerpt)
+      : '';
+
+    const commonContext = { postId: params.postId, commentId: params.commentId };
+    const commonMetadata = {
+      action: 'view_post' as const,
+      postId: params.postId,
+      commentId: params.commentId,
+      commentPreview: content,
+    };
+    const actorInfo = {
+      id: params.commenterId,
+      username: actor.username,
+      displayName: actor.displayName,
+      avatar: actor.avatar,
+    };
+
+    const tasks: Array<Promise<unknown>> = [];
+
+    // 1. Story author notification
+    if (authorId !== params.commenterId) {
+      tasks.push(
+        this.createNotification({
+          userId: authorId,
+          type: 'story_new_comment',
+          priority: 'normal',
+          content,
+          actor: actorInfo,
+          context: commonContext,
+          metadata: commonMetadata,
+        })
+      );
+    }
+
+    // 2. Previous commenters (thread participants)
+    for (const recipientId of previousCommenterIds) {
+      tasks.push(
+        this.createNotification({
+          userId: recipientId,
+          type: 'story_thread_reply',
+          priority: 'low',
+          content,
+          actor: actorInfo,
+          context: commonContext,
+          metadata: commonMetadata,
+        })
+      );
+    }
+
+    // 3. Friends of the story author
+    for (const recipientId of friendIds) {
+      tasks.push(
+        this.createNotification({
+          userId: recipientId,
+          type: 'friend_story_comment',
+          priority: 'low',
+          content,
+          actor: actorInfo,
+          context: commonContext,
+          metadata: commonMetadata,
+        })
+      );
+    }
+
+    await Promise.all(tasks);
   }
 
   // ==============================================

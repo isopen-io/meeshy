@@ -171,6 +171,17 @@ export function registerCommentRoutes(
         }
       }
 
+      // Story comment fan-out notifications (Phase 1D)
+      if (notifService && post?.authorId && !parsed.data.parentId) {
+        notifService.createStoryCommentNotificationsBatch({
+          postId,
+          commentId: comment.id,
+          storyAuthorId: post.authorId,
+          commenterId: authContext.registeredUser.id,
+          commentExcerpt: parsed.data.content?.slice(0, 100),
+        }).catch(err => fastify.log.error(`story comment notification fan-out failed: ${err}`));
+      }
+
       // Trigger async translation for comment content (fire-and-forget)
       if (parsed.data.content) {
         try {

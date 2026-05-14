@@ -68,6 +68,9 @@ export enum NotificationTypeEnum {
   COMMENT_LIKE = 'comment_like',
   COMMENT_REPLY = 'comment_reply',
   COMMENT_REACTION = 'comment_reaction',
+  STORY_NEW_COMMENT = 'story_new_comment',
+  FRIEND_STORY_COMMENT = 'friend_story_comment',
+  STORY_THREAD_REPLY = 'story_thread_reply',
 
   // ===== CALL EVENTS =====
   MISSED_CALL = 'missed_call',
