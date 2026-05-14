@@ -822,6 +822,51 @@ export class NotificationService {
   }
 
   // ==============================================
+  // COMMENT_REACTION
+  // ==============================================
+
+  async createCommentReactionNotification(params: {
+    commentAuthorId: string;
+    reactorUserId: string;
+    commentId: string;
+    postId: string;
+    reactionEmoji: string;
+  }): Promise<void> {
+    if (params.commentAuthorId === params.reactorUserId) return;
+
+    const reactor = await this.prisma.user.findUnique({
+      where: { id: params.reactorUserId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+
+    if (!reactor) return;
+
+    await this.createNotification({
+      userId: params.commentAuthorId,
+      type: 'comment_reaction',
+      priority: 'low',
+      content: params.reactionEmoji,
+
+      actor: {
+        id: params.reactorUserId,
+        username: reactor.username,
+        displayName: reactor.displayName,
+        avatar: reactor.avatar,
+      },
+
+      context: {
+        postId: params.postId,
+        commentId: params.commentId,
+      },
+
+      metadata: {
+        action: 'view_post',
+        reactionEmoji: params.reactionEmoji,
+      },
+    });
+  }
+
+  // ==============================================
   // MISSED_CALL
   // ==============================================
 

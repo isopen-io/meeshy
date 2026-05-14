@@ -236,3 +236,27 @@ export interface CommentTranslationUpdatedEventData {
     readonly createdAt: string;
   };
 }
+
+export interface CommentReactionAggregation {
+  readonly emoji: string;
+  readonly count: number;
+  readonly userIds: string[];
+  readonly hasCurrentUser: boolean;
+}
+
+export interface CommentReactionUpdateEventData {
+  readonly commentId: string;
+  readonly postId: string;
+  readonly userId: string;
+  readonly emoji: string;
+  readonly action: 'add' | 'remove';
+  readonly aggregation: CommentReactionAggregation;
+  readonly timestamp: Date | string;
+}
+
+export interface CommentReactionSyncEventData {
+  readonly commentId: string;
+  readonly reactions: readonly CommentReactionAggregation[];
+  readonly totalCount: number;
+  readonly userReactions: readonly string[];
+}

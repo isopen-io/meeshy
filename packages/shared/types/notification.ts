@@ -67,6 +67,7 @@ export enum NotificationTypeEnum {
   STATUS_REACTION = 'status_reaction',
   COMMENT_LIKE = 'comment_like',
   COMMENT_REPLY = 'comment_reply',
+  COMMENT_REACTION = 'comment_reaction',
 
   // ===== CALL EVENTS =====
   MISSED_CALL = 'missed_call',

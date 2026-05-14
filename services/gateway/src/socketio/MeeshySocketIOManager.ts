@@ -18,10 +18,12 @@ import { AuthHandler } from './handlers/AuthHandler';
 import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
 import { ReactionHandler } from './handlers/ReactionHandler';
+import { CommentReactionHandler } from './handlers/CommentReactionHandler';
 import { ConversationHandler } from './handlers/ConversationHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { ReactionService } from '../services/ReactionService.js';
+import { CommentReactionService } from '../services/CommentReactionService';
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
@@ -99,6 +101,7 @@ export class MeeshySocketIOManager {
   private messageHandler!: MessageHandler;
   private statusHandler!: StatusHandler;
   private reactionHandler!: ReactionHandler;
+  private commentReactionHandler!: CommentReactionHandler;
   private conversationHandler!: ConversationHandler;
 
   // Mapping des utilisateurs connectés
@@ -249,6 +252,16 @@ export class MeeshySocketIOManager {
       prisma: this.prisma,
       notificationService: this.notificationService,
       reactionService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+    });
+
+    const commentReactionService = new CommentReactionService(prisma);
+    this.commentReactionHandler = new CommentReactionHandler({
+      io: this.io,
+      prisma: this.prisma,
+      notificationService: this.notificationService,
+      commentReactionService,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
     });
@@ -581,6 +594,26 @@ export class MeeshySocketIOManager {
 
       socket.on(CLIENT_EVENTS.REACTION_REQUEST_SYNC, async (messageId, callback) => {
         try { await this.reactionHandler.handleReactionSync(socket, messageId, callback); } catch (error) { logger.error('[REACTION_SYNC] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.COMMENT_REACTION_ADD, async (data, callback) => {
+        try { await this.commentReactionHandler.handleAddReaction(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_ADD] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.COMMENT_REACTION_REMOVE, async (data, callback) => {
+        try { await this.commentReactionHandler.handleRemoveReaction(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_REMOVE] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.COMMENT_REACTION_REQUEST_SYNC, async (data, callback) => {
+        try { await this.commentReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[COMMENT_REACTION_SYNC] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.JOIN_POST, async (data, callback) => {
+        try { await this.commentReactionHandler.handleJoinPost(socket, data, callback); } catch (error) { logger.error('[JOIN_POST] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.LEAVE_POST, async (data, callback) => {
+        try { await this.commentReactionHandler.handleLeavePost(socket, data, callback); } catch (error) { logger.error('[LEAVE_POST] Error:', error); }
       });
 
       socket.on(CLIENT_EVENTS.LOCATION_SHARE, async (data, callback) => {
