@@ -120,6 +120,22 @@ public struct ComposerControlsLayer: View {
                         viewModel.selectedElementId = textId
                         bandStateMachine.openFormatPanel(.text, id: textId)
                     },
+                    onDeleteText: { textId in
+                        // Suppression d'un texte depuis la liste. Si le panel
+                        // de format est ouvert sur ce même texte, on referme
+                        // d'abord — sinon ComposerBottomBand garde un instant
+                        // une vue vide (binding nil) avant que le fallback
+                        // `Color.clear.onAppear` ne ferme le panel, et ça
+                        // produit un flicker visible.
+                        if case .formatPanel(.text, let openId) = bandStateMachine.state,
+                           openId == textId {
+                            bandStateMachine.closeFormatPanel()
+                        }
+                        if viewModel.selectedElementId == textId {
+                            viewModel.selectedElementId = nil
+                        }
+                        viewModel.deleteElement(id: textId)
+                    },
                     onShowInTimeline: {
                         viewModel.isTimelineVisible = true
                     }

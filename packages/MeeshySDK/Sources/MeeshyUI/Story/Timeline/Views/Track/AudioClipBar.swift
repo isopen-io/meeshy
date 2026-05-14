@@ -161,12 +161,16 @@ public struct AudioClipBar: View, Equatable {
     }
 
     private var muteBadge: some View {
+        // Force le badge sur le bord traînant ; sans `frame(alignment: .trailing)`
+        // il hérite du `.leading` du `ZStack` parent et se superpose au
+        // `titleOverlay` (icône waveform + titre) sur les clips ≥ 44 pt.
         Image(systemName: "speaker.slash.fill")
             .font(.caption2)
             .padding(4)
             .background(Circle().fill(Color.black.opacity(0.6)))
             .foregroundStyle(Color.white)
             .padding(4)
+            .frame(maxWidth: .infinity, alignment: .trailing)
             .accessibilityHidden(true)
     }
 }

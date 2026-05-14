@@ -15,6 +15,13 @@ struct ComposerToolPanelHost: View {
     let onBack: () -> Void
     var onEditMedia: ((String) -> Void)? = nil
     var onEditText: ((String) -> Void)? = nil
+    /// Suppression d'un texte depuis la liste : remontée jusqu'à
+    /// `ComposerControlsLayer` afin de fermer le format panel si le texte
+    /// supprimé était celui en cours d'édition — sans ce relai la branche
+    /// `.formatPanel(.text, …)` continue de rendre un panel vide pendant un
+    /// frame avant que le fallback `Color.clear.onAppear` ne déclenche la
+    /// fermeture (flicker visible).
+    var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
@@ -402,8 +409,12 @@ struct ComposerToolPanelHost: View {
                     viewModel.duplicateElement(id: text.id)
                 }
                 textActionBtn(icon: "trash", color: .red.opacity(0.8), tip: "Supprimer") {
-                    viewModel.deleteElement(id: text.id)
                     HapticFeedback.medium()
+                    if let onDeleteText {
+                        onDeleteText(text.id)
+                    } else {
+                        viewModel.deleteElement(id: text.id)
+                    }
                 }
             }
         }

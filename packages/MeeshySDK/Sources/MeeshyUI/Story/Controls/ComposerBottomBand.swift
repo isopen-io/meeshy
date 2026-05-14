@@ -21,6 +21,7 @@ struct ComposerBottomBand: View {
     let onOpenFilterForElement: (String) -> Void
     var onEditMedia: ((String) -> Void)? = nil
     var onEditText: ((String) -> Void)? = nil
+    var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
@@ -111,6 +112,7 @@ struct ComposerBottomBand: View {
                         onBack: onBackFromToolPanel,
                         onEditMedia: onEditMedia,
                         onEditText: onEditText,
+                        onDeleteText: onDeleteText,
                         onShowInTimeline: onShowInTimeline
                     )
                 case .formatPanel(.text, let elementId):
@@ -118,9 +120,13 @@ struct ComposerBottomBand: View {
                         StoryTextEditorView(
                             textObject: binding,
                             onDelete: {
-                                viewModel.deleteElement(id: elementId)
                                 HapticFeedback.medium()
+                                // Fermer AVANT de supprimer : sinon le binding
+                                // bascule sur nil pendant le frame courant et
+                                // SwiftUI rend un Color.clear flickering avant
+                                // que le fallback onAppear ne ferme le panel.
                                 onCloseFormatPanel()
+                                viewModel.deleteElement(id: elementId)
                             }
                         )
                     } else {
