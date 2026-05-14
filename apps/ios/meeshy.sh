@@ -720,6 +720,74 @@ do_release_check() {
     fi
 }
 
+# ─── Release (fastlane → TestFlight / App Store) ─────────────────────────────
+# Uploads a Release build to App Store Connect via fastlane, bypassing Xcode
+# Cloud entirely. Useful when Xcode Cloud's "Prepare Build for App Store
+# Connect" step fails to authenticate (e.g. missing API key in workflow,
+# unsigned agreements, app record not yet created).
+#
+# Uses the ASC API Key checked into the repo at fastlane/AuthKey_5542B6LVNL.p8
+# (matching the credentials in fastlane/Fastfile). The .p8 is gitignored in
+# production environments — adjust ASC_KEY_FILEPATH below if you rotate keys.
+#
+# Default: TestFlight (fastlane beta).
+# Flag    --appstore : full App Store submission (fastlane release).
+# Flag    --skip-tests : skip the unit-test pre-flight run.
+do_release() {
+    local lane="beta"
+    local lane_label="TestFlight"
+    [ "${RELEASE_TARGET:-testflight}" = "appstore" ] && { lane="release"; lane_label="App Store"; }
+
+    local key_file="$(pwd)/fastlane/AuthKey_5542B6LVNL.p8"
+    if [ ! -f "$key_file" ]; then
+        err "ASC API Key missing: $key_file"
+        err "Drop the .p8 file there or rotate the key via App Store Connect → Users → Integrations → App Store Connect API"
+        return 1
+    fi
+
+    if ! command -v bundle >/dev/null 2>&1; then
+        err "Bundler missing. Install with: gem install bundler"
+        return 1
+    fi
+
+    if [ ! -f "Gemfile.lock" ]; then
+        log "Bundle install (first-time setup)…"
+        bundle install || return 1
+    fi
+
+    log "Release → $lane_label via fastlane (lane: $lane)"
+    log "ASC API Key : $(basename "$key_file") (key_id from Fastfile: 5542B6LVNL)"
+
+    local fastlane_args=()
+    [ "${SKIP_TESTS:-}" = "true" ] && fastlane_args+=("skip_tests:true")
+    [ -n "${RELEASE_CHANGELOG:-}" ] && fastlane_args+=("changelog:${RELEASE_CHANGELOG}")
+    [ -n "${RELEASE_VERSION:-}" ] && fastlane_args+=("version:${RELEASE_VERSION}")
+
+    echo ""
+    warn "This will : sync certificates · build Release IPA (~15 min) · upload to $lane_label"
+    echo ""
+
+    ASC_KEY_FILEPATH="$key_file" \
+    ASC_KEY_ID="5542B6LVNL" \
+    ASC_ISSUER_ID="69a6de89-ae7a-47e3-e053-5b8c7c11a4d1" \
+        bundle exec fastlane "$lane" "${fastlane_args[@]}"
+    local rc=$?
+
+    echo ""
+    if [ "$rc" -eq 0 ]; then
+        ok "Release to $lane_label SUCCEEDED"
+    else
+        err "Release to $lane_label FAILED (exit $rc)"
+        echo ""
+        echo -e "  ${DIM}Common failures :${NC}"
+        echo -e "  ${DIM} - 'Failed to authenticate' → key revoked or expired ; create new one in ASC${NC}"
+        echo -e "  ${DIM} - 'App not found' → register me.meeshy.app in App Store Connect → My Apps first${NC}"
+        echo -e "  ${DIM} - 'Agreements pending' → sign in ASC → Agreements, Tax, and Banking${NC}"
+        echo -e "  ${DIM} - Match certificate errors → ./meeshy.sh release with fresh keychain${NC}"
+    fi
+    return "$rc"
+}
+
 # ─── Archive + IPA ───────────────────────────────────────────────────────────
 do_archive() {
     local archive_config="${CONFIGURATION:-Release}"
@@ -1117,6 +1185,7 @@ usage() {
     echo -e "    ${GREEN}clean${NC}        Clean build artifacts ${DIM}(add --deep for global caches)${NC}"
     echo -e "    ${GREEN}archive${NC}      Create archive + IPA for distribution"
     echo -e "    ${GREEN}release-check${NC} Mirror Xcode Cloud Release build locally ${DIM}(catch -O/-wmo crashes before push)${NC}"
+    echo -e "    ${GREEN}release${NC}      Upload to TestFlight via fastlane ${DIM}(--appstore for App Store submission)${NC}"
     echo -e "    ${GREEN}distribute${NC}   App Store build ${DIM}(auto: signing, aps-environment, preflight)${NC}"
     echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(add --ui for UI tests)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
@@ -1146,6 +1215,9 @@ usage() {
     echo -e "    ${DIM}./meeshy.sh build --ipad${NC}             ${DIM}# Build for iPad sim${NC}"
     echo -e "    ${DIM}./meeshy.sh archive -m ad-hoc${NC}        ${DIM}# Ad-hoc IPA${NC}"
     echo -e "    ${DIM}./meeshy.sh release-check${NC}            ${DIM}# Mirror Xcode Cloud Release build (no signing)${NC}"
+    echo -e "    ${DIM}./meeshy.sh release${NC}                  ${DIM}# Upload Release to TestFlight via fastlane${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --appstore${NC}       ${DIM}# Submit to App Store via fastlane${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --skip-tests${NC}     ${DIM}# TestFlight upload without pre-flight tests${NC}"
     echo -e "    ${DIM}./meeshy.sh distribute${NC}               ${DIM}# App Store / TestFlight build${NC}"
     echo -e "    ${DIM}./meeshy.sh test --ui --coverage${NC}     ${DIM}# All tests + coverage${NC}"
     echo -e "    ${DIM}./meeshy.sh clean --deep${NC}             ${DIM}# Nuke all caches${NC}"
@@ -1159,7 +1231,7 @@ DEEP_CLEAN=false
 
 # Check if first arg is a known command
 case "$COMMAND" in
-    run|build|stop|restart|logs|status|clean|archive|release-check|distribute|test|setup|screenshot|device|help|-h|--help)
+    run|build|stop|restart|logs|status|clean|archive|release-check|release|distribute|test|setup|screenshot|device|help|-h|--help)
         shift || true
         ;;
     -*)
@@ -1177,6 +1249,11 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --clean|-C)       CLEAN=true; shift ;;
         --release|-r)     CONFIGURATION="Release"; shift ;;
+        --testflight)     RELEASE_TARGET="testflight"; shift ;;
+        --appstore)       RELEASE_TARGET="appstore"; shift ;;
+        --skip-tests)     SKIP_TESTS=true; shift ;;
+        --changelog)      RELEASE_CHANGELOG="$2"; shift 2 ;;
+        --version)        RELEASE_VERSION="$2"; shift 2 ;;
         -c|--configuration) CONFIGURATION="$2"; shift 2 ;;
         -m|--method)      EXPORT_METHOD="$2"; shift 2 ;;
         --ui)             UI_TESTS=true; shift ;;
@@ -1290,6 +1367,10 @@ case "$COMMAND" in
 
     release-check)
         do_release_check
+        ;;
+
+    release)
+        do_release
         ;;
 
     distribute)
