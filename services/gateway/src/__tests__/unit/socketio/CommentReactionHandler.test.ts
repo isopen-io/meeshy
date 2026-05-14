@@ -36,6 +36,30 @@ jest.mock('../../../middleware/validation', () => ({
   validateSocketEvent: jest.fn(),
 }));
 
+jest.mock('../../../utils/logger-enhanced', () => ({
+  enhancedLogger: {
+    child: jest.fn().mockReturnValue({
+      info: jest.fn(),
+      debug: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
+    }),
+  },
+}));
+
+const mockCheckLimit = jest.fn<() => Promise<boolean>>();
+jest.mock('../../../utils/socket-rate-limiter', () => {
+  return {
+    SocketRateLimiter: jest.fn().mockImplementation(() => ({
+      checkLimit: mockCheckLimit,
+      destroy: jest.fn(),
+    })),
+    SOCKET_RATE_LIMITS: {
+      MESSAGE_SEND: { maxRequests: 20, windowMs: 60000, keyPrefix: 'socket:message:send' },
+    },
+  };
+});
+
 // Import after mocks
 import { CommentReactionHandler } from '../../../socketio/handlers/CommentReactionHandler';
 import type { CommentReactionService } from '../../../services/CommentReactionService';
@@ -95,6 +119,12 @@ function createMockPrisma(commentAuthorId: string = USER_ID) {
   return {
     postComment: {
       findUnique: jest.fn(),
+    },
+    post: {
+      findUnique: jest.fn(),
+    },
+    friendRequest: {
+      findFirst: jest.fn(),
     },
     _commentAuthorId: commentAuthorId,
   } as any;
@@ -158,6 +188,9 @@ describe('CommentReactionHandler', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
+    // Reset rate limiter to allow by default
+    mockCheckLimit.mockResolvedValue(true);
+
     mockIO = createMockIO();
     mockPrisma = createMockPrisma(USER_ID);
     mockReactionService = createMockCommentReactionService();
@@ -168,6 +201,14 @@ describe('CommentReactionHandler', () => {
     // Set default mock return values
     mockPrisma.postComment.findUnique.mockResolvedValue({ authorId: USER_ID });
     mockNotificationService.createCommentReactionNotification.mockResolvedValue(undefined);
+    // Default: PUBLIC post, not deleted
+    mockPrisma.post.findUnique.mockResolvedValue({
+      id: POST_ID,
+      authorId: ANOTHER_USER_ID,
+      visibility: 'PUBLIC',
+      visibilityUserIds: [],
+      deletedAt: null,
+    });
 
     handler = new CommentReactionHandler({
       io: mockIO as any,
@@ -577,6 +618,164 @@ describe('CommentReactionHandler', () => {
       expect(callback).toHaveBeenCalledWith({
         success: false,
         error: 'User not authenticated',
+      });
+    });
+  });
+
+  // ===== handleJoinPost visibility checks (Fix 1) =====
+
+  describe('handleJoinPost — post visibility ACL', () => {
+    it('test_handleJoinPost_privatePost_nonAuthor_forbidden', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'PRIVATE',
+        visibilityUserIds: [],
+        deletedAt: null,
+      });
+
+      await handler.handleJoinPost(socket as any, data, callback);
+
+      expect(socket.join).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Forbidden' });
+    });
+
+    it('test_handleJoinPost_onlyVisibility_userInList_success', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'ONLY',
+        visibilityUserIds: [USER_ID],
+        deletedAt: null,
+      });
+
+      await handler.handleJoinPost(socket as any, data, callback);
+
+      expect(socket.join).toHaveBeenCalledWith(ROOMS.post(POST_ID));
+      expect(callback).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('test_handleJoinPost_onlyVisibility_userNotInList_forbidden', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'ONLY',
+        visibilityUserIds: ['507f1f77bcf86cd799439099'],
+        deletedAt: null,
+      });
+
+      await handler.handleJoinPost(socket as any, data, callback);
+
+      expect(socket.join).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Forbidden' });
+    });
+
+    it('test_handleJoinPost_publicPost_success', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        deletedAt: null,
+      });
+
+      await handler.handleJoinPost(socket as any, data, callback);
+
+      expect(socket.join).toHaveBeenCalledWith(ROOMS.post(POST_ID));
+      expect(callback).toHaveBeenCalledWith({ success: true });
+    });
+
+    it('test_handleJoinPost_postNotFound_returnsError', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findUnique.mockResolvedValue(null);
+
+      await handler.handleJoinPost(socket as any, data, callback);
+
+      expect(socket.join).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
+    });
+
+    it('test_handleJoinPost_deletedPost_returnsError', async () => {
+      const socket = createMockSocket();
+      const data = { postId: POST_ID };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockPrisma.post.findUnique.mockResolvedValue({
+        id: POST_ID,
+        authorId: ANOTHER_USER_ID,
+        visibility: 'PUBLIC',
+        visibilityUserIds: [],
+        deletedAt: new Date(),
+      });
+
+      await handler.handleJoinPost(socket as any, data, callback);
+
+      expect(socket.join).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({ success: false, error: 'Post not found' });
+    });
+  });
+
+  // ===== Rate limiting (Fix 4) =====
+
+  describe('handleAddReaction — rate limit', () => {
+    it('test_handleAddReaction_rateLimitExceeded_callbackError', async () => {
+      const socket = createMockSocket();
+      const data = { commentId: COMMENT_ID, postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockCheckLimit.mockResolvedValueOnce(false);
+
+      await handler.handleAddReaction(socket as any, data, callback);
+
+      expect(mockReactionService.addReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({
+        success: false,
+        error: 'Rate limit exceeded',
+      });
+    });
+  });
+
+  describe('handleRemoveReaction — rate limit', () => {
+    it('test_handleRemoveReaction_rateLimitExceeded_callbackError', async () => {
+      const socket = createMockSocket();
+      const data = { commentId: COMMENT_ID, postId: POST_ID, emoji: EMOJI };
+      const callback = jest.fn();
+
+      mockValidate.mockReturnValue({ success: true, data });
+      mockCheckLimit.mockResolvedValueOnce(false);
+
+      await handler.handleRemoveReaction(socket as any, data, callback);
+
+      expect(mockReactionService.removeReaction).not.toHaveBeenCalled();
+      expect(callback).toHaveBeenCalledWith({
+        success: false,
+        error: 'Rate limit exceeded',
       });
     });
   });

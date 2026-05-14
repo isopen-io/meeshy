@@ -900,6 +900,7 @@ export class NotificationService {
         distinct: ['authorId'],
         select: { authorId: true },
         take: 500,
+        orderBy: { createdAt: 'desc' },
       }),
       this.prisma.friendRequest.findMany({
         where: {
@@ -908,6 +909,7 @@ export class NotificationService {
         },
         select: { senderId: true, receiverId: true },
         take: 500,
+        orderBy: { updatedAt: 'desc' },
       }),
     ]);
 
@@ -1041,7 +1043,16 @@ export class NotificationService {
       );
     }
 
-    await Promise.all(tasks);
+    const results = await Promise.allSettled(tasks);
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        notificationLogger.error(
+          'Story comment notification failed for one recipient',
+          result.reason,
+          { recipientIndex: index, type: 'story_comment_batch' }
+        );
+      }
+    });
   }
 
   // ==============================================
@@ -1119,7 +1130,16 @@ export class NotificationService {
       );
     }
 
-    await Promise.all(tasks);
+    const mentionResults = await Promise.allSettled(tasks);
+    mentionResults.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        notificationLogger.error(
+          'Comment mention notification failed for one recipient',
+          result.reason,
+          { recipientId: params.mentionedUserIds[index], type: 'user_mentioned' }
+        );
+      }
+    });
   }
 
   // ==============================================

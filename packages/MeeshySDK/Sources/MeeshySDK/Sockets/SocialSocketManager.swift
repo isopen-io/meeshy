@@ -402,10 +402,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public func addCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
         guard let socket else { throw CommentReactionError.noSocket }
         return try await withCheckedThrowingContinuation { continuation in
-            var resumed = false
             socket.emitWithAck("comment:reaction-add", ["commentId": commentId, "postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
-                guard !resumed else { return }
-                resumed = true
                 guard let response = items.first as? [String: Any] else {
                     continuation.resume(throwing: CommentReactionError.timeout)
                     return
@@ -431,10 +428,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public func removeCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
         guard let socket else { throw CommentReactionError.noSocket }
         return try await withCheckedThrowingContinuation { continuation in
-            var resumed = false
             socket.emitWithAck("comment:reaction-remove", ["commentId": commentId, "postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
-                guard !resumed else { return }
-                resumed = true
                 guard let response = items.first as? [String: Any] else {
                     continuation.resume(throwing: CommentReactionError.timeout)
                     return
@@ -460,10 +454,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public func requestCommentReactionSync(commentId: String) async throws -> SocketCommentReactionSyncEvent {
         guard let socket else { throw CommentReactionError.noSocket }
         return try await withCheckedThrowingContinuation { continuation in
-            var resumed = false
             socket.emitWithAck("comment:reaction-request-sync", ["commentId": commentId]).timingOut(after: 10) { items in
-                guard !resumed else { return }
-                resumed = true
                 guard let response = items.first as? [String: Any] else {
                     continuation.resume(throwing: CommentReactionError.timeout)
                     return

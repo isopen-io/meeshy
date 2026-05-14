@@ -38,6 +38,7 @@ export function registerCommentRoutes(
         ? await resolveMentionedUsers(prisma, commentContents)
         : [];
 
+      reply.header('Cache-Control', 'private, no-cache');
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
         meta: { mentionedUsers },
@@ -69,6 +70,7 @@ export function registerCommentRoutes(
         ? await resolveMentionedUsers(prisma, replyContents)
         : [];
 
+      reply.header('Cache-Control', 'private, no-cache');
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
         meta: { mentionedUsers: replyMentionedUsers },

@@ -1049,7 +1049,7 @@ struct ConversationView: View {
             VStack {
                 Spacer()
                 VStack(spacing: 0) {
-                    if !viewModel.mentionSuggestions.isEmpty {
+                    if viewModel.activeMentionQuery != nil {
                         mentionSuggestionPanel
                             .transition(.move(edge: .bottom).combined(with: .opacity))
                     }
@@ -1081,7 +1081,7 @@ struct ConversationView: View {
             }
             .zIndex(50)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: composerState.showTextEmojiPicker)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.mentionSuggestions.isEmpty)
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.activeMentionQuery != nil)
 
             searchResultsBlurOverlay
             returnToLatestButton

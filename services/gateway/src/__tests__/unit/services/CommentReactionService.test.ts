@@ -110,7 +110,9 @@ describe('CommentReactionService', () => {
       },
       user: {
         findMany: jest.fn().mockResolvedValue([])
-      }
+      },
+      // $transaction executes the callback with a transaction client (same shape).
+      $transaction: jest.fn(),
     };
 
     // Create service instance
@@ -143,6 +145,15 @@ describe('CommentReactionService', () => {
       mockPrisma.commentReaction.findFirst.mockResolvedValue(null);
       mockPrisma.commentReaction.create.mockResolvedValue(createMockCommentReaction());
       mockPrisma.postComment.update.mockResolvedValue(createMockPostComment());
+      // Wire $transaction to execute callback with a tx that delegates to the same mocks
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
+        return fn({
+          postComment: {
+            findUnique: mockPrisma.postComment.findUnique,
+            update: mockPrisma.postComment.update,
+          },
+        });
+      });
     });
 
     it('should add a reaction successfully', async () => {
@@ -303,6 +314,14 @@ describe('CommentReactionService', () => {
       mockPrisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
       mockPrisma.postComment.findUnique.mockResolvedValue(createMockPostComment());
       mockPrisma.postComment.update.mockResolvedValue(createMockPostComment());
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
+        return fn({
+          postComment: {
+            findUnique: mockPrisma.postComment.findUnique,
+            update: mockPrisma.postComment.update,
+          },
+        });
+      });
     });
 
     it('should remove a reaction successfully', async () => {
@@ -988,6 +1007,121 @@ describe('CommentReactionService', () => {
         createdAt: new Date('2025-01-01T00:00:00Z'),
         updatedAt: new Date('2025-01-02T00:00:00Z')
       });
+    });
+  });
+
+  // ==============================================
+  // P2002 CONCURRENT INSERT IDEMPOTENCY (Fix 2)
+  // ==============================================
+
+  describe('addReaction — P2002 concurrent insert', () => {
+    beforeEach(() => {
+      mockPrisma.postComment.findUnique.mockResolvedValue(createMockPostComment());
+      mockPrisma.commentReaction.findMany.mockResolvedValue([]);
+      mockPrisma.commentReaction.findFirst.mockResolvedValue(null);
+      mockPrisma.postComment.update.mockResolvedValue(createMockPostComment());
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
+        return fn({
+          postComment: {
+            findUnique: mockPrisma.postComment.findUnique,
+            update: mockPrisma.postComment.update,
+          },
+        });
+      });
+    });
+
+    it('test_addReaction_P2002_concurrentInsert_returnsExistingRecordWithoutThrowing', async () => {
+      const existingReaction = createMockCommentReaction();
+      const p2002Error = Object.assign(new Error('Unique constraint failed'), { code: 'P2002' });
+
+      // First findFirst (pre-check) returns null — concurrent race condition
+      mockPrisma.commentReaction.findFirst
+        .mockResolvedValueOnce(null)    // pre-check: not found
+        .mockResolvedValueOnce(existingReaction); // recovery lookup after P2002
+
+      mockPrisma.commentReaction.create.mockRejectedValue(p2002Error);
+
+      const result = await service.addReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(result).toBeDefined();
+      expect(result?.id).toBe(existingReaction.id);
+      // updateCommentReactionSummary must NOT be called (race winner already updated it)
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
+    });
+
+    it('test_addReaction_otherDbError_rethrows', async () => {
+      const dbError = Object.assign(new Error('Connection timeout'), { code: 'P1001' });
+
+      mockPrisma.commentReaction.findFirst.mockResolvedValueOnce(null);
+      mockPrisma.commentReaction.create.mockRejectedValue(dbError);
+
+      await expect(
+        service.addReaction({
+          commentId: testCommentId,
+          userId: testUserId,
+          emoji: '👍'
+        })
+      ).rejects.toThrow('Connection timeout');
+    });
+  });
+
+  // ==============================================
+  // TRANSACTION WRAPS REACTION SUMMARY (Fix 3)
+  // ==============================================
+
+  describe('updateCommentReactionSummary — uses $transaction', () => {
+    beforeEach(() => {
+      mockPrisma.postComment.findUnique.mockResolvedValue(createMockPostComment());
+      mockPrisma.commentReaction.findMany.mockResolvedValue([]);
+      mockPrisma.commentReaction.findFirst.mockResolvedValue(null);
+      mockPrisma.commentReaction.create.mockResolvedValue(createMockCommentReaction());
+      mockPrisma.postComment.update.mockResolvedValue(createMockPostComment());
+      mockPrisma.$transaction.mockImplementation((fn: (tx: any) => Promise<unknown>) => {
+        return fn({
+          postComment: {
+            findUnique: mockPrisma.postComment.findUnique,
+            update: mockPrisma.postComment.update,
+          },
+        });
+      });
+    });
+
+    it('test_addReaction_callsPrismaTransaction_forSummaryUpdate', async () => {
+      await service.addReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('test_removeReaction_callsPrismaTransaction_forSummaryUpdate', async () => {
+      mockPrisma.commentReaction.deleteMany.mockResolvedValue({ count: 1 });
+
+      await service.removeReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).toHaveBeenCalledTimes(1);
+    });
+
+    it('test_removeReaction_noDeletedRow_doesNotCallTransaction', async () => {
+      mockPrisma.commentReaction.deleteMany.mockResolvedValue({ count: 0 });
+
+      await service.removeReaction({
+        commentId: testCommentId,
+        userId: testUserId,
+        emoji: '👍'
+      });
+
+      expect(mockPrisma.$transaction).not.toHaveBeenCalled();
     });
   });
 

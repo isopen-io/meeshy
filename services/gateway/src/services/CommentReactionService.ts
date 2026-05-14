@@ -126,17 +126,28 @@ export class CommentReactionService {
       return this.mapReactionToData(existingReaction);
     }
 
-    const reaction = await this.prisma.commentReaction.create({
-      data: {
-        commentId,
-        userId,
-        emoji: sanitized
+    try {
+      const reaction = await this.prisma.commentReaction.create({
+        data: {
+          commentId,
+          userId,
+          emoji: sanitized
+        }
+      });
+
+      await this.updateCommentReactionSummary(commentId, sanitized, 'add');
+
+      return this.mapReactionToData(reaction);
+    } catch (err: unknown) {
+      if (err && typeof err === 'object' && 'code' in err && err.code === 'P2002') {
+        // Concurrent insert race: treat as idempotent success, summary already correct.
+        const existing = await this.prisma.commentReaction.findFirst({
+          where: { commentId, userId, emoji: sanitized }
+        });
+        if (existing) return this.mapReactionToData(existing);
       }
-    });
-
-    await this.updateCommentReactionSummary(commentId, sanitized, 'add');
-
-    return this.mapReactionToData(reaction);
+      throw err;
+    }
   }
 
   async removeReaction(options: RemoveCommentReactionOptions): Promise<boolean> {
@@ -356,39 +367,30 @@ export class CommentReactionService {
     action: 'add' | 'remove',
     count: number = 1
   ): Promise<void> {
-    const comment = await this.prisma.postComment.findUnique({
-      where: { id: commentId },
-      select: { reactionSummary: true, reactionCount: true }
-    });
+    await this.prisma.$transaction(async (tx) => {
+      const comment = await tx.postComment.findUnique({
+        where: { id: commentId },
+        select: { reactionSummary: true, reactionCount: true }
+      });
 
-    if (!comment) {
-      return;
-    }
+      if (!comment) return;
 
-    const currentSummary = (comment.reactionSummary as Record<string, number>) || {};
-    const currentCount = comment.reactionCount || 0;
+      const currentSummary = (comment.reactionSummary as Record<string, number>) || {};
+      const currentCount = comment.reactionCount || 0;
 
-    if (action === 'add') {
-      currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
-    } else {
-      if (currentSummary[emoji]) {
+      if (action === 'add') {
+        currentSummary[emoji] = (currentSummary[emoji] || 0) + count;
+      } else if (currentSummary[emoji]) {
         currentSummary[emoji] -= count;
-        if (currentSummary[emoji] <= 0) {
-          delete currentSummary[emoji];
-        }
+        if (currentSummary[emoji] <= 0) delete currentSummary[emoji];
       }
-    }
 
-    const newReactionCount = action === 'add'
-      ? currentCount + count
-      : Math.max(0, currentCount - count);
+      const newCount = action === 'add' ? currentCount + count : Math.max(0, currentCount - count);
 
-    await this.prisma.postComment.update({
-      where: { id: commentId },
-      data: {
-        reactionSummary: currentSummary,
-        reactionCount: newReactionCount
-      }
+      await tx.postComment.update({
+        where: { id: commentId },
+        data: { reactionSummary: currentSummary, reactionCount: newCount }
+      });
     });
   }
 

@@ -13,7 +13,7 @@
 
 import type { Socket } from 'socket.io';
 import type { Server as SocketIOServer } from 'socket.io';
-import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { PrismaClient, PostVisibility } from '@meeshy/shared/prisma/client';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { CommentReactionService } from '../../services/CommentReactionService';
 import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
@@ -25,6 +25,19 @@ import {
   SocketCommentReactionRemoveSchema,
   SocketPostRoomActionSchema,
 } from '../../validation/socket-event-schemas.js';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { SocketRateLimiter, SOCKET_RATE_LIMITS } from '../../utils/socket-rate-limiter.js';
+
+const logger = enhancedLogger.child({ module: 'CommentReactionHandler' });
+
+/** Per-user token bucket: 30 reactions/min across add + remove. */
+const COMMENT_REACTION_RATE_LIMIT = {
+  maxRequests: 30,
+  windowMs: 60_000,
+  keyPrefix: 'socket:comment:reaction',
+} as const;
+
+const reactionRateLimiter = new SocketRateLimiter();
 
 export interface CommentReactionHandlerDependencies {
   io: SocketIOServer;
@@ -42,6 +55,7 @@ export class CommentReactionHandler {
   private commentReactionService: CommentReactionService;
   private connectedUsers: Map<string, SocketUser>;
   private socketToUser: Map<string, string>;
+  private readonly logger = logger;
 
   constructor(deps: CommentReactionHandlerDependencies) {
     this.io = deps.io;
@@ -92,6 +106,13 @@ export class CommentReactionHandler {
         return;
       }
 
+      const rateLimitAllowed = await reactionRateLimiter.checkLimit(userId, COMMENT_REACTION_RATE_LIMIT);
+      if (!rateLimitAllowed) {
+        this.logger.warn('[CommentReactionHandler] comment:reaction-add rate limit exceeded', { userId, commentId: validated.commentId });
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
       const reaction = await this.commentReactionService.addReaction({
         commentId: validated.commentId,
         userId,
@@ -130,7 +151,7 @@ export class CommentReactionHandler {
         userId
       );
     } catch (error: unknown) {
-      console.error('❌ Erreur lors de l\'ajout de réaction sur commentaire:', error);
+      this.logger.error('Failed to add comment reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to add reaction',
@@ -179,6 +200,13 @@ export class CommentReactionHandler {
         return;
       }
 
+      const rateLimitAllowed = await reactionRateLimiter.checkLimit(userId, COMMENT_REACTION_RATE_LIMIT);
+      if (!rateLimitAllowed) {
+        this.logger.warn('[CommentReactionHandler] comment:reaction-remove rate limit exceeded', { userId, commentId: validated.commentId });
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
       const removed = await this.commentReactionService.removeReaction({
         commentId: validated.commentId,
         userId,
@@ -210,7 +238,7 @@ export class CommentReactionHandler {
 
       this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.COMMENT_REACTION_REMOVED, updateEvent);
     } catch (error: unknown) {
-      console.error('❌ Erreur lors de la suppression de réaction sur commentaire:', error);
+      this.logger.error('Failed to remove comment reaction', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to remove reaction',
@@ -252,7 +280,7 @@ export class CommentReactionHandler {
       };
       if (callback) callback(successResponse);
     } catch (error: unknown) {
-      console.error('❌ Erreur lors de la synchronisation des réactions sur commentaire:', error);
+      this.logger.error('Failed to sync comment reactions', error, { userId: this.socketToUser.get(socket.id) });
       const errorResponse: SocketIOResponse<unknown> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to sync reactions',
@@ -284,10 +312,28 @@ export class CommentReactionHandler {
         return;
       }
 
+      const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
+      const userId = userResult?.realUserId || userIdOrToken;
+
+      const post = await this.prisma.post.findUnique({
+        where: { id: validated.postId },
+        select: { id: true, authorId: true, visibility: true, visibilityUserIds: true, deletedAt: true },
+      });
+
+      if (!post || post.deletedAt !== null) {
+        return callback?.({ success: false, error: 'Post not found' });
+      }
+
+      const canView = await this._canUserViewPost(post, userId);
+      if (!canView) {
+        this.logger.warn('[CommentReactionHandler] post:join denied (visibility)', { userId, postId: validated.postId });
+        return callback?.({ success: false, error: 'Forbidden' });
+      }
+
       socket.join(ROOMS.post(validated.postId));
-      if (callback) callback({ success: true });
+      callback?.({ success: true });
     } catch (error: unknown) {
-      console.error('❌ Erreur lors du join post room:', error);
+      this.logger.error('Failed to join post room', error, { postId: (data as { postId?: string }).postId });
       const errorResponse: SocketIOResponse<unknown> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to join post room',
@@ -322,7 +368,7 @@ export class CommentReactionHandler {
       socket.leave(ROOMS.post(validated.postId));
       if (callback) callback({ success: true });
     } catch (error: unknown) {
-      console.error('❌ Erreur lors du leave post room:', error);
+      this.logger.error('Failed to leave post room', error, { postId: (data as { postId?: string }).postId });
       const errorResponse: SocketIOResponse<unknown> = {
         success: false,
         error: error instanceof Error ? error.message : 'Failed to leave post room',
@@ -356,7 +402,59 @@ export class CommentReactionHandler {
         reactionEmoji: emoji,
       })
       .catch((error) => {
-        console.error('❌ [COMMENT_REACTION_NOTIFICATION] Erreur création notification:', error);
+        this.logger.error('[CommentReactionHandler] Failed to create comment reaction notification', error, { reactorUserId, commentId, postId, emoji });
       });
+  }
+
+  /**
+   * Checks whether `userId` is allowed to see `post` based on its visibility setting.
+   *
+   * PUBLIC  → everyone
+   * FRIENDS → post author can see; friends of author resolved via friendRequest
+   * PRIVATE → author only
+   * ONLY    → userId must be in visibilityUserIds
+   * EXCEPT  → userId must NOT be in visibilityUserIds, AND must be a friend
+   */
+  private async _canUserViewPost(
+    post: {
+      authorId: string;
+      visibility: PostVisibility;
+      visibilityUserIds: string[];
+    },
+    userId: string
+  ): Promise<boolean> {
+    if (post.authorId === userId) return true;
+
+    switch (post.visibility) {
+      case PostVisibility.PUBLIC:
+        return true;
+
+      case PostVisibility.PRIVATE:
+        return false;
+
+      case PostVisibility.ONLY:
+        return post.visibilityUserIds.includes(userId);
+
+      case PostVisibility.FRIENDS:
+      case PostVisibility.EXCEPT: {
+        const friendship = await this.prisma.friendRequest.findFirst({
+          where: {
+            status: 'accepted',
+            OR: [
+              { senderId: post.authorId, receiverId: userId },
+              { senderId: userId, receiverId: post.authorId },
+            ],
+          },
+          select: { id: true },
+        });
+        const isFriend = friendship !== null;
+        if (post.visibility === PostVisibility.FRIENDS) return isFriend;
+        // EXCEPT: friends who are NOT blocked by visibilityUserIds
+        return isFriend && !post.visibilityUserIds.includes(userId);
+      }
+
+      default:
+        return false;
+    }
   }
 }

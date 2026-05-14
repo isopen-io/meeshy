@@ -1469,6 +1469,7 @@ extension StoryViewerView {
             userLang: userLang,
             isLiked: storyCommentLikedIds.contains(comment.id),
             likeCount: max(0, comment.likes + (storyCommentLikeDelta[comment.id] ?? 0)),
+            isInFlight: heartInFlightIds.contains(comment.id),
             onReply: {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     replyingToStoryComment = comment
@@ -1486,6 +1487,10 @@ extension StoryViewerView {
 
     func toggleStoryCommentLike(_ comment: FeedComment) async {
         let id = comment.id
+        guard !heartInFlightIds.contains(id) else { return }
+        heartInFlightIds.insert(id)
+        defer { heartInFlightIds.remove(id) }
+
         let wasLiked = storyCommentLikedIds.contains(id)
         let postId = currentStory?.id ?? ""
 
@@ -1606,14 +1611,25 @@ extension StoryViewerView {
 // - Header pair of language flags lets the viewer toggle between original and
 //   prisme-translated content without leaving the overlay.
 // - Heart reaction + Reply CTAs sit below the text in their own action row.
-struct StoryCommentRowView: View {
+struct StoryCommentRowView: View, Equatable {
     let comment: FeedComment
     let userLang: String
     let isLiked: Bool
     let likeCount: Int
+    var isInFlight: Bool = false
     let onReply: () -> Void
     let onToggleLike: () -> Void
 
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.comment.id == rhs.comment.id &&
+        lhs.isLiked == rhs.isLiked &&
+        lhs.likeCount == rhs.likeCount &&
+        lhs.isInFlight == rhs.isInFlight &&
+        lhs.comment.content == rhs.comment.content &&
+        lhs.comment.translatedContent == rhs.comment.translatedContent
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showOriginal: Bool = false
 
     private var hasTranslation: Bool {
@@ -1755,7 +1771,11 @@ struct StoryCommentRowView: View {
 
     private var actionRow: some View {
         HStack(spacing: 16) {
-            Button(action: onToggleLike) {
+            Button {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
+                    onToggleLike()
+                }
+            } label: {
                 HStack(spacing: 3) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
                         .font(.system(size: 11, weight: .semibold))
@@ -1770,6 +1790,8 @@ struct StoryCommentRowView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(isInFlight)
+            .frame(minHeight: 44)
 
             Button(action: onReply) {
                 HStack(spacing: 3) {
@@ -1782,6 +1804,7 @@ struct StoryCommentRowView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .frame(minHeight: 44)
 
             Spacer()
         }

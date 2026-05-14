@@ -621,5 +621,85 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
 
       expect(prisma.notification.create.mock.calls.length).toBe(callsBefore);
     });
+
+    // Fix 5: Promise.allSettled — one failure does not block other recipients
+    it('test_createCommentMentionNotificationsBatch_oneRecipientThrows_otherRecipientStillNotified', async () => {
+      prisma.notification.create
+        .mockRejectedValueOnce(new Error('DB error for Alice'))
+        .mockResolvedValueOnce(makeNotif('user_mentioned'));
+
+      // Should not throw even when one recipient fails
+      await expect(
+        service.createCommentMentionNotificationsBatch({
+          ...baseCommentMentionParams,
+          mentionedUserIds: [ALICE_ID, BOB_ID],
+        })
+      ).resolves.not.toThrow();
+
+      // Bob's notification was still attempted
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      const bobCall = calls.find((c) => c[0].data.userId === BOB_ID);
+      expect(bobCall).toBeDefined();
+    });
+  });
+
+  // ======================================================
+  // Fix 5: Promise.allSettled in createStoryCommentNotificationsBatch
+  // ======================================================
+
+  describe('createStoryCommentNotificationsBatch — allSettled resilience', () => {
+    it('test_createStoryCommentNotificationsBatch_oneRecipientThrows_otherRecipientsStillNotified', async () => {
+      prisma.user.findUnique.mockResolvedValue({
+        username: 'commenter_user',
+        displayName: 'Commenter',
+        avatar: null,
+      });
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      // Author notification throws, but prev commenter should still be attempted
+      prisma.notification.create
+        .mockRejectedValueOnce(new Error('Push failed for author'))
+        .mockResolvedValueOnce(makeNotif('story_thread_reply'));
+
+      await expect(
+        service.createStoryCommentNotificationsBatch({
+          postId: POST_ID,
+          commentId: COMMENT_ID,
+          storyAuthorId: AUTHOR_ID,
+          commenterId: COMMENTER_ID,
+        })
+      ).resolves.not.toThrow();
+
+      expect(prisma.notification.create).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ======================================================
+  // Fix 6: orderBy on truncated queries
+  // ======================================================
+
+  describe('getStoryNotificationRecipients — orderBy determinism', () => {
+    it('test_getStoryNotificationRecipients_postCommentQuery_includesOrderByCreatedAtDesc', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(prisma.postComment.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { createdAt: 'desc' } })
+      );
+    });
+
+    it('test_getStoryNotificationRecipients_friendRequestQuery_includesOrderByUpdatedAtDesc', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      await service.getStoryNotificationRecipients(POST_ID, AUTHOR_ID, COMMENTER_ID);
+
+      expect(prisma.friendRequest.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({ orderBy: { updatedAt: 'desc' } })
+      );
+    });
   });
 });

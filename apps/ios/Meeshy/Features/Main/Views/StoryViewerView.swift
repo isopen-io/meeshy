@@ -216,6 +216,8 @@ struct StoryViewerView: View {
     /// Local like-count delta keyed by comment id, applied on top of the server `comment.likes`
     /// to avoid waiting for refetch after a tap.
     @State var storyCommentLikeDelta: [String: Int] = [:]
+    /// In-flight heart taps: commentIds with a pending network call. Prevents rapid-tap desync.
+    @State var heartInFlightIds: Set<String> = []
     /// Latched once the `initialAction` (Phase F notification entry point) has
     /// been honoured. Guards against re-firing on every `.onAppear` cycle —
     /// scene phase transitions and parent re-renders both republish onAppear,
@@ -358,6 +360,7 @@ struct StoryViewerView: View {
             transitionPostRoom(from: previousStory, to: currentStory)
         }
         .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
+            guard showCommentsOverlay else { return }
             guard event.postId == currentStory?.id else { return }
             guard event.emoji == Self.heartEmoji else { return }
             let currentUserId = AuthManager.shared.currentUser?.id
@@ -368,6 +371,7 @@ struct StoryViewerView: View {
             }
         }
         .onReceive(SocialSocketManager.shared.commentReactionRemoved.receive(on: DispatchQueue.main)) { event in
+            guard showCommentsOverlay else { return }
             guard event.postId == currentStory?.id else { return }
             guard event.emoji == Self.heartEmoji else { return }
             let currentUserId = AuthManager.shared.currentUser?.id
