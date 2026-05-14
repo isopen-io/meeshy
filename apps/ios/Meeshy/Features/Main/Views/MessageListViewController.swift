@@ -35,7 +35,7 @@ final class MessageListViewController: UIViewController {
     /// for a quoted message. We keep the speed at ~80pt/s so the user sees
     /// the messages "flow" past without blur, yet fast enough to feel like
     /// the app is actively searching.
-    private var slowScrollDisplayLink: CADisplayLink?
+    nonisolated(unsafe) private var slowScrollDisplayLink: CADisplayLink?
     /// Points per second the slow scroll advances toward older messages.
     /// In the inverted layout, increasing `contentOffset.y` scrolls visually
     /// upward (toward older messages).

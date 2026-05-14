@@ -475,24 +475,29 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Text bubble path (with non-media attachments + reply preview)
 
-    /// Time + delivery indicator visibility depends on conversation type:
+    /// Time visibility depends on conversation type:
     ///
-    /// - **Group** (`!isDirect`): every message shows the time, rendered
-    ///   inline with the author's username (`@pseudo · today 12:45`). With
-    ///   many speakers in a thread the user needs the timestamp on each
-    ///   bubble to keep context, especially when the conversation
-    ///   pause-and-resumes across days.
+    /// - **Group / Public / Channel**: every bubble carries a timestamp.
     ///
-    /// - **Direct** (`isDirect`): both the last received message AND the
-    ///   last sent message carry a timestamp. The user wants to see *when
-    ///   their last reply landed* (with the delivery indicator) and *when
-    ///   the peer's last message arrived* — intermediate bubbles stay
+    /// - **Direct** (`isDirect`): only the last sent and last received
+    ///   messages carry a timestamp — intermediate bubbles stay
     ///   metadata-free to keep the thread readable.
-    private var shouldShowTimeAndDelivery: Bool {
+    private var shouldShowTime: Bool {
         if isDirect {
             return content.isMe ? isLastSentMessage : isLastReceivedMessage
         }
         return true
+    }
+
+    /// Delivery checkmarks (🕐→✓→✓✓→✓✓ purple) are shown on **every**
+    /// outgoing message regardless of position. The user must see the
+    /// real-time state machine transitions instantly to feel confident
+    /// their message was queued, sent, delivered, and read. In group
+    /// conversations, every message shows delivery. In direct, only
+    /// outgoing messages show it (received messages have no delivery
+    /// indicator since *we* are the recipient).
+    private var shouldShowDelivery: Bool {
+        content.isMe
     }
 
     @ViewBuilder
@@ -597,12 +602,11 @@ struct BubbleStandardLayout: View {
     private var identityBarSection: some View {
         let isMe = content.isMe
         let showTranslation = hasAnyTranslation && !isEmojiOnly
-        // Time + delivery are gated to the last message of each side. The
-        // empty string + nil combo is what `UserIdentityBar.messageBubble`
-        // and `.metaRow` interpret as "skip the trailing time/delivery
-        // group" — author info and language flags still render.
-        let timeString = shouldShowTimeAndDelivery ? content.meta.timeString : ""
-        let deliveryStatus: MeeshyMessage.DeliveryStatus? = shouldShowTimeAndDelivery
+        // Time is gated to the last message of each side in direct convos;
+        // delivery checkmark is always shown on outgoing messages so the
+        // user sees real-time state machine transitions on every bubble.
+        let timeString = shouldShowTime ? content.meta.timeString : ""
+        let deliveryStatus: MeeshyMessage.DeliveryStatus? = shouldShowDelivery
             ? content.meta.deliveryStatus
             : nil
         // Phase 4 Task 4.6: offline-pending hourglass + failed-retry button.
