@@ -78,6 +78,14 @@ public final class StoryCanvasUIView: UIView {
         case text, media, sticker
     }
 
+    /// Called when the user single-taps an item on the canvas. Used by the
+    /// composer to open the inline format panel (text editor / media format
+    /// band) on touch — the user requested touch-to-edit parity with the
+    /// UniversalComposerBar ephemeral-toggle UX (controls slide up the moment
+    /// the element is touched). Fires only when the tap doesn't escalate to
+    /// a double-tap (`doubleTapRecognizer` is the dominant gate).
+    public var onItemTapped: ((String, CanvasItemKind) -> Void)?
+
     /// Called when the user double-taps an item on the canvas. The parent
     /// composer typically uses this to open the inline text editor or the
     /// media editor sheet (legacy `onEditText` / `onEditMedia` UX parity).
@@ -165,6 +173,7 @@ public final class StoryCanvasUIView: UIView {
     private var panRecognizer: UIPanGestureRecognizer!
     private var pinchRecognizer: UIPinchGestureRecognizer!
     private var rotationRecognizer: UIRotationGestureRecognizer!
+    private var singleTapRecognizer: UITapGestureRecognizer!
     private var doubleTapRecognizer: UITapGestureRecognizer!
 
     // MARK: - Drawing mode (Phase 3 Task 3.4)
@@ -1066,14 +1075,33 @@ public final class StoryCanvasUIView: UIView {
         panRecognizer = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         pinchRecognizer = UIPinchGestureRecognizer(target: self, action: #selector(handlePinch(_:)))
         rotationRecognizer = UIRotationGestureRecognizer(target: self, action: #selector(handleRotation(_:)))
+        singleTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleSingleTap(_:)))
+        singleTapRecognizer.numberOfTapsRequired = 1
         doubleTapRecognizer = UITapGestureRecognizer(target: self, action: #selector(handleDoubleTap(_:)))
         doubleTapRecognizer.numberOfTapsRequired = 2
-        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, doubleTapRecognizer] {
+        // Le single-tap n'émet qu'après l'échec du double-tap pour éviter
+        // qu'un double-tap déclenche deux fois le format panel (open puis
+        // open-via-double). Pattern UIKit standard.
+        singleTapRecognizer.require(toFail: doubleTapRecognizer)
+        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer] {
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
         }
         addInteraction(UIPointerInteraction(delegate: self))
         addInteraction(UIContextMenuInteraction(delegate: self))
+    }
+
+    @objc private func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
+        guard mode == .edit, recognizer.state == .ended else { return }
+        let location = recognizer.location(in: self)
+        guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else { return }
+        // Pour cohérence avec la sémantique tactile attendue (tap = sélection,
+        // double-tap = édition avancée), le single-tap ouvre le format panel
+        // de l'élément ; le double-tap conserve son rôle historique (édition
+        // dédiée — image cropper / video editor — pour les médias). Sur un
+        // élément texte les deux gestes ouvrent le même panneau, le single
+        // étant le geste primaire annoncé par le UX.
+        onItemTapped?(id, kind)
     }
 
     @objc private func handleDoubleTap(_ recognizer: UITapGestureRecognizer) {

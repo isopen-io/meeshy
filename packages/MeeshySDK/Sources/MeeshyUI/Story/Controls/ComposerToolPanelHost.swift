@@ -14,6 +14,14 @@ struct ComposerToolPanelHost: View {
     @Binding var showVoiceRecorderSheet: Bool
     let onBack: () -> Void
     var onEditMedia: ((String) -> Void)? = nil
+    var onEditText: ((String) -> Void)? = nil
+    /// Suppression d'un texte depuis la liste : remontée jusqu'à
+    /// `ComposerControlsLayer` afin de fermer le format panel si le texte
+    /// supprimé était celui en cours d'édition — sans ce relai la branche
+    /// `.formatPanel(.text, …)` continue de rendre un panel vide pendant un
+    /// frame avant que le fallback `Color.clear.onAppear` ne déclenche la
+    /// fermeture (flicker visible).
+    var onDeleteText: ((String) -> Void)? = nil
     var onShowInTimeline: (() -> Void)? = nil
 
     @Environment(\.colorScheme) private var colorScheme
@@ -72,7 +80,7 @@ struct ComposerToolPanelHost: View {
         switch tool {
         case .media:    return 280
         case .drawing:  return 140
-        case .text:     return 140
+        case .text:     return 280
         case .texture:  return 160
         case .filters:  return 180
         case .timeline: return 0  // presented as sheet, not in band
@@ -294,24 +302,151 @@ struct ComposerToolPanelHost: View {
 
     @ViewBuilder
     private var textPanel: some View {
-        if viewModel.canAddText {
-            Button {
-                viewModel.addText()
-                HapticFeedback.light()
-            } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 14, weight: .medium))
-                    Text(String(localized: "story.composer.addText", defaultValue: "Ajouter du texte", bundle: .module))
-                        .font(.system(size: 13, weight: .medium))
+        VStack(spacing: 10) {
+            // Bouton « + Ajouter du texte ». Reste discret et collé à gauche
+            // pour ne pas competition la liste qui suit (parité avec mediaPanel).
+            HStack(spacing: 8) {
+                if viewModel.canAddText {
+                    Button {
+                        let new = viewModel.addText()
+                        HapticFeedback.light()
+                        if let id = new?.id {
+                            onEditText?(id)
+                        }
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.system(size: 14, weight: .medium))
+                            Text(String(localized: "story.composer.addText", defaultValue: "Ajouter du texte", bundle: .module))
+                                .font(.system(size: 13, weight: .medium))
+                        }
+                        .foregroundColor(MeeshyColors.brandPrimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(
+                            RoundedRectangle(cornerRadius: 10)
+                                .fill(MeeshyColors.brandPrimary.opacity(0.12))
+                        )
+                    }
                 }
-                .foregroundColor(MeeshyColors.brandPrimary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 10)
+                Spacer()
             }
-        } else {
-            EmptyView()
+
+            // Liste des textes existants — chaque row affiche un aperçu de
+            // contenu + actions (éditer, dupliquer, placer dans la timeline,
+            // supprimer). Caché si la slide n'a aucun texte (l'utilisateur
+            // vient juste d'ouvrir l'outil texte sur une slide vierge).
+            let texts = viewModel.currentEffects.textObjects
+            if !texts.isEmpty {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 4) {
+                        ForEach(texts) { text in
+                            textItemRow(text)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                }
+                .frame(maxHeight: 170)
+            }
         }
+    }
+
+    @ViewBuilder
+    private func textItemRow(_ text: StoryTextObject) -> some View {
+        let actionTint: Color = secondaryText
+        let rowBgFill: Color = colorScheme == .dark
+            ? Color.white.opacity(0.07)
+            : MeeshyColors.indigo950.opacity(0.05)
+        let preview: String = {
+            let trimmed = text.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            if trimmed.isEmpty {
+                return String(
+                    localized: "story.composer.text.empty",
+                    defaultValue: "Texte vide",
+                    bundle: .module
+                )
+            }
+            return trimmed
+        }()
+        let textHex = text.textColor ?? "FFFFFF"
+        HStack(spacing: 8) {
+            // Pastille couleur — rappelle la couleur courante du texte.
+            ZStack {
+                RoundedRectangle(cornerRadius: 5)
+                    .fill(Color(hex: textHex))
+                Text("Aa")
+                    .font(.system(size: 13, weight: .bold, design: .rounded))
+                    .foregroundColor(Color(hex: textHex).luminance > 0.6 ? .black : .white)
+            }
+            .frame(width: 32, height: 32)
+            .overlay(
+                RoundedRectangle(cornerRadius: 5)
+                    .stroke(Color.white.opacity(0.25), lineWidth: 0.5)
+            )
+
+            // Aperçu + style
+            VStack(alignment: .leading, spacing: 1) {
+                Text(preview)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(primaryText)
+                    .lineLimit(1)
+                Text((text.textStyle ?? "classic").capitalized)
+                    .font(.system(size: 9, weight: .medium))
+                    .foregroundColor(secondaryText)
+            }
+
+            Spacer(minLength: 4)
+
+            HStack(spacing: 6) {
+                textActionBtn(icon: "pencil", color: actionTint, tip: "Éditer") {
+                    onEditText?(text.id)
+                }
+                textActionBtn(icon: "timeline.selection", color: actionTint, tip: "Timeline") {
+                    viewModel.selectedElementId = text.id
+                    onShowInTimeline?()
+                }
+                textActionBtn(icon: "doc.on.doc", color: actionTint, tip: "Dupliquer") {
+                    viewModel.duplicateElement(id: text.id)
+                }
+                textActionBtn(icon: "trash", color: .red.opacity(0.8), tip: "Supprimer") {
+                    HapticFeedback.medium()
+                    if let onDeleteText {
+                        onDeleteText(text.id)
+                    } else {
+                        viewModel.deleteElement(id: text.id)
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(
+            RoundedRectangle(cornerRadius: 8)
+                .fill(rowBgFill)
+        )
+        .contentShape(Rectangle())
+        .onTapGesture {
+            onEditText?(text.id)
+            HapticFeedback.light()
+        }
+    }
+
+    private func textActionBtn(
+        icon: String, color: Color, tip: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            action()
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(color)
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(tip)
     }
 
     private var texturePanel: some View {

@@ -377,7 +377,8 @@ public struct ProTimelineView: View {
                                     tintHex: tint(for: track.kind),
                                     isDark: colorScheme == .dark,
                                     laneWidth: laneWidth,
-                                    laneHeight: 40
+                                    laneHeight: 40,
+                                    iconName: QuickTimelineView.iconName(for: track.kind)
                                 ) {
                                     ZStack(alignment: .leading) {
                                         ForEach(track.clipIds, id: \.self) { clipId in
@@ -636,7 +637,11 @@ public struct ProTimelineView: View {
         } else if let audio = viewModel.project.audioPlayerObjects.first(where: { $0.id == clipId }) {
             AudioClipBar(
                 clipId: audio.id,
-                title: audio.postMediaId,
+                // postMediaId is a UUID — unusable as a user-facing label.
+                // Show a localised type tag instead; the lane label
+                // already provides the per-track index ("Audio 1").
+                title: String(localized: "story.timeline.clip.audio",
+                              defaultValue: "Audio", bundle: .module),
                 startTime: Float(audio.startTime ?? 0),
                 duration: Float(audio.duration ?? 0),
                 volume: audio.volume,
