@@ -119,7 +119,7 @@ extension StoryBackgroundLayer {
 
             // Synchronous thumbHash placeholder (if any)
             if let hash = thumbHash,
-               let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash, size: bounds.size) {
+               let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
                 img.contents = placeholderImage.cgImage
             }
 
@@ -181,12 +181,12 @@ extension StoryBackgroundLayer {
 /// `nonisolated` so it can be called from `configure(...)` (`@MainActor`) and
 /// from background `Task` resolution without crossing actor boundaries — the
 /// decoder is pure CPU work over a fresh `[UInt8]` and produces an immutable
-/// `UIImage` value. We deliberately ignore the requested `size:` parameter:
-/// resampling to the canvas size happens implicitly when the layer assigns
-/// `contents` and respects `contentsGravity`. Pre-scaling here would waste CPU
-/// and degrade quality on retina displays.
+/// `UIImage` value. No target size is needed: resampling to the canvas size
+/// happens implicitly when the layer assigns `contents` and respects
+/// `contentsGravity`. Pre-scaling here would waste CPU and degrade quality on
+/// retina displays.
 enum ThumbHashDecoder {
-    nonisolated static func decodeIfAvailable(_ hash: String, size: CGSize) -> UIImage? {
+    nonisolated static func decodeIfAvailable(_ hash: String) -> UIImage? {
         guard !hash.isEmpty else { return nil }
         return UIImage.fromThumbHash(hash)
     }

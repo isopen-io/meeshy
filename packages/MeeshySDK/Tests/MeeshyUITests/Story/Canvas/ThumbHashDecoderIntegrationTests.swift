@@ -1,5 +1,5 @@
 // ThumbHashDecoderIntegrationTests — verify `StoryBackgroundLayer` consumes
-// the Wolt-format thumbHash via `ThumbHashDecoder.decodeIfAvailable(_:size:)`
+// the Wolt-format thumbHash via `ThumbHashDecoder.decodeIfAvailable(_:)`
 // and surfaces a non-nil placeholder UIImage BEFORE the full image loads.
 //
 // Failure modes covered:
@@ -38,17 +38,16 @@ final class ThumbHashDecoderIntegrationTests: XCTestCase {
     // MARK: - Decoder seam
 
     func test_decoder_emptyHash_returnsNil() {
-        XCTAssertNil(ThumbHashDecoder.decodeIfAvailable("", size: CGSize(width: 100, height: 100)))
+        XCTAssertNil(ThumbHashDecoder.decodeIfAvailable(""))
     }
 
     func test_decoder_invalidBase64_returnsNil() {
-        XCTAssertNil(ThumbHashDecoder.decodeIfAvailable("!!not-base64!!",
-                                                        size: CGSize(width: 100, height: 100)))
+        XCTAssertNil(ThumbHashDecoder.decodeIfAvailable("!!not-base64!!"))
     }
 
     func test_decoder_validHash_returnsImageWithCGImage() {
         let hash = makeEncodedHash()
-        let image = ThumbHashDecoder.decodeIfAvailable(hash, size: CGSize(width: 320, height: 480))
+        let image = ThumbHashDecoder.decodeIfAvailable(hash)
         XCTAssertNotNil(image, "Wolt-format hash must decode to a UIImage")
         XCTAssertNotNil(image?.cgImage,
                         "Decoded UIImage MUST expose a CGImage so CALayer.contents can consume it")
