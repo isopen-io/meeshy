@@ -3664,3 +3664,148 @@ Pinch/Rotation, drag-to-reorder dans la liste média).
 4. **Apple Pencil drawing** : PencilKit simule mal sans device physique.
 
 ---
+
+## Phase 6 — Post Detail Media, Comment Threading, Story Comment UX (2026-05-14)
+
+### 6.1 PostDetailView — Repost Media & Translation Rendering
+
+**Problem**: When viewing a reposted story or post in the post detail view, only the text content was visible. Media attachments (images, videos, audio) and text translations were completely missing.
+
+**Solution**: Rewrote `repostEmbed(_:)` to be a full-featured embedded content renderer:
+
+| Feature | Implementation |
+|---------|---------------|
+| Author header | Always navigable via `router.push(.postDetail(repost.id))` with avatar, name, timestamp |
+| Text + translations | `repostEffectiveContent()` resolves preferred language; inline secondary translation panel with language color accent |
+| Language flags | `repostLanguageFlags()` renders per-flag toggles matching `FeedPostCard` Prisme Linguistique — tap to switch primary or show secondary |
+| Story canvas | `StoryReaderRepresentable(repost:mute:true)` for `type == "STORY"` — 9:16 aspect ratio, muted autoplay |
+| Image/Video/Audio | `detailMediaSection(repost.media)` reuses existing media renderer (progressive images, inline video, audio player) |
+| Legacy audio | `AudioPlayerView` for `repost.audioUrl` (story background audio) |
+| Stats | Heart + count row when `repost.likes > 0` |
+
+**State additions**: `@State repostSecondaryLangCode`, `@State repostActiveDisplayLangCode` — scoped to the repost embed, independent of the parent post's language state.
+
+### 6.2 Comment Threading — Simplified UX
+
+**Problem**: Thread replies had a visual thread line trace (`Rectangle` fill) connecting parent → children which added visual clutter. Users also had to manually tap "Voir les réponses" to see any reply content.
+
+**Solution**: Stripped `ThreadedCommentSection` to use only left-padding indentation:
+
+| Before | After |
+|--------|-------|
+| Thread line (2pt colored bar) between parent and replies | Removed — no lines |
+| `HStack { threadLine; CommentRowView }` per reply | `.padding(.leading, 36)` per reply |
+| Toggle "Voir N réponses" visible when `replies > 0` | Auto-show first 2 replies without toggle |
+| Toggle always starts collapsed | "Voir N autres réponses" only appears when `replies > 2` |
+
+**Key files**: `FeedCommentsSheet.swift` — `ThreadedCommentSection`
+
+### 6.3 Story Comment Overlay — Full-Featured
+
+**Problem**: Story comment overlay was a simple live-chat scroll — no reply capability, no inline composer, no timer pause, no threading support.
+
+**Solution**: Rewrote `storyCommentsOverlay` as a structured bottom-half panel:
+
+#### Layout
+- **Upper half**: `Color.black.opacity(0.3)` tap-to-dismiss overlay
+- **Bottom half** (50% screen height): `ultraThinMaterial` + `Color.black.opacity(0.6)` glassmorphism panel with rounded top corners
+- **Header**: Comment count + close (×) button
+- **Scrollable area**: LazyVStack with top-level comments + auto-previewed replies
+- **Reply banner**: Shows target comment author + content when replying (dismissable)
+- **Composer**: Inline `UniversalComposerBar(style: .dark, mode: .comment)`
+
+#### Threading in Story Comments
+- Top-level comments displayed at root level
+- First 2 replies auto-shown with 28pt left indent (no toggle needed)
+- "Voir N autres réponses" toggle for comments with `replies > 2`
+- Expanded state shows all loaded replies
+- Loading spinner when fetching replies
+- Tap any comment to set it as reply target
+
+#### Reply Flow
+1. User taps a comment → `replyingToStoryComment` set → reply banner appears above composer
+2. User types in `UniversalComposerBar` → sends with `parentId`
+3. Reply banner auto-clears on send
+4. `sendComment(text:effectFlags:parentId:)` already supports `parentId`
+
+#### Timer Management
+- `showCommentsOverlay` added to `shouldPauseTimer` → story auto-advance pauses while comments are open
+- Timer resumes when overlay is dismissed
+
+#### Auto-Loading
+- `loadStoryComments()` now pre-fetches first 2 replies for up to 5 top-level comments that have `replyCount > 0`
+- Uses `loadStoryCommentReplies(commentId:)` with `PostService.getCommentReplies` API
+
+#### State Additions (StoryViewerView)
+```swift
+@State var replyingToStoryComment: FeedComment? = nil
+@State var storyCommentRepliesMap: [String: [FeedComment]] = [:]
+@State var storyCommentExpandedThreads: Set<String> = []
+@State var storyCommentLoadingReplies: Set<String> = []
+```
+
+### 6.4 Localization — Persistent Support
+
+All comment rendering (both feed and story) now respects:
+- `comment.originalLanguage` — shown as flag emoji
+- `comment.translatedContent` — auto-resolved from `preferredContentLanguages`
+- `translate` icon badge when translation is available
+- `commentFlagEmoji(for:)` maps language codes → flag emojis
+
+### Phase 6 Smoke Test Checklist
+
+#### PostDetailView — Repost Rendering
+- [ ] P6-01: Repost embed shows author avatar, name, relative timestamp
+- [ ] P6-02: Repost text displays in user's preferred language
+- [ ] P6-03: Language flags appear for available translations
+- [ ] P6-04: Tapping a flag toggles secondary translation panel
+- [ ] P6-05: Story-type repost renders canvas via StoryReaderRepresentable (9:16)
+- [ ] P6-06: Repost with images renders via detailMediaSection
+- [ ] P6-07: Repost with video renders inline video player
+- [ ] P6-08: Repost with audio renders AudioPlayerView
+- [ ] P6-09: Tapping repost author header navigates to original post
+- [ ] P6-10: Stats row shows heart + count when likes > 0
+
+#### Comment Threading (Feed)
+- [ ] P6-11: No thread lines visible between parent and reply comments
+- [ ] P6-12: Replies are indented with 36pt left padding
+- [ ] P6-13: First 2 replies auto-display without toggle
+- [ ] P6-14: "Voir N autres réponses" appears only when replies > 2
+- [ ] P6-15: Tapping toggle loads and shows all remaining replies
+- [ ] P6-16: "Masquer les réponses" collapses back (keeps auto-preview)
+
+#### Story Comment Overlay — Structure
+- [ ] P6-17: Comments overlay occupies bottom 50% of screen
+- [ ] P6-18: Upper half is tappable to dismiss
+- [ ] P6-19: Header shows comment count + close button
+- [ ] P6-20: Glassmorphism background (ultraThinMaterial + dark overlay)
+- [ ] P6-21: Top-level comments displayed at root level
+- [ ] P6-22: First 2 replies auto-indented (28pt left padding)
+- [ ] P6-23: "Voir N autres réponses" toggle for 3+ replies
+- [ ] P6-24: Loading spinner while fetching replies
+
+#### Story Comment Overlay — Reply Flow
+- [ ] P6-25: Tapping any comment shows reply banner
+- [ ] P6-26: Reply banner shows author name + content preview
+- [ ] P6-27: Dismiss (×) on reply banner clears reply context
+- [ ] P6-28: Sending reply includes parentId in API call
+- [ ] P6-29: Reply appears in comment list after send
+- [ ] P6-30: Reply banner auto-clears on send
+
+#### Story Comment Overlay — Composer
+- [ ] P6-31: UniversalComposerBar visible at bottom of panel
+- [ ] P6-32: Language selector functional in story comments
+- [ ] P6-33: Blur toggle functional in story comments
+- [ ] P6-34: Effects toggle functional in story comments
+
+#### Story Comment Overlay — Timer
+- [ ] P6-35: Story timer pauses when comments overlay opens
+- [ ] P6-36: Story timer resumes when comments overlay closes
+- [ ] P6-37: Progress bar frozen while comments are visible
+
+#### Story Comment Overlay — Auto-Loading
+- [ ] P6-38: Replies auto-fetched for first 5 comments with replyCount > 0
+- [ ] P6-39: Auto-fetched replies appear without user interaction
+- [ ] P6-40: Comment count reflects top-level comments only
+
+---
