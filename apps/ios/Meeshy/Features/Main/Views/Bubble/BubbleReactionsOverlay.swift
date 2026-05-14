@@ -164,17 +164,23 @@ struct BubbleReactionsOverlay: View, Equatable {
         .padding(.horizontal, reaction.count > 1 ? 6 : 5)
         .frame(height: 22)
 
+        // Différenciation amplifiée des pills où le user connecté a réagi :
+        //  - fill saturé : 0.65 dark / 0.50 light (vs 0.08 / 0.04 pour les autres)
+        //    → la pill "moi" se lit comme un bouton actif chargé en couleur
+        //  - stroke 2.5pt vs 0.5pt → 5× plus épais, immédiatement repérable
+        //  - shadow plus marquée pour donner un léger relief
         let fillColor: Color = reaction.includesMe
-            ? (isDark ? accent.opacity(0.5) : accent.opacity(0.35))
+            ? (isDark ? accent.opacity(0.65) : accent.opacity(0.50))
             : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04))
 
         let strokeColor: Color = reaction.includesMe
-            ? accent.opacity(isDark ? 0.8 : 0.6)
-            : accent.opacity(isDark ? 0.15 : 0.1)
+            ? accent.opacity(isDark ? 0.95 : 0.80)
+            : accent.opacity(isDark ? 0.15 : 0.10)
 
-        let strokeWidth: CGFloat = reaction.includesMe ? 1.5 : 0.5
+        let strokeWidth: CGFloat = reaction.includesMe ? 2.5 : 0.5
 
-        let shadowColor: Color = reaction.includesMe ? accent.opacity(0.3) : .clear
+        let shadowColor: Color = reaction.includesMe ? accent.opacity(0.40) : .clear
+        let shadowRadius: CGFloat = reaction.includesMe ? 5 : 0
 
         return pillContent
             .background(
@@ -184,7 +190,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                         Capsule()
                             .stroke(strokeColor, lineWidth: strokeWidth)
                     )
-                    .shadow(color: shadowColor, radius: 4, y: 2)
+                    .shadow(color: shadowColor, radius: shadowRadius, y: 2)
             )
             .onTapGesture {
                 HapticFeedback.light()
