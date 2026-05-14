@@ -198,7 +198,14 @@ export function useConversationMessagesRQ(
     if (!/^[a-f\d]{24}$/i.test(resolvedConvId)) return;
     batchFetchedRef.current = fetchKey;
 
-    const ownMessageIds = ownMessages.map(m => m.id).slice(0, 50);
+    // Filter out optimistic/temporary IDs (e.g. cid_*) — the gateway
+    // schema only accepts 24-char hex MongoDB ObjectIds and rejects the
+    // whole request otherwise.
+    const ownMessageIds = ownMessages
+      .map(m => m.id)
+      .filter(id => /^[a-f\d]{24}$/i.test(id))
+      .slice(0, 50);
+    if (ownMessageIds.length === 0) return;
     messagesService.getReadStatuses(resolvedConvId, ownMessageIds)
       .then(statusMap => {
         const batch: Record<string, { totalMembers: number; deliveredCount: number; readCount: number }> = {};

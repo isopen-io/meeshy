@@ -152,45 +152,58 @@ export function useStreamUI({
   const [location, setLocation] = useState<string>('');
 
   useEffect(() => {
-    if (navigator.geolocation) {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    let cancelled = false;
+
+    const resolveLocation = async (position: GeolocationPosition) => {
+      try {
+        const { latitude, longitude } = position.coords;
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=fr`
+        );
+        if (!response.ok || cancelled) return;
+        const data = await response.json();
+        const address = data.address ?? {};
+        const city = address.city || address.town || address.village || address.municipality;
+        const country = address.country;
+        if (cancelled) return;
+        if (city && country) setLocation(`${city}, ${country}`);
+        else if (city) setLocation(city);
+        else if (country) setLocation(country);
+      } catch {
+        // location reste vide
+      }
+    };
+
+    const requestPosition = () => {
       navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          try {
-            // Utiliser l'API Nominatim pour le reverse geocoding (ville, pays)
-            const { latitude, longitude } = position.coords;
-            const response = await fetch(
-              `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&accept-language=fr`
-            );
-
-            if (response.ok) {
-              const data = await response.json();
-              const address = data.address;
-
-              // Extraire ville et pays
-              const city = address.city || address.town || address.village || address.municipality;
-              const country = address.country;
-
-              // Ne définir location que si on a au moins la ville ou le pays
-              if (city && country) {
-                setLocation(`${city}, ${country}`);
-              } else if (city) {
-                setLocation(city);
-              } else if (country) {
-                setLocation(country);
-              }
-              // Si rien n'est disponible, location reste vide et ne s'affichera pas
-            }
-          } catch (error) {
-            console.error('Erreur géolocalisation:', error);
-            // En cas d'erreur, location reste vide
-          }
+        (position) => { if (!cancelled) void resolveLocation(position); },
+        () => {
+          // Géolocalisation indisponible (kCLErrorLocationUnknown, timeout,
+          // refus utilisateur, etc.) — non bloquant, on laisse location vide.
         },
-        (error) => {
-          // Géolocalisation refusée ou erreur - location reste vide
-          console.log('Géolocalisation non autorisée ou erreur:', error.message);
-        }
+        { enableHighAccuracy: false, timeout: 5000, maximumAge: 300000 }
       );
+    };
+
+    // Évite de déclencher une prompt de permission inutile à chaque ouverture
+    // de conversation : on demande la position seulement si l'utilisateur a
+    // déjà accordé la permission. Sinon il faudra une action explicite
+    // (composer un message localisé) pour la demander.
+    if (navigator.permissions?.query) {
+      navigator.permissions
+        .query({ name: 'geolocation' as PermissionName })
+        .then((status) => {
+          if (cancelled) return;
+          if (status.state === 'granted') requestPosition();
+        })
+        .catch(() => {
+          // Permissions API non disponible — on s'abstient pour ne pas
+          // déclencher de prompt non sollicitée.
+        });
     }
+
+    return () => { cancelled = true; };
   }, []);
 
   // Trending hashtags
