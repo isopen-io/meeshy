@@ -5,11 +5,6 @@ import os
 import MeeshySDK
 import MeeshyUI
 
-/// Marker error thrown by `StoryViewModel.executeQueuedPublish` until the
-/// V3 upload reconstruction lands. Retryable so the queue preserves the
-/// item across builds that don't yet have the full implementation.
-struct StoryPublishV3PendingError: Error {}
-
 @MainActor
 class StoryViewModel: ObservableObject, StoryPublishExecutor {
     @Published var storyGroups: [StoryGroup] = []
