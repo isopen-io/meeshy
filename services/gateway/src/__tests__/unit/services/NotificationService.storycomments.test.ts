@@ -411,5 +411,215 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(threadCall![0].data.priority).toBe('low');
       expect(friendCall![0].data.priority).toBe('low');
     });
+
+    // ------------------------------------------------------------------
+    // Phase 2B: excludeUserIds dedup
+    // ------------------------------------------------------------------
+
+    it('excludes mentioned previous-commenter from STORY_THREAD_REPLY (user_mentioned takes priority)', async () => {
+      // PREV_COMMENTER_1 was mentioned → should only get user_mentioned, not thread reply
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type))
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        excludeUserIds: [PREV_COMMENTER_1],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
+      const threadCall = calls.find((c) => c[0].data.userId === PREV_COMMENTER_1);
+      expect(threadCall).toBeUndefined();
+    });
+
+    it('excludes mentioned friend from FRIEND_STORY_COMMENT (user_mentioned takes priority)', async () => {
+      // FRIEND_1 was mentioned → should only get user_mentioned, not friend story comment
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type))
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        excludeUserIds: [FRIEND_1],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
+      const friendCall = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(friendCall).toBeUndefined();
+    });
+
+    it('still sends STORY_NEW_COMMENT to author even when author is in excludeUserIds', async () => {
+      // Author priority is always maintained regardless of excludeUserIds
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockResolvedValue(makeNotif('story_new_comment'));
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        excludeUserIds: [AUTHOR_ID],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
+      const authorCall = calls.find((c) => c[0].data.userId === AUTHOR_ID);
+      expect(authorCall).toBeDefined();
+      expect(authorCall![0].data.type).toBe('story_new_comment');
+    });
+
+    it('works correctly with no excludeUserIds (backward compatibility)', async () => {
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockResolvedValue(makeNotif('story_thread_reply'));
+
+      await service.createStoryCommentNotificationsBatch(baseParams); // no excludeUserIds
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
+      const threadCall = calls.find((c) => c[0].data.userId === PREV_COMMENTER_1);
+      expect(threadCall).toBeDefined();
+    });
+  });
+
+  // ======================================================
+  // createCommentMentionNotificationsBatch (Phase 2B)
+  // ======================================================
+
+  describe('createCommentMentionNotificationsBatch', () => {
+    const ALICE_ID = '507f1f77bcf86cd799439010';
+    const BOB_ID = '507f1f77bcf86cd799439011';
+    const POST_ID_2 = 'cccccccccccccccccccccccc';
+    const COMMENT_ID_2 = 'dddddddddddddddddddddddd';
+
+    const baseCommentMentionParams = {
+      commentId: COMMENT_ID_2,
+      postId: POST_ID_2,
+      commenterId: COMMENTER_ID,
+      mentionedUserIds: [ALICE_ID, BOB_ID],
+      commentExcerpt: 'Hey @alice and @bob check this out!',
+    };
+
+    beforeEach(() => {
+      prisma.user.findUnique.mockResolvedValue({
+        username: 'commenter_user',
+        displayName: 'Commenter',
+        avatar: null,
+      });
+    });
+
+    it('both @alice and @bob receive user_mentioned notification', async () => {
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type))
+      );
+
+      await service.createCommentMentionNotificationsBatch(baseCommentMentionParams);
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; type: string } }]>;
+      const aliceCall = calls.find((c) => c[0].data.userId === ALICE_ID);
+      const bobCall = calls.find((c) => c[0].data.userId === BOB_ID);
+
+      expect(aliceCall).toBeDefined();
+      expect(aliceCall![0].data.type).toBe('user_mentioned');
+      expect(bobCall).toBeDefined();
+      expect(bobCall![0].data.type).toBe('user_mentioned');
+    });
+
+    it('self-mention is skipped (commenter does not get user_mentioned)', async () => {
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type))
+      );
+
+      await service.createCommentMentionNotificationsBatch({
+        ...baseCommentMentionParams,
+        mentionedUserIds: [COMMENTER_ID, ALICE_ID],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string } }]>;
+      const selfCall = calls.find((c) => c[0].data.userId === COMMENTER_ID);
+      expect(selfCall).toBeUndefined();
+
+      const aliceCall = calls.find((c) => c[0].data.userId === ALICE_ID);
+      expect(aliceCall).toBeDefined();
+    });
+
+    it('user_mentioned notifications have priority high', async () => {
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type))
+      );
+
+      await service.createCommentMentionNotificationsBatch({
+        ...baseCommentMentionParams,
+        mentionedUserIds: [ALICE_ID],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; priority: string } }]>;
+      const aliceCall = calls.find((c) => c[0].data.userId === ALICE_ID);
+      expect(aliceCall![0].data.priority).toBe('high');
+    });
+
+    it('returns early without creating notifications when commenter user not found', async () => {
+      prisma.user.findUnique.mockResolvedValue(null);
+
+      await service.createCommentMentionNotificationsBatch(baseCommentMentionParams);
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+    });
+
+    it('does nothing when mentionedUserIds is empty', async () => {
+      await service.createCommentMentionNotificationsBatch({
+        ...baseCommentMentionParams,
+        mentionedUserIds: [],
+      });
+
+      expect(prisma.notification.create).not.toHaveBeenCalled();
+      expect(prisma.user.findUnique).not.toHaveBeenCalled();
+    });
+
+    it('notification context includes postId and commentId for iOS routing', async () => {
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type))
+      );
+
+      await service.createCommentMentionNotificationsBatch({
+        ...baseCommentMentionParams,
+        mentionedUserIds: [ALICE_ID],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { context: any } }]>;
+      const aliceCall = calls.find(
+        (c) => (c[0].data as any).userId === ALICE_ID
+      );
+      expect(aliceCall![0].data.context).toMatchObject({
+        postId: POST_ID_2,
+        commentId: COMMENT_ID_2,
+      });
+    });
+
+    it('blocks further mentions when rate limit exceeded for a sender:recipient pair', async () => {
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type))
+      );
+
+      // Exhaust the rate limit (MAX_MENTIONS_PER_MINUTE = 5)
+      for (let i = 0; i < 5; i++) {
+        await service.createCommentMentionNotificationsBatch({
+          ...baseCommentMentionParams,
+          mentionedUserIds: [ALICE_ID],
+        });
+      }
+
+      const callsBefore = prisma.notification.create.mock.calls.length;
+
+      // 6th attempt — should be blocked
+      await service.createCommentMentionNotificationsBatch({
+        ...baseCommentMentionParams,
+        mentionedUserIds: [ALICE_ID],
+      });
+
+      expect(prisma.notification.create.mock.calls.length).toBe(callsBefore);
+    });
   });
 });

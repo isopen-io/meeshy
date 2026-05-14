@@ -102,4 +102,72 @@ final class MentionServiceTests: XCTestCase {
             XCTFail("Expected MeeshyError, got \(type(of: error))")
         }
     }
+
+    // MARK: - Unified contextId/contextType API
+
+    func test_suggestions_contextTypeConversation_callsCorrectEndpoint() async throws {
+        let response = APIResponse<[MentionSuggestion]>(success: true, data: [], error: nil)
+        mock.stub("/mentions/suggestions", result: response)
+
+        _ = try await service.suggestions(contextId: "conv1", contextType: .conversation, query: "ali")
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/mentions/suggestions")
+        let items = mock.lastRequest?.queryItems ?? []
+        let contextIdItem = items.first(where: { $0.name == "contextId" })
+        let contextTypeItem = items.first(where: { $0.name == "contextType" })
+        XCTAssertEqual(contextIdItem?.value, "conv1")
+        XCTAssertEqual(contextTypeItem?.value, "conversation")
+    }
+
+    func test_suggestions_contextTypePost_sendsPostContextType() async throws {
+        let suggestions = [
+            MentionSuggestion(id: "u1", username: "alice", displayName: "Alice", avatar: nil, badge: "conversation", inConversation: true, isFriend: false)
+        ]
+        let response = APIResponse<[MentionSuggestion]>(success: true, data: suggestions, error: nil)
+        mock.stub("/mentions/suggestions", result: response)
+
+        let result = try await service.suggestions(contextId: "post-id-123", contextType: .post, query: "alice")
+
+        XCTAssertEqual(result.count, 1)
+        XCTAssertEqual(result[0].username, "alice")
+        let items = mock.lastRequest?.queryItems ?? []
+        let contextTypeItem = items.first(where: { $0.name == "contextType" })
+        XCTAssertEqual(contextTypeItem?.value, "post")
+    }
+
+    func test_suggestions_emptyQuery_doesNotSendQueryParam() async throws {
+        let response = APIResponse<[MentionSuggestion]>(success: true, data: [], error: nil)
+        mock.stub("/mentions/suggestions", result: response)
+
+        _ = try await service.suggestions(contextId: "post-id-123", contextType: .post, query: "")
+
+        let items = mock.lastRequest?.queryItems ?? []
+        XCTAssertNil(items.first(where: { $0.name == "query" }))
+    }
+
+    func test_suggestions_withQuery_sendsQueryParam() async throws {
+        let response = APIResponse<[MentionSuggestion]>(success: true, data: [], error: nil)
+        mock.stub("/mentions/suggestions", result: response)
+
+        _ = try await service.suggestions(contextId: "post-id-123", contextType: .post, query: "ali")
+
+        let items = mock.lastRequest?.queryItems ?? []
+        let queryItem = items.first(where: { $0.name == "query" })
+        XCTAssertEqual(queryItem?.value, "ali")
+    }
+
+    func test_suggestions_deprecatedMethod_delegatesToUnified() async throws {
+        let response = APIResponse<[MentionSuggestion]>(success: true, data: [], error: nil)
+        mock.stub("/mentions/suggestions", result: response)
+
+        _ = try await service.suggestions(conversationId: "conv-123", query: "bob")
+
+        let items = mock.lastRequest?.queryItems ?? []
+        // The deprecated method now sends contextId + contextType=conversation
+        let contextIdItem = items.first(where: { $0.name == "contextId" })
+        let contextTypeItem = items.first(where: { $0.name == "contextType" })
+        XCTAssertEqual(contextIdItem?.value, "conv-123")
+        XCTAssertEqual(contextTypeItem?.value, "conversation")
+    }
 }

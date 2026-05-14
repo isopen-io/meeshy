@@ -950,6 +950,13 @@ export class NotificationService {
     storyAuthorId: string;
     commenterId: string;
     commentExcerpt?: string;
+    /**
+     * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment).
+     * Use to pass mentionedUserIds so users who received user_mentioned don't also get
+     * a lower-priority story thread/friend notification.
+     * The story author always gets STORY_NEW_COMMENT regardless of this list.
+     */
+    excludeUserIds?: string[];
   }): Promise<void> {
     const actor = await this.prisma.user.findUnique({
       where: { id: params.commenterId },
@@ -983,9 +990,11 @@ export class NotificationService {
       avatar: actor.avatar,
     };
 
+    const excludeSet = new Set(params.excludeUserIds ?? []);
     const tasks: Array<Promise<unknown>> = [];
 
-    // 1. Story author notification
+    // 1. Story author notification — always sent regardless of excludeUserIds
+    //    (STORY_NEW_COMMENT has priority over all fan-out notifications)
     if (authorId !== params.commenterId) {
       tasks.push(
         this.createNotification({
@@ -1000,8 +1009,9 @@ export class NotificationService {
       );
     }
 
-    // 2. Previous commenters (thread participants)
+    // 2. Previous commenters (thread participants) — skip mentioned users
     for (const recipientId of previousCommenterIds) {
+      if (excludeSet.has(recipientId)) continue;
       tasks.push(
         this.createNotification({
           userId: recipientId,
@@ -1015,8 +1025,9 @@ export class NotificationService {
       );
     }
 
-    // 3. Friends of the story author
+    // 3. Friends of the story author — skip mentioned users
     for (const recipientId of friendIds) {
+      if (excludeSet.has(recipientId)) continue;
       tasks.push(
         this.createNotification({
           userId: recipientId,
@@ -1026,6 +1037,84 @@ export class NotificationService {
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
+        })
+      );
+    }
+
+    await Promise.all(tasks);
+  }
+
+  // ==============================================
+  // COMMENT MENTION NOTIFICATIONS (Phase 2B)
+  // ==============================================
+
+  /**
+   * Envoie des notifications user_mentioned en batch pour les mentions dans un commentaire.
+   *
+   * Priority dedup: user_mentioned > story_new_comment > story_thread_reply > friend_story_comment
+   * Les mentionedUserIds doivent être passés en excludeUserIds dans createStoryCommentNotificationsBatch
+   * pour éviter la double notification.
+   *
+   * Skip: self-mention, rate-limit anti-spam (MAX_MENTIONS_PER_MINUTE par paire sender:recipient).
+   */
+  async createCommentMentionNotificationsBatch(params: {
+    commentId: string;
+    postId: string;
+    commenterId: string;
+    mentionedUserIds: string[];
+    commentExcerpt?: string;
+  }): Promise<void> {
+    if (params.mentionedUserIds.length === 0) return;
+
+    const commenter = await this.prisma.user.findUnique({
+      where: { id: params.commenterId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+
+    if (!commenter) return;
+
+    const content = params.commentExcerpt
+      ? this.truncateMessage(params.commentExcerpt)
+      : '';
+
+    const actorInfo = {
+      id: params.commenterId,
+      username: commenter.username,
+      displayName: commenter.displayName,
+      avatar: commenter.avatar,
+    };
+
+    const tasks: Array<Promise<unknown>> = [];
+
+    for (const userId of params.mentionedUserIds) {
+      if (userId === params.commenterId) continue;
+
+      if (!this.shouldCreateMentionNotification(params.commenterId, userId)) {
+        notificationLogger.info('Comment mention notification blocked (rate limit)', {
+          commenterId: params.commenterId,
+          recipientId: userId,
+        });
+        continue;
+      }
+
+      tasks.push(
+        this.createNotification({
+          userId,
+          type: 'user_mentioned',
+          priority: 'high',
+          content,
+          actor: actorInfo,
+          context: {
+            postId: params.postId,
+            commentId: params.commentId,
+          },
+          metadata: {
+            action: 'view_post',
+            entityType: 'comment',
+            postId: params.postId,
+            commentId: params.commentId,
+            commentPreview: content,
+          } as any,
         })
       );
     }

@@ -71,6 +71,9 @@ jest.mock('@meeshy/shared/prisma/client', () => {
       create: jest.fn(),
       findMany: jest.fn(),
     },
+    commentMention: {
+      create: jest.fn(),
+    },
   };
 
   return {
@@ -1448,6 +1451,68 @@ describe('MentionService', () => {
       );
       expect(usernames).toContain('atabeth');
       expect(usernames).toContain('jcharles');
+    });
+  });
+
+  // ==============================================
+  // CREATE COMMENT MENTIONS TESTS (Phase 2B)
+  // ==============================================
+
+  describe('createCommentMentions', () => {
+    const commentId = 'comment-abc-123';
+
+    it('does nothing when mentionedUserIds is empty', async () => {
+      await service.createCommentMentions(commentId, []);
+
+      expect(prisma.commentMention.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a CommentMention row for each mentioned user', async () => {
+      const userIds = ['user-1', 'user-2', 'user-3'];
+      prisma.commentMention.create.mockResolvedValue({ id: 'cm-1' });
+
+      await service.createCommentMentions(commentId, userIds);
+
+      expect(prisma.commentMention.create).toHaveBeenCalledTimes(3);
+    });
+
+    it('creates CommentMention with correct data structure', async () => {
+      const userId = 'user-1';
+      prisma.commentMention.create.mockResolvedValue({ id: 'cm-1' });
+
+      await service.createCommentMentions(commentId, [userId]);
+
+      expect(prisma.commentMention.create).toHaveBeenCalledWith({
+        data: {
+          commentId,
+          mentionedUserId: userId,
+        },
+      });
+    });
+
+    it('ignores duplicate mention errors (P2002) — idempotent', async () => {
+      const duplicateError = new Error('Duplicate');
+      (duplicateError as any).code = 'P2002';
+      prisma.commentMention.create.mockRejectedValue(duplicateError);
+
+      await expect(service.createCommentMentions(commentId, ['user-1'])).resolves.not.toThrow();
+    });
+
+    it('logs non-duplicate errors without throwing', async () => {
+      const otherError = new Error('Unexpected DB error');
+      (otherError as any).code = 'P9999';
+      prisma.commentMention.create.mockRejectedValue(otherError);
+
+      await expect(service.createCommentMentions(commentId, ['user-1'])).resolves.not.toThrow();
+    });
+
+    it('creates all mentions in parallel (Promise.allSettled)', async () => {
+      const userIds = ['user-1', 'user-2'];
+      prisma.commentMention.create.mockResolvedValue({ id: 'cm-1' });
+
+      await service.createCommentMentions(commentId, userIds);
+
+      expect(prisma.commentMention.create).toHaveBeenCalledTimes(2);
     });
   });
 });

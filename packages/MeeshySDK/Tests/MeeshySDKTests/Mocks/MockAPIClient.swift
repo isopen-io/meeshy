@@ -12,6 +12,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         let endpoint: String
         let method: String
         let bodyJSON: [String: Any]?
+        let queryItems: [URLQueryItem]?
 
         var path: String { endpoint }
     }
@@ -62,7 +63,7 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
         body: Data?,
         queryItems: [URLQueryItem]?
     ) async throws -> T {
-        recordRequest(endpoint: endpoint, method: method, bodyData: body)
+        recordRequest(endpoint: endpoint, method: method, bodyData: body, queryItems: queryItems)
         if let error = errorToThrow { throw error }
         guard let result = stubs[endpoint] as? T else {
             throw NoStubError.missing(endpoint: endpoint, type: "\(T.self)", available: Array(stubs.keys))
@@ -140,14 +141,14 @@ final class MockAPIClient: APIClientProviding, @unchecked Sendable {
 
     // MARK: - Internal recording helpers
 
-    private func recordRequest(endpoint: String, method: String, bodyData: Data?) {
+    private func recordRequest(endpoint: String, method: String, bodyData: Data?, queryItems: [URLQueryItem]? = nil) {
         let json = bodyData.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json))
+        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json, queryItems: queryItems))
     }
 
     private func recordRequest<U: Encodable>(endpoint: String, method: String, encodableBody: U) {
         let data = try? JSONEncoder().encode(encodableBody)
         let json = data.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
-        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json))
+        requests.append(RecordedRequest(endpoint: endpoint, method: method, bodyJSON: json, queryItems: nil))
     }
 }

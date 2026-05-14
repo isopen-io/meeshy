@@ -270,6 +270,7 @@ model User {
   posts              Post[]            @relation("UserPosts")
   postComments       PostComment[]     @relation("UserPostComments")
   commentReactions   CommentReaction[] @relation("UserPostCommentReactions")
+  commentMentions    CommentMention[]  @relation("UserCommentMentions")
   postViews          PostView[]        @relation("UserPostViews")
   postImpressions    PostImpression[]  @relation("UserPostImpressions")
   postBookmarks      PostBookmark[]    @relation("UserPostBookmarks")
@@ -2918,6 +2919,7 @@ model PostComment {
   parent    PostComment?     @relation("CommentReplies", fields: [parentId], references: [id], onDelete: NoAction, onUpdate: NoAction)
   replies   PostComment[]    @relation("CommentReplies")
   reactions CommentReaction[] @relation("PostCommentReactions")
+  mentions  CommentMention[]  @relation("CommentMentions")
 
   @@index([postId, createdAt])
   @@index([parentId])
@@ -3502,4 +3504,20 @@ model MutationLog {
   @@unique([userId, clientMutationId])
   @@index([createdAt])
   @@map("mutation_logs")
+}
+
+/// Mention d'un utilisateur dans un commentaire de post
+model CommentMention {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  commentId         String   @db.ObjectId
+  mentionedUserId   String   @db.ObjectId
+  mentionedAt       DateTime @default(now())
+
+  comment        PostComment @relation("CommentMentions", fields: [commentId], references: [id], onDelete: Cascade)
+  mentionedUser  User        @relation("UserCommentMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([commentId, mentionedUserId], name: "comment_user_mention_unique")
+  @@index([commentId])
+  @@index([mentionedUserId])
+  @@index([mentionedAt])
 }
