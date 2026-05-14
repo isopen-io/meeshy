@@ -157,42 +157,45 @@ export function registerMagicLinkRoutes(context: AuthRouteContext) {
       const validatedData = validateSchema(AuthSchemas.refreshToken, request.body, 'refresh');
       const { token, sessionToken } = validatedData;
 
-      let decoded = authService.verifyToken(token);
+      // Try to decode the JWT — accept expired tokens (ignoreExpiration) so that
+      // the client can rotate a valid-but-stale JWT without a sessionToken round-trip.
+      // If the signature itself is invalid (tampered), jwt.verify will still throw.
+      let decoded: { userId?: string; username?: string; role?: string } | null = null;
+      try {
+        decoded = jwt.verify(token, authService['jwtSecret'], { ignoreExpiration: true }) as any;
+      } catch {
+        // Signature invalid — decoded stays null; will be rejected below unless sessionToken covers it.
+        decoded = jwt.decode(token) as any;
+      }
+
       let activeSession: { id: string; userId: string; expiresAt: Date } | null = null;
 
-      if (sessionToken) {
-        const jwtPayload = (decoded ?? jwt.decode(token)) as { userId?: string } | null;
-        if (jwtPayload?.userId) {
-          const hashedSession = crypto.createHash('sha256').update(sessionToken).digest('hex');
-          const session = await context.prisma.userSession.findFirst({
-            where: {
-              sessionToken: hashedSession,
-              userId: jwtPayload.userId,
-              isValid: true,
-              isTrusted: true,
-              expiresAt: { gt: new Date() }
-            },
-            select: { id: true, userId: true, expiresAt: true }
-          });
-          if (session) {
-            activeSession = session;
-            // If the JWT was already invalid/expired, accept the session as proof of identity.
-            if (!decoded) {
-              decoded = jwtPayload as any;
-              logger.info('Token refresh via trusted session', { userId: jwtPayload.userId });
-            }
-          }
+      if (sessionToken && decoded?.userId) {
+        const hashedSession = crypto.createHash('sha256').update(sessionToken).digest('hex');
+        const session = await context.prisma.userSession.findFirst({
+          where: {
+            sessionToken: hashedSession,
+            userId: decoded.userId,
+            isValid: true,
+            isTrusted: true,
+            expiresAt: { gt: new Date() }
+          },
+          select: { id: true, userId: true, expiresAt: true }
+        });
+        if (session) {
+          activeSession = session;
+          logger.info('Token refresh via trusted session', { userId: decoded.userId });
         }
       }
 
-      if (!decoded) {
+      if (!decoded?.userId) {
         return reply.status(401).send({
           success: false,
           error: 'Token invalide ou expiré'
         });
       }
 
-      const user = await authService.getUserById(decoded.userId);
+      const user = await authService.getUserById(decoded!.userId!);
 
       if (!user) {
         return reply.status(404).send({

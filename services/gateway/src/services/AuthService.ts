@@ -739,14 +739,21 @@ export class AuthService {
   }
 
   /**
-   * Vérifier un token JWT
+   * Vérifier un token JWT.
+   * Retourne null si le token est expiré ou invalide.
+   * TokenExpiredError est un cas attendu (refresh flow) — loggé en debug, pas ERROR.
    */
   verifyToken(token: string): TokenPayload | null {
     try {
       const decoded = jwt.verify(token, this.jwtSecret) as TokenPayload;
       return decoded;
-    } catch (error) {
-      logger.error('Error verifying token', error);
+    } catch (error: any) {
+      if (error?.name === 'TokenExpiredError') {
+        // Expected during /auth/refresh — not an error, the client will refresh.
+        logger.debug('[AuthService] JWT expired (expected at refresh)', { exp: error.expiredAt });
+      } else {
+        logger.error('Error verifying token', error);
+      }
       return null;
     }
   }
