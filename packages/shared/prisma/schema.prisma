@@ -270,6 +270,7 @@ model User {
   posts              Post[]            @relation("UserPosts")
   postComments       PostComment[]     @relation("UserPostComments")
   commentReactions   CommentReaction[] @relation("UserPostCommentReactions")
+  postReactionsAuthored PostReaction[] @relation("UserPostReactionsAuthored")
   commentMentions    CommentMention[]  @relation("UserCommentMentions")
   postViews          PostView[]        @relation("UserPostViews")
   postImpressions    PostImpression[]  @relation("UserPostImpressions")
@@ -1097,6 +1098,25 @@ model CommentReaction {
   @@index([userId])
   @@index([emoji])
   @@index([userId, commentId])
+}
+
+/// Réaction emoji sur un post par un utilisateur
+model PostReaction {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId    String   @db.ObjectId
+  userId    String   @db.ObjectId
+  emoji     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  post Post @relation("PostReactionsTable", fields: [postId], references: [id], onDelete: Cascade)
+  user User @relation("UserPostReactionsAuthored", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, userId, emoji], name: "post_user_reaction_unique")
+  @@index([postId])
+  @@index([userId])
+  @@index([emoji])
+  @@index([userId, postId])
 }
 
 /// Mention d'un participant dans un message
@@ -2773,6 +2793,8 @@ model Post {
   views       PostView[]
   impressions PostImpression[]
   bookmarks   PostBookmark[]
+  /// Réactions table (Phase 3 — source de vérité moderne, remplace progressivement reactions: Json[])
+  postReactions PostReaction[] @relation("PostReactionsTable")
 
   @@index([authorId, type, createdAt])
   @@index([communityId, type, createdAt])
