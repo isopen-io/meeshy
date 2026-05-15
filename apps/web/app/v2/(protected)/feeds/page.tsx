@@ -107,6 +107,25 @@ export default function V2FeedsPage() {
   const posts = useFeedPosts(feedQuery);
   const prefetchPost = usePrefetchPost();
 
+  /**
+   * Web-idiomatic equivalent of iOS CacheResult<T> (.fresh/.stale/.empty).
+   *
+   * React Query surfaces three useful signals:
+   *  - `data`          → cached pages exist (fresh or stale)
+   *  - `isFetching`    → background refetch in flight
+   *  - `dataUpdatedAt` → timestamp of last successful fetch
+   *
+   * Rules:
+   *  - 'empty'  → no data yet (cold cache); show skeleton
+   *  - 'fresh'  → data is < 30s old; show it as-is
+   *  - 'stale'  → data is ≥ 30s old; show with "Updating…" hint
+   */
+  const cacheState: 'fresh' | 'stale' | 'empty' = useMemo(() => {
+    if (!feedQuery.data) return 'empty';
+    const ageSec = (Date.now() - feedQuery.dataUpdatedAt) / 1000;
+    return ageSec < 30 ? 'fresh' : 'stale';
+  }, [feedQuery.data, feedQuery.dataUpdatedAt]);
+
   // Socket.IO → React Query cache sync for posts
   usePostSocketCacheSync();
 
@@ -432,8 +451,16 @@ export default function V2FeedsPage() {
           </button>
         </div>
 
-        {/* Feed loading state */}
-        {feedQuery.isLoading && (
+        {/* Stale data indicator — shown when cached data is being refreshed in background */}
+        {cacheState === 'stale' && feedQuery.isFetching && (
+          <div className="flex items-center justify-center gap-2 py-1 mb-2 text-xs text-[var(--gp-text-muted)]" data-testid="stale-indicator">
+            <div className="w-3 h-3 border border-[var(--gp-text-muted)] border-t-transparent rounded-full animate-spin" />
+            Updating...
+          </div>
+        )}
+
+        {/* Feed loading state — skeleton ONLY on empty cache (cold start) */}
+        {cacheState === 'empty' && feedQuery.isLoading && (
           <div className="space-y-6">
             {[1, 2, 3].map((i) => (
               <div key={i} className="rounded-2xl border border-[var(--gp-border)] bg-[var(--gp-surface)] p-4 space-y-3">
