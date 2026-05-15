@@ -1535,48 +1535,65 @@ extension StoryViewerView {
 
     func loadStoryComments() {
         guard let story = currentStory, !isLoadingComments else { return }
-        isLoadingComments = true
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        Task { await loadStoryCommentsAsync(story: story) }
+    }
 
-        Task {
-            do {
-                let response = try await PostService.shared.getComments(postId: story.id, limit: 50)
-                if response.success {
-                    storyCommentLikedIds = Self.computeLikedIds(from: response.data)
-                    let comments = response.data.map { c -> FeedComment in
-                        let translated: String? = {
-                            guard let dict = c.translations else { return nil }
-                            for lang in langs {
-                                if let entry = dict[lang] { return entry.text }
-                            }
-                            return nil
-                        }()
-                        return FeedComment(
-                            id: c.id, author: c.author.name, authorId: c.author.id,
-                            authorAvatarURL: c.author.avatar,
-                            content: c.content, timestamp: c.createdAt,
-                            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                            parentId: c.parentId,
-                            originalLanguage: c.originalLanguage, translatedContent: translated
-                        )
-                    }
-                    storyComments = comments
-                    let topAll = comments.filter { $0.parentId == nil }
-                    let totalReplies = topAll.reduce(0) { $0 + $1.replies }
-                    storyCommentCount = topAll.count + totalReplies
+    private func loadStoryCommentsAsync(story: StoryItem) async {
+        let cacheKey = "post-\(story.id)"
 
-                    // Auto-fetch replies for top-level comments that have replies
-                    // Sequential to avoid burst of concurrent requests
-                    let topLevel = topAll.filter { $0.replies > 0 }
-                    Task {
-                        for comment in topLevel.prefix(5) {
-                            await loadStoryCommentReplies(commentId: comment.id)
-                        }
-                    }
-                }
-            } catch {}
-            isLoadingComments = false
+        let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+        switch cached {
+        case .fresh(let comments, _):
+            storyComments = comments
+            let topAll = comments.filter { $0.parentId == nil }
+            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
+            return
+        case .stale(let comments, _):
+            storyComments = comments
+            let topAll = comments.filter { $0.parentId == nil }
+            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
+        case .expired, .empty:
+            isLoadingComments = true
         }
+
+        await fetchStoryCommentsFromNetwork(story: story, cacheKey: cacheKey)
+        isLoadingComments = false
+    }
+
+    private func fetchStoryCommentsFromNetwork(story: StoryItem, cacheKey: String) async {
+        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        do {
+            let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
+            let comments = response.data.map { c -> FeedComment in
+                let translated: String? = {
+                    guard let dict = c.translations else { return nil }
+                    for lang in langs {
+                        if let entry = dict[lang] { return entry.text }
+                    }
+                    return nil
+                }()
+                return FeedComment(
+                    id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorAvatarURL: c.author.avatar,
+                    content: c.content, timestamp: c.createdAt,
+                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                    parentId: c.parentId,
+                    originalLanguage: c.originalLanguage, translatedContent: translated
+                )
+            }
+            storyComments = comments
+            storyCommentLikedIds = Self.computeLikedIds(from: response.data)
+            let topAll = comments.filter { $0.parentId == nil }
+            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
+            try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+
+            let topLevel = topAll.filter { $0.replies > 0 }
+            Task {
+                for comment in topLevel.prefix(5) {
+                    await loadStoryCommentReplies(commentId: comment.id)
+                }
+            }
+        } catch {}
     }
 
     func loadStoryCommentCount() {
@@ -1589,15 +1606,28 @@ extension StoryViewerView {
         storyCommentCount = story.commentCount
 
         Task {
+            let cacheKey = "post-\(story.id)"
+            let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+            switch cached {
+            case .fresh(let comments, _):
+                let top = comments.filter { $0.parentId == nil }
+                let total = top.count + top.reduce(0) { $0 + $1.replies }
+                if total != storyCommentCount { storyCommentCount = total }
+                return
+            case .stale(let comments, _):
+                let top = comments.filter { $0.parentId == nil }
+                let total = top.count + top.reduce(0) { $0 + $1.replies }
+                if total != storyCommentCount { storyCommentCount = total }
+            case .expired, .empty:
+                break
+            }
             do {
-                let response = try await PostService.shared.getComments(postId: story.id, limit: 50)
+                let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
                 if response.success {
                     let top = response.data.filter { $0.parentId == nil }
                     let totalReplies = top.reduce(0) { $0 + ($1.replyCount ?? 0) }
                     let total = top.count + totalReplies
-                    if total != storyCommentCount {
-                        storyCommentCount = total
-                    }
+                    if total != storyCommentCount { storyCommentCount = total }
                 }
             } catch {}
         }

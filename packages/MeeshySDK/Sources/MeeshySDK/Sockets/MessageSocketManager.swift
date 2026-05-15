@@ -1518,6 +1518,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         // --- Reaction events ---
 
+        // NOTE (Fix E5 — v1 limitation): realtime reaction events for messages NOT
+        // currently held in the active conversation cache are silently dropped here.
+        // When the user opens that conversation later, the server-persisted
+        // `reactionSummary` on the Message document is the authoritative source of
+        // truth and will reflect all reactions. Adding a dedicated reactions cache
+        // store was evaluated (approach A) but deferred — the cross-conversation
+        // realtime delta is low-value for v1 and the implementation cost is high.
         socket.on("reaction:added") { [weak self] data, _ in
             guard let self else { return }
             let recvAt = Date()

@@ -369,10 +369,17 @@ struct CommentsSheetView: View {
         }
         .withStatusBubble()
         .task {
-            // Auto-load replies for first 5 comments that have replies > 0
-            // so the auto-preview (first 2 replies) is populated on appear
+            // Hydrate repliesMap from cache before hitting the network so
+            // auto-preview rows are visible instantly on re-present.
             let withReplies = topLevelComments.filter { $0.replies > 0 }
             for comment in withReplies.prefix(5) {
+                let cacheKey = "replies-\(comment.id)"
+                let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+                if case .fresh(let replies, _) = cached {
+                    repliesMap[comment.id] = replies
+                } else if case .stale(let replies, _) = cached {
+                    repliesMap[comment.id] = replies
+                }
                 await loadReplies(commentId: comment.id)
             }
         }
@@ -453,6 +460,9 @@ struct CommentsSheetView: View {
                 )
             }
             repliesMap[commentId] = replies
+            // Persist replies under "replies-{commentId}" so re-presenting the sheet
+            // hydrates the auto-preview rows instantly without a round-trip.
+            try? await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)")
         } catch {
             expandedThreads.remove(commentId)
         }
