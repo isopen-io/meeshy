@@ -1012,7 +1012,7 @@ export class NotificationService {
         params.commenterId
       );
 
-    const content = params.commentExcerpt
+    const excerpt = params.commentExcerpt
       ? this.truncateMessage(params.commentExcerpt)
       : '';
 
@@ -1021,7 +1021,7 @@ export class NotificationService {
       action: 'view_post' as const,
       postId: params.postId,
       commentId: params.commentId,
-      commentPreview: content,
+      commentPreview: excerpt,
     };
     const actorInfo = {
       id: params.commenterId,
@@ -1041,7 +1041,7 @@ export class NotificationService {
           userId: authorId,
           type: 'story_new_comment',
           priority: 'normal',
-          content,
+          content: excerpt || 'a commenté votre story',
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1057,7 +1057,7 @@ export class NotificationService {
           userId: recipientId,
           type: 'story_thread_reply',
           priority: 'low',
-          content,
+          content: excerpt || 'a répondu dans une story',
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1073,7 +1073,7 @@ export class NotificationService {
           userId: recipientId,
           type: 'friend_story_comment',
           priority: 'low',
-          content,
+          content: excerpt || 'a commenté une story',
           actor: actorInfo,
           context: commonContext,
           metadata: commonMetadata,
@@ -1205,9 +1205,10 @@ export class NotificationService {
 
     if (!poster) return;
 
-    const content = params.postExcerpt
+    const excerpt = params.postExcerpt
       ? this.truncateMessage(params.postExcerpt)
       : '';
+    const content = excerpt || 'vous a mentionné';
 
     const actorInfo = {
       id: params.posterId,
@@ -1243,7 +1244,7 @@ export class NotificationService {
             action: 'view_post',
             entityType: 'post',
             postId: params.postId,
-            postPreview: content,
+            postPreview: excerpt,
           } as any,
         })
       );
@@ -1319,7 +1320,14 @@ export class NotificationService {
     });
 
     const excludeSet = new Set(params.excludeUserIds ?? []);
-    const content = params.excerpt ? this.truncateMessage(params.excerpt) : '';
+    const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
+
+    const fallbackContent: Record<'friend_new_story' | 'friend_new_post' | 'friend_new_mood', string> = {
+      friend_new_story: 'a publié une nouvelle story',
+      friend_new_post: 'a publié un nouveau post',
+      friend_new_mood: 'a publié une nouvelle humeur',
+    };
+    const content = excerpt || fallbackContent[notificationType];
 
     const actorInfo = {
       id: params.authorId,
@@ -1351,7 +1359,7 @@ export class NotificationService {
             action: 'view_post',
             postId: params.postId,
             contentType: params.contentType,
-            excerpt: content,
+            excerpt,
           } as any,
         })
       );

@@ -280,6 +280,85 @@ describe('NotificationService — Phase 4F: friend content fan-out', () => {
   });
 
   // =====================================================
+  // Push body content — must never be empty
+  // =====================================================
+
+  describe('notification content (push body)', () => {
+    it('test_createFriendContentNotificationsBatch_noExcerpt_STORY_usesFallbackPhrase', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STORY',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { content: string; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.content).toBe('a publié une nouvelle story');
+    });
+
+    it('test_createFriendContentNotificationsBatch_noExcerpt_POST_usesFallbackPhrase', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { content: string; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.content).toBe('a publié un nouveau post');
+    });
+
+    it('test_createFriendContentNotificationsBatch_noExcerpt_STATUS_usesMoodFallbackPhrase', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'STATUS',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { content: string; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.content).toBe('a publié une nouvelle humeur');
+    });
+
+    it('test_createFriendContentNotificationsBatch_withExcerpt_usesExcerptAsContent', async () => {
+      (prisma.friendRequest.findMany as jest.Mock).mockResolvedValue([
+        makeFriendRequest(AUTHOR_ID, FRIEND_1),
+      ]);
+
+      await service.createFriendContentNotificationsBatch({
+        postId: POST_ID,
+        authorId: AUTHOR_ID,
+        contentType: 'POST',
+        excerpt: 'Look at this sunset',
+      });
+
+      const calls = (prisma.notification.create as jest.Mock).mock.calls as Array<
+        [{ data: { content: string; userId: string } }]
+      >;
+      const call = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(call![0].data.content).toBe('Look at this sunset');
+    });
+  });
+
+  // =====================================================
   // Fan-out to multiple friends
   // =====================================================
 

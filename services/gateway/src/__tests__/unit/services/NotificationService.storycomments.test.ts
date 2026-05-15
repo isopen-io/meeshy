@@ -561,6 +561,43 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       const threadCall = calls.find((c) => c[0].data.userId === PREV_COMMENTER_1);
       expect(threadCall).toBeDefined();
     });
+
+    it('uses the comment excerpt as content when present', async () => {
+      prisma.postComment.findMany.mockResolvedValue([]);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.notification.create.mockResolvedValue(makeNotif('story_new_comment'));
+
+      await service.createStoryCommentNotificationsBatch(baseParams);
+
+      const calls = prisma.notification.create.mock.calls as Array<[{ data: { userId: string; content: string } }]>;
+      const authorCall = calls.find((c) => c[0].data.userId === AUTHOR_ID);
+      expect(authorCall![0].data.content).toBe('Great story!');
+    });
+
+    it('falls back to a per-bucket phrase when the comment has no text excerpt', async () => {
+      prisma.postComment.findMany.mockResolvedValue([{ authorId: PREV_COMMENTER_1 }]);
+      prisma.friendRequest.findMany.mockResolvedValue([
+        { senderId: AUTHOR_ID, receiverId: FRIEND_1 },
+      ]);
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type)),
+      );
+
+      await service.createStoryCommentNotificationsBatch({
+        ...baseParams,
+        commentExcerpt: undefined,
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<
+        [{ data: { userId: string; content: string } }]
+      >;
+      const authorCall = calls.find((c) => c[0].data.userId === AUTHOR_ID);
+      const threadCall = calls.find((c) => c[0].data.userId === PREV_COMMENTER_1);
+      const friendCall = calls.find((c) => c[0].data.userId === FRIEND_1);
+      expect(authorCall![0].data.content).toBe('a commenté votre story');
+      expect(threadCall![0].data.content).toBe('a répondu dans une story');
+      expect(friendCall![0].data.content).toBe('a commenté une story');
+    });
   });
 
   // ======================================================
@@ -901,6 +938,43 @@ describe('NotificationService — Phase 1D: story comment fan-out', () => {
       expect(aliceCall![0].data.type).toBe('user_mentioned');
       expect(bobCall).toBeDefined();
       expect(bobCall![0].data.type).toBe('user_mentioned');
+    });
+
+    it('test_createPostMentionNotificationsBatch_withExcerpt_usesExcerptAsContent', async () => {
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type))
+      );
+
+      await service.createPostMentionNotificationsBatch({
+        postId: P2_POST_ID,
+        posterId: POSTER_ID,
+        mentionedUserIds: [ALICE_ID],
+        postExcerpt: 'Check this out @alice',
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<
+        [{ data: { userId: string; content: string } }]
+      >;
+      const aliceCall = calls.find((c) => c[0].data.userId === ALICE_ID);
+      expect(aliceCall![0].data.content).toBe('Check this out @alice');
+    });
+
+    it('test_createPostMentionNotificationsBatch_noExcerpt_usesFallbackPhrase', async () => {
+      prisma.notification.create.mockImplementation(({ data }: { data: { type: string } }) =>
+        Promise.resolve(makeNotif(data.type))
+      );
+
+      await service.createPostMentionNotificationsBatch({
+        postId: P2_POST_ID,
+        posterId: POSTER_ID,
+        mentionedUserIds: [ALICE_ID],
+      });
+
+      const calls = prisma.notification.create.mock.calls as Array<
+        [{ data: { userId: string; content: string } }]
+      >;
+      const aliceCall = calls.find((c) => c[0].data.userId === ALICE_ID);
+      expect(aliceCall![0].data.content).toBe('vous a mentionné');
     });
 
     it('test_createPostMentionNotificationsBatch_selfMention_skipped', async () => {
