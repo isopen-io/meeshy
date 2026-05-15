@@ -9,7 +9,7 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type {
   NotificationActor,
   NotificationContext,
@@ -343,6 +343,8 @@ export class NotificationService {
       // Émettre via Socket.IO
       if (this.io) {
         this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, formatted);
+        // Update badge counters on client (fire-and-forget, non-blocking)
+        this.emitCountsUpdate(params.userId).catch(() => {});
       }
 
       // Send push notification (always — iOS willPresent handles foreground display)
@@ -890,7 +892,7 @@ export class NotificationService {
   ): Promise<{ authorId: string; friendIds: string[]; previousCommenterIds: string[] }> {
     // Cap at 500 rows to bound fan-out cost on viral posts.
     // Future: large posts should use a background queue for fan-out.
-    const [previousComments, friendRequests] = await Promise.all([
+    const [previousComments, friendRequests, reactors] = await Promise.all([
       this.prisma.postComment.findMany({
         where: {
           postId,
@@ -911,13 +913,32 @@ export class NotificationService {
         take: 500,
         orderBy: { updatedAt: 'desc' },
       }),
+      // Include post reactors as thread-engaged participants (same bucket as prior commenters)
+      this.prisma.postReaction.findMany({
+        where: {
+          postId,
+          NOT: { userId: commenterId },
+        },
+        distinct: ['userId'],
+        select: { userId: true },
+        take: 500,
+        orderBy: { createdAt: 'desc' },
+      }),
     ]);
 
     const rawPreviousCommenterIds = previousComments
       .map((c: { authorId: string }) => c.authorId)
       .filter((id: string) => id !== authorId);
 
-    const previousCommenterSet = new Set(rawPreviousCommenterIds);
+    // Merge reactor user IDs into the "thread engagement" bucket.
+    // Reactors who also commented are deduplicated via Set — they still appear only once.
+    const reactorIds = reactors
+      .map((r: { userId: string }) => r.userId)
+      .filter((id: string) => id !== authorId);
+
+    const rawEngagedIds = Array.from(new Set([...rawPreviousCommenterIds, ...reactorIds]));
+
+    const previousCommenterSet = new Set(rawEngagedIds);
 
     const allFriendIds = friendRequests.flatMap(
       (fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId]
@@ -930,7 +951,7 @@ export class NotificationService {
         !previousCommenterSet.has(id)
     );
 
-    const previousCommenterIds = rawPreviousCommenterIds.filter(
+    const previousCommenterIds = rawEngagedIds.filter(
       (id: string) => id !== commenterId
     );
 
@@ -1135,6 +1156,87 @@ export class NotificationService {
       if (result.status === 'rejected') {
         notificationLogger.error(
           'Comment mention notification failed for one recipient',
+          result.reason,
+          { recipientId: params.mentionedUserIds[index], type: 'user_mentioned' }
+        );
+      }
+    });
+  }
+
+  // ==============================================
+  // POST MENTION NOTIFICATIONS (Fix 2)
+  // ==============================================
+
+  /**
+   * Envoie des notifications user_mentioned en batch pour les mentions dans un post.
+   *
+   * Mirrors createCommentMentionNotificationsBatch.
+   * Skip: self-mention, rate-limit anti-spam (MAX_MENTIONS_PER_MINUTE per pair sender:recipient).
+   */
+  async createPostMentionNotificationsBatch(params: {
+    postId: string;
+    posterId: string;
+    mentionedUserIds: string[];
+    postExcerpt?: string;
+  }): Promise<void> {
+    if (params.mentionedUserIds.length === 0) return;
+
+    const poster = await this.prisma.user.findUnique({
+      where: { id: params.posterId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+
+    if (!poster) return;
+
+    const content = params.postExcerpt
+      ? this.truncateMessage(params.postExcerpt)
+      : '';
+
+    const actorInfo = {
+      id: params.posterId,
+      username: poster.username,
+      displayName: poster.displayName,
+      avatar: poster.avatar,
+    };
+
+    const tasks: Array<Promise<unknown>> = [];
+
+    for (const userId of params.mentionedUserIds) {
+      if (userId === params.posterId) continue;
+
+      if (!this.shouldCreateMentionNotification(params.posterId, userId)) {
+        notificationLogger.info('Post mention notification blocked (rate limit)', {
+          posterId: params.posterId,
+          recipientId: userId,
+        });
+        continue;
+      }
+
+      tasks.push(
+        this.createNotification({
+          userId,
+          type: 'user_mentioned',
+          priority: 'high',
+          content,
+          actor: actorInfo,
+          context: {
+            postId: params.postId,
+          },
+          metadata: {
+            action: 'view_post',
+            entityType: 'post',
+            postId: params.postId,
+            postPreview: content,
+          } as any,
+        })
+      );
+    }
+
+    const mentionResults = await Promise.allSettled(tasks);
+    mentionResults.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        notificationLogger.error(
+          'Post mention notification failed for one recipient',
           result.reason,
           { recipientId: params.mentionedUserIds[index], type: 'user_mentioned' }
         );
@@ -2088,6 +2190,28 @@ export class NotificationService {
   }
 
   // ==============================================
+  // NOTIFICATION COUNTS PUSH (Fix 3)
+  // ==============================================
+
+  /**
+   * Emits updated notification counts to a user's socket room.
+   * Called after every notification create/read/delete mutation so clients
+   * can update badge counters without REST polling.
+   */
+  private async emitCountsUpdate(userId: string): Promise<void> {
+    if (!this.io) return;
+    try {
+      const [unread, total] = await Promise.all([
+        this.prisma.notification.count({ where: { userId, readAt: null } }),
+        this.prisma.notification.count({ where: { userId } }),
+      ]);
+      this.io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_COUNTS, { unread, total });
+    } catch (error) {
+      notificationLogger.error('Failed to emit notification counts', { error, userId });
+    }
+  }
+
+  // ==============================================
   // ANTI-SPAM & UTILITIES
   // ==============================================
 
@@ -2191,7 +2315,9 @@ export class NotificationService {
         },
       });
 
-      return this.formatNotification(notification);
+      const formatted = this.formatNotification(notification);
+      this.emitCountsUpdate(formatted.userId).catch(() => {});
+      return formatted;
     } catch (error) {
       notificationLogger.error('Failed to mark notification as read', {
         error,
@@ -2217,6 +2343,7 @@ export class NotificationService {
         },
       });
 
+      this.emitCountsUpdate(userId).catch(() => {});
       return result.count;
     } catch (error) {
       notificationLogger.error('Failed to mark all notifications as read', {
@@ -2294,9 +2421,20 @@ export class NotificationService {
    */
   async deleteNotification(notificationId: string): Promise<boolean> {
     try {
+      // Fetch userId before deletion so we can emit counts update after
+      const existing = await this.prisma.notification.findUnique({
+        where: { id: notificationId },
+        select: { userId: true },
+      });
+
       await this.prisma.notification.delete({
         where: { id: notificationId },
       });
+
+      if (existing?.userId) {
+        this.emitCountsUpdate(existing.userId).catch(() => {});
+      }
+
       return true;
     } catch (error) {
       notificationLogger.error('Failed to delete notification', {

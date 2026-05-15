@@ -6,7 +6,8 @@ import { PostService } from '../../services/PostService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError } from '../../utils/response';
-import { resolveMentionedUsers } from '../../services/MentionService';
+import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
+import { NotificationService } from '../../services/notifications/NotificationService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 
@@ -16,6 +17,8 @@ export function registerCoreRoutes(
   requiredAuth: any
 ) {
   const postService = new PostService(prisma);
+  const mentionService = new MentionService(prisma);
+  const notificationService = new NotificationService(prisma);
 
   // POST /posts — Create a new post
   fastify.post('/posts', {
@@ -88,6 +91,30 @@ export function registerCoreRoutes(
       const mentionedUsers = postContent
         ? await resolveMentionedUsers(prisma, [postContent])
         : [];
+
+      // Persist and notify post-body mentions (fire-and-forget)
+      if (postContent) {
+        const usernames = mentionService.extractMentions(postContent);
+        if (usernames.length > 0) {
+          const usernameMap = await mentionService.resolveUsernames(usernames);
+          const mentionedUserIds = Array.from(usernameMap.values()).map((u) => u.id);
+          if (mentionedUserIds.length > 0) {
+            const postId = (post as any).id as string;
+            const posterId = authContext.registeredUser.id;
+            mentionService.createPostMentions(postId, mentionedUserIds).catch((err: unknown) => {
+              fastify.log.error(`[POST /posts] post mention persist failed: ${err}`);
+            });
+            notificationService.createPostMentionNotificationsBatch({
+              postId,
+              posterId,
+              mentionedUserIds,
+              postExcerpt: postContent.slice(0, 100),
+            }).catch((err: unknown) => {
+              fastify.log.error(`[POST /posts] post mention notify failed: ${err}`);
+            });
+          }
+        }
+      }
 
       return sendSuccess(reply, post, { statusCode: 201, meta: { mentionedUsers } });
     } catch (error) {
@@ -163,6 +190,30 @@ export function registerCoreRoutes(
       const updateMentionedUsers = updateContentStrings.length > 0
         ? await resolveMentionedUsers(prisma, updateContentStrings)
         : [];
+
+      // Persist and notify post-body mentions on edit (re-fires all; idempotent via P2002 swallow)
+      const editedContent = (post as any).content as string | undefined;
+      if (editedContent) {
+        const editUsernames = mentionService.extractMentions(editedContent);
+        if (editUsernames.length > 0) {
+          const editUsernameMap = await mentionService.resolveUsernames(editUsernames);
+          const editMentionedUserIds = Array.from(editUsernameMap.values()).map((u) => u.id);
+          if (editMentionedUserIds.length > 0) {
+            const editPosterId = authContext.registeredUser.id;
+            mentionService.createPostMentions(postId, editMentionedUserIds).catch((err: unknown) => {
+              fastify.log.error(`[PUT /posts/:postId] post mention persist failed: ${err}`);
+            });
+            notificationService.createPostMentionNotificationsBatch({
+              postId,
+              posterId: editPosterId,
+              mentionedUserIds: editMentionedUserIds,
+              postExcerpt: editedContent.slice(0, 100),
+            }).catch((err: unknown) => {
+              fastify.log.error(`[PUT /posts/:postId] post mention notify failed: ${err}`);
+            });
+          }
+        }
+      }
 
       // Broadcast story edits to viewers so they don't render stale content.
       // Regular posts already have `broadcastPostUpdated`; stories need their

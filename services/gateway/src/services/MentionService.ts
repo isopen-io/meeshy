@@ -967,6 +967,32 @@ export class MentionService {
   }
 
   /**
+   * Crée les entrées PostMention dans la base de données.
+   * Idempotent: les doublons (P2002) sont ignorés silencieusement.
+   *
+   * @param postId - ID du post
+   * @param mentionedUserIds - IDs des utilisateurs mentionnés
+   */
+  async createPostMentions(postId: string, mentionedUserIds: string[]): Promise<void> {
+    if (mentionedUserIds.length === 0) return;
+
+    await Promise.allSettled(
+      mentionedUserIds.map(userId =>
+        this.prisma.postMention.create({
+          data: {
+            postId,
+            mentionedUserId: userId,
+          },
+        }).catch((error: any) => {
+          if (error.code !== 'P2002') {
+            logger.error(`Error creating post mention for user ${userId}:`, error);
+          }
+        })
+      )
+    );
+  }
+
+  /**
    * Vérifie si un utilisateur peut être mentionné dans une conversation
    *
    * @param conversationId - ID de la conversation

@@ -272,6 +272,7 @@ model User {
   commentReactions   CommentReaction[] @relation("UserPostCommentReactions")
   postReactionsAuthored PostReaction[] @relation("UserPostReactionsAuthored")
   commentMentions    CommentMention[]  @relation("UserCommentMentions")
+  postMentions       PostMention[]     @relation("UserPostMentions")
   postViews          PostView[]        @relation("UserPostViews")
   postImpressions    PostImpression[]  @relation("UserPostImpressions")
   postBookmarks      PostBookmark[]    @relation("UserPostBookmarks")
@@ -2795,6 +2796,8 @@ model Post {
   bookmarks   PostBookmark[]
   /// Réactions table (Phase 3 — source de vérité moderne, remplace progressivement reactions: Json[])
   postReactions PostReaction[] @relation("PostReactionsTable")
+  /// Mentions dans le corps du post
+  postMentions  PostMention[]  @relation("PostMentions")
 
   @@index([authorId, type, createdAt])
   @@index([communityId, type, createdAt])
@@ -3540,6 +3543,22 @@ model CommentMention {
 
   @@unique([commentId, mentionedUserId], name: "comment_user_mention_unique")
   @@index([commentId])
+  @@index([mentionedUserId])
+  @@index([mentionedAt])
+}
+
+/// Mention d'un utilisateur dans le corps d'un post
+model PostMention {
+  id                String   @id @default(auto()) @map("_id") @db.ObjectId
+  postId            String   @db.ObjectId
+  mentionedUserId   String   @db.ObjectId
+  mentionedAt       DateTime @default(now())
+
+  post           Post @relation("PostMentions", fields: [postId], references: [id], onDelete: Cascade)
+  mentionedUser  User @relation("UserPostMentions", fields: [mentionedUserId], references: [id], onDelete: Cascade)
+
+  @@unique([postId, mentionedUserId], name: "post_user_mention_unique")
+  @@index([postId])
   @@index([mentionedUserId])
   @@index([mentionedAt])
 }

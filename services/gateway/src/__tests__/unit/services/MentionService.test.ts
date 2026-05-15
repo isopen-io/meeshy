@@ -74,6 +74,9 @@ jest.mock('@meeshy/shared/prisma/client', () => {
     commentMention: {
       create: jest.fn(),
     },
+    postMention: {
+      create: jest.fn(),
+    },
   };
 
   return {
@@ -1513,6 +1516,68 @@ describe('MentionService', () => {
       await service.createCommentMentions(commentId, userIds);
 
       expect(prisma.commentMention.create).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  // ==============================================
+  // CREATE POST MENTIONS TESTS (Fix 2)
+  // ==============================================
+
+  describe('createPostMentions', () => {
+    const postId = 'post-xyz-456';
+
+    it('does nothing when mentionedUserIds is empty', async () => {
+      await service.createPostMentions(postId, []);
+
+      expect(prisma.postMention.create).not.toHaveBeenCalled();
+    });
+
+    it('creates a PostMention row for each mentioned user', async () => {
+      const userIds = ['user-1', 'user-2', 'user-3'];
+      prisma.postMention.create.mockResolvedValue({ id: 'pm-1' });
+
+      await service.createPostMentions(postId, userIds);
+
+      expect(prisma.postMention.create).toHaveBeenCalledTimes(3);
+    });
+
+    it('creates PostMention with correct data structure', async () => {
+      const userId = 'user-1';
+      prisma.postMention.create.mockResolvedValue({ id: 'pm-1' });
+
+      await service.createPostMentions(postId, [userId]);
+
+      expect(prisma.postMention.create).toHaveBeenCalledWith({
+        data: {
+          postId,
+          mentionedUserId: userId,
+        },
+      });
+    });
+
+    it('ignores duplicate mention errors (P2002) — idempotent', async () => {
+      const duplicateError = new Error('Duplicate');
+      (duplicateError as any).code = 'P2002';
+      prisma.postMention.create.mockRejectedValue(duplicateError);
+
+      await expect(service.createPostMentions(postId, ['user-1'])).resolves.not.toThrow();
+    });
+
+    it('logs non-duplicate errors without throwing', async () => {
+      const otherError = new Error('Unexpected DB error');
+      (otherError as any).code = 'P9999';
+      prisma.postMention.create.mockRejectedValue(otherError);
+
+      await expect(service.createPostMentions(postId, ['user-1'])).resolves.not.toThrow();
+    });
+
+    it('creates all mentions in parallel (Promise.allSettled)', async () => {
+      const userIds = ['user-1', 'user-2'];
+      prisma.postMention.create.mockResolvedValue({ id: 'pm-1' });
+
+      await service.createPostMentions(postId, userIds);
+
+      expect(prisma.postMention.create).toHaveBeenCalledTimes(2);
     });
   });
 });
