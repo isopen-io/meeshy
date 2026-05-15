@@ -78,6 +78,75 @@ On calque **exactement** sur `Reaction` (modèle MongoDB des reactions sur les m
 - **Idempotency** : `addReaction` actuel n'est pas en transaction (findFirst + create séparés). On reproduit le même pattern (cohérence) MÊME si ce n'est pas optimal — refacto séparée.
 - **`likeCount` field** : on garde pour rétro-compat mais on ne s'en sert plus côté heart (utiliser `reactionCount` + `currentUserReactions`).
 
+## Phase 3 — Post reactions unification (table pattern)
+
+Décision : aligner `Post` sur le pattern `Comment`/`Message` (table dédiée). Élimine la race d'array, la fuite de privacy (liste reactors broadcast à tous), et les 3 sources de vérité divergeantes (`likeCount`/`reactionCount`/`reactionSummary`/`reactions[]`).
+
+### 3A — Prisma + PostReactionService (commit atomique)
+- [ ] `PostReaction { id, postId, userId, emoji, createdAt, updatedAt }` + `@@unique([postId, userId, emoji])` + indexes (mirror exact de `CommentReaction`)
+- [ ] Relations inverses : `Post.postReactions PostReaction[]` + `User.postReactionsAuthored PostReaction[]`
+- [ ] **Garder** `Post.reactions: Json?` et `Post.likeCount` pour rétro-compat (deprecation future)
+- [ ] Créer `services/gateway/src/services/PostReactionService.ts` (mirror de `CommentReactionService`)
+  - `addReaction(postId, userId, emoji)` avec `try/catch P2002`
+  - `removeReaction`
+  - `getEmojiAggregation` retournant `{ emoji, count }` (pas `userIds` — décision privacy Phase 3 trim)
+  - `getPostReactions`
+  - `updatePostReactionSummary` enveloppé dans `prisma.$transaction`
+  - `MAX_REACTIONS_PER_USER = 1` (cohérent)
+- [ ] Tests TDD ~60 tests
+
+### 3B — Socket.IO + handler (commit atomique, après 3A)
+- [ ] `SERVER_EVENTS.POST_REACTION_ADDED/REMOVED/SYNC = 'post:reaction-added/-removed/-sync'`
+- [ ] `CLIENT_EVENTS.POST_REACTION_ADD/REMOVE/REQUEST_SYNC`
+- [ ] `PostReactionUpdateEventData`, `PostReactionAggregation`, `PostReactionSyncEventData` (slim — pas de `userIds`)
+- [ ] `PostReactionHandler` mirror de `CommentReactionHandler` :
+  - Auth check + Zod validation
+  - `canUserViewPost()` ACL réutilisé (déjà extrait Phase 1 remediation)
+  - `SocketRateLimiter` 30/min (cohérent)
+  - Broadcast à `ROOMS.post(postId)` (déjà existant !) + `user:{postAuthor}`
+- [ ] Wire dans `MeeshySocketIOManager`
+- [ ] Tests TDD ~20 tests
+
+### 3C — Refactor PostService.likePost/unlikePost en compatibility shim (commit atomique)
+- [ ] `PostService.likePost` → délègue à `postReactionService.addReaction` + maintient `Post.reactions: Json[]` + `likeCount` en parallèle (compat clients pré-Phase-3)
+- [ ] `PostService.unlikePost` → idem
+- [ ] Documenter dans le code que ces méthodes sont des shims temporaires
+- [ ] Tests asserent la double-écriture
+
+### 3D — GET /posts batch query currentUserReactions (commit atomique, après 3A)
+- [ ] Modifier `PostService.getFeed` / `getPost` / `findPostsForUser` (find canonical method) : après le `findMany(posts)`, batch query `prisma.postReaction.findMany({ userId, postId IN [...] })` → map → ajouter `currentUserReactions: string[]` à chaque post
+- [ ] Mirror exact du pattern messages.ts:711-734 et PostCommentService.getComments
+- [ ] Tests TDD ~10 tests
+
+### 3E — SDK Swift (commit atomique, après 3B+3D)
+- [ ] `APIPost.currentUserReactions: [String]?`
+- [ ] `SocketPostReactionUpdateEvent`, `SocketPostReactionAggregation`, `SocketPostReactionSyncEvent`
+- [ ] `SocialSocketProviding` : `addPostReaction(postId:emoji:)`, `removePostReaction`, `requestPostReactionSync`
+- [ ] Listeners
+- [ ] Tests
+
+### 3F — iOS feed + post detail wiring (commit atomique)
+- [ ] PostListView / PostDetailView : seed liked state depuis `currentUserReactions`
+- [ ] Heart tap → Socket.IO emit (pas REST)
+- [ ] `.onReceive` events realtime
+- [ ] In-flight lock + heartInFlight per postId
+- [ ] join/leave `post:{postId}` room sur viewer
+
+### 3G — Migration script one-shot (commit séparé)
+- [ ] `scripts/migrate-post-reactions.ts` : pour chaque `Post.reactions: Json[]` non vide, insert `PostReaction` rows (idempotent via unique constraint)
+- [ ] Dry-run option, batch 1000 posts/iteration, progress log
+- [ ] Tests sur fixtures
+
+### 3H — Docs (commit atomique)
+- [ ] `services/gateway/decisions.md` : entrée « Post reactions migrés vers table dédiée — unification avec Message/Comment »
+- [ ] `tasks/todo.md` Phase 3 review section
+
+### Hors scope Phase 3
+- Drop définitif de `Post.reactions: Json[]` + REST `/like` endpoints → Phase 4 (après ~2 versions clients migrés)
+- Endpoint paginé `GET /posts/:id/reactions?emoji=X` (si feature « voir qui a liké » devient produit) → à la demande
+- Web Next.js wiring → Phase 4
+- Migration analogue pour `Post.storyViews: Json[]` → séparé, scope distinct
+
 ## Review section
 
 **Status** : Phase 1 livrée (6 commits sur `claude/design-story-comments-ouk2s`, tous poussés).
