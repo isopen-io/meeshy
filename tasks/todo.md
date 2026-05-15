@@ -147,7 +147,73 @@ Décision : aligner `Post` sur le pattern `Comment`/`Message` (table dédiée). 
 - Web Next.js wiring → Phase 4
 - Migration analogue pour `Post.storyViews: Json[]` → séparé, scope distinct
 
-## Phase 4 — Cohérence end-to-end + parité web/iOS + SWR/local-first
+## Review section — Phase 4 (Cohérence end-to-end + parité + SWR)
+
+**Status** : Phase 4 livrée (8 commits supplémentaires, **26 commits total sur la branche**).
+
+### Commits Phase 4
+| Commit | Wave | Tests |
+|---|---|---|
+| `090851d` | Plan Phase 4 docs | — |
+| `810a75c` | 4E — iOS gaps (cache-first + story:updated/deleted + replies cache) | structurel |
+| `019eb07` | 4C — Web data layer Socket.IO migration + drop useState Sets | +37 ✓ |
+| `715fd3e` | 4A — Backend P0 : story reactors + post mentions + counts event + self-react guard | +32 ✓ |
+| `d87018e` | 4C fixup — use-comment-mutations test mocks | — |
+| `305f720` | 4D — Web v2 UX (story comments, mention composers, heart anim, shimmer, cacheState) | +14 ✓ |
+| `e54e614` | 4B — Backend P1 : per-type fan-out + room broadcast + reaction anti-spam + friend cache | +29 ✓ |
+| `107c241` | 4F — Friend content notifs (story/post/mood) | +22 ✓ |
+
+**Total Phase 4** : +134 nouveaux tests verts (gateway + web), `tsc --noEmit` clean partout.
+
+### Couverture par les 28 findings senior
+- **P0 (11/11)** ✅ tous fixés
+- **P1 (10/10)** ✅ tous fixés
+- **P2 (7/7)** ✅ tous fixés (incluant friend content notifs via 4F)
+
+### Coup d'œil sur les flux critiques (avant/après)
+
+| Scénario | Avant Phase 4 | Après Phase 4 |
+|---|---|---|
+| Ami publie un post → notif | ❌ silencieux | ✅ `friend_new_post/story/mood` |
+| Mention dans body de post → notif | ❌ ignorée | ✅ `user_mentioned` + dedup vs friend_new_* |
+| Story commentée → notif aux reactors | ❌ ignorés | ✅ `STORY_THREAD_REPLY` |
+| Badge `notification:counts` | ❌ polling REST | ✅ realtime via Socket.IO sur chaque mutation |
+| Web like post/comment | ❌ REST + `useState<Set>` lost on reload | ✅ Socket.IO + `currentUserReactions` persistant |
+| Web subscribed to reaction events | ❌ legacy only | ✅ `POST_REACTION_*` + `COMMENT_REACTION_*` |
+| Web story comments overlay | ❌ absent | ✅ slide-up panel dans StoryViewer |
+| Web mention autocomplete v2 | ❌ stub | ✅ wired dans Comment + Message composers |
+| iOS `loadStoryComments` | ❌ cold spinner | ✅ cache-first (`.fresh`/`.stale`/`.expired`/`.empty`) |
+| Story réagir multi-device | ⚠️ partial | ✅ `ROOMS.post` broadcast + dual fan-out |
+| STATUS likes | ❌ wrong event | ✅ `status:reacted/unreacted` dédié |
+| Edit non-STORY → broadcast | ❌ silencieux | ✅ `broadcastPostUpdated` par type |
+| Friend cache invalidation | ❌ jamais | ✅ sur acceptance friend request |
+| Self-reaction sur message → notif | ❌ fired | ✅ guarded |
+| Spam reactions → notif | ❌ illimité | ✅ 5/min/(author,reactor) cap |
+| Reduce Motion + 44pt touch target web | ❌ ignoré | ✅ `useReducedMotion` + `min-w-[44px]` |
+| `MentionAutocomplete` flicker | ❌ animation in/out | ✅ shimmer skeleton stable |
+| v2 feeds cacheState | ⚠️ implicit | ✅ explicite `fresh/stale/empty` |
+
+### Décisions documentées
+- **Mentions sur PostComposer** : différées (pas de postId à compose-time, endpoint requiert ObjectId). À débloquer quand un endpoint "compose" sera ajouté côté gateway.
+- **STATUS+MOOD grouping** : un seul type `friend_new_mood` couvre les deux. Séparable plus tard si UX justifie.
+- **Rate limit friend content** : aucun en v1. Aggregation différée à v2.
+- **STORY_TRANSLATION_UPDATED rename** : wire-format break assumé (vaut mieux que la dette de la nomenclature incohérente).
+- **iOS reactions cache store dédié** : pas créé. Documented limitation : reactions sur conversations inactives droppées en realtime, mais `Message.reactionSummary` persisté reste source de vérité.
+
+### Restant à valider (macOS uniquement)
+- `./apps/ios/meeshy.sh build && test`
+- `swift test --filter "NotificationModelsTests|SocialSocketEventTests|PostModelsTests"`
+- Smoke test multi-device : friend post → notif iOS + web ; mention dans post → notif ; story reactor → notif sur nouveau commentaire
+
+### Suivi
+- Vérifier les push templates APNs/FCM pour `friend_new_story/post/mood` (CLAUDE.md gateway mentionne FCM/APNs templates par type)
+- Aggregation des friend content notifs (v2)
+- Wire PostComposer mentions quand endpoint compose-time disponible
+- Drop legacy `Post.reactions: Json[]` field après ~2 versions clients migrés (Phase 5 originale)
+
+## Plan archivé — Phase 4 exécution (livré)
+
+
 
 Issu des 3 revues Opus seniors (event flow E2E + SWR + cross-frontend parity).
 Scope total : 11 P0 + 10 P1 + 7 P2.
