@@ -147,7 +147,62 @@ Décision : aligner `Post` sur le pattern `Comment`/`Message` (table dédiée). 
 - Web Next.js wiring → Phase 4
 - Migration analogue pour `Post.storyViews: Json[]` → séparé, scope distinct
 
-## Review section — Phase 3 (Post reactions unification)
+## Phase 4 — Cohérence end-to-end + parité web/iOS + SWR/local-first
+
+Issu des 3 revues Opus seniors (event flow E2E + SWR + cross-frontend parity).
+Scope total : 11 P0 + 10 P1 + 7 P2.
+
+### Wave 4A — Backend P0 critique (commit atomique)
+- [ ] **#1** `getStoryNotificationRecipients` inclut les `PostReaction` reactors (scénario 6 cassé)
+- [ ] **#2** `core.ts` POST + PUT : `extractMentions` + `createPostMentions` + `createPostMentionNotificationsBatch` (post-body mentions)
+- [ ] **#3** `notification:counts` event émis sur chaque `createNotification` + `notification:read` → `ROOMS.user(userId)`
+- [ ] **#4** Self-reaction guard dans `_createReactionNotification` (`ReactionHandler.ts`)
+- [ ] Tests TDD pour chaque
+
+### Wave 4B — Backend P1 broadcasts + rate limit (commit atomique)
+- [ ] STATUS likes → `status:reacted` au lieu de `post:liked` générique
+- [ ] `broadcastStoryReacted` émet à `ROOMS.post(storyId)` (pas que author)
+- [ ] Nouveau event `story:unreacted` + handler
+- [ ] `broadcastPostUpdated` appelé sur PUT `/posts/:id` non-STORY
+- [ ] Rate limit per-pair sur `message_reaction`/`post_like`/`comment_reaction` (mirror MAX_MENTIONS_PER_MINUTE)
+- [ ] `invalidateFriendsCache` sur friend accept
+- [ ] Rename `STORY_TRANSLATION_UPDATED` event constant `post:` → `story:`
+- [ ] Tests
+
+### Wave 4C — Web data layer migration (commit atomique)
+- [ ] **P0 #5** Fix `useCreateCommentMutation` import dans `feeds/post/[postId]/page.tsx` (crash)
+- [ ] **P0 #9** Ajouter `currentUserReactions: string[]` + `isLikedByMe: boolean` aux types `Post`/`PostComment` dans `packages/shared/types/`
+- [ ] **P0 #7** Migrer `useLikePost`/`useUnlikePost`/`useLikeComment`/`useUnlikeComment` REST → Socket.IO (`addPostReaction`/`addCommentReaction`)
+- [ ] **P0 #6** `use-post-socket-cache-sync.ts` subscribe à `POST_REACTION_ADDED/REMOVED/SYNC` + `COMMENT_REACTION_ADDED/REMOVED/SYNC`
+- [ ] **P0 #8** Supprimer `useState<Set<string>>` pour `likedPosts`/`bookmarkedPosts`/`userReactions` dans `feeds/page.tsx`, dériver depuis cache TanStack
+- [ ] Tests intégration React Query
+
+### Wave 4D — Web v2 UX (commit atomique, après 4C)
+- [ ] **P0 #11** Wire `useCommentsInfiniteQuery({postId: story.id})` + `CommentList` réutilisé dans `StoryViewer.tsx`
+- [ ] **P1** Wire `useMentions` + `MentionAutocomplete` dans v2 `CommentComposer.tsx`, `PostComposer.tsx`, `MessageComposer.tsx`
+- [ ] **P1** Heart animation : spring + `@media (prefers-reduced-motion: reduce)` guard sur `PostCard.tsx` + `CommentItem.tsx`
+- [ ] **P1** Min 44px touch target sur heart buttons
+- [ ] **P2** Shimmer placeholder dans `MentionAutocomplete.tsx` pendant debounce
+- [ ] **P2** v2 feeds page explicit `CacheResult` switch (au lieu de TanStack isLoading implicite)
+
+### Wave 4E — iOS gaps (commit atomique)
+- [ ] **P0 #10** `loadStoryComments` cache-first via `CacheCoordinator.shared.comments.load`
+- [ ] **P1** SDK `storyUpdated`/`storyDeleted` publishers + listeners (`SocialSocketManager.swift`)
+- [ ] **P1** Wire consommation dans `StoryViewModel.swift`
+- [ ] **P1** `FeedCommentsSheet.repliesMap` persiste via `CacheCoordinator.shared.comments` (clé `replies-{commentId}`)
+- [ ] **P2** Nouveau cache store `reactions: GRDBCacheStore<MessageID, ReactionAggregation[]>` OU forcer `messages.mergeUpdate` sur chaque event
+- [ ] Tests
+
+### Wave 4F — Friend content notifs (commit atomique)
+- [ ] **P2** Story creation : notif `friend_posted_story` aux amis (friends only)
+- [ ] **P2** Mood/status creation : notif `friend_posted_mood`
+- [ ] iOS `MeeshyNotificationType` + push templates
+- [ ] Tests
+
+### Plan d'exécution (parallélisation par file set)
+- **Round 1 (parallèle)** : 4A backend P0 / 4C web data / 4E iOS
+- **Round 2 (parallèle)** : 4B backend P1 / 4D web UX
+- **Round 3** : 4F friend notifs + final review
 
 **Status** : Phase 3 livrée (8 commits supplémentaires sur la branche, **18 commits total**).
 
