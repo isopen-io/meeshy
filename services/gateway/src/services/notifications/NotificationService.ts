@@ -122,6 +122,12 @@ export class NotificationService {
   private recentMentions: Map<string, number[]> = new Map();
   private readonly MAX_MENTIONS_PER_MINUTE = 5;
   private readonly MENTION_WINDOW_MS = 60000; // 1 minute
+
+  // Anti-spam: tracking des réactions récentes par paire (sender:recipient)
+  private recentReactions: Map<string, number[]> = new Map();
+  private readonly MAX_REACTIONS_PER_MINUTE = 5;
+  private readonly REACTION_WINDOW_MS = 60000; // 1 minute
+
   private pushService?: PushNotificationService;
   private emailService?: EmailService;
 
@@ -131,6 +137,7 @@ export class NotificationService {
   ) {
     // Nettoyer les entrées de rate limit périmées toutes les 2 minutes
     setInterval(() => this.cleanupOldMentions(), 120000);
+    setInterval(() => this.cleanupOldReactions(), 120000);
   }
 
   // ==============================================
@@ -775,6 +782,11 @@ export class NotificationService {
     conversationId: string;
     reactionEmoji: string;
   }): Promise<Notification | null> {
+    // Anti-spam: throttle reaction notifications per sender→recipient pair
+    if (!this.shouldCreateReactionNotification(params.reactorUserId, params.messageAuthorId)) {
+      return null;
+    }
+
     const [reactor, conversation, message] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: params.reactorUserId },
@@ -838,6 +850,11 @@ export class NotificationService {
     reactionEmoji: string;
   }): Promise<void> {
     if (params.commentAuthorId === params.reactorUserId) return;
+
+    // Anti-spam: throttle reaction notifications per sender→recipient pair
+    if (!this.shouldCreateReactionNotification(params.reactorUserId, params.commentAuthorId)) {
+      return;
+    }
 
     const reactor = await this.prisma.user.findUnique({
       where: { id: params.reactorUserId },
@@ -1558,6 +1575,11 @@ export class NotificationService {
     // Don't notify yourself
     if (params.actorId === params.postAuthorId) return null;
 
+    // Anti-spam: throttle reaction notifications per sender→recipient pair
+    if (!this.shouldCreateReactionNotification(params.actorId, params.postAuthorId)) {
+      return null;
+    }
+
     const actor = await this.prisma.user.findUnique({
       where: { id: params.actorId },
       select: { username: true, displayName: true, avatar: true },
@@ -2250,6 +2272,46 @@ export class NotificationService {
         this.recentMentions.delete(key);
       } else {
         this.recentMentions.set(key, recent);
+      }
+    }
+  }
+
+  /**
+   * Vérifie le rate limit des réactions par paire (sender → recipient).
+   * Maximum MAX_REACTIONS_PER_MINUTE réactions par minute par paire.
+   * La réaction elle-même est toujours autorisée — seule la notification est throttlée.
+   */
+  private shouldCreateReactionNotification(senderId: string, recipientId: string): boolean {
+    const key = `${senderId}:${recipientId}`;
+    const now = Date.now();
+    const cutoff = now - this.REACTION_WINDOW_MS;
+
+    const timestamps = this.recentReactions.get(key) ?? [];
+    const recentTimestamps = timestamps.filter(ts => ts > cutoff);
+
+    if (recentTimestamps.length >= this.MAX_REACTIONS_PER_MINUTE) {
+      return false;
+    }
+
+    recentTimestamps.push(now);
+    this.recentReactions.set(key, recentTimestamps);
+    return true;
+  }
+
+  /**
+   * Nettoie les entrées périmées de la map recentReactions.
+   * Appelé automatiquement toutes les 2 minutes via setInterval.
+   */
+  private cleanupOldReactions(): void {
+    const now = Date.now();
+    const cutoff = now - this.REACTION_WINDOW_MS;
+
+    for (const [key, timestamps] of this.recentReactions.entries()) {
+      const recent = timestamps.filter(ts => ts > cutoff);
+      if (recent.length === 0) {
+        this.recentReactions.delete(key);
+      } else {
+        this.recentReactions.set(key, recent);
       }
     }
   }

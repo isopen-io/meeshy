@@ -215,13 +215,20 @@ export function registerCoreRoutes(
         }
       }
 
-      // Broadcast story edits to viewers so they don't render stale content.
-      // Regular posts already have `broadcastPostUpdated`; stories need their
-      // own event so iOS / web can listen narrowly to story changes (per audit
-      // X7 — without this, deletes and edits silently desync the cached tray).
+      // Broadcast post edits. Each type has its own event so clients can listen narrowly:
+      // - STORY → story:updated (visibility-filtered, per audit X7)
+      // - STATUS → status:updated (visibility-filtered)
+      // - POST/MOOD → post:updated to friends feed
       const socialEvents = fastify.socialEvents;
-      if (socialEvents && (post as any).type === 'STORY') {
-        socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+      if (socialEvents) {
+        const updatedPostType = (post as any).type as string;
+        if (updatedPostType === 'STORY') {
+          socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+        } else if (updatedPostType === 'STATUS') {
+          socialEvents.broadcastStatusUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+        } else {
+          socialEvents.broadcastPostUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+        }
       }
 
       return sendSuccess(reply, post, { meta: { mentionedUsers: updateMentionedUsers } });

@@ -54,10 +54,12 @@ import type {
   StoryDeletedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
+  StoryUnreactedEventData,
   StatusCreatedEventData,
   StatusUpdatedEventData,
   StatusDeletedEventData,
   StatusReactedEventData,
+  StatusUnreactedEventData,
   CommentAddedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
@@ -204,13 +206,15 @@ export const SERVER_EVENTS = {
   STORY_DELETED: 'story:deleted',
   STORY_VIEWED: 'story:viewed',
   STORY_REACTED: 'story:reacted',
-  STORY_TRANSLATION_UPDATED: 'post:story-translation-updated',
+  STORY_UNREACTED: 'story:unreacted',
+  STORY_TRANSLATION_UPDATED: 'story:translation-updated',
 
   // --- Moods/Statuses ---
   STATUS_CREATED: 'status:created',
   STATUS_UPDATED: 'status:updated',
   STATUS_DELETED: 'status:deleted',
   STATUS_REACTED: 'status:reacted',
+  STATUS_UNREACTED: 'status:unreacted',
 
   // --- Comments ---
   COMMENT_ADDED: 'comment:added',
@@ -815,6 +819,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.STORY_DELETED]: (data: StoryDeletedEventData) => void;
   [SERVER_EVENTS.STORY_VIEWED]: (data: StoryViewedEventData) => void;
   [SERVER_EVENTS.STORY_REACTED]: (data: StoryReactedEventData) => void;
+  [SERVER_EVENTS.STORY_UNREACTED]: (data: StoryUnreactedEventData) => void;
   [SERVER_EVENTS.STORY_TRANSLATION_UPDATED]: (data: StoryTranslationUpdatedEventData) => void;
 
   // Moods/Statuses
@@ -822,6 +827,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.STATUS_UPDATED]: (data: StatusUpdatedEventData) => void;
   [SERVER_EVENTS.STATUS_DELETED]: (data: StatusDeletedEventData) => void;
   [SERVER_EVENTS.STATUS_REACTED]: (data: StatusReactedEventData) => void;
+  [SERVER_EVENTS.STATUS_UNREACTED]: (data: StatusUnreactedEventData) => void;
 
   // Comments
   [SERVER_EVENTS.COMMENT_ADDED]: (data: CommentAddedEventData) => void;

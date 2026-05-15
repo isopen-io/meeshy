@@ -180,6 +180,12 @@ export interface StoryReactedEventData {
   readonly emoji: string;
 }
 
+export interface StoryUnreactedEventData {
+  readonly storyId: string;
+  readonly userId: string;
+  readonly emoji: string;
+}
+
 export interface StatusCreatedEventData {
   readonly status: Post;
 }
@@ -194,6 +200,12 @@ export interface StatusDeletedEventData {
 }
 
 export interface StatusReactedEventData {
+  readonly statusId: string;
+  readonly userId: string;
+  readonly emoji: string;
+}
+
+export interface StatusUnreactedEventData {
   readonly statusId: string;
   readonly userId: string;
   readonly emoji: string;

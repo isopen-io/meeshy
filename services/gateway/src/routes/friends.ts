@@ -580,6 +580,16 @@ export async function friendRequestRoutes(fastify: FastifyInstance) {
         }
       }
 
+      // Invalider le cache des amis pour les deux utilisateurs afin que les prochains
+      // broadcasts incluent le nouvel ami sans attendre l'expiration du TTL (30s).
+      if (body.status === 'accepted') {
+        const socialEvents = (fastify as any).socialEvents;
+        if (socialEvents) {
+          socialEvents.invalidateFriendsCache(friendRequest.senderId);
+          socialEvents.invalidateFriendsCache(friendRequest.receiverId);
+        }
+      }
+
       // Si acceptee, creer une conversation directe entre les utilisateurs
       if (body.status === 'accepted') {
         const existingConversation = await fastify.prisma.conversation.findFirst({

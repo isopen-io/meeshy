@@ -65,15 +65,21 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      // Broadcast like via Socket.IO. Stories use a private `story:reacted`
-      // event aimed only at the author — previously they fanned out as
-      // `post:liked` to ALL friends (privacy leak: a reaction to a private
-      // story was advertised to the author's entire feed).
+      // Broadcast like via Socket.IO. Each post type fans out differently:
+      // - STORY → private story:reacted to author + post room (privacy: not fanned to friends)
+      // - STATUS → status:reacted to author + post room (same privacy model as STORY)
+      // - POST/MOOD → post:liked fan-out to all friends
       const socialEvents = fastify.socialEvents;
       if (socialEvents && post.authorId) {
         if (post.type === 'STORY') {
           socialEvents.broadcastStoryReacted({
             storyId: postId,
+            userId: authContext.registeredUser.id,
+            emoji,
+          }, post.authorId);
+        } else if (post.type === 'STATUS') {
+          socialEvents.broadcastStatusReacted({
+            statusId: postId,
             userId: authContext.registeredUser.id,
             emoji,
           }, post.authorId);
@@ -144,16 +150,30 @@ export function registerInteractionRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      // Broadcast unlike via Socket.IO
+      // Broadcast unlike via Socket.IO. Mirror the like broadcast routing per post type.
       const socialEvents = fastify.socialEvents;
       if (socialEvents && post.authorId) {
-        socialEvents.broadcastPostUnliked({
-          postId,
-          userId: authContext.registeredUser.id,
-          emoji: '❤️',
-          likeCount: post.likeCount,
-          reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
-        }, post.authorId).catch(() => {});
+        if (post.type === 'STORY') {
+          socialEvents.broadcastStoryUnreacted({
+            storyId: postId,
+            userId: authContext.registeredUser.id,
+            emoji: '❤️',
+          }, post.authorId);
+        } else if (post.type === 'STATUS') {
+          socialEvents.broadcastStatusUnreacted({
+            statusId: postId,
+            userId: authContext.registeredUser.id,
+            emoji: '❤️',
+          }, post.authorId);
+        } else {
+          socialEvents.broadcastPostUnliked({
+            postId,
+            userId: authContext.registeredUser.id,
+            emoji: '❤️',
+            likeCount: post.likeCount,
+            reactionSummary: (post.reactionSummary as Record<string, number>) ?? {},
+          }, post.authorId).catch(() => {});
+        }
       }
 
       return sendSuccess(reply, { liked: false, reactionSummary: post.reactionSummary });
