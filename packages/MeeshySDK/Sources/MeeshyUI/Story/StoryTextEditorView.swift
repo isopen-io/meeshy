@@ -18,11 +18,25 @@ public struct StoryTextEditorView: View {
         self.onDelete = onDelete
     }
 
+    // Texte adaptatif aligné sur les autres panels (ComposerToolPanelHost).
+    // Le bandeau parent fournit déjà un fond opaque tinté ; ce panel doit donc
+    // s'aplatir dedans sans empiler son propre material ni sa propre carte.
+    private var primaryText: Color { colorScheme == .dark ? .white : MeeshyColors.indigo950 }
+    private var secondaryText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.78) }
+    private var mutedText: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.55) }
+    private var inputBackground: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.08) }
+    private var chipFill: Color { (colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.10) }
+
     public var body: some View {
+        // Flat layout (pas de carte / clipShape / ultraThinMaterial superposé) :
+        // le bandeau parent (ComposerBottomBand) fournit déjà le fond opaque
+        // tinté et les coins arrondis du haut. Empiler une seconde carte ici
+        // donnait un effet "feuille flottante" qui ne correspondait pas à la
+        // charte du composer.
         VStack(spacing: 0) {
             editorHeader
                 .padding(.horizontal, 14)
-                .padding(.top, 12)
+                .padding(.top, 8)
                 .padding(.bottom, 4)
             textInputRow
             quickActions
@@ -30,9 +44,6 @@ public struct StoryTextEditorView: View {
             expandedSectionContent
         }
         .padding(.bottom, 4)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
-        .padding(.horizontal, 16)
     }
 
     // MARK: - Editor Header
@@ -53,6 +64,10 @@ public struct StoryTextEditorView: View {
 
     private var textInputRow: some View {
         HStack(spacing: 8) {
+            // Pour la zone d'édition on garde la couleur du texte choisie par
+            // l'utilisateur (textColor) — c'est le rendu réel du texte sur le
+            // canvas. Si la couleur est trop claire pour le fond clair de
+            // l'éditeur, on ajoute un overlay subtil pour la lisibilité.
             TextField(String(localized: "story.textEditor.placeholder", defaultValue: "Saisissez votre texte...", bundle: .module), text: contentBinding, axis: .vertical)
                 .font(storyFont(for: textObject.parsedTextStyle, size: min(textObject.resolvedSize, 20)))
                 .foregroundColor(Color(hex: textObject.textColor ?? "FFFFFF"))
@@ -62,10 +77,15 @@ public struct StoryTextEditorView: View {
                 .padding(10)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(Color.white.opacity(0.08))
+                        // Fond du champ : indigo950 atténué pour donner du
+                        // contraste à un texte blanc, blanc atténué inversement.
+                        // On choisit le foncé en light + clair en dark pour
+                        // simuler un "papier" qui supporte n'importe quelle
+                        // textColor choisie par l'utilisateur.
+                        .fill(colorScheme == .dark ? MeeshyColors.indigo950.opacity(0.35) : MeeshyColors.indigo950.opacity(0.85))
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(MeeshyColors.indigo400.opacity(isFocused ? 0.6 : 0.2), lineWidth: 1)
+                                .stroke(MeeshyColors.indigo400.opacity(isFocused ? 0.7 : 0.3), lineWidth: 1)
                         )
                 )
 
@@ -78,7 +98,7 @@ public struct StoryTextEditorView: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                         .frame(width: 34, height: 34)
-                        .background(Circle().fill(Color.white.opacity(0.08)))
+                        .background(Circle().fill(MeeshyColors.error.opacity(0.12)))
                 }
             }
         }
@@ -98,9 +118,9 @@ public struct StoryTextEditorView: View {
             } label: {
                 Text("Aa")
                     .font(storyFont(for: textObject.parsedTextStyle, size: 14))
-                    .foregroundColor(.white)
+                    .foregroundColor(primaryText)
                     .frame(width: 34, height: 30)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)))
+                    .background(RoundedRectangle(cornerRadius: 6).fill(chipFill))
             }
 
             // Alignment cycle
@@ -110,9 +130,9 @@ public struct StoryTextEditorView: View {
             } label: {
                 Image(systemName: alignmentIcon)
                     .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(secondaryText)
                     .frame(width: 34, height: 30)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)))
+                    .background(RoundedRectangle(cornerRadius: 6).fill(chipFill))
             }
 
             // Background toggle
@@ -122,9 +142,9 @@ public struct StoryTextEditorView: View {
             } label: {
                 Image(systemName: textObject.hasBg ? "a.square.fill" : "a.square")
                     .font(.system(size: 14, weight: .medium))
-                    .foregroundColor(textObject.hasBg ? MeeshyColors.brandPrimary : .white.opacity(0.5))
+                    .foregroundColor(textObject.hasBg ? MeeshyColors.brandPrimary : mutedText)
                     .frame(width: 34, height: 30)
-                    .background(RoundedRectangle(cornerRadius: 6).fill(Color.white.opacity(0.12)))
+                    .background(RoundedRectangle(cornerRadius: 6).fill(chipFill))
             }
 
             Spacer()
@@ -136,7 +156,7 @@ public struct StoryTextEditorView: View {
                 Circle()
                     .fill(Color(hex: textObject.textColor ?? "FFFFFF"))
                     .frame(width: 22, height: 22)
-                    .overlay(Circle().stroke(Color.white.opacity(0.4), lineWidth: 1.5))
+                    .overlay(Circle().stroke(primaryText.opacity(0.5), lineWidth: 1.5))
             }
         }
         .padding(.horizontal, 14)
@@ -171,11 +191,13 @@ public struct StoryTextEditorView: View {
                 Text(label)
                     .font(.system(size: 11, weight: .semibold))
             }
-            .foregroundStyle(isActive ? .white : .white.opacity(0.5))
+            // Tabs lisibles dans les 2 modes : blanc sur le pill brand actif,
+            // primary/secondary text-color sur le pill neutre.
+            .foregroundStyle(isActive ? Color.white : secondaryText)
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
             .background(
-                Capsule().fill(isActive ? MeeshyColors.brandPrimary.opacity(0.8) : Color.white.opacity(0.08))
+                Capsule().fill(isActive ? MeeshyColors.brandPrimary.opacity(0.85) : chipFill)
             )
         }
         .buttonStyle(.plain)
@@ -214,15 +236,15 @@ public struct StoryTextEditorView: View {
                         VStack(spacing: 4) {
                             Text("Aa")
                                 .font(storyFont(for: style, size: 18))
-                                .foregroundColor(isSelected ? .white : .white.opacity(0.6))
+                                .foregroundColor(isSelected ? Color.white : primaryText)
                                 .frame(width: 52, height: 40)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .fill(isSelected ? MeeshyColors.brandPrimary : Color.white.opacity(0.1))
+                                        .fill(isSelected ? MeeshyColors.brandPrimary : chipFill)
                                 )
                             Text(style.displayName)
                                 .font(.system(size: 9, weight: .medium))
-                                .foregroundColor(isSelected ? .white : .white.opacity(0.4))
+                                .foregroundColor(isSelected ? primaryText : mutedText)
                         }
                     }
                     .buttonStyle(.plain)
@@ -247,7 +269,13 @@ public struct StoryTextEditorView: View {
                             .fill(Color(hex: hex))
                             .frame(width: 30, height: 30)
                             .overlay(
-                                Circle().stroke(Color.white, lineWidth: isSelected ? 2.5 : 0).padding(1)
+                                Circle().stroke(primaryText, lineWidth: isSelected ? 2.5 : 0).padding(1)
+                            )
+                            .overlay(
+                                // Bord subtil pour distinguer la pastille du fond du panel,
+                                // surtout pour les couleurs très claires (blanc, gris) en
+                                // light mode où elles se confondent avec le panel blanc.
+                                Circle().stroke(primaryText.opacity(0.15), lineWidth: 0.5)
                             )
                             .scaleEffect(isSelected ? 1.15 : 1.0)
                             .animation(.spring(response: 0.2), value: isSelected)
@@ -264,18 +292,18 @@ public struct StoryTextEditorView: View {
         HStack(spacing: 8) {
             Image(systemName: "textformat.size.smaller")
                 .font(.system(size: 11))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(mutedText)
 
             Slider(value: sizeBinding, in: 14...60, step: 1)
                 .tint(MeeshyColors.brandPrimary)
 
             Image(systemName: "textformat.size.larger")
                 .font(.system(size: 15))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(mutedText)
 
             Text("\(Int(textObject.resolvedSize))")
                 .font(.system(size: 11, weight: .bold, design: .monospaced))
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(secondaryText)
                 .frame(width: 28)
         }
         .padding(.horizontal, 14)
@@ -302,13 +330,13 @@ public struct StoryTextEditorView: View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(mutedText)
             HStack(spacing: 4) {
                 Slider(value: value, in: range, step: 0.5)
                     .tint(MeeshyColors.indigo400)
                 Text("\(String(format: "%.1f", value.wrappedValue))\(unit)")
                     .font(.system(size: 10, weight: .medium, design: .monospaced))
-                    .foregroundColor(.white.opacity(0.5))
+                    .foregroundColor(secondaryText)
                     .frame(width: 32)
             }
         }

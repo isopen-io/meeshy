@@ -3,13 +3,6 @@ import Combine
 import MeeshySDK
 import MeeshyUI
 
-enum ContactConnectionStatus: Equatable {
-    case connected
-    case pendingSent
-    case pendingReceived
-    case none
-}
-
 @MainActor
 final class DiscoverViewModel: ObservableObject {
     @Published var searchResults: [UserSearchResult] = []
@@ -27,16 +20,40 @@ final class DiscoverViewModel: ObservableObject {
     private let friendService: FriendServiceProviding
     private let userService: UserServiceProviding
     private let cache = FriendshipCache.shared
+    private let resolver: UserRelationshipResolver
+    private var cancellables: Set<AnyCancellable> = []
 
     private var suggestionsRevalidationTask: Task<Void, Never>?
     private let suggestionsKey = "discover:suggestions"
 
     init(
         friendService: FriendServiceProviding = FriendService.shared,
-        userService: UserServiceProviding = UserService.shared
+        userService: UserServiceProviding = UserService.shared,
+        resolver: UserRelationshipResolver = .shared
     ) {
         self.friendService = friendService
         self.userService = userService
+        self.resolver = resolver
+        // Bridge external state changes into our own objectWillChange so the
+        // Discover row badges flip when a request is accepted/blocked from
+        // any other screen (Requests tab, profile sheet, push notification).
+        // Without this, `relationshipState(for:)` would return the right
+        // value but SwiftUI wouldn't know to re-evaluate the row.
+        //
+        // `.receive(on: DispatchQueue.main)` hops the value to MainActor
+        // before we touch `objectWillChange` — `@MainActor` isolation
+        // requires it, and the publisher emits from whatever queue mutated
+        // the cache.
+        cache.$version
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
+        BlockService.shared.$blockedUserIds
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.objectWillChange.send() }
+            .store(in: &cancellables)
     }
 
     deinit {
@@ -89,13 +106,11 @@ final class DiscoverViewModel: ObservableObject {
         )
     }
 
-    func connectionStatus(for userId: String) -> ContactConnectionStatus {
-        switch cache.status(for: userId) {
-        case .friend: return .connected
-        case .pendingSent: return .pendingSent
-        case .pendingReceived: return .pendingReceived
-        case .none: return .none
-        }
+    /// Resolves the relationship state for a search result row. Combines
+    /// friendship + block state into a single value via the shared resolver,
+    /// so Discover stays consistent with the rest of the app.
+    func relationshipState(for userId: String) -> UserRelationshipState {
+        resolver.resolve(userId: userId)
     }
 
     // MARK: - Send Friend Request

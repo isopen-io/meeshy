@@ -671,6 +671,145 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM
 
+# ─── Release Check (mirror Xcode Cloud) ─────────────────────────────────────
+# Catches Release/-O/-whole-module-optimization compiler regressions BEFORE
+# Xcode Cloud archives. Uses the project's own Release config — never override
+# SWIFT_VERSION / SWIFT_OPTIMIZATION_LEVEL via CLI (it would force settings on
+# SwiftPM packages like GRDB/Starscream that are not Swift 6 ready and break
+# them; Xcode Cloud doesn't do this either).
+do_release_check() {
+    log "Release check — mirror Xcode Cloud archive optimizer (no signing)"
+
+    local check_derived="$DERIVED_DATA/ReleaseCheck"
+    mkdir -p "$check_derived"
+
+    log "Project Release settings :"
+    xcodebuild -showBuildSettings -project "$PROJECT" -scheme "$SCHEME" -configuration Release 2>/dev/null \
+        | grep -E "^\s+(SWIFT_OPTIMIZATION_LEVEL|SWIFT_COMPILATION_MODE|SWIFT_VERSION) =" \
+        | sed 's/^/    /' || true
+
+    log "Building Release for generic iOS (this exercises -O -wmo)…"
+    set +e
+    xcodebuild \
+        -project "$PROJECT" \
+        -scheme "$SCHEME" \
+        -configuration Release \
+        -destination 'generic/platform=iOS' \
+        -derivedDataPath "$check_derived" \
+        -skipPackagePluginValidation \
+        -skipMacroValidation \
+        CODE_SIGNING_ALLOWED=NO \
+        CODE_SIGNING_REQUIRED=NO \
+        build 2>&1 \
+        | tee "$check_derived/build.log" \
+        | grep -E "error:|warning:.*deprecated|PLEASE submit|Stack dump|Command SwiftCompile failed|\*\* BUILD" \
+        | head -40
+    local rc=${PIPESTATUS[0]}
+    set -e
+
+    echo ""
+    if [ "$rc" -eq 0 ]; then
+        ok "Release check PASSED — Xcode Cloud archive should compile cleanly"
+        return 0
+    else
+        err "Release check FAILED (exit $rc) — full log: $check_derived/build.log"
+        echo ""
+        echo -e "  ${DIM}If the failure is a swift-frontend crash on a generic class deinit,${NC}"
+        echo -e "  ${DIM}see memory/feedback_swift_632_generic_class_deinit_crash.md${NC}"
+        return "$rc"
+    fi
+}
+
+# ─── Release (fastlane → TestFlight / App Store) ─────────────────────────────
+# Uploads a Release build to App Store Connect via fastlane, bypassing Xcode
+# Cloud entirely. Useful when Xcode Cloud's "Prepare Build for App Store
+# Connect" step fails to authenticate (e.g. missing API key in workflow,
+# unsigned agreements, app record not yet created).
+#
+# Uses the ASC API Key checked into the repo at fastlane/AuthKey_5542B6LVNL.p8
+# (matching the credentials in fastlane/Fastfile). The .p8 is gitignored in
+# production environments — adjust ASC_KEY_FILEPATH below if you rotate keys.
+#
+# Default: TestFlight (fastlane beta).
+# Flag    --appstore : full App Store submission (fastlane release).
+# Flag    --skip-tests : skip the unit-test pre-flight run.
+do_release() {
+    local lane="beta"
+    local lane_label="TestFlight"
+    [ "${RELEASE_TARGET:-testflight}" = "appstore" ] && { lane="release"; lane_label="App Store"; }
+
+    local key_file="$(pwd)/fastlane/AuthKey_5542B6LVNL.p8"
+    if [ ! -f "$key_file" ]; then
+        err "ASC API Key missing: $key_file"
+        err "Drop the .p8 file there or rotate the key via App Store Connect → Users → Integrations → App Store Connect API"
+        return 1
+    fi
+
+    if ! command -v bundle >/dev/null 2>&1; then
+        err "Bundler missing. Install with: gem install bundler"
+        return 1
+    fi
+
+    if [ ! -f "Gemfile.lock" ]; then
+        log "Bundle install (first-time setup)…"
+        bundle install || return 1
+    fi
+
+    # Match needs MATCH_PASSWORD to decrypt the certificates Git repo. The password
+    # was chosen the first time `fastlane match init` ran. We accept it via :
+    #   1. MATCH_PASSWORD env var (already supported by fastlane itself)
+    #   2. apps/ios/.env file with MATCH_PASSWORD=… (sourced here if present)
+    #   3. macOS keychain entry "fastlane-match" (auto-discovered by fastlane match)
+    if [ -z "${MATCH_PASSWORD:-}" ] && [ -f ".env" ]; then
+        # shellcheck disable=SC1091
+        set -a; source .env; set +a
+    fi
+    if [ -z "${MATCH_PASSWORD:-}" ] && ! security find-generic-password -l "fastlane-match" >/dev/null 2>&1; then
+        err "MATCH_PASSWORD is unset and the keychain has no 'fastlane-match' entry."
+        echo ""
+        echo -e "  ${DIM}fastlane match needs the password chosen at 'fastlane match init' time.${NC}"
+        echo -e "  ${DIM}Options :${NC}"
+        echo -e "  ${DIM}  1. Pass inline      :${NC} MATCH_PASSWORD=xxx ./meeshy.sh release"
+        echo -e "  ${DIM}  2. Store in .env    :${NC} echo 'MATCH_PASSWORD=xxx' >> apps/ios/.env"
+        echo -e "  ${DIM}  3. Save to keychain :${NC} cd apps/ios && bundle exec fastlane match appstore --readonly  ${DIM}(prompts once)${NC}"
+        echo -e "  ${DIM}  4. Lost the password:${NC} cd apps/ios && bundle exec fastlane match nuke distribution ${DIM}+ recreate (irreversible)${NC}"
+        return 1
+    fi
+
+    log "Release → $lane_label via fastlane (lane: $lane)"
+    log "ASC API Key : $(basename "$key_file") (key_id from Fastfile: 5542B6LVNL)"
+    [ -n "${MATCH_PASSWORD:-}" ] && log "MATCH_PASSWORD : sourced (env or .env)"
+
+    local fastlane_args=()
+    [ "${SKIP_TESTS:-}" = "true" ] && fastlane_args+=("skip_tests:true")
+    [ -n "${RELEASE_CHANGELOG:-}" ] && fastlane_args+=("changelog:${RELEASE_CHANGELOG}")
+    [ -n "${RELEASE_VERSION:-}" ] && fastlane_args+=("version:${RELEASE_VERSION}")
+
+    echo ""
+    warn "This will : sync certificates · build Release IPA (~15 min) · upload to $lane_label"
+    echo ""
+
+    ASC_KEY_FILEPATH="$key_file" \
+    ASC_KEY_ID="5542B6LVNL" \
+    ASC_ISSUER_ID="69a6de89-ae7a-47e3-e053-5b8c7c11a4d1" \
+        bundle exec fastlane "$lane" "${fastlane_args[@]}"
+    local rc=$?
+
+    echo ""
+    if [ "$rc" -eq 0 ]; then
+        ok "Release to $lane_label SUCCEEDED"
+    else
+        err "Release to $lane_label FAILED (exit $rc)"
+        echo ""
+        echo -e "  ${DIM}Common failures :${NC}"
+        echo -e "  ${DIM} - 'Failed to authenticate' → key revoked or expired ; create new one in ASC${NC}"
+        echo -e "  ${DIM} - 'App not found' → register me.meeshy.app in App Store Connect → My Apps first${NC}"
+        echo -e "  ${DIM} - 'Agreements pending' → sign in ASC → Agreements, Tax, and Banking${NC}"
+        echo -e "  ${DIM} - Match certificate errors → ./meeshy.sh release with fresh keychain${NC}"
+    fi
+    return "$rc"
+}
+
 # ─── Archive + IPA ───────────────────────────────────────────────────────────
 do_archive() {
     local archive_config="${CONFIGURATION:-Release}"
@@ -1067,6 +1206,8 @@ usage() {
     echo -e "    ${GREEN}status${NC}       Show simulator/app status"
     echo -e "    ${GREEN}clean${NC}        Clean build artifacts ${DIM}(add --deep for global caches)${NC}"
     echo -e "    ${GREEN}archive${NC}      Create archive + IPA for distribution"
+    echo -e "    ${GREEN}release-check${NC} Mirror Xcode Cloud Release build locally ${DIM}(catch -O/-wmo crashes before push)${NC}"
+    echo -e "    ${GREEN}release${NC}      Upload to TestFlight via fastlane ${DIM}(--appstore for App Store submission)${NC}"
     echo -e "    ${GREEN}distribute${NC}   App Store build ${DIM}(auto: signing, aps-environment, preflight)${NC}"
     echo -e "    ${GREEN}test${NC}         Run unit tests ${DIM}(add --ui for UI tests)${NC}"
     echo -e "    ${GREEN}setup${NC}        Check/install dev dependencies"
@@ -1095,6 +1236,10 @@ usage() {
     echo -e "    ${DIM}./meeshy.sh build --release${NC}          ${DIM}# Release build only${NC}"
     echo -e "    ${DIM}./meeshy.sh build --ipad${NC}             ${DIM}# Build for iPad sim${NC}"
     echo -e "    ${DIM}./meeshy.sh archive -m ad-hoc${NC}        ${DIM}# Ad-hoc IPA${NC}"
+    echo -e "    ${DIM}./meeshy.sh release-check${NC}            ${DIM}# Mirror Xcode Cloud Release build (no signing)${NC}"
+    echo -e "    ${DIM}./meeshy.sh release${NC}                  ${DIM}# Upload Release to TestFlight via fastlane${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --appstore${NC}       ${DIM}# Submit to App Store via fastlane${NC}"
+    echo -e "    ${DIM}./meeshy.sh release --skip-tests${NC}     ${DIM}# TestFlight upload without pre-flight tests${NC}"
     echo -e "    ${DIM}./meeshy.sh distribute${NC}               ${DIM}# App Store / TestFlight build${NC}"
     echo -e "    ${DIM}./meeshy.sh test --ui --coverage${NC}     ${DIM}# All tests + coverage${NC}"
     echo -e "    ${DIM}./meeshy.sh clean --deep${NC}             ${DIM}# Nuke all caches${NC}"
@@ -1108,7 +1253,7 @@ DEEP_CLEAN=false
 
 # Check if first arg is a known command
 case "$COMMAND" in
-    run|build|stop|restart|logs|status|clean|archive|distribute|test|setup|screenshot|device|help|-h|--help)
+    run|build|stop|restart|logs|status|clean|archive|release-check|release|distribute|test|setup|screenshot|device|help|-h|--help)
         shift || true
         ;;
     -*)
@@ -1126,6 +1271,11 @@ while [[ $# -gt 0 ]]; do
     case "$1" in
         --clean|-C)       CLEAN=true; shift ;;
         --release|-r)     CONFIGURATION="Release"; shift ;;
+        --testflight)     RELEASE_TARGET="testflight"; shift ;;
+        --appstore)       RELEASE_TARGET="appstore"; shift ;;
+        --skip-tests)     SKIP_TESTS=true; shift ;;
+        --changelog)      RELEASE_CHANGELOG="$2"; shift 2 ;;
+        --version)        RELEASE_VERSION="$2"; shift 2 ;;
         -c|--configuration) CONFIGURATION="$2"; shift 2 ;;
         -m|--method)      EXPORT_METHOD="$2"; shift 2 ;;
         --ui)             UI_TESTS=true; shift ;;
@@ -1235,6 +1385,14 @@ case "$COMMAND" in
 
     archive)
         do_archive
+        ;;
+
+    release-check)
+        do_release_check
+        ;;
+
+    release)
+        do_release
         ;;
 
     distribute)

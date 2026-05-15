@@ -13,7 +13,7 @@
 const APP_BUILD_VERSION = '__RUNTIME_BUILD_VERSION__' !== '__RUNTIME' + '_BUILD_VERSION__'
   ? '__RUNTIME_BUILD_VERSION__'
   : `DEV_${Date.now()}`;
-const SW_VERSION = '1.3.0';
+const SW_VERSION = '1.3.1';
 const CACHE_NAME = `meeshy-cache-${APP_BUILD_VERSION}`;
 
 // Assets critiques pour l'App Shell (chargement instantané)
@@ -83,6 +83,15 @@ self.addEventListener('fetch', (event) => {
 
   // 1. Ignorer le streaming WebSocket et les uploads volumineux
   if (url.pathname.startsWith('/socket.io') || request.method !== 'GET') {
+    return;
+  }
+
+  // 1bis. Ne pas intercepter les fichiers d'attachements (avatars,
+  // images, audio, video). Ces requêtes sont cross-origin / no-cors,
+  // souvent volumineuses, et un échec réseau côté SW se traduit par un
+  // Response.error() qui casse le <img>. On laisse le navigateur les
+  // gérer directement (cache HTTP natif + ETag du gateway).
+  if (url.pathname.includes('/attachments/file/') || url.pathname.includes('/static/')) {
     return;
   }
 

@@ -15,6 +15,13 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
     private let logger = Logger(subsystem: "com.meeshy.sdk", category: "friendship-cache")
     private let lock = NSLock()
 
+    /// Monotonic version bumped on every mutation. Use `@ObservedObject` on
+    /// `FriendshipCache.shared` and observe `version` (or `$version` via
+    /// Combine) to react to cache changes without manually subscribing to
+    /// `objectWillChange`. ViewModels that already expose their own
+    /// `objectWillChange` should subscribe to `$version` and re-emit.
+    @Published public private(set) var version: Int = 0
+
     private var _friendIds: Set<String> = []
     private var _sentPending: [String: String] = [:]      // receiverId -> requestId
     private var _receivedPending: [String: String] = [:]   // senderId -> requestId
@@ -152,7 +159,7 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
             return
         }
 
-        await MainActor.run { objectWillChange.send() }
+        await MainActor.run { self.version &+= 1 }
 
         // Capture counts as plain Int locals BEFORE the log interpolation.
         // Letting os_log interpolate `\(self._friendIds.count)` directly was
@@ -230,14 +237,14 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         lock.lock()
         _sentPending[receiverId] = requestId
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func didCancelRequest(to receiverId: String) {
         lock.lock()
         _sentPending.removeValue(forKey: receiverId)
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func didAcceptRequest(from senderId: String) {
@@ -245,21 +252,31 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         _receivedPending.removeValue(forKey: senderId)
         _friendIds.insert(senderId)
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func didRejectRequest(from senderId: String) {
         lock.lock()
         _receivedPending.removeValue(forKey: senderId)
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func didReceiveRequest(from senderId: String, requestId: String) {
         lock.lock()
         _receivedPending[senderId] = requestId
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
+    }
+
+    /// Used when a friendship is severed from the contacts list (e.g. the
+    /// "Remove friend" action) — drops the user from the accepted set so the
+    /// resolver returns `.none` everywhere immediately.
+    public func didRemoveFriend(_ userId: String) {
+        lock.lock()
+        _friendIds.remove(userId)
+        lock.unlock()
+        notifyChange()
     }
 
     // MARK: - Rollback
@@ -268,7 +285,7 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         lock.lock()
         _sentPending.removeValue(forKey: receiverId)
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func rollbackAccept(senderId: String, requestId: String) {
@@ -276,14 +293,66 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         _friendIds.remove(senderId)
         _receivedPending[senderId] = requestId
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 
     public func rollbackReject(senderId: String, requestId: String) {
         lock.lock()
         _receivedPending[senderId] = requestId
         lock.unlock()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
+    }
+
+    // MARK: - Change notification
+
+    /// Bump the version on the main actor. `@Published` will fire
+    /// `objectWillChange` automatically, so any `@ObservedObject` view or any
+    /// Combine subscriber on `$version` reacts. We hop to the main actor
+    /// because `@Published` mutations must originate there.
+    ///
+    /// Persistence invalidation is NOT triggered from here on purpose:
+    /// callers (RequestsViewModel, ConnectionActionView, NotificationManager)
+    /// often need to interleave invalidation with an optimistic `save()`
+    /// into the same GRDB entry, and a fire-and-forget Task here would race
+    /// against that save. Each mutation site invokes
+    /// `invalidatePersistedFriendCaches()` explicitly so the order is
+    /// deterministic.
+    private func notifyChange() {
+        Task { @MainActor in self.version &+= 1 }
+    }
+
+    // MARK: - Persistence Invalidation
+    //
+    // Every mutation flips the in-memory cache instantly, but downstream
+    // GRDB stores (the persistent contacts list, the persistent received /
+    // sent request lists) keep their own copy. If those caches are still
+    // `.fresh` (within TTL) when the next consumer loads them, the consumer
+    // would serve stale data without revalidating — masking the mutation.
+    //
+    // `invalidatePersistedFriendCaches()` marks the three friendship-derived
+    // GRDB entries as expired so the next `loadFriends()` / `loadReceived()`
+    // / `loadSent()` is forced to round-trip the gateway and refresh the
+    // persistent store. Called automatically from `notifyChange()` so every
+    // mutation cascades; also exposed `public` so call sites can await it
+    // explicitly when they need the invalidation to complete before
+    // continuing (e.g. before reading the cache again).
+
+    /// Cache keys for the friendship-derived persistent stores.
+    /// Kept here so RequestsViewModel and ContactsListViewModel use a single
+    /// source of truth instead of duplicating string literals.
+    public enum PersistenceKeys {
+        public static let friendsList = "friends_list"
+        public static let receivedRequests = "requests:received"
+        public static let sentRequests = "requests:sent"
+    }
+
+    /// Invalidate the three friendship-derived GRDB caches so the next load
+    /// forces a fresh server fetch. Safe to call from any actor.
+    public func invalidatePersistedFriendCaches() async {
+        let coord = CacheCoordinator.shared
+        await coord.friends.invalidate(for: PersistenceKeys.friendsList)
+        await coord.friendRequests.invalidate(for: PersistenceKeys.receivedRequests)
+        await coord.friendRequests.invalidate(for: PersistenceKeys.sentRequests)
     }
 
     // MARK: - Clear
@@ -305,6 +374,6 @@ public final class FriendshipCache: ObservableObject, @unchecked Sendable {
         _isHydrated = false
         lock.unlock()
         inflight?.cancel()
-        Task { @MainActor in self.objectWillChange.send() }
+        notifyChange()
     }
 }

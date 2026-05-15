@@ -178,4 +178,70 @@ final class FriendshipCacheTests: XCTestCase {
         XCTAssertTrue(sut.friendIds.contains("friend-2"))
         XCTAssertEqual(sut.friendIds.count, 2)
     }
+
+    // MARK: - didRemoveFriend
+
+    func test_didRemoveFriend_dropsUserFromFriendSet() {
+        let sut = makeSUT()
+        sut.didAcceptRequest(from: "friend-x")
+        XCTAssertTrue(sut.isFriend("friend-x"))
+
+        sut.didRemoveFriend("friend-x")
+
+        XCTAssertFalse(sut.isFriend("friend-x"))
+        XCTAssertEqual(sut.status(for: "friend-x"), .none)
+    }
+
+    // MARK: - version (reactive observation)
+
+    /// Every mutation must bump `version` on the main actor. ViewModels rely
+    /// on this — they subscribe to `$version` to re-render the rest of the
+    /// app when the cache changes, instead of polling.
+    @MainActor
+    func test_version_incrementsOnEachMutation() async {
+        let sut = makeSUT()
+        await yieldMainActor()
+        let initial = sut.version
+
+        sut.didSendRequest(to: "v1", requestId: "r1")
+        await yieldMainActor()
+        XCTAssertGreaterThan(sut.version, initial, "didSendRequest must bump version")
+
+        let afterSend = sut.version
+        sut.didReceiveRequest(from: "v2", requestId: "r2")
+        await yieldMainActor()
+        XCTAssertGreaterThan(sut.version, afterSend, "didReceiveRequest must bump version")
+
+        let afterReceive = sut.version
+        sut.didAcceptRequest(from: "v2")
+        await yieldMainActor()
+        XCTAssertGreaterThan(sut.version, afterReceive, "didAcceptRequest must bump version")
+
+        let afterAccept = sut.version
+        sut.didCancelRequest(to: "v1")
+        await yieldMainActor()
+        XCTAssertGreaterThan(sut.version, afterAccept, "didCancelRequest must bump version")
+    }
+
+    /// `clear()` is also a mutation — observers (eg. logout flows that flush
+    /// per-user UI state) must see the bump too.
+    @MainActor
+    func test_version_incrementsOnClear() async {
+        let sut = makeSUT()
+        sut.didAcceptRequest(from: "x")
+        await yieldMainActor()
+        let before = sut.version
+
+        sut.clear()
+        await yieldMainActor()
+
+        XCTAssertGreaterThan(sut.version, before)
+    }
+
+    /// Bumps run through `Task { @MainActor }`, so we yield to let scheduled
+    /// tasks land before asserting. One `Task.yield()` is enough — the bumps
+    /// don't await further work.
+    private func yieldMainActor() async {
+        for _ in 0..<3 { await Task.yield() }
+    }
 }

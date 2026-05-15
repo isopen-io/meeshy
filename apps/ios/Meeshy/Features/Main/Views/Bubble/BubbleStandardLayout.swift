@@ -297,12 +297,13 @@ struct BubbleStandardLayout: View {
                 // bleeding ~8pt below the bubble's bottom edge so they
                 // float as "stickers" attached to the corner, just above
                 // where the inline quick-reaction bar will rise from the
-                // composer. The pills + smiley add-button are anchored
-                // here so they keep their relationship with the source
-                // bubble even when the quick-reaction bar is visible.
+                // composer. La leading/trailing edge déborde maintenant
+                // de -4pt (auparavant +8pt INTÉRIEUR) pour donner un effet
+                // "à cheval" sur le coin : ~50% sous le coin de la bulle,
+                // ~50% dehors. C'est le look "sticker collé au coin" demandé.
                 .overlay(alignment: isMe ? .bottomTrailing : .bottomLeading) {
                     reactionsOverlay
-                        .padding(isMe ? .trailing : .leading, 8)
+                        .padding(isMe ? .trailing : .leading, -4)
                         .offset(y: 8)
                 }
 

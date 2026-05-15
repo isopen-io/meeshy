@@ -11,6 +11,14 @@ public final class SendablePassthrough<Output: Sendable>: @unchecked Sendable {
 
     public init() {}
 
+    /// Explicit empty deinit — defensive workaround for the Swift 6.3.2
+    /// optimizer crash (EarlyPerfInliner / isCallerAndCalleeLayoutConstraintsCompatible)
+    /// observed on generic-class synthesized deinits under Release
+    /// `-O -whole-module-optimization`. An explicit body changes the SIL
+    /// representation enough to sidestep the inliner's layout-compat check
+    /// path. Do NOT remove without verifying Xcode Cloud archive succeeds.
+    deinit {}
+
     public func send(_ value: Output) {
         subject.send(value)
     }
@@ -38,6 +46,10 @@ public final class SendableCurrentValueSubject<Output: Sendable>: @unchecked Sen
     public init(_ initialValue: Output) {
         self.subject = CurrentValueSubject<Output, Never>(initialValue)
     }
+
+    /// Explicit empty deinit — see `SendablePassthrough.deinit` for the
+    /// Swift 6.3.2 EarlyPerfInliner workaround rationale.
+    deinit {}
 
     public func send(_ value: Output) {
         subject.send(value)

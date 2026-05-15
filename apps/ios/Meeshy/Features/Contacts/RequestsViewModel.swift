@@ -22,8 +22,8 @@ final class RequestsViewModel: ObservableObject {
     private var receivedRevalidationTask: Task<Void, Never>?
     private var sentRevalidationTask: Task<Void, Never>?
 
-    private let receivedKey = "requests:received"
-    private let sentKey = "requests:sent"
+    private let receivedKey = FriendshipCache.PersistenceKeys.receivedRequests
+    private let sentKey = FriendshipCache.PersistenceKeys.sentRequests
 
     init(friendService: FriendServiceProviding = FriendService.shared) {
         self.friendService = friendService
@@ -128,11 +128,38 @@ final class RequestsViewModel: ObservableObject {
     func accept(requestId: String) async {
         let snapshot = receivedRequests
         let cmid = ClientMutationId.generate()
+        // Capture the senderId AND the full FriendRequestUser BEFORE we
+        // remove the row — we need senderId to flip the FriendshipCache and
+        // the user record to optimistically inject the new contact into the
+        // friends GRDB cache so it survives an app relaunch even before the
+        // network round-trip completes.
+        let acceptedRequest = receivedRequests.first(where: { $0.id == requestId })
+        let senderId = acceptedRequest?.senderId
+        let acceptedSender = acceptedRequest?.sender
         receivedRequests.removeAll { $0.id == requestId }
+        if let senderId {
+            FriendshipCache.shared.didAcceptRequest(from: senderId)
+        }
+        // Invalidate FIRST so any stale `.fresh` entries don't mask the
+        // mutation; then persist the optimistic friend record. The save
+        // re-stamps the entry as fresh, so the next cold-load (e.g. user
+        // closes/relaunches the app offline) sees the new contact without
+        // hitting the gateway. If we persisted first and invalidated after,
+        // the invalidation would mark our optimistic write as expired —
+        // defeating the whole point of the persist.
+        await FriendshipCache.shared.invalidatePersistedFriendCaches()
+        if let acceptedSender {
+            await Self.persistAcceptedFriend(acceptedSender)
+        }
         HapticFeedback.success()
         observeOutcome(
             cmid: cmid,
-            rollback: { [weak self] in self?.receivedRequests = snapshot },
+            rollback: { [weak self] in
+                self?.receivedRequests = snapshot
+                if let senderId {
+                    FriendshipCache.shared.rollbackAccept(senderId: senderId, requestId: requestId)
+                }
+            },
             toast: "Impossible d'accepter cette demande"
         )
         let payload = RespondFriendRequestPayload(
@@ -145,6 +172,9 @@ final class RequestsViewModel: ObservableObject {
             ToastManager.shared.showSuccess("Connexion acceptee")
         } catch {
             receivedRequests = snapshot
+            if let senderId {
+                FriendshipCache.shared.rollbackAccept(senderId: senderId, requestId: requestId)
+            }
             HapticFeedback.error()
             ToastManager.shared.showError("Impossible d'accepter")
         }
@@ -153,11 +183,21 @@ final class RequestsViewModel: ObservableObject {
     func reject(requestId: String) async {
         let snapshot = receivedRequests
         let cmid = ClientMutationId.generate()
+        let senderId = receivedRequests.first(where: { $0.id == requestId })?.senderId
         receivedRequests.removeAll { $0.id == requestId }
+        if let senderId {
+            FriendshipCache.shared.didRejectRequest(from: senderId)
+        }
+        await FriendshipCache.shared.invalidatePersistedFriendCaches()
         HapticFeedback.medium()
         observeOutcome(
             cmid: cmid,
-            rollback: { [weak self] in self?.receivedRequests = snapshot },
+            rollback: { [weak self] in
+                self?.receivedRequests = snapshot
+                if let senderId {
+                    FriendshipCache.shared.rollbackReject(senderId: senderId, requestId: requestId)
+                }
+            },
             toast: "Impossible de refuser cette demande"
         )
         let payload = RespondFriendRequestPayload(
@@ -170,6 +210,9 @@ final class RequestsViewModel: ObservableObject {
             ToastManager.shared.showSuccess("Demande refusee")
         } catch {
             receivedRequests = snapshot
+            if let senderId {
+                FriendshipCache.shared.rollbackReject(senderId: senderId, requestId: requestId)
+            }
             HapticFeedback.error()
             ToastManager.shared.showError("Impossible de refuser")
         }
@@ -202,15 +245,42 @@ final class RequestsViewModel: ObservableObject {
 
     func cancel(requestId: String) async {
         let snapshot = sentRequests
+        // Capture receiverId before removing so we can flip cache state and
+        // roll back on failure.
+        let receiverId = sentRequests.first(where: { $0.id == requestId })?.receiverId
         sentRequests.removeAll { $0.id == requestId }
+        if let receiverId {
+            FriendshipCache.shared.didCancelRequest(to: receiverId)
+        }
+        await FriendshipCache.shared.invalidatePersistedFriendCaches()
         HapticFeedback.medium()
         do {
             try await friendService.deleteRequest(requestId: requestId)
             ToastManager.shared.showSuccess("Demande annulee")
         } catch {
             sentRequests = snapshot
+            if let receiverId {
+                FriendshipCache.shared.didSendRequest(to: receiverId, requestId: requestId)
+            }
             HapticFeedback.error()
             ToastManager.shared.showError("Impossible d'annuler")
         }
+    }
+
+    // MARK: - Optimistic Friend Persistence
+
+    /// Merge the accepted sender into the persistent `friends_list` GRDB
+    /// cache so Contacts can show the new contact on its next cold load,
+    /// without having to wait for `ContactsListViewModel` to observe the
+    /// mutation and trigger a network refetch. Read-merge-write under the
+    /// store's actor isolation.
+    private static func persistAcceptedFriend(_ user: FriendRequestUser) async {
+        let store = await CacheCoordinator.shared.friends
+        let key = FriendshipCache.PersistenceKeys.friendsList
+        let existing = await store.load(for: key).snapshot() ?? []
+        guard !existing.contains(where: { $0.id == user.id }) else { return }
+        var merged = existing
+        merged.append(user)
+        try? await store.save(merged, for: key)
     }
 }

@@ -12,6 +12,11 @@ final class ContactsListViewModel: ObservableObject {
 
     private let friendService: FriendServiceProviding
     private let currentUserId: String
+    private let friendshipCache: FriendshipCache
+    private var cacheVersionSubscription: AnyCancellable?
+    private var lastObservedFriendIds: Set<String> = []
+    private var reconcileTask: Task<Void, Never>?
+    private let cacheKey = FriendshipCache.PersistenceKeys.friendsList
 
     var filteredFriends: [FriendRequestUser] {
         var result = friends
@@ -38,29 +43,93 @@ final class ContactsListViewModel: ObservableObject {
 
     init(
         friendService: FriendServiceProviding = FriendService.shared,
-        currentUserId: String = AuthManager.shared.currentUser?.id ?? ""
+        currentUserId: String = AuthManager.shared.currentUser?.id ?? "",
+        friendshipCache: FriendshipCache = .shared
     ) {
         self.friendService = friendService
         self.currentUserId = currentUserId
+        self.friendshipCache = friendshipCache
+        observeFriendshipCache()
+    }
+
+    deinit {
+        reconcileTask?.cancel()
+    }
+
+    // MARK: - Cache Observation
+
+    /// Reconcile the local `friends` list whenever the friendship cache
+    /// mutates from anywhere in the app (Requests tab accepting, profile
+    /// sheet accepting, push notifications eventually).
+    ///
+    /// Removals are applied locally without a network call. Additions
+    /// trigger a silent SWR fetch — we don't have the user record (name,
+    /// avatar, presence) until the gateway returns it.
+    private func observeFriendshipCache() {
+        lastObservedFriendIds = friendshipCache.friendIds
+        cacheVersionSubscription = friendshipCache.$version
+            .dropFirst()
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.reconcileWithCache() }
+    }
+
+    private func reconcileWithCache() {
+        let cacheIds = friendshipCache.friendIds
+        guard cacheIds != lastObservedFriendIds else { return }
+        let previous = lastObservedFriendIds
+        lastObservedFriendIds = cacheIds
+
+        let removed = previous.subtracting(cacheIds)
+        if !removed.isEmpty {
+            friends.removeAll { removed.contains($0.id) }
+            persistFriends()
+        }
+
+        let added = cacheIds.subtracting(previous)
+        if !added.isEmpty {
+            // We only have the userId at this point — the FriendRequestUser
+            // record lives on the gateway. Trigger a silent refetch so the
+            // new contact appears with its full details. Reusing the SWR
+            // fetcher keeps the cache layer consistent.
+            reconcileTask?.cancel()
+            reconcileTask = Task { [weak self] in
+                await self?.fetchFriendsFromNetwork(cacheKey: self?.cacheKey ?? "friends_list")
+            }
+        }
+    }
+
+    private func persistFriends() {
+        let snapshot = friends
+        Task { try? await CacheCoordinator.shared.friends.save(snapshot, for: cacheKey) }
     }
 
     // MARK: - Load Friends
 
     func loadFriends() async {
-        let cacheKey = "friends_list"
         let cached = await CacheCoordinator.shared.friends.load(for: cacheKey)
 
         switch cached {
         case .fresh(let data, _):
             friends = data
             loadState = .loaded
+            // Even when GRDB reports `.fresh`, we may have an in-memory
+            // FriendshipCache that's *ahead* of the persistent store (the
+            // user accepted a request elsewhere, the friendship cache flipped,
+            // but no consumer has refetched yet). If the two views disagree,
+            // force a background revalidate so the GRDB cache and `friends`
+            // list converge on the gateway's truth.
+            if cacheLagsBehindFriendship(data: data) {
+                Task { [weak self] in
+                    await self?.fetchFriendsFromNetwork(cacheKey: self?.cacheKey ?? FriendshipCache.PersistenceKeys.friendsList)
+                }
+            }
             return
 
         case .stale(let data, _):
             friends = data
             loadState = .loaded
             Task { [weak self] in
-                await self?.fetchFriendsFromNetwork(cacheKey: cacheKey)
+                await self?.fetchFriendsFromNetwork(cacheKey: self?.cacheKey ?? FriendshipCache.PersistenceKeys.friendsList)
             }
             return
 
@@ -69,6 +138,16 @@ final class ContactsListViewModel: ObservableObject {
         }
 
         await fetchFriendsFromNetwork(cacheKey: cacheKey)
+    }
+
+    /// True when the in-memory FriendshipCache and the loaded GRDB list
+    /// disagree on the friend set — that's the signature of a cross-screen
+    /// mutation that happened while this ViewModel was asleep. Triggers an
+    /// opportunistic revalidate to reconcile.
+    private func cacheLagsBehindFriendship(data: [FriendRequestUser]) -> Bool {
+        let cachedIds = Set(data.map(\.id))
+        let memoryIds = friendshipCache.friendIds
+        return cachedIds != memoryIds
     }
 
     private func fetchFriendsFromNetwork(cacheKey: String) async {
@@ -106,6 +185,7 @@ final class ContactsListViewModel: ObservableObject {
             }
 
             loadState = .loaded
+            lastObservedFriendIds = Set(friends.map(\.id))
             try? await CacheCoordinator.shared.friends.save(friends, for: cacheKey)
         } catch {
             if friends.isEmpty {

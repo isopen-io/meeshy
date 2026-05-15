@@ -626,8 +626,12 @@ public final class StoryCanvasUIView: UIView {
     /// Le contour reste désactivé en `.play` mode pour ne pas polluer le rendu.
     private func applyForegroundFrames() {
         guard mode == .edit else { return }
+        // Les textes ne reçoivent PAS de cadre permanent : le contour
+        // rectangulaire entoure inutilement la chaîne de caractères et alourdit
+        // le rendu (le glyph dessine déjà sa propre forme). Seuls les médias
+        // visuels foreground (images / vidéos) gardent un cadre.
         let fgMediaIds = Set((slide.effects.mediaObjects ?? []).filter { !$0.isBackground }.map { $0.id })
-        let fgTextIds = Set(slide.effects.textObjects.map { $0.id })
+        let fgTextIds: Set<String> = []
 
         // Couleur contrastante. Le cadre doit être très visible (demande UX) :
         //  - Sur slide sombre / image foncée → blanc franc (95%)
@@ -848,8 +852,15 @@ public final class StoryCanvasUIView: UIView {
         contentReadyFired = false
         teardownReadinessObservers()
 
+        // Explicit `_` placeholders on the comma-combined cases — Swift 6.2
+        // under iOS 26.5 SDK no longer accepts the bare `.solidColor, .gradient`
+        // shorthand here (the Xcode Cloud build reports `error: switch must be
+        // exhaustive` for this site, misattributed to StoryAVCompositor.swift
+        // because of cross-file batch compilation). Pinning the arities makes
+        // the pattern unambiguous: solidColor has 1 associated value, gradient
+        // has 2 named (colors:, direction:).
         switch kind {
-        case .solidColor, .gradient:
+        case .solidColor(_), .gradient(_, _):
             // No async work — yield to the next runloop tick so the caller
             // can attach `onContentReady` after `rebuildLayers()` returns
             // (the prefetcher attaches the callback right after init).

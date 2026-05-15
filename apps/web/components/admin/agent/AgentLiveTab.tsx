@@ -171,23 +171,14 @@ function RecentConversationsList({
 // ── Live State Detail Cards ───────────────────────────────────────────────
 
 function ActivityCard({ data }: { data: LiveStateData }) {
-
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="text-sm font-medium text-gray-500 dark:text-gray-400">
           Utilisateurs contrôlés
         </CardTitle>
-        <div className="flex items-center gap-2">
-          {hasCooldown && (
-            <Badge variant="outline" className="border-orange-300 text-orange-600 dark:text-orange-400 text-[10px]">
-              <Clock className="h-3 w-3 mr-0.5" />
-              Cooldown
-            </Badge>
-          )}
-          <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950">
-            <Users className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
-          </div>
+        <div className="p-1.5 rounded-lg bg-indigo-50 dark:bg-indigo-950">
+          <Users className="h-3.5 w-3.5 text-indigo-600 dark:text-indigo-400" />
         </div>
       </CardHeader>
       <CardContent className="space-y-3">

@@ -873,7 +873,7 @@ struct StoryViewerView: View {
     /// gate matches the export's own routing in `prepareExport`.
     private var currentStoryNeedsVideoExport: Bool {
         guard let story = currentStory else { return false }
-        return story.toRenderableSlide(preferredLanguages: preferredLanguages).needsVideoExport
+        return story.toRenderableSlide(preferredLanguages: preferredContentLanguagesForReader).needsVideoExport
     }
 
     private var storyActionSidebar: some View {
