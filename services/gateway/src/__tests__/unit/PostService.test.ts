@@ -12,6 +12,7 @@ import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { PostService } from '../../services/PostService';
 import { PostCommentService } from '../../services/PostCommentService';
 import { MediaService } from '../../services/MediaService';
+import type { PostReactionService } from '../../services/PostReactionService';
 import { PostType, PostVisibility } from '@meeshy/shared/prisma/client';
 
 // PostAudioService uses a singleton that requires initialization — mock it entirely
@@ -90,6 +91,13 @@ function makePost(overrides: Record<string, unknown> = {}) {
   };
 }
 
+function createMockPostReactionService() {
+  return {
+    addReaction: jest.fn<PostReactionService['addReaction']>().mockResolvedValue({ id: 'rxn-1', postId: 'post-1', userId: 'user-liker', emoji: '❤️', createdAt: new Date(), updatedAt: new Date() }),
+    removeReaction: jest.fn<PostReactionService['removeReaction']>().mockResolvedValue(true),
+  } as unknown as PostReactionService;
+}
+
 function makeComment(overrides: Record<string, unknown> = {}) {
   return {
     id: 'comment-1',
@@ -112,13 +120,15 @@ function makeComment(overrides: Record<string, unknown> = {}) {
 describe('PostService', () => {
   let prisma: ReturnType<typeof createMockPrisma>;
   let mediaService: MediaService;
+  let mockReactionService: PostReactionService;
   let service: PostService;
 
   beforeEach(() => {
     jest.clearAllMocks();
     prisma = createMockPrisma();
     mediaService = new MediaService();
-    service = new PostService(prisma, mediaService);
+    mockReactionService = createMockPostReactionService();
+    service = new PostService(prisma, mediaService, undefined, mockReactionService);
   });
 
   // -----------------------------------------------------------------------
@@ -294,71 +304,91 @@ describe('PostService', () => {
   // -----------------------------------------------------------------------
 
   describe('likePost', () => {
-    it('returns null when the post does not exist', async () => {
-      prisma.post.findFirst.mockResolvedValue(null);
+    it('returns null when addReaction throws "not found"', async () => {
+      (mockReactionService.addReaction as ReturnType<typeof jest.fn>)
+        .mockRejectedValue(new Error('Post not found'));
 
-      const result = await service.likePost('missing', 'user-1');
+      const result = await service.likePost('000000000000000000000001', 'user-1');
       expect(result).toBeNull();
       expect(prisma.post.update).not.toHaveBeenCalled();
     });
 
-    it('adds a reaction, updates summary, and increments likeCount', async () => {
-      const post = makePost();
-      prisma.post.findFirst.mockResolvedValue(post);
+    it('delegates to addReaction and syncs Json mirror with 1 entry', async () => {
+      const createdAt = new Date('2025-01-01T00:00:00Z');
+      (mockReactionService.addReaction as ReturnType<typeof jest.fn>)
+        .mockResolvedValue({ id: 'rxn-1', postId: 'post-1', userId: 'user-liker', emoji: '🔥', createdAt, updatedAt: createdAt });
 
-      const updatedPost = makePost({ likeCount: 1, reactionCount: 1 });
-      prisma.post.update.mockResolvedValue(updatedPost);
+      const post = makePost({ likeCount: 1, reactionCount: 1 });
+      // findFirst: first call returns post for Json rebuild, second call returns enriched post
+      prisma.post.findFirst
+        .mockResolvedValueOnce(post)
+        .mockResolvedValueOnce(post);
+      prisma.postReaction.findMany.mockResolvedValue([
+        { userId: 'user-liker', emoji: '🔥', createdAt },
+      ]);
+      prisma.post.update.mockResolvedValue(post);
 
       const result = await service.likePost('post-1', 'user-liker', '🔥');
 
+      expect(mockReactionService.addReaction).toHaveBeenCalledWith({
+        postId: 'post-1',
+        userId: 'user-liker',
+        emoji: '🔥',
+      });
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'post-1' },
           data: expect.objectContaining({
-            reactions: expect.arrayContaining([
-              expect.objectContaining({ userId: 'user-liker', emoji: '🔥' }),
-            ]),
-            reactionSummary: { '🔥': 1 },
-            reactionCount: { increment: 1 },
-            likeCount: { increment: 1 },
+            reactions: [{ userId: 'user-liker', emoji: '🔥', createdAt: createdAt.toISOString() }],
+            likeCount: 1,
           }),
         }),
       );
-      expect(result).toEqual(updatedPost);
+      expect(result).toEqual(post);
     });
 
-    it('returns the same post without updating when already liked', async () => {
-      const post = makePost({
-        reactions: [{ userId: 'user-liker', emoji: '❤️', createdAt: '2025-01-01' }],
-        reactionSummary: { '❤️': 1 },
-        likeCount: 1,
-      });
-      prisma.post.findFirst.mockResolvedValue(post);
+    it('is idempotent — addReaction returns existing reaction, Json shows 1 entry (no duplication)', async () => {
+      const createdAt = new Date('2025-01-01T00:00:00Z');
+      (mockReactionService.addReaction as ReturnType<typeof jest.fn>)
+        .mockResolvedValue({ id: 'rxn-1', postId: 'post-1', userId: 'user-liker', emoji: '❤️', createdAt, updatedAt: createdAt });
+
+      const post = makePost({ likeCount: 1, reactions: [{ userId: 'user-liker', emoji: '❤️', createdAt: createdAt.toISOString() }] });
+      prisma.post.findFirst
+        .mockResolvedValueOnce(post)
+        .mockResolvedValueOnce(post);
+      prisma.postReaction.findMany.mockResolvedValue([
+        { userId: 'user-liker', emoji: '❤️', createdAt },
+      ]);
+      prisma.post.update.mockResolvedValue(post);
 
       const result = await service.likePost('post-1', 'user-liker');
 
-      expect(prisma.post.update).not.toHaveBeenCalled();
-      expect(result).toBe(post);
-    });
-
-    it('increments existing emoji count in summary', async () => {
-      const post = makePost({
-        reactions: [{ userId: 'other-user', emoji: '❤️', createdAt: '2025-01-01' }],
-        reactionSummary: { '❤️': 1 },
-        likeCount: 1,
-      });
-      prisma.post.findFirst.mockResolvedValue(post);
-      prisma.post.update.mockResolvedValue(makePost({ likeCount: 2 }));
-
-      await service.likePost('post-1', 'user-liker', '❤️');
-
+      expect(mockReactionService.addReaction).toHaveBeenCalledTimes(1);
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            reactionSummary: { '❤️': 2 },
+            reactions: [{ userId: 'user-liker', emoji: '❤️', createdAt: createdAt.toISOString() }],
+            likeCount: 1,
           }),
         }),
       );
+      expect(result).toEqual(post);
+    });
+
+    it('returns null and skips Json update when post is deleted (addReaction throws "deleted")', async () => {
+      (mockReactionService.addReaction as ReturnType<typeof jest.fn>)
+        .mockRejectedValue(new Error('Post has been deleted'));
+
+      const result = await service.likePost('000000000000000000000001', 'user-1');
+      expect(result).toBeNull();
+      expect(prisma.post.update).not.toHaveBeenCalled();
+    });
+
+    it('propagates unexpected errors from addReaction', async () => {
+      (mockReactionService.addReaction as ReturnType<typeof jest.fn>)
+        .mockRejectedValue(new Error('DB connection lost'));
+
+      await expect(service.likePost('post-1', 'user-1')).rejects.toThrow('DB connection lost');
     });
   });
 
@@ -367,72 +397,57 @@ describe('PostService', () => {
   // -----------------------------------------------------------------------
 
   describe('unlikePost', () => {
-    it('returns null when the post does not exist', async () => {
+    it('returns null when the post does not exist (findFirst before removeReaction)', async () => {
+      prisma.postReaction.findMany.mockResolvedValue([]);
       prisma.post.findFirst.mockResolvedValue(null);
 
-      const result = await service.unlikePost('missing', 'user-1');
+      const result = await service.unlikePost('000000000000000000000001', 'user-1');
       expect(result).toBeNull();
     });
 
-    it('removes the reaction, updates summary, and decrements likeCount', async () => {
-      const post = makePost({
-        reactions: [{ userId: 'user-liker', emoji: '❤️', createdAt: '2025-01-01' }],
-        reactionSummary: { '❤️': 1 },
-        likeCount: 1,
-      });
-      prisma.post.findFirst.mockResolvedValue(post);
+    it('removes the reaction and syncs Json mirror with 0 entries', async () => {
+      (mockReactionService.removeReaction as ReturnType<typeof jest.fn>).mockResolvedValue(true);
 
-      const updatedPost = makePost({ likeCount: 0 });
-      prisma.post.update.mockResolvedValue(updatedPost);
+      const post = makePost({ likeCount: 0 });
+      prisma.post.findFirst
+        .mockResolvedValueOnce(post)
+        .mockResolvedValueOnce(post);
+      prisma.postReaction.findMany
+        // First call: fetch user's existing reaction to find emoji
+        .mockResolvedValueOnce([{ userId: 'user-liker', emoji: '❤️', createdAt: new Date() }])
+        // Second call: after removeReaction, rebuild Json mirror (0 rows)
+        .mockResolvedValueOnce([]);
+      prisma.post.update.mockResolvedValue(post);
 
       const result = await service.unlikePost('post-1', 'user-liker');
 
+      expect(mockReactionService.removeReaction).toHaveBeenCalledWith({
+        postId: 'post-1',
+        userId: 'user-liker',
+        emoji: '❤️',
+      });
       expect(prisma.post.update).toHaveBeenCalledWith(
         expect.objectContaining({
           where: { id: 'post-1' },
           data: expect.objectContaining({
             reactions: [],
-            reactionSummary: {},
-            reactionCount: { decrement: 1 },
-            likeCount: { decrement: 1 },
+            likeCount: 0,
           }),
         }),
       );
-      expect(result).toEqual(updatedPost);
+      expect(result).toEqual(post);
     });
 
-    it('returns the same post without updating when not liked', async () => {
+    it('is idempotent — no reaction exists, returns post unchanged without calling removeReaction', async () => {
       const post = makePost();
       prisma.post.findFirst.mockResolvedValue(post);
+      prisma.postReaction.findMany.mockResolvedValue([]);
 
       const result = await service.unlikePost('post-1', 'user-1');
 
+      expect(mockReactionService.removeReaction).not.toHaveBeenCalled();
       expect(prisma.post.update).not.toHaveBeenCalled();
-      expect(result).toBe(post);
-    });
-
-    it('preserves other emojis when removing one', async () => {
-      const post = makePost({
-        reactions: [
-          { userId: 'user-a', emoji: '❤️', createdAt: '2025-01-01' },
-          { userId: 'user-b', emoji: '🔥', createdAt: '2025-01-02' },
-        ],
-        reactionSummary: { '❤️': 1, '🔥': 1 },
-        likeCount: 2,
-      });
-      prisma.post.findFirst.mockResolvedValue(post);
-      prisma.post.update.mockResolvedValue(makePost());
-
-      await service.unlikePost('post-1', 'user-a');
-
-      expect(prisma.post.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          data: expect.objectContaining({
-            reactions: [expect.objectContaining({ userId: 'user-b', emoji: '🔥' })],
-            reactionSummary: { '🔥': 1 },
-          }),
-        }),
-      );
+      expect(result).toEqual(post);
     });
   });
 
