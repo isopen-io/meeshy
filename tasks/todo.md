@@ -147,7 +147,45 @@ Décision : aligner `Post` sur le pattern `Comment`/`Message` (table dédiée). 
 - Web Next.js wiring → Phase 4
 - Migration analogue pour `Post.storyViews: Json[]` → séparé, scope distinct
 
-## Review section
+## Review section — Phase 3 (Post reactions unification)
+
+**Status** : Phase 3 livrée (8 commits supplémentaires sur la branche, **18 commits total**).
+
+### Commits Phase 3
+| Commit | Phase | Tests |
+|---|---|---|
+| `997befa` | docs(plan) | — |
+| `3b7e0a5` | 3A — Prisma `PostReaction` + service | 67 ✓ |
+| `ae384f8` | 3B+3D — Socket.IO `PostReactionHandler` + GET batch `currentUserReactions` | +48 ✓ |
+| `53d85c2` | 3C — `PostService.likePost/unlikePost` compat shim | 154 ✓ (full suite) |
+| `78edd78` | 3E — SDK Swift `currentUserReactions` + socket events | +5 (Swift) |
+| `d42d8f6` | 3G — Migration script + helper + 19 tests | 19 ✓ |
+| `c8e88ff` | 3F — iOS feed + post detail wiring | +10 (Swift) |
+| à venir | 3H — docs decisions.md + review | — |
+
+**Bilan Phase 3** : 8 commits, ~149 nouveaux tests verts gateway/iOS, `tsc --noEmit` clean. Pattern unifié sur Message/Comment/Post (3 entités sur 4 désormais alignées).
+
+### Vérifications restantes (macOS requis)
+- [ ] `./apps/ios/meeshy.sh build && test`
+- [ ] `swift test` SDK (PostModelsTests, SocialSocketEventTests)
+- [ ] Smoke test : like/unlike rapide multi-device, vérifier convergence
+
+### Plan de déploiement
+1. Deploy gateway + SDK + iOS Phase 3 codebase
+2. Exécuter `pnpm tsx scripts/migrate-post-reactions.ts --dry-run` pour estimer volume
+3. Exécuter sans `--dry-run` en horaire creux (~80 min/M posts)
+4. Monitor metrics `post_reactions_added_total`, latence socket handler
+5. Après ~2 semaines de stabilité + clients SDK migrés : Phase 4 deprecate `Post.reactions: Json[]` + REST `/like` endpoints
+
+### Follow-ups (Phase 4+)
+- Drop `Post.reactions: Json[]` après backfill complet et clients migrés
+- Drop REST `POST/DELETE /posts/:id/like` endpoints (équivalent Socket.IO disponible)
+- Endpoint paginé `GET /posts/:id/reactions?emoji=X&limit=20` si feature « liked by » devient produit
+- Migration analogue pour `Post.storyViews: Json[]` → table `PostView` (autre dette structurelle)
+- Web Next.js consume `currentUserReactions` + socket realtime
+- Localized APNs/FCM templates pour `post_like`/`comment_reaction`
+
+## Review section — Phase 2 (Mentions)
 
 **Status** : Phase 1 livrée (6 commits sur `claude/design-story-comments-ouk2s`, tous poussés).
 
