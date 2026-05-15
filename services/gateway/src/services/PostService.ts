@@ -453,7 +453,17 @@ export class PostService {
       where: { id: postId, isDeleted: false, ...visibilityFilter },
       include: postInclude,
     });
-    return post ?? null;
+    if (!post) return null;
+
+    const userReactions = viewerUserId
+      ? await this.prisma.postReaction.findMany({
+          where: { userId: viewerUserId, postId: post.id },
+          select: { postId: true, emoji: true },
+        })
+      : [];
+    const currentUserReactions = userReactions.map((r) => r.emoji);
+
+    return { ...post, currentUserReactions };
   }
 
   /// Builds the Prisma `where` fragment that enforces post visibility for a viewer.

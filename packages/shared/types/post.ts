@@ -260,3 +260,39 @@ export interface CommentReactionSyncEventData {
   readonly totalCount: number;
   readonly userReactions: readonly string[];
 }
+
+// =====================================================
+// POST REACTION EVENT DATA (Phase 3 — privacy-trimmed)
+// NO userIds, NO hasCurrentUser (count only)
+// =====================================================
+
+export interface PostReactionAggregation {
+  readonly emoji: string;
+  readonly count: number;
+}
+
+export interface PostReactionUpdateEventData {
+  readonly postId: string;
+  readonly userId: string;
+  readonly emoji: string;
+  readonly action: 'add' | 'remove';
+  readonly aggregation: PostReactionAggregation;
+  readonly timestamp: Date | string;
+}
+
+export interface PostReactionSyncEventData {
+  readonly postId: string;
+  readonly reactions: readonly PostReactionAggregation[];
+  readonly totalCount: number;
+  readonly userReactions: readonly string[];
+}
+
+export interface PostReactionAddData {
+  readonly postId: string;
+  readonly emoji: string;
+}
+
+export interface PostReactionRemoveData {
+  readonly postId: string;
+  readonly emoji: string;
+}

@@ -65,6 +65,10 @@ import type {
   CommentTranslationUpdatedEventData,
   CommentReactionUpdateEventData,
   CommentReactionSyncEventData,
+  PostReactionUpdateEventData,
+  PostReactionSyncEventData,
+  PostReactionAddData,
+  PostReactionRemoveData,
 } from './post.js';
 
 // ===== ROOM HELPERS =====
@@ -216,6 +220,11 @@ export const SERVER_EVENTS = {
   COMMENT_REACTION_REMOVED: 'comment:reaction-removed',
   COMMENT_REACTION_SYNC: 'comment:reaction-sync',
 
+  // --- Post reactions (Phase 3B) ---
+  POST_REACTION_ADDED: 'post:reaction-added',
+  POST_REACTION_REMOVED: 'post:reaction-removed',
+  POST_REACTION_SYNC: 'post:reaction-sync',
+
   // --- Post/Comment Translations ---
   POST_TRANSLATION_UPDATED: 'post:translation-updated',
   COMMENT_TRANSLATION_UPDATED: 'comment:translation-updated',
@@ -280,6 +289,11 @@ export const CLIENT_EVENTS = {
   COMMENT_REACTION_ADD: 'comment:reaction-add',
   COMMENT_REACTION_REMOVE: 'comment:reaction-remove',
   COMMENT_REACTION_REQUEST_SYNC: 'comment:reaction-request-sync',
+
+  // --- Post reactions (Phase 3B) ---
+  POST_REACTION_ADD: 'post:reaction-add',
+  POST_REACTION_REMOVE: 'post:reaction-remove',
+  POST_REACTION_REQUEST_SYNC: 'post:reaction-request-sync',
 
   // --- Presence ---
   HEARTBEAT: 'heartbeat',
@@ -817,6 +831,11 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.COMMENT_REACTION_REMOVED]: (data: CommentReactionUpdateEventData) => void;
   [SERVER_EVENTS.COMMENT_REACTION_SYNC]: (data: CommentReactionSyncEventData) => void;
 
+  // Post reactions (Phase 3B)
+  [SERVER_EVENTS.POST_REACTION_ADDED]: (data: PostReactionUpdateEventData) => void;
+  [SERVER_EVENTS.POST_REACTION_REMOVED]: (data: PostReactionUpdateEventData) => void;
+  [SERVER_EVENTS.POST_REACTION_SYNC]: (data: PostReactionSyncEventData) => void;
+
   // Post/Comment Translations
   [SERVER_EVENTS.POST_TRANSLATION_UPDATED]: (data: PostTranslationUpdatedEventData) => void;
   [SERVER_EVENTS.COMMENT_TRANSLATION_UPDATED]: (data: CommentTranslationUpdatedEventData) => void;
@@ -1025,6 +1044,11 @@ export interface ClientToServerEvents {
   [CLIENT_EVENTS.COMMENT_REACTION_ADD]: (data: CommentReactionAddData, callback?: (response: SocketIOResponse<CommentReactionUpdateEventData>) => void) => void;
   [CLIENT_EVENTS.COMMENT_REACTION_REMOVE]: (data: CommentReactionRemoveData, callback?: (response: SocketIOResponse<CommentReactionUpdateEventData>) => void) => void;
   [CLIENT_EVENTS.COMMENT_REACTION_REQUEST_SYNC]: (data: { commentId: string }, callback?: (response: SocketIOResponse<CommentReactionSyncEventData>) => void) => void;
+
+  // Post reactions (Phase 3B)
+  [CLIENT_EVENTS.POST_REACTION_ADD]: (data: PostReactionAddData, callback?: (response: SocketIOResponse<PostReactionUpdateEventData>) => void) => void;
+  [CLIENT_EVENTS.POST_REACTION_REMOVE]: (data: PostReactionRemoveData, callback?: (response: SocketIOResponse<PostReactionUpdateEventData>) => void) => void;
+  [CLIENT_EVENTS.POST_REACTION_REQUEST_SYNC]: (data: { postId: string }, callback?: (response: SocketIOResponse<PostReactionSyncEventData>) => void) => void;
 
   // Presence
   [CLIENT_EVENTS.HEARTBEAT]: () => void;

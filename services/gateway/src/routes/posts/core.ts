@@ -110,6 +110,8 @@ export function registerCoreRoutes(
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
+      reply.header('Cache-Control', 'private, no-cache');
+
       const contentStrings: string[] = [];
       if ((post as any).content) contentStrings.push((post as any).content);
       const embeddedComments = (post as any).comments as Array<{ content?: string }> | undefined;

@@ -19,11 +19,13 @@ import { MessageHandler } from './handlers/MessageHandler';
 import { StatusHandler } from './handlers/StatusHandler';
 import { ReactionHandler } from './handlers/ReactionHandler';
 import { CommentReactionHandler } from './handlers/CommentReactionHandler';
+import { PostReactionHandler } from './handlers/PostReactionHandler';
 import { ConversationHandler } from './handlers/ConversationHandler';
 import { CallService } from '../services/CallService';
 import { AttachmentService } from '../services/attachments';
 import { ReactionService } from '../services/ReactionService.js';
 import { CommentReactionService } from '../services/CommentReactionService';
+import { PostReactionService } from '../services/PostReactionService';
 import { MessageReadStatusService } from '../services/MessageReadStatusService.js';
 import { EmailService } from '../services/EmailService';
 import { PushNotificationService } from '../services/PushNotificationService';
@@ -102,6 +104,7 @@ export class MeeshySocketIOManager {
   private statusHandler!: StatusHandler;
   private reactionHandler!: ReactionHandler;
   private commentReactionHandler!: CommentReactionHandler;
+  private postReactionHandler!: PostReactionHandler;
   private conversationHandler!: ConversationHandler;
 
   // Mapping des utilisateurs connectés
@@ -262,6 +265,16 @@ export class MeeshySocketIOManager {
       prisma: this.prisma,
       notificationService: this.notificationService,
       commentReactionService,
+      connectedUsers: this.connectedUsers,
+      socketToUser: this.socketToUser,
+    });
+
+    const postReactionService = new PostReactionService(prisma);
+    this.postReactionHandler = new PostReactionHandler({
+      io: this.io,
+      prisma: this.prisma,
+      notificationService: this.notificationService,
+      postReactionService,
       connectedUsers: this.connectedUsers,
       socketToUser: this.socketToUser,
     });
@@ -609,11 +622,23 @@ export class MeeshySocketIOManager {
       });
 
       socket.on(CLIENT_EVENTS.JOIN_POST, async (data, callback) => {
-        try { await this.commentReactionHandler.handleJoinPost(socket, data, callback); } catch (error) { logger.error('[JOIN_POST] Error:', error); }
+        try { await this.postReactionHandler.handleJoinPost(socket, data, callback); } catch (error) { logger.error('[JOIN_POST] Error:', error); }
       });
 
       socket.on(CLIENT_EVENTS.LEAVE_POST, async (data, callback) => {
-        try { await this.commentReactionHandler.handleLeavePost(socket, data, callback); } catch (error) { logger.error('[LEAVE_POST] Error:', error); }
+        try { await this.postReactionHandler.handleLeavePost(socket, data, callback); } catch (error) { logger.error('[LEAVE_POST] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.POST_REACTION_ADD, async (data, callback) => {
+        try { await this.postReactionHandler.handleAddReaction(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_ADD] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.POST_REACTION_REMOVE, async (data, callback) => {
+        try { await this.postReactionHandler.handleRemoveReaction(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_REMOVE] Error:', error); }
+      });
+
+      socket.on(CLIENT_EVENTS.POST_REACTION_REQUEST_SYNC, async (data, callback) => {
+        try { await this.postReactionHandler.handleRequestSync(socket, data, callback); } catch (error) { logger.error('[POST_REACTION_SYNC] Error:', error); }
       });
 
       socket.on(CLIENT_EVENTS.LOCATION_SHARE, async (data, callback) => {

@@ -97,6 +97,26 @@ export const SocketPostRoomActionSchema = z.object({
 
 export type SocketPostRoomActionData = z.infer<typeof SocketPostRoomActionSchema>;
 
+export const SocketPostReactionAddSchema = z.object({
+  postId: mongoId,
+  emoji: z.string().min(1).max(10),
+});
+
+export type SocketPostReactionAddData = z.infer<typeof SocketPostReactionAddSchema>;
+
+export const SocketPostReactionRemoveSchema = z.object({
+  postId: mongoId,
+  emoji: z.string().min(1).max(10),
+});
+
+export type SocketPostReactionRemoveData = z.infer<typeof SocketPostReactionRemoveSchema>;
+
+export const SocketPostReactionRequestSyncSchema = z.object({
+  postId: mongoId,
+});
+
+export type SocketPostReactionRequestSyncData = z.infer<typeof SocketPostReactionRequestSyncSchema>;
+
 export const SocketAuthenticateSchema = z.object({
   userId: z.string().optional(),
   sessionToken: z.string().optional(),

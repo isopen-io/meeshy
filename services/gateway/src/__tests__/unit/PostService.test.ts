@@ -61,6 +61,12 @@ function createMockPrisma() {
     participant: {
       findMany: jest.fn(),
     },
+    postReaction: {
+      findMany: jest.fn(),
+    },
+    friendRequest: {
+      findMany: jest.fn(),
+    },
   } as any;
 }
 
@@ -875,6 +881,68 @@ describe('PostService', () => {
 
       const createCall = prisma.post.create.mock.calls[0][0];
       expect(createCall.data.expiresAt).toBeUndefined();
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // getPostById — currentUserReactions enrichment
+  // -----------------------------------------------------------------------
+
+  describe('getPostById', () => {
+    it('returns null when the post does not exist', async () => {
+      prisma.post.findFirst.mockResolvedValue(null);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getPostById('missing', 'user-1');
+      expect(result).toBeNull();
+    });
+
+    it('returns post with currentUserReactions: [] when user has not reacted', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([]);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect(result).not.toBeNull();
+      expect((result as any).currentUserReactions).toEqual([]);
+    });
+
+    it('returns currentUserReactions: ["❤️"] when user reacted with that emoji', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([{ postId: 'post-1', emoji: '❤️' }]);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect((result as any).currentUserReactions).toEqual(['❤️']);
+    });
+
+    it('returns currentUserReactions: ["❤️", "🔥"] for multi-emoji reactions', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+      prisma.postReaction.findMany.mockResolvedValue([
+        { postId: 'post-1', emoji: '❤️' },
+        { postId: 'post-1', emoji: '🔥' },
+      ]);
+
+      const result = await service.getPostById('post-1', 'user-1');
+
+      expect((result as any).currentUserReactions).toEqual(['❤️', '🔥']);
+    });
+
+    it('returns currentUserReactions: [] when currentUserId is undefined (anonymous read)', async () => {
+      const post = makePost();
+      prisma.post.findFirst.mockResolvedValue(post);
+      prisma.friendRequest.findMany.mockResolvedValue([]);
+
+      const result = await service.getPostById('post-1', undefined);
+
+      expect((result as any).currentUserReactions).toEqual([]);
+      expect(prisma.postReaction.findMany).not.toHaveBeenCalled();
     });
   });
 
