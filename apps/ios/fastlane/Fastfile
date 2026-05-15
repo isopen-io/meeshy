@@ -89,7 +89,7 @@ platform :ios do
       clean: false,
       cloned_source_packages_path: "./SourcePackages",
       export_options: "./fastlane/ExportOptions.plist",
-      xcargs: "DEVELOPMENT_TEAM=D72UK7R5RE -allowProvisioningUpdates SWIFT_OPTIMIZATION_LEVEL=-Onone CODE_SIGN_STYLE=Automatic"
+      xcargs: "DEVELOPMENT_TEAM=D72UK7R5RE -allowProvisioningUpdates SWIFT_OPTIMIZATION_LEVEL=-Onone"
     )
   end
 
