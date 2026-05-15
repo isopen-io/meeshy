@@ -1674,7 +1674,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
           conversationId: { type: 'string' },
         },
       },
-      response: { 200: successDataResponse, ...stdErrors },
+      response: { 200: successArrayResponse, ...stdErrors },
     },
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     const client = ensureAgentClient(reply);
@@ -1683,7 +1683,7 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
     try {
       const { conversationId } = request.query as { conversationId?: string };
       const data = await client.getQueue(conversationId);
-      return sendSuccess(reply, data);
+      return sendSuccess(reply, Array.isArray(data) ? data : []);
     } catch (error) {
       if (error instanceof AgentUnavailableError) {
         return sendError(reply, 502, 'Agent service unavailable');
