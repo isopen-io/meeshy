@@ -306,4 +306,27 @@ final class NotificationModelsTests: XCTestCase {
         XCTAssertEqual(MeeshyNotificationType.storyThreadReply.systemIcon, "text.bubble.fill")
         XCTAssertEqual(MeeshyNotificationType.storyThreadReply.accentHex, "3498DB")
     }
+
+    // MARK: - Phase 4F friend content notification types
+
+    func test_notificationType_friendNewStory_decodesCorrectly() {
+        XCTAssertEqual(MeeshyNotificationType(rawValue: "friend_new_story"), .friendNewStory)
+        XCTAssertEqual(MeeshyNotificationType.friendNewStory.rawValue, "friend_new_story")
+        XCTAssertEqual(MeeshyNotificationType.friendNewStory.systemIcon, "camera.fill")
+        XCTAssertEqual(MeeshyNotificationType.friendNewStory.accentHex, "6366F1")
+    }
+
+    func test_notificationType_friendNewPost_decodesCorrectly() {
+        XCTAssertEqual(MeeshyNotificationType(rawValue: "friend_new_post"), .friendNewPost)
+        XCTAssertEqual(MeeshyNotificationType.friendNewPost.rawValue, "friend_new_post")
+        XCTAssertEqual(MeeshyNotificationType.friendNewPost.systemIcon, "square.text.square.fill")
+        XCTAssertEqual(MeeshyNotificationType.friendNewPost.accentHex, "6366F1")
+    }
+
+    func test_notificationType_friendNewMood_decodesCorrectly() {
+        XCTAssertEqual(MeeshyNotificationType(rawValue: "friend_new_mood"), .friendNewMood)
+        XCTAssertEqual(MeeshyNotificationType.friendNewMood.rawValue, "friend_new_mood")
+        XCTAssertEqual(MeeshyNotificationType.friendNewMood.systemIcon, "face.smiling.fill")
+        XCTAssertEqual(MeeshyNotificationType.friendNewMood.accentHex, "6366F1")
+    }
 }

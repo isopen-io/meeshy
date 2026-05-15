@@ -92,6 +92,8 @@ export function registerCoreRoutes(
         ? await resolveMentionedUsers(prisma, [postContent])
         : [];
 
+      let mentionedUserIdsForDedup: string[] = [];
+
       // Persist and notify post-body mentions (fire-and-forget)
       if (postContent) {
         const usernames = mentionService.extractMentions(postContent);
@@ -99,6 +101,7 @@ export function registerCoreRoutes(
           const usernameMap = await mentionService.resolveUsernames(usernames);
           const mentionedUserIds = Array.from(usernameMap.values()).map((u) => u.id);
           if (mentionedUserIds.length > 0) {
+            mentionedUserIdsForDedup = mentionedUserIds;
             const postId = (post as any).id as string;
             const posterId = authContext.registeredUser.id;
             mentionService.createPostMentions(postId, mentionedUserIds).catch((err: unknown) => {
@@ -115,6 +118,18 @@ export function registerCoreRoutes(
           }
         }
       }
+
+      // Fan-out to friends: user_mentioned takes priority (dedup via excludeUserIds)
+      const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+      notificationService.createFriendContentNotificationsBatch({
+        postId: (post as any).id as string,
+        authorId: authContext.registeredUser.id,
+        contentType: postTypeForNotif,
+        excerpt: postContent?.slice(0, 100),
+        excludeUserIds: mentionedUserIdsForDedup,
+      }).catch((err: unknown) => {
+        fastify.log.error(`[POST /posts] friend content notification fan-out failed: ${err}`);
+      });
 
       return sendSuccess(reply, post, { statusCode: 201, meta: { mentionedUsers } });
     } catch (error) {

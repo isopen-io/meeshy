@@ -1262,6 +1262,114 @@ export class NotificationService {
   }
 
   // ==============================================
+  // FRIEND CONTENT NOTIFICATIONS (Phase 4F)
+  // ==============================================
+
+  /**
+   * Fan-out notifications to all friends of `authorId` when they publish new content.
+   *
+   * contentType mapping:
+   *   STORY  → friend_new_story
+   *   POST   → friend_new_post
+   *   MOOD   → friend_new_mood
+   *   STATUS → friend_new_mood  (lightweight/ephemeral; grouped with MOOD to avoid type proliferation)
+   *
+   * Rate-limit: none in v1. These are once-per-publish events so burst risk is low.
+   * Aggregation: none in v1. Duplicate suppression (author vs friend) is enforced via excludeUserIds.
+   *
+   * Dedup with mentions: pass mentionedUserIds as `excludeUserIds`.
+   * user_mentioned takes priority over friend_new_post for the same recipient.
+   *
+   * Cap: 500 friend rows max (mirrors createStoryCommentNotificationsBatch pattern).
+   */
+  async createFriendContentNotificationsBatch(params: {
+    postId: string;
+    authorId: string;
+    contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+    excerpt?: string;
+    /**
+     * User IDs to exclude from fan-out.
+     * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
+     */
+    excludeUserIds?: string[];
+  }): Promise<void> {
+    const typeMap: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', 'friend_new_story' | 'friend_new_post' | 'friend_new_mood'> = {
+      STORY: 'friend_new_story',
+      POST: 'friend_new_post',
+      MOOD: 'friend_new_mood',
+      STATUS: 'friend_new_mood',
+    };
+    const notificationType = typeMap[params.contentType];
+
+    const author = await this.prisma.user.findUnique({
+      where: { id: params.authorId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+
+    if (!author) return;
+
+    const friendRequests = await this.prisma.friendRequest.findMany({
+      where: {
+        status: 'accepted',
+        OR: [{ senderId: params.authorId }, { receiverId: params.authorId }],
+      },
+      select: { senderId: true, receiverId: true },
+      take: 500,
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const excludeSet = new Set(params.excludeUserIds ?? []);
+    const content = params.excerpt ? this.truncateMessage(params.excerpt) : '';
+
+    const actorInfo = {
+      id: params.authorId,
+      username: author.username,
+      displayName: author.displayName,
+      avatar: author.avatar,
+    };
+
+    const seenIds = new Set<string>();
+    const tasks: Array<Promise<unknown>> = [];
+
+    for (const fr of friendRequests) {
+      const friendId = fr.senderId === params.authorId ? fr.receiverId : fr.senderId;
+
+      if (friendId === params.authorId) continue;
+      if (excludeSet.has(friendId)) continue;
+      if (seenIds.has(friendId)) continue;
+      seenIds.add(friendId);
+
+      tasks.push(
+        this.createNotification({
+          userId: friendId,
+          type: notificationType,
+          priority: 'normal',
+          content,
+          actor: actorInfo,
+          context: { postId: params.postId },
+          metadata: {
+            action: 'view_post',
+            postId: params.postId,
+            contentType: params.contentType,
+            excerpt: content,
+          } as any,
+        })
+      );
+    }
+
+    const results = await Promise.allSettled(tasks);
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        notificationLogger.error(
+          'Friend content notification failed for one recipient',
+          result.reason,
+          { recipientIndex: index, type: notificationType, postId: params.postId }
+        );
+      }
+    });
+  }
+
+  // ==============================================
   // MISSED_CALL
   // ==============================================
 
