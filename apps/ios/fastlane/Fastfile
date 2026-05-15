@@ -79,6 +79,12 @@ platform :ios do
 
   desc "Build production IPA"
   lane :build_production do
+    archive_path = File.expand_path("../build/Meeshy.xcarchive", __dir__)
+
+    # Pass 1 — archive only. Automatic signing falls back to 'Apple Development'
+    # for the SPM-bundled binary frameworks (Firebase, GoogleAppMeasurement, …)
+    # which would fail App Store Connect's ITMS-90035 analyzer. We accept that
+    # here, then strip + re-sign before export below.
     build_app(
       project: "Meeshy.xcodeproj",
       scheme: "Meeshy",
@@ -88,8 +94,35 @@ platform :ios do
       derived_data_path: "./Build",
       clean: false,
       cloned_source_packages_path: "./SourcePackages",
-      export_options: "./fastlane/ExportOptions.plist",
-      xcargs: "DEVELOPMENT_TEAM=D72UK7R5RE -allowProvisioningUpdates SWIFT_OPTIMIZATION_LEVEL=-Onone"
+      archive_path: archive_path,
+      skip_package_ipa: true,
+      xcargs: "DEVELOPMENT_TEAM=D72UK7R5RE -allowProvisioningUpdates SWIFT_OPTIMIZATION_LEVEL=-Onone CODE_SIGN_STYLE=Automatic"
+    )
+
+    # Strip embedded framework signatures so the export step re-signs them
+    # cleanly with the Apple Distribution cert. Same logic Xcode Cloud's
+    # ci_post_xcodebuild.sh applies — keeps ITMS-90035 ('Invalid Signature
+    # on Firebase/Google frameworks') from rejecting the upload.
+    sh(
+      "CI_ARCHIVE_PATH=#{archive_path.shellescape} " \
+      "CI_XCODEBUILD_ACTION=archive " \
+      "../ci_scripts/ci_post_xcodebuild.sh"
+    )
+
+    # Pass 2 — export the (now stripped) archive. ExportOptions.plist has
+    # signingStyle=automatic so xcodebuild fetches the Distribution cert
+    # and signs the parent app + the stripped embedded frameworks fresh.
+    build_app(
+      project: "Meeshy.xcodeproj",
+      scheme: "Meeshy",
+      configuration: "Release",
+      output_directory: "./build",
+      output_name: "Meeshy.ipa",
+      derived_data_path: "./Build",
+      cloned_source_packages_path: "./SourcePackages",
+      archive_path: archive_path,
+      skip_build_archive: true,
+      export_options: "./fastlane/ExportOptions.plist"
     )
   end
 
