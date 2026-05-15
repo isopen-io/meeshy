@@ -118,6 +118,27 @@ public struct SocketPostBookmarkedData: Decodable, Sendable {
     public let bookmarked: Bool
 }
 
+public struct SocketPostReactionAggregation: Codable, Sendable {
+    public let emoji: String
+    public let count: Int
+}
+
+public struct SocketPostReactionUpdateEvent: Codable, Sendable {
+    public let postId: String
+    public let userId: String
+    public let emoji: String
+    public let action: String
+    public let aggregation: SocketPostReactionAggregation
+    public let timestamp: Date?
+}
+
+public struct SocketPostReactionSyncEvent: Codable, Sendable {
+    public let postId: String
+    public let reactions: [SocketPostReactionAggregation]
+    public let totalCount: Int
+    public let userReactions: [String]
+}
+
 public struct SocketStoryTranslationUpdatedData: Decodable, Sendable {
     public let postId: String
     public let textObjectIndex: Int
@@ -168,6 +189,9 @@ public protocol SocialSocketProviding: Sendable {
     var commentReactionAdded: PassthroughSubject<SocketCommentReactionUpdateEvent, Never> { get }
     var commentReactionRemoved: PassthroughSubject<SocketCommentReactionUpdateEvent, Never> { get }
     var commentReactionSync: PassthroughSubject<SocketCommentReactionSyncEvent, Never> { get }
+    var postReactionAdded: PassthroughSubject<SocketPostReactionUpdateEvent, Never> { get }
+    var postReactionRemoved: PassthroughSubject<SocketPostReactionUpdateEvent, Never> { get }
+    var postReactionSync: PassthroughSubject<SocketPostReactionSyncEvent, Never> { get }
     var storyTranslationUpdated: PassthroughSubject<SocketStoryTranslationUpdatedData, Never> { get }
     var postTranslationUpdated: PassthroughSubject<SocketPostTranslationUpdatedData, Never> { get }
     var commentTranslationUpdated: PassthroughSubject<SocketCommentTranslationUpdatedData, Never> { get }
@@ -182,6 +206,9 @@ public protocol SocialSocketProviding: Sendable {
     func addCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent
     func removeCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent
     func requestCommentReactionSync(commentId: String) async throws -> SocketCommentReactionSyncEvent
+    func addPostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent
+    func removePostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent
+    func requestPostReactionSync(postId: String) async throws -> SocketPostReactionSyncEvent
 }
 
 // MARK: - Social Socket Manager
@@ -210,6 +237,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     public let commentReactionAdded = PassthroughSubject<SocketCommentReactionUpdateEvent, Never>()
     public let commentReactionRemoved = PassthroughSubject<SocketCommentReactionUpdateEvent, Never>()
     public let commentReactionSync = PassthroughSubject<SocketCommentReactionSyncEvent, Never>()
+    public let postReactionAdded = PassthroughSubject<SocketPostReactionUpdateEvent, Never>()
+    public let postReactionRemoved = PassthroughSubject<SocketPostReactionUpdateEvent, Never>()
+    public let postReactionSync = PassthroughSubject<SocketPostReactionSyncEvent, Never>()
     public let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
     public let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
     public let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
@@ -477,6 +507,102 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
         }
     }
 
+    // MARK: - Post Reaction Emission
+
+    public enum PostReactionError: Error, Sendable, LocalizedError {
+        case noSocket
+        case timeout
+        case serverError(String)
+        case malformedResponse
+
+        public var errorDescription: String? {
+            switch self {
+            case .noSocket: return "noSocket — SocialSocket not connected"
+            case .timeout: return "timeout — Gateway did not respond within 10s"
+            case .serverError(let message): return "serverError — \(message)"
+            case .malformedResponse: return "malformedResponse — Unexpected ACK format"
+            }
+        }
+    }
+
+    public func addPostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent {
+        guard let socket else { throw PostReactionError.noSocket }
+        return try await withCheckedThrowingContinuation { continuation in
+            socket.emitWithAck("post:reaction-add", ["postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
+                guard let response = items.first as? [String: Any] else {
+                    continuation.resume(throwing: PostReactionError.timeout)
+                    return
+                }
+                guard let success = response["success"] as? Bool, success,
+                      let data = response["data"] as? [String: Any] else {
+                    let message = (response["error"] as? [String: Any])?["message"] as? String
+                        ?? (response["error"] as? String)
+                        ?? "unknown error"
+                    continuation.resume(throwing: PostReactionError.serverError(message))
+                    return
+                }
+                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
+                      let event = try? self.decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData) else {
+                    continuation.resume(throwing: PostReactionError.malformedResponse)
+                    return
+                }
+                continuation.resume(returning: event)
+            }
+        }
+    }
+
+    public func removePostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent {
+        guard let socket else { throw PostReactionError.noSocket }
+        return try await withCheckedThrowingContinuation { continuation in
+            socket.emitWithAck("post:reaction-remove", ["postId": postId, "emoji": emoji]).timingOut(after: 10) { items in
+                guard let response = items.first as? [String: Any] else {
+                    continuation.resume(throwing: PostReactionError.timeout)
+                    return
+                }
+                guard let success = response["success"] as? Bool, success,
+                      let data = response["data"] as? [String: Any] else {
+                    let message = (response["error"] as? [String: Any])?["message"] as? String
+                        ?? (response["error"] as? String)
+                        ?? "unknown error"
+                    continuation.resume(throwing: PostReactionError.serverError(message))
+                    return
+                }
+                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
+                      let event = try? self.decoder.decode(SocketPostReactionUpdateEvent.self, from: jsonData) else {
+                    continuation.resume(throwing: PostReactionError.malformedResponse)
+                    return
+                }
+                continuation.resume(returning: event)
+            }
+        }
+    }
+
+    public func requestPostReactionSync(postId: String) async throws -> SocketPostReactionSyncEvent {
+        guard let socket else { throw PostReactionError.noSocket }
+        return try await withCheckedThrowingContinuation { continuation in
+            socket.emitWithAck("post:reaction-request-sync", ["postId": postId]).timingOut(after: 10) { items in
+                guard let response = items.first as? [String: Any] else {
+                    continuation.resume(throwing: PostReactionError.timeout)
+                    return
+                }
+                guard let success = response["success"] as? Bool, success,
+                      let data = response["data"] as? [String: Any] else {
+                    let message = (response["error"] as? [String: Any])?["message"] as? String
+                        ?? (response["error"] as? String)
+                        ?? "unknown error"
+                    continuation.resume(throwing: PostReactionError.serverError(message))
+                    return
+                }
+                guard let jsonData = try? JSONSerialization.data(withJSONObject: data),
+                      let event = try? self.decoder.decode(SocketPostReactionSyncEvent.self, from: jsonData) else {
+                    continuation.resume(throwing: PostReactionError.malformedResponse)
+                    return
+                }
+                continuation.resume(returning: event)
+            }
+        }
+    }
+
     // MARK: - Event Handlers
 
     private func setupEventHandlers() {
@@ -673,6 +799,27 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             guard let self else { return }
             self.decode(SocketCommentReactionSyncEvent.self, from: data) { [weak self] payload in
                 self?.commentReactionSync.send(payload)
+            }
+        }
+
+        socket.on("post:reaction-added") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketPostReactionUpdateEvent.self, from: data) { [weak self] payload in
+                self?.postReactionAdded.send(payload)
+            }
+        }
+
+        socket.on("post:reaction-removed") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketPostReactionUpdateEvent.self, from: data) { [weak self] payload in
+                self?.postReactionRemoved.send(payload)
+            }
+        }
+
+        socket.on("post:reaction-sync") { [weak self] data, _ in
+            guard let self else { return }
+            self.decode(SocketPostReactionSyncEvent.self, from: data) { [weak self] payload in
+                self?.postReactionSync.send(payload)
             }
         }
 

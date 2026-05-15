@@ -475,6 +475,78 @@ final class SocialSocketEventTests: XCTestCase {
         XCTAssertEqual(event.userReactions, ["\u{2764}\u{FE0F}"])
     }
 
+    // MARK: - SocketPostReactionUpdateEvent
+
+    func testSocketPostReactionUpdateEvent_decoding() throws {
+        let json = """
+        {
+            "postId": "p1",
+            "userId": "u1",
+            "emoji": "\u{2764}\u{FE0F}",
+            "action": "add",
+            "aggregation": {
+                "emoji": "\u{2764}\u{FE0F}",
+                "count": 3
+            },
+            "timestamp": "2026-05-15T10:00:00.000Z"
+        }
+        """.data(using: .utf8)!
+        let event = try decoder.decode(SocketPostReactionUpdateEvent.self, from: json)
+        XCTAssertEqual(event.postId, "p1")
+        XCTAssertEqual(event.userId, "u1")
+        XCTAssertEqual(event.emoji, "\u{2764}\u{FE0F}")
+        XCTAssertEqual(event.action, "add")
+        XCTAssertEqual(event.aggregation.emoji, "\u{2764}\u{FE0F}")
+        XCTAssertEqual(event.aggregation.count, 3)
+        XCTAssertNotNil(event.timestamp)
+    }
+
+    func testSocketPostReactionUpdateEvent_decoding_removeAction() throws {
+        let json = """
+        {
+            "postId": "p2",
+            "userId": "u2",
+            "emoji": "\u{1F525}",
+            "action": "remove",
+            "aggregation": {
+                "emoji": "\u{1F525}",
+                "count": 0
+            }
+        }
+        """.data(using: .utf8)!
+        let event = try decoder.decode(SocketPostReactionUpdateEvent.self, from: json)
+        XCTAssertEqual(event.postId, "p2")
+        XCTAssertEqual(event.action, "remove")
+        XCTAssertEqual(event.emoji, "\u{1F525}")
+        XCTAssertEqual(event.aggregation.count, 0)
+        XCTAssertNil(event.timestamp)
+    }
+
+    // MARK: - SocketPostReactionSyncEvent
+
+    func testSocketPostReactionSyncEvent_decoding() throws {
+        let json = """
+        {
+            "postId": "p3",
+            "reactions": [
+                {"emoji": "\u{2764}\u{FE0F}", "count": 5},
+                {"emoji": "\u{1F44D}", "count": 2}
+            ],
+            "totalCount": 7,
+            "userReactions": ["\u{2764}\u{FE0F}"]
+        }
+        """.data(using: .utf8)!
+        let event = try decoder.decode(SocketPostReactionSyncEvent.self, from: json)
+        XCTAssertEqual(event.postId, "p3")
+        XCTAssertEqual(event.reactions.count, 2)
+        XCTAssertEqual(event.reactions[0].emoji, "\u{2764}\u{FE0F}")
+        XCTAssertEqual(event.reactions[0].count, 5)
+        XCTAssertEqual(event.reactions[1].emoji, "\u{1F44D}")
+        XCTAssertEqual(event.reactions[1].count, 2)
+        XCTAssertEqual(event.totalCount, 7)
+        XCTAssertEqual(event.userReactions, ["\u{2764}\u{FE0F}"])
+    }
+
     // MARK: - SocketCommentReactionAggregation
 
     func testSocketCommentReactionAggregation_hasCurrentUser_true() throws {
