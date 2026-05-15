@@ -15,7 +15,12 @@ struct MeeshyApp: App {
     @StateObject private var deepLinkRouter = DeepLinkRouter.shared
     @StateObject private var theme = ThemeManager.shared
     @AppStorage("hasCompletedOnboarding") private var hasCompletedOnboarding = false
-    @State private var showSplash = AuthManager.shared.authToken == nil
+    // Splash : shown ALWAYS on cold start, regardless of auth state, until the
+    // boot work in `.task` finishes (session check + conversations cache
+    // preload). Dismissed explicitly from the task once data is ready ; the
+    // SplashScreen itself no longer auto-dismisses. A minimum elapsed time
+    // (1.2s) is enforced so the animation never flashes when the cache is hot.
+    @State private var showSplash = true
     @State private var hasCheckedSession = false
     @State private var activeGuestSession: GuestSession?
     @State private var crashReportsToShow: [CrashDiagnostic] = []
@@ -55,13 +60,12 @@ struct MeeshyApp: App {
                     .opacity(showSplash ? 0 : 1)
 
                     if showSplash {
-                        SplashScreen(onFinish: {
-                            withAnimation(.easeInOut(duration: 0.6)) {
-                                showSplash = false
-                            }
-                        })
-                        .transition(.opacity.combined(with: .scale(scale: 1.1)))
-                        .zIndex(1)
+                        // onFinish is kept as a no-op so the existing component
+                        // signature is preserved ; dismissal is driven by the
+                        // `.task` block once boot work completes.
+                        SplashScreen(onFinish: {})
+                            .transition(.opacity.combined(with: .scale(scale: 1.1)))
+                            .zIndex(1)
                     }
                 }
                 .fullScreenCover(isPresented: .init(
@@ -126,6 +130,12 @@ struct MeeshyApp: App {
                     let _ = deepLinkRouter.handle(url: url)
                 }
                 .task {
+                    // Splash : capture boot start so we can enforce a minimum
+                    // 1.2s display time once data is ready. Without this, a
+                    // hot-cache cold start would flash the splash away mid-
+                    // animation.
+                    let splashStart = ContinuousClock.now
+
                     ImageDownsamplingConfig.applyGlobal()
                     KeychainManager.shared.migrateToAfterFirstUnlock()
                     MeeshyConfig.shared.restoreEnvironment()
@@ -267,12 +277,34 @@ struct MeeshyApp: App {
                     _ = await (friendshipHydration, sessionCheck)
                     hasCheckedSession = true
                     if authManager.isAuthenticated {
+                        // Splash : preload the conversations list cache so
+                        // ConversationListView lands on hydrated data when the
+                        // splash dismisses. `.load(...)` is a SQLite read —
+                        // instantaneous on hot disk, returns `.empty` on a
+                        // first install. Either way it never blocks the
+                        // network, so the splash duration stays bounded.
+                        _ = await CacheCoordinator.shared.conversations.load(for: "list")
+
                         await requestPushPermissionIfNeeded()
                         VoIPPushManager.shared.register()
                         await NotificationManager.shared.refreshUnreadCount()
                         await NotificationCoordinator.shared.syncNow()
                     } else {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
+                    }
+
+                    // Splash : enforce a 1.2s minimum elapsed time so the
+                    // logo/title/subtitle animation runs through, then
+                    // dismiss. Any work that lands *after* the splash hides
+                    // (push permission grant flow, retention purge, etc.) is
+                    // already scheduled below or in detached tasks.
+                    let minSplashDuration: Duration = .milliseconds(1200)
+                    let elapsed = splashStart.duration(to: .now)
+                    if elapsed < minSplashDuration {
+                        try? await Task.sleep(for: minSplashDuration - elapsed)
+                    }
+                    withAnimation(.easeInOut(duration: 0.6)) {
+                        showSplash = false
                     }
                     // Surface any crash/hang reports captured since the last
                     // foreground. Done after the splash + session work so the
@@ -686,10 +718,12 @@ struct SplashScreen: View {
                 backgroundScale = 1.0
             }
 
-            // Transition to main app
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-                onFinish()
-            }
+            // Dismissal is driven by MeeshyApp.task once boot data is ready.
+            // The `onFinish` callback is kept in the signature for backwards
+            // compatibility (callers may still wire it) but is no longer
+            // invoked automatically here — the previous 1.2s timer caused
+            // the splash to vanish before the conversations cache was
+            // hydrated, which defeated its purpose.
         }
         .onDisappear {
             withTransaction(Transaction(animation: nil)) {
