@@ -27,6 +27,10 @@ import type {
   CommentLikedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
+  PostReactionUpdateEventData,
+  PostReactionSyncEventData,
+  CommentReactionUpdateEventData,
+  CommentReactionSyncEventData,
 } from '@meeshy/shared/types/post';
 import type { InfiniteFeedData, InfiniteCommentsData } from './types';
 
@@ -36,10 +40,11 @@ import type { InfiniteFeedData, InfiniteCommentsData } from './types';
 
 interface UsePostSocketCacheSyncOptions {
   enabled?: boolean;
+  currentUserId?: string;
 }
 
 export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = {}) {
-  const { enabled = true } = options;
+  const { enabled = true, currentUserId } = options;
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -201,6 +206,157 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       );
     }
 
+    // ── Post reaction events (Phase 3B) ─────────────────────────────────
+
+    function handlePostReactionAdded(data: PostReactionUpdateEventData) {
+      patchPostInAllCaches(queryClient, data.postId, (p) => ({
+        ...p,
+        reactionCount: (p.reactionCount ?? p.likeCount) + 1,
+        likeCount: p.likeCount + 1,
+        reactionSummary: {
+          ...p.reactionSummary,
+          [data.emoji]: data.aggregation.count,
+        },
+        currentUserReactions:
+          data.userId === currentUserId
+            ? (p.currentUserReactions ?? []).includes(data.emoji)
+              ? p.currentUserReactions
+              : [...(p.currentUserReactions ?? []), data.emoji]
+            : p.currentUserReactions,
+      }));
+    }
+
+    function handlePostReactionRemoved(data: PostReactionUpdateEventData) {
+      patchPostInAllCaches(queryClient, data.postId, (p) => {
+        const newSummary = { ...p.reactionSummary };
+        if (data.aggregation.count === 0) {
+          delete newSummary[data.emoji];
+        } else {
+          newSummary[data.emoji] = data.aggregation.count;
+        }
+        return {
+          ...p,
+          reactionCount: Math.max(0, (p.reactionCount ?? p.likeCount) - 1),
+          likeCount: Math.max(0, p.likeCount - 1),
+          reactionSummary: newSummary,
+          currentUserReactions:
+            data.userId === currentUserId
+              ? (p.currentUserReactions ?? []).filter((e) => e !== data.emoji)
+              : p.currentUserReactions,
+        };
+      });
+    }
+
+    function handlePostReactionSync(data: PostReactionSyncEventData) {
+      const summaryFromSync: Record<string, number> = {};
+      for (const agg of data.reactions) {
+        summaryFromSync[agg.emoji] = agg.count;
+      }
+      patchPostInAllCaches(queryClient, data.postId, (p) => ({
+        ...p,
+        reactionCount: data.totalCount,
+        likeCount: data.totalCount,
+        reactionSummary: summaryFromSync,
+        currentUserReactions: data.userReactions as string[],
+      }));
+    }
+
+    // ── Comment reaction events ─────────────────────────────────────────
+
+    function handleCommentReactionAdded(data: CommentReactionUpdateEventData) {
+      queryClient.setQueryData<InfiniteCommentsData>(
+        queryKeys.posts.commentsInfinite(data.postId),
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              data: page.data.map((c) => {
+                if (c.id !== data.commentId) return c;
+                const newSummary = {
+                  ...c.reactionSummary,
+                  [data.emoji]: data.aggregation.count,
+                };
+                return {
+                  ...c,
+                  likeCount: c.likeCount + 1,
+                  reactionSummary: newSummary,
+                  currentUserReactions:
+                    data.userId === currentUserId
+                      ? (c.currentUserReactions ?? []).includes(data.emoji)
+                        ? c.currentUserReactions
+                        : [...(c.currentUserReactions ?? []), data.emoji]
+                      : c.currentUserReactions,
+                };
+              }),
+            })),
+          };
+        },
+      );
+    }
+
+    function handleCommentReactionRemoved(data: CommentReactionUpdateEventData) {
+      queryClient.setQueryData<InfiniteCommentsData>(
+        queryKeys.posts.commentsInfinite(data.postId),
+        (old) => {
+          if (!old) return old;
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              data: page.data.map((c) => {
+                if (c.id !== data.commentId) return c;
+                const newSummary = { ...c.reactionSummary };
+                if (data.aggregation.count === 0) {
+                  delete newSummary[data.emoji];
+                } else {
+                  newSummary[data.emoji] = data.aggregation.count;
+                }
+                return {
+                  ...c,
+                  likeCount: Math.max(0, c.likeCount - 1),
+                  reactionSummary: newSummary,
+                  currentUserReactions:
+                    data.userId === currentUserId
+                      ? (c.currentUserReactions ?? []).filter((e) => e !== data.emoji)
+                      : c.currentUserReactions,
+                };
+              }),
+            })),
+          };
+        },
+      );
+    }
+
+    function handleCommentReactionSync(data: CommentReactionSyncEventData) {
+      queryClient.setQueryData<InfiniteCommentsData>(
+        queryKeys.posts.commentsInfinite(data.commentId),
+        (old) => {
+          if (!old) return old;
+          const summaryFromSync: Record<string, number> = {};
+          for (const agg of data.reactions) {
+            summaryFromSync[agg.emoji] = agg.count;
+          }
+          return {
+            ...old,
+            pages: old.pages.map((page) => ({
+              ...page,
+              data: page.data.map((c) => {
+                if (c.id !== data.commentId) return c;
+                return {
+                  ...c,
+                  likeCount: data.totalCount,
+                  reactionSummary: summaryFromSync,
+                  currentUserReactions: data.userReactions as string[],
+                };
+              }),
+            })),
+          };
+        },
+      );
+    }
+
     // ── Translation events ──────────────────────────────────────────────
 
     function handlePostTranslationUpdated(data: PostTranslationUpdatedEventData) {
@@ -297,6 +453,13 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
     socket.on(SERVER_EVENTS.STATUS_DELETED, handleStatusDeleted);
     socket.on(SERVER_EVENTS.STATUS_REACTED, handleStatusReacted);
 
+    socket.on(SERVER_EVENTS.POST_REACTION_ADDED, handlePostReactionAdded);
+    socket.on(SERVER_EVENTS.POST_REACTION_REMOVED, handlePostReactionRemoved);
+    socket.on(SERVER_EVENTS.POST_REACTION_SYNC, handlePostReactionSync);
+    socket.on(SERVER_EVENTS.COMMENT_REACTION_ADDED, handleCommentReactionAdded);
+    socket.on(SERVER_EVENTS.COMMENT_REACTION_REMOVED, handleCommentReactionRemoved);
+    socket.on(SERVER_EVENTS.COMMENT_REACTION_SYNC, handleCommentReactionSync);
+
     return () => {
       socket.off(SERVER_EVENTS.POST_CREATED, handlePostCreated);
       socket.off(SERVER_EVENTS.POST_UPDATED, handlePostUpdated);
@@ -318,8 +481,15 @@ export function usePostSocketCacheSync(options: UsePostSocketCacheSyncOptions = 
       socket.off(SERVER_EVENTS.STATUS_UPDATED, handleStatusUpdated);
       socket.off(SERVER_EVENTS.STATUS_DELETED, handleStatusDeleted);
       socket.off(SERVER_EVENTS.STATUS_REACTED, handleStatusReacted);
+
+      socket.off(SERVER_EVENTS.POST_REACTION_ADDED, handlePostReactionAdded);
+      socket.off(SERVER_EVENTS.POST_REACTION_REMOVED, handlePostReactionRemoved);
+      socket.off(SERVER_EVENTS.POST_REACTION_SYNC, handlePostReactionSync);
+      socket.off(SERVER_EVENTS.COMMENT_REACTION_ADDED, handleCommentReactionAdded);
+      socket.off(SERVER_EVENTS.COMMENT_REACTION_REMOVED, handleCommentReactionRemoved);
+      socket.off(SERVER_EVENTS.COMMENT_REACTION_SYNC, handleCommentReactionSync);
     };
-  }, [enabled, queryClient]);
+  }, [enabled, currentUserId, queryClient]);
 }
 
 // ---------------------------------------------------------------------------

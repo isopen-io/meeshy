@@ -128,10 +128,6 @@ export default function V2FeedsPage() {
   const [repostingPost, setRepostingPost] = useState<{ id: string; author?: string; content?: string } | null>(null);
   const [audioComposerOpen, setAudioComposerOpen] = useState(false);
 
-  // Local interaction state
-  const [likedPosts, setLikedPosts] = useState<Set<string>>(new Set());
-  const [bookmarkedPosts, setBookmarkedPosts] = useState<Set<string>>(new Set());
-  const [userReactions, setUserReactions] = useState<Record<string, string>>({});
 
   // New posts banner
   const [newPostsCount, setNewPostsCount] = useState(0);
@@ -247,33 +243,21 @@ export default function V2FeedsPage() {
     [createPostMutation, showToast],
   );
 
-  const handleLike = useCallback((postId: string) => {
-    const isLiked = likedPosts.has(postId);
-    setLikedPosts((prev) => {
-      const next = new Set(prev);
-      if (isLiked) next.delete(postId);
-      else next.add(postId);
-      return next;
-    });
-
-    if (isLiked) {
-      unlikeMutation.mutate(postId);
+  const handleLike = useCallback((postId: string, isCurrentlyLiked: boolean) => {
+    if (isCurrentlyLiked) {
+      unlikeMutation.mutate({ postId });
     } else {
       likeMutation.mutate({ postId });
     }
-  }, [likedPosts, likeMutation, unlikeMutation]);
+  }, [likeMutation, unlikeMutation]);
 
-  const handleReact = useCallback((postId: string, emoji: string) => {
-    setUserReactions((prev) => {
-      if (prev[postId] === emoji) {
-        const next = { ...prev };
-        delete next[postId];
-        return next;
-      }
-      return { ...prev, [postId]: emoji };
-    });
-    likeMutation.mutate({ postId, emoji });
-  }, [likeMutation]);
+  const handleReact = useCallback((postId: string, emoji: string, currentUserReactions: readonly string[]) => {
+    if (currentUserReactions.includes(emoji)) {
+      unlikeMutation.mutate({ postId, emoji });
+    } else {
+      likeMutation.mutate({ postId, emoji });
+    }
+  }, [likeMutation, unlikeMutation]);
 
   const handleComment = useCallback((postId: string) => {
     router.push(`/v2/feeds/post/${postId}`);
@@ -289,21 +273,13 @@ export default function V2FeedsPage() {
     }
   }, [shareMutation, showToast]);
 
-  const handleBookmark = useCallback((postId: string) => {
-    const isBookmarked = bookmarkedPosts.has(postId);
-    setBookmarkedPosts((prev) => {
-      const next = new Set(prev);
-      if (isBookmarked) next.delete(postId);
-      else next.add(postId);
-      return next;
-    });
-
-    if (isBookmarked) {
+  const handleBookmark = useCallback((postId: string, isCurrentlyBookmarked: boolean) => {
+    if (isCurrentlyBookmarked) {
       unbookmarkMutation.mutate(postId);
     } else {
       bookmarkMutation.mutate(postId);
     }
-  }, [bookmarkedPosts, bookmarkMutation, unbookmarkMutation]);
+  }, [bookmarkMutation, unbookmarkMutation]);
 
   const handleTranslate = useCallback((postId: string) => {
     translateMutation.mutate({ postId, targetLanguage: userLanguage });
@@ -504,37 +480,45 @@ export default function V2FeedsPage() {
                 key={post.id}
                 onMouseEnter={() => prefetchPost(post.id)}
               >
-                <PostCard
-                  author={{
-                    name: post.author?.displayName ?? post.author?.username ?? 'Unknown',
-                    avatar: post.author?.avatar ?? undefined,
-                  }}
-                  lang={post.originalLanguage ?? 'unknown'}
-                  content={post.content ?? ''}
-                  translations={postToTranslations(post)}
-                  userLanguage={userLanguage}
-                  time={formatRelativeTime(post.createdAt)}
-                  likes={post.likeCount}
-                  comments={post.commentCount}
-                  isLiked={likedPosts.has(post.id)}
-                  isBookmarked={bookmarkedPosts.has(post.id)}
-                  isAuthor={post.authorId === currentUserId}
-                  isPinned={post.isPinned}
-                  reactionSummary={post.reactionSummary ?? undefined}
-                  userReaction={userReactions[post.id]}
-                  media={post.media}
-                  onLike={() => handleLike(post.id)}
-                  onReact={(emoji) => handleReact(post.id, emoji)}
-                  onComment={() => handleComment(post.id)}
-                  onShare={() => handleShare(post.id)}
-                  onBookmark={() => handleBookmark(post.id)}
-                  onTranslate={() => handleTranslate(post.id)}
-                  onRepost={() => handleRepostOpen(post.id)}
-                  onEdit={() => handleEditPost(post.id)}
-                  onDelete={() => handleDeletePost(post.id)}
-                  onPin={() => handlePinPost(post.id, post.isPinned)}
-                  onClick={() => router.push(`/v2/feeds/post/${post.id}`)}
-                />
+                {(() => {
+                  const postReactions = post.currentUserReactions ?? [];
+                  const isLiked = postReactions.includes('❤️') || (post.isLikedByMe ?? false);
+                  const isBookmarked = !!post.bookmarkedAt;
+                  const userReaction = postReactions[0];
+                  return (
+                    <PostCard
+                      author={{
+                        name: post.author?.displayName ?? post.author?.username ?? 'Unknown',
+                        avatar: post.author?.avatar ?? undefined,
+                      }}
+                      lang={post.originalLanguage ?? 'unknown'}
+                      content={post.content ?? ''}
+                      translations={postToTranslations(post)}
+                      userLanguage={userLanguage}
+                      time={formatRelativeTime(post.createdAt)}
+                      likes={post.likeCount}
+                      comments={post.commentCount}
+                      isLiked={isLiked}
+                      isBookmarked={isBookmarked}
+                      isAuthor={post.authorId === currentUserId}
+                      isPinned={post.isPinned}
+                      reactionSummary={post.reactionSummary ?? undefined}
+                      userReaction={userReaction}
+                      media={post.media}
+                      onLike={() => handleLike(post.id, isLiked)}
+                      onReact={(emoji) => handleReact(post.id, emoji, postReactions)}
+                      onComment={() => handleComment(post.id)}
+                      onShare={() => handleShare(post.id)}
+                      onBookmark={() => handleBookmark(post.id, isBookmarked)}
+                      onTranslate={() => handleTranslate(post.id)}
+                      onRepost={() => handleRepostOpen(post.id)}
+                      onEdit={() => handleEditPost(post.id)}
+                      onDelete={() => handleDeletePost(post.id)}
+                      onPin={() => handlePinPost(post.id, post.isPinned)}
+                      onClick={() => router.push(`/v2/feeds/post/${post.id}`)}
+                    />
+                  );
+                })()}
               </div>
             ))}
 

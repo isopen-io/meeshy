@@ -11,16 +11,32 @@ import {
 
 const mockCreatePost = jest.fn();
 const mockDeletePost = jest.fn();
-const mockLikePost = jest.fn();
-const mockUnlikePost = jest.fn();
 const mockBookmarkPost = jest.fn();
+
+// Socket mock for post reaction mutations
+const mockSocketEmit = jest.fn();
+const mockSocket = {
+  connected: true,
+  emit: mockSocketEmit,
+};
+
+jest.mock('@/services/meeshy-socketio.service', () => ({
+  meeshySocketIOService: {
+    getSocket: () => mockSocket,
+  },
+}));
+
+jest.mock('@meeshy/shared/types/socketio-events', () => ({
+  CLIENT_EVENTS: {
+    POST_REACTION_ADD: 'post:reaction-add',
+    POST_REACTION_REMOVE: 'post:reaction-remove',
+  },
+}));
 
 jest.mock('@/services/posts.service', () => ({
   postsService: {
     createPost: (...args: unknown[]) => mockCreatePost(...args),
     deletePost: (...args: unknown[]) => mockDeletePost(...args),
-    likePost: (...args: unknown[]) => mockLikePost(...args),
-    unlikePost: (...args: unknown[]) => mockUnlikePost(...args),
     bookmarkPost: (...args: unknown[]) => mockBookmarkPost(...args),
     updatePost: jest.fn(),
     unbookmarkPost: jest.fn(),
@@ -179,44 +195,84 @@ describe('useDeletePostMutation', () => {
 });
 
 describe('useLikePostMutation', () => {
+  beforeEach(() => { mockSocketEmit.mockClear(); });
+
+  it('emits post:reaction-add on the socket', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockSocketEmit.mockImplementation((_event: string, _payload: unknown, cb: (r: { success: boolean }) => void) => {
+      cb({ success: true });
+    });
+
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ postId: 'post-1' });
+    });
+
+    expect(mockSocketEmit).toHaveBeenCalledWith(
+      'post:reaction-add',
+      { postId: 'post-1', emoji: '❤️' },
+      expect.any(Function),
+    );
+  });
+
   it('optimistically increments likeCount', async () => {
     const qc = createQueryClient();
     seedFeed(qc);
-    mockLikePost.mockResolvedValue({ success: true });
-
-    const { result } = renderHook(() => useLikePostMutation(), {
-      wrapper: createWrapper(qc),
+    mockSocketEmit.mockImplementation((_event: string, _payload: unknown, cb: (r: { success: boolean }) => void) => {
+      cb({ success: true });
     });
 
-    await act(async () => {
-      result.current.mutate({ postId: 'post-1' });
+    const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => { result.current.mutate({ postId: 'post-1' }); });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].likeCount).toBe(6);
     });
-
-    await waitFor(() => expect(result.current.isSuccess || result.current.isPending).toBe(true));
-
-    const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
-    expect(data?.pages[0].data[0].likeCount).toBe(6);
   });
 });
 
 describe('useUnlikePostMutation', () => {
+  beforeEach(() => { mockSocketEmit.mockClear(); });
+
+  it('emits post:reaction-remove on the socket', async () => {
+    const qc = createQueryClient();
+    seedFeed(qc);
+    mockSocketEmit.mockImplementation((_event: string, _payload: unknown, cb: (r: { success: boolean }) => void) => {
+      cb({ success: true });
+    });
+
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ postId: 'post-1' });
+    });
+
+    expect(mockSocketEmit).toHaveBeenCalledWith(
+      'post:reaction-remove',
+      { postId: 'post-1', emoji: '❤️' },
+      expect.any(Function),
+    );
+  });
+
   it('optimistically decrements likeCount', async () => {
     const qc = createQueryClient();
     seedFeed(qc);
-    mockUnlikePost.mockResolvedValue({ success: true });
-
-    const { result } = renderHook(() => useUnlikePostMutation(), {
-      wrapper: createWrapper(qc),
+    mockSocketEmit.mockImplementation((_event: string, _payload: unknown, cb: (r: { success: boolean }) => void) => {
+      cb({ success: true });
     });
 
-    await act(async () => {
-      result.current.mutate('post-1');
+    const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
+
+    act(() => { result.current.mutate({ postId: 'post-1' }); });
+
+    await waitFor(() => {
+      const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
+      expect(data?.pages[0].data[0].likeCount).toBe(4);
     });
-
-    await waitFor(() => expect(result.current.isSuccess || result.current.isPending).toBe(true));
-
-    const data = qc.getQueryData<{ pages: { data: typeof mockPost[] }[] }>(['posts', 'list', 'infinite', 'feed']);
-    expect(data?.pages[0].data[0].likeCount).toBe(4);
   });
 });
 
@@ -262,10 +318,12 @@ describe('useCreatePostMutation - rollback', () => {
 });
 
 describe('useLikePostMutation - rollback', () => {
-  it('rolls back likeCount on error', async () => {
+  it('rolls back likeCount on socket error', async () => {
     const qc = createQueryClient();
     seedFeed(qc);
-    mockLikePost.mockRejectedValue(new Error('Network error'));
+    mockSocketEmit.mockImplementation((_event: string, _payload: unknown, cb: (r: { success: boolean; error?: string }) => void) => {
+      cb({ success: false, error: 'Network error' });
+    });
 
     const { result } = renderHook(() => useLikePostMutation(), { wrapper: createWrapper(qc) });
 
@@ -281,15 +339,17 @@ describe('useLikePostMutation - rollback', () => {
 });
 
 describe('useUnlikePostMutation - rollback', () => {
-  it('rolls back likeCount on error', async () => {
+  it('rolls back likeCount on socket error', async () => {
     const qc = createQueryClient();
     seedFeed(qc);
-    mockUnlikePost.mockRejectedValue(new Error('Network error'));
+    mockSocketEmit.mockImplementation((_event: string, _payload: unknown, cb: (r: { success: boolean; error?: string }) => void) => {
+      cb({ success: false, error: 'Network error' });
+    });
 
     const { result } = renderHook(() => useUnlikePostMutation(), { wrapper: createWrapper(qc) });
 
     await act(async () => {
-      result.current.mutate('post-1');
+      result.current.mutate({ postId: 'post-1' });
     });
 
     await waitFor(() => expect(result.current.isError).toBe(true));

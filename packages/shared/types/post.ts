@@ -48,6 +48,8 @@ export interface PostComment {
   readonly likeCount: number;
   readonly replyCount: number;
   readonly reactionSummary?: Record<string, number> | null;
+  readonly currentUserReactions?: readonly string[];
+  readonly isLikedByMe?: boolean;
   readonly isEdited?: boolean;
   readonly isDeleted?: boolean;
   readonly createdAt: string | Date;
@@ -71,6 +73,9 @@ export interface Post {
   readonly reactions?: readonly PostReaction[] | null;
   readonly reactionSummary?: Record<string, number> | null;
   readonly reactionCount?: number;
+  readonly currentUserReactions?: readonly string[];
+  readonly isLikedByMe?: boolean;
+  readonly bookmarkedAt?: string | Date | null;
   readonly likeCount: number;
   readonly commentCount: number;
   readonly repostCount: number;
