@@ -235,47 +235,6 @@ extension StoryViewerView {
         .accessibilityHidden(true)
     }
 
-    // MARK: - Gesture Overlay
-
-    func gestureOverlay(geometry: GeometryProxy) -> some View {
-        HStack(spacing: 0) {
-            // Left half — previous
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if isComposerEngaged { dismissComposer(); return }
-                    goToPrevious()
-                }
-                .accessibilityLabel("Story precedente")
-                .accessibilityHint("Toucher pour revenir a la story precedente")
-                .accessibilityAddTraits(.isButton)
-
-            // Right half — next
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if isComposerEngaged { dismissComposer(); return }
-                    goToNext()
-                }
-                .accessibilityLabel("Story suivante")
-                .accessibilityHint("Toucher pour passer a la story suivante")
-                .accessibilityAddTraits(.isButton)
-        }
-        // Exclude the bottom composer zone from tap targets
-        .padding(.bottom, 120 + geometry.safeAreaInsets.bottom)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.2)
-                .onChanged { _ in
-                    guard !isComposerEngaged else { return }
-                    pauseTimer()
-                }
-                .onEnded { _ in
-                    guard !isComposerEngaged else { return }
-                    resumeTimer()
-                }
-        )
-    }
-
     // MARK: - Unified Drag Gesture (horizontal = groups, vertical = dismiss)
 
     var unifiedDragGesture: some Gesture {
@@ -369,7 +328,7 @@ extension StoryViewerView {
 
     // MARK: - Navigation
 
-    private func goToNext() {
+    func goToNext() {
         guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
         HapticFeedback.light()
         guard let group = currentGroup else { return }
@@ -398,7 +357,7 @@ extension StoryViewerView {
         }
     }
 
-    private func goToPrevious() {
+    func goToPrevious() {
         guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
         HapticFeedback.light()
 
@@ -1174,17 +1133,40 @@ struct StoryViewersSheet: View {
 
 // MARK: - Story Comments Overlay (live-chat style with replies)
 
-extension StoryViewerView {
+/// Full-featured comment overlay: occupies bottom half of screen with
+/// infinite scroll, reply threading (simple indentation), inline
+/// UniversalComposerBar, and timer pause. All other controls except
+/// the composer are hidden.
+///
+/// Extracted from `StoryViewerView.storyCommentsOverlay` (formerly an
+/// `AnyView`) so the deeply-nested comment panel becomes its own
+/// type-metadata unit instead of inflating the viewer's opaque type.
+struct StoryCommentsOverlayView: View {
+    let storyComments: [FeedComment]
+    let storyCommentCount: Int
+    let storyCommentRepliesMap: [String: [FeedComment]]
+    let storyCommentExpandedThreads: Set<String>
+    let storyCommentLoadingReplies: Set<String>
+    let isLoadingComments: Bool
+    let userLang: String
+    let composerAccentColor: String
 
-    /// Full-featured comment overlay: occupies bottom half of screen with
-    /// infinite scroll, reply threading (simple indentation), inline
-    /// UniversalComposerBar, and timer pause. All other controls except
-    /// the composer are hidden.
-    var storyCommentsOverlay: AnyView {
-        let userLang = AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr"
-        let topLevelComments = storyComments.filter { $0.parentId == nil }
+    @Binding var showCommentsOverlay: Bool
+    @Binding var replyingToStoryComment: FeedComment?
+    @Binding var composerLanguage: String
+    @Binding var commentEffects: MessageEffects
+    @Binding var commentBlurEnabled: Bool
 
-        return AnyView(VStack(spacing: 0) {
+    let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
+    let toggleStoryCommentThread: (String) async -> Void
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?) -> Void
+
+    private var topLevelComments: [FeedComment] {
+        storyComments.filter { $0.parentId == nil }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
             // Tap-to-dismiss upper half
             Color.black.opacity(0.3)
                 .contentShape(Rectangle())
@@ -1230,14 +1212,14 @@ extension StoryViewerView {
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(alignment: .leading, spacing: 6) {
                             ForEach(topLevelComments) { comment in
-                                makeStoryCommentRow(comment, userLang: userLang)
+                                makeStoryCommentRow(comment, userLang)
                                     .id(comment.id)
 
                                 let replies = storyCommentRepliesMap[comment.id] ?? []
                                 let autoPreview = Array(replies.prefix(2))
                                 if !autoPreview.isEmpty && !storyCommentExpandedThreads.contains(comment.id) {
                                     ForEach(autoPreview) { reply in
-                                        makeStoryCommentRow(reply, userLang: userLang)
+                                        makeStoryCommentRow(reply, userLang)
                                             .padding(.leading, 32)
                                             .id(reply.id)
                                     }
@@ -1275,7 +1257,7 @@ extension StoryViewerView {
                                     }
 
                                     ForEach(replies) { reply in
-                                        makeStoryCommentRow(reply, userLang: userLang)
+                                        makeStoryCommentRow(reply, userLang)
                                             .padding(.leading, 32)
                                             .id(reply.id)
                                     }
@@ -1342,7 +1324,7 @@ extension StoryViewerView {
                     )
                     .ignoresSafeArea(edges: .bottom)
             )
-        })
+        }
     }
 
     // MARK: - Story Comment Composer
@@ -1352,7 +1334,7 @@ extension StoryViewerView {
         return UniversalComposerBar(
             style: .dark,
             mode: .comment,
-            accentColor: replyContext?.authorColor ?? currentGroup?.avatarColor ?? "6366F1",
+            accentColor: replyContext?.authorColor ?? composerAccentColor,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onSend: { text in
@@ -1364,7 +1346,7 @@ extension StoryViewerView {
                 let effectFlags = flags > 0 ? Int(flags) : nil
                 let parentId = replyingToStoryComment?.id
                 replyingToStoryComment = nil
-                sendComment(text: text, effectFlags: effectFlags, parentId: parentId)
+                sendComment(text, effectFlags, parentId)
             },
             replyBanner: replyContext.map { reply in
                 AnyView(
@@ -1419,6 +1401,9 @@ extension StoryViewerView {
         .padding(.horizontal, 8)
         .padding(.bottom, 4)
     }
+}
+
+extension StoryViewerView {
 
     // MARK: - Story Comment Thread Management
 
@@ -1462,8 +1447,7 @@ extension StoryViewerView {
         }
     }
 
-    @ViewBuilder
-    func makeStoryCommentRow(_ comment: FeedComment, userLang: String) -> some View {
+    func makeStoryCommentRow(_ comment: FeedComment, userLang: String) -> StoryCommentRowView {
         StoryCommentRowView(
             comment: comment,
             userLang: userLang,
