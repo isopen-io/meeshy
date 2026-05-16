@@ -726,3 +726,26 @@ struct OutboxDispatcher: OutboxDispatching {
         }
     }
 }
+
+// MARK: - On-demand outbox drain
+
+/// Triggers an immediate outbox drain. `OutboxFlusher.flush()` otherwise
+/// only runs at app boot (`MeeshyApp`) and on background→foreground
+/// transitions (`BackgroundTransitionCoordinator`) — so an optimistic
+/// mutation enqueued mid-session (a reaction in particular, which has no
+/// other send path) would sit `pending` in the outbox until one of those
+/// events and never reach the server. Call this right after enqueueing so
+/// the change leaves the device immediately.
+@MainActor
+enum OutboxFlushTrigger {
+    static func flushNow() async {
+        let flusher = OutboxFlusher(
+            pool: DependencyContainer.shared.dbPool,
+            dispatcher: OutboxDispatcher(),
+            onOutcome: { @Sendable outcome in
+                Task { await OfflineQueue.shared.publishOutcome(outcome) }
+            }
+        )
+        await flusher.flush()
+    }
+}

@@ -1892,6 +1892,11 @@ class ConversationViewModel: ObservableObject {
                 try? await OfflineQueue.shared.enqueueReaction(
                     messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
                 )
+                // Draine l'outbox tout de suite : sans ca la reaction reste
+                // `pending` jusqu'au prochain lancement / retour avant-plan de
+                // l'app (seuls moments ou le flusher tourne) et n'atteint
+                // jamais le serveur.
+                await OutboxFlushTrigger.flushNow()
             }
         } else {
             let reactionId = UUID().uuidString
@@ -1905,6 +1910,11 @@ class ConversationViewModel: ObservableObject {
                 try? await OfflineQueue.shared.enqueueReaction(
                     messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
                 )
+                // Draine l'outbox tout de suite : sans ca la reaction reste
+                // `pending` jusqu'au prochain lancement / retour avant-plan de
+                // l'app (seuls moments ou le flusher tourne) et n'atteint
+                // jamais le serveur.
+                await OutboxFlushTrigger.flushNow()
             }
         }
 
