@@ -247,79 +247,59 @@ struct ConversationListView: View {
         return statusViewModel.statusForUser(userId: userId)
     }
 
-    // Returns AnyView to cap the per-row type: the row (swipe actions +
-    // context menu + preview) is the deepest leaf of the list, and erasing
-    // it here keeps the enclosing ConversationListView body type small
-    // enough for the Swift runtime to instantiate on low-memory devices.
-    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat) -> AnyView {
+    // Builds one conversation row. The heavy subtree (swipe actions +
+    // context menu + preview) lives in the nominal `ConversationRowItem`
+    // struct (ConversationListView+Rows.swift) so it no longer bloats the
+    // ConversationListView body type — that monolithic type was the
+    // type-metadata instantiation crash on low-memory devices. This builder
+    // only wires the row's inputs; the returned `some View` is the nominal
+    // `ConversationRowItem`, which keeps the enclosing list type small.
+    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat) -> some View {
         let community: MeeshyCommunity? = {
             guard conversation.type == .community || conversation.communityId != nil,
                   let communityId = conversation.communityId else { return nil }
             return userCommunityLookup[communityId] ?? userCommunities.first(where: { $0.id == communityId })
         }()
 
-        return AnyView(SwipeableRow(
+        return ConversationRowItem(
+            conversation: conversation,
+            community: community,
+            rowWidth: rowWidth,
+            isDragging: draggingConversation?.id == conversation.id,
+            presenceState: presenceManager.presenceState(for: conversation.participantUserId ?? ""),
+            isDark: theme.mode.isDark,
+            storyRingState: storyRingState(for: conversation),
+            moodStatus: conversationMoodStatus(for: conversation),
+            typingUsername: conversationViewModel.typingUsernames[conversation.id],
+            isSelected: selectedConversationId == conversation.id,
+            cachedPreviewMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
             leadingActions: leadingSwipeActions(for: conversation),
-            trailingActions: trailingSwipeActions(for: conversation)
-        ) {
-            ThemedConversationRow(
-                conversation: conversation,
-                community: community,
-                availableWidth: rowWidth,
-                isDragging: draggingConversation?.id == conversation.id,
-                presenceState: presenceManager.presenceState(for: conversation.participantUserId ?? ""),
-                onViewStory: {
-                    handleStoryView(conversation)
-                },
-                onViewProfile: {
-                    handleProfileView(conversation)
-                },
-                onViewConversationInfo: {
-                    handleConversationInfoView(conversation)
-                },
-                onMoodBadgeTap: { anchor in
-                    handleMoodBadgeTap(conversation, at: anchor)
-                },
-                onCreateShareLink: canCreateShareLink(for: conversation) ? {
-                    inviteSheetConversation = conversation
-                } : nil,
-                isDark: theme.mode.isDark,
-                storyRingState: storyRingState(for: conversation),
-                moodStatus: conversationMoodStatus(for: conversation),
-                typingUsername: conversationViewModel.typingUsernames[conversation.id],
-                isSelected: selectedConversationId == conversation.id
-            )
-            .equatable()
-            .contentShape(Rectangle())
-            .onTapGesture {
-                HapticFeedback.light()
+            trailingActions: trailingSwipeActions(for: conversation),
+            onViewStory: { handleStoryView(conversation) },
+            onViewProfile: { handleProfileView(conversation) },
+            onViewConversationInfo: { handleConversationInfoView(conversation) },
+            onMoodBadgeTap: { anchor in handleMoodBadgeTap(conversation, at: anchor) },
+            onCreateShareLink: canCreateShareLink(for: conversation) ? {
+                inviteSheetConversation = conversation
+            } : nil,
+            onTap: {
                 if ConversationLockManager.shared.isLocked(conversation.id) {
                     lockSheetMode = .openConversation
                     lockSheetConversation = conversation
                 } else {
                     onSelect(conversation)
                 }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Ouvre la conversation")
-            .onDrag {
+            },
+            onDragStart: {
                 draggingConversation = conversation
                 HapticFeedback.medium()
-                return NSItemProvider(object: conversation.id as NSString)
-            }
-            .contextMenu {
-                conversationContextMenu(for: conversation)
-            } preview: {
-                ConversationPreviewView(
-                    conversation: conversation,
-                    cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? []
-                )
-            }
-            .task {
+            },
+            onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
             }
-        })
+        ) {
+            conversationContextMenu(for: conversation)
+        }
     }
 
     // MARK: - Share Link Permission
@@ -475,70 +455,8 @@ struct ConversationListView: View {
         return actions
     }
 
-    // Erased to AnyView so this 4-branch switch does not inline its full
-    // type into the scroll content (see conversationRow for rationale).
-    private var paginationFooter: AnyView {
-        AnyView(paginationFooterContent)
-    }
-
-    @ViewBuilder
-    private var paginationFooterContent: some View {
-        switch conversationViewModel.paginationState {
-        case .loadingMore:
-            HStack {
-                Spacer()
-                ProgressView()
-                    .tint(MeeshyColors.indigo400)
-                Spacer()
-            }
-            .padding(.vertical, 16)
-        case .exhausted:
-            // Show the "all loaded" hint only on lists that actually
-            // had to paginate -- avoids cluttering empty/small lists.
-            if conversationViewModel.conversations.count > 30 {
-                Text(String(
-                    localized: "conversations.pagination.allLoaded",
-                    defaultValue: "Toutes les conversations chargees"
-                ))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-            }
-        case .error:
-            VStack(spacing: 6) {
-                Text(String(
-                    localized: "conversations.pagination.errorTitle",
-                    defaultValue: "Erreur de chargement"
-                ))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                Button {
-                    Task { await conversationViewModel.loadMore() }
-                } label: {
-                    Text(String(
-                        localized: "conversations.pagination.retry",
-                        defaultValue: "Reessayer"
-                    ))
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(MeeshyColors.indigo400)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-        case .idle:
-            // Invisible sentinel: when the user scrolls deep enough to
-            // reveal this row, fire `loadMore`. The ViewModel guards
-            // against re-entry and short-circuits when hasMore=false.
-            if conversationViewModel.hasMore {
-                Color.clear
-                    .frame(height: 1)
-                    .onAppear {
-                        Task { await conversationViewModel.loadMore() }
-                    }
-            }
-        }
-    }
+    // Pagination footer now lives in `ConversationPaginationFooter`
+    // (ConversationListView+Rows.swift).
 
     private func triggerLoadMoreIfNeeded(conversation: Conversation) {
         let all = conversationViewModel.conversations
@@ -713,9 +631,10 @@ struct ConversationListView: View {
             // tel quel, le wrapper s'occupe du sentinel scrollOffset, du
             // MeeshyPullIndicator au top, des haptics et de l'orchestration
             // de la sequence pull -> armed -> refreshing -> completing -> idle.
-            // AnyView seam: keeps the scroll subtree's (large) type out of
-            // the enclosing ZStack / mainContentZStack / body type.
-            AnyView(MeeshyRefreshableScroll(
+            // The scroll subtree's type is kept small by the nominal
+            // ConversationRowItem / ConversationPaginationFooter structs
+            // (ConversationListView+Rows.swift) — no AnyView seam needed.
+            MeeshyRefreshableScroll(
                 onRefresh: {
                     async let convRefresh: Void = conversationViewModel.pullToRefresh()
                     async let storyRefresh: Void = storyViewModel.loadStories(forceNetwork: true)
@@ -809,7 +728,7 @@ struct ConversationListView: View {
                     //                 loadMore via onAppear once the
                     //                 user reaches the tail (back-up to
                     //                 the per-row threshold trigger)
-                    paginationFooter
+                    ConversationPaginationFooter()
 
                     Color.clear.frame(height: 280)
                         .onChange(of: draggingConversation) { oldValue, newValue in
@@ -823,7 +742,7 @@ struct ConversationListView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 120)
             }
-            .scrollDismissesKeyboard(.interactively))
+            .scrollDismissesKeyboard(.interactively)
 
             // Layer 2: Bottom overlay — Search bar + Communities & Filters
             ConversationListBottomBar(

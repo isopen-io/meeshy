@@ -138,6 +138,9 @@
 		AURC0001000100010001001 /* AudioRecorderManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AURC0001000100010001002 /* AudioRecorderManagerTests.swift */; };
 		B19F8FBBC6C564834DAC55E7 /* RequestsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65259648A7CB9FA1618B613E /* RequestsViewModel.swift */; };
 		BB22CC33DD44EE55FF660058 /* StoryViewerView+Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */; };
+		82C6C143D1C7470481A1B2FE /* ConversationListView+Rows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 583B6F0C56A44AA8A68F517A /* ConversationListView+Rows.swift */; };
+		5E3B82855928421D99F204C2 /* StoryViewerView+Canvas.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CA4E994A3234A78A90BB16F /* StoryViewerView+Canvas.swift */; };
+		34AA507DB9AA4CC78FEC78C9 /* StoryViewerView+Sidebar.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBCF87A60F92454FA8977EA8 /* StoryViewerView+Sidebar.swift */; };
 		BB7000000000002FB7 /* ImageEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB7000000000001FB7 /* ImageEditView.swift */; };
 		BBLA0001000100010001BLD /* BubbleMetaBadges.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLA0001000100010001REF /* BubbleMetaBadges.swift */; };
 		SKLN0001000100010001BLD /* SkeletonVisibilityResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = SKLN0001000100010001REF /* SkeletonVisibilityResolver.swift */; };
@@ -628,6 +631,9 @@
 		BB22CC33DD44EE55FF660044 /* StoryTrayView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryTrayView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryViewerView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Content.swift"; sourceTree = "<group>"; };
+		583B6F0C56A44AA8A68F517A /* ConversationListView+Rows.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ConversationListView+Rows.swift"; sourceTree = "<group>"; };
+		9CA4E994A3234A78A90BB16F /* StoryViewerView+Canvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Canvas.swift"; sourceTree = "<group>"; };
+		FBCF87A60F92454FA8977EA8 /* StoryViewerView+Sidebar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Sidebar.swift"; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660066 /* StatusBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusComposerView.swift; sourceTree = "<group>"; };
 		BB7000000000001FB7 /* ImageEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageEditView.swift; sourceTree = "<group>"; };
@@ -1222,6 +1228,9 @@
 				BB22CC33DD44EE55FF660055 /* StoryViewerView.swift */,
 				C8B729437578B76EC6727BF0 /* StoryViewerContainer.swift */,
 				BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */,
+				583B6F0C56A44AA8A68F517A /* ConversationListView+Rows.swift */,
+				9CA4E994A3234A78A90BB16F /* StoryViewerView+Canvas.swift */,
+				FBCF87A60F92454FA8977EA8 /* StoryViewerView+Sidebar.swift */,
 				SESH000000000001F28 /* StoryExportShareSheet.swift */,
 				BB22CC33DD44EE55FF660066 /* StatusBarView.swift */,
 				CC44DD55EE66FF7788990011 /* AudioPostComposerView.swift */,
@@ -2155,6 +2164,9 @@
 				AA00BB11CC22DD33EE440004 /* SampleData.swift in Sources */,
 				AA00BB11CC22DD33EE440005 /* RootViewComponents.swift in Sources */,
 				BB22CC33DD44EE55FF660058 /* StoryViewerView+Content.swift in Sources */,
+				82C6C143D1C7470481A1B2FE /* ConversationListView+Rows.swift in Sources */,
+				5E3B82855928421D99F204C2 /* StoryViewerView+Canvas.swift in Sources */,
+				34AA507DB9AA4CC78FEC78C9 /* StoryViewerView+Sidebar.swift in Sources */,
 				EE55FF66AA77BB88CC990043 /* ConversationBackgroundComponents.swift in Sources */,
 				E3FB7818ED933C8F0757593F /* ThemedConversationRow.swift in Sources */,
 				2FC8583F3AB2170FFC13A49D /* ConversationListHelpers.swift in Sources */,
