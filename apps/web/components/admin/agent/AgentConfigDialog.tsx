@@ -74,7 +74,6 @@ const DEFAULTS: AgentConfigUpsert = {
   burstSize: 4,
   burstIntervalMinutes: 5,
   quietIntervalMinutes: 90,
-  inactivityDaysThreshold: 3,
   prioritizeTaggedUsers: true,
   prioritizeRepliedUsers: true,
   reactionBoostFactor: 1.5,
@@ -91,7 +90,19 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
   useEffect(() => {
     if (config) {
       setConversationId(config.conversationId);
-      const { _id, conversationId: _cid, _conversation, _configuredBy, controlledUserIds: _cu, analytics: _an, _createdAt, _updatedAt, ...upsertFields } = config;
+      const {
+        id: _id,
+        conversationId: _conversationId,
+        conversation: _conversation,
+        isScanning: _isScanning,
+        currentNode: _currentNode,
+        configuredBy: _configuredBy,
+        controlledUserIds: _controlledUserIds,
+        analytics: _analytics,
+        createdAt: _createdAt,
+        updatedAt: _updatedAt,
+        ...upsertFields
+      } = config;
       setForm(upsertFields);
     } else {
       setConversationId('');
@@ -337,7 +348,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
               <div className="space-y-2">
                 <div className="flex items-center">
                   <Label>Inactivité (heures)</Label>
-                  <InfoIcon content="Seuil critique pour l'Auto-pickup. Si un utilisateur n'a pas posté depuis X heures, l'agent peut prendre sa place." />
+                  <InfoIcon content="Délai unique de l'auto-pickup. Un utilisateur ne devient contrôlable par l'agent qu'après X heures sans connexion. Dès qu'il se reconnecte, l'agent le relâche et attend de nouveau ce délai avant de le réutiliser." />
                 </div>
                 <Input
                   type="number"
@@ -779,15 +790,17 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
             <div className="space-y-2">
               <div className="flex items-center">
                 <Label>Seuil d&apos;inactivité (jours)</Label>
-                <InfoIcon content="Nettoyage du pool : si l'utilisateur contrôlé ne s'est pas connecté manuellement depuis X jours, l'agent arrête de l'utiliser pour éviter les situations étranges." />
+                <InfoIcon content="Miroir en jours du seuil « Inactivité (heures) » ci-dessus — c'est exactement le même délai. L'agent cesse de contrôler un utilisateur dès qu'il s'est reconnecté, et attend de nouveau ce délai avant de le réutiliser." />
               </div>
-              <Input
-                type="number"
-                value={form.inactivityDaysThreshold ?? 3}
-                onChange={e => updateField('inactivityDaysThreshold', Math.max(1, Math.min(30, parseInt(e.target.value) || 3)))}
-                min={1}
-                max={30}
-              />
+              <div className="flex h-10 items-center gap-2 rounded-md border border-dashed border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 px-3 text-sm text-gray-600 dark:text-gray-300">
+                <span className="font-mono">
+                  {Math.max(1, Math.round((form.inactivityThresholdHours ?? 72) / 24))}
+                </span>
+                <span className="text-gray-400">jour(s)</span>
+                <span className="ml-auto text-[9px] font-bold uppercase tracking-wider text-gray-400">
+                  Auto · {form.inactivityThresholdHours ?? 72}h
+                </span>
+              </div>
             </div>
 
             <div className="flex items-center justify-between">

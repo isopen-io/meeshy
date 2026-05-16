@@ -106,6 +106,15 @@ export class ConversationScanner {
     if (globalConfig?.enabled === false) return;
     const config = await this.configCache.getConfig(conversationId);
     if (config?.enabled === false) return;
+
+    // A manual rescan refreshes the controlled-user pool: release users who
+    // reconnected within the inactivity delay before picking up newly inactive
+    // ones, so the trigger button both adds and removes users.
+    const evicted = await this.persistence.evictRecentlyActiveUsers();
+    if (evicted > 0) {
+      console.log(`[Scanner] Manual rescan evicted ${evicted} recently active user(s)`);
+    }
+
     const conversation = await this.persistence.getConversationWithType(conversationId);
     const conv: EligibleConversation = {
       conversationId,
@@ -420,6 +429,7 @@ export class ConversationScanner {
         bootstrapLimit,
         (config?.excludedUserIds as string[]) ?? [],
         existingRoleUserIds,
+        config?.inactivityThresholdHours ?? 72,
       );
 
       for (const u of fallbackUsers) {

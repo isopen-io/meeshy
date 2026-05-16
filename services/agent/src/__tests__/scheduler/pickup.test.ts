@@ -52,6 +52,7 @@ function makePersistence(overrides: Record<string, jest.Mock> = {}) {
   return {
     getRecentMessageCount: jest.fn().mockResolvedValue(1),
     getRecentUniqueAuthors: jest.fn().mockResolvedValue(1),
+    evictRecentlyActiveUsers: jest.fn().mockResolvedValue(0),
     getControlledUsers: jest.fn().mockResolvedValue([makeControlledUser()]),
     getAgentConfig: jest.fn().mockResolvedValue({
       autoPickupEnabled: true,
@@ -154,7 +155,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
 
     await scanner.scanConversation('conv-1');
 
-    expect(persistence.getLeastActiveParticipants).toHaveBeenCalledWith('conv-1', 3, [], []);
+    expect(persistence.getLeastActiveParticipants).toHaveBeenCalledWith('conv-1', 3, [], [], 30);
     expect(graph.invoke).toHaveBeenCalled();
     const invokeArgs = graph.invoke.mock.calls[0][0];
     expect(invokeArgs.controlledUsers).toHaveLength(1);
@@ -265,7 +266,7 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
 
     await scanner.scanConversation('conv-1');
 
-    expect(persistence.getLeastActiveParticipants).toHaveBeenCalledWith('conv-1', 3, [], []);
+    expect(persistence.getLeastActiveParticipants).toHaveBeenCalledWith('conv-1', 3, [], [], 30);
     expect(graph.invoke).toHaveBeenCalled();
     const invokeArgs = graph.invoke.mock.calls[0][0];
     expect(invokeArgs.controlledUsers).toHaveLength(3);
@@ -291,5 +292,32 @@ describe('ConversationScanner — Dynamic User Pickup', () => {
     expect(persistence.getPotentialControlledUsers).not.toHaveBeenCalled();
     const invokeArgs = graph.invoke.mock.calls[0][0];
     expect(invokeArgs.controlledUsers).toHaveLength(1);
+  });
+
+  it('evicts recently reconnected users when a manual rescan is triggered', async () => {
+    const graph = { invoke: jest.fn().mockResolvedValue({ pendingActions: [] }) };
+    const persistence = makePersistence({
+      evictRecentlyActiveUsers: jest.fn().mockResolvedValue(2),
+    });
+
+    const scanner = new ConversationScanner(
+      graph,
+      persistence,
+      makeStateManager(),
+      { enqueue: jest.fn().mockResolvedValue('mock-id'), getScheduledTopicsForConversation: jest.fn().mockResolvedValue([]) } as any,
+      makeRedis(),
+      { getConfig: jest.fn().mockResolvedValue(null), getGlobalConfig: jest.fn().mockResolvedValue(null) } as any,
+      {
+        canSendMessage: jest.fn().mockResolvedValue({ allowed: true, remaining: 10 }),
+        canBurst: jest.fn().mockResolvedValue({ allowed: true }),
+        canScanConversation: jest.fn().mockResolvedValue({ allowed: true, current: 0, max: 50 }),
+        recordScannedConversation: jest.fn().mockResolvedValue(undefined),
+        getTodayStats: jest.fn().mockResolvedValue({ messagesUsed: 0, usersActive: 0 }),
+      } as any,
+    );
+
+    await scanner.scanConversation('conv-1');
+
+    expect(persistence.evictRecentlyActiveUsers).toHaveBeenCalledTimes(1);
   });
 });
