@@ -41,6 +41,14 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
+/**
+ * Resolve the best available name for a notification actor:
+ * displayName first, then username, then a neutral fallback.
+ */
+function resolveActorName(actor: NotificationActor | undefined): string {
+  return actor?.displayName?.trim() || actor?.username?.trim() || 'Meeshy';
+}
+
 function extractExtension(filename: string | null | undefined): string | null {
   if (!filename) return null;
   const dot = filename.lastIndexOf('.');
@@ -363,18 +371,19 @@ export class NotificationService {
               `/conversations/${params.context.conversationId}`) :
             undefined;
 
-          const isGroupMessage = params.type === 'new_message'
+          const isMessage = params.type === 'new_message';
+          const isGroupMessage = isMessage
             && params.context.conversationType
             && params.context.conversationType !== 'direct';
+          const actorName = resolveActorName(params.actor);
+          const messageTitle = isGroupMessage && params.context.conversationTitle
+            ? `${actorName} | ${params.context.conversationTitle}`
+            : actorName;
           const pushTitle = params.title
-            || (isGroupMessage && params.context.conversationTitle
-              ? params.context.conversationTitle
-              : null)
+            || (isMessage ? messageTitle : null)
             || params.actor?.displayName
             || 'Meeshy';
-          const pushBody = isGroupMessage && params.actor?.displayName
-            ? `${params.actor.displayName}: ${params.content.substring(0, 200)}`
-            : params.content.substring(0, 200);
+          const pushBody = params.content.substring(0, 200);
 
           this.pushService.sendToUser({
             userId: params.userId,
