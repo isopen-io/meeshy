@@ -1180,11 +1180,11 @@ extension StoryViewerView {
     /// infinite scroll, reply threading (simple indentation), inline
     /// UniversalComposerBar, and timer pause. All other controls except
     /// the composer are hidden.
-    var storyCommentsOverlay: some View {
+    var storyCommentsOverlay: AnyView {
         let userLang = AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr"
         let topLevelComments = storyComments.filter { $0.parentId == nil }
 
-        return VStack(spacing: 0) {
+        return AnyView(VStack(spacing: 0) {
             // Tap-to-dismiss upper half
             Color.black.opacity(0.3)
                 .contentShape(Rectangle())
@@ -1342,7 +1342,7 @@ extension StoryViewerView {
                     )
                     .ignoresSafeArea(edges: .bottom)
             )
-        }
+        })
     }
 
     // MARK: - Story Comment Composer
@@ -1839,5 +1839,129 @@ struct StoryCommentRowView: View, Equatable {
             Spacer()
         }
         .padding(.top, 2)
+    }
+}
+
+// MARK: - Story Action Button
+
+/// Single circular action button used in the story viewer's right sidebar.
+/// Extracted from `StoryViewerView.storyActionButton(...)` so the sidebar
+/// no longer inlines this subtree ~9 times into one opaque type.
+struct StoryActionButton: View {
+    let icon: String
+    let label: String
+    var isActive: Bool = false
+    var activeColor: Color = .white
+    var activeGlow: Color? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            action()
+        } label: {
+            VStack(spacing: 4) {
+                ZStack {
+                    // Outer glow when active
+                    if isActive, let glow = activeGlow {
+                        Circle()
+                            .fill(glow.opacity(0.2))
+                            .frame(width: 52, height: 52)
+                            .blur(radius: 4)
+                    }
+
+                    Circle()
+                        .fill(isActive ? activeColor.opacity(0.15) : Color.white.opacity(0.08))
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    isActive ?
+                                        AnyShapeStyle(activeColor.opacity(0.4)) :
+                                        AnyShapeStyle(Color.white.opacity(0.15)),
+                                    lineWidth: isActive ? 1 : 0.5
+                                )
+                        )
+                        .frame(width: 46, height: 46)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(isActive ? activeColor : .white)
+                        .symbolEffect(.bounce, value: isActive)
+                }
+                .shadow(
+                    color: isActive ? (activeGlow ?? activeColor).opacity(0.3) : .black.opacity(0.2),
+                    radius: isActive ? 8 : 4,
+                    y: isActive ? 0 : 2
+                )
+
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(isActive ? 0.95 : 0.65))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: 56)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+}
+
+// MARK: - Story Progress Bars
+
+/// Segmented progress indicator for the story viewer's current group.
+/// Extracted from `StoryViewerView.progressBars` so the header layer no
+/// longer inlines a `ForEach` / `GeometryReader` subtree into the viewer's
+/// opaque type.
+struct StoryProgressBarsView: View {
+    let group: StoryGroup?
+    let currentIndex: Int
+    let progress: CGFloat
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if let group {
+                ForEach(Array(group.stories.enumerated()), id: \.element.id) { index, _ in
+                    GeometryReader { barGeo in
+                        let w = width(for: index, totalWidth: barGeo.size.width)
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.2))
+                            Capsule()
+                                .fill(
+                                    index == currentIndex ?
+                                    AnyShapeStyle(LinearGradient(
+                                        colors: [MeeshyColors.indigo500, MeeshyColors.error, MeeshyColors.indigo400],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )) :
+                                    AnyShapeStyle(Color.white)
+                                )
+                                .frame(width: w)
+                                .shadow(
+                                    color: index == currentIndex ? MeeshyColors.indigo500.opacity(0.6) : .clear,
+                                    radius: 4, y: 0
+                                )
+                        }
+                    }
+                    .frame(height: 3)
+                    .accessibilityHidden(true)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Story \(currentIndex + 1) sur \(group?.stories.count ?? 0)")
+        .accessibilityValue("\(Int(progress * 100)) pourcent")
+    }
+
+    private func width(for index: Int, totalWidth: CGFloat) -> CGFloat {
+        if index < currentIndex {
+            return totalWidth
+        } else if index == currentIndex {
+            return totalWidth * progress
+        } else {
+            return 0
+        }
     }
 }

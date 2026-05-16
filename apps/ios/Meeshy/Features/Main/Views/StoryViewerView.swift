@@ -244,10 +244,12 @@ struct StoryViewerView: View {
         min(abs(totalSlideX) / screenW, 1.0)
     }
 
-    // Extracted from `body` to keep the SwiftUI type-checker within its time
-    // budget. Holds the ZStack canvas and all lifecycle modifiers.
-    private var viewerContent: some View {
-        ZStack {
+    // Extracted from `body` and erased to `AnyView` so the deeply-nested
+    // story canvas never composes into `StoryViewerView.Body`'s opaque
+    // type. That monolithic type triggered a Swift type-metadata
+    // instantiation crash on low-memory devices (cf. ConversationListView).
+    private var viewerContent: AnyView {
+        AnyView(ZStack {
             // Opaque black base — prevents any white frame bleed
             Color.black.ignoresSafeArea()
 
@@ -380,7 +382,7 @@ struct StoryViewerView: View {
             } else {
                 storyCommentLikeDelta[event.commentId] = (storyCommentLikeDelta[event.commentId] ?? 0) - 1
             }
-        }
+        })
     }
 
     var body: some View {
@@ -692,8 +694,8 @@ struct StoryViewerView: View {
 
     // MARK: - Story Card
 
-    private func storyCard(geometry: GeometryProxy) -> some View {
-        ZStack {
+    private func storyCard(geometry: GeometryProxy) -> AnyView {
+        AnyView(ZStack {
             // === Layer 1: Background ===
             // Color/gradient fallback (always present)
             storyBackground(geometry: geometry)
@@ -802,7 +804,11 @@ struct StoryViewerView: View {
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
             // min 59pt accounts for Dynamic Island when .statusBarHidden() zeroes safeAreaInsets
             VStack(spacing: 0) {
-                progressBars
+                StoryProgressBarsView(
+                    group: currentGroup,
+                    currentIndex: currentStoryIndex,
+                    progress: progress
+                )
                     .padding(.horizontal, 12)
                     .padding(.top, max(geometry.safeAreaInsets.top, 59) + 4)
 
@@ -912,7 +918,7 @@ struct StoryViewerView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(150)
             }
-        }
+        })
     }
 
     // MARK: - Right Action Sidebar
@@ -933,11 +939,11 @@ struct StoryViewerView: View {
         return story.toRenderableSlide(preferredLanguages: preferredContentLanguagesForReader).needsVideoExport
     }
 
-    private var storyActionSidebar: some View {
-        VStack(spacing: 20) {
+    private var storyActionSidebar: AnyView {
+        AnyView(VStack(spacing: 20) {
             // 1. Reaction (heart) — primary action, brand-colored when active
             if !isOwnStory {
-                storyActionButton(
+                StoryActionButton(
                     icon: "heart.fill",
                     label: storyReactionCount > 0 ? "\(storyReactionCount)" : "React",
                     isActive: showEmojiStrip || storyReactionCount > 0,
@@ -982,7 +988,7 @@ struct StoryViewerView: View {
 
             // 2. Reply privately (opens DM with story context)
             if !isOwnStory, onReplyToStory != nil {
-                storyActionButton(
+                StoryActionButton(
                     icon: "arrowshape.turn.up.left.fill",
                     label: "Répondre"
                 ) {
@@ -1005,7 +1011,7 @@ struct StoryViewerView: View {
             }
 
             // 3. Forward (send to someone)
-            storyActionButton(
+            StoryActionButton(
                 icon: "paperplane.fill",
                 label: "Envoyer"
             ) {
@@ -1020,7 +1026,7 @@ struct StoryViewerView: View {
             // Visibility-gated on `currentStory?.isPublic` (B.2 helper) so we never
             // expose Partager for non-public visibility (FRIENDS / PRIVATE).
             if !isOwnStory, currentStory?.isPublic == true {
-                storyActionButton(
+                StoryActionButton(
                     icon: "arrow.2.squarepath",
                     label: "Partager"
                 ) {
@@ -1034,7 +1040,7 @@ struct StoryViewerView: View {
                     }
                 }
             } else if isOwnStory {
-                storyActionButton(
+                StoryActionButton(
                     icon: "eye.fill",
                     label: "Vues"
                 ) {
@@ -1049,7 +1055,7 @@ struct StoryViewerView: View {
             // the Meeshy backend (stories publish RAW, see CLAUDE.md
             // "Story Architecture").
             if isOwnStory, currentStoryNeedsVideoExport {
-                storyActionButton(
+                StoryActionButton(
                     icon: "square.and.arrow.up.fill",
                     label: "Exporter"
                 ) {
@@ -1061,7 +1067,7 @@ struct StoryViewerView: View {
 
             // 4. Mute/Unmute — only shown if story has audio or video content
             if storyHasAudioOrVideo {
-                storyActionButton(
+                StoryActionButton(
                     icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
                     label: isGlobalMuted ? "Mute" : "Son",
                     isActive: !isGlobalMuted,
@@ -1084,7 +1090,7 @@ struct StoryViewerView: View {
 
             // 5. Comments toggle
             if storyCommentCount > 0 {
-                storyActionButton(
+                StoryActionButton(
                     icon: "bubble.left.fill",
                     label: "\(storyCommentCount)",
                     isActive: showCommentsOverlay,
@@ -1103,7 +1109,7 @@ struct StoryViewerView: View {
 
             // 6. Translate — brand cyan when active (only for stories with text/audio)
             if !isOwnStory && storyHasTranslatableContent {
-                storyActionButton(
+                StoryActionButton(
                     icon: "textformat.abc",
                     label: "Traductions",
                     isActive: showLanguageOptions,
@@ -1127,66 +1133,7 @@ struct StoryViewerView: View {
                 }
                 .zIndex(10)
             }
-        }
-    }
-
-    private func storyActionButton(
-        icon: String,
-        label: String,
-        isActive: Bool = false,
-        activeColor: Color = .white,
-        activeGlow: Color? = nil,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button {
-            action()
-        } label: {
-            VStack(spacing: 4) {
-                ZStack {
-                    // Outer glow when active
-                    if isActive, let glow = activeGlow {
-                        Circle()
-                            .fill(glow.opacity(0.2))
-                            .frame(width: 52, height: 52)
-                            .blur(radius: 4)
-                    }
-
-                    Circle()
-                        .fill(isActive ? activeColor.opacity(0.15) : Color.white.opacity(0.08))
-                        .overlay(
-                            Circle()
-                                .stroke(
-                                    isActive ?
-                                        AnyShapeStyle(activeColor.opacity(0.4)) :
-                                        AnyShapeStyle(Color.white.opacity(0.15)),
-                                    lineWidth: isActive ? 1 : 0.5
-                                )
-                        )
-                        .frame(width: 46, height: 46)
-
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(isActive ? activeColor : .white)
-                        .symbolEffect(.bounce, value: isActive)
-                }
-                .shadow(
-                    color: isActive ? (activeGlow ?? activeColor).opacity(0.3) : .black.opacity(0.2),
-                    radius: isActive ? 8 : 4,
-                    y: isActive ? 0 : 2
-                )
-
-                Text(label)
-                    .font(.system(size: 10, weight: .semibold))
-                    .foregroundColor(.white.opacity(isActive ? 0.95 : 0.65))
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .frame(width: 56)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(label)
-        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
-        .accessibilityAddTraits(isActive ? .isSelected : [])
+        })
     }
 
     // MARK: - Language Scroll Strip
@@ -1538,62 +1485,14 @@ struct StoryViewerView: View {
         )
     }
 
-    // MARK: - Progress Bars
-
-    private var progressBars: some View {
-        HStack(spacing: 3) {
-            if let group = currentGroup {
-                ForEach(Array(group.stories.enumerated()), id: \.element.id) { index, _ in
-                    GeometryReader { barGeo in
-                        let w = progressWidth(for: index, totalWidth: barGeo.size.width)
-                        ZStack(alignment: .leading) {
-                            Capsule()
-                                .fill(Color.white.opacity(0.2))
-                            Capsule()
-                                .fill(
-                                    index == currentStoryIndex ?
-                                    AnyShapeStyle(LinearGradient(
-                                        colors: [MeeshyColors.indigo500, MeeshyColors.error, MeeshyColors.indigo400],
-                                        startPoint: .leading,
-                                        endPoint: .trailing
-                                    )) :
-                                    AnyShapeStyle(Color.white)
-                                )
-                                .frame(width: w)
-                                .shadow(
-                                    color: index == currentStoryIndex ? MeeshyColors.indigo500.opacity(0.6) : .clear,
-                                    radius: 4, y: 0
-                                )
-                        }
-                    }
-                    .frame(height: 3)
-                    .accessibilityHidden(true)
-                }
-            }
-        }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Story \(currentStoryIndex + 1) sur \(currentGroup?.stories.count ?? 0)")
-        .accessibilityValue("\(Int(progress * 100)) pourcent")
-    }
-
-    private func progressWidth(for index: Int, totalWidth: CGFloat) -> CGFloat {
-        if index < currentStoryIndex {
-            return totalWidth
-        } else if index == currentStoryIndex {
-            return totalWidth * progress
-        } else {
-            return 0
-        }
-    }
-
     // MARK: - Header
 
     @State private var showStoryOptions = false
     @State private var avatarLongPressGlow = false
     @State private var showReportSheet = false
 
-    private var storyHeader: some View {
-        HStack(spacing: 10) {
+    private var storyHeader: AnyView {
+        AnyView(HStack(spacing: 10) {
             if let group = currentGroup {
                 Button {
                     HapticFeedback.light()
@@ -1846,7 +1745,7 @@ struct StoryViewerView: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
-        }
+        })
     }
 
     // MARK: - Content, Gestures, Navigation, Timer & Actions (see StoryViewerView+Content.swift)
