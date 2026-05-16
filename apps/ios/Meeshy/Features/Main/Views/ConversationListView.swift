@@ -87,7 +87,6 @@ struct ConversationListView: View {
     // Search and Filters
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
-    @State var searchBounce: Bool = false
     @State private var animateGradient = false
     @State private var expandedSections: Set<String> = ["pinned", "other"]
 
@@ -248,15 +247,18 @@ struct ConversationListView: View {
         return statusViewModel.statusForUser(userId: userId)
     }
 
-    @ViewBuilder
-    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat) -> some View {
+    // Returns AnyView to cap the per-row type: the row (swipe actions +
+    // context menu + preview) is the deepest leaf of the list, and erasing
+    // it here keeps the enclosing ConversationListView body type small
+    // enough for the Swift runtime to instantiate on low-memory devices.
+    private func conversationRow(for conversation: Conversation, rowWidth: CGFloat) -> AnyView {
         let community: MeeshyCommunity? = {
             guard conversation.type == .community || conversation.communityId != nil,
                   let communityId = conversation.communityId else { return nil }
             return userCommunityLookup[communityId] ?? userCommunities.first(where: { $0.id == communityId })
         }()
 
-        SwipeableRow(
+        return AnyView(SwipeableRow(
             leadingActions: leadingSwipeActions(for: conversation),
             trailingActions: trailingSwipeActions(for: conversation)
         ) {
@@ -317,7 +319,7 @@ struct ConversationListView: View {
             .task {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
             }
-        }
+        })
     }
 
     // MARK: - Share Link Permission
@@ -473,8 +475,14 @@ struct ConversationListView: View {
         return actions
     }
 
+    // Erased to AnyView so this 4-branch switch does not inline its full
+    // type into the scroll content (see conversationRow for rationale).
+    private var paginationFooter: AnyView {
+        AnyView(paginationFooterContent)
+    }
+
     @ViewBuilder
-    private var paginationFooter: some View {
+    private var paginationFooterContent: some View {
         switch conversationViewModel.paginationState {
         case .loadingMore:
             HStack {
@@ -705,7 +713,9 @@ struct ConversationListView: View {
             // tel quel, le wrapper s'occupe du sentinel scrollOffset, du
             // MeeshyPullIndicator au top, des haptics et de l'orchestration
             // de la sequence pull -> armed -> refreshing -> completing -> idle.
-            MeeshyRefreshableScroll(
+            // AnyView seam: keeps the scroll subtree's (large) type out of
+            // the enclosing ZStack / mainContentZStack / body type.
+            AnyView(MeeshyRefreshableScroll(
                 onRefresh: {
                     async let convRefresh: Void = conversationViewModel.pullToRefresh()
                     async let storyRefresh: Void = storyViewModel.loadStories(forceNetwork: true)
@@ -813,28 +823,16 @@ struct ConversationListView: View {
                 .padding(.top, 8)
                 .padding(.bottom, 120)
             }
-            .scrollDismissesKeyboard(.interactively)
+            .scrollDismissesKeyboard(.interactively))
 
             // Layer 2: Bottom overlay — Search bar + Communities & Filters
-            VStack(spacing: 0) {
-                Spacer()
-
-                // Communities carousel - only when search overlay is open (loupe tap)
-                if showSearchOverlay {
-                    communitiesSection
-                        .padding(.vertical, 10)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-
-                // Category filters - only when search overlay is open (loupe tap)
-                if showSearchOverlay {
-                    categoryFilters
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-
-                // Search bar - always visible (unless scrolled away)
-                themedSearchBar
-            }
+            ConversationListBottomBar(
+                showSearchOverlay: $showSearchOverlay,
+                isSearching: $isSearching,
+                showWidgetPreview: $showWidgetPreview,
+                showGlobalSearch: $showGlobalSearch,
+                userCommunities: userCommunities
+            )
             .padding(.bottom, 8)
             // Hide on scroll down
             .offset(y: isScrollingDown ? 150 : 0)
@@ -844,100 +842,14 @@ struct ConversationListView: View {
         }
         // Layer 3: Collapsible header overlay — pinned to top, respects safe area
         .overlay(alignment: .top) {
-            CollapsibleHeader(
-                title: "Meeshy",
+            ConversationListHeaderOverlay(
                 scrollOffset: headerScrollOffset,
-                showBackButton: false,
-                titleColor: theme.textPrimary,
-                backArrowColor: MeeshyColors.indigo500,
-                backgroundColor: theme.backgroundPrimary,
-                leading: {
-                    if let iPadFeedAction {
-                        Button {
-                            HapticFeedback.light()
-                            iPadFeedAction()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "square.stack.fill")
-                                    .font(.system(size: 13, weight: .semibold))
-                                Text("Feed")
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            .foregroundStyle(
-                                LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
-                            )
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(
-                                Capsule()
-                                    .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.15 : 1))
-                            )
-                        }
-                    }
-                },
-                titleView: {
-                    Text("Meeshy")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
-                        )
-                },
-                trailing: {
-                    HStack(spacing: 12) {
-                        Button {
-                            showShareLinkSheet = true
-                        } label: {
-                            Image(systemName: "link.badge.plus")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(MeeshyColors.indigo500)
-                        }
-                        .accessibilityLabel("Creer un lien de partage")
-
-                        Button {
-                            onNewConversation?()
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundColor(MeeshyColors.indigo500)
-                        }
-                        .accessibilityLabel("Nouvelle conversation")
-
-                        if let onNotificationsTap {
-                            Button {
-                                HapticFeedback.light()
-                                onNotificationsTap()
-                            } label: {
-                                ZStack(alignment: .topTrailing) {
-                                    Image(systemName: "bell.fill")
-                                        .font(.system(size: 18, weight: .semibold))
-                                        .foregroundColor(MeeshyColors.indigo500)
-
-                                    if iPadNotificationCount > 0 {
-                                        Text("\(min(iPadNotificationCount, 99))")
-                                            .font(.system(size: 9, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .frame(width: 16, height: 16)
-                                            .background(Circle().fill(MeeshyColors.error))
-                                            .offset(x: 6, y: -6)
-                                    }
-                                }
-                            }
-                            .accessibilityLabel("Notifications")
-                        }
-
-                        if let onSettingsTap {
-                            Button {
-                                HapticFeedback.light()
-                                onSettingsTap()
-                            } label: {
-                                Image(systemName: "gearshape.fill")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(MeeshyColors.indigo500)
-                            }
-                            .accessibilityLabel("Reglages")
-                        }
-                    }
-                }
+                iPadFeedAction: iPadFeedAction,
+                iPadNotificationCount: iPadNotificationCount,
+                onNotificationsTap: onNotificationsTap,
+                onSettingsTap: onSettingsTap,
+                onNewConversation: onNewConversation,
+                showShareLinkSheet: $showShareLinkSheet
             )
         }
         .sheet(isPresented: $showShareLinkSheet) {
@@ -1057,7 +969,8 @@ struct ConversationListView: View {
         userCommunityLookup = Dictionary(uniqueKeysWithValues: mapped.map { ($0.id, $0) })
     }
 
-    // See ConversationListView+Overlays.swift for communitiesSection, categoryFilters, themedSearchBar
+    // communitiesSection, categoryFilters, themedSearchBar now live in
+    // ConversationListBottomBar (ConversationListView+Overlays.swift).
 
     // Pull-to-refresh entierement gere par MeeshyRefreshableScroll.
     // Voir Layer 1 dans `mainContentZStack`.

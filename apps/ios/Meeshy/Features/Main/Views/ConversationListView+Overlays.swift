@@ -218,9 +218,166 @@ extension ConversationListView {
             Label(String(localized: "context.delete", defaultValue: "Supprimer"), systemImage: "trash.fill")
         }
     }
+}
+
+// MARK: - Header Overlay
+// Extracted into a dedicated View struct so the deeply-nested collapsible
+// header no longer composes into ConversationListView.body's type. That
+// monolithic type was the root cause of a Swift type-metadata instantiation
+// crash at launch on low-memory devices (iPhone XR / iOS 17.6).
+struct ConversationListHeaderOverlay: View {
+    let scrollOffset: CGFloat
+    let iPadFeedAction: (() -> Void)?
+    let iPadNotificationCount: Int
+    let onNotificationsTap: (() -> Void)?
+    let onSettingsTap: (() -> Void)?
+    let onNewConversation: (() -> Void)?
+    @Binding var showShareLinkSheet: Bool
+
+    private var theme: ThemeManager { ThemeManager.shared }
+
+    var body: some View {
+        CollapsibleHeader(
+            title: "Meeshy",
+            scrollOffset: scrollOffset,
+            showBackButton: false,
+            titleColor: theme.textPrimary,
+            backArrowColor: MeeshyColors.indigo500,
+            backgroundColor: theme.backgroundPrimary,
+            leading: {
+                if let iPadFeedAction {
+                    Button {
+                        HapticFeedback.light()
+                        iPadFeedAction()
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "square.stack.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                            Text("Feed")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundStyle(
+                            LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
+                        )
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(
+                            Capsule()
+                                .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.15 : 1))
+                        )
+                    }
+                }
+            },
+            titleView: {
+                Text("Meeshy")
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+                    .foregroundStyle(
+                        LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
+                    )
+            },
+            trailing: {
+                HStack(spacing: 12) {
+                    Button {
+                        showShareLinkSheet = true
+                    } label: {
+                        Image(systemName: "link.badge.plus")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(MeeshyColors.indigo500)
+                    }
+                    .accessibilityLabel("Creer un lien de partage")
+
+                    Button {
+                        onNewConversation?()
+                    } label: {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.system(size: 22, weight: .semibold))
+                            .foregroundColor(MeeshyColors.indigo500)
+                    }
+                    .accessibilityLabel("Nouvelle conversation")
+
+                    if let onNotificationsTap {
+                        Button {
+                            HapticFeedback.light()
+                            onNotificationsTap()
+                        } label: {
+                            ZStack(alignment: .topTrailing) {
+                                Image(systemName: "bell.fill")
+                                    .font(.system(size: 18, weight: .semibold))
+                                    .foregroundColor(MeeshyColors.indigo500)
+
+                                if iPadNotificationCount > 0 {
+                                    Text("\(min(iPadNotificationCount, 99))")
+                                        .font(.system(size: 9, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .frame(width: 16, height: 16)
+                                        .background(Circle().fill(MeeshyColors.error))
+                                        .offset(x: 6, y: -6)
+                                }
+                            }
+                        }
+                        .accessibilityLabel("Notifications")
+                    }
+
+                    if let onSettingsTap {
+                        Button {
+                            HapticFeedback.light()
+                            onSettingsTap()
+                        } label: {
+                            Image(systemName: "gearshape.fill")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(MeeshyColors.indigo500)
+                        }
+                        .accessibilityLabel("Reglages")
+                    }
+                }
+            }
+        )
+    }
+}
+
+// MARK: - Bottom Bar Overlay
+// Search bar + communities carousel + category filters. Extracted into its
+// own View struct for the same type-complexity reason as the header. Owns
+// its `searchBounce` animation state locally.
+struct ConversationListBottomBar: View {
+    @Binding var showSearchOverlay: Bool
+    var isSearching: FocusState<Bool>.Binding
+    @Binding var showWidgetPreview: Bool
+    @Binding var showGlobalSearch: Bool
+    let userCommunities: [MeeshyCommunity]
+
+    @EnvironmentObject var conversationViewModel: ConversationListViewModel
+    @EnvironmentObject var router: Router
+
+    @State private var searchBounce = false
+
+    private var theme: ThemeManager { ThemeManager.shared }
+    private var isActive: Bool { isSearching.wrappedValue || showSearchOverlay }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer()
+
+            // Communities carousel - only when search overlay is open (loupe tap)
+            if showSearchOverlay {
+                communitiesSection
+                    .padding(.vertical, 10)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
+            // Category filters - only when search overlay is open (loupe tap)
+            if showSearchOverlay {
+                categoryFilters
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+
+            // Search bar - always visible (unless scrolled away)
+            themedSearchBar
+        }
+    }
 
     // MARK: - Communities Section
-    var communitiesSection: some View {
+    private var communitiesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text(String(localized: "communities.title", defaultValue: "Communaut\u{00e9}s"))
@@ -280,7 +437,7 @@ extension ConversationListView {
     }
 
     // MARK: - Category Filters
-    var categoryFilters: some View {
+    private var categoryFilters: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 10) {
                 ForEach(ConversationFilter.allCases) { filter in
@@ -301,9 +458,7 @@ extension ConversationListView {
     }
 
     // MARK: - Themed Search Bar
-    private var isActive: Bool { isSearching || showSearchOverlay }
-
-    var themedSearchBar: some View {
+    private var themedSearchBar: some View {
         HStack(spacing: 12) {
             // Magnifying glass: tappable to toggle search overlay (communities + filters)
             Button {
@@ -311,7 +466,7 @@ extension ConversationListView {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showSearchOverlay.toggle()
                     if showSearchOverlay {
-                        isSearching = true
+                        isSearching.wrappedValue = true
                     }
                 }
             } label: {
@@ -329,7 +484,7 @@ extension ConversationListView {
             .accessibilityHint(String(localized: "accessibility.search.hint", defaultValue: "Ouvre les filtres et la recherche de conversations"))
 
             TextField(String(localized: "search.placeholder", defaultValue: "Rechercher..."), text: $conversationViewModel.searchText)
-                .focused($isSearching)
+                .focused(isSearching)
                 .foregroundColor(theme.textPrimary)
                 .font(.system(size: 15))
                 .accessibilityLabel("Rechercher des conversations")
@@ -400,7 +555,7 @@ extension ConversationListView {
         )
         .scaleEffect(searchBounce ? 1.02 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: conversationViewModel.searchText.isEmpty)
-        .onChange(of: isSearching) { _, newValue in
+        .onChange(of: isSearching.wrappedValue) { _, newValue in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 searchBounce = newValue
             }
