@@ -208,6 +208,12 @@ export class MessageHandler {
         forwardedFromId: data.forwardedFromId,
         forwardedFromConversationId: data.forwardedFromConversationId,
         encryptedPayload: data.encryptedPayload as MessageRequest['encryptedPayload'],
+        // Effets de message — parité avec POST /messages. Le bitfield final
+        // `effectFlags` est recomposé par `MessageProcessor.saveMessage`
+        // depuis `isBlurred` / `expiresAt`, donc on transmet les champs bruts.
+        isBlurred: validated.isBlurred,
+        expiresAt: validated.expiresAt ? new Date(validated.expiresAt) : undefined,
+        effectFlags: validated.effectFlags,
         isAnonymous,
         metadata: {
           source: 'websocket',
