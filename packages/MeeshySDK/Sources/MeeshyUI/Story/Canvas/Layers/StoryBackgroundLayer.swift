@@ -144,14 +144,21 @@ extension StoryBackgroundLayer {
                 break
             }
 
-            // Async swap to cached / network image
-            if let cache = imageCache, let resolver = resolver {
+            // Async swap to cached / network image. The image cache is an
+            // optional optimisation, not a prerequisite: the reader always
+            // passes `imageCache: nil` (no shared cache is wired into the
+            // story canvas). Gating the whole branch on `imageCache` left
+            // every published-story image background frozen on the ThumbHash
+            // placeholder forever — the bitmap fetch must run on the resolver
+            // alone when no cache is supplied.
+            if imageCache != nil || resolver != nil {
                 Task { @MainActor [weak img] in
-                    if let cached = await cache.cachedImage(for: postMediaId) {
+                    if let cache = imageCache,
+                       let cached = await cache.cachedImage(for: postMediaId) {
                         img?.contents = cached.cgImage
                         return
                     }
-                    if let url = resolver(postMediaId),
+                    if let url = resolver?(postMediaId),
                        let (data, _) = try? await URLSession.shared.data(from: url),
                        let uiImage = UIImage(data: data) {
                         img?.contents = uiImage.cgImage
