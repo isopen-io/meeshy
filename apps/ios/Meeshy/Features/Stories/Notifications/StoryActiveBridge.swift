@@ -73,10 +73,11 @@ struct StoryActiveBridge: View {
     /// Internal so the unit tests can drive the bridge synchronously without
     /// hosting it in a SwiftUI scene.
     func handleAppear() {
-        let action: StoryViewerInitialAction = {
+        let action: StoryViewerInitialAction? = {
             switch intent {
             case .comments: return .showCommentsOverlay
             case .reactions: return .showViewersSheet
+            case .view: return nil
             }
         }()
 

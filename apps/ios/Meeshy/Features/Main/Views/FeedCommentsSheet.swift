@@ -633,12 +633,12 @@ struct CommentsSheetView: View {
             },
             textBinding: $composerText,
             replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
-            isBlurEnabled: $commentBlurEnabled,
-            pendingEffects: $commentEffects,
-            focusTrigger: $composerFocusTrigger,
             onTextChange: { text in
                 mentionController.handleQuery(in: text)
-            }
+            },
+            isBlurEnabled: $commentBlurEnabled,
+            pendingEffects: $commentEffects,
+            focusTrigger: $composerFocusTrigger
         )
     }
 

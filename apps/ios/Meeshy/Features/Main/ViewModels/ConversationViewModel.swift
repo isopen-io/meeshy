@@ -633,14 +633,6 @@ class ConversationViewModel: ObservableObject {
         self.reportService = reportService
         self.syncEngine = syncEngine
         self.mentionService = mentionService
-        // Wire up the mention controller for this conversation.
-        // localCandidates closure is evaluated lazily when a mention query fires,
-        // so mentionCandidates (which depend on messages) is always up-to-date.
-        self.mentionController = MentionComposerController(
-            context: .conversation(id: conversationId),
-            localCandidates: { [weak self] in self?.mentionCandidates ?? [] },
-            service: mentionService
-        )
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
         let store = MessageStore(
@@ -648,6 +640,17 @@ class ConversationViewModel: ObservableObject {
             persistence: dependencies.persistence
         )
         self.messageStore = store
+        // Wire up the mention controller for this conversation.
+        // localCandidates closure is evaluated lazily when a mention query fires,
+        // so mentionCandidates (which depend on messages) is always up-to-date.
+        // messageStore is initialized first: the localCandidates closure
+        // transitively reads it through `mentionCandidates` -> `messages`,
+        // so forming it before messageStore is set is a use-before-init error.
+        self.mentionController = MentionComposerController(
+            context: .conversation(id: conversationId),
+            localCandidates: { [weak self] in self?.mentionCandidates ?? [] },
+            service: mentionService
+        )
         let handler = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: authManager.currentUser?.id ?? ""

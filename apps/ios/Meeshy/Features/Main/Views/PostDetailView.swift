@@ -154,6 +154,91 @@ struct PostDetailView: View {
         HapticFeedback.light()
     }
 
+    // Scrollable post-detail content (text, media, repost, actions, comments).
+    // Extracted from `body` into its own @ViewBuilder unit so the Swift
+    // type-checker stays within budget — inlining the threaded-comment
+    // ForEach made `body` exceed the reasonable type-check time.
+    @ViewBuilder
+    private func postDetailContent(_ post: FeedPost) -> some View {
+        // ZONE 1: Text
+        textZone(post)
+
+        // ZONE 2: Media
+        if post.hasMedia {
+            detailMediaSection(post.media)
+                .padding(.horizontal, 16)
+                .padding(.top, 8)
+        }
+
+        // Repost embed
+        if let repost = post.repost {
+            repostEmbed(repost)
+        }
+
+        // Actions bar
+        actionsBar(post)
+
+        // Separator + Comments (ZONE 3)
+        Rectangle()
+            .fill(theme.inputBorder.opacity(0.5))
+            .frame(height: 1)
+            .padding(.horizontal, 16)
+
+        commentsHeader
+            .id("commentsSection")
+
+        // Comments (threaded)
+        ForEach(viewModel.topLevelComments) { comment in
+            ThreadedCommentSection(
+                comment: comment,
+                replies: viewModel.repliesFor(comment.id),
+                isExpanded: viewModel.expandedThreads.contains(comment.id),
+                isLoadingReplies: viewModel.loadingReplies.contains(comment.id),
+                accentColor: accentColor,
+                // PostDetailView relays comment likes straight to the server via
+                // onLikeComment and does not maintain the optimistic like state
+                // (likedIds / likeDelta / heartInFlightIds) that FeedCommentsSheet does.
+                likedIds: [],
+                likeDelta: [:],
+                heartInFlightIds: [],
+                onReply: { target in
+                    viewModel.replyingTo = target
+                },
+                onToggleThread: {
+                    Task { await viewModel.toggleThread(comment.id, postId: postId) }
+                },
+                onLikeComment: { commentId in
+                    Task {
+                        try? await PostService.shared.likeComment(postId: postId, commentId: commentId)
+                    }
+                },
+                moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
+                storyState: storyViewModel.storyGroupForUser(userId: comment.authorId).map { $0.hasUnviewed ? .unread : .read } ?? .none,
+                presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state ?? .offline,
+                replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
+                replyStoryResolver: { storyViewModel.storyGroupForUser(userId: $0).map { $0.hasUnviewed ? .unread : .read } ?? .none },
+                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state ?? .offline }
+            )
+            .padding(.horizontal, 16)
+        }
+
+        if viewModel.isLoadingComments {
+            ProgressView()
+                .padding()
+        }
+
+        if viewModel.hasMoreComments && !viewModel.isLoadingComments {
+            Button {
+                Task { await viewModel.loadMoreComments(postId) }
+            } label: {
+                Text("Charger plus")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(MeeshyColors.indigo500)
+            }
+            .padding()
+        }
+    }
+
     var body: some View {
         VStack(spacing: 0) {
             navBar
@@ -165,77 +250,7 @@ struct PostDetailView: View {
                 ScrollViewReader { scrollProxy in
                 ScrollView(showsIndicators: false) {
                     LazyVStack(spacing: 0) {
-                        // ZONE 1: Text
-                        textZone(post)
-
-                        // ZONE 2: Media
-                        if post.hasMedia {
-                            detailMediaSection(post.media)
-                                .padding(.horizontal, 16)
-                                .padding(.top, 8)
-                        }
-
-                        // Repost embed
-                        if let repost = post.repost {
-                            repostEmbed(repost)
-                        }
-
-                        // Actions bar
-                        actionsBar(post)
-
-                        // Separator + Comments (ZONE 3)
-                        Rectangle()
-                            .fill(theme.inputBorder.opacity(0.5))
-                            .frame(height: 1)
-                            .padding(.horizontal, 16)
-
-                        commentsHeader
-                            .id("commentsSection")
-
-                        // Comments (threaded)
-                        ForEach(viewModel.topLevelComments) { comment in
-                            ThreadedCommentSection(
-                                comment: comment,
-                                replies: viewModel.repliesFor(comment.id),
-                                isExpanded: viewModel.expandedThreads.contains(comment.id),
-                                isLoadingReplies: viewModel.loadingReplies.contains(comment.id),
-                                accentColor: accentColor,
-                                onReply: { target in
-                                    viewModel.replyingTo = target
-                                },
-                                onToggleThread: {
-                                    Task { await viewModel.toggleThread(comment.id, postId: postId) }
-                                },
-                                onLikeComment: { commentId in
-                                    Task {
-                                        try? await PostService.shared.likeComment(postId: postId, commentId: commentId)
-                                    }
-                                },
-                                moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
-                                storyState: storyViewModel.storyGroupForUser(userId: comment.authorId).map { $0.hasUnviewed ? .unread : .read } ?? .none,
-                                presenceState: PresenceManager.shared.presenceMap[comment.authorId]?.state ?? .offline,
-                                replyMoodResolver: { statusViewModel.statusForUser(userId: $0)?.moodEmoji },
-                                replyStoryResolver: { storyViewModel.storyGroupForUser(userId: $0).map { $0.hasUnviewed ? .unread : .read } ?? .none },
-                                replyPresenceResolver: { PresenceManager.shared.presenceMap[$0]?.state ?? .offline }
-                            )
-                            .padding(.horizontal, 16)
-                        }
-
-                        if viewModel.isLoadingComments {
-                            ProgressView()
-                                .padding()
-                        }
-
-                        if viewModel.hasMoreComments && !viewModel.isLoadingComments {
-                            Button {
-                                Task { await viewModel.loadMoreComments(postId) }
-                            } label: {
-                                Text("Charger plus")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundColor(MeeshyColors.indigo500)
-                            }
-                            .padding()
-                        }
+                        postDetailContent(post)
                     }
                     .padding(.bottom, 80)
                 }
