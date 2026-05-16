@@ -1,0 +1,407 @@
+/**
+ * Post Reaction Handler
+ * Gère les réactions emoji sur les posts (ajout, suppression, synchronisation)
+ *
+ * Mirrors CommentReactionHandler exactly, substituting:
+ *   commentId       → postId
+ *   ROOMS.post      → ROOMS.post (same room — post reactions live in the same room as comment reactions)
+ *   CommentReactionService → PostReactionService
+ *   Anonymous users are rejected (posts require registered users to react)
+ *
+ * join/leave post room handlers are owned by this handler (PostReactionHandler)
+ * since posts are the natural semantic owner of the post room.
+ * CommentReactionHandler delegates join/leave to the same shared room.
+ */
+
+import type { Socket } from 'socket.io';
+import type { Server as SocketIOServer } from 'socket.io';
+import { PrismaClient } from '@meeshy/shared/prisma/client';
+import { NotificationService } from '../../services/notifications/NotificationService';
+import { PostReactionService } from '../../services/PostReactionService';
+import { getConnectedUser, type SocketUser } from '../utils/socket-helpers';
+import type { SocketIOResponse } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { validateSocketEvent } from '../../middleware/validation.js';
+import {
+  SocketPostReactionAddSchema,
+  SocketPostReactionRemoveSchema,
+  SocketPostRoomActionSchema,
+} from '../../validation/socket-event-schemas.js';
+import { enhancedLogger } from '../../utils/logger-enhanced.js';
+import { SocketRateLimiter } from '../../utils/socket-rate-limiter.js';
+import { canUserViewPost } from '../../services/posts/postVisibility.js';
+
+const logger = enhancedLogger.child({ module: 'PostReactionHandler' });
+
+/** Per-user token bucket: 30 reactions/min across add + remove. */
+const POST_REACTION_RATE_LIMIT = {
+  maxRequests: 30,
+  windowMs: 60_000,
+  keyPrefix: 'socket:post:reaction',
+} as const;
+
+const reactionRateLimiter = new SocketRateLimiter();
+
+export interface PostReactionHandlerDependencies {
+  io: SocketIOServer;
+  prisma: PrismaClient;
+  notificationService: NotificationService;
+  postReactionService: PostReactionService;
+  connectedUsers: Map<string, SocketUser>;
+  socketToUser: Map<string, string>;
+}
+
+export class PostReactionHandler {
+  private io: SocketIOServer;
+  private prisma: PrismaClient;
+  private notificationService: NotificationService;
+  private postReactionService: PostReactionService;
+  private connectedUsers: Map<string, SocketUser>;
+  private socketToUser: Map<string, string>;
+  private readonly logger = logger;
+
+  constructor(deps: PostReactionHandlerDependencies) {
+    this.io = deps.io;
+    this.prisma = deps.prisma;
+    this.notificationService = deps.notificationService;
+    this.postReactionService = deps.postReactionService;
+    this.connectedUsers = deps.connectedUsers;
+    this.socketToUser = deps.socketToUser;
+  }
+
+  /**
+   * Ajoute une réaction à un post
+   */
+  async handleAddReaction(
+    socket: Socket,
+    data: { postId: string; emoji: string },
+    callback?: (response: SocketIOResponse<unknown>) => void
+  ): Promise<void> {
+    try {
+      const schemaValidation = validateSocketEvent(SocketPostReactionAddSchema, data);
+      if (schemaValidation.success === false) {
+        if (callback) callback({ success: false, error: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      if (!userIdOrToken) {
+        const errorResponse: SocketIOResponse<unknown> = {
+          success: false,
+          error: 'User not authenticated',
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
+
+      const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
+      const user = userResult?.user;
+      const userId = userResult?.realUserId || userIdOrToken;
+      const isAnonymous = user?.isAnonymous || false;
+
+      if (isAnonymous) {
+        const errorResponse: SocketIOResponse<unknown> = {
+          success: false,
+          error: 'Only registered users can react',
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
+
+      const rateLimitAllowed = await reactionRateLimiter.checkLimit(userId, POST_REACTION_RATE_LIMIT);
+      if (!rateLimitAllowed) {
+        this.logger.warn('[PostReactionHandler] post:reaction-add rate limit exceeded', { userId, postId: validated.postId });
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
+      const reaction = await this.postReactionService.addReaction({
+        postId: validated.postId,
+        userId,
+        emoji: validated.emoji,
+      });
+
+      if (!reaction) {
+        const errorResponse: SocketIOResponse<unknown> = {
+          success: false,
+          error: 'Failed to add reaction',
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
+
+      const updateEvent = await this.postReactionService.createUpdateEvent(
+        validated.postId,
+        validated.emoji,
+        'add',
+        userId
+      );
+
+      const successResponse: SocketIOResponse<unknown> = {
+        success: true,
+        data: reaction,
+      };
+      if (callback) callback(successResponse);
+
+      this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.POST_REACTION_ADDED, updateEvent);
+
+      await this._createPostReactionNotification(
+        validated.postId,
+        validated.emoji,
+        userId
+      );
+    } catch (error: unknown) {
+      this.logger.error('Failed to add post reaction', error, { userId: this.socketToUser.get(socket.id) });
+      const errorResponse: SocketIOResponse<unknown> = {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to add reaction',
+      };
+      if (callback) callback(errorResponse);
+    }
+  }
+
+  /**
+   * Supprime une réaction d'un post
+   */
+  async handleRemoveReaction(
+    socket: Socket,
+    data: { postId: string; emoji: string },
+    callback?: (response: SocketIOResponse<unknown>) => void
+  ): Promise<void> {
+    try {
+      const schemaValidation = validateSocketEvent(SocketPostReactionRemoveSchema, data);
+      if (schemaValidation.success === false) {
+        if (callback) callback({ success: false, error: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      if (!userIdOrToken) {
+        const errorResponse: SocketIOResponse<unknown> = {
+          success: false,
+          error: 'User not authenticated',
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
+
+      const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
+      const user = userResult?.user;
+      const userId = userResult?.realUserId || userIdOrToken;
+      const isAnonymous = user?.isAnonymous || false;
+
+      if (isAnonymous) {
+        const errorResponse: SocketIOResponse<unknown> = {
+          success: false,
+          error: 'Only registered users can react',
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
+
+      const rateLimitAllowed = await reactionRateLimiter.checkLimit(userId, POST_REACTION_RATE_LIMIT);
+      if (!rateLimitAllowed) {
+        this.logger.warn('[PostReactionHandler] post:reaction-remove rate limit exceeded', { userId, postId: validated.postId });
+        if (callback) callback({ success: false, error: 'Rate limit exceeded' });
+        return;
+      }
+
+      const removed = await this.postReactionService.removeReaction({
+        postId: validated.postId,
+        userId,
+        emoji: validated.emoji,
+      });
+
+      if (!removed) {
+        const errorResponse: SocketIOResponse<unknown> = {
+          success: false,
+          error: 'Reaction not found',
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
+
+      const updateEvent = await this.postReactionService.createUpdateEvent(
+        validated.postId,
+        validated.emoji,
+        'remove',
+        userId
+      );
+
+      const successResponse: SocketIOResponse<unknown> = {
+        success: true,
+        data: { message: 'Reaction removed successfully' },
+      };
+      if (callback) callback(successResponse);
+
+      this.io.to(ROOMS.post(validated.postId)).emit(SERVER_EVENTS.POST_REACTION_REMOVED, updateEvent);
+    } catch (error: unknown) {
+      this.logger.error('Failed to remove post reaction', error, { userId: this.socketToUser.get(socket.id) });
+      const errorResponse: SocketIOResponse<unknown> = {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to remove reaction',
+      };
+      if (callback) callback(errorResponse);
+    }
+  }
+
+  /**
+   * Synchronise les réactions d'un post
+   */
+  async handleRequestSync(
+    socket: Socket,
+    data: { postId: string },
+    callback?: (response: SocketIOResponse<unknown>) => void
+  ): Promise<void> {
+    try {
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      if (!userIdOrToken) {
+        const errorResponse: SocketIOResponse<unknown> = {
+          success: false,
+          error: 'User not authenticated',
+        };
+        if (callback) callback(errorResponse);
+        return;
+      }
+
+      const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
+      const userId = userResult?.realUserId || userIdOrToken;
+
+      const reactionSync = await this.postReactionService.getPostReactions({
+        postId: data.postId,
+        currentUserId: userId,
+      });
+
+      const successResponse: SocketIOResponse<unknown> = {
+        success: true,
+        data: reactionSync,
+      };
+      if (callback) callback(successResponse);
+    } catch (error: unknown) {
+      this.logger.error('Failed to sync post reactions', error, { userId: this.socketToUser.get(socket.id) });
+      const errorResponse: SocketIOResponse<unknown> = {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to sync reactions',
+      };
+      if (callback) callback(errorResponse);
+    }
+  }
+
+  /**
+   * Rejoint la room d'un post pour recevoir les événements de réactions.
+   * Requires authentication — anonymous sockets cannot subscribe to post rooms.
+   */
+  async handleJoinPost(
+    socket: Socket,
+    data: { postId: string },
+    callback?: (response: SocketIOResponse<unknown>) => void
+  ): Promise<void> {
+    try {
+      const schemaValidation = validateSocketEvent(SocketPostRoomActionSchema, data);
+      if (schemaValidation.success === false) {
+        if (callback) callback({ success: false, error: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      if (!userIdOrToken) {
+        if (callback) callback({ success: false, error: 'User not authenticated' });
+        return;
+      }
+
+      const userResult = getConnectedUser(userIdOrToken, this.connectedUsers);
+      const userId = userResult?.realUserId || userIdOrToken;
+
+      const post = await this.prisma.post.findUnique({
+        where: { id: validated.postId },
+        select: { id: true, authorId: true, visibility: true, visibilityUserIds: true, deletedAt: true },
+      });
+
+      if (!post || post.deletedAt !== null) {
+        return callback?.({ success: false, error: 'Post not found' });
+      }
+
+      const canView = await canUserViewPost(this.prisma, post, userId);
+      if (!canView) {
+        this.logger.warn('[PostReactionHandler] post:join denied (visibility)', { userId, postId: validated.postId });
+        return callback?.({ success: false, error: 'Forbidden' });
+      }
+
+      socket.join(ROOMS.post(validated.postId));
+      callback?.({ success: true });
+    } catch (error: unknown) {
+      this.logger.error('Failed to join post room', error, { postId: (data as { postId?: string }).postId });
+      const errorResponse: SocketIOResponse<unknown> = {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to join post room',
+      };
+      if (callback) callback(errorResponse);
+    }
+  }
+
+  /**
+   * Quitte la room d'un post.
+   * Requires authentication — mirrors handleJoinPost guards.
+   */
+  async handleLeavePost(
+    socket: Socket,
+    data: { postId: string },
+    callback?: (response: SocketIOResponse<unknown>) => void
+  ): Promise<void> {
+    try {
+      const schemaValidation = validateSocketEvent(SocketPostRoomActionSchema, data);
+      if (schemaValidation.success === false) {
+        if (callback) callback({ success: false, error: schemaValidation.error });
+        return;
+      }
+      const validated = schemaValidation.data;
+
+      const userIdOrToken = this.socketToUser.get(socket.id);
+      if (!userIdOrToken) {
+        if (callback) callback({ success: false, error: 'User not authenticated' });
+        return;
+      }
+
+      socket.leave(ROOMS.post(validated.postId));
+      if (callback) callback({ success: true });
+    } catch (error: unknown) {
+      this.logger.error('Failed to leave post room', error, { postId: (data as { postId?: string }).postId });
+      const errorResponse: SocketIOResponse<unknown> = {
+        success: false,
+        error: error instanceof Error ? error.message : 'Failed to leave post room',
+      };
+      if (callback) callback(errorResponse);
+    }
+  }
+
+  /**
+   * Crée une notification de réaction sur post (reuses post_like type)
+   */
+  private async _createPostReactionNotification(
+    postId: string,
+    emoji: string,
+    reactorUserId: string
+  ): Promise<void> {
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: { authorId: true },
+    });
+
+    if (!post?.authorId) return;
+
+    this.notificationService
+      .createPostLikeNotification({
+        actorId: reactorUserId,
+        postId,
+        postAuthorId: post.authorId,
+        emoji,
+        postType: 'POST',
+      })
+      .catch((error) => {
+        this.logger.error('[PostReactionHandler] Failed to create post reaction notification', error, { reactorUserId, postId, emoji });
+      });
+  }
+}

@@ -1,6 +1,7 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import type { Prisma } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
+import { PostReactionService } from './PostReactionService';
 import type { MobileTranscription } from '../routes/posts/types';
 import { PostAudioService } from './posts/PostAudioService';
 import { MediaService } from './MediaService';
@@ -115,6 +116,8 @@ const postInclude = {
 };
 
 export class PostService {
+  private readonly postReactionService: PostReactionService;
+
   constructor(
     private readonly prisma: PrismaClient,
     // Typed against the MediaStorage interface so a future swap to MinIO/R2
@@ -130,7 +133,10 @@ export class PostService {
     // safety net — same behavior as before the outbox was introduced.
     // Reference: SOTA audit Pilier 4.
     private readonly orphanCleanup?: OrphanMediaCleanupService,
-  ) {}
+    postReactionService?: PostReactionService,
+  ) {
+    this.postReactionService = postReactionService ?? new PostReactionService(prisma);
+  }
 
   async createPost(data: {
     type: PostType;
@@ -453,7 +459,17 @@ export class PostService {
       where: { id: postId, isDeleted: false, ...visibilityFilter },
       include: postInclude,
     });
-    return post ?? null;
+    if (!post) return null;
+
+    const userReactions = viewerUserId
+      ? await this.prisma.postReaction.findMany({
+          where: { userId: viewerUserId, postId: post.id },
+          select: { postId: true, emoji: true },
+        })
+      : [];
+    const currentUserReactions = userReactions.map((r) => r.emoji);
+
+    return { ...post, currentUserReactions };
   }
 
   /// Builds the Prisma `where` fragment that enforces post visibility for a viewer.
@@ -541,29 +557,44 @@ export class PostService {
   }
 
   async likePost(postId: string, userId: string, emoji: string = '❤️') {
+    try {
+      await this.postReactionService.addReaction({ postId, userId, emoji });
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '';
+      if (message.includes('not found') || message.includes('deleted')) {
+        return null;
+      }
+      throw err;
+    }
+
     const post = await this.prisma.post.findFirst({
       where: { id: postId, isDeleted: false },
+      include: postInclude,
     });
     if (!post) return null;
 
-    const reactions = (post.reactions as any[] | null) ?? [];
-    const existing = reactions.find((r: any) => r.userId === userId);
-    if (existing) return post; // Already liked
+    const reactions = await this.prisma.postReaction.findMany({
+      where: { postId },
+      select: { userId: true, emoji: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
 
-    const updatedReactions = [...reactions, { userId, emoji, createdAt: new Date().toISOString() }];
+    const reactionsJson = reactions.map(r => ({
+      userId: r.userId,
+      emoji: r.emoji,
+      createdAt: r.createdAt.toISOString(),
+    }));
 
-    // Update summary
-    const summary = (post.reactionSummary as Record<string, number> | null) ?? {};
-    summary[emoji] = (summary[emoji] ?? 0) + 1;
-
-    return this.prisma.post.update({
+    await this.prisma.post.update({
       where: { id: postId },
       data: {
-        reactions: updatedReactions as any,
-        reactionSummary: summary as any,
-        reactionCount: { increment: 1 },
-        likeCount: { increment: 1 },
+        reactions: reactionsJson as Prisma.InputJsonValue,
+        likeCount: reactions.length,
       },
+    });
+
+    return this.prisma.post.findFirst({
+      where: { id: postId, isDeleted: false },
       include: postInclude,
     });
   }
@@ -571,30 +602,42 @@ export class PostService {
   async unlikePost(postId: string, userId: string) {
     const post = await this.prisma.post.findFirst({
       where: { id: postId, isDeleted: false },
+      include: postInclude,
     });
     if (!post) return null;
 
-    const reactions = (post.reactions as any[] | null) ?? [];
-    const existing = reactions.find((r: any) => r.userId === userId);
-    if (!existing) return post; // Not liked
+    const userReactions = await this.prisma.postReaction.findMany({
+      where: { postId, userId },
+      select: { userId: true, emoji: true, createdAt: true },
+    });
 
-    const updatedReactions = reactions.filter((r: any) => r.userId !== userId);
-    const emoji = existing.emoji;
+    if (userReactions.length === 0) return post;
 
-    const summary = (post.reactionSummary as Record<string, number> | null) ?? {};
-    if (summary[emoji]) {
-      summary[emoji] = Math.max(0, summary[emoji] - 1);
-      if (summary[emoji] === 0) delete summary[emoji];
-    }
+    const foundEmoji = userReactions[0].emoji;
+    await this.postReactionService.removeReaction({ postId, userId, emoji: foundEmoji });
 
-    return this.prisma.post.update({
+    const remainingReactions = await this.prisma.postReaction.findMany({
+      where: { postId },
+      select: { userId: true, emoji: true, createdAt: true },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const reactionsJson = remainingReactions.map(r => ({
+      userId: r.userId,
+      emoji: r.emoji,
+      createdAt: r.createdAt.toISOString(),
+    }));
+
+    await this.prisma.post.update({
       where: { id: postId },
       data: {
-        reactions: updatedReactions as any,
-        reactionSummary: summary as any,
-        reactionCount: { decrement: 1 },
-        likeCount: { decrement: 1 },
+        reactions: reactionsJson as Prisma.InputJsonValue,
+        likeCount: remainingReactions.length,
       },
+    });
+
+    return this.prisma.post.findFirst({
+      where: { id: postId, isDeleted: false },
       include: postInclude,
     });
   }

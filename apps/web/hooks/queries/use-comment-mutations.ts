@@ -3,9 +3,14 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { postsService } from '@/services/posts.service';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Post, PostComment } from '@meeshy/shared/types/post';
 import type { InfiniteFeedData, InfiniteCommentsData } from './types';
 import { useAuthStore } from '@/stores/auth-store';
+
+const HEART_EMOJI = '❤️';
+const SOCKET_ACK_TIMEOUT_MS = 10_000;
 
 // ---------------------------------------------------------------------------
 // Cache helpers
@@ -154,10 +159,31 @@ export function useLikeCommentMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ postId, commentId, emoji }: { postId: string; commentId: string; emoji?: string }) =>
-      postsService.likeComment(postId, commentId, emoji),
+    mutationFn: ({ postId, commentId, emoji = HEART_EMOJI }: { postId: string; commentId: string; emoji?: string }) =>
+      new Promise<void>((resolve, reject) => {
+        const socket = meeshySocketIOService.getSocket();
+        if (!socket?.connected) {
+          reject(new Error('Socket not connected'));
+          return;
+        }
 
-    onMutate: async ({ postId, commentId, emoji = '❤️' }) => {
+        const timer = setTimeout(() => reject(new Error('Socket ack timeout')), SOCKET_ACK_TIMEOUT_MS);
+
+        socket.emit(
+          CLIENT_EVENTS.COMMENT_REACTION_ADD,
+          { commentId, postId, emoji },
+          (response: { success: boolean; error?: string }) => {
+            clearTimeout(timer);
+            if (response.success) {
+              resolve();
+            } else {
+              reject(new Error(response.error ?? 'Failed to add reaction'));
+            }
+          },
+        );
+      }),
+
+    onMutate: async ({ postId, commentId, emoji = HEART_EMOJI }) => {
       const commentsKey = queryKeys.posts.commentsInfinite(postId);
       await queryClient.cancelQueries({ queryKey: commentsKey });
       const previous = queryClient.getQueryData<InfiniteCommentsData>(commentsKey);
@@ -177,6 +203,9 @@ export function useLikeCommentMutation() {
                       ...c.reactionSummary,
                       [emoji]: ((c.reactionSummary ?? {})[emoji] ?? 0) + 1,
                     },
+                    currentUserReactions: (c.currentUserReactions ?? []).includes(emoji)
+                      ? c.currentUserReactions
+                      : [...(c.currentUserReactions ?? []), emoji],
                   }
                 : c,
             ),
@@ -199,10 +228,31 @@ export function useUnlikeCommentMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ postId, commentId }: { postId: string; commentId: string }) =>
-      postsService.unlikeComment(postId, commentId),
+    mutationFn: ({ postId, commentId, emoji = HEART_EMOJI }: { postId: string; commentId: string; emoji?: string }) =>
+      new Promise<void>((resolve, reject) => {
+        const socket = meeshySocketIOService.getSocket();
+        if (!socket?.connected) {
+          reject(new Error('Socket not connected'));
+          return;
+        }
 
-    onMutate: async ({ postId, commentId }) => {
+        const timer = setTimeout(() => reject(new Error('Socket ack timeout')), SOCKET_ACK_TIMEOUT_MS);
+
+        socket.emit(
+          CLIENT_EVENTS.COMMENT_REACTION_REMOVE,
+          { commentId, postId, emoji },
+          (response: { success: boolean; error?: string }) => {
+            clearTimeout(timer);
+            if (response.success) {
+              resolve();
+            } else {
+              reject(new Error(response.error ?? 'Failed to remove reaction'));
+            }
+          },
+        );
+      }),
+
+    onMutate: async ({ postId, commentId, emoji = HEART_EMOJI }: { postId: string; commentId: string; emoji?: string }) => {
       const commentsKey = queryKeys.posts.commentsInfinite(postId);
       await queryClient.cancelQueries({ queryKey: commentsKey });
       const previous = queryClient.getQueryData<InfiniteCommentsData>(commentsKey);
@@ -215,7 +265,15 @@ export function useUnlikeCommentMutation() {
             ...page,
             data: page.data.map((c) =>
               c.id === commentId
-                ? { ...c, likeCount: Math.max(0, c.likeCount - 1) }
+                ? {
+                    ...c,
+                    likeCount: Math.max(0, c.likeCount - 1),
+                    reactionSummary: {
+                      ...c.reactionSummary,
+                      [emoji]: Math.max(0, ((c.reactionSummary ?? {})[emoji] ?? 1) - 1),
+                    },
+                    currentUserReactions: (c.currentUserReactions ?? []).filter((e) => e !== emoji),
+                  }
                 : c,
             ),
           })),

@@ -1,4 +1,4 @@
-import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
 
 const authorSelect = {
@@ -72,7 +72,7 @@ export class PostCommentService {
     return comment;
   }
 
-  async getComments(postId: string, cursor?: string, limit: number = 20) {
+  async getComments(postId: string, cursor?: string, limit: number = 20, currentUserId?: string) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
     const where: any = {
@@ -97,6 +97,7 @@ export class PostCommentService {
         translations: true,
         likeCount: true,
         replyCount: true,
+        reactionCount: true,
         effectFlags: true,
         parentId: true,
         createdAt: true,
@@ -112,10 +113,25 @@ export class PostCommentService {
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
 
-    return { items, nextCursor, hasMore };
+    const commentIds = items.map((c) => c.id);
+    const userReactions = currentUserId && commentIds.length > 0
+      ? await this.prisma.commentReaction.findMany({
+          where: { userId: currentUserId, commentId: { in: commentIds } },
+          select: { commentId: true, emoji: true },
+        })
+      : [];
+    const userReactionsMap = new Map<string, string[]>();
+    userReactions.forEach((r) => {
+      const list = userReactionsMap.get(r.commentId) ?? [];
+      list.push(r.emoji);
+      userReactionsMap.set(r.commentId, list);
+    });
+    const enriched = items.map((c) => ({ ...c, currentUserReactions: userReactionsMap.get(c.id) ?? [] }));
+
+    return { items: enriched, nextCursor, hasMore };
   }
 
-  async getReplies(commentId: string, cursor?: string, limit: number = 20) {
+  async getReplies(commentId: string, cursor?: string, limit: number = 20, currentUserId?: string) {
     const cursorData = cursor ? decodeCursor(cursor) : null;
 
     const where: any = {
@@ -139,6 +155,7 @@ export class PostCommentService {
         translations: true,
         likeCount: true,
         replyCount: true,
+        reactionCount: true,
         effectFlags: true,
         parentId: true,
         createdAt: true,
@@ -154,7 +171,22 @@ export class PostCommentService {
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
 
-    return { items, nextCursor, hasMore };
+    const replyIds = items.map((r) => r.id);
+    const userReactions = currentUserId && replyIds.length > 0
+      ? await this.prisma.commentReaction.findMany({
+          where: { userId: currentUserId, commentId: { in: replyIds } },
+          select: { commentId: true, emoji: true },
+        })
+      : [];
+    const userReactionsMap = new Map<string, string[]>();
+    userReactions.forEach((r) => {
+      const list = userReactionsMap.get(r.commentId) ?? [];
+      list.push(r.emoji);
+      userReactionsMap.set(r.commentId, list);
+    });
+    const enriched = items.map((r) => ({ ...r, currentUserReactions: userReactionsMap.get(r.id) ?? [] }));
+
+    return { items: enriched, nextCursor, hasMore };
   }
 
   async deleteComment(commentId: string, userId: string) {
@@ -197,7 +229,7 @@ export class PostCommentService {
       where: { id: commentId },
       data: {
         likeCount: { increment: 1 },
-        reactionSummary: summary as any,
+        reactionSummary: summary as Prisma.InputJsonValue,
       },
       select: {
         id: true,
@@ -226,7 +258,7 @@ export class PostCommentService {
       where: { id: commentId },
       data: {
         likeCount: { decrement: 1 },
-        reactionSummary: summary as any,
+        reactionSummary: summary as Prisma.InputJsonValue,
       },
       select: {
         id: true,

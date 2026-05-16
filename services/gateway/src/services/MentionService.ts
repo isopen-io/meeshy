@@ -514,6 +514,202 @@ export class MentionService {
   }
 
   /**
+   * Obtient des suggestions d'utilisateurs pour l'autocomplete dans le contexte d'un post/story.
+   * Audience résolue par priorité :
+   *   1. Auteur du post (badge: 'conversation')
+   *   2. Commentateurs précédents non-supprimés (badge: 'conversation')
+   *   3. Amis de l'utilisateur courant (badge: 'friend')
+   * Résultats limités à MAX_SUGGESTIONS (10).
+   *
+   * @param postId - ID du post
+   * @param currentUserId - ID de l'utilisateur qui fait la recherche
+   * @param query - Texte de recherche (optionnel)
+   * @throws Error('Post non trouvé ou accès refusé') si le post n'existe pas ou est supprimé
+   */
+  async getUserSuggestionsForPost(
+    postId: string,
+    currentUserId: string,
+    query: string = ''
+  ): Promise<MentionSuggestion[]> {
+    logger.info('[MentionService] getUserSuggestionsForPost called', {
+      postId,
+      currentUserId,
+      query
+    });
+
+    // Verify post exists and is not deleted
+    const post = await this.prisma.post.findUnique({
+      where: { id: postId },
+      select: {
+        id: true,
+        authorId: true,
+        isDeleted: true,
+        deletedAt: true,
+        author: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true
+          }
+        }
+      }
+    });
+
+    if (!post || post.isDeleted || post.deletedAt) {
+      throw new Error('Post non trouvé ou accès refusé');
+    }
+
+    const normalizedQuery = query.toLowerCase().trim();
+
+    // Helper: filter users by query against username, displayName, fullName
+    const matchesQuery = (user: {
+      username: string;
+      displayName: string | null;
+      firstName: string | null;
+      lastName: string | null;
+    }): boolean => {
+      if (!normalizedQuery) return true;
+      const username = user.username.toLowerCase();
+      const displayName = (user.displayName ?? '').toLowerCase();
+      const fullName = `${user.firstName ?? ''} ${user.lastName ?? ''}`.toLowerCase();
+      return (
+        username.includes(normalizedQuery) ||
+        displayName.includes(normalizedQuery) ||
+        fullName.includes(normalizedQuery)
+      );
+    };
+
+    const suggestions: MentionSuggestion[] = [];
+    const addedUserIds = new Set<string>();
+
+    // Priority 1: Post author (excluded if it's the current user)
+    if (post.author && post.author.id !== currentUserId && matchesQuery(post.author)) {
+      suggestions.push({
+        id: post.author.id,
+        username: post.author.username,
+        displayName: post.author.displayName,
+        avatar: post.author.avatar,
+        badge: 'conversation',
+        inConversation: true,
+        isFriend: false
+      });
+      addedUserIds.add(post.author.id);
+    }
+
+    if (suggestions.length >= this.MAX_SUGGESTIONS) {
+      return suggestions;
+    }
+
+    // Priority 2: Previous commenters (non-deleted, excluding current user)
+    const comments = await this.prisma.postComment.findMany({
+      where: {
+        postId,
+        isDeleted: false,
+        deletedAt: null,
+        authorId: { not: currentUserId }
+      },
+      select: {
+        authorId: true,
+        author: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true
+          }
+        }
+      },
+      orderBy: { createdAt: 'asc' }
+    });
+
+    for (const comment of comments) {
+      if (!comment.author) continue;
+      if (addedUserIds.has(comment.author.id)) continue;
+      if (!matchesQuery(comment.author)) continue;
+
+      suggestions.push({
+        id: comment.author.id,
+        username: comment.author.username,
+        displayName: comment.author.displayName,
+        avatar: comment.author.avatar,
+        badge: 'conversation',
+        inConversation: true,
+        isFriend: false
+      });
+      addedUserIds.add(comment.author.id);
+
+      if (suggestions.length >= this.MAX_SUGGESTIONS) {
+        return suggestions;
+      }
+    }
+
+    // Priority 3: Friends of current user (not already in the thread)
+    const friendships = await this.prisma.friendRequest.findMany({
+      where: {
+        OR: [
+          { senderId: currentUserId, status: 'accepted' },
+          { receiverId: currentUserId, status: 'accepted' }
+        ]
+      },
+      select: {
+        senderId: true,
+        receiverId: true,
+        sender: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true
+          }
+        },
+        receiver: {
+          select: {
+            id: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            displayName: true,
+            avatar: true
+          }
+        }
+      }
+    });
+
+    for (const friendship of friendships) {
+      const friend =
+        friendship.senderId === currentUserId ? friendship.receiver : friendship.sender;
+      if (!friend) continue;
+      if (addedUserIds.has(friend.id)) continue;
+      if (friend.id === currentUserId) continue;
+      if (!matchesQuery(friend)) continue;
+
+      suggestions.push({
+        id: friend.id,
+        username: friend.username,
+        displayName: friend.displayName,
+        avatar: friend.avatar,
+        badge: 'friend',
+        inConversation: false,
+        isFriend: true
+      });
+      addedUserIds.add(friend.id);
+
+      if (suggestions.length >= this.MAX_SUGGESTIONS) {
+        return suggestions;
+      }
+    }
+
+    return suggestions;
+  }
+
+  /**
    * Valide les permissions de mention selon le type de conversation
    *
    * @param conversationId - ID de la conversation
@@ -743,6 +939,57 @@ export class MentionService {
     });
 
     return mentions;
+  }
+
+  /**
+   * Crée les entrées CommentMention dans la base de données
+   *
+   * @param commentId - ID du commentaire
+   * @param mentionedUserIds - IDs des utilisateurs mentionnés
+   */
+  async createCommentMentions(commentId: string, mentionedUserIds: string[]): Promise<void> {
+    if (mentionedUserIds.length === 0) return;
+
+    await Promise.allSettled(
+      mentionedUserIds.map(userId =>
+        this.prisma.commentMention.create({
+          data: {
+            commentId,
+            mentionedUserId: userId,
+          },
+        }).catch((error: any) => {
+          if (error.code !== 'P2002') {
+            logger.error(`Error creating comment mention for user ${userId}:`, error);
+          }
+        })
+      )
+    );
+  }
+
+  /**
+   * Crée les entrées PostMention dans la base de données.
+   * Idempotent: les doublons (P2002) sont ignorés silencieusement.
+   *
+   * @param postId - ID du post
+   * @param mentionedUserIds - IDs des utilisateurs mentionnés
+   */
+  async createPostMentions(postId: string, mentionedUserIds: string[]): Promise<void> {
+    if (mentionedUserIds.length === 0) return;
+
+    await Promise.allSettled(
+      mentionedUserIds.map(userId =>
+        this.prisma.postMention.create({
+          data: {
+            postId,
+            mentionedUserId: userId,
+          },
+        }).catch((error: any) => {
+          if (error.code !== 'P2002') {
+            logger.error(`Error creating post mention for user ${userId}:`, error);
+          }
+        })
+      )
+    );
   }
 
   /**

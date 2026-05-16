@@ -9,14 +9,31 @@ import {
 
 const mockCreateComment = jest.fn();
 const mockDeleteComment = jest.fn();
-const mockLikeComment = jest.fn();
+
+// Socket mock for comment reaction mutations
+const mockSocketEmit = jest.fn();
+const mockSocket = {
+  connected: true,
+  emit: mockSocketEmit,
+};
+
+jest.mock('@/services/meeshy-socketio.service', () => ({
+  meeshySocketIOService: {
+    getSocket: () => mockSocket,
+  },
+}));
+
+jest.mock('@meeshy/shared/types/socketio-events', () => ({
+  CLIENT_EVENTS: {
+    COMMENT_REACTION_ADD: 'comment:reaction-add',
+    COMMENT_REACTION_REMOVE: 'comment:reaction-remove',
+  },
+}));
 
 jest.mock('@/services/posts.service', () => ({
   postsService: {
     createComment: (...args: unknown[]) => mockCreateComment(...args),
     deleteComment: (...args: unknown[]) => mockDeleteComment(...args),
-    likeComment: (...args: unknown[]) => mockLikeComment(...args),
-    unlikeComment: jest.fn(),
   },
 }));
 
@@ -171,10 +188,34 @@ describe('useDeleteCommentMutation', () => {
 });
 
 describe('useLikeCommentMutation', () => {
+  beforeEach(() => { mockSocketEmit.mockClear(); });
+
+  it('emits comment:reaction-add on the socket', async () => {
+    const qc = createQueryClient();
+    seedComments(qc);
+    mockSocketEmit.mockImplementation((_event: string, _payload: unknown, cb: (r: { success: boolean }) => void) => {
+      cb({ success: true });
+    });
+
+    const { result } = renderHook(() => useLikeCommentMutation(), { wrapper: createWrapper(qc) });
+
+    await act(async () => {
+      await result.current.mutateAsync({ postId: 'post-1', commentId: 'comment-1' });
+    });
+
+    expect(mockSocketEmit).toHaveBeenCalledWith(
+      'comment:reaction-add',
+      { commentId: 'comment-1', postId: 'post-1', emoji: '❤️' },
+      expect.any(Function),
+    );
+  });
+
   it('optimistically increments likeCount', async () => {
     const qc = createQueryClient();
     seedComments(qc);
-    mockLikeComment.mockResolvedValue({ success: true });
+    mockSocketEmit.mockImplementation((_event: string, _payload: unknown, cb: (r: { success: boolean }) => void) => {
+      cb({ success: true });
+    });
 
     const { result } = renderHook(() => useLikeCommentMutation(), { wrapper: createWrapper(qc) });
 
@@ -213,10 +254,12 @@ describe('useCreateCommentMutation - rollback', () => {
 });
 
 describe('useLikeCommentMutation - rollback', () => {
-  it('rolls back likeCount on error', async () => {
+  it('rolls back likeCount on socket error', async () => {
     const qc = createQueryClient();
     seedComments(qc);
-    mockLikeComment.mockRejectedValue(new Error('Network error'));
+    mockSocketEmit.mockImplementation((_event: string, _payload: unknown, cb: (r: { success: boolean; error?: string }) => void) => {
+      cb({ success: false, error: 'Network error' });
+    });
 
     const { result } = renderHook(() => useLikeCommentMutation(), { wrapper: createWrapper(qc) });
 

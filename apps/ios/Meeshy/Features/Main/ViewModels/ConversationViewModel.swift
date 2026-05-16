@@ -195,16 +195,12 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Mention Autocomplete State
 
-    struct MentionCandidate: Identifiable, Equatable {
-        let id: String          // userId or username
-        let username: String
-        let displayName: String
-        let avatarURL: String?
-    }
+    @Published var mentionController: MentionComposerController = MentionComposerController(context: .conversation(id: ""))
 
-    @Published var mentionSuggestions: [MentionCandidate] = []
-    @Published var activeMentionQuery: String? = nil
-    private(set) var draftMentions: [String: MentionCandidate] = [:]
+    // MARK: - Mention Forwarding (backwards compat for ConversationView)
+
+    var mentionSuggestions: [MentionCandidate] { mentionController.suggestions }
+    var activeMentionQuery: String? { mentionController.activeQuery }
 
     // MARK: - Search State
 
@@ -500,9 +496,7 @@ class ConversationViewModel: ObservableObject {
     private let reportService: ReportServiceProviding
     private let syncEngine: ConversationSyncEngineProviding
     private let mentionService: MentionServiceProviding
-    private var mentionDebounceTask: Task<Void, Never>?
     private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
-    private static let mentionDebounceMs: UInt64 = 300_000_000
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
     /// Public read-only accessor for the view layer (UIKit bridge needs the user id).
@@ -561,96 +555,20 @@ class ConversationViewModel: ObservableObject {
         return candidates
     }
 
-    /// Called from the composer's `onTextChange` callback.
-    /// Detects `@query` at the end of typed text (after the last `@` that has no space before content).
+    // MARK: - Mention Delegation
+
+    /// Delegates to the controller. Called from `onTextChanged`.
     func handleMentionQuery(in text: String) {
-        // Find the last @ that could start a mention (not preceded by alphanumeric)
-        guard let atRange = text.range(of: "@", options: .backwards) else {
-            clearMentionSuggestions()
-            return
-        }
-
-        let afterAt = text[atRange.upperBound...]
-        // Query with spaces is allowed — but stop if we see a newline
-        let query = String(afterAt)
-        guard !query.contains("\n") else {
-            clearMentionSuggestions()
-            return
-        }
-
-        activeMentionQuery = query
-        let queryLower = query.lowercased()
-
-        let filtered = mentionCandidates.filter { candidate in
-            queryLower.isEmpty
-                || candidate.username.lowercased().hasPrefix(queryLower)
-                || candidate.displayName.lowercased().hasPrefix(queryLower)
-        }
-
-        mentionSuggestions = filtered
-
-        mentionDebounceTask?.cancel()
-        let convId = conversationId
-        let service = mentionService
-        mentionDebounceTask = Task { [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: Self.mentionDebounceMs)
-            } catch { return }
-            guard !Task.isCancelled else { return }
-            do {
-                let apiSuggestions = try await service.suggestions(conversationId: convId, query: query)
-                guard !Task.isCancelled else { return }
-                let merged = self?.mergeAPISuggestions(apiSuggestions, localCandidates: filtered) ?? []
-                guard self?.activeMentionQuery == query else { return }
-                self?.mentionSuggestions = merged
-            } catch {
-                // API failure is non-fatal — local suggestions remain visible
-            }
-        }
-    }
-
-    private func mergeAPISuggestions(_ apiResults: [MentionSuggestion], localCandidates: [MentionCandidate]) -> [MentionCandidate] {
-        UserDisplayNameCache.shared.trackFromMentionSuggestions(apiResults)
-        var seen = Set<String>()
-        var merged: [MentionCandidate] = []
-        for s in apiResults {
-            let candidate = MentionCandidate(
-                id: s.id,
-                username: s.username,
-                displayName: s.displayName ?? s.username,
-                avatarURL: s.avatar
-            )
-            if seen.insert(s.id).inserted {
-                merged.append(candidate)
-            }
-        }
-        for c in localCandidates where !seen.contains(c.id) {
-            seen.insert(c.id)
-            merged.append(c)
-        }
-        return merged
+        mentionController.handleQuery(in: text)
     }
 
     func clearMentionSuggestions() {
-        mentionDebounceTask?.cancel()
-        mentionDebounceTask = nil
-        mentionSuggestions = []
-        activeMentionQuery = nil
+        mentionController.clearSuggestions()
     }
 
-    /// Replaces the active `@query` at the end of `text` with `@username `.
-    /// Always inserts `@username` so the server regex `/@(\w{1,30})/g` reliably matches.
-    /// `MessageTextRenderer` resolves `@username` → display name for rendering.
+    /// Delegates insertion to the controller and returns the updated text.
     func insertMention(_ candidate: MentionCandidate, into text: String) -> String {
-        let insertText = "@\(candidate.username) "
-
-        guard let atRange = text.range(of: "@", options: .backwards) else {
-            return text + insertText
-        }
-        let newText = text[..<atRange.lowerBound] + insertText
-        draftMentions[candidate.username] = candidate
-        clearMentionSuggestions()
-        return String(newText)
+        mentionController.insertMention(candidate, into: text)
     }
 
     // MARK: - Top Active Members (cached)
@@ -715,6 +633,14 @@ class ConversationViewModel: ObservableObject {
         self.reportService = reportService
         self.syncEngine = syncEngine
         self.mentionService = mentionService
+        // Wire up the mention controller for this conversation.
+        // localCandidates closure is evaluated lazily when a mention query fires,
+        // so mentionCandidates (which depend on messages) is always up-to-date.
+        self.mentionController = MentionComposerController(
+            context: .conversation(id: conversationId),
+            localCandidates: { [weak self] in self?.mentionCandidates ?? [] },
+            service: mentionService
+        )
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
         let store = MessageStore(
@@ -897,11 +823,7 @@ class ConversationViewModel: ObservableObject {
 
     func onTextChanged(_ text: String) {
         socketHandler?.onTextChanged(text)
-        if text.contains("@") {
-            handleMentionQuery(in: text)
-        } else {
-            clearMentionSuggestions()
-        }
+        mentionController.handleQuery(in: text)
     }
 
     func stopTypingEmission() {
@@ -1679,7 +1601,7 @@ class ConversationViewModel: ObservableObject {
             if pendingEffects.hasAnyEffect {
                 pendingEffects = .none
             }
-            draftMentions.removeAll()
+            mentionController.clearDraft()
             isSending = false
             return true
         } catch {

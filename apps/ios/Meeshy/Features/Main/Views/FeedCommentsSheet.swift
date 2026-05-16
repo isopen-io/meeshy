@@ -11,6 +11,9 @@ struct ThreadedCommentSection: View {
     let isExpanded: Bool
     let isLoadingReplies: Bool
     let accentColor: String
+    let likedIds: Set<String>
+    let likeDelta: [String: Int]
+    let heartInFlightIds: Set<String>
     let onReply: (FeedComment) -> Void
     let onToggleThread: () -> Void
     let onLikeComment: (String) -> Void
@@ -42,6 +45,9 @@ struct ThreadedCommentSection: View {
             CommentRowView(
                 comment: comment,
                 accentColor: accentColor,
+                isLiked: likedIds.contains(comment.id),
+                likeCount: max(0, comment.likes + (likeDelta[comment.id] ?? 0)),
+                isInFlight: heartInFlightIds.contains(comment.id),
                 onReply: { onReply(comment) },
                 onLikeComment: { onLikeComment(comment.id) },
                 moodEmoji: moodEmoji,
@@ -56,6 +62,9 @@ struct ThreadedCommentSection: View {
                         comment: reply,
                         accentColor: accentColor,
                         isReply: true,
+                        isLiked: likedIds.contains(reply.id),
+                        likeCount: max(0, reply.likes + (likeDelta[reply.id] ?? 0)),
+                        isInFlight: heartInFlightIds.contains(reply.id),
                         onReply: { onReply(reply) },
                         onLikeComment: { onLikeComment(reply.id) },
                         moodEmoji: replyMoodResolver?(reply.authorId),
@@ -90,6 +99,9 @@ struct ThreadedCommentSection: View {
                         comment: reply,
                         accentColor: accentColor,
                         isReply: true,
+                        isLiked: likedIds.contains(reply.id),
+                        likeCount: max(0, reply.likes + (likeDelta[reply.id] ?? 0)),
+                        isInFlight: heartInFlightIds.contains(reply.id),
                         onReply: { onReply(reply) },
                         onLikeComment: { onLikeComment(reply.id) },
                         moodEmoji: replyMoodResolver?(reply.authorId),
@@ -151,11 +163,49 @@ struct CommentsSheetView: View {
     @State private var expandedThreads: Set<String> = []
     @State private var loadingReplies: Set<String> = []
 
+    /// Hoisted like state — keyed by commentId, seeded from API `currentUserReactions`.
+    @State private var likedIds: Set<String> = []
+    /// Local like-count delta keyed by commentId (optimistic, applied on top of server count).
+    @State private var likeDelta: [String: Int] = [:]
+    /// In-flight heart taps: prevents rapid-tap desync.
+    @State private var heartInFlightIds: Set<String> = []
+
+    /// Tracks current composer text so `MentionSuggestionPanel` can pass it
+    /// back to `insertMention(_:into:)` without needing to own the text field.
+    @State private var composerText: String = ""
+
+    @StateObject private var mentionController: MentionComposerController
+
+    init(
+        post: FeedPost,
+        accentColor: String,
+        onSendComment: ((String, String, String?) -> Void)? = nil,
+        onLikeComment: ((String, String) -> Void)? = nil
+    ) {
+        self.post = post
+        self.accentColor = accentColor
+        self.onSendComment = onSendComment
+        self.onLikeComment = onLikeComment
+        _mentionController = StateObject(wrappedValue: MentionComposerController(
+            context: .post(id: post.id)
+        ))
+    }
+
     private var comments: [FeedComment] { liveComments ?? post.comments }
     private var commentCount: Int { liveCommentCount ?? post.commentCount }
 
     private var topLevelComments: [FeedComment] {
         comments.filter { $0.parentId == nil }
+    }
+
+    /// Computes the set of comment ids that the current user has heart-reacted to.
+    /// Mirrors `StoryViewerView.computeLikedIds(from:)` so seeding logic is testable.
+    static func computeLikedIds(from comments: [APIPostComment]) -> Set<String> {
+        Set(
+            comments
+                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
+                .map { $0.id }
+        )
     }
 
     var body: some View {
@@ -173,6 +223,9 @@ struct CommentsSheetView: View {
                                     isExpanded: expandedThreads.contains(comment.id),
                                     isLoadingReplies: loadingReplies.contains(comment.id),
                                     accentColor: accentColor,
+                                    likedIds: likedIds,
+                                    likeDelta: likeDelta,
+                                    heartInFlightIds: heartInFlightIds,
                                     onReply: { target in
                                         replyingTo = target
                                         composerFocusTrigger = true
@@ -181,7 +234,7 @@ struct CommentsSheetView: View {
                                         Task { await toggleThread(comment.id) }
                                     },
                                     onLikeComment: { commentId in
-                                        onLikeComment?(post.id, commentId)
+                                        Task { await toggleCommentLike(commentId: commentId) }
                                     },
                                     moodEmoji: statusViewModel.statusForUser(userId: comment.authorId)?.moodEmoji,
                                     storyState: storyViewModel.storyGroupForUser(userId: comment.authorId).map { $0.hasUnviewed ? .unread : .read } ?? .none,
@@ -196,7 +249,23 @@ struct CommentsSheetView: View {
                         .padding(.bottom, 100)
                     }
 
-                    commentComposer
+                    VStack(spacing: 0) {
+                        if mentionController.activeQuery != nil {
+                            MentionSuggestionPanel(
+                                controller: mentionController,
+                                accentColor: accentColor,
+                                currentText: composerText,
+                                onSelect: { updated in
+                                    // The panel calls insertMention which clears suggestions;
+                                    // we update composerText so the next onChange syncs.
+                                    composerText = updated
+                                }
+                            )
+                            .transition(.move(edge: .bottom).combined(with: .opacity))
+                        }
+                        commentComposer
+                    }
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: mentionController.activeQuery != nil)
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
@@ -222,6 +291,12 @@ struct CommentsSheetView: View {
         }
         .presentationDetents([.large, .medium])
         .presentationDragIndicator(.visible)
+        .onAppear {
+            SocialSocketManager.shared.joinPostRoom(postId: post.id)
+        }
+        .onDisappear {
+            SocialSocketManager.shared.leavePostRoom(postId: post.id)
+        }
         .onReceive(
             SocialSocketManager.shared.commentAdded
                 .receive(on: DispatchQueue.main)
@@ -257,6 +332,32 @@ struct CommentsSheetView: View {
             }
             liveCommentCount = data.commentCount
         }
+        .onReceive(
+            SocialSocketManager.shared.commentReactionAdded
+                .receive(on: DispatchQueue.main)
+                .filter { [postId = post.id] in $0.postId == postId }
+        ) { event in
+            guard event.emoji == StoryViewerView.heartEmoji else { return }
+            let currentUserId = AuthManager.shared.currentUser?.id
+            if event.userId == currentUserId {
+                likedIds.insert(event.commentId)
+            } else {
+                likeDelta[event.commentId] = (likeDelta[event.commentId] ?? 0) + 1
+            }
+        }
+        .onReceive(
+            SocialSocketManager.shared.commentReactionRemoved
+                .receive(on: DispatchQueue.main)
+                .filter { [postId = post.id] in $0.postId == postId }
+        ) { event in
+            guard event.emoji == StoryViewerView.heartEmoji else { return }
+            let currentUserId = AuthManager.shared.currentUser?.id
+            if event.userId == currentUserId {
+                likedIds.remove(event.commentId)
+            } else {
+                likeDelta[event.commentId] = (likeDelta[event.commentId] ?? 0) - 1
+            }
+        }
         .sheet(item: $selectedProfileUser) { user in
             UserProfileSheet(
                 user: user,
@@ -268,11 +369,56 @@ struct CommentsSheetView: View {
         }
         .withStatusBubble()
         .task {
-            // Auto-load replies for first 5 comments that have replies > 0
-            // so the auto-preview (first 2 replies) is populated on appear
+            // Hydrate repliesMap from cache before hitting the network so
+            // auto-preview rows are visible instantly on re-present.
             let withReplies = topLevelComments.filter { $0.replies > 0 }
             for comment in withReplies.prefix(5) {
+                let cacheKey = "replies-\(comment.id)"
+                let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+                if case .fresh(let replies, _) = cached {
+                    repliesMap[comment.id] = replies
+                } else if case .stale(let replies, _) = cached {
+                    repliesMap[comment.id] = replies
+                }
                 await loadReplies(commentId: comment.id)
+            }
+        }
+    }
+
+    // MARK: - Comment Like Toggle
+
+    private func toggleCommentLike(commentId: String) async {
+        guard !heartInFlightIds.contains(commentId) else { return }
+        heartInFlightIds.insert(commentId)
+        defer { heartInFlightIds.remove(commentId) }
+
+        let wasLiked = likedIds.contains(commentId)
+        if wasLiked {
+            likedIds.remove(commentId)
+            likeDelta[commentId] = (likeDelta[commentId] ?? 0) - 1
+        } else {
+            likedIds.insert(commentId)
+            likeDelta[commentId] = (likeDelta[commentId] ?? 0) + 1
+        }
+        onLikeComment?(post.id, commentId)
+
+        do {
+            if wasLiked {
+                _ = try await SocialSocketManager.shared.removeCommentReaction(
+                    commentId: commentId, postId: post.id, emoji: StoryViewerView.heartEmoji
+                )
+            } else {
+                _ = try await SocialSocketManager.shared.addCommentReaction(
+                    commentId: commentId, postId: post.id, emoji: StoryViewerView.heartEmoji
+                )
+            }
+        } catch {
+            if wasLiked {
+                likedIds.insert(commentId)
+                likeDelta[commentId] = (likeDelta[commentId] ?? 0) + 1
+            } else {
+                likedIds.remove(commentId)
+                likeDelta[commentId] = (likeDelta[commentId] ?? 0) - 1
             }
         }
     }
@@ -314,6 +460,9 @@ struct CommentsSheetView: View {
                 )
             }
             repliesMap[commentId] = replies
+            // Persist replies under "replies-{commentId}" so re-presenting the sheet
+            // hydrates the auto-preview rows instantly without a round-trip.
+            try? await CacheCoordinator.shared.comments.save(replies, for: "replies-\(commentId)")
         } catch {
             expandedThreads.remove(commentId)
         }
@@ -476,15 +625,20 @@ struct CommentsSheetView: View {
                             liveComments = current
                         }
                         liveCommentCount = (liveCommentCount ?? post.comments.count) + 1
+                        mentionController.clearDraft()
                     } catch {
                         ToastManager.shared.showError("Erreur lors de l'envoi du commentaire")
                     }
                 }
             },
+            textBinding: $composerText,
             replyBanner: replyingTo.map { AnyView(commentReplyBanner($0)) },
             isBlurEnabled: $commentBlurEnabled,
             pendingEffects: $commentEffects,
-            focusTrigger: $composerFocusTrigger
+            focusTrigger: $composerFocusTrigger,
+            onTextChange: { text in
+                mentionController.handleQuery(in: text)
+            }
         )
     }
 
@@ -499,19 +653,31 @@ struct CommentsSheetView: View {
 
 // MARK: - Comment Row View
 
-struct CommentRowView: View {
+struct CommentRowView: View, Equatable {
     let comment: FeedComment
     let accentColor: String
     var isReply: Bool = false
+    var isLiked: Bool = false
+    var likeCount: Int = 0
+    var isInFlight: Bool = false
     let onReply: () -> Void
     var onLikeComment: (() -> Void)? = nil
     var moodEmoji: String? = nil
     var storyState: StoryRingState = .none
     var presenceState: PresenceState = .offline
 
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.comment.id == rhs.comment.id &&
+        lhs.isLiked == rhs.isLiked &&
+        lhs.likeCount == rhs.likeCount &&
+        lhs.isInFlight == rhs.isInFlight &&
+        lhs.comment.content == rhs.comment.content &&
+        lhs.comment.translatedContent == rhs.comment.translatedContent
+    }
+
     private var theme: ThemeManager { ThemeManager.shared }
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var statusViewModel: StatusViewModel
-    @State private var isLiked = false
     @State private var selectedProfileUser: ProfileSheetUser?
     @State private var showOriginal = false
     @State private var hasPlayedAppearanceEffect = false
@@ -630,25 +796,25 @@ struct CommentRowView: View {
 
                 HStack(spacing: 20) {
                     Button {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
-                            isLiked.toggle()
+                        withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
+                            onLikeComment?()
                         }
                         HapticFeedback.light()
-                        onLikeComment?()
                     } label: {
                         HStack(spacing: 4) {
-                            let totalLikes = comment.likes + (isLiked ? 1 : 0)
-                            let heartColor: Color = isLiked ? MeeshyColors.error : (totalLikes > 0 ? Color(hex: accentColor) : theme.textMuted)
-                            Image(systemName: isLiked || totalLikes > 0 ? "heart.fill" : "heart")
+                            let heartColor: Color = isLiked ? MeeshyColors.error : (likeCount > 0 ? Color(hex: accentColor) : theme.textMuted)
+                            Image(systemName: isLiked || likeCount > 0 ? "heart.fill" : "heart")
                                 .font(.system(size: isReply ? 12 : 14))
                                 .foregroundColor(heartColor)
                                 .scaleEffect(isLiked ? 1.1 : 1.0)
 
-                            Text("\(totalLikes)")
+                            Text("\(likeCount)")
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(heartColor)
                         }
                     }
+                    .disabled(isInFlight)
+                    .frame(minHeight: 44)
 
                     Button {
                         onReply()
@@ -662,6 +828,7 @@ struct CommentRowView: View {
                         }
                         .foregroundColor(theme.textMuted)
                     }
+                    .frame(minHeight: 44)
 
                     Spacer()
 

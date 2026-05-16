@@ -1469,6 +1469,7 @@ extension StoryViewerView {
             userLang: userLang,
             isLiked: storyCommentLikedIds.contains(comment.id),
             likeCount: max(0, comment.likes + (storyCommentLikeDelta[comment.id] ?? 0)),
+            isInFlight: heartInFlightIds.contains(comment.id),
             onReply: {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     replyingToStoryComment = comment
@@ -1485,9 +1486,13 @@ extension StoryViewerView {
     // MARK: - Story Comment Reactions
 
     func toggleStoryCommentLike(_ comment: FeedComment) async {
-        guard let story = currentStory else { return }
         let id = comment.id
+        guard !heartInFlightIds.contains(id) else { return }
+        heartInFlightIds.insert(id)
+        defer { heartInFlightIds.remove(id) }
+
         let wasLiked = storyCommentLikedIds.contains(id)
+        let postId = currentStory?.id ?? ""
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
             if wasLiked {
@@ -1501,9 +1506,9 @@ extension StoryViewerView {
 
         do {
             if wasLiked {
-                try await PostService.shared.unlikeComment(postId: story.id, commentId: id)
+                _ = try await SocialSocketManager.shared.removeCommentReaction(commentId: id, postId: postId, emoji: StoryViewerView.heartEmoji)
             } else {
-                try await PostService.shared.likeComment(postId: story.id, commentId: id)
+                _ = try await SocialSocketManager.shared.addCommentReaction(commentId: id, postId: postId, emoji: StoryViewerView.heartEmoji)
             }
         } catch {
             withAnimation {
@@ -1520,49 +1525,75 @@ extension StoryViewerView {
 
     // MARK: - Load Comments
 
+    static func computeLikedIds(from comments: [APIPostComment]) -> Set<String> {
+        return Set(
+            comments
+                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
+                .map { $0.id }
+        )
+    }
+
     func loadStoryComments() {
         guard let story = currentStory, !isLoadingComments else { return }
-        isLoadingComments = true
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        Task { await loadStoryCommentsAsync(story: story) }
+    }
 
-        Task {
-            do {
-                let response = try await PostService.shared.getComments(postId: story.id, limit: 50)
-                if response.success {
-                    let comments = response.data.map { c -> FeedComment in
-                        let translated: String? = {
-                            guard let dict = c.translations else { return nil }
-                            for lang in langs {
-                                if let entry = dict[lang] { return entry.text }
-                            }
-                            return nil
-                        }()
-                        return FeedComment(
-                            id: c.id, author: c.author.name, authorId: c.author.id,
-                            authorAvatarURL: c.author.avatar,
-                            content: c.content, timestamp: c.createdAt,
-                            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                            parentId: c.parentId,
-                            originalLanguage: c.originalLanguage, translatedContent: translated
-                        )
-                    }
-                    storyComments = comments
-                    let topAll = comments.filter { $0.parentId == nil }
-                    let totalReplies = topAll.reduce(0) { $0 + $1.replies }
-                    storyCommentCount = topAll.count + totalReplies
+    private func loadStoryCommentsAsync(story: StoryItem) async {
+        let cacheKey = "post-\(story.id)"
 
-                    // Auto-fetch replies for top-level comments that have replies
-                    // Sequential to avoid burst of concurrent requests
-                    let topLevel = topAll.filter { $0.replies > 0 }
-                    Task {
-                        for comment in topLevel.prefix(5) {
-                            await loadStoryCommentReplies(commentId: comment.id)
-                        }
-                    }
-                }
-            } catch {}
-            isLoadingComments = false
+        let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+        switch cached {
+        case .fresh(let comments, _):
+            storyComments = comments
+            let topAll = comments.filter { $0.parentId == nil }
+            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
+            return
+        case .stale(let comments, _):
+            storyComments = comments
+            let topAll = comments.filter { $0.parentId == nil }
+            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
+        case .expired, .empty:
+            isLoadingComments = true
         }
+
+        await fetchStoryCommentsFromNetwork(story: story, cacheKey: cacheKey)
+        isLoadingComments = false
+    }
+
+    private func fetchStoryCommentsFromNetwork(story: StoryItem, cacheKey: String) async {
+        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        do {
+            let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
+            let comments = response.data.map { c -> FeedComment in
+                let translated: String? = {
+                    guard let dict = c.translations else { return nil }
+                    for lang in langs {
+                        if let entry = dict[lang] { return entry.text }
+                    }
+                    return nil
+                }()
+                return FeedComment(
+                    id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorAvatarURL: c.author.avatar,
+                    content: c.content, timestamp: c.createdAt,
+                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                    parentId: c.parentId,
+                    originalLanguage: c.originalLanguage, translatedContent: translated
+                )
+            }
+            storyComments = comments
+            storyCommentLikedIds = Self.computeLikedIds(from: response.data)
+            let topAll = comments.filter { $0.parentId == nil }
+            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
+            try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+
+            let topLevel = topAll.filter { $0.replies > 0 }
+            Task {
+                for comment in topLevel.prefix(5) {
+                    await loadStoryCommentReplies(commentId: comment.id)
+                }
+            }
+        } catch {}
     }
 
     func loadStoryCommentCount() {
@@ -1575,15 +1606,28 @@ extension StoryViewerView {
         storyCommentCount = story.commentCount
 
         Task {
+            let cacheKey = "post-\(story.id)"
+            let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+            switch cached {
+            case .fresh(let comments, _):
+                let top = comments.filter { $0.parentId == nil }
+                let total = top.count + top.reduce(0) { $0 + $1.replies }
+                if total != storyCommentCount { storyCommentCount = total }
+                return
+            case .stale(let comments, _):
+                let top = comments.filter { $0.parentId == nil }
+                let total = top.count + top.reduce(0) { $0 + $1.replies }
+                if total != storyCommentCount { storyCommentCount = total }
+            case .expired, .empty:
+                break
+            }
             do {
-                let response = try await PostService.shared.getComments(postId: story.id, limit: 50)
+                let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
                 if response.success {
                     let top = response.data.filter { $0.parentId == nil }
                     let totalReplies = top.reduce(0) { $0 + ($1.replyCount ?? 0) }
                     let total = top.count + totalReplies
-                    if total != storyCommentCount {
-                        storyCommentCount = total
-                    }
+                    if total != storyCommentCount { storyCommentCount = total }
                 }
             } catch {}
         }
@@ -1597,14 +1641,25 @@ extension StoryViewerView {
 // - Header pair of language flags lets the viewer toggle between original and
 //   prisme-translated content without leaving the overlay.
 // - Heart reaction + Reply CTAs sit below the text in their own action row.
-struct StoryCommentRowView: View {
+struct StoryCommentRowView: View, Equatable {
     let comment: FeedComment
     let userLang: String
     let isLiked: Bool
     let likeCount: Int
+    var isInFlight: Bool = false
     let onReply: () -> Void
     let onToggleLike: () -> Void
 
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.comment.id == rhs.comment.id &&
+        lhs.isLiked == rhs.isLiked &&
+        lhs.likeCount == rhs.likeCount &&
+        lhs.isInFlight == rhs.isInFlight &&
+        lhs.comment.content == rhs.comment.content &&
+        lhs.comment.translatedContent == rhs.comment.translatedContent
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showOriginal: Bool = false
 
     private var hasTranslation: Bool {
@@ -1746,7 +1801,11 @@ struct StoryCommentRowView: View {
 
     private var actionRow: some View {
         HStack(spacing: 16) {
-            Button(action: onToggleLike) {
+            Button {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
+                    onToggleLike()
+                }
+            } label: {
                 HStack(spacing: 3) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
                         .font(.system(size: 11, weight: .semibold))
@@ -1761,6 +1820,8 @@ struct StoryCommentRowView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(isInFlight)
+            .frame(minHeight: 44)
 
             Button(action: onReply) {
                 HStack(spacing: 3) {
@@ -1773,6 +1834,7 @@ struct StoryCommentRowView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .frame(minHeight: 44)
 
             Spacer()
         }

@@ -9,7 +9,7 @@
  */
 
 import { PrismaClient } from '@meeshy/shared/prisma/client';
-import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import type {
   NotificationActor,
   NotificationContext,
@@ -122,6 +122,12 @@ export class NotificationService {
   private recentMentions: Map<string, number[]> = new Map();
   private readonly MAX_MENTIONS_PER_MINUTE = 5;
   private readonly MENTION_WINDOW_MS = 60000; // 1 minute
+
+  // Anti-spam: tracking des réactions récentes par paire (sender:recipient)
+  private recentReactions: Map<string, number[]> = new Map();
+  private readonly MAX_REACTIONS_PER_MINUTE = 5;
+  private readonly REACTION_WINDOW_MS = 60000; // 1 minute
+
   private pushService?: PushNotificationService;
   private emailService?: EmailService;
 
@@ -131,6 +137,7 @@ export class NotificationService {
   ) {
     // Nettoyer les entrées de rate limit périmées toutes les 2 minutes
     setInterval(() => this.cleanupOldMentions(), 120000);
+    setInterval(() => this.cleanupOldReactions(), 120000);
   }
 
   // ==============================================
@@ -202,6 +209,9 @@ export class NotificationService {
       case 'status_reaction':   return prefs.storyReactionEnabled ?? true;
       case 'comment_like':      return prefs.commentLikeEnabled ?? false;
       case 'comment_reply':     return prefs.commentReplyEnabled ?? true;
+      case 'story_new_comment':
+      case 'friend_story_comment':
+      case 'story_thread_reply': return prefs.postCommentEnabled ?? true;
       case 'new_conversation_direct':
       case 'new_conversation_group':
       case 'new_conversation':  return prefs.conversationEnabled;
@@ -340,6 +350,8 @@ export class NotificationService {
       // Émettre via Socket.IO
       if (this.io) {
         this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, formatted);
+        // Update badge counters on client (fire-and-forget, non-blocking)
+        this.emitCountsUpdate(params.userId).catch(() => {});
       }
 
       // Send push notification (always — iOS willPresent handles foreground display)
@@ -770,6 +782,11 @@ export class NotificationService {
     conversationId: string;
     reactionEmoji: string;
   }): Promise<Notification | null> {
+    // Anti-spam: throttle reaction notifications per sender→recipient pair
+    if (!this.shouldCreateReactionNotification(params.reactorUserId, params.messageAuthorId)) {
+      return null;
+    }
+
     const [reactor, conversation, message] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: params.reactorUserId },
@@ -818,6 +835,545 @@ export class NotificationService {
         reactionEmoji: params.reactionEmoji,
         ...(messagePreview && { messageContent: messagePreview }),
       },
+    });
+  }
+
+  // ==============================================
+  // COMMENT_REACTION
+  // ==============================================
+
+  async createCommentReactionNotification(params: {
+    commentAuthorId: string;
+    reactorUserId: string;
+    commentId: string;
+    postId: string;
+    reactionEmoji: string;
+  }): Promise<void> {
+    if (params.commentAuthorId === params.reactorUserId) return;
+
+    // Anti-spam: throttle reaction notifications per sender→recipient pair
+    if (!this.shouldCreateReactionNotification(params.reactorUserId, params.commentAuthorId)) {
+      return;
+    }
+
+    const reactor = await this.prisma.user.findUnique({
+      where: { id: params.reactorUserId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+
+    if (!reactor) return;
+
+    await this.createNotification({
+      userId: params.commentAuthorId,
+      type: 'comment_reaction',
+      priority: 'low',
+      content: params.reactionEmoji,
+
+      actor: {
+        id: params.reactorUserId,
+        username: reactor.username,
+        displayName: reactor.displayName,
+        avatar: reactor.avatar,
+      },
+
+      context: {
+        postId: params.postId,
+        commentId: params.commentId,
+      },
+
+      metadata: {
+        action: 'view_post',
+        reactionEmoji: params.reactionEmoji,
+      },
+    });
+  }
+
+  // ==============================================
+  // STORY COMMENT FAN-OUT (Phase 1D)
+  // ==============================================
+
+  /**
+   * Resolves the three recipient buckets for story comment notifications.
+   *
+   * Priority order (a user appears in EXACTLY ONE bucket):
+   *   1. storyAuthorId  → STORY_NEW_COMMENT
+   *   2. previousCommenterIds (prior commenters on this post, excl. commenter & author)
+   *                     → STORY_THREAD_REPLY
+   *   3. friendIds (friends of the author, excl. commenter, author, and prior commenters)
+   *                     → FRIEND_STORY_COMMENT
+   */
+  async getStoryNotificationRecipients(
+    postId: string,
+    authorId: string,
+    commenterId: string
+  ): Promise<{ authorId: string; friendIds: string[]; previousCommenterIds: string[] }> {
+    // Cap at 500 rows to bound fan-out cost on viral posts.
+    // Future: large posts should use a background queue for fan-out.
+    const [previousComments, friendRequests, reactors] = await Promise.all([
+      this.prisma.postComment.findMany({
+        where: {
+          postId,
+          isDeleted: false,
+          NOT: { authorId: commenterId },
+        },
+        distinct: ['authorId'],
+        select: { authorId: true },
+        take: 500,
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.friendRequest.findMany({
+        where: {
+          status: 'accepted',
+          OR: [{ senderId: authorId }, { receiverId: authorId }],
+        },
+        select: { senderId: true, receiverId: true },
+        take: 500,
+        orderBy: { updatedAt: 'desc' },
+      }),
+      // Include post reactors as thread-engaged participants (same bucket as prior commenters)
+      this.prisma.postReaction.findMany({
+        where: {
+          postId,
+          NOT: { userId: commenterId },
+        },
+        distinct: ['userId'],
+        select: { userId: true },
+        take: 500,
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    const rawPreviousCommenterIds = previousComments
+      .map((c: { authorId: string }) => c.authorId)
+      .filter((id: string) => id !== authorId);
+
+    // Merge reactor user IDs into the "thread engagement" bucket.
+    // Reactors who also commented are deduplicated via Set — they still appear only once.
+    const reactorIds = reactors
+      .map((r: { userId: string }) => r.userId)
+      .filter((id: string) => id !== authorId);
+
+    const rawEngagedIds = Array.from(new Set([...rawPreviousCommenterIds, ...reactorIds]));
+
+    const previousCommenterSet = new Set(rawEngagedIds);
+
+    const allFriendIds = friendRequests.flatMap(
+      (fr: { senderId: string; receiverId: string }) => [fr.senderId, fr.receiverId]
+    ).filter((id: string) => id !== authorId);
+
+    const friendIds = Array.from(new Set(allFriendIds)).filter(
+      (id: string) =>
+        id !== commenterId &&
+        id !== authorId &&
+        !previousCommenterSet.has(id)
+    );
+
+    const previousCommenterIds = rawEngagedIds.filter(
+      (id: string) => id !== commenterId
+    );
+
+    return { authorId, friendIds, previousCommenterIds };
+  }
+
+  /**
+   * Fan-out notifications when a new top-level comment is added to a story.
+   *
+   *  - Story author        → STORY_NEW_COMMENT  (priority: normal)
+   *  - Previous commenters → STORY_THREAD_REPLY (priority: low)
+   *  - Friends of author   → FRIEND_STORY_COMMENT (priority: low)
+   *
+   * Commenter never receives a notification.
+   */
+  async createStoryCommentNotificationsBatch(params: {
+    postId: string;
+    commentId: string;
+    storyAuthorId: string;
+    commenterId: string;
+    commentExcerpt?: string;
+    /**
+     * User IDs to exclude from fan-out buckets (story_thread_reply, friend_story_comment).
+     * Use to pass mentionedUserIds so users who received user_mentioned don't also get
+     * a lower-priority story thread/friend notification.
+     * The story author always gets STORY_NEW_COMMENT regardless of this list.
+     */
+    excludeUserIds?: string[];
+  }): Promise<void> {
+    const actor = await this.prisma.user.findUnique({
+      where: { id: params.commenterId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+
+    if (!actor) return;
+
+    const { authorId, friendIds, previousCommenterIds } =
+      await this.getStoryNotificationRecipients(
+        params.postId,
+        params.storyAuthorId,
+        params.commenterId
+      );
+
+    const excerpt = params.commentExcerpt
+      ? this.truncateMessage(params.commentExcerpt)
+      : '';
+
+    const commonContext = { postId: params.postId, commentId: params.commentId };
+    const commonMetadata = {
+      action: 'view_post' as const,
+      postId: params.postId,
+      commentId: params.commentId,
+      commentPreview: excerpt,
+    };
+    const actorInfo = {
+      id: params.commenterId,
+      username: actor.username,
+      displayName: actor.displayName,
+      avatar: actor.avatar,
+    };
+
+    const excludeSet = new Set(params.excludeUserIds ?? []);
+    const tasks: Array<Promise<unknown>> = [];
+
+    // 1. Story author notification — always sent regardless of excludeUserIds
+    //    (STORY_NEW_COMMENT has priority over all fan-out notifications)
+    if (authorId !== params.commenterId) {
+      tasks.push(
+        this.createNotification({
+          userId: authorId,
+          type: 'story_new_comment',
+          priority: 'normal',
+          content: excerpt || 'a commenté votre story',
+          actor: actorInfo,
+          context: commonContext,
+          metadata: commonMetadata,
+        })
+      );
+    }
+
+    // 2. Previous commenters (thread participants) — skip mentioned users
+    for (const recipientId of previousCommenterIds) {
+      if (excludeSet.has(recipientId)) continue;
+      tasks.push(
+        this.createNotification({
+          userId: recipientId,
+          type: 'story_thread_reply',
+          priority: 'low',
+          content: excerpt || 'a répondu dans une story',
+          actor: actorInfo,
+          context: commonContext,
+          metadata: commonMetadata,
+        })
+      );
+    }
+
+    // 3. Friends of the story author — skip mentioned users
+    for (const recipientId of friendIds) {
+      if (excludeSet.has(recipientId)) continue;
+      tasks.push(
+        this.createNotification({
+          userId: recipientId,
+          type: 'friend_story_comment',
+          priority: 'low',
+          content: excerpt || 'a commenté une story',
+          actor: actorInfo,
+          context: commonContext,
+          metadata: commonMetadata,
+        })
+      );
+    }
+
+    const results = await Promise.allSettled(tasks);
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        notificationLogger.error(
+          'Story comment notification failed for one recipient',
+          result.reason,
+          { recipientIndex: index, type: 'story_comment_batch' }
+        );
+      }
+    });
+  }
+
+  // ==============================================
+  // COMMENT MENTION NOTIFICATIONS (Phase 2B)
+  // ==============================================
+
+  /**
+   * Envoie des notifications user_mentioned en batch pour les mentions dans un commentaire.
+   *
+   * Priority dedup: user_mentioned > story_new_comment > story_thread_reply > friend_story_comment
+   * Les mentionedUserIds doivent être passés en excludeUserIds dans createStoryCommentNotificationsBatch
+   * pour éviter la double notification.
+   *
+   * Skip: self-mention, rate-limit anti-spam (MAX_MENTIONS_PER_MINUTE par paire sender:recipient).
+   */
+  async createCommentMentionNotificationsBatch(params: {
+    commentId: string;
+    postId: string;
+    commenterId: string;
+    mentionedUserIds: string[];
+    commentExcerpt?: string;
+  }): Promise<void> {
+    if (params.mentionedUserIds.length === 0) return;
+
+    const commenter = await this.prisma.user.findUnique({
+      where: { id: params.commenterId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+
+    if (!commenter) return;
+
+    const content = params.commentExcerpt
+      ? this.truncateMessage(params.commentExcerpt)
+      : '';
+
+    const actorInfo = {
+      id: params.commenterId,
+      username: commenter.username,
+      displayName: commenter.displayName,
+      avatar: commenter.avatar,
+    };
+
+    const tasks: Array<Promise<unknown>> = [];
+
+    for (const userId of params.mentionedUserIds) {
+      if (userId === params.commenterId) continue;
+
+      if (!this.shouldCreateMentionNotification(params.commenterId, userId)) {
+        notificationLogger.info('Comment mention notification blocked (rate limit)', {
+          commenterId: params.commenterId,
+          recipientId: userId,
+        });
+        continue;
+      }
+
+      tasks.push(
+        this.createNotification({
+          userId,
+          type: 'user_mentioned',
+          priority: 'high',
+          content,
+          actor: actorInfo,
+          context: {
+            postId: params.postId,
+            commentId: params.commentId,
+          },
+          metadata: {
+            action: 'view_post',
+            entityType: 'comment',
+            postId: params.postId,
+            commentId: params.commentId,
+            commentPreview: content,
+          } as any,
+        })
+      );
+    }
+
+    const mentionResults = await Promise.allSettled(tasks);
+    mentionResults.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        notificationLogger.error(
+          'Comment mention notification failed for one recipient',
+          result.reason,
+          { recipientId: params.mentionedUserIds[index], type: 'user_mentioned' }
+        );
+      }
+    });
+  }
+
+  // ==============================================
+  // POST MENTION NOTIFICATIONS (Fix 2)
+  // ==============================================
+
+  /**
+   * Envoie des notifications user_mentioned en batch pour les mentions dans un post.
+   *
+   * Mirrors createCommentMentionNotificationsBatch.
+   * Skip: self-mention, rate-limit anti-spam (MAX_MENTIONS_PER_MINUTE per pair sender:recipient).
+   */
+  async createPostMentionNotificationsBatch(params: {
+    postId: string;
+    posterId: string;
+    mentionedUserIds: string[];
+    postExcerpt?: string;
+  }): Promise<void> {
+    if (params.mentionedUserIds.length === 0) return;
+
+    const poster = await this.prisma.user.findUnique({
+      where: { id: params.posterId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+
+    if (!poster) return;
+
+    const excerpt = params.postExcerpt
+      ? this.truncateMessage(params.postExcerpt)
+      : '';
+    const content = excerpt || 'vous a mentionné';
+
+    const actorInfo = {
+      id: params.posterId,
+      username: poster.username,
+      displayName: poster.displayName,
+      avatar: poster.avatar,
+    };
+
+    const tasks: Array<Promise<unknown>> = [];
+
+    for (const userId of params.mentionedUserIds) {
+      if (userId === params.posterId) continue;
+
+      if (!this.shouldCreateMentionNotification(params.posterId, userId)) {
+        notificationLogger.info('Post mention notification blocked (rate limit)', {
+          posterId: params.posterId,
+          recipientId: userId,
+        });
+        continue;
+      }
+
+      tasks.push(
+        this.createNotification({
+          userId,
+          type: 'user_mentioned',
+          priority: 'high',
+          content,
+          actor: actorInfo,
+          context: {
+            postId: params.postId,
+          },
+          metadata: {
+            action: 'view_post',
+            entityType: 'post',
+            postId: params.postId,
+            postPreview: excerpt,
+          } as any,
+        })
+      );
+    }
+
+    const mentionResults = await Promise.allSettled(tasks);
+    mentionResults.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        notificationLogger.error(
+          'Post mention notification failed for one recipient',
+          result.reason,
+          { recipientId: params.mentionedUserIds[index], type: 'user_mentioned' }
+        );
+      }
+    });
+  }
+
+  // ==============================================
+  // FRIEND CONTENT NOTIFICATIONS (Phase 4F)
+  // ==============================================
+
+  /**
+   * Fan-out notifications to all friends of `authorId` when they publish new content.
+   *
+   * contentType mapping:
+   *   STORY  → friend_new_story
+   *   POST   → friend_new_post
+   *   MOOD   → friend_new_mood
+   *   STATUS → friend_new_mood  (lightweight/ephemeral; grouped with MOOD to avoid type proliferation)
+   *
+   * Rate-limit: none in v1. These are once-per-publish events so burst risk is low.
+   * Aggregation: none in v1. Duplicate suppression (author vs friend) is enforced via excludeUserIds.
+   *
+   * Dedup with mentions: pass mentionedUserIds as `excludeUserIds`.
+   * user_mentioned takes priority over friend_new_post for the same recipient.
+   *
+   * Cap: 500 friend rows max (mirrors createStoryCommentNotificationsBatch pattern).
+   */
+  async createFriendContentNotificationsBatch(params: {
+    postId: string;
+    authorId: string;
+    contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+    excerpt?: string;
+    /**
+     * User IDs to exclude from fan-out.
+     * Pass mentionedUserIds so a friend who is also @mentioned only gets user_mentioned.
+     */
+    excludeUserIds?: string[];
+  }): Promise<void> {
+    const typeMap: Record<'STORY' | 'POST' | 'MOOD' | 'STATUS', 'friend_new_story' | 'friend_new_post' | 'friend_new_mood'> = {
+      STORY: 'friend_new_story',
+      POST: 'friend_new_post',
+      MOOD: 'friend_new_mood',
+      STATUS: 'friend_new_mood',
+    };
+    const notificationType = typeMap[params.contentType];
+
+    const author = await this.prisma.user.findUnique({
+      where: { id: params.authorId },
+      select: { username: true, displayName: true, avatar: true },
+    });
+
+    if (!author) return;
+
+    const friendRequests = await this.prisma.friendRequest.findMany({
+      where: {
+        status: 'accepted',
+        OR: [{ senderId: params.authorId }, { receiverId: params.authorId }],
+      },
+      select: { senderId: true, receiverId: true },
+      take: 500,
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    const excludeSet = new Set(params.excludeUserIds ?? []);
+    const excerpt = params.excerpt ? this.truncateMessage(params.excerpt) : '';
+
+    const fallbackContent: Record<'friend_new_story' | 'friend_new_post' | 'friend_new_mood', string> = {
+      friend_new_story: 'a publié une nouvelle story',
+      friend_new_post: 'a publié un nouveau post',
+      friend_new_mood: 'a publié une nouvelle humeur',
+    };
+    const content = excerpt || fallbackContent[notificationType];
+
+    const actorInfo = {
+      id: params.authorId,
+      username: author.username,
+      displayName: author.displayName,
+      avatar: author.avatar,
+    };
+
+    const seenIds = new Set<string>();
+    const tasks: Array<Promise<unknown>> = [];
+
+    for (const fr of friendRequests) {
+      const friendId = fr.senderId === params.authorId ? fr.receiverId : fr.senderId;
+
+      if (friendId === params.authorId) continue;
+      if (excludeSet.has(friendId)) continue;
+      if (seenIds.has(friendId)) continue;
+      seenIds.add(friendId);
+
+      tasks.push(
+        this.createNotification({
+          userId: friendId,
+          type: notificationType,
+          priority: 'normal',
+          content,
+          actor: actorInfo,
+          context: { postId: params.postId },
+          metadata: {
+            action: 'view_post',
+            postId: params.postId,
+            contentType: params.contentType,
+            excerpt,
+          } as any,
+        })
+      );
+    }
+
+    const results = await Promise.allSettled(tasks);
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        notificationLogger.error(
+          'Friend content notification failed for one recipient',
+          result.reason,
+          { recipientIndex: index, type: notificationType, postId: params.postId }
+        );
+      }
     });
   }
 
@@ -1134,6 +1690,11 @@ export class NotificationService {
   }): Promise<Notification | null> {
     // Don't notify yourself
     if (params.actorId === params.postAuthorId) return null;
+
+    // Anti-spam: throttle reaction notifications per sender→recipient pair
+    if (!this.shouldCreateReactionNotification(params.actorId, params.postAuthorId)) {
+      return null;
+    }
 
     const actor = await this.prisma.user.findUnique({
       where: { id: params.actorId },
@@ -1767,6 +2328,28 @@ export class NotificationService {
   }
 
   // ==============================================
+  // NOTIFICATION COUNTS PUSH (Fix 3)
+  // ==============================================
+
+  /**
+   * Emits updated notification counts to a user's socket room.
+   * Called after every notification create/read/delete mutation so clients
+   * can update badge counters without REST polling.
+   */
+  private async emitCountsUpdate(userId: string): Promise<void> {
+    if (!this.io) return;
+    try {
+      const [unread, total] = await Promise.all([
+        this.prisma.notification.count({ where: { userId, readAt: null } }),
+        this.prisma.notification.count({ where: { userId } }),
+      ]);
+      this.io.to(ROOMS.user(userId)).emit(SERVER_EVENTS.NOTIFICATION_COUNTS, { unread, total });
+    } catch (error) {
+      notificationLogger.error('Failed to emit notification counts', { error, userId });
+    }
+  }
+
+  // ==============================================
   // ANTI-SPAM & UTILITIES
   // ==============================================
 
@@ -1805,6 +2388,46 @@ export class NotificationService {
         this.recentMentions.delete(key);
       } else {
         this.recentMentions.set(key, recent);
+      }
+    }
+  }
+
+  /**
+   * Vérifie le rate limit des réactions par paire (sender → recipient).
+   * Maximum MAX_REACTIONS_PER_MINUTE réactions par minute par paire.
+   * La réaction elle-même est toujours autorisée — seule la notification est throttlée.
+   */
+  private shouldCreateReactionNotification(senderId: string, recipientId: string): boolean {
+    const key = `${senderId}:${recipientId}`;
+    const now = Date.now();
+    const cutoff = now - this.REACTION_WINDOW_MS;
+
+    const timestamps = this.recentReactions.get(key) ?? [];
+    const recentTimestamps = timestamps.filter(ts => ts > cutoff);
+
+    if (recentTimestamps.length >= this.MAX_REACTIONS_PER_MINUTE) {
+      return false;
+    }
+
+    recentTimestamps.push(now);
+    this.recentReactions.set(key, recentTimestamps);
+    return true;
+  }
+
+  /**
+   * Nettoie les entrées périmées de la map recentReactions.
+   * Appelé automatiquement toutes les 2 minutes via setInterval.
+   */
+  private cleanupOldReactions(): void {
+    const now = Date.now();
+    const cutoff = now - this.REACTION_WINDOW_MS;
+
+    for (const [key, timestamps] of this.recentReactions.entries()) {
+      const recent = timestamps.filter(ts => ts > cutoff);
+      if (recent.length === 0) {
+        this.recentReactions.delete(key);
+      } else {
+        this.recentReactions.set(key, recent);
       }
     }
   }
@@ -1870,7 +2493,9 @@ export class NotificationService {
         },
       });
 
-      return this.formatNotification(notification);
+      const formatted = this.formatNotification(notification);
+      this.emitCountsUpdate(formatted.userId).catch(() => {});
+      return formatted;
     } catch (error) {
       notificationLogger.error('Failed to mark notification as read', {
         error,
@@ -1896,6 +2521,7 @@ export class NotificationService {
         },
       });
 
+      this.emitCountsUpdate(userId).catch(() => {});
       return result.count;
     } catch (error) {
       notificationLogger.error('Failed to mark all notifications as read', {
@@ -1973,9 +2599,20 @@ export class NotificationService {
    */
   async deleteNotification(notificationId: string): Promise<boolean> {
     try {
+      // Fetch userId before deletion so we can emit counts update after
+      const existing = await this.prisma.notification.findUnique({
+        where: { id: notificationId },
+        select: { userId: true },
+      });
+
       await this.prisma.notification.delete({
         where: { id: notificationId },
       });
+
+      if (existing?.userId) {
+        this.emitCountsUpdate(existing.userId).catch(() => {});
+      }
+
       return true;
     } catch (error) {
       notificationLogger.error('Failed to delete notification', {

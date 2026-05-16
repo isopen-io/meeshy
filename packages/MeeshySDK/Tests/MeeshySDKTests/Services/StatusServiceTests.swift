@@ -30,7 +30,7 @@ final class StatusServiceTests: XCTestCase {
             repostOf: nil, originalRepostOfId: nil, isQuote: false,
             moodEmoji: "smile", audioUrl: nil,
             audioDuration: nil, storyEffects: nil, translations: nil, isLikedByMe: nil,
-            isViewedByMe: nil, mentionedUsers: nil, viaUsername: nil
+            isViewedByMe: nil, currentUserReactions: nil, mentionedUsers: nil, viaUsername: nil
         )
     }
 

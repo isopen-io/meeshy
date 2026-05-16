@@ -90,6 +90,8 @@ struct StoryViewerView: View {
     /// (tray, deep link, story-reaction redirect) on the existing path.
     var initialAction: StoryViewerInitialAction? = nil
 
+    static let heartEmoji = "\u{2764}\u{FE0F}"
+
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
@@ -214,6 +216,8 @@ struct StoryViewerView: View {
     /// Local like-count delta keyed by comment id, applied on top of the server `comment.likes`
     /// to avoid waiting for refetch after a tap.
     @State var storyCommentLikeDelta: [String: Int] = [:]
+    /// In-flight heart taps: commentIds with a pending network call. Prevents rapid-tap desync.
+    @State var heartInFlightIds: Set<String> = []
     /// Latched once the `initialAction` (Phase F notification entry point) has
     /// been honoured. Guards against re-firing on every `.onAppear` cycle —
     /// scene phase transitions and parent re-renders both republish onAppear,
@@ -318,6 +322,9 @@ struct StoryViewerView: View {
                 appearCornerRadius = 0
             }
             triggerInitialActionIfNeeded()
+            if let story = currentStory {
+                SocialSocketManager.shared.joinPostRoom(postId: story.id)
+            }
         }
         .onDisappear {
             timerCancellable?.cancel()
@@ -325,6 +332,9 @@ struct StoryViewerView: View {
             prefetcher.detach()
             hasInstalledPrefetchPipeline = false
             StoryMediaCoordinator.shared.deactivate()
+            if let story = currentStory {
+                SocialSocketManager.shared.leavePostRoom(postId: story.id)
+            }
         }
         .onChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
@@ -334,8 +344,43 @@ struct StoryViewerView: View {
                 isPresented = false
             }
         }
-        .onChange(of: currentStoryIndex) { _, _ in refreshPrefetchWindowAndTimer() }
-        .onChange(of: currentGroupIndex) { _, _ in refreshPrefetchWindowAndTimer() }
+        .onChange(of: currentStoryIndex) { oldValue, _ in
+            refreshPrefetchWindowAndTimer()
+            let previousStory = currentGroup.flatMap { group in
+                group.stories.indices.contains(oldValue) ? group.stories[oldValue] : nil
+            }
+            transitionPostRoom(from: previousStory, to: currentStory)
+        }
+        .onChange(of: currentGroupIndex) { oldValue, _ in
+            refreshPrefetchWindowAndTimer()
+            let previousStory: StoryItem? = (oldValue >= 0 && oldValue < groups.count &&
+                groups[oldValue].stories.indices.contains(currentStoryIndex))
+                ? groups[oldValue].stories[currentStoryIndex]
+                : nil
+            transitionPostRoom(from: previousStory, to: currentStory)
+        }
+        .onReceive(SocialSocketManager.shared.commentReactionAdded.receive(on: DispatchQueue.main)) { event in
+            guard showCommentsOverlay else { return }
+            guard event.postId == currentStory?.id else { return }
+            guard event.emoji == Self.heartEmoji else { return }
+            let currentUserId = AuthManager.shared.currentUser?.id
+            if event.userId == currentUserId {
+                storyCommentLikedIds.insert(event.commentId)
+            } else {
+                storyCommentLikeDelta[event.commentId] = (storyCommentLikeDelta[event.commentId] ?? 0) + 1
+            }
+        }
+        .onReceive(SocialSocketManager.shared.commentReactionRemoved.receive(on: DispatchQueue.main)) { event in
+            guard showCommentsOverlay else { return }
+            guard event.postId == currentStory?.id else { return }
+            guard event.emoji == Self.heartEmoji else { return }
+            let currentUserId = AuthManager.shared.currentUser?.id
+            if event.userId == currentUserId {
+                storyCommentLikedIds.remove(event.commentId)
+            } else {
+                storyCommentLikeDelta[event.commentId] = (storyCommentLikeDelta[event.commentId] ?? 0) - 1
+            }
+        }
     }
 
     var body: some View {
@@ -556,6 +601,18 @@ struct StoryViewerView: View {
     /// Direct repost-as-post action wired to the kebab menu's "Republier en
     /// post" item. Mirrors the share-button repost UX (C.1) but skips the
     /// composer — fires `PostService.repost` immediately with no content and
+    /// Transitions the Socket.IO post room subscription from `oldStory` to `newStory`.
+    /// The old.id != new.id check makes redundant calls (e.g. double-fire from both
+    /// onChange handlers at a group boundary) idempotent.
+    private func transitionPostRoom(from oldStory: StoryItem?, to newStory: StoryItem?) {
+        if let old = oldStory, old.id != newStory?.id {
+            SocialSocketManager.shared.leavePostRoom(postId: old.id)
+        }
+        if let new = newStory, new.id != oldStory?.id {
+            SocialSocketManager.shared.joinPostRoom(postId: new.id)
+        }
+    }
+
     /// `isQuote: false`. Surfaces user-facing toasts on success / known error
     /// codes (404 = source story gone, 403 = repost forbidden) and a generic
     /// failure otherwise. Errors are mapped against `APIError.serverError`'s

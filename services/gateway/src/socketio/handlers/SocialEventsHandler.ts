@@ -15,7 +15,9 @@ import type {
   PostRepostedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
+  StoryUnreactedEventData,
   StatusReactedEventData,
+  StatusUnreactedEventData,
   CommentAddedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
@@ -207,7 +209,15 @@ export class SocialEventsHandler {
   }
 
   broadcastStoryReacted(data: StoryReactedEventData, storyAuthorId: string): void {
+    // Notify the author (via their feed room)
     this.emitToUser(storyAuthorId, SERVER_EVENTS.STORY_REACTED, data);
+    // Also broadcast to viewers currently watching the story room (ROOMS.post is separate from feed room — no overlap)
+    this.io.to(ROOMS.post(data.storyId)).emit(SERVER_EVENTS.STORY_REACTED, data);
+  }
+
+  broadcastStoryUnreacted(data: StoryUnreactedEventData, storyAuthorId: string): void {
+    this.emitToUser(storyAuthorId, SERVER_EVENTS.STORY_UNREACTED, data);
+    this.io.to(ROOMS.post(data.storyId)).emit(SERVER_EVENTS.STORY_UNREACTED, data);
   }
 
   // ==============================================
@@ -235,6 +245,12 @@ export class SocialEventsHandler {
 
   broadcastStatusReacted(data: StatusReactedEventData, statusAuthorId: string): void {
     this.emitToUser(statusAuthorId, SERVER_EVENTS.STATUS_REACTED, data);
+    this.io.to(ROOMS.post(data.statusId)).emit(SERVER_EVENTS.STATUS_REACTED, data);
+  }
+
+  broadcastStatusUnreacted(data: StatusUnreactedEventData, statusAuthorId: string): void {
+    this.emitToUser(statusAuthorId, SERVER_EVENTS.STATUS_UNREACTED, data);
+    this.io.to(ROOMS.post(data.statusId)).emit(SERVER_EVENTS.STATUS_UNREACTED, data);
   }
 
   // ==============================================

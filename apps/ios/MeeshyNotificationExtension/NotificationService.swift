@@ -209,8 +209,18 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
              "post_comment",
              "post_repost",
              "story_reaction",
+             "status_reaction",
              "comment_like",
-             "comment_reply":
+             "comment_reply",
+             "comment_reaction",
+             // Story comment fan-out (Phase 1) — author / thread / friends
+             "story_new_comment",
+             "story_thread_reply",
+             "friend_story_comment",
+             // Friend content fan-out (Phase 4F)
+             "friend_new_story",
+             "friend_new_post",
+             "friend_new_mood":
             category = "MEESHY_SOCIAL"
 
         // Call events — callback / answer / decline actions
@@ -401,7 +411,10 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         "new_conversation", "new_conversation_direct", "new_conversation_group", "added_to_conversation",
         "message_reaction", "mention", "user_mentioned",
         "missed_call", "call_ended", "call_declined", "call_recording_ready",
-        "post_like", "post_comment", "post_repost", "story_reaction", "comment_like", "comment_reply",
+        "post_like", "post_comment", "post_repost", "story_reaction", "status_reaction",
+        "comment_like", "comment_reply", "comment_reaction",
+        "story_new_comment", "story_thread_reply", "friend_story_comment",
+        "friend_new_story", "friend_new_post", "friend_new_mood",
         "friend_request", "contact_request"
     ]
 

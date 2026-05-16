@@ -26,6 +26,63 @@ struct PostDetailView: View {
     @State private var composerFocusTrigger: Bool = false
     @State private var isTextExpanded = false
 
+    // Post reaction state — socket-driven, hoisted to this view (single-post context).
+    // PostDetailView joins the post:{postId} room on appear and leaves on disappear,
+    // enabling real-time reaction updates from other users.
+    @State private var postLikedIds: Set<String> = []
+    @State private var postLikeDelta: [String: Int] = [:]
+    @State private var postHeartInFlightIds: Set<String> = []
+
+    private var detailIsLiked: Bool { postLikedIds.contains(postId) }
+    private var detailLikeCount: Int {
+        guard let post = displayPost else { return 0 }
+        return max(0, post.likes + (postLikeDelta[postId] ?? 0))
+    }
+
+    // MARK: - Post Heart Toggle (socket-driven, post detail)
+
+    @MainActor
+    private func toggleDetailPostHeart() {
+        Task {
+            guard !postHeartInFlightIds.contains(postId) else { return }
+            postHeartInFlightIds.insert(postId)
+            defer {
+                Task { @MainActor in
+                    postHeartInFlightIds.remove(postId)
+                }
+            }
+            let wasLiked = postLikedIds.contains(postId)
+            // Optimistic update
+            if wasLiked {
+                postLikedIds.remove(postId)
+                postLikeDelta[postId, default: 0] -= 1
+            } else {
+                postLikedIds.insert(postId)
+                postLikeDelta[postId, default: 0] += 1
+            }
+            do {
+                if wasLiked {
+                    _ = try await SocialSocketManager.shared.removePostReaction(
+                        postId: postId, emoji: StoryViewerView.heartEmoji
+                    )
+                } else {
+                    _ = try await SocialSocketManager.shared.addPostReaction(
+                        postId: postId, emoji: StoryViewerView.heartEmoji
+                    )
+                }
+            } catch {
+                // Rollback optimistic update on failure
+                if wasLiked {
+                    postLikedIds.insert(postId)
+                    postLikeDelta[postId, default: 0] += 1
+                } else {
+                    postLikedIds.remove(postId)
+                    postLikeDelta[postId, default: 0] -= 1
+                }
+            }
+        }
+    }
+
     private var displayPost: FeedPost? { viewModel.post ?? initialPost }
 
     private var accentColor: String {
@@ -215,10 +272,50 @@ struct PostDetailView: View {
             if viewModel.post == nil {
                 await viewModel.loadPost(postId)
             }
+            // Seed liked state from initial/cached post (post.isLiked is derived from
+            // APIPost.currentUserReactions / isLikedByMe by the SDK).
+            if let post = displayPost, post.isLiked {
+                postLikedIds.insert(postId)
+            }
             await viewModel.loadComments(postId)
             viewModel.subscribeToSocket(postId)
+            // Join the post room for real-time reaction events (single focused post).
+            SocialSocketManager.shared.joinPostRoom(postId: postId)
             // Record view when post detail is opened
             try? await PostService.shared.viewPost(postId: postId, duration: nil)
+        }
+        .onDisappear {
+            SocialSocketManager.shared.leavePostRoom(postId: postId)
+        }
+        .onChange(of: viewModel.post) { _, updatedPost in
+            // Re-seed when post loads from network (stale → fresh). Preserve
+            // optimistic state: only update if no in-flight toggle is active.
+            guard let updatedPost, !postHeartInFlightIds.contains(postId) else { return }
+            if updatedPost.isLiked {
+                postLikedIds.insert(postId)
+            } else {
+                postLikedIds.remove(postId)
+            }
+        }
+        .onReceive(SocialSocketManager.shared.postReactionAdded.receive(on: DispatchQueue.main)) { event in
+            let heart = StoryViewerView.heartEmoji
+            guard event.emoji == heart, event.postId == postId else { return }
+            let currentUserId = AuthManager.shared.currentUser?.id
+            if event.userId == currentUserId {
+                postLikedIds.insert(postId)
+            } else {
+                postLikeDelta[postId, default: 0] += 1
+            }
+        }
+        .onReceive(SocialSocketManager.shared.postReactionRemoved.receive(on: DispatchQueue.main)) { event in
+            let heart = StoryViewerView.heartEmoji
+            guard event.emoji == heart, event.postId == postId else { return }
+            let currentUserId = AuthManager.shared.currentUser?.id
+            if event.userId == currentUserId {
+                postLikedIds.remove(postId)
+            } else {
+                postLikeDelta[postId, default: 0] -= 1
+            }
         }
         .sheet(isPresented: $showTranslationSheet) {
             if let post = displayPost {
@@ -688,8 +785,10 @@ struct PostDetailView: View {
     @ViewBuilder
     private func actionsBar(_ post: FeedPost) -> some View {
         HStack(spacing: 0) {
+            // Heart button — socket-driven (joins post room on appear, leaves on disappear)
             Button {
-                Task { await viewModel.likePost() }
+                guard !postHeartInFlightIds.contains(postId) else { return }
+                toggleDetailPostHeart()
                 HapticFeedback.light()
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.5)) {
                     likeScale = 1.3
@@ -701,16 +800,19 @@ struct PostDetailView: View {
                 }
             } label: {
                 HStack(spacing: 5) {
-                    let heartColor: Color = post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textSecondary)
-                    Image(systemName: post.isLiked || post.likes > 0 ? "heart.fill" : "heart")
+                    let heartColor: Color = detailIsLiked ? MeeshyColors.error : (detailLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
+                    Image(systemName: detailIsLiked || detailLikeCount > 0 ? "heart.fill" : "heart")
                         .font(.system(size: 18))
                         .foregroundColor(heartColor)
                         .scaleEffect(likeScale)
-                    Text("\(post.likes)")
+                        .opacity(postHeartInFlightIds.contains(postId) ? 0.5 : 1.0)
+                    Text("\(detailLikeCount)")
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundColor(post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textMuted))
+                        .foregroundColor(detailIsLiked ? MeeshyColors.error : (detailLikeCount > 0 ? Color(hex: accentColor) : theme.textMuted))
+                        .contentTransition(.numericText())
                 }
             }
+            .disabled(postHeartInFlightIds.contains(postId))
 
             Spacer()
 

@@ -12,9 +12,18 @@ public struct MentionSuggestion: Codable, Identifiable, Sendable {
     public let isFriend: Bool?
 }
 
+// MARK: - Context Type
+
+public enum MentionContextType: String, Sendable {
+    case conversation
+    case post
+}
+
 // MARK: - Protocol
 
 public protocol MentionServiceProviding: AnyObject, Sendable {
+    func suggestions(contextId: String, contextType: MentionContextType, query: String) async throws -> [MentionSuggestion]
+    @available(*, deprecated, renamed: "suggestions(contextId:contextType:query:)")
     func suggestions(conversationId: String, query: String) async throws -> [MentionSuggestion]
 }
 
@@ -28,8 +37,12 @@ public final class MentionService: MentionServiceProviding, @unchecked Sendable 
         self.api = api
     }
 
-    public func suggestions(conversationId: String, query: String) async throws -> [MentionSuggestion] {
-        var queryItems = [URLQueryItem(name: "conversationId", value: conversationId)]
+    /// Unified suggestion endpoint — supports both conversation and post contexts.
+    public func suggestions(contextId: String, contextType: MentionContextType, query: String) async throws -> [MentionSuggestion] {
+        var queryItems = [
+            URLQueryItem(name: "contextId", value: contextId),
+            URLQueryItem(name: "contextType", value: contextType.rawValue)
+        ]
         if !query.isEmpty {
             queryItems.append(URLQueryItem(name: "query", value: query))
         }
@@ -38,5 +51,12 @@ public final class MentionService: MentionServiceProviding, @unchecked Sendable 
             queryItems: queryItems
         )
         return response.data
+    }
+
+    /// Legacy method — passes `conversationId` as the deprecated query param.
+    /// Prefer `suggestions(contextId:contextType:query:)` for new call sites.
+    @available(*, deprecated, message: "Use suggestions(contextId:contextType:query:) instead")
+    public func suggestions(conversationId: String, query: String) async throws -> [MentionSuggestion] {
+        try await suggestions(contextId: conversationId, contextType: .conversation, query: query)
     }
 }

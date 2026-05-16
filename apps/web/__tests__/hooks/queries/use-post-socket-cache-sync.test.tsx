@@ -44,6 +44,12 @@ jest.mock('@meeshy/shared/types/socketio-events', () => ({
     STATUS_UPDATED: 'status:updated',
     STATUS_DELETED: 'status:deleted',
     STATUS_REACTED: 'status:reacted',
+    POST_REACTION_ADDED: 'post:reaction-added',
+    POST_REACTION_REMOVED: 'post:reaction-removed',
+    POST_REACTION_SYNC: 'post:reaction-sync',
+    COMMENT_REACTION_ADDED: 'comment:reaction-added',
+    COMMENT_REACTION_REMOVED: 'comment:reaction-removed',
+    COMMENT_REACTION_SYNC: 'comment:reaction-sync',
   },
 }));
 
@@ -79,6 +85,7 @@ const mockPost = {
   isPinned: false,
   isEdited: false,
   reactionSummary: {} as Record<string, number>,
+  currentUserReactions: [] as string[],
   createdAt: '2026-03-28T00:00:00Z',
   updatedAt: '2026-03-28T00:00:00Z',
 };
@@ -117,17 +124,17 @@ describe('usePostSocketCacheSync', () => {
     Object.keys(listeners).forEach((k) => delete listeners[k]);
   });
 
-  it('registers 19 socket listeners on mount (12 post/comment + 7 story/status)', () => {
+  it('registers 25 socket listeners on mount (12 post/comment + 7 story/status + 6 reaction)', () => {
     const qc = createQueryClient();
     renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
-    expect(mockSocket.on).toHaveBeenCalledTimes(19);
+    expect(mockSocket.on).toHaveBeenCalledTimes(25);
   });
 
-  it('unregisters all 19 listeners on unmount', () => {
+  it('unregisters all 25 listeners on unmount', () => {
     const qc = createQueryClient();
     const { unmount } = renderHook(() => usePostSocketCacheSync(), { wrapper: createWrapper(qc) });
     unmount();
-    expect(mockSocket.off).toHaveBeenCalledTimes(19);
+    expect(mockSocket.off).toHaveBeenCalledTimes(25);
   });
 
   it('does not register when enabled=false', () => {
@@ -280,6 +287,87 @@ describe('usePostSocketCacheSync', () => {
 
       expect(spy).toHaveBeenCalledWith({ queryKey: ['posts', 'list', 'statuses'] });
       spy.mockRestore();
+    });
+  });
+
+  describe('post:reaction-added', () => {
+    it('patches reactionSummary and currentUserReactions for the reacting user', () => {
+      const qc = createQueryClient();
+      seedFeed(qc, [{ ...mockPost, currentUserReactions: [] as string[], reactionSummary: {} as Record<string, number> }]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-2' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'post-1',
+        userId: 'user-2',
+        emoji: '❤️',
+        action: 'add',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { reactionSummary: Record<string, number>; currentUserReactions: string[] })[];
+      expect(posts[0].reactionSummary['❤️']).toBe(1);
+      expect(posts[0].currentUserReactions).toContain('❤️');
+    });
+
+    it('does not add to currentUserReactions for another user', () => {
+      const qc = createQueryClient();
+      seedFeed(qc, [{ ...mockPost, currentUserReactions: [] as string[], reactionSummary: {} as Record<string, number> }]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-added', {
+        postId: 'post-1',
+        userId: 'user-99',
+        emoji: '❤️',
+        action: 'add',
+        aggregation: { emoji: '❤️', count: 1 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { currentUserReactions: string[] })[];
+      expect(posts[0].currentUserReactions).toHaveLength(0);
+    });
+  });
+
+  describe('post:reaction-removed', () => {
+    it('removes emoji from reactionSummary when count drops to zero', () => {
+      const seed = { ...mockPost, reactionSummary: { '❤️': 1 } as Record<string, number>, currentUserReactions: ['❤️'] };
+      const qc = createQueryClient();
+      seedFeed(qc, [seed]);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-removed', {
+        postId: 'post-1',
+        userId: 'user-1',
+        emoji: '❤️',
+        action: 'remove',
+        aggregation: { emoji: '❤️', count: 0 },
+        timestamp: new Date().toISOString(),
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { reactionSummary: Record<string, number>; currentUserReactions: string[] })[];
+      expect(posts[0].reactionSummary['❤️']).toBeUndefined();
+      expect(posts[0].currentUserReactions).not.toContain('❤️');
+    });
+  });
+
+  describe('post:reaction-sync', () => {
+    it('replaces reactionSummary and currentUserReactions entirely', () => {
+      const qc = createQueryClient();
+      seedFeed(qc);
+      renderHook(() => usePostSocketCacheSync({ currentUserId: 'user-1' }), { wrapper: createWrapper(qc) });
+
+      act(() => emit('post:reaction-sync', {
+        postId: 'post-1',
+        reactions: [{ emoji: '👍', count: 3 }, { emoji: '❤️', count: 7 }],
+        totalCount: 10,
+        userReactions: ['👍'],
+      }));
+
+      const posts = getFeedPosts(qc) as (typeof mockPost & { reactionSummary: Record<string, number>; currentUserReactions: string[] })[];
+      expect(posts[0].reactionSummary).toEqual({ '👍': 3, '❤️': 7 });
+      expect(posts[0].currentUserReactions).toEqual(['👍']);
+      expect(posts[0].likeCount).toBe(10);
     });
   });
 });
