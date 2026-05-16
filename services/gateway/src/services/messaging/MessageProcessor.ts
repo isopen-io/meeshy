@@ -959,12 +959,18 @@ export class MessageProcessor {
       });
 
       const first = attachments[0];
+      const attachmentTypeOf = (mimeType?: string | null): 'image' | 'video' | 'audio' | 'document' =>
+        mimeType?.startsWith('image/') ? 'image' :
+        mimeType?.startsWith('video/') ? 'video' :
+        mimeType?.startsWith('audio/') ? 'audio' : 'document';
       const attachmentInfo = {
         hasAttachments: attachments.length > 0,
         attachmentCount: attachments.length,
-        firstAttachmentType: first?.mimeType?.startsWith('image/') ? 'image' as const :
-                            first?.mimeType?.startsWith('video/') ? 'video' as const :
-                            first?.mimeType?.startsWith('audio/') ? 'audio' as const : 'document' as const,
+        firstAttachmentType: attachmentTypeOf(first?.mimeType),
+        attachments: attachments.map(att => ({
+          type: attachmentTypeOf(att.mimeType),
+          filename: att.fileName,
+        })),
         firstAttachmentFilename: first?.fileName,
         firstAttachmentFileSize: first?.fileSize,
         firstAttachmentDuration: first?.duration,

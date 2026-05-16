@@ -41,6 +41,14 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
 }
 
+/**
+ * Resolve the best available name for a notification actor:
+ * displayName first, then username, then a neutral fallback.
+ */
+function resolveActorName(actor: NotificationActor | undefined): string {
+  return actor?.displayName?.trim() || actor?.username?.trim() || 'Meeshy';
+}
+
 function extractExtension(filename: string | null | undefined): string | null {
   if (!filename) return null;
   const dot = filename.lastIndexOf('.');
@@ -74,47 +82,116 @@ function formatDocumentLabel(ext: string): string {
   return DOC_LABELS[ext] ?? `📎 Fichier .${ext}`;
 }
 
-function formatAttachmentNotificationBody(params: {
-  attachmentCount?: number;
-  firstAttachmentType?: string;
-  firstAttachmentFilename?: string | null;
+type NotificationAttachmentType = 'image' | 'video' | 'audio' | 'document';
+
+type NotificationAttachmentSummary = {
+  type: NotificationAttachmentType;
+  filename?: string | null;
+};
+
+/**
+ * Detailed label for a single attachment — used as the notification body base
+ * when the message carries no text. Includes dimensions/duration/size.
+ */
+function formatSingleAttachmentLabel(params: {
+  type: NotificationAttachmentType;
+  filename?: string | null;
+  fileSize?: number | null;
+  /** Durée en secondes (champ `duration` de MessageAttachment). */
+  duration?: number | null;
+  width?: number | null;
+  height?: number | null;
+}): string {
+  const details: string[] = [];
+
+  if (params.type === 'audio') {
+    if (params.duration) details.push(formatDuration(params.duration * 1000));
+    if (params.fileSize) details.push(formatFileSize(params.fileSize));
+    return details.length > 0 ? `🎵 Audio · ${details.join(' · ')}` : '🎵 Audio';
+  }
+
+  if (params.type === 'video') {
+    if (params.duration) details.push(formatDuration(params.duration * 1000));
+    if (params.fileSize) details.push(formatFileSize(params.fileSize));
+    return details.length > 0 ? `🎬 Vidéo · ${details.join(' · ')}` : '🎬 Vidéo';
+  }
+
+  if (params.type === 'image') {
+    if (params.width && params.height) details.push(`${params.width}×${params.height}`);
+    if (params.fileSize) details.push(formatFileSize(params.fileSize));
+    return details.length > 0 ? `📷 Photo · ${details.join(' · ')}` : '📷 Photo';
+  }
+
+  const ext = extractExtension(params.filename);
+  const docLabel = ext ? formatDocumentLabel(ext) : '📎 Document';
+  return params.fileSize ? `${docLabel} · ${formatFileSize(params.fileSize)}` : docLabel;
+}
+
+/**
+ * Badge for a group of extra document attachments. Keeps the per-extension
+ * label (📄 PDF, 📝 Word…) when the group is homogeneous, falls back to a
+ * generic paperclip count otherwise.
+ */
+function formatDocumentBadge(docs: ReadonlyArray<NotificationAttachmentSummary>): string {
+  const labels = docs.map(doc => {
+    const ext = extractExtension(doc.filename);
+    return ext ? formatDocumentLabel(ext) : '📎 Document';
+  });
+  const homogeneous = labels.every(label => label === labels[0]);
+  if (homogeneous) {
+    return docs.length > 1 ? `${labels[0]} · ${docs.length}` : labels[0];
+  }
+  return `📎 ${docs.length} fichiers`;
+}
+
+/**
+ * Per-type `+N` badges for the attachments beyond the first one (the first is
+ * surfaced as inline rich media). Order: images, audios, videos, documents.
+ */
+function buildAttachmentBadges(rest: ReadonlyArray<NotificationAttachmentSummary>): string {
+  const images = rest.filter(att => att.type === 'image');
+  const audios = rest.filter(att => att.type === 'audio');
+  const videos = rest.filter(att => att.type === 'video');
+  const documents = rest.filter(att => att.type === 'document');
+
+  const segments: string[] = [];
+  if (images.length > 0) segments.push(`+${images.length}📷`);
+  if (audios.length > 0) segments.push(`+${audios.length}🎵`);
+  if (videos.length > 0) segments.push(`+${videos.length}🎬`);
+  if (documents.length > 0) segments.push(formatDocumentBadge(documents));
+  return segments.join(' ');
+}
+
+/**
+ * Compose the message notification body: message text (or, when absent, a
+ * detailed label for the first attachment) followed by per-type `+N` badges
+ * for the remaining attachments.
+ */
+function buildMessageNotificationBody(params: {
+  messagePreview?: string;
+  attachments?: ReadonlyArray<NotificationAttachmentSummary>;
   firstAttachmentFileSize?: number | null;
   firstAttachmentDuration?: number | null;
   firstAttachmentWidth?: number | null;
   firstAttachmentHeight?: number | null;
 }): string {
-  const count = params.attachmentCount ?? 1;
-  const type = params.firstAttachmentType ?? 'document';
-  const details: string[] = [];
+  const text = params.messagePreview?.trim() || '';
+  const attachments = params.attachments ?? [];
 
-  if (type === 'audio') {
-    const label = count > 1 ? `🎵 ${count} audios` : '🎵 Audio';
-    if (params.firstAttachmentDuration) details.push(formatDuration(params.firstAttachmentDuration));
-    if (params.firstAttachmentFileSize) details.push(formatFileSize(params.firstAttachmentFileSize));
-    return details.length > 0 ? `${label} · ${details.join(' · ')}` : label;
-  }
+  if (attachments.length === 0) return text;
 
-  if (type === 'video') {
-    const label = count > 1 ? `🎬 ${count} vidéos` : '🎬 Vidéo';
-    if (params.firstAttachmentDuration) details.push(formatDuration(params.firstAttachmentDuration));
-    if (params.firstAttachmentFileSize) details.push(formatFileSize(params.firstAttachmentFileSize));
-    return details.length > 0 ? `${label} · ${details.join(' · ')}` : label;
-  }
+  const [first, ...rest] = attachments;
+  const badges = buildAttachmentBadges(rest);
+  const base = text || formatSingleAttachmentLabel({
+    type: first.type,
+    filename: first.filename,
+    fileSize: params.firstAttachmentFileSize,
+    duration: params.firstAttachmentDuration,
+    width: params.firstAttachmentWidth,
+    height: params.firstAttachmentHeight,
+  });
 
-  if (type === 'image') {
-    const label = count > 1 ? `📷 ${count} photos` : '📷 Photo';
-    if (params.firstAttachmentWidth && params.firstAttachmentHeight) {
-      details.push(`${params.firstAttachmentWidth}×${params.firstAttachmentHeight}`);
-    }
-    if (params.firstAttachmentFileSize) details.push(formatFileSize(params.firstAttachmentFileSize));
-    return details.length > 0 ? `${label} · ${details.join(' · ')}` : label;
-  }
-
-  const ext = extractExtension(params.firstAttachmentFilename);
-  const docLabel = ext ? formatDocumentLabel(ext) : '📎 Document';
-  if (count > 1) return `📎 ${count} fichiers`;
-  if (params.firstAttachmentFileSize) return `${docLabel} · ${formatFileSize(params.firstAttachmentFileSize)}`;
-  return docLabel;
+  return [base, badges].filter(Boolean).join(' ');
 }
 
 export class NotificationService {
@@ -363,18 +440,19 @@ export class NotificationService {
               `/conversations/${params.context.conversationId}`) :
             undefined;
 
-          const isGroupMessage = params.type === 'new_message'
+          const isMessage = params.type === 'new_message';
+          const isGroupMessage = isMessage
             && params.context.conversationType
             && params.context.conversationType !== 'direct';
+          const actorName = resolveActorName(params.actor);
+          const messageTitle = isGroupMessage && params.context.conversationTitle
+            ? `${actorName} | ${params.context.conversationTitle}`
+            : actorName;
           const pushTitle = params.title
-            || (isGroupMessage && params.context.conversationTitle
-              ? params.context.conversationTitle
-              : null)
+            || (isMessage ? messageTitle : null)
             || params.actor?.displayName
             || 'Meeshy';
-          const pushBody = isGroupMessage && params.actor?.displayName
-            ? `${params.actor.displayName}: ${params.content.substring(0, 200)}`
-            : params.content.substring(0, 200);
+          const pushBody = params.content.substring(0, 200);
 
           this.pushService.sendToUser({
             userId: params.userId,
@@ -593,6 +671,13 @@ export class NotificationService {
     firstAttachmentDuration?: number | null;
     firstAttachmentWidth?: number | null;
     firstAttachmentHeight?: number | null;
+    /** Résumé léger de TOUS les attachments, dans l'ordre d'envoi. Le 1er est
+     *  affiché en média inline, les suivants sont agrégés en badges `+N` par
+     *  type dans le corps de la notification. */
+    attachments?: ReadonlyArray<{
+      type: 'image' | 'video' | 'audio' | 'document';
+      filename?: string | null;
+    }>;
     /** URL accessible publiquement pour le 1er attachment (image/audio/video).
      *  L'extension iOS télécharge ce fichier et le rend en UNNotificationAttachment
      *  natif (waveform pour audio, preview pour image, thumbnail pour video). */
@@ -622,9 +707,14 @@ export class NotificationService {
       select: { title: true, type: true },
     });
 
-    const content = params.messagePreview || (params.hasAttachments
-      ? formatAttachmentNotificationBody(params)
-      : '');
+    const content = buildMessageNotificationBody({
+      messagePreview: params.messagePreview,
+      attachments: params.attachments,
+      firstAttachmentFileSize: params.firstAttachmentFileSize,
+      firstAttachmentDuration: params.firstAttachmentDuration,
+      firstAttachmentWidth: params.firstAttachmentWidth,
+      firstAttachmentHeight: params.firstAttachmentHeight,
+    });
 
     return this.createNotification({
       userId: params.recipientUserId,
