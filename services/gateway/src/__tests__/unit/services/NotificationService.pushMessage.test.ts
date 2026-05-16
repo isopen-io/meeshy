@@ -261,4 +261,125 @@ describe('NotificationService — message push title/body', () => {
       expect(lastPushPayload().title).toBe('alice | Équipe Dev');
     });
   });
+
+  describe('attachment body badges', () => {
+    type Att = { type: 'image' | 'video' | 'audio' | 'document'; filename?: string | null };
+
+    beforeEach(() => {
+      (prisma.user.findUnique as jest.Mock).mockResolvedValue({
+        username: 'alice',
+        displayName: 'Alice Martin',
+        avatar: null,
+      });
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
+        title: 'Équipe Dev',
+        type: 'direct',
+      });
+    });
+
+    function sendWith(params: {
+      messagePreview: string;
+      attachments: Att[];
+      firstAttachmentWidth?: number;
+      firstAttachmentHeight?: number;
+      firstAttachmentDuration?: number;
+    }) {
+      return service.createMessageNotification({
+        recipientUserId: RECIPIENT_ID,
+        senderId: SENDER_ID,
+        messageId: MESSAGE_ID,
+        conversationId: CONVERSATION_ID,
+        ...params,
+      });
+    }
+
+    it('test_body_textWithMixedAttachments_appendsPerTypeBadgesForRest', async () => {
+      await sendWith({
+        messagePreview: 'Regardez ça !',
+        attachments: [
+          { type: 'image', filename: 'a.jpg' },
+          { type: 'image', filename: 'b.jpg' },
+          { type: 'image', filename: 'c.jpg' },
+          { type: 'audio', filename: 'm1.m4a' },
+          { type: 'audio', filename: 'm2.m4a' },
+          { type: 'video', filename: 'v.mp4' },
+          { type: 'document', filename: 'r1.pdf' },
+          { type: 'document', filename: 'r2.pdf' },
+        ],
+      });
+
+      expect(lastPushPayload().body).toBe('Regardez ça ! +2📷 +2🎵 +1🎬 📄 PDF · 2');
+    });
+
+    it('test_body_textWithSingleAttachment_hasNoBadges', async () => {
+      await sendWith({
+        messagePreview: 'Une seule photo',
+        attachments: [{ type: 'image', filename: 'a.jpg' }],
+      });
+
+      expect(lastPushPayload().body).toBe('Une seule photo');
+    });
+
+    it('test_body_noText_usesFirstAttachmentLabelThenBadges', async () => {
+      await sendWith({
+        messagePreview: '',
+        attachments: [
+          { type: 'image', filename: 'a.jpg' },
+          { type: 'image', filename: 'b.jpg' },
+          { type: 'image', filename: 'c.jpg' },
+          { type: 'audio', filename: 'm1.m4a' },
+          { type: 'audio', filename: 'm2.m4a' },
+          { type: 'video', filename: 'v.mp4' },
+          { type: 'document', filename: 'r1.pdf' },
+          { type: 'document', filename: 'r2.pdf' },
+        ],
+        firstAttachmentWidth: 1920,
+        firstAttachmentHeight: 1080,
+      });
+
+      expect(lastPushPayload().body).toBe('📷 Photo · 1920×1080 +2📷 +2🎵 +1🎬 📄 PDF · 2');
+    });
+
+    it('test_body_noText_singleAttachment_isJustTheLabel', async () => {
+      await sendWith({
+        messagePreview: '',
+        attachments: [{ type: 'audio', filename: 'voice.m4a' }],
+        firstAttachmentDuration: 34,
+      });
+
+      expect(lastPushPayload().body).toBe('🎵 Audio · 0:34');
+    });
+
+    it('test_body_mixedDocumentExtensions_fallBackToGenericPaperclip', async () => {
+      await sendWith({
+        messagePreview: 'Les fichiers',
+        attachments: [
+          { type: 'image', filename: 'a.jpg' },
+          { type: 'document', filename: 'r1.pdf' },
+          { type: 'document', filename: 'r2.docx' },
+        ],
+      });
+
+      expect(lastPushPayload().body).toBe('Les fichiers 📎 2 fichiers');
+    });
+
+    it('test_body_group_titleStillSenderPipeConversation_withBadges', async () => {
+      (prisma.conversation.findUnique as jest.Mock).mockResolvedValue({
+        title: 'Équipe Dev',
+        type: 'group',
+      });
+
+      await sendWith({
+        messagePreview: 'Sprint',
+        attachments: [
+          { type: 'image', filename: 'a.jpg' },
+          { type: 'video', filename: 'v.mp4' },
+        ],
+      });
+
+      const payload = lastPushPayload();
+      expect(payload.title).toBe('Alice Martin | Équipe Dev');
+      expect(payload.body).toBe('Sprint +1🎬');
+    });
+  });
 });
