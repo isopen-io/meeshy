@@ -649,6 +649,9 @@ struct StoryViewerView: View {
     @State var showEmojiStrip = false // internal for cross-file extension access
     @State private var bigReactionEmoji: String?
     @State private var bigReactionPhase: Int = 0
+    /// Ticks on every reaction sent, through any path (quick strip or the
+    /// full-screen picker). Drives the heart-button bounce in the sidebar.
+    @State private var heartBouncePulse: Int = 0
     @State private var sharedContentWrapper: SharedContentWrapper?
     @State private var repostStoryComposerSource: RepostStorySourceWrapper?
     @State private var editAndRepostAsPostSource: RepostPostSourceWrapper?
@@ -685,6 +688,7 @@ struct StoryViewerView: View {
             isRevealActive: isRevealActive,
             bigReactionEmoji: bigReactionEmoji,
             bigReactionPhase: bigReactionPhase,
+            heartBouncePulse: heartBouncePulse,
             storyReactionCount: storyReactionCount,
             storyCommentCount: storyCommentCount,
             isStoryCommentsEmpty: storyComments.isEmpty,
@@ -809,6 +813,7 @@ struct StoryViewerView: View {
         }
 
         storyReactionCount += 1
+        heartBouncePulse += 1
         sendReaction(emoji: emoji)
     }
 

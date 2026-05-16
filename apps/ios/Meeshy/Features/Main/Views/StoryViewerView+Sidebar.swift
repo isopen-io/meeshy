@@ -19,6 +19,8 @@ import MeeshyUI
 struct StoryActionSidebarView: View {
     let isOwnStory: Bool
     let storyReactionCount: Int
+    /// Ticks on every reaction sent (any path). `.onChange` drives `bounceHeart()`.
+    let heartBouncePulse: Int
     let quickEmojis: [String]
     let onReplyToStory: ((ReplyContext) -> Void)?
     let currentStory: StoryItem?
@@ -80,6 +82,12 @@ struct StoryActionSidebarView: View {
                     }
                 }
                 .scaleEffect(heartScale)
+                // Bounce on every reaction sent — via the quick strip below
+                // OR the full-screen picker — since heartBouncePulse ticks
+                // inside triggerStoryReaction, the single reaction-sent seam.
+                .onChange(of: heartBouncePulse) { _, _ in
+                    bounceHeart()
+                }
                 .overlay(alignment: .trailing) {
                     if showEmojiStrip {
                         EmojiReactionPicker(
@@ -87,7 +95,6 @@ struct StoryActionSidebarView: View {
                             style: .dark,
                             onReact: { emoji in
                                 triggerStoryReaction(emoji)
-                                bounceHeart()
                             },
                             onDismiss: {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {

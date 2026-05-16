@@ -198,6 +198,7 @@ struct StoryCardView: View {
     let isRevealActive: Bool
     let bigReactionEmoji: String?
     let bigReactionPhase: Int
+    let heartBouncePulse: Int
 
     // Sidebar inputs
     let storyReactionCount: Int
@@ -425,6 +426,7 @@ struct StoryCardView: View {
                 StoryActionSidebarView(
                     isOwnStory: isOwnStory,
                     storyReactionCount: storyReactionCount,
+                    heartBouncePulse: heartBouncePulse,
                     quickEmojis: quickEmojis,
                     onReplyToStory: onReplyToStory,
                     currentStory: currentStory,
