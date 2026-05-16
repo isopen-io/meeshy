@@ -376,7 +376,6 @@
 		PROF002A002A002A002A0002 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = PROF001A001A001A001A0001 /* ProfileView.swift */; };
 		PS3900000000002F39 /* ParticipantService.swift in Sources */ = {isa = PBXBuildFile; fileRef = PS3900000000001F39 /* ParticipantService.swift */; };
 		PSQU0001000100010001B001 /* PendingStatusQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = PSQU0001000100010001F001 /* PendingStatusQueueTests.swift */; };
-		QRB100000000002F17 /* QuickReactionBar.swift in Sources */ = {isa = PBXBuildFile; fileRef = QRB100000000001F17 /* QuickReactionBar.swift */; };
 		ROUT0001000100010001001 /* RouterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ROUT0001000100010001000 /* RouterTests.swift */; };
 		RPCC0001000100010001001 /* ReplyContextCleaner.swift in Sources */ = {isa = PBXBuildFile; fileRef = RPCC0001000100010001000 /* ReplyContextCleaner.swift */; };
 		RPTU002A002A002A002A0002 /* ReportUserView.swift in Sources */ = {isa = PBXBuildFile; fileRef = RPTU001A001A001A001A0001 /* ReportUserView.swift */; };
@@ -869,7 +868,6 @@
 		PROF001A001A001A001A0001 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
 		PS3900000000001F39 /* ParticipantService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ParticipantService.swift; sourceTree = "<group>"; };
 		PSQU0001000100010001F001 /* PendingStatusQueueTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PendingStatusQueueTests.swift; sourceTree = "<group>"; };
-		QRB100000000001F17 /* QuickReactionBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickReactionBar.swift; sourceTree = "<group>"; };
 		ROUT0001000100010001000 /* RouterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RouterTests.swift; sourceTree = "<group>"; };
 		RPCC0001000100010001000 /* ReplyContextCleaner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReplyContextCleaner.swift; sourceTree = "<group>"; };
 		RPTU001A001A001A001A0001 /* ReportUserView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportUserView.swift; sourceTree = "<group>"; };
@@ -1015,7 +1013,6 @@
 			children = (
 				CC1000000000001F10 /* MediaPlayerContext.swift */,
 				CC1700000000001F17 /* MessageOverlayMenu.swift */,
-				QRB100000000001F17 /* QuickReactionBar.swift */,
 				CC2100000000001F21 /* ReportMessageSheet.swift */,
 				CC2200000000001F22 /* MessageDetailSheet.swift */,
 				CC1800000000001F18 /* MessageInfoSheet.swift */,
@@ -2119,7 +2116,6 @@
 				CSHDR001B001B001B001B0002 /* ConversationSocketHandler.swift in Sources */,
 				CC1000000000002F10 /* MediaPlayerContext.swift in Sources */,
 				CC1700000000002F17 /* MessageOverlayMenu.swift in Sources */,
-				QRB100000000002F17 /* QuickReactionBar.swift in Sources */,
 				CC2100000000002F21 /* ReportMessageSheet.swift in Sources */,
 				CC2200000000002F22 /* MessageDetailSheet.swift in Sources */,
 				CC1800000000002F18 /* MessageInfoSheet.swift in Sources */,

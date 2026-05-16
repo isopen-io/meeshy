@@ -223,17 +223,18 @@ struct MessageOverlayMenu: View {
     // MARK: - Emoji Quick Bar (EmojiReactionPicker — shared component)
 
     private var emojiQuickBar: some View {
-        // Meme composant `QuickReactionBar` que le picker inline du
-        // long-press en conversation — garde les deux surfaces
-        // identiques. La cascade gauche→droite est obtenue par un masque
-        // a gradient dont la largeur revelee suit `emojiReveal` : la
-        // frange douce balaye la strip emoji par emoji sans toucher au
-        // composant partage. Le chrome (capsule glass + lueur accent)
-        // reste fixe — seuls les emojis se devoilent.
+        // Shared `EmojiReactionPicker` (MeeshyUI) — the same strip the
+        // in-conversation long-press inline picker uses, so the two surfaces
+        // stay identical. Capped at 280pt to hold the pill silhouette. The
+        // left→right reveal is a gradient mask driven by `emojiReveal`: the
+        // soft fringe sweeps the strip emoji by emoji without touching the
+        // shared component. The chrome (glass capsule + accent glow) stays
+        // fixed — only the emojis reveal.
         let topEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
-        return QuickReactionBar(
-            isDark: isDark,
+        return EmojiReactionPicker(
             quickEmojis: topEmojis,
+            style: isDark ? .dark : .light,
+            scrollable: true,
             onReact: { emoji in
                 EmojiUsageTracker.recordUsage(emoji: emoji)
                 onReact?(emoji)
@@ -245,6 +246,7 @@ struct MessageOverlayMenu: View {
                 forceTab = isEmojiPickerOpen ? .react : .language
             }
         )
+        .frame(maxWidth: 280)
         .padding(.horizontal, 6)
         .padding(.vertical, 5)
         .background(

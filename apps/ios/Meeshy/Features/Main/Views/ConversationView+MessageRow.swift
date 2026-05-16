@@ -642,16 +642,16 @@ extension ConversationView {
     }
 
     private func quickReactionEmojiStrip(messageId: String, emojis: [String]) -> some View {
-        // Shared `QuickReactionBar` component — the same strip is reused
-        // by the long-press `MessageOverlayMenu` so the two surfaces
-        // stay visually identical. The component caps width at 280pt
-        // and wraps the `EmojiReactionPicker` (MeeshyUI) with
-        // scrollable: true + the trailing "+" expand button. All the
-        // contextual behaviour (toggle reaction, close bar, promote to
-        // full detail sheet) lives here in the call site closures.
-        QuickReactionBar(
-            isDark: isDark,
+        // Shared `EmojiReactionPicker` (MeeshyUI) — the same strip the
+        // long-press `MessageOverlayMenu` uses, so the two surfaces stay
+        // visually identical. Capped at 280pt to hold the pill silhouette;
+        // scrollable with the trailing "+" expand button. All the contextual
+        // behaviour (toggle reaction, close bar, promote to the full detail
+        // sheet) lives here in the call-site closures.
+        EmojiReactionPicker(
             quickEmojis: emojis,
+            style: isDark ? .dark : .light,
+            scrollable: true,
             onReact: { emoji in
                 viewModel.toggleReaction(messageId: messageId, emoji: emoji)
                 EmojiUsageTracker.recordUsage(emoji: emoji)
@@ -673,6 +673,7 @@ extension ConversationView {
                 }
             }
         )
+        .frame(maxWidth: 280)
     }
 
     private func quickReactionActionsRow(messageId: String) -> some View {
