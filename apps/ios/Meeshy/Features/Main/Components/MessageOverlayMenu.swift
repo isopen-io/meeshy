@@ -38,6 +38,10 @@ struct MessageOverlayMenu: View {
     @State private var dragOffset: CGFloat = 0
     @State private var forceTab: DetailTab? = nil
     @State private var isEmojiPickerOpen = false
+    // Pilote la cascade gauche→droite de la barre d'emojis : largeur du
+    // masque qui se deroule. 0 = strip masquee, 1 = entierement revelee.
+    // Anime apres `isVisible` avec un leger delai pour staggerer l'entree.
+    @State private var emojiReveal: CGFloat = 0
 
     private let previewCharLimit = 500
     // Expanded emoji set — far more than fits in the viewport, so the
@@ -61,6 +65,12 @@ struct MessageOverlayMenu: View {
     // full MessageDetailSheet (translations, full react picker, every
     // action).
     private let gridVisibleHeight: CGFloat = 195
+
+    // Accent couleur de la conversation — sert de teinte de marque pour
+    // les lueurs, contours et ombres du chrome de l'overlay (panneau,
+    // barre d'emojis). Distinct de `bubbleAccentHex` qui, lui, teinte
+    // la bulle previsualisee selon l'expediteur.
+    private var overlayAccent: Color { Color(hex: contactColor) }
 
     // MARK: - Bubble preview helpers (mirror BubbleStandardLayout)
 
@@ -131,78 +141,81 @@ struct MessageOverlayMenu: View {
             ZStack {
                 dismissBackground
 
-                VStack(spacing: 0) {
-                    // Top tappable area — `maxHeight: .infinity` lets this
-                    // spacer absorb whatever room is left above the
-                    // message+emojiBar+panel cluster. The cluster therefore
-                    // sits anchored to the bottom of the screen at rest,
-                    // and ONLY moves up when the user drags the detail
-                    // panel up (panelHeight grows → cluster pushed
-                    // upward). This is the natural iMessage-style layout
-                    // the user expects: message just above the emoji
-                    // strip, emoji strip just above the menu sheet.
+                VStack(spacing: 10) {
+                    // Zone tappable haute — `maxHeight: .infinity` laisse ce
+                    // spacer absorber l'espace au-dessus du cluster
+                    // bulle+emojis+panneau. Le cluster reste donc ancre vers
+                    // le bas, juste au-dessus du panneau ; le preview se
+                    // place plus haut (vers la zone des messages reels) que
+                    // l'ancien centrage plein ecran. Un tap ici ferme.
                     Color.clear
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                         .contentShape(Rectangle())
                         .onTapGesture { dismiss() }
 
-                    // Message preview — composite animation: slides DOWN
-                    // from above + LIFT-OFF (scale 0.92 → 1.04 → 1.0 with
-                    // an over-shoot spring) so it visually detaches from
-                    // its row in the conversation, floats forward, then
-                    // settles into its anchored position. The HStack uses
-                    // a generous Spacer(minLength: 50) on the opposite
-                    // side so the bubble truly hugs its native edge
-                    // (right for sent, left for received) — matching the
-                    // 0.70 max-width applied inside `messagePreview`.
-                    HStack {
-                        if message.isMe { Spacer(minLength: 50) }
+                    // Apercu du message — animation composite : zoom-spring
+                    // depuis le coin natif de la bulle (haut-droite pour les
+                    // messages envoyes, haut-gauche pour les recus) + leger
+                    // glissement vertical. La bulle se detache visuellement
+                    // de sa rangee, flotte vers l'avant puis se pose. Le
+                    // `Spacer(minLength: 44)` du cote oppose colle la bulle
+                    // a son bord natif (cf. cap 0.70 dans `messagePreview`).
+                    HStack(spacing: 0) {
+                        if message.isMe { Spacer(minLength: 44) }
                         messagePreview
-                        if !message.isMe { Spacer(minLength: 50) }
+                        if !message.isMe { Spacer(minLength: 44) }
                     }
                     .fixedSize(horizontal: false, vertical: true)
-                    .padding(.bottom, 4)
+                    .padding(.horizontal, 4)
                     .opacity(isVisible ? 1 : 0)
-                    .offset(y: isVisible ? 0 : -80)
-                    .scaleEffect(isVisible ? 1.0 : 0.92, anchor: message.isMe ? .topTrailing : .topLeading)
-                    .shadow(color: Color.black.opacity(isVisible ? 0.18 : 0), radius: 18, y: 8)
+                    .offset(y: isVisible ? 0 : -28)
+                    .scaleEffect(
+                        isVisible ? 1.0 : 0.86,
+                        anchor: message.isMe ? .topTrailing : .topLeading
+                    )
 
-                    // Emoji quick bar — same horizontal alignment as the
-                    // bubble (right for sent, left for received) so it
-                    // visually attaches to the message side instead of
-                    // floating centered. The reduced offset (-40) vs the
-                    // preview's -80 staggers the convergence.
-                    HStack {
-                        if message.isMe { Spacer() }
+                    // Barre d'emojis rapides — meme alignement horizontal
+                    // que la bulle. L'entree est decalee (stagger) : le
+                    // conteneur apparait apres le preview, puis la cascade
+                    // gauche→droite des emojis se joue via le masque
+                    // `emojiReveal` (cf. `emojiQuickBar`).
+                    HStack(spacing: 0) {
+                        if message.isMe { Spacer(minLength: 0) }
                         emojiQuickBar
-                        if !message.isMe { Spacer() }
+                        if !message.isMe { Spacer(minLength: 0) }
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.bottom, 2)
+                    .padding(.horizontal, 14)
                     .opacity(isVisible ? 1 : 0)
-                    .offset(y: isVisible ? 0 : -40)
+                    .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
+                    .offset(y: isVisible ? 0 : 18)
 
-                    // Detail panel rises from the bottom — every element
-                    // animates with the same spring so they converge into
-                    // a single visually-linked block at rest.
+                    // Le panneau de detail monte depuis le bas — meme spring
+                    // que les autres elements pour qu'ils convergent en un
+                    // bloc visuellement lie au repos.
                     detailPanel(safeBottom: safeBottom)
                         .frame(height: panelHeight)
-                        .offset(y: isVisible ? 0 : panelBaseHeight)
+                        .offset(y: isVisible ? 0 : panelBaseHeight + 40)
                 }
             }
         }
         .ignoresSafeArea()
         .onAppear {
             HapticFeedback.medium()
-            // Spring entry — iMessage-grade response curve, but the panel
-            // starts COLLAPSED (`dragOffset = 0`) so the bubble preview
-            // owns the centre of the screen. The user can drag the handle
-            // up to expand the full detail sheet on demand. Auto-expanding
-            // to -400 (the previous behaviour) buried the bubble preview
-            // under the panel.
-            withAnimation(.spring(response: 0.38, dampingFraction: 0.78)) {
+            // Entree spring — courbe de reponse de qualite iMessage. Le
+            // panneau demarre REPLIE (`dragOffset = 0`) pour laisser le
+            // preview de bulle occuper la scene. La cascade d'emojis est
+            // declenchee juste apres via un Task differe.
+            withAnimation(.spring(response: 0.42, dampingFraction: 0.74)) {
                 isVisible = true
                 dragOffset = 0
+            }
+            // Stagger : la cascade gauche→droite des emojis demarre une
+            // fois la bulle posee, pour une entree sequencee et lisible.
+            Task { @MainActor in
+                try? await Task.sleep(nanoseconds: 130_000_000)
+                withAnimation(.easeOut(duration: 0.34)) {
+                    emojiReveal = 1
+                }
             }
         }
     }
@@ -210,17 +223,13 @@ struct MessageOverlayMenu: View {
     // MARK: - Emoji Quick Bar (EmojiReactionPicker — shared component)
 
     private var emojiQuickBar: some View {
-        // Same `QuickReactionBar` component the in-conversation
-        // long-press inline picker uses — keeps the two surfaces
-        // visually identical so a redesign of the strip propagates
-        // automatically. Pull a wider list (20) so the user can swipe
-        // horizontally to discover beyond the 6 visible defaults; the
-        // recency tracker front-loads most-used emojis without losing
-        // the long tail. The trailing "+" expand button toggles the
-        // bottom detail panel between the React tab (full emoji
-        // picker) and the Language tab (translation flags / settings)
-        // so the user can promote the inline strip to the full picker
-        // without dismissing the overlay.
+        // Meme composant `QuickReactionBar` que le picker inline du
+        // long-press en conversation — garde les deux surfaces
+        // identiques. La cascade gauche→droite est obtenue par un masque
+        // a gradient dont la largeur revelee suit `emojiReveal` : la
+        // frange douce balaye la strip emoji par emoji sans toucher au
+        // composant partage. Le chrome (capsule glass + lueur accent)
+        // reste fixe — seuls les emojis se devoilent.
         let topEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
         return QuickReactionBar(
             isDark: isDark,
@@ -236,25 +245,70 @@ struct MessageOverlayMenu: View {
                 forceTab = isEmojiPickerOpen ? .react : .language
             }
         )
+        .padding(.horizontal, 6)
+        .padding(.vertical, 5)
+        .background(
+            Capsule(style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    Capsule(style: .continuous)
+                        .fill(isDark ? Color.black.opacity(0.22) : Color.white.opacity(0.55))
+                )
+                .overlay(
+                    Capsule(style: .continuous)
+                        .stroke(overlayAccent.opacity(isDark ? 0.32 : 0.20), lineWidth: 0.75)
+                )
+        )
+        .shadow(color: overlayAccent.opacity(isVisible ? 0.22 : 0), radius: 16, y: 6)
+        .shadow(color: .black.opacity(isVisible ? 0.16 : 0), radius: 10, y: 3)
+        // Masque-cascade : un gradient horizontal dont le bord nuance
+        // balaye la barre. La frange douce de 0.12 donne l'illusion que
+        // les emojis se materialisent un a un, gauche→droite.
+        .mask(
+            GeometryReader { proxy in
+                LinearGradient(
+                    stops: [
+                        .init(color: .black, location: 0),
+                        .init(color: .black, location: max(0, emojiReveal - 0.12)),
+                        .init(color: .clear, location: min(1, emojiReveal))
+                    ],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(width: proxy.size.width, height: proxy.size.height)
+            }
+        )
     }
 
     // MARK: - Dismiss Background (light blur — silhouettes stay readable)
 
     private var dismissBackground: some View {
-        // Light blur (thinMaterial instead of ultraThinMaterial) with a
-        // restrained dim layer. Bubble silhouettes / colors / outlines
-        // remain distinguishable behind, but the text underneath blurs
-        // out so it doesn't compete with the centered preview. iMessage
-        // heavy blur was too aggressive; flat opacity-only had no
-        // material at all and let the text race for attention.
+        // Flou doux (`thinMaterial`) double d'une voile sombre retenue +
+        // une lueur radiale teintee a l'accent de la conversation. Les
+        // silhouettes de bulles restent lisibles derriere, mais le texte
+        // sous-jacent se floute pour ne pas concurrencer le preview. La
+        // lueur indigo/accent ancre l'overlay dans l'identite Meeshy.
         ZStack {
             Rectangle()
                 .fill(.thinMaterial)
                 .opacity(isVisible ? 1 : 0)
+
             Color.black
-                .opacity(isVisible ? 0.18 : 0)
+                .opacity(isVisible ? 0.22 : 0)
+
+            RadialGradient(
+                colors: [
+                    overlayAccent.opacity(isDark ? 0.30 : 0.20),
+                    Color.clear
+                ],
+                center: .bottom,
+                startRadius: 12,
+                endRadius: 520
+            )
+            .opacity(isVisible ? 1 : 0)
+            .blendMode(isDark ? .screen : .multiply)
         }
-        .animation(.easeOut(duration: 0.22), value: isVisible)
+        .animation(.easeOut(duration: 0.26), value: isVisible)
         .onTapGesture { dismiss() }
     }
 
@@ -271,13 +325,24 @@ struct MessageOverlayMenu: View {
         // bubble the user just long-pressed — not a wider clone. The
         // `alignment` parameter pins the (now-compact) content to the
         // bubble's native edge inside the frame, working in tandem
-        // with the parent HStack's Spacer(minLength: 50).
+        // with the parent HStack's Spacer(minLength: 44).
         .frame(
             maxWidth: UIScreen.main.bounds.width * 0.70,
             alignment: message.isMe ? .trailing : .leading
         )
         .padding(.horizontal, 8)
-        .shadow(color: .black.opacity(0.2), radius: 16, y: 6)
+        // Halo lumineux ancre a l'accent de la conversation + ombre
+        // profonde : le preview semble decolle de la liste, flottant
+        // au-dessus du flou. Les deux ombres ne s'allument qu'une fois
+        // l'overlay visible pour une apparition propre.
+        .shadow(
+            color: overlayAccent.opacity(isVisible ? 0.28 : 0),
+            radius: 22, y: 4
+        )
+        .shadow(
+            color: .black.opacity(isVisible ? 0.26 : 0),
+            radius: 16, y: 10
+        )
     }
 
     private var previewSenderHeader: some View {
@@ -443,7 +508,16 @@ struct MessageOverlayMenu: View {
                 isDark: isDark
             )
         )
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        // Liseré subtil a la teinte de la bulle — donne du relief au
+        // preview flottant sans alourdir la lecture.
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(
+                    Color(hex: bubbleAccentHex).opacity(message.isMe ? 0.0 : 0.18),
+                    lineWidth: 0.75
+                )
+        )
     }
 
     // MARK: - Preview Image Grid
@@ -566,10 +640,11 @@ struct MessageOverlayMenu: View {
         .background(panelBackground)
         .clipShape(
             UnevenRoundedRectangle(
-                topLeadingRadius: 20,
+                topLeadingRadius: 26,
                 bottomLeadingRadius: 0,
                 bottomTrailingRadius: 0,
-                topTrailingRadius: 20
+                topTrailingRadius: 26,
+                style: .continuous
             )
         )
         .gesture(panelDragGesture)
@@ -578,10 +653,10 @@ struct MessageOverlayMenu: View {
     private var panelDragHandle: some View {
         VStack(spacing: 0) {
             Capsule()
-                .fill(theme.textMuted.opacity(0.4))
-                .frame(width: 36, height: 4)
+                .fill(overlayAccent.opacity(0.45))
+                .frame(width: 40, height: 5)
                 .padding(.top, 10)
-                .padding(.bottom, 4)
+                .padding(.bottom, 5)
         }
         .frame(maxWidth: .infinity)
         .contentShape(Rectangle())
@@ -612,37 +687,49 @@ struct MessageOverlayMenu: View {
     }
 
     private var panelBackground: some View {
-        UnevenRoundedRectangle(
-            topLeadingRadius: 20,
+        // Chrome verre du panneau : `.ultraThinMaterial` + voile de
+        // tonalite, liseré accent en haut et lueur de marque douce. Les
+        // coins continus (26pt) et l'ombre montante donnent l'illusion
+        // d'une feuille qui monte depuis le bas de l'ecran.
+        let shape = UnevenRoundedRectangle(
+            topLeadingRadius: 26,
             bottomLeadingRadius: 0,
             bottomTrailingRadius: 0,
-            topTrailingRadius: 20
+            topTrailingRadius: 26,
+            style: .continuous
         )
-        .fill(.ultraThinMaterial)
-        .overlay(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 20,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 20
+        return shape
+            .fill(.ultraThinMaterial)
+            .overlay(
+                shape.fill(isDark ? Color.black.opacity(0.30) : Color.white.opacity(0.72))
             )
-            .fill(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.7))
-        )
-        .overlay(
-            UnevenRoundedRectangle(
-                topLeadingRadius: 20,
-                bottomLeadingRadius: 0,
-                bottomTrailingRadius: 0,
-                topTrailingRadius: 20
+            .overlay(
+                shape.fill(
+                    LinearGradient(
+                        colors: [
+                            overlayAccent.opacity(isDark ? 0.16 : 0.10),
+                            Color.clear
+                        ],
+                        startPoint: .top,
+                        endPoint: .center
+                    )
+                )
             )
-            .stroke(
-                isDark
-                    ? Color.white.opacity(0.12)
-                    : Color.black.opacity(0.06),
-                lineWidth: 0.5
+            .overlay(
+                shape.stroke(
+                    LinearGradient(
+                        colors: [
+                            overlayAccent.opacity(isDark ? 0.40 : 0.26),
+                            (isDark ? Color.white : Color.black).opacity(isDark ? 0.10 : 0.05)
+                        ],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    ),
+                    lineWidth: 0.75
+                )
             )
-        )
-        .shadow(color: .black.opacity(0.2), radius: 20, y: -4)
+            .shadow(color: overlayAccent.opacity(0.20), radius: 26, y: -6)
+            .shadow(color: .black.opacity(0.22), radius: 20, y: -4)
     }
 
     // MARK: - Quick Actions for Grid
@@ -718,20 +805,29 @@ struct MessageOverlayMenu: View {
 
     private func dismiss() {
         HapticFeedback.light()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        // Sortie symetrique de l'entree : la cascade emoji se replie
+        // d'abord (droite→gauche via le masque), puis tout l'overlay se
+        // retracte vers le coin natif de la bulle.
+        withAnimation(.easeIn(duration: 0.16)) {
+            emojiReveal = 0
+        }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             isVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
             isPresented = false
         }
     }
 
     private func dismissThen(_ action: @escaping () -> Void) {
         HapticFeedback.light()
-        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+        withAnimation(.easeIn(duration: 0.16)) {
+            emojiReveal = 0
+        }
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             isVisible = false
         }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.26) {
             isPresented = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
                 action()
