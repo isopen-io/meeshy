@@ -125,3 +125,21 @@
 - **Server-side copy S3** (`CopyObject`) : non applicable car stockage actuel = volumes Docker locaux. Sera la SOTA quand on migrera vers MinIO/R2 (cf. Pilier 7 audit).
 **Cons**: dpend du filesystem hte (mais fallback gracieux)
 **Source**: `docs/superpowers/specs/2026-05-06-composer-based-story-repost-sota-audit.md` Pilier 3
+
+## 2026-05-16 : Envoi de messages WebSocket-first + fallback REST
+
+**Statut**: Accepte
+**Contexte**: L'app iOS envoyait TOUS les messages texte via REST (`POST /conversations/:id/messages`), sans jamais tenter le WebSocket. Le gateway expose pourtant le handler `message:send` (utilise par le web en primaire), et tous les autres evenements temps reel — reactions, commentaires, statuts de lecture — transitent deja par Socket.IO. REST etait cense n'etre qu'un fallback ; iOS avait simplement diverge (aucun emetteur `message:send` cote SDK).
+**Decision**:
+- SDK `MessageSocketManager.sendAsync(...)` emet `message:send` avec ACK (`emitWithAck` + timeout 10s, miroir de `sendWithAttachmentsAsync`). Retourne `SendMessageAck` (`messageId`, `clientMessageId`, `createdAt`) ou `nil`.
+- `ConversationViewModel.sendMessage` tente le WebSocket d'abord, puis bascule sur REST si : socket deconnecte, pas d'ACK dans le delai, ou erreur serveur.
+- Le gateway `_sendResponse` echoe desormais `createdAt` dans l'ACK socket pour que la ligne optimiste recoive l'horodatage serveur sans attendre le broadcast `message:new`.
+- L'evenement `message:send` a ete etendu pour porter tout le jeu d'effets de message — `isBlurred`, `expiresAt` (ephemere), `effectFlags` (bitfield), `isViewOnce`, `maxViewOnceCount` — ajoutes au schema Zod `SocketMessageSendSchema` et au `messageRequest` du handler `handleMessageSend`, a parite stricte avec la route REST. `MessageProcessor.saveMessage` recompose le bitfield `effectFlags` (bits BLURRED / EPHEMERAL / VIEW_ONCE) a l'identique pour les deux transports.
+- Le view-once (`isViewOnce` / `maxViewOnceCount`) etait une feature morte cote envoi : ni `SendMessageBody` (REST) ni `SocketMessageSendSchema` (WS) ne l'acceptaient, et `MessageProcessor.saveMessage` ne l'ecrivait pas — le message etait toujours cree avec `isViewOnce = false`. Cable de bout en bout sur les DEUX transports + le processor + le payload broadcast `message:new` (`maxViewOnceCount` ajoute a `_buildMessagePayload`). Les effets bitfield purs (shake, zoom, glow, confetti...) etaient deja transportes par `effectFlags` sur les deux voies.
+**Garde (reste sur REST)**: messages E2EE (le chiffrement iOS produit un payload de forme REST — `content` base64 + `isEncrypted`/`encryptionMode` — et non la forme socket `encryptedContent`/`encryptionMetadata` du web), et messages avec pieces jointes (voie WS dediee `message:send-with-attachments`).
+**Justification**: parite avec le web et avec les autres evenements temps reel ; reutilise la connexion socket deja ouverte (pas de handshake HTTP) ; ACK socket = transition horloge -> simple coche plus rapide. La livraison temps reel aux destinataires (broadcast `message:new`) etait deja en WS quel que soit le transport d'envoi — ce changement aligne juste le transport d'envoi.
+**Securite by-design**: si la voie WS est cassee ou indisponible, le comportement degrade exactement vers l'ancien chemin REST (eprouve). REST n'est jamais retire.
+**Alternatives rejetees**:
+- **E2EE iOS en WS** : necessiterait de retravailler le bloc de chiffrement iOS pour produire `encryptedContent`/`encryptionMetadata` (forme socket, comme le web) ; chantier separe — reporte.
+- **WS-only sans fallback** : fragile (socket en handshake au demarrage, coupures reseau) — REST reste indispensable comme filet.
+**Cons**: deux chemins d'envoi a maintenir (WS + REST), mais c'est deja le cas (REST + `message:send-with-attachments`).

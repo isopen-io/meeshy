@@ -1150,20 +1150,34 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Send With Attachments
 
-    /// ACK returned by the gateway after `message:send-with-attachments`.
+    /// ACK returned by the gateway after `message:send` / `message:send-with-attachments`.
     /// Phase 4 (spec §6.2) requires `_sendResponse()` to echo back the same
     /// `clientMessageId` the client supplied in the request so the local
     /// outbox/optimistic layer can match the row without scraping the
     /// `message:new` broadcast. `clientMessageId` is optional on the wire
     /// during the rollout window — older gateway builds drop the field.
+    /// `createdAt` carries the authoritative server timestamp so the WS-first
+    /// send path can stamp the optimistic row without waiting for the
+    /// `message:new` broadcast; it is `nil` against older gateway builds.
     public struct SendMessageAck: Sendable {
         public let messageId: String
         public let clientMessageId: String?
+        public let createdAt: Date?
 
-        public init(messageId: String, clientMessageId: String?) {
+        public init(messageId: String, clientMessageId: String?, createdAt: Date? = nil) {
             self.messageId = messageId
             self.clientMessageId = clientMessageId
+            self.createdAt = createdAt
         }
+    }
+
+    /// Parses the ISO-8601 `createdAt` echoed in a send ACK, tolerating both
+    /// the fractional-seconds and basic forms. Returns `nil` on any mismatch
+    /// so the caller can fall back to the local send time.
+    private static func parseAckDate(_ value: Any?) -> Date? {
+        guard let string = value as? String, !string.isEmpty else { return nil }
+        return isoFormatterWithFractional.date(from: string)
+            ?? isoFormatterBasic.date(from: string)
     }
 
     private func buildAttachmentPayload(
@@ -1233,7 +1247,81 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                    let data = response["data"] as? [String: Any],
                    let messageId = data["messageId"] as? String {
                     let ackCid = data["clientMessageId"] as? String ?? cid
-                    continuation.resume(returning: SendMessageAck(messageId: messageId, clientMessageId: ackCid))
+                    continuation.resume(returning: SendMessageAck(
+                        messageId: messageId,
+                        clientMessageId: ackCid,
+                        createdAt: MessageSocketManager.parseAckDate(data["createdAt"])
+                    ))
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+    }
+
+    // MARK: - Send Text (WebSocket-first)
+
+    /// Emits a plain-text `message:send` over the open Socket.IO connection and
+    /// awaits the gateway ACK. This is the WebSocket-first send path used for
+    /// regular text messages — parity with reactions / comments / status, which
+    /// already travel over the socket. Carries the full message effect set
+    /// (`isBlurred`, `expiresAt` for ephemeral, `effectFlags` bitfield,
+    /// `isViewOnce` / `maxViewOnceCount`) at parity with the REST route.
+    ///
+    /// Returns the `SendMessageAck` (server `messageId`, echoed
+    /// `clientMessageId`, server `createdAt`) on success, or `nil` on timeout /
+    /// no socket / server error so the caller can fall back to the REST send.
+    ///
+    /// NOT for E2EE payloads or attachments — the `message:send` event does not
+    /// transport those; the caller routes them through REST or
+    /// `sendWithAttachments`.
+    public func sendAsync(
+        conversationId: String,
+        content: String?,
+        originalLanguage: String? = nil,
+        replyToId: String? = nil,
+        storyReplyToId: String? = nil,
+        forwardedFromId: String? = nil,
+        forwardedFromConversationId: String? = nil,
+        messageType: String? = nil,
+        isBlurred: Bool? = nil,
+        expiresAt: Date? = nil,
+        effectFlags: UInt32? = nil,
+        isViewOnce: Bool? = nil,
+        maxViewOnceCount: Int? = nil,
+        clientMessageId: String? = nil,
+        timeoutSeconds: Double = 10
+    ) async -> SendMessageAck? {
+        guard let socket else { return nil }
+        let cid = clientMessageId ?? ClientMessageId.generate()
+        var payload: [String: Any] = [
+            "conversationId": conversationId,
+            "content": content ?? "",
+            "clientMessageId": cid
+        ]
+        if let originalLanguage { payload["originalLanguage"] = originalLanguage }
+        if let messageType { payload["messageType"] = messageType }
+        if let replyToId { payload["replyToId"] = replyToId }
+        if let storyReplyToId { payload["storyReplyToId"] = storyReplyToId }
+        if let forwardedFromId { payload["forwardedFromId"] = forwardedFromId }
+        if let forwardedFromConversationId { payload["forwardedFromConversationId"] = forwardedFromConversationId }
+        if let isBlurred { payload["isBlurred"] = isBlurred }
+        if let expiresAt { payload["expiresAt"] = MessageSocketManager.isoFormatterWithFractional.string(from: expiresAt) }
+        if let effectFlags { payload["effectFlags"] = Int(effectFlags) }
+        if let isViewOnce { payload["isViewOnce"] = isViewOnce }
+        if let maxViewOnceCount { payload["maxViewOnceCount"] = maxViewOnceCount }
+        return await withCheckedContinuation { continuation in
+            socket.emitWithAck("message:send", payload).timingOut(after: timeoutSeconds) { items in
+                if let response = items.first as? [String: Any],
+                   let success = response["success"] as? Bool, success,
+                   let data = response["data"] as? [String: Any],
+                   let messageId = data["messageId"] as? String {
+                    let ackCid = data["clientMessageId"] as? String ?? cid
+                    continuation.resume(returning: SendMessageAck(
+                        messageId: messageId,
+                        clientMessageId: ackCid,
+                        createdAt: MessageSocketManager.parseAckDate(data["createdAt"])
+                    ))
                 } else {
                     continuation.resume(returning: nil)
                 }

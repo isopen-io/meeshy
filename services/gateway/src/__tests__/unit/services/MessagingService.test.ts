@@ -935,14 +935,17 @@ describe('MessagingService', () => {
       mockPrisma.conversation.update.mockResolvedValue({});
       mockHandleNewMessage.mockRejectedValue(new Error('Translation service unavailable'));
 
-      // Should still succeed - translation errors should not fail the message
+      // Should still succeed - translation errors should not fail the message.
+      // Translation is queued as a background post-save side effect (off the
+      // ACK path), so the send response always reports "pending"; a translator
+      // failure is captured and logged asynchronously, never surfaced here.
       const response = await service.handleMessage(
         validRequest,
         testParticipantId
       );
 
       expect(response.success).toBe(true);
-      expect(response.metadata.translationStatus?.status).toBe('failed');
+      expect(response.metadata.translationStatus?.status).toBe('pending');
     });
 
     it('should include requestId in error responses', async () => {

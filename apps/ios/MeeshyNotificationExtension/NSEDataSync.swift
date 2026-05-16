@@ -221,4 +221,124 @@ nonisolated enum NSEDataSync {
         }
         return token
     }
+
+    // MARK: - Background server POST (delivery receipts, …)
+    //
+    // Reliability-first, latency-tolerant calls from the NSE. The request is
+    // handed to the system transfer daemon (`nsurlsessiond`), so it survives
+    // the extension being suspended the instant it calls `contentHandler` —
+    // unlike `URLSession.shared`, whose tasks die with the process. This is
+    // the standard path for "fire-and-forget to the gateway" from the
+    // extension; it is NOT for anything that must enrich the banner (a
+    // background transfer has no latency guarantee).
+
+    /// Minimal delegate so the background `URLSession` is valid. No completion
+    /// handling: the daemon carries the request to completion on its own, and
+    /// a lost receipt is acceptable (the author's checkmark simply upgrades
+    /// later, when the recipient opens the app).
+    private final class BackgroundSessionDelegate: NSObject, URLSessionDelegate, @unchecked Sendable {}
+
+    /// One background `URLSession` per NSE process. The identifier carries a
+    /// per-process UUID because iOS may run several NSE instances concurrently
+    /// for rapid-fire pushes, and two live sessions sharing an identifier is a
+    /// documented conflict. A `static let` keeps it to a single session object
+    /// within this process so the daemon can coalesce its tasks.
+    private static let backgroundSession: URLSession = {
+        let config = URLSessionConfiguration.background(
+            withIdentifier: "me.meeshy.nse.bg.\(UUID().uuidString)"
+        )
+        config.sharedContainerIdentifier = appGroupId
+        config.isDiscretionary = false
+        config.sessionSendsLaunchEvents = false
+        return URLSession(
+            configuration: config,
+            delegate: BackgroundSessionDelegate(),
+            delegateQueue: nil
+        )
+    }()
+
+    /// Fire-and-forget authenticated POST to the gateway via the background
+    /// session. `path` is appended to the resolved (allowlisted) API base URL.
+    /// The Bearer JWT is read from the shared Keychain — same trust model as
+    /// `syncMessage`, and the base URL is never taken from the push payload.
+    static func enqueueBackgroundPost(path: String, body: Data) {
+        guard let token = readAuthToken() else { return }
+
+        let apiBaseURL = resolveApiBaseURL()
+        guard let url = URL(string: "\(apiBaseURL)\(path)") else { return }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+
+        // Background upload tasks must read their body from a file.
+        guard let bodyFileURL = writeBackgroundBodyFile(body) else { return }
+
+        let task = backgroundSession.uploadTask(with: request, fromFile: bodyFileURL)
+        task.resume()
+    }
+
+    /// POST a delivery receipt for a message received via push while the user
+    /// was offline. The gateway marks the message delivered for this recipient
+    /// and broadcasts `read-status:updated`, so the author's checkmark
+    /// upgrades ✓ → ✓✓ without waiting for the recipient to open the app.
+    /// The gateway still enforces the recipient's `showReadReceipts` setting.
+    static func postDeliveryReceipt(conversationId: String, messageId: String) {
+        let cid = conversationId.addingPercentEncoding(
+            withAllowedCharacters: .urlPathAllowed
+        ) ?? conversationId
+        let mid = messageId.addingPercentEncoding(
+            withAllowedCharacters: .urlPathAllowed
+        ) ?? messageId
+        enqueueBackgroundPost(
+            path: "/api/v1/conversations/\(cid)/messages/\(mid)/delivery-receipt",
+            body: Data("{}".utf8)
+        )
+    }
+
+    /// Persists the POST body to the App Group container — a background upload
+    /// task reads its body from a file, and the file must outlive the
+    /// extension. Old files are pruned opportunistically since the system does
+    /// not delete them once the transfer completes.
+    private static func writeBackgroundBodyFile(_ body: Data) -> URL? {
+        guard let container = FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupId
+        ) else { return nil }
+
+        let dir = container.appendingPathComponent("nse_bg_uploads", isDirectory: true)
+        if !FileManager.default.fileExists(atPath: dir.path) {
+            try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        }
+        pruneBackgroundBodyFiles(in: dir)
+
+        let fileURL = dir.appendingPathComponent("\(UUID().uuidString).json")
+        do {
+            try body.write(to: fileURL, options: [.atomic])
+            return fileURL
+        } catch {
+            return nil
+        }
+    }
+
+    /// Best-effort removal of body files older than one hour (their transfers
+    /// have long since completed or failed).
+    private static func pruneBackgroundBodyFiles(in dir: URL) {
+        let fm = FileManager.default
+        guard let files = try? fm.contentsOfDirectory(
+            at: dir,
+            includingPropertiesForKeys: [.contentModificationDateKey]
+        ) else { return }
+
+        let cutoff = Date().addingTimeInterval(-3600)
+        for file in files {
+            let modified = (try? file.resourceValues(
+                forKeys: [.contentModificationDateKey]
+            ))?.contentModificationDate
+            if let modified, modified < cutoff {
+                try? fm.removeItem(at: file)
+            }
+        }
+    }
 }

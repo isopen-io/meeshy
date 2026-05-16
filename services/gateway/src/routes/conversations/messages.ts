@@ -2,6 +2,7 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import * as path from 'path';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
+import { MessagingService } from '../../services/messaging/MessagingService';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
 import { conversationStatsService } from '../../services/ConversationStatsService';
@@ -52,6 +53,8 @@ const SendMessageBodySchema = z.object({
   isBlurred: z.boolean().optional(),
   expiresAt: z.string().optional(),
   effectFlags: z.number().int().optional(),
+  isViewOnce: z.boolean().optional(),
+  maxViewOnceCount: z.number().int().optional(),
   mentionedUserIds: z.array(z.string()).optional(),
 });
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
@@ -149,6 +152,25 @@ export function registerMessagesRoutes(
   const attachmentService = new AttachmentService(prisma);
   const socketIOHandler = (fastify as any).socketIOHandler;
   const privacyPreferencesService = new PrivacyPreferencesService(prisma);
+
+  // `MessagingService` is stateless across requests, so it is built once and
+  // reused. The POST /messages handler previously re-imported the module and
+  // reconstructed the whole dependency graph (validator, processor,
+  // AttachmentService, …) on every send — pure overhead on the send hot path.
+  // Construction is lazy so `fastify.notificationService` is read only after
+  // it has been decorated (decoration order vs route registration is not
+  // guaranteed).
+  let messagingService: MessagingService | undefined;
+  function getMessagingService(): MessagingService {
+    if (!messagingService) {
+      messagingService = new MessagingService(
+        prisma,
+        translationService,
+        (fastify as any).notificationService
+      );
+    }
+    return messagingService;
+  }
 
   async function broadcastReadStatus(
     userId: string,
@@ -1307,6 +1329,8 @@ export function registerMessagesRoutes(
         attachmentIds,
         isBlurred,
         expiresAt,
+        isViewOnce,
+        maxViewOnceCount,
         mentionedUserIds
       } = bodyResult.data as SendMessageBody;
 
@@ -1321,6 +1345,7 @@ export function registerMessagesRoutes(
       let effectFlags = (bodyResult.data as any).effectFlags ?? 0;
       if (isBlurred && !(effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED)) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
       if (expiresAt && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+      if (isViewOnce && !(effectFlags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE)) effectFlags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
 
       const userId = authRequest.authContext.userId;
       let participantId: string;
@@ -1352,13 +1377,8 @@ export function registerMessagesRoutes(
         ...corr, step: 'http.message.post', phase: 'start'
       });
 
-      // Utiliser le MessagingService unifié
-      const { MessagingService } = await import('../../services/messaging/MessagingService');
-      const messagingService = new MessagingService(
-        prisma,
-        translationService,
-        (fastify as any).notificationService
-      );
+      // MessagingService unifié — instance partagée construite une seule fois
+      const messagingService = getMessagingService();
 
       const messageRequest = {
         conversationId,
@@ -1374,6 +1394,8 @@ export function registerMessagesRoutes(
         isBlurred,
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,
         effectFlags,
+        isViewOnce,
+        maxViewOnceCount,
         encryptedPayload: isEncrypted ? {
           ciphertext: encryptedContent!,
           mode: encryptionMode as any,
