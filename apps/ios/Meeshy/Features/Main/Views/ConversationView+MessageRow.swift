@@ -730,6 +730,39 @@ extension ConversationView {
         }
     }
 
+    /// Floating quick-reaction bar anchored to the bubble that opened it.
+    /// The bar sits just below the tapped bubble and flips above when the
+    /// message hugs the composer — see `QuickReactionBarPlacement`. The
+    /// full-screen `Color.clear` backdrop dismisses the bar on tap and also
+    /// blocks the list from scrolling, so the captured anchor never drifts.
+    @ViewBuilder
+    func quickReactionBarOverlay(for messageId: String) -> some View {
+        GeometryReader { proxy in
+            let container = proxy.frame(in: .global)
+            let placement = QuickReactionBarPlacement.compute(
+                anchor: overlayState.quickReactionAnchorFrame,
+                container: container,
+                barHeight: QuickReactionBarPlacement.estimatedEmojiBarHeight,
+                topLimit: QuickReactionBarPlacement.headerClearance,
+                composerHeight: composerHeight,
+                gap: QuickReactionBarPlacement.bubbleGap
+            )
+            ZStack(alignment: placement.isAbove ? .bottom : .top) {
+                Color.clear
+                    .contentShape(Rectangle())
+                    .onTapGesture { closeReactionBar() }
+
+                quickReactionBar(for: messageId)
+                    .padding(.horizontal, 16)
+                    .padding(placement.isAbove ? .bottom : .top, placement.inset)
+                    .frame(maxWidth: .infinity, alignment: .center)
+            }
+            .frame(width: container.width, height: container.height)
+        }
+        .ignoresSafeArea()
+        .transition(.scale(scale: 0.9).combined(with: .opacity))
+    }
+
     // MARK: - Failed Message Retry
     func failedMessageBar(for msg: Message) -> some View {
         HStack(spacing: 8) {
@@ -809,5 +842,65 @@ extension ConversationView {
         }
         .accessibilityLabel(label)
         .accessibilityHint("Aller a la premiere reponse de ce message")
+    }
+}
+
+// MARK: - Quick Reaction Bar Placement
+
+/// Pure geometry helper deciding where the floating quick-reaction bar sits
+/// relative to the bubble that opened it. Kept free of SwiftUI/UIKit view
+/// types (only `CGRect`/`CGFloat`) so it is unit-testable in isolation.
+enum QuickReactionBarPlacement {
+    /// Vertical gap between the bubble cell and the reaction bar. Generous on
+    /// purpose so the message's own reaction stickers — which bleed a few
+    /// points below the bubble — stay fully visible above the bar.
+    static let bubbleGap: CGFloat = 16
+    /// Rough height of the emoji-only quick-reaction bar. Used solely to pick
+    /// the below/above side; the bar self-sizes once rendered.
+    static let estimatedEmojiBarHeight: CGFloat = 56
+    /// Clearance kept below the floating conversation header so a bar flipped
+    /// above a high bubble never tucks under the header chrome.
+    static let headerClearance: CGFloat = 96
+
+    struct Result: Equatable {
+        /// `true` when the bar is placed above the bubble (no room below).
+        let isAbove: Bool
+        /// Padding applied inside the placement container: top padding when
+        /// `!isAbove`, bottom padding when `isAbove`.
+        let inset: CGFloat
+    }
+
+    /// Decides the bar's side and the padding that positions it.
+    /// - Parameters:
+    ///   - anchor: bubble cell frame, same coordinate space as `container`
+    ///     (`nil` → bar pinned just above the composer, legacy behaviour).
+    ///   - container: the placement container frame.
+    ///   - barHeight: estimated bar height, for the below/above decision.
+    ///   - topLimit: clearance kept below the container's top edge.
+    ///   - composerHeight: height of the composer pinned at the bottom.
+    ///   - gap: spacing between the bubble and the bar.
+    static func compute(
+        anchor: CGRect?,
+        container: CGRect,
+        barHeight: CGFloat,
+        topLimit: CGFloat,
+        composerHeight: CGFloat,
+        gap: CGFloat
+    ) -> Result {
+        guard let anchor, container.height > 0 else {
+            return Result(isAbove: true, inset: composerHeight + gap)
+        }
+        let composerTop = container.maxY - composerHeight
+        let belowTop = anchor.maxY + gap
+        if belowTop + barHeight <= composerTop {
+            return Result(isAbove: false, inset: belowTop - container.minY)
+        }
+        let aboveBottom = anchor.minY - gap
+        if aboveBottom - barHeight >= container.minY + topLimit {
+            return Result(isAbove: true, inset: container.maxY - aboveBottom)
+        }
+        // Neither side fully fits — pin just above the composer (legacy spot)
+        // so the bar never collides with it.
+        return Result(isAbove: true, inset: composerHeight + gap)
     }
 }

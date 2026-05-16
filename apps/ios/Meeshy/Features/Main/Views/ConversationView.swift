@@ -39,6 +39,10 @@ struct ConversationOverlayState {
     var detailSheetMessage: Message? = nil
     var detailSheetInitialTab: DetailTab? = nil
     var quickReactionMessageId: String? = nil
+    /// Bubble cell frame (window coordinates) of the message whose
+    /// add-reaction button opened the quick-reaction bar. Anchors the bar's
+    /// placement; `nil` falls back to the legacy bottom-pinned position.
+    var quickReactionAnchorFrame: CGRect? = nil
     var emojiOnlyMode = false
     var deleteConfirmMessageId: String? = nil
     var showStoryViewer = false
@@ -892,10 +896,12 @@ struct ConversationView: View {
                     overlayState.overlayMessage = msg
                     overlayState.showOverlayMenu = true
                 },
-                onAddReaction: { messageId in
-                    // Spring-open the inline emoji bar next to the bubble.
+                onAddReaction: { messageId, bubbleFrame in
+                    // Spring-open the emoji bar anchored to the tapped bubble
+                    // (appears below it, flips above near the composer).
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         overlayState.emojiOnlyMode = true
+                        overlayState.quickReactionAnchorFrame = bubbleFrame
                         overlayState.quickReactionMessageId = messageId
                     }
                     HapticFeedback.light()
@@ -944,40 +950,14 @@ struct ConversationView: View {
 
             floatingHeaderSection
 
-            // Quick reaction bar — surfaced as a BOTTOM-anchored overlay
-            // sitting just above the composer when the user taps the
-            // smiley "+" inside a bubble. The legacy `+MessageRow` SwiftUI
-            // list rendered this inline next to each cell, but the new
-            // UICollectionView host doesn't carry the row-side state, so
-            // we hoist the bar to the conversation root where it floats
-            // over whichever message triggered it.
-            //
-            // Layout :
-            //   - Color.clear backdrop (full-screen) → tap dismisses
-            //     the bar, with the same spring as the open animation.
-            //     `contentShape(Rectangle())` is REQUIRED for Color.clear
-            //     to register taps — without it SwiftUI treats it as
-            //     transparent for hit-testing.
-            //   - Bar pinned to bottom via `.frame(maxHeight: .infinity, alignment: .bottom)`.
-            //     Without that, the wrapper collapses to its intrinsic
-            //     size and the parent ZStack centers it on screen.
-            //   - `transition(.move(edge: .bottom).combined(with: .opacity))`
-            //     + the `withAnimation { quickReactionMessageId = ... }`
-            //     in `onAddReaction` produce the spring rise animation
-            //     on appear and the symmetric fall on dismiss.
+            // Quick reaction bar — a floating overlay anchored to the bubble
+            // whose smiley "+" the user tapped. `quickReactionBarOverlay`
+            // places the bar just below that bubble (using the cell frame
+            // captured at tap time) and flips it above when the message
+            // hugs the composer. See `QuickReactionBarPlacement`.
             if let pickerMessageId = overlayState.quickReactionMessageId {
-                ZStack {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture { closeReactionBar() }
-
-                    quickReactionBar(for: pickerMessageId)
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, composerHeight + 12)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
-                }
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .zIndex(99)
+                quickReactionBarOverlay(for: pickerMessageId)
+                    .zIndex(99)
             }
 
             // Connection status banner

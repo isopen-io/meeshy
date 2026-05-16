@@ -64,8 +64,10 @@ final class MessageListViewController: UIViewController {
     var onSwipeForward: ((String) -> Void)?
     /// Long press on a bubble — opens the contextual options menu.
     var onLongPress: ((String) -> Void)?
-    /// Add reaction (typically opens an inline emoji picker).
-    var onAddReaction: ((String) -> Void)?
+    /// Add reaction. Carries the message id and the tapped bubble cell's
+    /// on-screen frame (window coords; `nil` when the cell is not realized)
+    /// so the quick-reaction bar can anchor to the bubble.
+    var onAddReaction: ((String, CGRect?) -> Void)?
     /// Toggle an existing reaction emoji on a message.
     var onToggleReaction: ((String, String) -> Void)?
     /// Open the full reaction picker / list for a message.
@@ -248,7 +250,12 @@ final class MessageListViewController: UIViewController {
             let swipeReplyHandler = self.onSwipeReply
             let swipeForwardHandler = self.onSwipeForward
             let longPressHandler = self.onLongPress
-            let addReactionHandler = self.onAddReaction
+            // Wrap the raw handler so each tap also carries the bubble cell's
+            // on-screen frame — the quick-reaction bar anchors to it.
+            let addReactionHandler: ((String) -> Void) = { [weak self] tappedId in
+                guard let self else { return }
+                self.onAddReaction?(tappedId, self.cellFrameInWindow(messageId: tappedId))
+            }
             let toggleReactionHandler = self.onToggleReaction
             let openReactPickerHandler = self.onOpenReactPicker
             let showInfoHandler = self.onShowMessageInfo
@@ -445,6 +452,25 @@ final class MessageListViewController: UIViewController {
         collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
 
         flashCell(at: indexPath, strong: true)
+    }
+
+    // MARK: - Cell Frame Lookup
+
+    /// On-screen frame (window coordinates) of the realized cell hosting
+    /// `messageId`, or `nil` when that cell is not currently visible.
+    /// `convert(_:to: nil)` resolves the collection view's inverted-axis
+    /// transform, so the returned rect is the upright frame the user sees.
+    /// Used to anchor the floating quick-reaction bar to the tapped bubble.
+    func cellFrameInWindow(messageId: String) -> CGRect? {
+        let snapshot = dataSource.snapshot()
+        guard let index = snapshot.itemIdentifiers.firstIndex(where: {
+            if case .message(let id) = $0 { return id == messageId }
+            return false
+        }) else { return nil }
+        guard let cell = collectionView.cellForItem(at: IndexPath(item: index, section: 0)) else {
+            return nil
+        }
+        return cell.convert(cell.bounds, to: nil)
     }
 
     // MARK: - Slow Continuous Scroll (Quoted Message Search)

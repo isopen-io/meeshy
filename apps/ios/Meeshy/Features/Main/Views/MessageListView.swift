@@ -345,9 +345,10 @@ struct MessageListView: UIViewControllerRepresentable {
     /// Long-press on a bubble — opens the contextual options menu for that
     /// message (reply, forward, react, copy, delete, …).
     var onLongPress: ((String) -> Void)?
-    /// User-initiated reaction add — typically opens the emoji picker bar
-    /// inline near the message.
-    var onAddReaction: ((String) -> Void)?
+    /// User-initiated reaction add. Carries the message id and the tapped
+    /// bubble cell's on-screen frame (window coords, `nil` when the cell is
+    /// not realized) so the quick-reaction bar can anchor to the bubble.
+    var onAddReaction: ((String, CGRect?) -> Void)?
     /// Toggle a reaction emoji on a message (tap an existing reaction chip).
     var onToggleReaction: ((String, String) -> Void)?
     /// Open the full reactions list / picker sheet for a message.

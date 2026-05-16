@@ -116,6 +116,14 @@ struct BubbleReactionsOverlay: View, Equatable {
                 HapticFeedback.medium()
                 onOpenReactPicker?(messageId)
             }
+            // Layout height pinned to 22pt — la meme que les pills de
+            // reaction — pour que le cadre de hit-area 40pt ci-dessus ne
+            // gonfle PAS la HStack des reactions. La bande est ancree en
+            // bas en overlay sur la bulle ; une bande plus haute remonte
+            // et pousse le smiley DANS la bulle sur le dernier message
+            // recu. Le cercle de hit 40pt deborde toujours de +/-9pt et
+            // reste entierement tappable (l'overlay de bulle n'est pas clippe).
+            .frame(height: 22)
             .accessibilityLabel("Ajouter une reaction")
             .accessibilityHint("Appuyer pour reagir rapidement, maintenir pour choisir un emoji")
     }
