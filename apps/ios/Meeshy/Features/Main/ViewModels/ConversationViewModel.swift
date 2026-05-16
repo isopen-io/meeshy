@@ -1545,16 +1545,57 @@ class ConversationViewModel: ObservableObject {
                 encryptionMode: encryptionMode,
                 clientMessageId: tempId
             )
-            print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
-            let responseData = try await messageService.send(
-                conversationId: conversationId, request: body
-            )
-            print("[SendFlow] POST OK tempId=\(tempId) serverId=\(responseData.id) createdAt=\(responseData.createdAt)")
+            // WebSocket-first — emit `message:send` over the already-open
+            // Socket.IO connection (parity with reactions / comments / status,
+            // which already travel over the socket). REST is the fallback:
+            // socket down, no ACK within the timeout, OR a message carrying
+            // fields the `message:send` event does not transport — E2EE
+            // payload, ephemeral timer, view-once, blur, effects, attachments —
+            // which keep the REST / dedicated send paths.
+            let socketEligible = !isEncrypted
+                && resolvedExpiresAt == nil
+                && resolvedEphemeralDuration == nil
+                && !resolvedIsViewOnce
+                && resolvedMaxViewOnceCount == nil
+                && resolvedBlur != true
+                && !pendingEffects.hasAnyEffect
+                && (attachmentIds ?? []).isEmpty
+
+            let serverId: String
+            let serverCreatedAt: Date
+            let sentViaSocket: Bool
+
+            if socketEligible,
+               MessageSocketManager.shared.isConnected,
+               let ack = await MessageSocketManager.shared.sendAsync(
+                   conversationId: conversationId,
+                   content: finalContent,
+                   originalLanguage: body.originalLanguage,
+                   replyToId: replyToId,
+                   storyReplyToId: storyReplyToId,
+                   forwardedFromId: forwardedFromId,
+                   forwardedFromConversationId: forwardedFromConversationId,
+                   clientMessageId: tempId
+               ) {
+                serverId = ack.messageId
+                serverCreatedAt = ack.createdAt ?? Date()
+                sentViaSocket = true
+                print("[SendFlow] WS message:send OK tempId=\(tempId) serverId=\(serverId)")
+            } else {
+                print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
+                let responseData = try await messageService.send(
+                    conversationId: conversationId, request: body
+                )
+                serverId = responseData.id
+                serverCreatedAt = responseData.createdAt
+                sentViaSocket = false
+                print("[SendFlow] POST OK tempId=\(tempId) serverId=\(responseData.id) createdAt=\(responseData.createdAt)")
+            }
 
             // Register tempId → serverId mapping so the socket handler can reconcile
             // the `message:new` broadcast without creating a duplicate row.
             // UI update (sent state) flows through persistence → store observation.
-            pendingServerIds[tempId] = responseData.id
+            pendingServerIds[tempId] = serverId
 
             // GRDB server ack — state machine transitions to .sent; store observation
             // surfaces the change to the view without a direct messages[idx] write.
@@ -1563,16 +1604,16 @@ class ConversationViewModel: ObservableObject {
             // the state machine rejects the event or the record is missing).
             let ackResult = try? await messagePersistence.applyEvent(
                 localId: tempId,
-                event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
+                event: .serverAck(serverId: serverId, at: serverCreatedAt)
             )
             print("[SendFlow] applyEvent serverAck tempId=\(tempId) → resultState=\(ackResult.map { String(describing: $0) } ?? "nil")")
             let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
-            Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(responseData.id, privacy: .public) durationMs=\(ackElapsedMs, privacy: .public)")
+            Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=\(sentViaSocket ? "ws" : "rest", privacy: .public) durationMs=\(ackElapsedMs, privacy: .public)")
 
             // Move conversation to top of list immediately (optimistic)
             let convId = conversationId
             let msgContent = text
-            let msgTime = responseData.createdAt
+            let msgTime = serverCreatedAt
 
             // Persist the server-id mapping so that a future cold-start REST fetch
             // reconciles without duplicate `temp_…` / server-id pairs.

@@ -125,3 +125,19 @@
 - **Server-side copy S3** (`CopyObject`) : non applicable car stockage actuel = volumes Docker locaux. Sera la SOTA quand on migrera vers MinIO/R2 (cf. Pilier 7 audit).
 **Cons**: dpend du filesystem hte (mais fallback gracieux)
 **Source**: `docs/superpowers/specs/2026-05-06-composer-based-story-repost-sota-audit.md` Pilier 3
+
+## 2026-05-16 : Envoi de messages WebSocket-first + fallback REST
+
+**Statut**: Accepte
+**Contexte**: L'app iOS envoyait TOUS les messages texte via REST (`POST /conversations/:id/messages`), sans jamais tenter le WebSocket. Le gateway expose pourtant le handler `message:send` (utilise par le web en primaire), et tous les autres evenements temps reel — reactions, commentaires, statuts de lecture — transitent deja par Socket.IO. REST etait cense n'etre qu'un fallback ; iOS avait simplement diverge (aucun emetteur `message:send` cote SDK).
+**Decision**:
+- SDK `MessageSocketManager.sendAsync(...)` emet `message:send` avec ACK (`emitWithAck` + timeout 10s, miroir de `sendWithAttachmentsAsync`). Retourne `SendMessageAck` (`messageId`, `clientMessageId`, `createdAt`) ou `nil`.
+- `ConversationViewModel.sendMessage` tente le WebSocket d'abord, puis bascule sur REST si : socket deconnecte, pas d'ACK dans le delai, ou erreur serveur.
+- Le gateway `_sendResponse` echoe desormais `createdAt` dans l'ACK socket pour que la ligne optimiste recoive l'horodatage serveur sans attendre le broadcast `message:new`.
+**Garde (reste sur REST)**: messages E2EE (le payload chiffre ne transite pas dans `message:send`), ephemeres (`expiresAt`/`ephemeralDuration`), view-once, blur, effets, et messages avec pieces jointes (qui ont leur propre voie WS `message:send-with-attachments`). Ces champs ne sont pas portes par l'evenement `message:send` ; les router via WS les perdrait silencieusement.
+**Justification**: parite avec le web et avec les autres evenements temps reel ; reutilise la connexion socket deja ouverte (pas de handshake HTTP) ; ACK socket = transition horloge -> simple coche plus rapide. La livraison temps reel aux destinataires (broadcast `message:new`) etait deja en WS quel que soit le transport d'envoi — ce changement aligne juste le transport d'envoi.
+**Securite by-design**: si la voie WS est cassee ou indisponible, le comportement degrade exactement vers l'ancien chemin REST (eprouve). REST n'est jamais retire.
+**Alternatives rejetees**:
+- **Etendre `message:send` pour porter E2EE/ephemere/blur/effets** : changement transverse du schema socket + handler gateway ; reporte. Tant que ces champs ne sont pas portes, ces messages restent sur REST.
+- **WS-only sans fallback** : fragile (socket en handshake au demarrage, coupures reseau) — REST reste indispensable comme filet.
+**Cons**: deux chemins d'envoi a maintenir (WS + REST), mais c'est deja le cas (REST + `message:send-with-attachments`).

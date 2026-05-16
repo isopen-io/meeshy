@@ -971,7 +971,7 @@ export class MessageHandler {
    * Envoie une réponse de succès
    */
   private _sendResponse(
-    callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string }>) => void) | undefined,
+    callback: ((response: SocketIOResponse<{ messageId: string; clientMessageId?: string; createdAt?: string }>) => void) | undefined,
     response: MessageResponse
   ): void {
     if (!callback) return;
@@ -981,12 +981,19 @@ export class MessageHandler {
       // ACK against their pending optimistic row by cid (the `messageId`
       // alone is insufficient: the optimistic row has a `cid_*` local id
       // and only learns the server `messageId` from this very ACK).
-      const data = response.data as { id: string; clientMessageId?: string };
+      // `createdAt` is echoed too so the WS-first send path can stamp the
+      // optimistic row with the authoritative server time without waiting
+      // for the `message:new` broadcast.
+      const data = response.data as { id: string; clientMessageId?: string; createdAt?: Date | string };
+      const createdAt = data.createdAt instanceof Date
+        ? data.createdAt.toISOString()
+        : data.createdAt;
       callback({
         success: true,
         data: {
           messageId: data.id,
-          ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {})
+          ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {}),
+          ...(createdAt ? { createdAt } : {})
         }
       });
     } else {
