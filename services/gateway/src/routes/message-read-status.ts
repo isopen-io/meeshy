@@ -4,7 +4,7 @@ import { MessageReadStatusService } from '../services/MessageReadStatusService.j
 import { PrivacyPreferencesService } from '../services/PrivacyPreferencesService.js';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateParams, validateQuery } from '../validation/helpers.js';
-import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema } from '../validation/message-read-status-schemas.js';
+import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema, DeliveryReceiptParamsSchema } from '../validation/message-read-status-schemas.js';
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
 
 interface MessageParams {
@@ -17,6 +17,11 @@ interface ConversationParams {
 
 interface MessageIdsQuery {
   messageIds?: string;
+}
+
+interface DeliveryReceiptRouteParams {
+  conversationId: string;
+  messageId: string;
 }
 
 export default async function messageReadStatusRoutes(fastify: FastifyInstance) {
@@ -329,6 +334,123 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
       return reply.status(500).send({
         success: false,
         error: 'Erreur lors de la mise à jour du statut de réception'
+      });
+    }
+  });
+
+  /**
+   * POST /conversations/:conversationId/messages/:messageId/delivery-receipt
+   *
+   * Push-driven delivery acknowledgement. Called by the iOS Notification
+   * Service Extension when an OFFLINE recipient receives a `new_message`
+   * push: the extension holds no socket, so the gateway's online
+   * auto-delivery path (`MessageHandler._autoDeliverToOnlineRecipients`)
+   * never fires for that recipient and the author stays stuck on a single
+   * checkmark. This endpoint marks the message delivered for the
+   * authenticated recipient and broadcasts `read-status:updated` so the
+   * author's checkmark upgrades from "sent" (✓) to "delivered" (✓✓)
+   * without waiting for the recipient to open the app.
+   *
+   * Behaviour mirrors `mark-as-received`: the delivery cursor is always
+   * advanced (keeps unread counts accurate), but the `read-status:updated`
+   * broadcast is suppressed when the recipient disabled `showReadReceipts`.
+   */
+  fastify.post<{
+    Params: DeliveryReceiptRouteParams;
+  }>('/conversations/:conversationId/messages/:messageId/delivery-receipt', {
+    preValidation: [requiredAuth],
+    preHandler: [validateParams(DeliveryReceiptParamsSchema)]
+  }, async (request, reply) => {
+    try {
+      const { conversationId: rawId, messageId } = request.params;
+      const authRequest = request as UnifiedAuthRequest;
+      const userId = authRequest.authContext.userId;
+
+      // Resolve identifier (e.g. "meeshy") → ObjectId
+      const conversationId = await resolveConversationId(prisma, rawId);
+      if (!conversationId) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Conversation non trouvée'
+        });
+      }
+
+      // Vérifier l'accès à la conversation
+      const membership = await prisma.participant.findFirst({
+        where: {
+          conversationId,
+          userId: userId,
+          isActive: true
+        },
+        select: { id: true }
+      });
+
+      if (!membership) {
+        return reply.status(403).send({
+          success: false,
+          error: 'Accès non autorisé à cette conversation'
+        });
+      }
+
+      // The message must exist and actually belong to this conversation —
+      // reject a spoofed or cross-conversation messageId in the push payload.
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        select: { conversationId: true, senderId: true, deletedAt: true }
+      });
+
+      if (!message || message.deletedAt || message.conversationId !== conversationId) {
+        return reply.status(404).send({
+          success: false,
+          error: 'Message non trouvé'
+        });
+      }
+
+      // A recipient never acknowledges delivery of their own message.
+      if (message.senderId === membership.id) {
+        return reply.send({
+          success: true,
+          data: { message: 'Aucune action requise' }
+        });
+      }
+
+      // Marquer comme reçu (participantId, pas userId)
+      await readStatusService.markMessagesAsReceived(
+        membership.id,
+        conversationId,
+        messageId
+      );
+
+      // PRIVACY: ne diffuser le receipt à l'auteur que si le destinataire
+      // autorise les read receipts. Le curseur est avancé dans tous les cas.
+      const shouldShowReadReceipts = await privacyPreferencesService.shouldShowReadReceipts(
+        userId,
+        false
+      );
+
+      if (shouldShowReadReceipts) {
+        try {
+          await broadcastReadStatusUpdate(fastify, prisma, readStatusService, {
+            conversationId,
+            participantId: membership.id,
+            userId,
+            type: 'received'
+          });
+        } catch (socketError) {
+          console.error('[MessageReadStatus] Erreur lors de la diffusion Socket.IO:', socketError);
+        }
+      }
+
+      return reply.send({
+        success: true,
+        data: { message: 'Message marqué comme livré' }
+      });
+
+    } catch (error) {
+      console.error('[MessageReadStatus] Error processing delivery receipt:', error);
+      return reply.status(500).send({
+        success: false,
+        error: 'Erreur lors de la mise à jour du statut de livraison'
       });
     }
   });

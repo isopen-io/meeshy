@@ -227,6 +227,26 @@ Décision : aligner `Post` sur le pattern `Comment`/`Message` (table dédiée). 
 2. L'extension iOS POST ce receipt à réception d'un push `new_message` (l'extension a ~30s d'exécution + le token via App Group/Keychain).
 3. Considérations : exécution limitée de l'extension, non-garantie de livraison APNs, batterie. Respecter `showReadReceipts` côté serveur.
 
+### Gap comblé — implémentation (branche `claude/double-check-delivery-bRzWz`, 2026-05-16)
+
+**Status** : livré.
+
+**Gateway**
+- [x] `validation/message-read-status-schemas.ts` : `DeliveryReceiptParamsSchema` (`conversationId` string + `messageId` ObjectId).
+- [x] `routes/message-read-status.ts` : `POST /conversations/:conversationId/messages/:messageId/delivery-receipt`. Résout la conversation, vérifie l'appartenance (403), valide que le message existe / n'est pas supprimé / appartient à la conversation (404 sinon — rejet d'un messageId spoofé), no-op si self-sender, `markMessagesAsReceived(participantId, conversationId, messageId)`, broadcast `read-status:updated` via le helper existant `broadcastReadStatusUpdate` **uniquement** si `showReadReceipts`.
+- [x] Tests : `__tests__/routes/delivery-receipt.test.ts` — 9 tests verts (curseur avancé + broadcast, 404 conversation/message/cross-conversation/supprimé, 403 non-membre, `showReadReceipts` off → curseur sans broadcast, no-op self-sender, 400 messageId invalide).
+
+**iOS — extension NSE**
+- [x] `NSEDataSync.swift` : helper générique réutilisable `enqueueBackgroundPost(path:body:)` via **`URLSession` background** (`sharedContainerIdentifier` = App Group, identifiant UUID par process pour éviter les collisions entre instances NSE concurrentes, délégué minimal). Le daemon `nsurlsessiond` termine le transfert après le teardown de l'extension → ne retarde jamais la bannière. + wrapper `postDeliveryReceipt(conversationId:messageId:)`. Token Keychain partagé + base URL allowlist (jamais depuis le payload push).
+- [x] `NotificationService.swift` : `postDeliveryReceipt(from:userInfo)` appelé dans `didReceive` pour les push de type message (`new_message`, `message_reply`, `reply`, `message_forwarded`, `new_conversation*`, `added_to_conversation`).
+
+**Décisions** : voir `services/gateway/decisions.md` → « 2026-05-16 : Double coche pilotée par push ».
+- Endpoint dédié plutôt que réutilisation de `mark-as-received` : messageId explicite + observabilité.
+- `URLSession` background plutôt que `URLSession.shared` dans le `DispatchGroup` : fiabilité (survit au teardown) + ne retarde pas la bannière. Background = livraison éventuelle garantie, **pas** temps réel — acceptable pour la double coche.
+- Aucun changement côté client auteur : le `read-status:updated` émis est identique à celui du chemin online, déjà consommé.
+
+**Vérification restante (macOS requise)** : `./apps/ios/meeshy.sh build` (l'extension NSE n'a pas de cible de tests dans le repo, comme `NSEDataSync.syncMessage` / `NSEDecryptor` pré-existants).
+
 ## Plan archivé — Phase 4 exécution (livré)
 
 
