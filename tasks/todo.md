@@ -211,6 +211,22 @@ Décision : aligner `Post` sur le pattern `Comment`/`Message` (table dédiée). 
 - Wire PostComposer mentions quand endpoint compose-time disponible
 - Drop legacy `Post.reactions: Json[]` field après ~2 versions clients migrés (Phase 5 originale)
 
+### Gap connu — double coche pilotée par push (destinataire hors-ligne)
+
+**Constat** (audit du 2026-05-16, hors périmètre stories/comments — non implémenté, juste documenté).
+
+État actuel du flux de livraison message (sent → delivered → read) :
+- ✓ envoyé : message persisté en DB.
+- ✓✓ livré : `MessageHandler._autoDeliverToOnlineRecipients` (`services/gateway/src/socketio/handlers/MessageHandler.ts:615`) — à l'envoi, marque le message livré pour chaque destinataire ayant une socket active, respecte `showReadReceipts`, émet un `read-status:updated` consolidé. **Fonctionne uniquement pour les destinataires EN LIGNE.**
+- ✓✓ bleu lu : `MessageReadStatusService.markMessagesAsRead` quand le destinataire ouvre la conversation.
+
+**Le gap** : un destinataire HORS-LIGNE qui reçoit seulement un push notification ne déclenche aucune transition de statut. L'extension iOS `MeeshyNotificationExtension/NotificationService.swift` (`prePersistMessage`) pré-enregistre le message localement en `state: .delivered` mais **ne rappelle jamais le gateway**. Les delivery-receipts APNs/FCM ne sont pas captés non plus. Résultat : l'auteur reste sur simple coche jusqu'à ce que le destinataire ouvre l'app.
+
+**Pour combler** (nouvelle feature transverse, à scoper séparément) :
+1. Nouvel endpoint gateway `POST /messages/:id/delivery-receipt` (ou socket equiv.) → appelle `markMessagesAsReceived` + émet `read-status:updated`.
+2. L'extension iOS POST ce receipt à réception d'un push `new_message` (l'extension a ~30s d'exécution + le token via App Group/Keychain).
+3. Considérations : exécution limitée de l'extension, non-garantie de livraison APNs, batterie. Respecter `showReadReceipts` côté serveur.
+
 ## Plan archivé — Phase 4 exécution (livré)
 
 
