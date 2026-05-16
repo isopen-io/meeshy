@@ -210,10 +210,13 @@ export class MessageHandler {
         encryptedPayload: data.encryptedPayload as MessageRequest['encryptedPayload'],
         // Effets de message — parité avec POST /messages. Le bitfield final
         // `effectFlags` est recomposé par `MessageProcessor.saveMessage`
-        // depuis `isBlurred` / `expiresAt`, donc on transmet les champs bruts.
+        // depuis `isBlurred` / `expiresAt` / `isViewOnce`, donc on transmet
+        // les champs bruts.
         isBlurred: validated.isBlurred,
         expiresAt: validated.expiresAt ? new Date(validated.expiresAt) : undefined,
         effectFlags: validated.effectFlags,
+        isViewOnce: validated.isViewOnce,
+        maxViewOnceCount: validated.maxViewOnceCount,
         isAnonymous,
         metadata: {
           source: 'websocket',
@@ -847,6 +850,7 @@ export class MessageHandler {
       clientMessageId: (message as never)['clientMessageId'] || undefined,
       isBlurred: Boolean((message as never)['isBlurred']),
       isViewOnce: Boolean((message as never)['isViewOnce']),
+      maxViewOnceCount: (message as never)['maxViewOnceCount'] ?? undefined,
       effectFlags: (message as never)['effectFlags'] ?? 0,
       expiresAt: (message as never)['expiresAt'] || undefined,
       isEdited: Boolean((message as never)['isEdited']),

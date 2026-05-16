@@ -53,6 +53,8 @@ const SendMessageBodySchema = z.object({
   isBlurred: z.boolean().optional(),
   expiresAt: z.string().optional(),
   effectFlags: z.number().int().optional(),
+  isViewOnce: z.boolean().optional(),
+  maxViewOnceCount: z.number().int().optional(),
   mentionedUserIds: z.array(z.string()).optional(),
 });
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
@@ -1327,6 +1329,8 @@ export function registerMessagesRoutes(
         attachmentIds,
         isBlurred,
         expiresAt,
+        isViewOnce,
+        maxViewOnceCount,
         mentionedUserIds
       } = bodyResult.data as SendMessageBody;
 
@@ -1341,6 +1345,7 @@ export function registerMessagesRoutes(
       let effectFlags = (bodyResult.data as any).effectFlags ?? 0;
       if (isBlurred && !(effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED)) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
       if (expiresAt && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+      if (isViewOnce && !(effectFlags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE)) effectFlags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
 
       const userId = authRequest.authContext.userId;
       let participantId: string;
@@ -1389,6 +1394,8 @@ export function registerMessagesRoutes(
         isBlurred,
         expiresAt: expiresAt ? new Date(expiresAt) : undefined,
         effectFlags,
+        isViewOnce,
+        maxViewOnceCount,
         encryptedPayload: isEncrypted ? {
           ciphertext: encryptedContent!,
           mode: encryptionMode as any,

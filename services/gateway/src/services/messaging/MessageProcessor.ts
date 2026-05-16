@@ -313,6 +313,8 @@ export class MessageProcessor {
     isBlurred?: boolean;
     effectFlags?: number;
     expiresAt?: Date;
+    isViewOnce?: boolean;
+    maxViewOnceCount?: number;
     clientMessageId?: string;
   }): Promise<Message> {
     const corr: Record<string, any> = {
@@ -360,6 +362,7 @@ export class MessageProcessor {
     let effectFlags = data.effectFlags ?? 0;
     if (data.isBlurred && !(effectFlags & MESSAGE_EFFECT_FLAGS.BLURRED)) effectFlags |= MESSAGE_EFFECT_FLAGS.BLURRED;
     if (data.expiresAt && !(effectFlags & MESSAGE_EFFECT_FLAGS.EPHEMERAL)) effectFlags |= MESSAGE_EFFECT_FLAGS.EPHEMERAL;
+    if (data.isViewOnce && !(effectFlags & MESSAGE_EFFECT_FLAGS.VIEW_ONCE)) effectFlags |= MESSAGE_EFFECT_FLAGS.VIEW_ONCE;
 
     // ÉTAPE 3: Créer le message avec le contenu traité et encryption.
     //
@@ -387,6 +390,8 @@ export class MessageProcessor {
       isBlurred: data.isBlurred || false,
       expiresAt: data.expiresAt || null,
       effectFlags,
+      isViewOnce: data.isViewOnce || false,
+      maxViewOnceCount: data.maxViewOnceCount ?? null,
       deletedAt: null,
       ...(data.clientMessageId ? { clientMessageId: data.clientMessageId } : {})
     } as const;

@@ -44,10 +44,12 @@ export interface SendMessageBody {
   isEncrypted?: boolean;
   // Audio attachments (pre-uploaded via /attachments/upload)
   attachmentIds?: string[];
-  // Ephemeral/blurred message fields
+  // Ephemeral/blurred/view-once message fields
   isBlurred?: boolean;
   expiresAt?: string;
   effectFlags?: number;
+  isViewOnce?: boolean;
+  maxViewOnceCount?: number;
   mentionedUserIds?: string[];
 }
 

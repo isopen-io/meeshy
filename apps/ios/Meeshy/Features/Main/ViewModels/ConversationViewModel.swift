@@ -1547,15 +1547,13 @@ class ConversationViewModel: ObservableObject {
             )
             // WebSocket-first — emit `message:send` over the already-open
             // Socket.IO connection (parity with reactions / comments / status,
-            // which already travel over the socket). The socket event now
-            // carries message effects (blur, ephemeral `expiresAt`, effect
-            // flags) at parity with REST. REST stays the fallback: socket down,
-            // no ACK within the timeout, OR a message the `message:send` event
-            // still cannot transport — E2EE payload, view-once, attachments —
-            // which keep the REST / dedicated send paths.
+            // which already travel over the socket). The socket event carries
+            // the full message effect set (blur, ephemeral `expiresAt`, effect
+            // flags bitfield, view-once) at parity with REST. REST stays the
+            // fallback: socket down, no ACK within the timeout, OR a message
+            // the `message:send` event cannot transport — E2EE payload,
+            // attachments — which keep the REST / dedicated send paths.
             let socketEligible = !isEncrypted
-                && !resolvedIsViewOnce
-                && resolvedMaxViewOnceCount == nil
                 && (attachmentIds ?? []).isEmpty
 
             let serverId: String
@@ -1575,6 +1573,8 @@ class ConversationViewModel: ObservableObject {
                    isBlurred: resolvedBlur,
                    expiresAt: resolvedExpiresAt,
                    effectFlags: body.effectFlags,
+                   isViewOnce: resolvedIsViewOnce ? true : nil,
+                   maxViewOnceCount: resolvedMaxViewOnceCount,
                    clientMessageId: tempId
                ) {
                 serverId = ack.messageId

@@ -1264,16 +1264,17 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// Emits a plain-text `message:send` over the open Socket.IO connection and
     /// awaits the gateway ACK. This is the WebSocket-first send path used for
     /// regular text messages — parity with reactions / comments / status, which
-    /// already travel over the socket. Carries the message effects (`isBlurred`,
-    /// `expiresAt` for ephemeral, `effectFlags`) at parity with the REST route.
+    /// already travel over the socket. Carries the full message effect set
+    /// (`isBlurred`, `expiresAt` for ephemeral, `effectFlags` bitfield,
+    /// `isViewOnce` / `maxViewOnceCount`) at parity with the REST route.
     ///
     /// Returns the `SendMessageAck` (server `messageId`, echoed
     /// `clientMessageId`, server `createdAt`) on success, or `nil` on timeout /
     /// no socket / server error so the caller can fall back to the REST send.
     ///
-    /// NOT for E2EE payloads, attachments, or view-once messages — the
-    /// `message:send` event does not transport those fields; the caller routes
-    /// them through REST or `sendWithAttachments`.
+    /// NOT for E2EE payloads or attachments — the `message:send` event does not
+    /// transport those; the caller routes them through REST or
+    /// `sendWithAttachments`.
     public func sendAsync(
         conversationId: String,
         content: String?,
@@ -1286,6 +1287,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         isBlurred: Bool? = nil,
         expiresAt: Date? = nil,
         effectFlags: UInt32? = nil,
+        isViewOnce: Bool? = nil,
+        maxViewOnceCount: Int? = nil,
         clientMessageId: String? = nil,
         timeoutSeconds: Double = 10
     ) async -> SendMessageAck? {
@@ -1305,6 +1308,8 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         if let isBlurred { payload["isBlurred"] = isBlurred }
         if let expiresAt { payload["expiresAt"] = MessageSocketManager.isoFormatterWithFractional.string(from: expiresAt) }
         if let effectFlags { payload["effectFlags"] = Int(effectFlags) }
+        if let isViewOnce { payload["isViewOnce"] = isViewOnce }
+        if let maxViewOnceCount { payload["maxViewOnceCount"] = maxViewOnceCount }
         return await withCheckedContinuation { continuation in
             socket.emitWithAck("message:send", payload).timingOut(after: timeoutSeconds) { items in
                 if let response = items.first as? [String: Any],

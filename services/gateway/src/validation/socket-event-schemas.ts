@@ -19,10 +19,12 @@ export const SocketMessageSendSchema = z.object({
   clientMessageId: clientMessageIdSchema,
   // Effets de message — parité avec la route REST POST /messages.
   // `MessageProcessor.saveMessage` recompose le bitfield `effectFlags`
-  // depuis `isBlurred` / `expiresAt`.
+  // depuis `isBlurred` / `expiresAt` / `isViewOnce`.
   isBlurred: z.boolean().optional(),
   expiresAt: z.string().optional(),
   effectFlags: z.number().int().optional(),
+  isViewOnce: z.boolean().optional(),
+  maxViewOnceCount: z.number().int().optional(),
 });
 
 export type SocketMessageSendData = z.infer<typeof SocketMessageSendSchema>;

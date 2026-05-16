@@ -133,13 +133,16 @@ export interface MessageRequest {
   readonly encrypted?: boolean;             // Default: false
   readonly attachments?: readonly MessageAttachment[];
 
-  // Effets de message — flou (BLURRED) et éphémère (EPHEMERAL).
-  // Portés à l'identique par REST (POST /messages) et WebSocket (message:send).
-  // `effectFlags` est le bitfield canonique ; `MessageProcessor.saveMessage`
-  // recompose les bits BLURRED / EPHEMERAL depuis `isBlurred` / `expiresAt`.
+  // Effets de message — flou (BLURRED), éphémère (EPHEMERAL), vue unique
+  // (VIEW_ONCE). Portés à l'identique par REST (POST /messages) et WebSocket
+  // (message:send). `effectFlags` est le bitfield canonique ;
+  // `MessageProcessor.saveMessage` recompose les bits BLURRED / EPHEMERAL /
+  // VIEW_ONCE depuis `isBlurred` / `expiresAt` / `isViewOnce`.
   readonly isBlurred?: boolean;
   readonly expiresAt?: Date;
   readonly effectFlags?: number;
+  readonly isViewOnce?: boolean;
+  readonly maxViewOnceCount?: number;
 
   // End-to-end encryption payload (for E2EE mode)
   // When present, content field should be empty or ignored
