@@ -78,10 +78,10 @@ const agentConfigSchema = z.object({
   globalScanEnabled: z.boolean().optional(),
   globalScanMinInterval: z.number().int().min(1).optional(),
   globalScanMaxInterval: z.number().int().min(1).optional(),
-  minDelayMinutes: z.number().int().min(1).max(1440).optional(),
-  maxDelayMinutes: z.number().int().min(1).max(1440).optional(),
+  minDelayMinutes: z.number().int().min(1).max(1440).nullable().optional(),
+  maxDelayMinutes: z.number().int().min(1).max(1440).nullable().optional(),
   spreadOverDayEnabled: z.boolean().optional(),
-  maxMessagesPerUserPer10Min: z.number().int().min(1).max(20).optional(),
+  maxMessagesPerUserPer10Min: z.number().int().min(1).max(20).nullable().optional(),
 }).refine((data) => {
   if (data.minResponsesPerCycle !== undefined && data.maxResponsesPerCycle !== undefined) {
     return data.minResponsesPerCycle <= data.maxResponsesPerCycle;
@@ -93,7 +93,7 @@ const agentConfigSchema = z.object({
   }
   return true;
 }, { message: 'minWordsPerMessage doit être <= maxWordsPerMessage' }).refine((data) => {
-  if (data.minDelayMinutes !== undefined && data.maxDelayMinutes !== undefined) {
+  if (typeof data.minDelayMinutes === 'number' && typeof data.maxDelayMinutes === 'number') {
     return data.minDelayMinutes <= data.maxDelayMinutes;
   }
   return true;
@@ -487,10 +487,17 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
       }
 
       const authContext = (request as UnifiedAuthRequest).authContext;
+      // inactivityDaysThreshold is a derived mirror of inactivityThresholdHours:
+      // the agent uses a single inactivity delay, expressed in hours for the
+      // conversation and surfaced in days for display.
+      const data = { ...parsed.data };
+      if (typeof data.inactivityThresholdHours === 'number') {
+        data.inactivityDaysThreshold = Math.max(1, Math.round(data.inactivityThresholdHours / 24));
+      }
       const config = await fastify.prisma.agentConfig.upsert({
         where: { conversationId },
-        create: { conversationId, configuredBy: authContext.registeredUser.id, ...parsed.data },
-        update: parsed.data,
+        create: { conversationId, configuredBy: authContext.registeredUser.id, ...data },
+        update: data,
       });
 
       // Sync manualUserIds → AgentUserRole so they appear in admin lists
