@@ -747,14 +747,14 @@ extension ConversationView {
                 composerHeight: composerHeight,
                 gap: QuickReactionBarPlacement.bubbleGap
             )
-            ZStack(alignment: placement.isAbove ? .bottom : .top) {
+            ZStack(alignment: .top) {
                 Color.clear
                     .contentShape(Rectangle())
                     .onTapGesture { closeReactionBar() }
 
                 quickReactionBar(for: messageId)
                     .padding(.horizontal, 16)
-                    .padding(placement.isAbove ? .bottom : .top, placement.inset)
+                    .padding(.top, placement.inset)
                     .frame(maxWidth: .infinity, alignment: .center)
             }
             .frame(width: container.width, height: container.height)
@@ -855,29 +855,32 @@ enum QuickReactionBarPlacement {
     /// purpose so the message's own reaction stickers — which bleed a few
     /// points below the bubble — stay fully visible above the bar.
     static let bubbleGap: CGFloat = 16
-    /// Rough height of the emoji-only quick-reaction bar. Used solely to pick
-    /// the below/above side; the bar self-sizes once rendered.
+    /// Rough height of the emoji-only quick-reaction bar, used to clamp the
+    /// bar so it never clips past the screen's bottom edge.
     static let estimatedEmojiBarHeight: CGFloat = 56
-    /// Clearance kept below the floating conversation header so a bar flipped
-    /// above a high bubble never tucks under the header chrome.
+    /// Clearance kept below the floating conversation header so the bar never
+    /// tucks under the header chrome for a message near the top.
     static let headerClearance: CGFloat = 96
 
     struct Result: Equatable {
-        /// `true` when the bar is placed above the bubble (no room below).
-        let isAbove: Bool
-        /// Padding applied inside the placement container: top padding when
-        /// `!isAbove`, bottom padding when `isAbove`.
+        /// Top padding inside the placement container — positions the bar
+        /// just below the tapped bubble.
         let inset: CGFloat
     }
 
-    /// Decides the bar's side and the padding that positions it.
+    /// Computes the top inset that places the floating quick-reaction bar
+    /// just below the tapped bubble. The bar ALWAYS sits below the bubble;
+    /// for a message pinned to the bottom it simply floats over the composer
+    /// zone (the full-screen backdrop dismisses it on tap). The inset is
+    /// clamped so the bar stays fully on-screen — never under the header,
+    /// never clipped past the bottom edge.
     /// - Parameters:
     ///   - anchor: bubble cell frame, same coordinate space as `container`
-    ///     (`nil` → bar pinned just above the composer, legacy behaviour).
+    ///     (`nil` → bar pinned just above the composer, legacy fallback).
     ///   - container: the placement container frame.
-    ///   - barHeight: estimated bar height, for the below/above decision.
+    ///   - barHeight: estimated bar height, for the bottom-edge clamp.
     ///   - topLimit: clearance kept below the container's top edge.
-    ///   - composerHeight: height of the composer pinned at the bottom.
+    ///   - composerHeight: composer height — used only by the no-anchor fallback.
     ///   - gap: spacing between the bubble and the bar.
     static func compute(
         anchor: CGRect?,
@@ -888,19 +891,15 @@ enum QuickReactionBarPlacement {
         gap: CGFloat
     ) -> Result {
         guard let anchor, container.height > 0 else {
-            return Result(isAbove: true, inset: composerHeight + gap)
+            // No realised cell — fall back to just above the composer.
+            let fallback = container.height - composerHeight - gap - barHeight
+            return Result(inset: max(topLimit, fallback))
         }
-        let composerTop = container.maxY - composerHeight
         let belowTop = anchor.maxY + gap
-        if belowTop + barHeight <= composerTop {
-            return Result(isAbove: false, inset: belowTop - container.minY)
-        }
-        let aboveBottom = anchor.minY - gap
-        if aboveBottom - barHeight >= container.minY + topLimit {
-            return Result(isAbove: true, inset: container.maxY - aboveBottom)
-        }
-        // Neither side fully fits — pin just above the composer (legacy spot)
-        // so the bar never collides with it.
-        return Result(isAbove: true, inset: composerHeight + gap)
+        // Clamp so the bar stays fully on-screen: never under the header,
+        // never clipped past the bottom edge.
+        let maxTop = container.maxY - barHeight
+        let clamped = min(max(belowTop, container.minY + topLimit), maxTop)
+        return Result(inset: clamped - container.minY)
     }
 }
