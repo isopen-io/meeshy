@@ -28,6 +28,13 @@ struct BubbleReactionsOverlay: View, Equatable {
     var onOpenReactPicker: ((String) -> Void)? = nil
     var onShowReactions: ((String) -> Void)? = nil
 
+    /// Ensemble des emojis deja vus au rendu precedent. Une pill dont
+    /// l'emoji est ABSENT de ce set est consideree "nouvelle" et joue
+    /// l'animation comet. Les pills deja presentes (count qui change,
+    /// re-render de liste) ne rejouent JAMAIS l'animation.
+    /// Exclu de Equatable : c'est un etat de presentation interne.
+    @State private var seenEmojis: Set<String> = []
+
     static func == (lhs: Self, rhs: Self) -> Bool {
         lhs.messageId == rhs.messageId &&
         lhs.isMe == rhs.isMe &&
@@ -54,29 +61,44 @@ struct BubbleReactionsOverlay: View, Equatable {
         let overflowCount = summaries.count - visible.count
         let hasReactions = !summaries.isEmpty
 
-        if isMe {
-            if hasReactions {
+        Group {
+            if isMe {
+                if hasReactions {
+                    HStack(spacing: 3) {
+                        ForEach(visible, id: \.emoji) { reaction in
+                            pill(reaction: reaction, accent: accent)
+                        }
+                        if overflowCount > 0 {
+                            overflowPill(count: overflowCount, accent: accent)
+                        }
+                    }
+                }
+            } else {
                 HStack(spacing: 3) {
+                    if overflowCount > 0 {
+                        overflowPill(count: overflowCount, accent: accent)
+                    } else if isLastReceivedMessage {
+                        addButton(accent: accent)
+                    }
+
                     ForEach(visible, id: \.emoji) { reaction in
                         pill(reaction: reaction, accent: accent)
                     }
-                    if overflowCount > 0 {
-                        overflowPill(count: overflowCount, accent: accent)
-                    }
                 }
             }
-        } else {
-            HStack(spacing: 3) {
-                if overflowCount > 0 {
-                    overflowPill(count: overflowCount, accent: accent)
-                } else if isLastReceivedMessage {
-                    addButton(accent: accent)
-                }
-
-                ForEach(visible, id: \.emoji) { reaction in
-                    pill(reaction: reaction, accent: accent)
-                }
+        }
+        // Synchronise l'ensemble des emojis connus a chaque changement de
+        // resume. Au montage initial (`onAppear`) on enregistre tout sans
+        // animer — les reactions deja chargees ne doivent pas crasher a
+        // l'ouverture de la conversation. Ensuite, chaque emoji absent du
+        // set est traite comme "nouveau" par `CometPillModifier`.
+        .onAppear {
+            if seenEmojis.isEmpty {
+                seenEmojis = Set(summaries.map(\.emoji))
             }
+        }
+        .onChange(of: summaries.map(\.emoji)) { _, newEmojis in
+            seenEmojis = Set(newEmojis)
         }
     }
 
@@ -190,6 +212,12 @@ struct BubbleReactionsOverlay: View, Equatable {
         let shadowColor: Color = reaction.includesMe ? accent.opacity(0.40) : .clear
         let shadowRadius: CGFloat = reaction.includesMe ? 5 : 0
 
+        // Une pill est "nouvelle" si son emoji n'etait pas dans `seenEmojis`
+        // au rendu precedent. C'est vrai aussi bien quand le user local
+        // ajoute une reaction que lorsqu'une reaction distante arrive via
+        // socket : dans les deux cas `summaries` gagne un emoji inconnu.
+        let isNew = !seenEmojis.contains(reaction.emoji)
+
         return pillContent
             .background(
                 Capsule()
@@ -200,6 +228,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                     )
                     .shadow(color: shadowColor, radius: shadowRadius, y: 2)
             )
+            .modifier(CometPillModifier(isNew: isNew))
             .onTapGesture {
                 HapticFeedback.light()
                 onToggleReaction?(reaction.emoji)
@@ -218,5 +247,92 @@ struct BubbleReactionsOverlay: View, Equatable {
         let countLabel = reaction.count == 1 ? "reaction" : "reactions"
         let meLabel = reaction.includesMe ? ", vous avez reagi" : ""
         return "\(reaction.emoji) \(reaction.count) \(countLabel)\(meLabel)"
+    }
+}
+
+// MARK: - Comet-landing modifier
+
+/// Anime l'entree d'une pill de reaction comme une comete qui s'ecrase :
+/// 1. Phase ZOOM : la pill demarre fortement zoomee (~2.6x) et legerement
+///    decalee en haut, comme un emoji qui fonce vers la bulle.
+/// 2. Phase DEZOOM : un ressort rapide ramene l'echelle a 1.0 et l'offset
+///    a zero — l'impact.
+/// 3. Phase SHAKE : 2-3 oscillations decroissantes de rotation/translation
+///    simulent le tremblement post-impact, puis stabilisation.
+///
+/// Une pill deja presente (`isNew == false`) est rendue a son etat final
+/// sans aucune animation : pas de re-jeu sur un simple re-render de liste.
+private struct CometPillModifier: ViewModifier {
+    let isNew: Bool
+
+    /// `progress` pilote zoom + offset (0 = comete lointaine, 1 = posee).
+    @State private var progress: CGFloat
+    /// `shake` pilote l'amplitude des oscillations post-impact (1 -> 0).
+    @State private var shake: CGFloat = 0
+    /// Phase angulaire des oscillations — avance pendant le tremblement.
+    @State private var wobblePhase: CGFloat = 0
+    @State private var didStart = false
+
+    init(isNew: Bool) {
+        self.isNew = isNew
+        // Pills deja vues : etat final immediat. Pills neuves : etat
+        // "comete" initial, l'animation est declenchee dans onAppear.
+        _progress = State(initialValue: isNew ? 0 : 1)
+    }
+
+    // Echelle : 2.6x au depart, 1.0 a l'arrivee.
+    private var scale: CGFloat {
+        let cometScale: CGFloat = 2.6
+        return cometScale - (cometScale - 1.0) * progress
+    }
+
+    // Offset : la comete tombe depuis le haut (-18pt) vers sa place.
+    private var dropOffset: CGFloat {
+        -18 * (1 - progress)
+    }
+
+    // Tremblement : 3 oscillations sinusoidales dont l'amplitude decroit
+    // avec `shake`. Rotation legere + micro-translation horizontale.
+    private var wobbleAngle: Angle {
+        .degrees(Double(sin(wobblePhase * .pi * 6) * shake * 9))
+    }
+
+    private var wobbleX: CGFloat {
+        cos(wobblePhase * .pi * 6) * shake * 3
+    }
+
+    func body(content: Content) -> some View {
+        content
+            .scaleEffect(scale)
+            .rotationEffect(wobbleAngle)
+            .offset(x: wobbleX, y: dropOffset)
+            .onAppear {
+                guard isNew, !didStart else { return }
+                didStart = true
+                startCometLanding()
+            }
+    }
+
+    private func startCometLanding() {
+        // Phase 1+2 — dezoom : ressort rapide et un peu rebondissant qui
+        // ramene la comete a sa place finale.
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.55)) {
+            progress = 1
+        }
+        HapticFeedback.light()
+
+        // Phase 3 — shake : declenche a l'impact (~0.18s apres le lancement).
+        // On amorce `shake` a 1, on fait avancer `wobblePhase` lineairement
+        // pour generer les oscillations, puis on amortit `shake` vers 0.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.18) {
+            shake = 1
+            wobblePhase = 0
+            withAnimation(.linear(duration: 0.42)) {
+                wobblePhase = 1
+            }
+            withAnimation(.easeOut(duration: 0.42)) {
+                shake = 0
+            }
+        }
     }
 }

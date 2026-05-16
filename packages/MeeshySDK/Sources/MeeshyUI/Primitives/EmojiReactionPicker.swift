@@ -71,6 +71,10 @@ public struct EmojiReactionPicker: View {
     public var onExpandFullPicker: (() -> Void)?
 
     @State private var reactedEmoji: String?
+    /// Pilote l'entree en vague sinusoidale des tuiles : `false` au montage,
+    /// passe a `true` dans `onAppear` ce qui declenche, tuile par tuile et
+    /// avec un decalage croissant, la montee de chaque emoji.
+    @State private var hasEntered = false
 
     public init(
         quickEmojis: [String] = ["❤️", "😂", "😮", "🔥", "😢", "👏"],
@@ -88,16 +92,25 @@ public struct EmojiReactionPicker: View {
     }
 
     public var body: some View {
-        if scrollable {
-            scrollableQuickEmojiStrip
-        } else {
-            quickEmojiStrip
+        Group {
+            if scrollable {
+                scrollableQuickEmojiStrip
+            } else {
+                quickEmojiStrip
+            }
+        }
+        // Declenche l'entree en vague une seule fois, a l'ouverture de la
+        // barre de quick-reaction. Chaque tuile lit `hasEntered` + son index
+        // pour calculer son propre delai (cf. `WaveTileModifier`).
+        .onAppear {
+            guard !hasEntered else { return }
+            hasEntered = true
         }
     }
 
     private var emojiList: some View {
         HStack(spacing: 6 * scale) {
-            ForEach(quickEmojis, id: \.self) { emoji in
+            ForEach(Array(quickEmojis.enumerated()), id: \.element) { index, emoji in
                 Button {
                     reactToEmoji(emoji)
                 } label: {
@@ -106,6 +119,10 @@ public struct EmojiReactionPicker: View {
                         .scaleEffect(reactedEmoji == emoji ? 1.3 : 1.0)
                         .animation(.spring(response: 0.25, dampingFraction: 0.5), value: reactedEmoji)
                 }
+                // Entree en vague sinusoidale : la tuile `index` apparait
+                // apres celles a sa gauche, en suivant une courbe d'ease
+                // ondulante (cf. `WaveTileModifier`).
+                .modifier(WaveTileModifier(index: index, hasEntered: hasEntered))
             }
         }
     }
@@ -126,6 +143,9 @@ public struct EmojiReactionPicker: View {
                         .foregroundColor(style == .dark ? .white.opacity(0.8) : .gray)
                 }
             }
+            // La tuile "+" cloture la vague — son index est place juste
+            // apres le dernier emoji pour qu'elle arrive en derniere.
+            .modifier(WaveTileModifier(index: quickEmojis.count, hasEntered: hasEntered))
         }
     }
 
@@ -192,6 +212,62 @@ public struct EmojiReactionPicker: View {
             withAnimation { reactedEmoji = nil }
         }
         onReact?(emoji)
+    }
+}
+
+// MARK: - Sinusoidal wave entrance
+
+/// Entree en vague sinusoidale d'une tuile d'emoji de la quick-reaction bar.
+///
+/// Quand la barre s'ouvre, `hasEntered` passe a `true` ; chaque tuile joue
+/// alors son animation d'entree avec un delai proportionnel a son `index`
+/// (~0.045s/tuile) — d'ou l'apparition en cascade gauche -> droite. La courbe
+/// d'entree combine fade + montee verticale (la tuile arrive depuis le bas),
+/// l'easing `.spring` rebondissant donnant l'ondulation "wave-like" propre a
+/// chaque tuile au moment de se poser.
+private struct WaveTileModifier: ViewModifier {
+    let index: Int
+    let hasEntered: Bool
+
+    /// `t` va de 0 (tuile cachee, sous la ligne) a 1 (tuile posee).
+    @State private var t: CGFloat = 0
+
+    /// Delai d'entree : decalage croissant => effet de cascade sinusoidale.
+    private var staggerDelay: Double { Double(index) * 0.045 }
+
+    // La tuile arrive depuis ~16pt sous sa position finale.
+    private var riseOffset: CGFloat { 16 * (1 - t) }
+
+    // Demarre legerement reduite pour un "pop" a l'arrivee.
+    private var entranceScale: CGFloat { 0.55 + 0.45 * t }
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(Double(t))
+            .scaleEffect(entranceScale)
+            .offset(y: riseOffset)
+            .onChange(of: hasEntered) { _, entered in
+                guard entered else { return }
+                animateIn()
+            }
+            .onAppear {
+                // Cas ou `hasEntered` est deja vrai au montage de la tuile
+                // (recomposition) : on joue quand meme l'entree.
+                guard hasEntered, t == 0 else { return }
+                animateIn()
+            }
+    }
+
+    private func animateIn() {
+        // Ressort rebondissant declenche apres le delai de cascade : le
+        // rebond de la tuile, decale d'une tuile a l'autre, dessine la
+        // vague sinusoidale qui parcourt la barre de gauche a droite.
+        withAnimation(
+            .spring(response: 0.42, dampingFraction: 0.62)
+                .delay(staggerDelay)
+        ) {
+            t = 1
+        }
     }
 }
 
