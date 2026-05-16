@@ -47,8 +47,6 @@ struct StoryActionSidebarView: View {
     let pauseTimer: () -> Void
     let loadStoryComments: () -> Void
 
-    @State private var heartScale: CGFloat = 1.0
-
     var body: some View {
         VStack(spacing: 20) {
             // 1. Reaction (heart) — primary action, brand-colored when active
@@ -64,7 +62,6 @@ struct StoryActionSidebarView: View {
                         showEmojiStrip.toggle()
                     }
                 }
-                .scaleEffect(heartScale)
                 .overlay(alignment: .trailing) {
                     if showEmojiStrip {
                         EmojiReactionPicker(
