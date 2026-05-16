@@ -268,7 +268,8 @@ public struct StoryComposerView: View {
             // doesn't time out on this body's full modifier chain.
             canvasComposerLayer
 
-            // Top bar — auto-hides during canvas zoom to reveal canvas controls
+            // Top bar — auto-hides during canvas zoom to reveal canvas controls.
+            // Hidden (non-interactive) while the floating text editor is open.
             VStack(spacing: 0) {
                 if showTopBar {
                     topBar
@@ -277,6 +278,8 @@ public struct StoryComposerView: View {
                 Spacer()
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showTopBar)
+            .opacity(viewModel.textEditingMode == .inactive ? 1 : 0)
+            .allowsHitTesting(viewModel.textEditingMode == .inactive)
 
             // Bottom: toolbar + active panel.
             // When the composer is empty (no content + no tool selected) we
@@ -284,8 +287,17 @@ public struct StoryComposerView: View {
             // rectangular tiles in a horizontal carousel taking the bottom
             // half of the screen. The compact toolbar comes back as soon as
             // a tool is selected OR a slide has any content.
+            // Hidden (non-interactive) while the floating text editor is open.
             bottomRegion
+                .opacity(viewModel.textEditingMode == .inactive ? 1 : 0)
+                .allowsHitTesting(viewModel.textEditingMode == .inactive)
+
+            // Floating text edit overlay — sits above every composer control.
+            // Empty view when `textEditingMode == .inactive`.
+            FloatingTextEditOverlay(viewModel: viewModel)
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                   value: viewModel.textEditingMode)
         .statusBarHidden()
         .onAppear {
             viewModel.startMemoryObserver()
@@ -303,6 +315,9 @@ public struct StoryComposerView: View {
             viewModel.loadCurrentSlideIntoTimeline()
             bandStateMachine.reset()
             areFabsVisible = true
+            // A text edit overlay open on the previous slide references an
+            // element that does not exist on the new one — close it.
+            viewModel.exitTextEditingMode()
         }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
@@ -937,7 +952,11 @@ public struct StoryComposerView: View {
                 // point for the .text tool when the slide has no text yet.
                 if tool == .text,
                    viewModel.currentEffects.textObjects.isEmpty {
-                    _ = viewModel.addText()
+                    // Create the text and jump straight into the floating
+                    // editor so the user can type immediately.
+                    if let newText = viewModel.addText() {
+                        viewModel.enterTextEditingMode(textId: newText.id)
+                    }
                 } else {
                     viewModel.selectTool(tool)
                 }
@@ -1040,7 +1059,8 @@ public struct StoryComposerView: View {
                 viewModel.selectedElementId = id
                 switch kind {
                 case .text:
-                    bandStateMachine.openFormatPanel(.text, id: id)
+                    // Tap on a text → open the floating text edit overlay.
+                    viewModel.enterTextEditingMode(textId: id)
                 case .media:
                     bandStateMachine.openFormatPanel(.media, id: id)
                 case .sticker:
@@ -1052,8 +1072,9 @@ public struct StoryComposerView: View {
                 viewModel.selectedElementId = id
                 switch kind {
                 case .text:
-                    // Open inline text editing
-                    bandStateMachine.openFormatPanel(.text, id: id)
+                    // Double-tap on a text behaves like a single tap —
+                    // opens the floating text edit overlay (idempotent).
+                    viewModel.enterTextEditingMode(textId: id)
                 case .media:
                     // Open dedicated full-screen media editor (image crop / video editor)
                     openMediaEditor(elementId: id)

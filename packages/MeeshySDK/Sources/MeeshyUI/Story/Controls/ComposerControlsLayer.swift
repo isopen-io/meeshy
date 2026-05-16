@@ -115,10 +115,9 @@ public struct ComposerControlsLayer: View {
                     },
                     onEditText: { textId in
                         // Action « éditer » depuis la liste des textes :
-                        // sélectionne l'élément et bascule le band sur le
-                        // format panel — même chemin que le single-tap canvas.
-                        viewModel.selectedElementId = textId
-                        bandStateMachine.openFormatPanel(.text, id: textId)
+                        // ouvre l'overlay d'édition de texte flottant — même
+                        // chemin que le tap sur un texte du canvas.
+                        viewModel.enterTextEditingMode(textId: textId)
                     },
                     onDeleteText: { textId in
                         // Suppression d'un texte depuis la liste. Si le panel
