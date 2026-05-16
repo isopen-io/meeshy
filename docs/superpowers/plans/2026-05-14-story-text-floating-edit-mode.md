@@ -3,22 +3,23 @@
 **Date** : 2026-05-14
 **Cible** : `apps/ios` + `packages/MeeshySDK/Sources/MeeshyUI/Story`
 **Statut** : Plan révisé — non implémenté
-**Révision** : 2026-05-16 — revue de cohérence vs code réel + précisions UX clavier (voir « Révisions » ci-dessous)
+**Révision** : 2026-05-16 — revue de cohérence vs code réel + 3 passes de feedback utilisateur (voir « Révisions »)
 **Driver** : feedback utilisateur smoke-test Section 12 — la vue Texte actuelle (bandeau bas avec sections collapsibles) ne correspond pas à l'UX attendue.
 
 ---
 
 ## Révisions (2026-05-16)
 
-Revue du plan contre le code réel (`StoryComposerViewModel.swift`, `StoryCanvasUIView.swift`, `StoryModels.swift`, `Controls/`). Changements appliqués :
+Revue du plan contre le code réel (`StoryComposerViewModel.swift`, `StoryCanvasUIView.swift`, `StoryModels.swift`, `StoryTextLayer.swift`, `Controls/`) + 3 passes de feedback utilisateur. État consolidé :
 
-1. **Bulle « Border » reportée hors V1.** `StoryTextObject` n'a aucun champ `border` (modèle SDK core). L'implémenter exige une extension de modèle + migration `Codable` non chiffrée. La rangée passe de 6 à **5 bulles d'outils** + X. Voir §2.3, §3.1, §3.7, §7.
-2. **`mutate(textId:)` n'existe pas.** Helper à créer en Phase 1. Voir §3.2.
-3. **Phase 2 simplifiée.** Le canvas a déjà un `singleTapRecognizer` → `onItemTapped`. Pas besoin de toucher `handlePan` ni d'ajouter un callback `onTextTapped`. On patche la branche `.text` du `onItemTapped` existant. Voir §3.3.
-4. **Un seul `TextField`.** La preview centrée devient un `Text` non éditable (la version initiale décrivait deux champs éditables sur le même binding — conflit de focus/curseur). Voir §3.4, §3.6.
-5. **Sortie clavier explicite + nouveau geste.** Les 4 sorties (X, swipe-down, tap-outside, **re-tap sur le texte en édition**) dismissent toutes le clavier via un funnel unique `keyboardFocus = false`. Voir §2.7, §3.4.
-6. **Cleanup code mort.** `ComposerTextFormatBand.swift` + `ComposerTextEditingView.swift` (stubs jamais câblés du cutover floating-controls `a9b4509`) à supprimer. Voir §3.8 bis, Phase 5.
-7. **Risque sérialisation en cours d'édition** renforcé (autosave / `granularCanvasSync`). Voir §3.9, Risk #7.
+1. **Bulle « Border » maintenue en V1.** Border / Background / Color sont tous des contrôles de texte de plein droit, décidés par l'utilisateur. `StoryTextObject` n'a pas de champ `border` → extension modèle SDK (`borderColor` + `borderWidth`) + rendu du contour dans `StoryTextLayer`, cadrés en **Phase 0**. V1 = **presets uniquement** (palettes + épaisseurs / transparences préréglées). Voir §2.3, §3.10.
+2. **Le champ d'édition centré est un vrai textarea éditable**, pas une preview en lecture seule. Toucher le texte pendant l'édition **positionne le curseur / sélectionne** — ce n'est PAS une sortie. Voir §2.7, §3.4, §3.6.
+3. **Texte affiché en 1:1, intégral, avec retour à la ligne.** Pendant l'édition le texte revient à `scale 1.0` / `rotation 0` ET s'affiche à sa **taille réelle de rendu** : multi-ligne, **wrap automatique**, **aucune troncature `…`**, scroll interne si très long. Le bug actuel (texte trop petit, tronqué) est explicitement à corriger. Voir §2.5, §3.6.
+4. **Sorties d'édition (3, toutes dismissent le clavier).** Bulle X, swipe-down clavier, tap-outside (fond assombri) → funnel unique `keyboardFocus = false`. Le re-tap sur le texte n'est PAS une sortie (cf. point 2).
+5. **`mutate(textId:)` n'existe pas** → helper à créer en Phase 1. Voir §3.2.
+6. **Phase 2 simplifiée** : le canvas a déjà `singleTapRecognizer` → `onItemTapped`. On patche la branche `.text` existante, pas de modif de `handlePan`. Voir §3.3.
+7. **Cleanup code mort.** `ComposerTextFormatBand.swift` (stub jamais câblé) à supprimer ; `ComposerTextEditingView.swift` (UITextView representable) peut être recyclé comme base du champ éditable. Voir §3.8 bis.
+8. **Risque sérialisation pendant l'édition** (autosave / `granularCanvasSync`). Voir §3.9, Risk #7.
 
 ---
 
@@ -30,15 +31,17 @@ Le mode d'édition texte actuel est sous-optimal :
 2. **Bandeau bas surchargé** : le `StoryTextEditorView` consomme ~280pt de hauteur sous le canvas avec 4 sections collapsibles (Style / Couleur / Taille / Timing). Le texte que l'utilisateur édite reste invisible derrière le clavier.
 3. **Pas de contrôles in-context** : pour changer le style il faut quitter visuellement la zone texte et aller au bandeau bas.
 4. **Le texte ne se déplace pas pour rester visible** : pendant l'édition, le texte peut être recouvert par le clavier + le bandeau.
-5. **Pas de moyen évident de sortir** : `swipe-down` sur le bandeau ferme mais la métaphore n'est pas claire.
+5. **Texte trop petit / tronqué pendant l'édition** : le `TextField` actuel du `StoryTextEditorView` cape la police (~20pt) et limite à 1–4 lignes — le texte réel ne se voit pas tel qu'il sera, et un texte long se tronque.
+6. **Pas de moyen évident de sortir** : `swipe-down` sur le bandeau ferme mais la métaphore n'est pas claire.
 
 L'utilisateur veut une UX inspirée des composer bars modernes (Instagram Stories, TikTok, message éphémère timer) :
 
 - **Tap** sur un texte → entre en mode édition focalisée
-- **Clavier monte** + **texte se déplace au centre haut** (au-dessus du clavier)
+- **Clavier monte** + **texte se déplace au centre haut**, ramené à sa **taille réelle 1:1**, intégralement visible (wrap, pas de troncature)
+- Le texte centré est un **vrai champ éditable** : on touche pour positionner le curseur, sélectionner, manipuler comme une zone de texte
 - **Bulles flottantes** apparaissent **au-dessus du texte**, style mini-FAB (60% taille FAB principal)
-- **Tap sur une bulle** révèle ses options (palette, slider, alignement) **comme le timer éphémère dans la composer bar de messagerie**
-- **Swipe-down sur clavier** OU **bulle X** OU **re-tap sur le texte** ferme proprement le mode édition (et le clavier)
+- **Tap sur une bulle** révèle ses options (palette, slider, alignement)
+- **Swipe-down sur clavier** OU **bulle X** OU **tap sur le fond assombri** ferme proprement le mode édition (et le clavier)
 
 ---
 
@@ -51,16 +54,17 @@ L'utilisateur veut une UX inspirée des composer bars modernes (Instagram Storie
   │ user taps a text on canvas
   ↓
 .active(textId, expandedTool: nil)
-  │ user types  → text content updates (live preview on canvas via binding)
+  │ user types          → text content updates (live, the centered field IS the text)
+  │ user taps the text  → cursor moves / text selection (normal editing — NO exit)
   │ user taps bubble.X       → exit (keyboard dismissed)
   │ user swipe-down keyboard → exit
-  │ user taps the editing text again → exit (keyboard dismissed)
-  │ user taps dim background → exit (keyboard dismissed)
+  │ user taps dim background  → exit (keyboard dismissed)
   ↓
 .active(textId, expandedTool: .style)
   │ user taps another bubble → switch expandedTool
   │ user taps same bubble → expandedTool = nil
-  │ user picks option → option applied (binding writes through), expandedTool stays
+  │ user picks option → option applied (binding writes through), expandedTool stays,
+  │                     keyboard stays up, cursor stays in the field
   ↓
 .inactive  ←  exit (animation 250-300ms)
 ```
@@ -74,13 +78,13 @@ L'utilisateur veut une UX inspirée des composer bars modernes (Instagram Storie
 │         (canvas dimmed @60%)        │
 │                                     │
 │   ┌─────────────────────────────┐   │
-│   │ [Aa] [🎨] [↔] [◇] [⬜] · [X]│   │   ← floating bubbles row (5 outils + X)
+│   │[Aa][🎨][↕][⌖][▨][▢] · [X] │   │   ← floating bubbles row (6 outils + X)
 │   └─────────────────────────────┘   │
 │                                     │
 │   ╔═════════════════════════════╗   │
-│   ║                             ║   │
-│   ║      Texte en édition       ║   │   ← centered text (live preview, re-tap = exit)
-│   ║                             ║   │
+│   ║  Texte en édition, affiché  ║   │   ← editable textarea, real 1:1 size,
+│   ║  en 1:1, qui passe à la     ║   │     wraps to multiple lines,
+│   ║  ligne, jamais tronqué…     ║   │     tap = cursor, never truncated
 │   ╚═════════════════════════════╝   │
 │                                     │
 │   ┌─────────────────────────────┐   │
@@ -103,17 +107,23 @@ Style : `.ultraThinMaterial` background + indigo accent stroke + icône SF Symbo
 | Bulle | Icône | Action / Option panel |
 |-------|-------|-----------------------|
 | Style | `textformat` | Carrousel des 5 styles (bold/neon/typewriter/handwriting/classic) |
-| Color | `paintpalette.fill` | Palette `StoryTextColors.palette` (couleurs) en cercles 28pt |
+| Color | `paintpalette.fill` | Palette `StoryTextColors.palette` (couleurs préréglées) en cercles 28pt |
 | Size | `textformat.size` | Slider 14-60 + valeur live |
 | Align | `text.alignleft` (dynamique selon état) | 3 chips Left / Center / Right |
-| Background | `a.square.fill` | Toggle none/solid/glass + picker couleur si solid |
+| Background | `a.square.fill` | Presets fond : `none` / `glass` / couleurs solides avec transparence préréglée |
+| Border | `square` | Presets bord : `none` + couleur × épaisseur (fin / moyen / épais) préréglées |
 | **X** | `xmark` | **Quitte le mode édition ET dismisse le clavier** (destructive red tint) |
 
 Gap entre bulles : 8pt. Distance au texte : 16pt (margin-bottom du row).
 
-> 🔧 **Révision 2026-05-16** — La bulle **Border** (contour none/thin/thick + couleur) est **retirée de la V1** : `StoryTextObject` (`packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift`) ne possède aucun champ `border`. L'ajouter implique d'étendre le modèle SDK core et de migrer le `Codable` (tagged union), travail non chiffré dans ce plan. → Reportée (§7). La rangée comporte donc **5 bulles d'outils + 1 bulle X**.
+> **Philosophie V1 — presets uniquement.** Les trois contrôles couleur / fond / bord exposent des **valeurs préréglées**, pas de pickers libres :
+> - **Color (texte)** : palette `StoryTextColors.palette` (existante). Modèle `textColor` inchangé.
+> - **Background** : presets `none` / `glass` / couleurs solides à transparence préréglée. `StoryTextBackgroundStyle.solid(hex:)` accepte déjà un hex **8 chiffres `RRGGBBAA`** (couleur + alpha) — `parseHexColor` le gère (`StoryTextLayer.swift:249-257`). Aucun changement modèle ni renderer.
+> - **Border** : presets `none` + couleur (palette) × épaisseur (fin / moyen / épais). Nécessite l'extension modèle + le renderer de §3.10.
+>
+> Le modèle reste flexible (couleur = hex arbitraire, épaisseur = `Double`) ; seuls les *choix offerts par l'UI V1* sont des presets — exactement comme `textColor` aujourd'hui (modèle = hex libre, UI = palette). Pickers système et sliders continus → post-V1 (§7).
 
-> 🔧 **Révision 2026-05-16** — La bulle **X est la sortie principale et garantie** : son tap doit *toujours* faire descendre le clavier en plus de fermer le mode. Implémentation : le X ne ferme pas directement le mode — il passe par le funnel unique `keyboardFocus = false` (§3.4), ce qui dismisse le clavier puis déclenche `exitTextEditingMode()`. Aucune sortie ne doit laisser un clavier orphelin.
+> **La bulle X est la sortie principale et garantie** : son tap doit *toujours* faire descendre le clavier en plus de fermer le mode. Implémentation : le X passe par le funnel unique `keyboardFocus = false` (§3.4) — aucune sortie ne doit laisser un clavier orphelin.
 
 ### 2.4 Options panel (sous le texte)
 
@@ -123,18 +133,20 @@ Hauteur : ~70-90pt selon contenu. Fond `.ultraThinMaterial` + rounded 16pt + 16p
 
 Disparaît : tap sur la même bulle (toggle off), tap sur une autre bulle (remplace).
 
-> 🔧 **Révision 2026-05-16** — La version initiale listait aussi « tap-outside du panel » pour replier le panneau. Supprimé car ambigu avec §2.7 #3 (tap sur le fond assombri = sortie complète du mode). Règle nette : **tap sur le dim background = sortie du mode** ; le repli du panneau se fait uniquement via les bulles.
+Pendant qu'on manipule une option (palette, slider…), le **clavier reste monté** et le **curseur reste dans le champ** — l'utilisateur peut enchaîner frappe et formatage sans perdre le focus.
 
-### 2.5 Position du texte au centre
+> Le repli du panneau se fait uniquement via les bulles. Un tap sur le fond assombri (dim background) = sortie complète du mode (§2.7 #3), pas un repli de panneau.
+
+### 2.5 Position et taille du texte au centre
 
 Au moment où `textEditingMode` passe de `.inactive` à `.active(...)` :
-- Le texte sur le canvas anime sa position normalisée de `(text.x, text.y)` vers `(0.5, 0.32)` (centré horizontalement, à 32% de la hauteur — laisse 68% pour le clavier + options panel).
-- Animation : `spring(response: 0.30, dampingFraction: 0.85)`.
-- À l'exit : retour vers `(text.x, text.y)` originaux (stockés dans `editingTextSnapshot`).
 
-Le **scale** et la **rotation** du texte sont temporairement **mises à 1.0 / 0°** pendant l'édition pour rendre le texte lisible et taillable au clavier, puis restaurés au sortie.
+- **Position** : le texte anime sa position normalisée de `(text.x, text.y)` vers `(0.5, 0.32)` (centré horizontalement, à 32% de la hauteur — laisse 68% pour le clavier + options panel). Animation `spring(response: 0.30, dampingFraction: 0.85)`.
+- **Transform 1:1** : `scale → 1.0` et `rotation → 0°`, pour que le texte soit droit et à l'échelle normale, lisible et taillable au clavier.
+- **Taille réelle, intégrale, wrappée** : le champ d'édition affiche le texte à sa **taille de rendu réelle** (résolue depuis `fontSize` via la géométrie canvas — voir §3.6), **PAS** une police capée. Le champ est **multi-ligne** : il **passe à la ligne automatiquement** (word-wrap), grandit verticalement selon le contenu, et **ne tronque JAMAIS** (`…` interdit). Si le texte est plus haut que l'espace disponible, le champ **scrolle** en interne (comportement textarea).
+- À l'exit : retour vers `(text.x, text.y)` + `scale` + `rotation` originaux (stockés dans `editingTextSnapshot`).
 
-> ⚠️ **Révision 2026-05-16** — Ce déplacement mute le *vrai* `StoryTextObject`. Voir §3.9 + Risk #7 : protéger contre une sérialisation (`granularCanvasSync` / autosave / publish) qui surviendrait pendant l'édition et figerait la position centrée. Mitigation requise, pas optionnelle.
+> Le bug actuel (`StoryTextEditorView` : `TextField` à police ≤ 20pt, `lineLimit(1...4)`) tronque les textes longs et les affiche trop petits. Le champ flottant corrige ça : taille 1:1, lignes illimitées, wrap, scroll — jamais de troncature.
 
 ### 2.6 Choix de tap simple vs double-tap
 
@@ -144,18 +156,17 @@ Médias et stickers : conservent leur comportement (long-press → menu contextu
 
 Le `bringForegroundToFront` au tap reste actif (l'élément vient devant les autres).
 
-> 🔧 **Révision 2026-05-16** — Avec le tap simple qui entre en édition, le **double-tap sur un texte** devient ambigu. Décision : le double-tap sur un texte se comporte comme un tap simple (entre en mode édition — idempotent, `enterTextEditingMode` re-appelé sur un texte déjà en édition est un no-op grâce au guard). Le `doubleTapRecognizer` du canvas reste réservé aux médias.
+Le **double-tap sur un texte** se comporte comme un tap simple (entre en mode édition — idempotent grâce au guard de `enterTextEditingMode`). Le `doubleTapRecognizer` du canvas reste réservé aux médias.
 
 ### 2.7 Sortie du mode édition
 
-**Quatre** sorties possibles. **Toutes dismissent le clavier** : elles passent par le funnel unique `keyboardFocus = false`, et un seul `onChange(of: keyboardFocus)` déclenche `exitTextEditingMode()`. Ça garantit qu'aucune sortie ne laisse le clavier monté.
+**Trois** sorties. **Toutes dismissent le clavier** : elles passent par le funnel unique `keyboardFocus = false`, et un seul `onChange(of: keyboardFocus)` déclenche `exitTextEditingMode()`. Aucune sortie ne laisse le clavier monté.
 
 1. **Bulle X** (dernière bulle de la rangée flottante) : tap → `keyboardFocus = false` → clavier descend → exit. Tint rouge destructif, découvrable. ✅
 2. **Swipe-down sur le clavier** : `@FocusState` passe à `false` de lui-même → `onChange` → exit. Standard iOS. ✅
-3. **Tap-outside** : tap sur la zone canvas assombrie (dim background) hors texte/bulles/options → `keyboardFocus = false` → exit. ✅
-4. **Re-tap sur le texte en cours d'édition** : un nouveau tap sur la preview centrée du texte pendant l'édition → `keyboardFocus = false` → exit + clavier dismiss. L'utilisateur « retouche » son texte pour le valider/fermer — geste naturel. ✅
+3. **Tap sur le fond assombri** (dim background, hors texte / bulles / options) → `keyboardFocus = false` → exit. ✅
 
-> 🔧 **Révision 2026-05-16** — Ajout de la sortie #4 (re-tap sur le texte) à la demande utilisateur. Conséquence directe : la preview centrale **n'est PAS un champ éditable focalisable** (cf. §3.6) — sinon le tap dessus placerait le curseur au lieu de fermer. La frappe passe par un `TextField` caché unique (§3.4). La preview centrale est un `Text` live + `.onTapGesture` de sortie.
+> **Le re-tap sur le texte n'est PAS une sortie.** Pendant l'édition, le champ centré est un vrai champ de texte : toucher le texte **positionne le curseur**, permet de **sélectionner**, de manipuler le contenu au doigt comme une zone de texte (`textarea`). Le clavier reste monté, le mode reste actif. (Correction d'une version antérieure du plan qui faisait du re-tap une sortie — erroné.)
 
 Validation : le texte garde tous ses changements (le binding écrit live). Pas de bouton « Annuler » — les changements sont permanents (l'utilisateur peut éditer à nouveau ou supprimer).
 
@@ -192,13 +203,14 @@ public enum TextEditTool: String, CaseIterable, Sendable, Equatable {
     case size
     case align
     case background
+    case border
 
     var sfSymbol: String { … }
     var accessibilityLabel: String { … }
 }
 ```
 
-> 🔧 **Révision 2026-05-16** — Le case `.border` est retiré (cf. §2.3). `allCases` produit donc 5 bulles d'outils. Si Border est réintroduit (§7), ajouter le case + le champ modèle d'abord.
+`allCases` produit 6 bulles d'outils ; l'ordre des cases fixe l'ordre d'affichage. `TextEditTool.border` ne doit pas être livré avant les champs modèle de la Phase 0 (§3.10).
 
 ### 3.2 Modifs ViewModel
 
@@ -217,7 +229,7 @@ private struct EditingTextSnapshot: Equatable {
 private var editingTextSnapshot: EditingTextSnapshot?
 
 func enterTextEditingMode(textId: String) {
-    // Idempotent : déjà en édition sur ce texte → no-op (double-tap, re-entrée).
+    // Idempotent : déjà en édition sur ce texte → no-op (double-tap, ré-entrée).
     if case .active(let current, _) = textEditingMode, current == textId { return }
     guard let text = currentEffects.textObjects.first(where: { $0.id == textId }) else { return }
     editingTextSnapshot = EditingTextSnapshot(
@@ -227,7 +239,7 @@ func enterTextEditingMode(textId: String) {
         originalScale: text.scale,
         originalRotation: text.rotation
     )
-    // Move text to centered editing position (no scale/rotation).
+    // Move text to centered editing position, transform 1:1.
     mutate(textId: textId) { t in
         t.x = 0.5
         t.y = 0.32
@@ -259,7 +271,7 @@ func setExpandedTool(_ tool: TextEditTool?) {
 }
 ```
 
-> 🔧 **Révision 2026-05-16** — `mutate(textId:) { t in … }` **n'existe pas** sur `StoryComposerViewModel`. Phase 1 doit le créer. Il reproduit le pattern de mutation `currentEffects` déjà utilisé par `addText()` et `textObjectBinding(for:)` (propage aux observateurs `@Bindable`, déclenche `granularCanvasSync`) :
+> **`mutate(textId:)` n'existe pas** sur `StoryComposerViewModel` — Phase 1 doit le créer. Il reproduit le pattern de mutation `currentEffects` déjà utilisé par `addText()` et `textObjectBinding(for:)` (propage aux observateurs `@Bindable`, déclenche `granularCanvasSync`) :
 
 ```swift
 private func mutate(textId: String, _ transform: (inout StoryTextObject) -> Void) {
@@ -270,13 +282,13 @@ private func mutate(textId: String, _ transform: (inout StoryTextObject) -> Void
 }
 ```
 
-> 🔧 **Révision 2026-05-16** — Le guard d'idempotence en tête de `enterTextEditingMode` couvre le double-tap (§2.6) et toute ré-entrée — sans lui, un 2ᵉ appel écraserait le snapshot par la position déjà centrée `(0.5, 0.32)`, et l'exit ne restaurerait jamais l'originale.
+> Le guard d'idempotence en tête de `enterTextEditingMode` couvre le double-tap (§2.6) et toute ré-entrée — sans lui, un 2ᵉ appel écraserait le snapshot par la position déjà centrée `(0.5, 0.32)`, et l'exit ne restaurerait jamais l'originale.
 
 ### 3.3 Modifs canvas — routage du tap simple sur texte
 
-> 🔧 **Révision 2026-05-16** — La version initiale proposait de modifier `handlePan.began/.ended` pour détecter un « tap sans drag » et d'exposer un nouveau callback `onTextTapped`. **C'est redondant** : `StoryCanvasUIView` possède déjà un `singleTapRecognizer` dédié (`StoryCanvasUIView.swift:1089-1096`, configuré `require(toFail: doubleTapRecognizer)`) qui appelle déjà `onItemTapped?(id, kind)`. Et `StoryComposerView.canvasCore` (`StoryComposerView.swift:1032`) route déjà `onItemTapped` `.text` vers `bandStateMachine.openFormatPanel(.text, id:)`.
+`StoryCanvasUIView` possède déjà un `singleTapRecognizer` dédié (`StoryCanvasUIView.swift:1089-1096`, configuré `require(toFail: doubleTapRecognizer)`) qui appelle déjà `onItemTapped?(id, kind)`. Et `StoryComposerView.canvasCore` (`StoryComposerView.swift:1032`) route déjà `onItemTapped` `.text` vers `bandStateMachine.openFormatPanel(.text, id:)`.
 
-**Correction** : pas de nouveau callback, pas de modif du pan recognizer, pas de modif de `StoryCanvasUIView` ni `StoryCanvasRepresentable`. On change uniquement la branche `.text` du `onItemTapped` existant dans `StoryComposerView.canvasCore` :
+**Correction minimale** : pas de nouveau callback, pas de modif du pan recognizer, pas de modif de `StoryCanvasUIView` ni `StoryCanvasRepresentable`. On change uniquement la branche `.text` du `onItemTapped` (et `onItemDoubleTapped`) existant dans `StoryComposerView.canvasCore` :
 
 ```swift
 // StoryComposerView.canvasCore — onItemTapped (existant, SEULE la branche .text change)
@@ -296,9 +308,7 @@ onItemTapped: { id, kind in
 
 Idem pour `onItemDoubleTapped` branche `.text` → `viewModel.enterTextEditingMode(textId: id)` (idempotent, cf. §2.6).
 
-`bringForegroundToFront` au tap reste géré côté `StoryCanvasUIView` (inchangé).
-
-> ⚠️ Pendant l'édition, `FloatingTextEditOverlay` couvre le canvas avec un fond assombri hittable (§3.4) — les taps canvas ne re-déclenchent donc pas `onItemTapped`. Le « re-tap sur le texte » (§2.7 #4) est capté par la preview centrée *dans l'overlay*, pas par le canvas.
+> Pendant l'édition, `FloatingTextEditOverlay` couvre le canvas avec un fond assombri hittable (§3.4) — les taps canvas ne re-déclenchent donc pas `onItemTapped`. Les taps « sur le texte » pendant l'édition atterrissent sur le champ éditable de l'overlay (positionnement curseur — §2.7), pas sur le canvas.
 
 ### 3.4 Nouveau composant — `FloatingTextEditOverlay`
 
@@ -333,14 +343,13 @@ public struct FloatingTextEditOverlay: View {
                     )
                     .padding(.horizontal, 16)
 
-                    // 3. Centered text preview — NON-editable Text. Re-tapping
-                    //    it exits the mode (§2.7 #4). Typing flows through the
-                    //    hidden TextField (item 5), the single editable field.
-                    TextEditCenteredPreview(textObject: binding)
+                    // 3. Centered EDITABLE text field — real textarea. Tapping it
+                    //    moves the cursor / selects text (§2.7). It IS the first
+                    //    responder driving the keyboard. Real 1:1 size, wraps,
+                    //    never truncates (§2.5, §3.6).
+                    TextEditCenteredField(textObject: binding, focused: $keyboardFocus)
                         .padding(.horizontal, 24)
                         .padding(.top, 16)
-                        .contentShape(Rectangle())
-                        .onTapGesture { dismissKeyboardAndExit() }
 
                     // 4. Expanded tool options panel (if any)
                     if let tool = expandedTool {
@@ -352,19 +361,11 @@ public struct FloatingTextEditOverlay: View {
 
                     Spacer()
                 }
-
-                // 5. Hidden TextField — the SINGLE editable field; drives the
-                //    keyboard. Not hit-testable: focus is set programmatically.
-                TextField("", text: binding.text)
-                    .focused($keyboardFocus)
-                    .opacity(0)
-                    .frame(width: 1, height: 1)
-                    .allowsHitTesting(false)
             }
             .onAppear { keyboardFocus = true }
             .onChange(of: keyboardFocus) { _, isFocused in
                 // SINGLE exit funnel: any keyboard dismissal — swipe-down (§2.7 #2),
-                // X bubble, tap-outside, re-tap text — lands here → exit edit mode.
+                // X bubble, tap-outside — lands here → exit edit mode.
                 if !isFocused { viewModel.exitTextEditingMode() }
             }
             .animation(.spring(response: 0.30, dampingFraction: 0.85),
@@ -373,8 +374,8 @@ public struct FloatingTextEditOverlay: View {
     }
 
     /// Unique exit funnel. Resigns the keyboard; `onChange(of: keyboardFocus)`
-    /// then runs `exitTextEditingMode()`. Guarantees no exit path leaves the
-    /// keyboard up — every exit (X, tap-outside, re-tap text) calls this.
+    /// then runs `exitTextEditingMode()`. Guarantees no exit leaves the
+    /// keyboard up. The X bubble and tap-outside both call this.
     private func dismissKeyboardAndExit() {
         keyboardFocus = false
     }
@@ -383,10 +384,10 @@ public struct FloatingTextEditOverlay: View {
 }
 ```
 
-> 🔧 **Révision 2026-05-16** — Trois changements vs version initiale :
-> 1. **Funnel unique `dismissKeyboardAndExit()`** : X, tap-outside et re-tap-texte ne ferment plus le mode directement — ils mettent `keyboardFocus = false`. Le `onChange(of: keyboardFocus)` est le *seul* point qui appelle `exitTextEditingMode()`. Le swipe-down clavier y arrive aussi naturellement. → impossible de sortir sans dismisser le clavier.
-> 2. **Re-tap sur le texte** : `TextEditCenteredPreview` reçoit `.contentShape(Rectangle())` + `.onTapGesture { dismissKeyboardAndExit() }`.
-> 3. **Un seul `TextField`** : le champ caché (item 5) est le *seul* champ éditable, marqué `allowsHitTesting(false)` (focus programmatique uniquement). La preview centrée n'est plus un `TextField`.
+> **Différences clés vs versions antérieures du plan** :
+> - **Pas de `TextField` caché.** Le champ centré `TextEditCenteredField` est *lui-même* le champ éditable, focalisable, qui pilote le clavier (`@FocusState` partagé). Un seul champ.
+> - **Pas de `.onTapGesture` de sortie sur le champ centré.** Toucher le texte = éditer (curseur / sélection). Seuls le fond assombri et la bulle X déclenchent une sortie.
+> - **Funnel unique `dismissKeyboardAndExit()`** : X et tap-outside mettent `keyboardFocus = false` ; `onChange(of: keyboardFocus)` est le seul point qui appelle `exitTextEditingMode()`. Le swipe-down clavier y arrive naturellement. → impossible de sortir sans dismisser le clavier.
 
 ### 3.5 Nouveau composant — `TextEditFloatingBubbles`
 
@@ -402,7 +403,7 @@ struct TextEditFloatingBubbles: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // 5 tool bubbles (style / color / size / align / background)
+            // 6 tool bubbles (style / color / size / align / background / border)
             ForEach(TextEditTool.allCases, id: \.self) { tool in
                 bubble(tool: tool, isActive: expandedTool == tool)
                     .onTapGesture { onSelectTool(tool) }
@@ -445,39 +446,68 @@ struct TextEditFloatingBubbles: View {
 }
 ```
 
-`TextEditTool.allCases` produit 5 bulles d'outils ; `dismissBubble()` ajoute la 6ᵉ (X).
+`TextEditTool.allCases` produit 6 bulles d'outils ; `dismissBubble()` ajoute la 7ᵉ (X).
 
-### 3.6 Nouveau composant — `TextEditCenteredPreview`
+### 3.6 Nouveau composant — `TextEditCenteredField`
 
-Fichier : `packages/MeeshySDK/Sources/MeeshyUI/Story/TextEditCenteredPreview.swift`
+Fichier : `packages/MeeshySDK/Sources/MeeshyUI/Story/TextEditCenteredField.swift`
 
-Affiche le texte **en lecture seule** (`Text`, **pas** `TextField`) au centre, stylé selon les propriétés courantes du `StoryTextObject` (police via la résolution canvas, couleur, taille, alignement, fond). C'est une **preview live non focalisable** : la frappe passe par le `TextField` caché unique de `FloatingTextEditOverlay` (§3.4 item 5), et ce composant ne fait que refléter `binding.text` à chaque keystroke (le canvas re-render via `slidesEqualForCanvas`).
+C'est le **champ d'édition principal** : un vrai champ de texte **multi-ligne, éditable**, centré, qui *est* le texte (WYSIWYG). Pas une preview en lecture seule.
 
-> 🔧 **Révision 2026-05-16** — La version initiale décrivait ici « un `TextField` éditable au centre ». Corrigé pour 2 raisons : (a) deux `TextField` éditables sur le même `binding.text` (celui-ci + le caché de §3.4) = conflit de focus/curseur ; (b) un champ focalisable empêcherait le geste « re-tap pour sortir » (§2.7 #4) car le tap placerait le curseur. → preview = `Text` non éditable, le tap dessus déclenche la sortie.
+Exigences :
 
-Placeholder : si `binding.text` est vide (texte fraîchement créé via `addText()`), afficher un placeholder grisé (« Saisissez votre texte… ») dans le `Text`.
+- **Éditable comme un textarea** : toucher positionne le curseur, glisser sélectionne, le clavier est piloté par ce champ. `.focused($keyboardFocus)` (binding partagé avec `FloatingTextEditOverlay`).
+- **Taille réelle 1:1** : police résolue depuis `textObject.fontSize` mappé design-pixels → points écran via la géométrie canvas (`CanvasGeometry`), pour que le rendu d'édition corresponde exactement au rendu final sur la slide. **Aucun cap de police**, **aucun `minimumScaleFactor`**.
+- **Multi-ligne, wrap, zéro troncature** : retour à la ligne automatique (word-wrap), croissance verticale selon le contenu, **jamais** de `…`. Si le texte dépasse la hauteur disponible, scroll interne (textarea).
+- **Style WYSIWYG** : applique `textStyle` (police via `storyFont(for:size:)` — `FontStylePicker.swift`), `textColor`, `textAlign`, et reflète live `backgroundStyle` / bord.
 
-Curseur : optionnel en V1. Si un curseur visible est souhaité, le rendre purement décoratif (barre `|` animée en fin de texte) — il ne reflète pas une position d'insertion réelle.
+**Implémentation recommandée — SwiftUI `TextField` multi-ligne** :
 
-Le canvas reste visible en fond grisé (option B retenue) — l'utilisateur voit le texte se transformer en temps réel ; l'overlay `Color.black.opacity(0.40)` le rend modestement visible derrière.
+```swift
+struct TextEditCenteredField: View {
+    @Binding var textObject: StoryTextObject
+    var focused: FocusState<Bool>.Binding
+
+    var body: some View {
+        TextField("", text: $textObject.text, axis: .vertical)   // axis:.vertical ⇒ wrap, pas de troncature
+            .focused(focused)
+            .font(storyFont(for: textObject.parsedTextStyle, size: resolvedScreenSize))
+            .foregroundColor(Color(hex: textObject.textColor ?? "FFFFFF"))
+            .multilineTextAlignment(resolvedAlignment)
+            .lineLimit(nil)                                       // lignes illimitées
+            .textFieldStyle(.plain)
+            // backgroundStyle / bord rendus en arrière-plan ici
+    }
+
+    /// fontSize (design-pixels, référentiel 1080) → points écran, 1:1 avec le rendu canvas.
+    private var resolvedScreenSize: CGFloat { … }
+}
+```
+
+`TextField(text:, axis: .vertical)` (iOS 16+) gère nativement : wrap, lignes illimitées, positionnement du curseur au tap, sélection. Pas de troncature avec `axis: .vertical`.
+
+> **Fallback** — si `TextField` n'offre pas une fidélité suffisante (polices custom neon/handwriting, contrôle fin de la sélection, rendu du bord), basculer sur un `UITextView` via `UIViewRepresentable` (`isScrollEnabled = true`, `textContainer.lineBreakMode = .byWordWrapping`, `isEditable = true`). Le fichier mort `ComposerTextEditingView.swift` (§3.8 bis) fournit déjà un `UITextView` representable réutilisable — en retirer le wiring `inputAccessoryView` (inutile : les bulles sont un overlay libre, pas ancré au clavier).
+
+Placeholder : si `textObject.text` est vide (texte fraîchement créé via `addText()`), afficher un placeholder grisé via le 1ᵉʳ argument du `TextField` ou un overlay.
+
+Le canvas reste visible en fond grisé — le texte de la slide (déplacé en `(0.5, 0.32)`, scale 1.0) se redessine en temps réel sous l'overlay.
 
 ### 3.7 Nouveau composant — `TextEditToolOptions`
 
 Fichier : `packages/MeeshySDK/Sources/MeeshyUI/Story/TextEditToolOptions.swift`
 
-Switch sur `TextEditTool` → rend les bons controls :
+Switch sur `TextEditTool` → rend les bons controls (presets V1) :
 
-- **style** : `ScrollView(.horizontal)` de chips style (réutilise la logique existante de `StoryTextEditorView.styleSection`)
-- **color** : `ScrollView(.horizontal)` de cercles couleur (réutilise `colorSection`)
-- **size** : `Slider` + label (réutilise `sizeSection`)
+- **style** : `ScrollView(.horizontal)` de chips style (réutilise la logique de `StoryTextEditorView.styleSection`)
+- **color** : `ScrollView(.horizontal)` de cercles couleur — palette `StoryTextColors.palette` (réutilise `colorSection`)
+- **size** : `Slider` 14-60 + label (réutilise `sizeSection`)
 - **align** : `Picker(.segmented)` Left/Center/Right
-- **background** : `Picker` none/solid/glass + color picker conditionnel si solid — mappe sur `StoryTextBackgroundStyle` (`.none` / `.solid(hex:)` / `.glass(radius:)`, déjà dans le SDK)
-
-> 🔧 **Révision 2026-05-16** — Le case `border` est retiré du switch (cf. §2.3, §7). Le case `background` mappe proprement sur l'enum `StoryTextBackgroundStyle` existant — aucune extension modèle nécessaire.
+- **background** : presets `none` / `glass` / couleurs solides — mappe sur `StoryTextBackgroundStyle` (`.none` / `.solid(hex: RRGGBBAA)` / `.glass(radius:)`, déjà dans le SDK). La transparence est portée par l'alpha du hex 8 chiffres.
+- **border** : presets `none` + couleur × épaisseur — écrit `borderColor` / `borderWidth` sur `StoryTextObject` (champs ajoutés en Phase 0, §3.10)
 
 Reuse maximal des bouts du `StoryTextEditorView` actuel : extraire `styleSection` / `colorSection` / `sizeSection` en sous-composants partagés (Phase 4).
 
-> ⚠️ **Cible** : le `StoryTextEditorView` actuel **n'est PAS supprimé** — il reste accessible depuis la liste des textes du `ComposerToolPanelHost.textPanel` (bouton « éditer » → `onEditText` → `bandStateMachine.openFormatPanel(.text, id:)`). Le mode floating est l'entrée par défaut au tap canvas. Deux points d'entrée, deux UX — divergence assumée mais à surveiller post-launch.
+> **Cible** : le `StoryTextEditorView` actuel **n'est PAS supprimé** — il reste accessible depuis la liste des textes du `ComposerToolPanelHost.textPanel` (bouton « éditer » → `onEditText` → `bandStateMachine.openFormatPanel(.text, id:)`). Le mode floating est l'entrée par défaut au tap canvas. Deux points d'entrée, deux UX — divergence assumée mais à surveiller post-launch.
 
 ### 3.8 Visibilité coordonnée
 
@@ -509,7 +539,10 @@ ZStack {
 
 ### 3.8 bis — Cleanup code mort
 
-> 🔧 **Révision 2026-05-16** — `ComposerTextFormatBand.swift` et `ComposerTextEditingView.swift` (dans `Controls/`) sont des **stubs jamais câblés** : créés par le cutover floating-controls (`a9b4509`), leurs boutons sont inertes (`Button(action: {})`, commentaire « wired in Phase 4 »), et `formatPanel(.text)` route vers `StoryTextEditorView`, pas vers eux. Le mode floating de ce plan les rend définitivement obsolètes. → **À supprimer** (Phase 5). Vérifier au préalable qu'aucun autre fichier ne les référence (`grep -rn "ComposerTextFormatBand\|ComposerTextEditingView" packages/MeeshySDK/Sources`).
+`Controls/ComposerTextFormatBand.swift` et `Controls/ComposerTextEditingView.swift` sont des **stubs jamais câblés** (créés par le cutover floating-controls `a9b4509`, boutons inertes, `formatPanel(.text)` route vers `StoryTextEditorView`).
+
+- **`ComposerTextFormatBand.swift`** → barre de format ancrée au clavier, non utilisée par ce design (les bulles sont un overlay libre). **À supprimer** (Phase 5), après `grep -rn "ComposerTextFormatBand" packages/MeeshySDK/Sources` de non-référencement.
+- **`ComposerTextEditingView.swift`** → `UITextView` representable. **Recyclable** : c'est exactement le type de champ éditable requis par §3.6 (fallback `UITextView`). Option : le réutiliser comme base de `TextEditCenteredField` (retirer le wiring `inputAccessoryView`), plutôt que le supprimer puis réécrire. À trancher en Phase 3 selon le choix `TextField` vs `UITextView`.
 
 ### 3.9 Cleanup à la fermeture / changement slide / sérialisation
 
@@ -523,11 +556,43 @@ if textEditingMode != .inactive {
 
 Idem dans `viewModel.deleteElement(id:)` — si on supprime le texte en cours d'édition, snapshot devient invalide → `editingTextSnapshot = nil; textEditingMode = .inactive`.
 
-> ⚠️ **Révision 2026-05-16 — sérialisation pendant l'édition.** `enterTextEditingMode` écrit la position centrée `(0.5, 0.32)` + transform reset dans le *vrai* `StoryTextObject` via `currentEffects`. Si `granularCanvasSync`, un autosave, ou un `publish` se déclenche **pendant** l'édition (avant l'exit qui restaure), la position centrée est **sérialisée durablement** — le texte resterait centré après réouverture de la story.
+> ⚠️ **Sérialisation pendant l'édition.** `enterTextEditingMode` écrit la position centrée `(0.5, 0.32)` + transform 1:1 dans le *vrai* `StoryTextObject` via `currentEffects`. Si `granularCanvasSync`, un autosave, ou un `publish` se déclenche **pendant** l'édition (avant l'exit qui restaure), la position centrée est **sérialisée durablement** — le texte resterait centré après réouverture de la story.
 >
 > Mitigation obligatoire (choisir une) :
-> - **(A)** Tout chemin de commit/sérialisation appelle `exitTextEditingMode()` en pré-étape (restaure la position avant de sérialiser). À étendre à *tous* les points de sérialisation, pas seulement slide-switch — auditer `granularCanvasSync` + le path de publish.
-> - **(B)** *(recommandé, plus robuste)* Ne pas muter le modèle : appliquer le recentrage comme **offset purement view-layer** (le canvas / l'overlay dessine le texte édité centré sans toucher `x/y/scale/rotation`). Supprime le snapshot, le restore, et tout risque de sérialisation. Coût : la logique de rendu doit accepter un override de position pour l'élément en édition. À évaluer en Phase 1 — si faisable sans surcoût majeur, préférer (B) à toute l'approche snapshot de §3.2.
+> - **(A)** Tout chemin de commit/sérialisation appelle `exitTextEditingMode()` en pré-étape (restaure la position avant de sérialiser). À étendre à *tous* les points de sérialisation — auditer `granularCanvasSync` + le path de publish.
+> - **(B)** *(recommandé, plus robuste)* Ne pas muter le modèle pour le recentrage : appliquer position + transform 1:1 comme **override purement view-layer** (le canvas / l'overlay dessine le texte édité centré sans toucher `x/y/scale/rotation`). Supprime le snapshot, le restore, et tout risque de sérialisation. Coût : la logique de rendu doit accepter un override pour l'élément en édition. À évaluer en Phase 1 — si faisable sans surcoût majeur, préférer (B).
+>
+> Note : le **contenu du texte** (`text`), lui, DOIT être écrit live dans le modèle (c'est l'édition même) — seul le *recentrage géométrique* est concerné par ce risque.
+
+### 3.10 — Modèle SDK & rendu : contrôles Color / Background / Border
+
+> Section ajoutée — cadre le support modèle / rendu des trois contrôles de texte. V1 = presets uniquement (§2.3).
+
+**Color (texte) — aucun changement.** `StoryTextObject.textColor: String?` (hex) existe et est rendu. V1 UI = palette `StoryTextColors.palette`.
+
+**Background — aucun changement modèle ni renderer.** `StoryTextObject.backgroundStyle: StoryTextBackgroundStyle?` existe (`.none` / `.solid(hex:)` / `.glass(radius:)`). `solid(hex:)` accepte un hex **8 chiffres `RRGGBBAA`** ; `StoryTextLayer.parseHexColor` décode déjà l'alpha (`StoryTextLayer.swift:249-257`). La transparence du fond est donc déjà supportée — V1 expose des presets (p.ex. opaque / 50% / glass).
+
+**Border — NOUVEAU (Phase 0).** Aucun champ ni rendu de bord aujourd'hui : `StoryTextLayer` n'a aucun code de stroke/outline. Deux ajouts :
+
+1. **Modèle** — `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift`, struct `StoryTextObject` :
+
+```swift
+/// Contour / outline du texte. `borderColor == nil` ⇒ pas de bord
+/// (pas de booléen séparé — cf. règle CLAUDE.md « no redundant boolean »).
+public var borderColor: String?      // hex "RRGGBB" / "RRGGBBAA"
+public var borderWidth: Double?      // design-pixels (référentiel 1080) ; nil ⇒ défaut 3.0
+```
+
+   - Ajouter `borderColor`, `borderWidth` aux `CodingKeys` (pas de clé legacy — champs neufs optionnels ⇒ décodage des stories existantes intact).
+   - Étendre l'`init` (defaults `nil`).
+   - Cohérent avec le pattern existant `textColor: String?` / `textBg: String?` / `fontSize: Double`.
+
+2. **Renderer** — `packages/MeeshyUI/Story/Canvas/Layers/StoryTextLayer.swift` : dessiner le contour des glyphes. Le texte est rendu via `CATextLayer` + `NSAttributedString`. Quand `borderColor != nil`, ajouter les attributs `.strokeColor` (UIColor depuis `parseHexColor`) et `.strokeWidth` **négatif** (négatif = remplir + contourer ; positif = texte creux). Échelonner `borderWidth` (design-px) par le facteur de rendu canvas, comme `fontSize`.
+   - Vérifier que l'export MP4 (`StoryExporter` / `StoryAVCompositor`) réutilise `StoryTextLayer` → le bord est baké automatiquement ; sinon répliquer l'attribut côté export.
+
+3. **Presets V1** — l'UI `TextEditToolOptions` case `.border` propose : 1 chip `none` + une palette de couleurs (réutilise `StoryTextColors.palette`) + 3 épaisseurs préréglées (`fin` ≈ 2, `moyen` ≈ 4, `épais` ≈ 8 design-px). `none` ⇒ `borderColor = nil`.
+
+> ⚠️ Le rendu de texte contouré via `CATextLayer` peut présenter des artefacts selon la version d'iOS. Fallback si besoin : un 2ᵉ `CATextLayer` derrière, même texte, couleur = bord, légèrement dilaté — mais privilégier d'abord l'attribut `.strokeWidth`.
 
 ---
 
@@ -537,89 +602,105 @@ Idem dans `viewModel.deleteElement(id:)` — si on supprime le texte en cours d'
 
 | Test | Comportement |
 |------|--------------|
-| `test_enterMode_snapshotsOriginalProperties` | enter mode → `editingTextSnapshot` contains original x/y/scale/rotation |
+| `test_enterMode_snapshotsOriginalProperties` | enter mode → `editingTextSnapshot` contient x/y/scale/rotation d'origine |
 | `test_enterMode_movesTextToCenterAndResetsTransform` | text.x == 0.5, text.y == 0.32, scale == 1.0, rotation == 0 |
-| `test_enterMode_alreadyEditingSameText_isNoOp` | re-enter on the same id → snapshot unchanged (idempotence guard) |
-| `test_exitMode_restoresOriginalProperties` | exit → x/y/scale/rotation back to snapshot values |
-| `test_exitMode_clearsSnapshot` | editingTextSnapshot == nil after exit |
-| `test_setExpandedTool_storesInState` | textEditingMode.expandedTool reflects |
-| `test_setExpandedTool_whileInactive_noop` | inactive + setExpandedTool → still inactive |
-| `test_enterMode_invalidTextId_noop` | id not found → mode stays inactive |
-| `test_slideSwitch_autoExitsEditMode` | currentSlideIndex change → mode → inactive + position restored |
-| `test_deleteElement_whileEditing_clearsState` | delete edited text → snapshot cleared, mode inactive |
-| `test_mutate_helper_propagatesToCurrentEffects` | `mutate(textId:)` writes through `currentEffects` |
+| `test_enterMode_alreadyEditingSameText_isNoOp` | ré-entrée sur le même id → snapshot inchangé (guard d'idempotence) |
+| `test_exitMode_restoresOriginalProperties` | exit → x/y/scale/rotation reviennent aux valeurs du snapshot |
+| `test_exitMode_clearsSnapshot` | editingTextSnapshot == nil après exit |
+| `test_setExpandedTool_storesInState` | textEditingMode.expandedTool reflète |
+| `test_setExpandedTool_whileInactive_noop` | inactive + setExpandedTool → reste inactive |
+| `test_enterMode_invalidTextId_noop` | id introuvable → mode reste inactive |
+| `test_slideSwitch_autoExitsEditMode` | currentSlideIndex change → mode → inactive + position restaurée |
+| `test_deleteElement_whileEditing_clearsState` | delete du texte édité → snapshot vidé, mode inactive |
+| `test_mutate_helper_propagatesToCurrentEffects` | `mutate(textId:)` écrit via `currentEffects` |
 
 ### 4.2 UI Snapshot — `FloatingTextEditOverlayTests.swift`
 
 Snapshots :
-- Bubbles row inactive (no expanded tool) — light & dark — **5 bulles + X**
+- Bubbles row inactive (no expanded tool) — light & dark — **6 bulles + X**
 - Bubbles row with style expanded — light & dark
 - Bubbles row with color expanded — palette visible
-- Centered text with each TextEditTool's options panel (style / color / size / align / background) — light & dark
+- Centered field with each TextEditTool's options panel (style / color / size / align / background / border) — light & dark
+- **Centered field avec texte long multi-ligne** — vérifie wrap + croissance verticale, **aucune troncature `…`**
 
 ### 4.3 Integration — `StoryComposerTextEditIntegrationTests.swift`
 
 | Test | Comportement |
 |------|--------------|
-| `test_canvasTapOnText_entersEditMode` | tap on text canvas element → `textEditingMode == .active(id, nil)` |
-| `test_canvasTapOnMedia_doesNotEnterTextMode` | tap on image → no text edit mode |
-| `test_textTyping_propagatesToCanvas` | type via hidden TextField → currentSlide.textObjects[i].text updates |
-| `test_styleChange_propagatesToCanvas` | change style bubble → text on canvas re-renders with new font |
-| `test_dismissBubble_exitsModeAndDismissesKeyboard` | tap X bubble → `keyboardFocus == false` → mode inactive + position restored |
+| `test_canvasTapOnText_entersEditMode` | tap sur un texte canvas → `textEditingMode == .active(id, nil)` |
+| `test_canvasTapOnMedia_doesNotEnterTextMode` | tap sur une image → pas de mode texte |
+| `test_textTyping_propagatesToCanvas` | frappe dans le champ centré → `currentSlide.textObjects[i].text` se met à jour |
+| `test_styleChange_propagatesToCanvas` | change le style via bulle → texte canvas re-render avec la nouvelle police |
+| `test_borderPreset_propagatesToModel` | choisir un preset bord → `borderColor` / `borderWidth` écrits sur le textObject |
+| `test_backgroundPreset_propagatesToModel` | choisir un preset fond → `backgroundStyle` mis à jour |
+| `test_dismissBubble_exitsModeAndDismissesKeyboard` | tap bulle X → `keyboardFocus == false` → mode inactive + position restaurée |
 | `test_keyboardSwipeDown_exitsMode` | keyboardFocus = false → mode inactive |
-| `test_tapOutsideOverlay_exitsMode` | tap on dim background → keyboardFocus false → mode inactive |
-| `test_reTapEditingText_exitsModeAndDismissesKeyboard` | tap on the centered preview while editing → keyboardFocus false → mode inactive + position restored |
-| `test_allExits_funnelThroughKeyboardFocus` | chaque sortie (X / swipe / tap-outside / re-tap) → `keyboardFocus` repasse `false` avant `exitTextEditingMode` |
+| `test_tapOutsideOverlay_exitsMode` | tap sur le fond assombri → keyboardFocus false → mode inactive |
+| `test_tapInsideTextField_whileEditing_keepsModeActive` | tap dans le champ centré → mode reste `.active`, clavier monté (re-tap ≠ sortie) |
+| `test_allExits_funnelThroughKeyboardFocus` | chaque sortie (X / swipe / tap-outside) → `keyboardFocus` repasse `false` avant `exitTextEditingMode` |
 
-> 🔧 **Révision 2026-05-16** — Ajout de `test_reTapEditingText_exitsModeAndDismissesKeyboard`, `test_allExits_funnelThroughKeyboardFocus`, `test_enterMode_alreadyEditingSameText_isNoOp`, `test_mutate_helper_propagatesToCurrentEffects`. `test_dismissBubble` renommé pour vérifier explicitement le dismiss clavier.
+### 4.4 SDK model — `StoryTextObjectTests.swift` (Phase 0)
+
+| Test | Comportement |
+|------|--------------|
+| `test_border_codableRoundtrip` | `borderColor` + `borderWidth` survivent encode/decode |
+| `test_border_legacyJSON_decodesWithNilBorder` | une story sans champs border décode `borderColor == nil` |
+| `test_textLayer_rendersStrokeWhenBorderColorSet` | `StoryTextLayer` applique `.strokeColor` / `.strokeWidth` quand `borderColor != nil` |
 
 ---
 
 ## 5. Phases d'implémentation
 
+### Phase 0 (SDK model + renderer — Border, ~1.5h)
+- [ ] `StoryTextObject` : ajouter `borderColor: String?` + `borderWidth: Double?` + `CodingKeys` + defaults `nil` dans l'`init` (§3.10)
+- [ ] `StoryTextLayer` : rendre le contour quand `borderColor != nil` (attributs `NSAttributedString` `.strokeColor` + `.strokeWidth` négatif, épaisseur échelonnée comme `fontSize`)
+- [ ] Vérifier le chemin d'export MP4 (`StoryExporter` / `StoryAVCompositor`) — le bord doit être baké
+- [ ] Tests SDK : Codable roundtrip + décodage legacy-JSON + rendu stroke (§4.4)
+- [ ] **Gate** : build SDK vert, tests passent — aucune couche UI modifiée
+
 ### Phase 1 (foundation, ~1.5h)
-- [ ] Add `TextEditingMode` enum + `TextEditTool` enum (5 cases, **pas** de `.border`) to `StoryComposerViewModel.swift`
+- [ ] Add `TextEditingMode` enum + `TextEditTool` enum (6 cases, `.border` inclus) to `StoryComposerViewModel.swift`
 - [ ] Add the **`mutate(textId:)` private helper** (n'existe pas — cf. §3.2)
-- [ ] Add `editingTextSnapshot` private + `enterTextEditingMode` (avec guard d'idempotence) / `exitTextEditingMode` / `setExpandedTool` methods
+- [ ] Add `editingTextSnapshot` private + `enterTextEditingMode` (avec guard d'idempotence) / `exitTextEditingMode` / `setExpandedTool`
 - [ ] **Évaluer l'option (B) de §3.9** (recentrage view-layer sans mutation modèle) — si simple, l'adopter et adapter §3.2
-- [ ] Unit tests for the ViewModel state machine (11 tests above)
+- [ ] Unit tests ViewModel (11 tests, §4.1)
 
 ### Phase 2 (canvas tap routing, ~0.5h)
 - [ ] Patcher la branche `.text` de `onItemTapped` **et** `onItemDoubleTapped` dans `StoryComposerView.canvasCore` → `viewModel.enterTextEditingMode(textId:)`
 - [ ] (Aucune modif de `StoryCanvasUIView` / `StoryCanvasRepresentable` / `handlePan` — cf. §3.3)
-- [ ] Integration test: tap on text → mode entered ; tap on media → pas de mode texte
+- [ ] Integration test : tap on text → mode entered ; tap on media → pas de mode texte
 
-### Phase 3 (FloatingTextEditOverlay shell, ~2h)
-- [ ] Create `FloatingTextEditOverlay.swift` : dim bg + bubble row + centered preview + hidden TextField + funnel `dismissKeyboardAndExit()`
-- [ ] Create `TextEditFloatingBubbles.swift` (5 tool bubbles + dismiss X)
-- [ ] Create `TextEditCenteredPreview.swift` (preview `Text` non éditable + `.onTapGesture` de sortie)
+### Phase 3 (FloatingTextEditOverlay shell, ~2.5h)
+- [ ] Create `FloatingTextEditOverlay.swift` : dim bg + bubble row + champ centré éditable + funnel `dismissKeyboardAndExit()`
+- [ ] Create `TextEditFloatingBubbles.swift` (6 tool bubbles + dismiss X)
+- [ ] Create `TextEditCenteredField.swift` : champ **multi-ligne éditable**, taille 1:1, wrap, **zéro troncature**, tap = curseur (§3.6) — choisir `TextField(axis:.vertical)` ou `UITextView` representable (recyclage `ComposerTextEditingView`, §3.8 bis)
 - [ ] Mount in `StoryComposerView` ZStack + coordinate visibility (opacity + `allowsHitTesting` + animation) avec FABs/band/topBar
-- [ ] Snapshot tests
-- [ ] Vérifier : les 4 sorties passent toutes par `keyboardFocus = false`
+- [ ] Snapshot tests, dont le cas texte long multi-ligne
+- [ ] Vérifier : les 3 sorties passent toutes par `keyboardFocus = false` ; le tap dans le champ ne sort PAS
 
 ### Phase 4 (tool options, ~1.5h)
-- [ ] Create `TextEditToolOptions.swift` with switch over `TextEditTool` (5 cases)
-- [ ] Refactor existing `StoryTextEditorView.styleSection / colorSection / sizeSection` into shared components
-- [ ] Reuse those in TextEditToolOptions ; `background` mappe sur `StoryTextBackgroundStyle`
+- [ ] Create `TextEditToolOptions.swift` with switch over `TextEditTool` (6 cases)
+- [ ] Refactor `StoryTextEditorView.styleSection / colorSection / sizeSection` en composants partagés
+- [ ] Reuse those in TextEditToolOptions ; `background` mappe sur `StoryTextBackgroundStyle` ; `border` écrit `borderColor`/`borderWidth`
 - [ ] Wire bubble taps to setExpandedTool
-- [ ] Verify each tool change live-propagates to canvas
+- [ ] Verify chaque changement (style/color/size/align/background/border) live-propagates au canvas
 
 ### Phase 5 (polish, cleanup + edge cases, ~1h)
-- [ ] Slide switch during edit → auto-exit (étendre à **tous** les points de sérialisation — cf. §3.9 mitigation A)
+- [ ] Slide switch during edit → auto-exit (étendre à **tous** les points de sérialisation — §3.9 mitigation A)
 - [ ] Element delete during edit → clear state
-- [ ] **Supprimer les stubs morts** `ComposerTextFormatBand.swift` + `ComposerTextEditingView.swift` (après `grep` de non-référencement — §3.8 bis)
+- [ ] **Supprimer le stub mort** `ComposerTextFormatBand.swift` ; recycler ou supprimer `ComposerTextEditingView.swift` selon le choix Phase 3 (§3.8 bis)
 - [ ] Accessibility labels on all bubbles ; hint « ferme l'éditeur et masque le clavier » sur X
-- [ ] Dynamic Type support on preview
-- [ ] VoiceOver flow (focus order : preview → bubbles → dismiss)
+- [ ] Dynamic Type ; VoiceOver flow (champ → bulles → dismiss)
 - [ ] Haptic feedback : light on bubble tap, medium on dismiss
 
-### Phase 6 (manual QA + smoke, ~30min)
+### Phase 6 (manual QA + smoke, ~0.5h)
 - [ ] Re-run Section 12 Text-related smoke tests
-- [ ] Take screenshots in light + dark mode
-- [ ] Verify keyboard dismiss interactions — **les 4 sorties** font bien descendre le clavier
-- [ ] Verify gesture conflict with canvas pan/pinch (priorities)
+- [ ] Screenshots light + dark
+- [ ] Vérifier : texte long → wrap + scroll, jamais tronqué ; texte petit → affiché 1:1 lisible
+- [ ] Vérifier : les 3 sorties font descendre le clavier ; tap dans le texte = curseur, pas sortie
+- [ ] Gesture conflict canvas pan/pinch
 
-**Total estimé** : ~6.5-7h (Phase 2 raccourcie, Border hors scope).
+**Total estimé** : ~8-9h.
 
 ---
 
@@ -627,62 +708,65 @@ Snapshots :
 
 | # | Risque | Mitigation |
 |---|--------|-----------|
-| 1 | Conflit de gestures : pan recognizer absorbe le tap simple sur texte | **Résolu par §3.3** : on réutilise le `singleTapRecognizer` existant (déjà `require(toFail: doubleTapRecognizer)`), pas de modif gesture. |
-| 2 | Le canvas continue d'afficher le texte aussi → confusion preview vs réel | L'animation `text.x/y → 0.5, 0.32` ramène le canvas texte au centre ; la preview overlay le superpose à la même position → cohérent. Si confusion, masquer la copie canvas pendant l'édition. |
-| 3 | Keyboard dismissal : `@FocusState` ne distingue pas swipe-down vs autre dismiss | OK et **voulu** : tout dismiss du clavier = sortie du mode. Le funnel unique `keyboardFocus = false` (§3.4) rend ça déterministe — X, tap-outside et re-tap-texte y passent aussi. |
-| 4 | Animation jitter quand bubble expanded change rapidement | Limit `setExpandedTool` à 1 toggle / 150ms via debounce light. |
-| 5 | Position d'édition 0.32 collisionne avec status bar sur petits iPhones (SE) | Calculer `editingY = max(0.20, (statusBarHeight + 60) / canvasHeight)` dynamiquement. |
-| 6 | Performance : re-render canvas à chaque keystroke | `slidesEqualForCanvas` détecte text change → re-render. Pour textes longs, debounce 80ms le binding write côté `FloatingTextEditOverlay`. |
-| 7 | **Sérialisation pendant l'édition** : autosave / `granularCanvasSync` / publish fige la position centrée `(0.5, 0.32)` | **Critique** — cf. §3.9. Option (A) : tout commit appelle `exitTextEditingMode()` en pré-étape (auditer *tous* les points). Option (B, recommandée) : recentrage view-layer sans muter le modèle. Risk #7 couvre aussi le force-quit (snapshot perdu). |
-| 8 | Deux `TextField` sur le même binding (preview + caché) → curseur/focus cassés | **Résolu par §3.6** : un seul champ éditable (le caché) ; la preview est un `Text` non éditable. |
+| 1 | Conflit de gestures : pan recognizer absorbe le tap simple sur texte | **Résolu §3.3** : réutilise le `singleTapRecognizer` existant (`require(toFail: doubleTapRecognizer)`), pas de modif gesture. |
+| 2 | Le canvas affiche aussi le texte → confusion avec le champ d'édition | Le texte canvas est recentré en `(0.5, 0.32)` scale 1.0 sous l'overlay ; le champ éditable le superpose à la même position → cohérent. Si confusion, masquer la copie canvas pendant l'édition. |
+| 3 | Keyboard dismissal : `@FocusState` ne distingue pas swipe-down vs autre dismiss | OK et **voulu** : tout dismiss du clavier = sortie. Funnel unique `keyboardFocus = false` (§3.4) → déterministe. |
+| 4 | Animation jitter quand bubble expanded change rapidement | Debounce léger `setExpandedTool` à 1 toggle / 150ms. |
+| 5 | Position 0.32 + clavier + options trop serrés sur petit iPhone (SE) | `editingY` calculé : `max(0.20, (statusBarHeight + 60) / canvasHeight)`. Le champ scrolle en interne si nécessaire. |
+| 6 | Performance : re-render canvas à chaque keystroke | `slidesEqualForCanvas` détecte le changement de texte → re-render. Pour textes longs, debounce 80ms l'écriture du binding. |
+| 7 | **Sérialisation pendant l'édition** fige la position centrée `(0.5, 0.32)` | **Critique** — §3.9. Option (A) : tout commit appelle `exitTextEditingMode()` en pré-étape. Option (B, recommandée) : recentrage view-layer sans muter le modèle. Couvre aussi le force-quit. |
+| 8 | `TextField(axis:.vertical)` insuffisant pour polices custom / sélection fine | Fallback `UITextView` representable (§3.6) — recyclage de `ComposerTextEditingView`. |
+| 9 | Texte très long → champ déborde l'écran | Le champ scrolle en interne (textarea) ; jamais de troncature. Hauteur max bornée, scroll au-delà. |
 
 ---
 
-## 7. Hors scope (Phase 2 future)
+## 7. Hors scope (V2 future)
 
-- **Bulle « Border »** (contour none/thin/thick + couleur) : `StoryTextObject` n'a aucun champ `border` (`StoryModels.swift`, modèle SDK core). L'ajouter exige une extension du modèle + migration `Codable` (tagged union) côté SDK, non chiffrée dans ce plan. → Reportée. Réintroduction : ajouter le champ modèle + le case `TextEditTool.border` + le case dans `TextEditToolOptions`.
-- Pinch in/out **sur le canvas** pour redimensionner texte pendant édition — pour cette V1, le slider Size suffit.
-- Long-press sur texte → menu contextuel (Modifier / Dupliquer / Supprimer) — déjà présent dans le menu canvas global, on conserve.
-- Animation custom du texte (entrance / exit) — la timeline panel gère ça, hors mode édition.
-- Multi-line text editing avec retours à la ligne dans le preview — le `TextField axis: .vertical` du `StoryTextEditorView` actuel le supportait, à porter dans la centered preview.
+- **Pickers libres couleur / fond / bord** : en V1 ces trois contrôles n'offrent que des **presets** (palettes + épaisseurs / transparences préréglées — §2.3, §3.10). Color pickers système (`UIColorPickerViewController`), slider d'épaisseur de bord continu, slider de transparence de fond continu → reportés post-V1.
+- Pinch in/out **sur le canvas** pour redimensionner le texte pendant l'édition — en V1, le slider Size suffit.
+- Long-press sur texte → menu contextuel (Modifier / Dupliquer / Supprimer) — déjà dans le menu canvas global, conservé.
+- Animation custom du texte (entrance / exit) — gérée par la timeline panel, hors mode édition.
 - Markdown / mention support — non requis ici.
-- Curseur d'insertion réel positionnable (tap dans la preview pour placer le curseur) — en V1 le tap dans la preview = sortie ; la frappe est en append seul.
 
 ---
 
 ## 8. Source of truth & references
 
-- Texte object model : `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` → `StoryTextObject` (textStyle, textColor, textAlign, textBg, fontSize, fontFamily, backgroundStyle — **pas de champ border**) + `StoryTextBackgroundStyle` (`.none` / `.solid(hex:)` / `.glass(radius:)`)
-- Font resolution canvas : `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/Layers/StoryTextLayer.swift` → `resolveFont(forTextObject:size:)`
+- Texte object model : `packages/MeeshySDK/Sources/MeeshySDK/Models/StoryModels.swift` → `StoryTextObject` (textStyle, textColor, textAlign, textBg, fontSize, fontFamily, backgroundStyle ; **`borderColor` + `borderWidth` ajoutés en Phase 0**) + `StoryTextBackgroundStyle` (`.none` / `.solid(hex: RRGGBBAA)` / `.glass(radius:)`)
+- Rendu texte canvas : `packages/MeeshyUI/Story/Canvas/Layers/StoryTextLayer.swift` → `resolveFont(...)`, `applyBackgroundStyle(...)`, `parseHexColor(...)` (gère l'alpha 8-digits) ; **rendu du contour ajouté en Phase 0**
+- Résolution police SwiftUI : `storyFont(for:size:)` dans `FontStylePicker.swift`
 - Existing text panel (à conserver pour la liste des textes) : `packages/MeeshySDK/Sources/MeeshyUI/Story/StoryTextEditorView.swift`
-- Canvas tap routing : `packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift` (`singleTapRecognizer` → `onItemTapped`, `:1089`) + `StoryComposerView.swift` `canvasCore` (`:1032`)
+- Canvas tap routing : `StoryCanvasUIView.swift` (`singleTapRecognizer` → `onItemTapped`, `:1089`) + `StoryComposerView.swift` `canvasCore` (`:1032`)
 - Band state machine : `packages/MeeshySDK/Sources/MeeshyUI/Story/Controls/BandStateMachine.swift`
-- Stubs morts à supprimer : `Controls/ComposerTextFormatBand.swift`, `Controls/ComposerTextEditingView.swift`
+- Code à nettoyer / recycler : `Controls/ComposerTextFormatBand.swift` (supprimer), `Controls/ComposerTextEditingView.swift` (recycler en `UITextView` representable ou supprimer)
 
 ---
 
 ## 9. Self-Review checklist (post-impl)
 
 - [ ] Tap simple sur un texte → mode édition entre, clavier monte, texte centré
-- [ ] Texte canvas se déplace de (x,y) original vers (0.5, 0.32) avec spring 250ms
-- [ ] Bulles flottantes 36×36 au-dessus du texte, style FAB 60% — **5 bulles d'outils + 1 bulle X**
+- [ ] Texte canvas se déplace de (x,y) original vers (0.5, 0.32), scale → 1.0, rotation → 0, spring 250ms
+- [ ] **Texte affiché à sa taille réelle 1:1** — ni cap de police, ni shrink-to-fit
+- [ ] **Texte intégral visible** : multi-ligne, retour à la ligne automatique, **aucune troncature `…`** ; scroll interne si très long
+- [ ] **Toucher le texte pendant l'édition positionne le curseur / sélectionne** — ne ferme PAS le mode
+- [ ] Bulles flottantes 36×36 au-dessus du texte, style FAB 60% — **6 bulles d'outils + 1 bulle X**
 - [ ] Tap sur Style bubble → carrousel des 5 styles apparaît sous le texte (slide-up)
-- [ ] Choix d'un style → texte canvas + preview se mettent à jour live
-- [ ] Idem pour Color / Size / Align / Background
-- [ ] Tap sur la même bulle → options se referment
-- [ ] Tap sur autre bulle → options switchent sans flicker
+- [ ] Choix d'un style → texte canvas + champ d'édition se mettent à jour live
+- [ ] Idem pour Color / Size / Align / Background / Border
+- [ ] Border : choisir un preset (couleur × épaisseur) → le contour s'affiche sur le canvas ; `none` → pas de contour
+- [ ] Background : un preset à transparence → le fond translucide se rend correctement (alpha 8-digits)
+- [ ] Tap sur la même bulle → options se referment ; autre bulle → switch sans flicker ; clavier reste monté
 - [ ] **Bulle X → le clavier descend ET le mode se ferme** (jamais de clavier orphelin)
 - [ ] **Swipe-down sur clavier → mode édition se ferme, position restaurée**
-- [ ] **Tap-outside (dim bg) → clavier descend + mode édition se ferme**
-- [ ] **Re-tap sur le texte en cours d'édition → clavier descend + mode édition se ferme, position restaurée**
-- [ ] Les 4 sorties passent par `keyboardFocus = false` (funnel unique) — aucune ne laisse le clavier monté
+- [ ] **Tap sur le fond assombri → clavier descend + mode édition se ferme**
+- [ ] Les 3 sorties passent par `keyboardFocus = false` (funnel unique)
 - [ ] FABs + band + top bar masqués (opacity + non-hittable) pendant édition, restaurés après
 - [ ] Changement de slide pendant édition → auto-exit + position restaurée
-- [ ] Autosave / publish pendant édition → la position centrée n'est PAS sérialisée (cf. §3.9)
+- [ ] Autosave / publish pendant édition → la position centrée n'est PAS sérialisée (§3.9)
 - [ ] Suppression du texte pendant édition → snapshot nettoyé, pas de leak
 - [ ] Double-tap sur texte = même effet que tap simple (idempotent)
-- [ ] Stubs `ComposerTextFormatBand` / `ComposerTextEditingView` supprimés, build vert
+- [ ] Stub `ComposerTextFormatBand` supprimé ; `ComposerTextEditingView` recyclé ou supprimé ; build vert
 - [ ] Accessibility : VoiceOver lit les bulles, navigation rotor fonctionne
 - [ ] Light + dark mode : tous les contrôles lisibles
 - [ ] Pas de retain cycle (memory graph propre après 10 cycles enter/exit)
-- [ ] Tests passent : 11 ViewModel + 9 integration + snapshots stables
+- [ ] Tests passent : 3 SDK (Phase 0) + 11 ViewModel + 11 integration + snapshots stables
