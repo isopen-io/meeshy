@@ -47,6 +47,23 @@ struct StoryActionSidebarView: View {
     let pauseTimer: () -> Void
     let loadStoryComments: () -> Void
 
+    /// Transient scale of the heart button — driven only by `bounceHeart()`.
+    @State private var heartScale: CGFloat = 1.0
+
+    /// Quick pop on the heart button that confirms the user just sent a
+    /// reaction. Phased spring, matching the style of `triggerStoryReaction`'s
+    /// own multi-phase animation.
+    private func bounceHeart() {
+        withAnimation(.spring(response: 0.22, dampingFraction: 0.45)) {
+            heartScale = 1.35
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.16) {
+            withAnimation(.spring(response: 0.34, dampingFraction: 0.55)) {
+                heartScale = 1.0
+            }
+        }
+    }
+
     var body: some View {
         VStack(spacing: 20) {
             // 1. Reaction (heart) — primary action, brand-colored when active
@@ -62,6 +79,7 @@ struct StoryActionSidebarView: View {
                         showEmojiStrip.toggle()
                     }
                 }
+                .scaleEffect(heartScale)
                 .overlay(alignment: .trailing) {
                     if showEmojiStrip {
                         EmojiReactionPicker(
@@ -69,6 +87,7 @@ struct StoryActionSidebarView: View {
                             style: .dark,
                             onReact: { emoji in
                                 triggerStoryReaction(emoji)
+                                bounceHeart()
                             },
                             onDismiss: {
                                 withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
