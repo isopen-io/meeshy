@@ -45,6 +45,7 @@ public final class ReactionService: ReactionServiceProviding, @unchecked Sendabl
 /// does not consume. Its decoder succeeds against ANY JSON value (object,
 /// array, scalar, null) without inspecting it, so a change in the server's
 /// response shape can never make the call throw a `DecodingError`.
-private struct DiscardedReactionResponse: Decodable {
+struct DiscardedReactionResponse: Decodable {
+    init() {}
     init(from decoder: Decoder) throws {}
 }
