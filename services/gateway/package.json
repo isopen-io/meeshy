@@ -20,7 +20,7 @@
     "test:watch": "jest --config=jest.config.json --watch",
     "test:coverage": "jest --config=jest.config.json --coverage",
     "lint": "eslint src/",
-    "type-check": "tsc --noEmit",
+    "type-check": "pnpm --filter @meeshy/shared build && tsc --noEmit",
     "clean": "rm -rf dist node_modules coverage"
   },
   "dependencies": {
