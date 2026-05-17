@@ -417,7 +417,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             @unknown default:
                 debugInfo += error.localizedDescription
             }
-            logger.error("DecodingError: \(debugInfo)")
+            // Endpoint + method are logged so a `DecodingError` line is
+            // self-sufficient to locate the failing call — without it a
+            // `data.message` mismatch could be any of a dozen requests.
+            logger.error("DecodingError on \(method, privacy: .public) \(endpoint, privacy: .public): \(debugInfo)")
             throw MeeshyError.server(statusCode: 0, message: debugInfo)
         } catch let error as URLError {
             switch error.code {
