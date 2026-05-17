@@ -1095,8 +1095,18 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func joinConversation(_ conversationId: String) {
         guard !joinedConversations.contains(conversationId) else { return }
-        socket?.emit("conversation:join", ["conversationId": conversationId])
+        // Tracker la room AVANT toute emission : le handler `.connect`
+        // (re-join loop) re-emet `conversation:join` pour toutes les rooms
+        // de `joinedConversations` une fois le handshake termine.
         joinedConversations.insert(conversationId)
+        guard socket?.status == .connected else {
+            // Socket pas encore connecte : emettre ici serait perdu et
+            // declencherait l'erreur `Tried emitting when not connected`.
+            // Le re-join du handler `.connect` prendra le relais.
+            Logger.socket.info("Queued conversation join (socket not connected): \(conversationId)")
+            return
+        }
+        socket?.emit("conversation:join", ["conversationId": conversationId])
         Logger.socket.info("Joined conversation: \(conversationId)")
     }
 

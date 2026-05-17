@@ -6,6 +6,7 @@ import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { MessageIdParamSchema, ConversationIdParamSchema, ReadStatusesQuerySchema, DeliveryReceiptParamsSchema } from '../validation/message-read-status-schemas.js';
 import { resolveConversationId } from '../utils/conversation-id-cache.js';
+import { sendSuccess } from '../utils/response.js';
 
 interface MessageParams {
   messageId: string;
@@ -220,6 +221,10 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         });
       }
 
+      // Compteur AVANT marquage — nombre de messages marqués comme lus,
+      // uniforme avec POST /conversations/:id/mark-read.
+      const markedCount = await readStatusService.getUnreadCount(membership.id, conversationId);
+
       // Marquer comme lu (participantId, pas userId)
       await readStatusService.markMessagesAsRead(membership.id, conversationId);
 
@@ -244,10 +249,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         }
       }
 
-      return reply.send({
-        success: true,
-        data: { message: 'Messages marqués comme lus' }
-      });
+      return sendSuccess(reply, { markedCount });
 
     } catch (error) {
       console.error('[MessageReadStatus] Error marking messages as read:', error);
@@ -300,6 +302,9 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         });
       }
 
+      // Compteur AVANT marquage — uniforme avec POST /conversations/:id/mark-read.
+      const markedCount = await readStatusService.getUnreadCount(membership.id, conversationId);
+
       // Marquer comme reçu (participantId, pas userId)
       await readStatusService.markMessagesAsReceived(membership.id, conversationId);
 
@@ -324,10 +329,7 @@ export default async function messageReadStatusRoutes(fastify: FastifyInstance) 
         }
       }
 
-      return reply.send({
-        success: true,
-        data: { message: 'Messages marqués comme reçus' }
-      });
+      return sendSuccess(reply, { markedCount });
 
     } catch (error) {
       console.error('[MessageReadStatus] Error marking messages as received:', error);
