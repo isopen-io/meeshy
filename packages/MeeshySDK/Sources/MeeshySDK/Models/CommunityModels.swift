@@ -93,6 +93,13 @@ public struct APICommunity: Codable, Identifiable, Sendable, CacheIdentifiable {
     public let creator: APICommunityUser?
     public let members: [APICommunityMember]?
     public let _count: APICommunityCount?
+    /// Flat count fields emitted by the `GET /communities` Fastify response
+    /// schema. `fast-json-stringify` strips the raw Prisma `_count` object
+    /// (it is not declared in `communitySchema`), so the list endpoint
+    /// serialises `memberCount` / `conversationCount` directly. Optional so
+    /// payloads carrying the legacy `_count` shape still decode.
+    public let memberCount: Int?
+    public let conversationCount: Int?
 }
 
 extension APICommunity {
@@ -108,8 +115,9 @@ extension APICommunity {
             createdBy: createdBy,
             createdAt: createdAt,
             updatedAt: updatedAt ?? createdAt,
-            memberCount: _count?.members ?? members?.count ?? 0,
-            conversationCount: _count?.conversations ?? 0
+            memberCount: memberCount ?? _count?.members ?? members?.count ?? 0,
+            conversationCount: conversationCount ?? _count?.conversations ?? 0,
+            color: DynamicColorGenerator.colorForName(name)
         )
     }
 }
@@ -140,7 +148,8 @@ public struct APICommunitySearchResult: Decodable, Identifiable {
             createdAt: createdAt,
             updatedAt: createdAt,
             memberCount: memberCount ?? 0,
-            conversationCount: conversationCount ?? 0
+            conversationCount: conversationCount ?? 0,
+            color: DynamicColorGenerator.colorForName(name)
         )
     }
 }

@@ -303,9 +303,20 @@ export async function communityRoutes(fastify: FastifyInstance) {
         fastify.prisma.community.count({ where: whereClause })
       ]);
 
+      // Flatten the Prisma `_count` aggregate into the `memberCount` /
+      // `conversationCount` fields declared by `communitySchema`. Without
+      // this map the response schema's `fast-json-stringify` strips the raw
+      // `_count` object (it is not a declared property) and emits nothing for
+      // the counts — the client always read 0. Mirrors `/communities/search`.
+      const data = communities.map(({ _count, members, ...community }) => ({
+        ...community,
+        memberCount: _count.members,
+        conversationCount: _count.Conversation
+      }));
+
       reply.send({
         success: true,
-        data: communities,
+        data,
         pagination: {
           total: totalCount,
           limit: limitNum,

@@ -213,25 +213,31 @@ private struct VibrantCommunityCard: View {
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            LinearGradient(
-                colors: [
-                    Color(hex: accentColor),
-                    Color(hex: accentColor).opacity(0.65)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+            // Banner image — full-bleed. Falls back to the community's
+            // derived accent colour gradient when no banner is set.
+            CachedBannerImage(
+                urlString: community.banner,
+                thumbHash: community.bannerThumbHash,
+                fallbackColor: accentColor,
+                height: 180
             )
 
-            if !community.emoji.isEmpty {
-                Text(community.emoji)
-                    .font(.system(size: 40))
-                    .rotationEffect(.degrees(isPressed ? -12 : -5))
-                    .offset(x: 10, y: 6)
-                    .opacity(0.9)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-                    .padding(.trailing, 8)
-                    .padding(.top, 8)
-            }
+            // Community avatar — circular, top-trailing, ringed for
+            // separation from the banner.
+            CachedAvatarImage(
+                urlString: community.avatar,
+                thumbHash: community.avatarThumbHash,
+                name: community.name,
+                size: 44,
+                accentColor: accentColor
+            )
+            .overlay(Circle().stroke(Color.white.opacity(0.85), lineWidth: 2))
+            .shadow(color: Color.black.opacity(0.25), radius: 4, y: 2)
+            .rotationEffect(.degrees(isPressed ? -8 : 0))
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
+            .padding(.trailing, 10)
+            .padding(.top, 10)
 
             HStack(spacing: 3) {
                 Image(systemName: community.isPrivate ? "lock.fill" : "globe")

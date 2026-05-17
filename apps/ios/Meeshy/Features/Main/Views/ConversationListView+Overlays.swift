@@ -358,17 +358,31 @@ struct ConversationListBottomBar: View {
         VStack(spacing: 0) {
             Spacer()
 
-            // Communities carousel - only when search overlay is open (loupe tap)
+            // Communities carousel + category filters — shown together inside
+            // a glass panel when the search overlay is open (loupe tap). The
+            // `.ultraThinMaterial` fill adapts to dark/light automatically and
+            // keeps the conversation list behind it legible; the theme-aware
+            // `inputBorder` stroke defines the panel edge in both modes.
             if showSearchOverlay {
-                communitiesSection
-                    .padding(.vertical, 10)
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
-            }
-
-            // Category filters - only when search overlay is open (loupe tap)
-            if showSearchOverlay {
-                categoryFilters
-                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+                VStack(spacing: 0) {
+                    communitiesSection
+                        .padding(.vertical, 10)
+                    categoryFilters
+                }
+                .padding(.top, 6)
+                .padding(.bottom, 4)
+                .background(
+                    RoundedRectangle(cornerRadius: 24)
+                        .fill(.ultraThinMaterial)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 24)
+                                .stroke(theme.inputBorder, lineWidth: 1)
+                        )
+                        .shadow(color: Color.black.opacity(0.12), radius: 14, y: 6)
+                )
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
 
             // Search bar - always visible (unless scrolled away)

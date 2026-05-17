@@ -258,4 +258,106 @@ final class CommunityModelsTests: XCTestCase {
         XCTAssertEqual(count.members, 5)
         XCTAssertEqual(count.conversations, 0)
     }
+
+    // MARK: - APICommunity — flat count contract (GET /communities)
+
+    /// The `GET /communities` Fastify response schema serialises the counts as
+    /// flat `memberCount` / `conversationCount` fields (not the raw Prisma
+    /// `_count` object, which `fast-json-stringify` strips). `APICommunity`
+    /// must decode this shape.
+    func test_apiCommunity_decodesFlatCountFields() throws {
+        let json = """
+        {
+            "id": "comm-flat",
+            "identifier": "flat-club",
+            "name": "Flat Club",
+            "description": null,
+            "avatar": null,
+            "banner": null,
+            "isPrivate": false,
+            "createdBy": "user9",
+            "createdAt": "2026-05-01T08:00:00.000Z",
+            "updatedAt": null,
+            "creator": null,
+            "memberCount": 27,
+            "conversationCount": 6
+        }
+        """.data(using: .utf8)!
+
+        let community = try makeDecoder().decode(APICommunity.self, from: json)
+        XCTAssertEqual(community.memberCount, 27)
+        XCTAssertEqual(community.conversationCount, 6)
+    }
+
+    func test_apiCommunity_toCommunity_usesFlatCountFields() throws {
+        let json = """
+        {
+            "id": "comm-flat2",
+            "identifier": "flat-club-2",
+            "name": "Flat Club 2",
+            "description": null,
+            "avatar": null,
+            "banner": null,
+            "isPrivate": true,
+            "createdBy": "user9",
+            "createdAt": "2026-05-01T08:00:00.000Z",
+            "updatedAt": null,
+            "creator": null,
+            "memberCount": 88,
+            "conversationCount": 12
+        }
+        """.data(using: .utf8)!
+
+        let community = try makeDecoder().decode(APICommunity.self, from: json).toCommunity()
+        XCTAssertEqual(community.memberCount, 88)
+        XCTAssertEqual(community.conversationCount, 12)
+    }
+
+    /// Each community gets a deterministic accent colour derived from its name
+    /// so the carousel cards are visually distinct instead of all sharing the
+    /// `MeeshyCommunity.color` default.
+    func test_apiCommunity_toCommunity_derivesAccentColorFromName() throws {
+        let json = """
+        {
+            "id": "comm-color",
+            "identifier": "color-club",
+            "name": "Colorful Community",
+            "description": null,
+            "avatar": null,
+            "banner": null,
+            "isPrivate": false,
+            "createdBy": "user9",
+            "createdAt": "2026-05-01T08:00:00.000Z",
+            "updatedAt": null,
+            "creator": null,
+            "memberCount": 1,
+            "conversationCount": 0
+        }
+        """.data(using: .utf8)!
+
+        let community = try makeDecoder().decode(APICommunity.self, from: json).toCommunity()
+        XCTAssertEqual(community.color, DynamicColorGenerator.colorForName("Colorful Community"))
+        XCTAssertFalse(community.color.isEmpty)
+    }
+
+    func test_apiCommunitySearchResult_toCommunity_derivesAccentColorFromName() throws {
+        let json = """
+        {
+            "id": "comm-search-color",
+            "name": "Search Color Hub",
+            "identifier": "search-color-hub",
+            "description": null,
+            "avatar": null,
+            "isPrivate": false,
+            "memberCount": 4,
+            "conversationCount": 2,
+            "createdAt": "2026-03-10T09:00:00.000Z",
+            "creator": null,
+            "members": null
+        }
+        """.data(using: .utf8)!
+
+        let community = try makeDecoder().decode(APICommunitySearchResult.self, from: json).toCommunity()
+        XCTAssertEqual(community.color, DynamicColorGenerator.colorForName("Search Color Hub"))
+    }
 }
