@@ -10,6 +10,24 @@ public struct MentionSuggestion: Codable, Identifiable, Sendable {
     public let badge: String?
     public let inConversation: Bool?
     public let isFriend: Bool?
+
+    public init(
+        id: String,
+        username: String,
+        displayName: String? = nil,
+        avatar: String? = nil,
+        badge: String? = nil,
+        inConversation: Bool? = nil,
+        isFriend: Bool? = nil
+    ) {
+        self.id = id
+        self.username = username
+        self.displayName = displayName
+        self.avatar = avatar
+        self.badge = badge
+        self.inConversation = inConversation
+        self.isFriend = isFriend
+    }
 }
 
 // MARK: - Context Type

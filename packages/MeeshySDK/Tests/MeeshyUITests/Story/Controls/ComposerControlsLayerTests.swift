@@ -1,4 +1,6 @@
 import XCTest
+import SwiftUI
+import PencilKit
 @testable import MeeshyUI
 @testable import MeeshySDK
 
@@ -72,6 +74,8 @@ final class ComposerControlsLayerTests: XCTestCase {
     private func makeLayer(vm: StoryComposerViewModel) -> ComposerControlsLayer {
         ComposerControlsLayer(
             viewModel: vm,
+            bandStateMachine: .constant(BandStateMachine()),
+            areFabsVisible: .constant(true),
             drawingCanvas: .constant(.init()),
             drawingTool: .constant(.pen),
             selectedFilter: .constant(nil),

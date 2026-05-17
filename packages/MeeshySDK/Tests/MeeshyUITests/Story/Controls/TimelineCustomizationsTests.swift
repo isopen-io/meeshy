@@ -10,10 +10,10 @@ final class TimelineCustomizationsTests: XCTestCase {
         XCTAssertFalse(vm.timelineHasCustomizations)
     }
 
-    func test_added_keyframe_marks_customized() {
+    func test_added_keyframe_marks_customized() throws {
         let vm = StoryComposerViewModel()
         // Setup a mock text element & select it
-        let textObj = vm.addText()
+        let textObj = try XCTUnwrap(vm.addText())
         vm.timelineViewModel.selectClip(id: textObj.id)
         
         vm.timelineViewModel.addKeyframeAtPlayhead(x: 0, y: 0)
@@ -24,7 +24,7 @@ final class TimelineCustomizationsTests: XCTestCase {
         let vm = StoryComposerViewModel()
         // Add a transition to the timeline project
         vm.timelineViewModel.project.clipTransitions.append(
-             StoryClipTransition(fromClipId: "1", toClipId: "2", kind: .fade, duration: 1.0, easing: .linear)
+             StoryClipTransition(fromClipId: "1", toClipId: "2", kind: .crossfade, duration: 1.0, easing: .linear)
         )
         XCTAssertTrue(vm.timelineHasCustomizations)
     }

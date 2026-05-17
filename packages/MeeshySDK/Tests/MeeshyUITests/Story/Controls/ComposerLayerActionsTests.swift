@@ -7,19 +7,19 @@ final class ComposerLayerActionsTests: XCTestCase {
 
     // MARK: - bringForward / sendBackward
 
-    func test_bringForward_atTop_isNoOp() {
+    func test_bringForward_atTop_isNoOp() throws {
         let vm = StoryComposerViewModel()
-        let _ = vm.addText()  // returns the new text object
-        let b = vm.addText()
+        _ = vm.addText()  // returns the new text object
+        let b = try XCTUnwrap(vm.addText())
         vm.bringToFront(id: b.id)   // b is at top
         let zBefore = vm.zIndex(for: b.id)
         vm.bringForward(id: b.id)
         XCTAssertEqual(vm.zIndex(for: b.id), zBefore)
     }
 
-    func test_sendBackward_atBottom_isNoOp() {
+    func test_sendBackward_atBottom_isNoOp() throws {
         let vm = StoryComposerViewModel()
-        let a = vm.addText()
+        let a = try XCTUnwrap(vm.addText())
         _ = vm.addText()
         vm.sendToBack(id: a.id)
         let zBefore = vm.zIndex(for: a.id)
@@ -27,28 +27,28 @@ final class ComposerLayerActionsTests: XCTestCase {
         XCTAssertEqual(vm.zIndex(for: a.id), zBefore)
     }
 
-    func test_bringForward_swapsWithNextHigher() {
+    func test_bringForward_swapsWithNextHigher() throws {
         let vm = StoryComposerViewModel()
-        let a = vm.addText()  // z=1
-        let b = vm.addText()  // z=2
-        let _ = vm.addText()  // z=3
+        let a = try XCTUnwrap(vm.addText())  // z=1
+        let b = try XCTUnwrap(vm.addText())  // z=2
+        _ = vm.addText()  // z=3
         vm.bringForward(id: a.id)
         XCTAssertGreaterThan(vm.zIndex(for: a.id), vm.zIndex(for: b.id))
     }
 
-    func test_bringForward_withGap_skipsDeletedZIndex() {
+    func test_bringForward_withGap_skipsDeletedZIndex() throws {
         let vm = StoryComposerViewModel()
-        let a = vm.addText()  // z=1
-        let b = vm.addText()  // z=2
-        let c = vm.addText()  // z=3
+        let a = try XCTUnwrap(vm.addText())  // z=1
+        let b = try XCTUnwrap(vm.addText())  // z=2
+        let c = try XCTUnwrap(vm.addText())  // z=3
         vm.deleteElement(id: b.id)  // gap at z=2
         vm.bringForward(id: a.id)
         XCTAssertGreaterThan(vm.zIndex(for: a.id), vm.zIndex(for: c.id))
     }
 
-    func test_sendBackward_acrossKinds() {
+    func test_sendBackward_acrossKinds() throws {
         let vm = StoryComposerViewModel()
-        let textId = vm.addText().id  // z=1
+        let textId = try XCTUnwrap(vm.addText()).id  // z=1
         let mediaId = "fake-media-1"
         var effects = vm.currentEffects
         var medias = effects.mediaObjects ?? []
@@ -67,9 +67,9 @@ final class ComposerLayerActionsTests: XCTestCase {
 
     // MARK: - duplicateElement
 
-    func test_duplicateElement_text_createsCloneWithNewIdAndOffset() {
+    func test_duplicateElement_text_createsCloneWithNewIdAndOffset() throws {
         let vm = StoryComposerViewModel()
-        let original = vm.addText()
+        let original = try XCTUnwrap(vm.addText())
         let originalCount = vm.currentEffects.textObjects.count
         vm.duplicateElement(id: original.id)
         XCTAssertEqual(vm.currentEffects.textObjects.count, originalCount + 1)
@@ -106,27 +106,27 @@ final class ComposerLayerActionsTests: XCTestCase {
 
     // MARK: - deleteElement
 
-    func test_deleteElement_text_removesFromArray() {
+    func test_deleteElement_text_removesFromArray() throws {
         let vm = StoryComposerViewModel()
-        let toDelete = vm.addText().id
-        let keep = vm.addText().id
+        let toDelete = try XCTUnwrap(vm.addText()).id
+        let keep = try XCTUnwrap(vm.addText()).id
         vm.deleteElement(id: toDelete)
         XCTAssertEqual(vm.currentEffects.textObjects.count, 1)
         XCTAssertEqual(vm.currentEffects.textObjects.first?.id, keep)
     }
 
-    func test_deleteElement_clearsZIndexMap() {
+    func test_deleteElement_clearsZIndexMap() throws {
         let vm = StoryComposerViewModel()
-        let id = vm.addText().id
+        let id = try XCTUnwrap(vm.addText()).id
         vm.bringToFront(id: id)
         XCTAssertNotEqual(vm.zIndex(for: id), 0)
         vm.deleteElement(id: id)
         XCTAssertEqual(vm.zIndex(for: id), 0)  // map cleared, zIndex(for:) returns default
     }
 
-    func test_deleteElement_unknownId_isNoOp() {
+    func test_deleteElement_unknownId_isNoOp() throws {
         let vm = StoryComposerViewModel()
-        let id = vm.addText().id
+        let id = try XCTUnwrap(vm.addText()).id
         vm.deleteElement(id: "nonexistent")
         XCTAssertEqual(vm.currentEffects.textObjects.count, 1)
         XCTAssertEqual(vm.currentEffects.textObjects.first?.id, id)

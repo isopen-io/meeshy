@@ -5,7 +5,7 @@ import PencilKit
 
 // MARK: - Tool Modes
 
-public enum StoryToolMode: String, CaseIterable, Sendable {
+public nonisolated enum StoryToolMode: String, CaseIterable, Sendable {
     // Contenu
     case media      // Images, videos, audio (foreground + background)
     case drawing
@@ -27,7 +27,7 @@ public enum StoryToolMode: String, CaseIterable, Sendable {
     }
 }
 
-enum StoryTab: String {
+nonisolated enum StoryTab: String {
     case contenu, effets
 }
 
