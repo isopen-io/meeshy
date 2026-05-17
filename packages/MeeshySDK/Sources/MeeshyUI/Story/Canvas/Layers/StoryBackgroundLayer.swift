@@ -123,37 +123,41 @@ extension StoryBackgroundLayer {
                 img.contents = placeholderImage.cgImage
             }
 
-            // Composer édition : si `postMediaId` est en réalité une URL
-            // (file:// vers le temp .jpg posé par le composer après PhotosPicker,
-            // ou bien une URL distante), on la charge directement sans passer
-            // par le couple resolver/imageCache (qui est nil en édition). Sans
-            // ce shortcut le slide affichait un rectangle noir car la pipe
-            // attend un `postMediaId` distant et un cache fourni par le reader.
-            if let directURL = Self.directURLIfAny(from: postMediaId) {
+            // Charge le bitmap réel par-dessus le placeholder thumbHash.
+            // Trois sources, dans l'ordre : (1) cache image fourni par le
+            // reader (preview composer via `PreloadedImageCacheReader`, ou un
+            // cache disque), (2) URL directe embarquée dans `postMediaId`
+            // (file:// du composer après PhotosPicker, ou URL distante),
+            // (3) resolver `postMediaId` distant → URL → téléchargement réseau.
+            //
+            // BUGFIX : le chemin (3) était auparavant imbriqué dans un
+            // `if let imageCache` — or le viewer en ligne passe `imageCache: nil`
+            // (seul le preview en fournit un). Résultat : une story publiée
+            // dont le background référence un `postMediaId` distant ne chargeait
+            // jamais son image (rectangle noir + loader infini, le timer ne
+            // démarrant jamais car `onContentReady` ne se déclenchait pas). Le
+            // téléchargement réseau est désormais gardé par le `resolver` seul ;
+            // le cache image n'est qu'un fast-path optionnel.
+            let directURL = Self.directURLIfAny(from: postMediaId)
+            let imageCacheReader = imageCache
+            let urlResolver = resolver
+            if directURL != nil || imageCacheReader != nil || urlResolver != nil {
                 Task { @MainActor [weak img] in
-                    if directURL.isFileURL {
-                        if let data = try? Data(contentsOf: directURL),
-                           let uiImage = UIImage(data: data) {
-                            img?.contents = uiImage.cgImage
-                        }
-                    } else if let (data, _) = try? await URLSession.shared.data(from: directURL),
-                              let uiImage = UIImage(data: data) {
-                        img?.contents = uiImage.cgImage
-                    }
-                }
-                break
-            }
-
-            // Async swap to cached / network image
-            if let cache = imageCache, let resolver = resolver {
-                Task { @MainActor [weak img] in
-                    if let cached = await cache.cachedImage(for: postMediaId) {
+                    // (1) Fast-path cache (preview / disque).
+                    if let imageCacheReader,
+                       let cached = await imageCacheReader.cachedImage(for: postMediaId) {
                         img?.contents = cached.cgImage
                         return
                     }
-                    if let url = resolver(postMediaId),
-                       let (data, _) = try? await URLSession.shared.data(from: url),
-                       let uiImage = UIImage(data: data) {
+                    // (2) URL directe embarquée, sinon (3) resolver distant.
+                    guard let url = directURL ?? urlResolver?(postMediaId) else { return }
+                    if url.isFileURL {
+                        if let data = try? Data(contentsOf: url),
+                           let uiImage = UIImage(data: data) {
+                            img?.contents = uiImage.cgImage
+                        }
+                    } else if let (data, _) = try? await URLSession.shared.data(from: url),
+                              let uiImage = UIImage(data: data) {
                         img?.contents = uiImage.cgImage
                     }
                 }
