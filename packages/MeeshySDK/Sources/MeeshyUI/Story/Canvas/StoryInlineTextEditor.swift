@@ -41,17 +41,45 @@ public final class StoryInlineTextEditor: UITextView {
     public func apply(textObject: StoryTextObject,
                       geometry: CanvasGeometry,
                       setText: Bool) {
-        let renderedSize = geometry.render(CGFloat(textObject.fontSize * textObject.scale))
+        let designFontSize = CGFloat(textObject.fontSize * textObject.scale)
         let resolved = StoryTextFontResolver.resolveFont(forTextObject: textObject,
-                                                         size: renderedSize)
+                                                         size: geometry.render(designFontSize))
+        let color = Self.color(hex: textObject.textColor) ?? .white
+        let align = Self.alignment(from: textObject.textAlign)
+
         font = resolved
-        textColor = Self.color(hex: textObject.textColor) ?? .white
-        textAlignment = Self.alignment(from: textObject.textAlign)
+        textColor = color
+        textAlignment = align
         if setText { text = textObject.text }
 
+        // Attributs complets, contour inclus. Le contour est un attribut de
+        // glyphe (`.strokeColor` / `.strokeWidth`) — un `UITextView` ne l'expose
+        // pas en propriété de vue. On les pose en `typingAttributes` (frappe à
+        // venir) ET sur le texte déjà saisi via `textStorage`, pour qu'un
+        // changement de contour soit rendu en temps réel, comme sur le canvas.
+        let para = NSMutableParagraphStyle()
+        para.alignment = align
+        var attrs: [NSAttributedString.Key: Any] = [
+            .font: resolved,
+            .foregroundColor: color,
+            .paragraphStyle: para
+        ]
+        if let hex = textObject.borderColor, let borderColor = Self.color(hex: hex) {
+            // `.strokeWidth` négatif = remplir ET contourer ; pourcentage de la
+            // taille de police design (mêmes unités que `StoryTextLayer`).
+            let widthPx = CGFloat(textObject.borderWidth ?? 3.0)
+            attrs[.strokeColor] = borderColor
+            attrs[.strokeWidth] = -(widthPx / max(designFontSize, 1)) * 100.0
+        }
+        typingAttributes = attrs
+        if textStorage.length > 0 {
+            textStorage.setAttributes(
+                attrs, range: NSRange(location: 0, length: textStorage.length))
+        }
+
         placeholderLabel.font = resolved
-        placeholderLabel.textColor = (textColor ?? .white).withAlphaComponent(0.45)
-        placeholderLabel.textAlignment = textAlignment
+        placeholderLabel.textColor = color.withAlphaComponent(0.45)
+        placeholderLabel.textAlignment = align
         updatePlaceholderVisibility()
     }
 

@@ -84,7 +84,16 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
             .foregroundColor: color.cgColor,
             .paragraphStyle: para
         ].merging(strokeAttrs) { _, new in new })
-        let designSize = designAttr.size()
+        // Mesure AVEC retour à la ligne : la largeur est plafonnée à ~88 % de la
+        // largeur design (marge symétrique) pour qu'un texte long wrappe sur
+        // plusieurs lignes au lieu de déborder du canvas. `size()` mesurait en
+        // mono-ligne, ce qui forçait des largeurs hors-canvas et un rendu tronqué.
+        let maxDesignWidth = CanvasGeometry.designWidth * 0.88
+        let designSize = designAttr.boundingRect(
+            with: CGSize(width: maxDesignWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        ).size
         // Symmetric pad in design pixels (16 design px ≈ ~6 px on iPhone, ~12 on iPad).
         let designBounds = CGSize(width: ceil(designSize.width) + 16,
                                   height: ceil(designSize.height) + 16)
@@ -115,7 +124,10 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         alignmentMode = caTextAlignment(from: alignment)
         contentsScale = UIScreen.main.scale
         isWrapped = true
-        truncationMode = .end
+        // Jamais de troncature « … » : la mesure ci-dessus dimensionne `bounds`
+        // pour contenir tout le texte wrappé. `.none` garantit l'absence
+        // d'ellipse même si la mesure et le layout CATextLayer divergent d'un px.
+        truncationMode = .none
 
         let designCenterX = geometry.designLength(forNormalized: CGFloat(text.x))
         let designCenterY = CGFloat(text.y) * CanvasGeometry.designHeight

@@ -40,4 +40,26 @@ final class StoryInlineTextEditorTests: XCTestCase {
         editor.updatePlaceholderVisibility()
         XCTAssertTrue(editor.isPlaceholderHidden)
     }
+
+    func test_apply_withBorder_appliesStrokeAttributes() {
+        let editor = StoryInlineTextEditor()
+        let text = StoryTextObject(id: "t1", text: "Salut",
+                                   borderColor: "FF0000", borderWidth: 4)
+        editor.apply(textObject: text, geometry: geometry, setText: true)
+
+        let attrs = editor.textStorage.attributes(at: 0, effectiveRange: nil)
+        XCTAssertNotNil(attrs[.strokeColor], "le contour doit être appliqué au texte saisi")
+        let stroke = (attrs[.strokeWidth] as? NSNumber)?.doubleValue ?? 0
+        XCTAssertLessThan(stroke, 0, "strokeWidth négatif = remplir + contourer")
+        XCTAssertNotNil(editor.typingAttributes[.strokeColor],
+                        "la frappe à venir doit aussi être contourée")
+    }
+
+    func test_apply_withoutBorder_hasNoStroke() {
+        let editor = StoryInlineTextEditor()
+        let text = StoryTextObject(id: "t1", text: "Salut")
+        editor.apply(textObject: text, geometry: geometry, setText: true)
+        let attrs = editor.textStorage.attributes(at: 0, effectiveRange: nil)
+        XCTAssertNil(attrs[.strokeColor], "sans bordure, aucun contour")
+    }
 }
