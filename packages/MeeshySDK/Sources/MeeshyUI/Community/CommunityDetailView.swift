@@ -267,27 +267,16 @@ public struct CommunityDetailView: View {
         }
     }
 
-    @ViewBuilder
     private func bannerView(_ community: MeeshyCommunity, color: String) -> some View {
-        if let bannerUrl = community.banner, !bannerUrl.isEmpty, let url = URL(string: bannerUrl) {
-            AsyncImage(url: url) { phase in
-                if let image = phase.image {
-                    image.resizable().aspectRatio(contentMode: .fill)
-                } else {
-                    LinearGradient(
-                        colors: [Color(hex: color), Color(hex: color).opacity(0.5)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                }
-            }
-        } else {
-            LinearGradient(
-                colors: [Color(hex: color), Color(hex: color).opacity(0.5)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        }
+        // 3-tier cached banner — same component as the community cards, so a
+        // banner already fetched for the carousel/list is reused here instead
+        // of re-downloading. Falls back to the derived-colour gradient when
+        // no banner is set.
+        CachedBannerImage(
+            urlString: community.banner,
+            fallbackColor: color,
+            height: 190
+        )
     }
 
     @ViewBuilder

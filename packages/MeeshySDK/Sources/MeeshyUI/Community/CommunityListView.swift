@@ -177,6 +177,7 @@ public struct CommunityListView: View {
                     VibrantCommunityCard(community: community) {
                         onSelectCommunity?(community)
                     }
+                    .equatable()
                     .animation(
                         .spring(response: 0.4, dampingFraction: 0.7).delay(Double(index) * 0.04),
                         value: viewModel.communities.count
@@ -201,11 +202,16 @@ public struct CommunityListView: View {
 
 // MARK: - Vibrant Community Card
 
-private struct VibrantCommunityCard: View {
+private struct VibrantCommunityCard: View, Equatable {
     let community: MeeshyCommunity
     var onTap: () -> Void
-    @ObservedObject private var theme = ThemeManager.shared
     @State private var isPressed = false
+
+    // Leaf-cell equality (CLAUDE.md "Leaf Views"): only the community data
+    // drives the body — the `onTap` closure and transient `@State` do not.
+    static func == (lhs: VibrantCommunityCard, rhs: VibrantCommunityCard) -> Bool {
+        lhs.community == rhs.community
+    }
 
     private var accentColor: String {
         community.color.isEmpty ? DynamicColorGenerator.colorForName(community.name) : community.color
@@ -217,7 +223,6 @@ private struct VibrantCommunityCard: View {
             // derived accent colour gradient when no banner is set.
             CachedBannerImage(
                 urlString: community.banner,
-                thumbHash: community.bannerThumbHash,
                 fallbackColor: accentColor,
                 height: 180
             )
@@ -226,7 +231,6 @@ private struct VibrantCommunityCard: View {
             // separation from the banner.
             CachedAvatarImage(
                 urlString: community.avatar,
-                thumbHash: community.avatarThumbHash,
                 name: community.name,
                 size: 44,
                 accentColor: accentColor

@@ -443,6 +443,7 @@ struct ConversationListBottomBar: View {
                             HapticFeedback.light()
                             router.push(.communityDetail(community.id))
                         }
+                        .equatable()
                     }
                 }
                 .padding(.horizontal, 16)

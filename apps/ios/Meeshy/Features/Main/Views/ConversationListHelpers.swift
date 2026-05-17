@@ -288,7 +288,7 @@ struct ConversationPreviewView: View {
 }
 
 // MARK: - Themed Community Card
-struct ThemedCommunityCard: View {
+struct ThemedCommunityCard: View, Equatable {
     let community: Community
     var action: (() -> Void)? = nil
     @State private var isPressed = false
@@ -300,13 +300,18 @@ struct ThemedCommunityCard: View {
         _displayColor = State(initialValue: UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? community.color)
     }
 
+    // Leaf-cell equality (CLAUDE.md "Leaf Views"): only the community data
+    // drives the body — the `action` closure and transient `@State` do not.
+    static func == (lhs: ThemedCommunityCard, rhs: ThemedCommunityCard) -> Bool {
+        lhs.community == rhs.community
+    }
+
     var body: some View {
         ZStack(alignment: .bottomLeading) {
             // Banner image — full-bleed. Falls back to the community's
             // derived accent colour gradient when no banner is set.
             CachedBannerImage(
                 urlString: community.banner,
-                thumbHash: community.bannerThumbHash,
                 fallbackColor: displayColor,
                 height: 110
             )
@@ -470,6 +475,7 @@ struct CommunityCard: View {
 
     var body: some View {
         ThemedCommunityCard(community: community)
+            .equatable()
     }
 }
 
