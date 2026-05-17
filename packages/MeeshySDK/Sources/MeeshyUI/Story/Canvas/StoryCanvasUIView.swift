@@ -1192,7 +1192,14 @@ public final class StoryCanvasUIView: UIView {
     @objc private func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
-        guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else { return }
+        guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else {
+            // Tap sur une zone vide du canvas pendant l'édition de texte en
+            // place → sortie de l'édition (déclencheur nº2 de la spec). `endEditing`
+            // résigne le `StoryInlineTextEditor`, ce qui déclenche
+            // `textViewDidEndEditing` → `onInlineTextEditEnded`.
+            if inlineEditingTextId != nil { endEditing(true) }
+            return
+        }
         // Pour cohérence avec la sémantique tactile attendue (tap = sélection,
         // double-tap = édition avancée), le single-tap ouvre le format panel
         // de l'élément ; le double-tap conserve son rôle historique (édition

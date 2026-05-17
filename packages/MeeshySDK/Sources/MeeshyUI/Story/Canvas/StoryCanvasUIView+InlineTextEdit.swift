@@ -29,6 +29,10 @@ extension StoryCanvasUIView: UITextViewDelegate {
         textLayer(forId: id)?.setGlyphsHidden(false)
         let editor = inlineEditor
         inlineEditor = nil
+        // `inlineEditingTextId` est mis à nil AVANT `resignFirstResponder()` :
+        // résigner déclenche un `textViewDidEndEditing` dont la guard sur
+        // `inlineEditingTextId` échoue alors — ce qui évite un second
+        // `onInlineTextEditEnded` ré-entrant.
         inlineEditingTextId = nil
         editor?.resignFirstResponder()
         editor?.removeFromSuperview()
