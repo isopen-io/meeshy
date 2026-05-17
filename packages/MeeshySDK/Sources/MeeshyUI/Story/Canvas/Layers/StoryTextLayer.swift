@@ -23,6 +23,13 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
     private var backgroundFillLayer: CALayer?
     private var glassBackdropLayer: StoryGlassBackdropLayer?
 
+    /// Chaînes attribuées mémorisées par `configure`, permettant à
+    /// `setGlyphsHidden` de basculer les glyphes sans toucher `bounds` ni les
+    /// sous-calques de fond.
+    private var visibleString: NSAttributedString?
+    private var hiddenString: NSAttributedString?
+    public private(set) var glyphsHidden: Bool = false
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -95,6 +102,13 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
             .paragraphStyle: para
         ].merging(strokeAttrs) { _, new in new })
         string = renderedAttr
+        visibleString = renderedAttr
+        hiddenString = NSAttributedString(string: text.text, attributes: [
+            .font: renderedFont,
+            .foregroundColor: UIColor.clear.cgColor,
+            .paragraphStyle: para
+        ])
+        if glyphsHidden { string = hiddenString }
         // Mirror the rendered font size on the CATextLayer property so callers
         // (and tests) can read it directly without unwrapping the attributed string.
         fontSize = renderedFontSize
@@ -120,6 +134,16 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         // background must live in a *sublayer* placed at zPosition < 0 so the
         // CATextLayer's own drawn glyphs paint above it.
         applyBackgroundStyle(text.resolvedBackgroundStyle, geometry: geometry)
+    }
+
+    /// Rend les glyphes invisibles (couleur de premier plan transparente) tout
+    /// en conservant `bounds` et les sous-calques de fond (solide / glass).
+    /// Utilisé pendant l'édition de texte en place : `StoryInlineTextEditor`
+    /// peint les glyphes éditables par-dessus, le vrai fond reste visible.
+    @MainActor
+    public func setGlyphsHidden(_ hidden: Bool) {
+        glyphsHidden = hidden
+        string = hidden ? hiddenString : visibleString
     }
 
     // MARK: - Background style
