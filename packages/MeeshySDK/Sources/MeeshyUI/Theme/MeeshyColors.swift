@@ -41,6 +41,15 @@ public nonisolated struct MeeshyColors {
     public static let readReceipt = indigo400
     public static let pinnedBlue = Color(hex: "3B82F6")
 
+    /// Variante sombre du rouge sémantique — fond du badge de non-lus en dark mode.
+    public static let errorDark = Color(hex: "991B1B")
+
+    /// Fond du badge de compteur de messages non lus, thématisé.
+    /// Light : rouge vif (`error`). Dark : rouge foncé (`errorDark`).
+    public static func unreadBadgeBackground(isDark: Bool) -> Color {
+        isDark ? errorDark : error
+    }
+
     // MARK: - Brand Gradient (The Signature)
 
     public static let brandGradient = LinearGradient(
