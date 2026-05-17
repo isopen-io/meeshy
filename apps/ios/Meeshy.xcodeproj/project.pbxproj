@@ -418,6 +418,7 @@
 		TNAV0001000100010001001 /* TabNavigationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TNAV0001000100010001000 /* TabNavigationTests.swift */; };
 		TOSV002A002A002A002A0002 /* TermsOfServiceView.swift in Sources */ = {isa = PBXBuildFile; fileRef = TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */; };
 		TSTM0001000100010001B001 /* ToastManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = TSTM0001000100010001F001 /* ToastManagerTests.swift */; };
+		SPST0001000100010001B001 /* StoryPublishServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPST0001000100010001F001 /* StoryPublishServiceTests.swift */; };
 		VF4200000000002F42 /* VideoFiltersPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = VF4200000000001F42 /* VideoFiltersPanel.swift */; };
 		VOIP0001000100010001B001 /* VoIPPushManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = VOIP0001000100010001F001 /* VoIPPushManagerTests.swift */; };
 		VP01000000000002F001 /* VoiceProfileWizardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = VP01000000000001F001 /* VoiceProfileWizardView.swift */; };
@@ -903,6 +904,7 @@
 		TNAV0001000100010001000 /* TabNavigationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TabNavigationTests.swift; sourceTree = "<group>"; };
 		TOSV001A001A001A001A0001 /* TermsOfServiceView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TermsOfServiceView.swift; sourceTree = "<group>"; };
 		TSTM0001000100010001F001 /* ToastManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ToastManagerTests.swift; sourceTree = "<group>"; };
+		SPST0001000100010001F001 /* StoryPublishServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishServiceTests.swift; sourceTree = "<group>"; };
 		TSTS000A000A000A000A001 /* MeeshyTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = MeeshyTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		VF4200000000001F42 /* VideoFiltersPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoFiltersPanel.swift; sourceTree = "<group>"; };
 		VOIP0001000100010001F001 /* VoIPPushManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VoIPPushManagerTests.swift; sourceTree = "<group>"; };
@@ -1793,6 +1795,7 @@
 				PSQU0001000100010001F001 /* PendingStatusQueueTests.swift */,
 				SBCT0001000100010001F001 /* StatusBubbleControllerTests.swift */,
 				TSTM0001000100010001F001 /* ToastManagerTests.swift */,
+				SPST0001000100010001F001 /* StoryPublishServiceTests.swift */,
 				WDGM0001000100010001F001 /* WidgetDataManagerTests.swift */,
 				VOIP0001000100010001F001 /* VoIPPushManagerTests.swift */,
 				BGTM0001000100010001F001 /* BackgroundTaskManagerTests.swift */,
@@ -2400,6 +2403,7 @@
 				PSQU0001000100010001B001 /* PendingStatusQueueTests.swift in Sources */,
 				SBCT0001000100010001B001 /* StatusBubbleControllerTests.swift in Sources */,
 				TSTM0001000100010001B001 /* ToastManagerTests.swift in Sources */,
+				SPST0001000100010001B001 /* StoryPublishServiceTests.swift in Sources */,
 				WDGM0001000100010001B001 /* WidgetDataManagerTests.swift in Sources */,
 				VOIP0001000100010001B001 /* VoIPPushManagerTests.swift in Sources */,
 				BGTM0001000100010001B001 /* BackgroundTaskManagerTests.swift in Sources */,
