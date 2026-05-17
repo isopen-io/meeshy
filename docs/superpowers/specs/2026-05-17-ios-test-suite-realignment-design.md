@@ -31,7 +31,16 @@ La décision est justifiée dans le message de commit du point concerné.
 ## Méthode par point
 
 Boucle uniforme : **investiguer → décider → corriger → vérifier → committer**.
-Un commit par point sur `main`. Vérification avant de passer au point suivant.
+Vérification avant de passer au point suivant.
+
+**Granularité de commit** : un commit par point sur `main`, **sauf P2** qui peut
+se scinder en plusieurs commits (un par cluster) si les décisions d'alignement
+divergent — p. ex. trois clusters = MAJ test, un cluster = fix app → commits
+séparés. Total : **au moins 6 commits**.
+
+**Ordre d'exécution** : P1 → P2 → P6 (phase A), puis P4 → P3 → P5 (phase B).
+La numérotation P1-P6 reflète le périmètre validé, pas l'ordre — les phases le
+réordonnent pour grouper app puis SDK.
 
 ## Les 6 points
 
@@ -80,10 +89,12 @@ dossier. Suspicion de **vraie régression applicative** → investigation
 prioritaire du code de prod (`StoryOfflineQueue`).
 
 **P5 — baselines snapshot**
-`AudioClipBarSnapshotTests` (et autres `*SnapshotTests`) échouent (« does not
-match reference »). Décider par fichier : régénérer les baselines (record mode)
-si le test fait une vraie capture, ou aligner/retirer si le fichier ne fait plus
-de snapshot réel.
+`AudioClipBarSnapshotTests` fait de **vraies captures** (`assertSnapshot`) mais
+échoue (« does not match reference ») : la baseline committée manque ou est
+périmée. Décision par fichier : régénérer la baseline (record mode) sur le
+simulateur de référence si le test apporte une vraie valeur de régression
+visuelle ; sinon le retirer (cf. R3). Vérifier au passage les autres
+`*SnapshotTests` : certains ne font plus de capture réelle malgré leur nom.
 
 ## Vérification
 
