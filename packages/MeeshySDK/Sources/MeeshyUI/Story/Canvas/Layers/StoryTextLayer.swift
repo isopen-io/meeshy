@@ -50,7 +50,7 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         // Auparavant `resolveFont(family:size:)` ignorait textStyle, donc le
         // panel d'édition affichait le bon style mais le canvas restait dans
         // le default semibold system font.
-        let designFont = resolveFont(forTextObject: text, size: designFontSize)
+        let designFont = StoryTextFontResolver.resolveFont(forTextObject: text, size: designFontSize)
         let color = parseHexColor(text.textColor) ?? UIColor.white
 
         let alignment = parseAlignment(text.textAlign)
@@ -88,7 +88,7 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
 
         // Render-space font for actual painting — applique aussi le textStyle.
         let renderedFontSize = geometry.render(designFontSize)
-        let renderedFont = resolveFont(forTextObject: text, size: renderedFontSize)
+        let renderedFont = StoryTextFontResolver.resolveFont(forTextObject: text, size: renderedFontSize)
         let renderedAttr = NSAttributedString(string: text.text, attributes: [
             .font: renderedFont,
             .foregroundColor: color.cgColor,
@@ -188,44 +188,6 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
             return custom
         }
         return UIFont.systemFont(ofSize: size, weight: .semibold)
-    }
-
-    /// Resolves the canvas-side `UIFont` for a `StoryTextObject`, taking its
-    /// `textStyle` into account. Mirrors the SwiftUI helper `storyFont(for:size:)`
-    /// (FontStylePicker.swift) so the canvas rendering matches the panel preview:
-    /// previously the canvas only consulted `fontFamily` (always "system" for
-    /// new texts) and ignored `textStyle`, so picking "Neon" / "Typewriter" /
-    /// "Handwriting" / "Classic" in the editor updated the panel preview but
-    /// the canvas glyphs stayed in the default semibold system font.
-    @MainActor
-    private func resolveFont(forTextObject text: StoryTextObject, size: CGFloat) -> UIFont {
-        // Family-specific custom font takes precedence (e.g. user-loaded font).
-        if text.fontFamily != "system",
-           let custom = UIFont(name: text.fontFamily, size: size) {
-            return custom
-        }
-        switch text.parsedTextStyle {
-        case .bold:
-            return UIFont.systemFont(ofSize: size, weight: .black)
-        case .neon:
-            let base = UIFont.systemFont(ofSize: size, weight: .semibold)
-            let descriptor = base.fontDescriptor.withDesign(.rounded) ?? base.fontDescriptor
-            return UIFont(descriptor: descriptor, size: size)
-        case .typewriter:
-            return UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
-        case .handwriting:
-            if let name = text.parsedTextStyle.fontName,
-               let custom = UIFont(name: name, size: size) {
-                return custom
-            }
-            let base = UIFont.systemFont(ofSize: size, weight: .regular)
-            let descriptor = base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor
-            return UIFont(descriptor: descriptor, size: size)
-        case .classic:
-            let base = UIFont.systemFont(ofSize: size, weight: .medium)
-            let descriptor = base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor
-            return UIFont(descriptor: descriptor, size: size)
-        }
     }
 
     private nonisolated func parseAlignment(_ raw: String?) -> NSTextAlignment {
