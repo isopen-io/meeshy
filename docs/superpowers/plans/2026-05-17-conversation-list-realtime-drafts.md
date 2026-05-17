@@ -112,40 +112,19 @@ git commit -m "feat(ios): indicateur de durée en rouge quand la conversation a 
 
 ---
 
-## Task 2: Durcissement de `bumpToTop`
+## Task 2: Durcissement de `bumpToTop` + log de confirmation websocket
 
 **Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift:225-232`
-- Test: `apps/ios/MeeshyTests/Unit/ViewModels/ConversationListViewModelTests.swift`
+- Modify: `apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift`
 
-- [ ] **Step 1: Écrire les tests qui échouent**
+Refactor à comportement préservé : `bumpToTop` garde son comportement exact (no-op si conversation inconnue, sinon remontée en position 0). Les tests **déjà présents** dans `ConversationListViewModelTests.swift` — `test_bumpToTop_unknownConversationId_isNoOp` et `test_bumpToTop_existingConversation_movesToFirstPosition` (section `// MARK: - bumpToTop` ~ligne 1176) — servent de filet de sécurité. **Aucun nouveau test n'est ajouté** (ne pas dupliquer la section `// MARK: - bumpToTop`).
 
-Ajouter dans la classe `ConversationListViewModelTests` :
-
-```swift
-    // MARK: - bumpToTop
-
-    func test_bumpToTop_unknownConversation_isNoOp() {
-        let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "a"), makeConversation(id: "b")]
-        sut.bumpToTop(conversationId: "ghost", newLastMessageAt: Date())
-        XCTAssertEqual(sut.conversations.map(\.id), ["a", "b"])
-    }
-
-    func test_bumpToTop_knownConversation_movesToFront() {
-        let (sut, _, _, _, _, _, _) = makeSUT()
-        sut.conversations = [makeConversation(id: "a"), makeConversation(id: "b")]
-        sut.bumpToTop(conversationId: "b", newLastMessageAt: Date())
-        XCTAssertEqual(sut.conversations.first?.id, "b")
-    }
-```
-
-- [ ] **Step 2: Lancer les tests pour vérifier l'état**
+- [ ] **Step 1: Établir la ligne de base verte**
 
 Run: `./apps/ios/meeshy.sh test`
-Expected: les deux tests PASSENT déjà (le comportement actuel est correct) — ce sont des tests de non-régression. Si l'un échoue, arrêter et investiguer.
+Expected: `test_bumpToTop_unknownConversationId_isNoOp` et `test_bumpToTop_existingConversation_movesToFirstPosition` PASSENT. Si l'un échoue, arrêter et investiguer avant tout changement.
 
-- [ ] **Step 3: Durcir `bumpToTop`**
+- [ ] **Step 2: Durcir `bumpToTop`**
 
 Dans `ConversationListViewModel.swift`, remplacer la fonction `bumpToTop` (lignes 225-232) :
 
@@ -176,7 +155,7 @@ par :
     }
 ```
 
-- [ ] **Step 4: Ajouter le log de confirmation websocket (spec §2a)**
+- [ ] **Step 3: Ajouter le log de confirmation websocket (spec §2a)**
 
 Pour valider en pratique que le chemin `conversation:updated` → bump fonctionne, ajouter un log à la réception de l'event. Dans `ConversationListViewModel.swift`, dans le handler `messageSocket.conversationUpdated` (le `.sink`), la branche de bump (lignes 609-611) est :
 
@@ -197,15 +176,15 @@ La remplacer par :
                 } else {
 ```
 
-- [ ] **Step 5: Lancer les tests pour vérifier qu'ils passent**
+- [ ] **Step 4: Lancer les tests — toujours verts**
 
 Run: `./apps/ios/meeshy.sh test`
-Expected: `test_bumpToTop_unknownConversation_isNoOp` et `test_bumpToTop_knownConversation_movesToFront` PASSENT.
+Expected: `test_bumpToTop_unknownConversationId_isNoOp` et `test_bumpToTop_existingConversation_movesToFirstPosition` PASSENT toujours (refactor sans régression).
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift apps/ios/MeeshyTests/Unit/ViewModels/ConversationListViewModelTests.swift
+git add apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift
 git commit -m "feat(ios): bumpToTop logue les conversations introuvables au lieu d'un no-op silencieux"
 ```
 
@@ -612,7 +591,19 @@ git commit -m "feat(ios): resynchro de la liste de conversations au retour au pr
 
 - [ ] **Step 1: Écrire les tests qui échouent**
 
-Ajouter `import Combine` en haut de `DraftStoreTests.swift` (sous `import XCTest`). Puis ajouter dans la classe `DraftStoreTests` :
+Ajouter `import Combine` en haut de `DraftStoreTests.swift` (sous `import XCTest`).
+
+Isoler chaque test : remplacer le `makeSUT()` existant — qui utilise un nom de suite constant `"DraftStoreTests"` partagé entre tous les tests — par une suite unique par test (les tests de comptage de `changed` peuvent sinon être pollués par un `save` concurrent). Le `makeSUT()` devient :
+
+```swift
+    private func makeSUT() -> DraftStore {
+        let store = DraftStore(userDefaults: UserDefaults(suiteName: "DraftStoreTests-\(UUID().uuidString)")!)
+        store.clearAll()
+        return store
+    }
+```
+
+Puis ajouter dans la classe `DraftStoreTests` :
 
 ```swift
     // MARK: - allNonEmptyDrafts
@@ -1157,7 +1148,7 @@ Dans `ConversationListViewModel.swift`, remplacer la fonction `groupConversation
 
 - [ ] **Step 8: Passer `draftSummaries` au pipeline de groupement**
 
-Dans `ConversationListViewModel.swift`, dans `setupBackgroundProcessing()`, remplacer le bloc `.sink` du pipeline (lignes 352-364) :
+Dans `ConversationListViewModel.swift`, dans `setupBackgroundProcessing()`, remplacer le bloc `.sink { [weak self] (convs, text, filter, categories) in … }` du pipeline (le `.sink` qui suit le `.debounce`, juste avant `.store(in: &cancellables)`) :
 
 ```swift
             .sink { [weak self] (convs, text, filter, categories) in
@@ -1317,7 +1308,9 @@ Dans `ThemedConversationRow.swift`, remplacer la fonction `==` de l'extension `E
 
 - [ ] **Step 7: Ajouter le champ `draftSummary` à `ConversationRowItem`**
 
-Dans `ConversationListView+Rows.swift`, ajouter ce champ dans le `struct ConversationRowItem`, juste après `let isSelected: Bool` (ligne 32) :
+> ⚠️ Édition sensible à l'ordre : `ConversationRowItem` n'a pas d'init explicite — il utilise l'initialiseur memberwise synthétisé. L'ordre des champs `let` DOIT correspondre à l'ordre des arguments au site d'appel (`ConversationListView.conversationRow`, Step 8). Insérer `draftSummary` exactement après `isSelected` dans **les deux** endroits.
+
+Dans `ConversationListView+Rows.swift`, ajouter ce champ dans le `struct ConversationRowItem`, juste après `let isSelected: Bool` (ligne 32) et avant `let cachedPreviewMessages: [Message]` :
 
 ```swift
     let draftSummary: DraftSummary?
