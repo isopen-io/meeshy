@@ -147,10 +147,19 @@ final class WebRTCServiceTests: XCTestCase {
 
     // MARK: - Connection State Delegate
 
-    func test_connectionStateChange_updatesConnectionState() {
+    func test_connectionStateChange_updatesConnectionState() async {
         let (sut, client) = makeSUT()
+
         client.delegate?.webRTCClient(client, didChangeConnectionState: .connected)
-        XCTAssertEqual(sut.connectionState, .connected)
+
+        // webRTCClient(_:didChangeConnectionState:) is nonisolated and applies
+        // the new state on a hopped @MainActor Task — yield until it drains.
+        var observed = await sut.connectionState
+        for _ in 0..<100 where observed != .connected {
+            await Task.yield()
+            observed = await sut.connectionState
+        }
+        XCTAssertEqual(observed, .connected)
     }
 }
 
