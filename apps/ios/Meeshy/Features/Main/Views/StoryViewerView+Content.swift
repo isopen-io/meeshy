@@ -529,6 +529,7 @@ extension StoryViewerView {
     func startTimer() {
         timerCancellable?.cancel()
         progress = 0
+        isContentReady = false
         hasFiredFadeOut = false
         showCommentsOverlay = false
         replyingToStoryComment = nil
@@ -550,15 +551,24 @@ extension StoryViewerView {
         //     visually advance by at least 1/300 (≈1 pixel on a 300pt-wide
         //     viewer). On a 5s story that's ~60 commits total instead of ~165
         //     timer fires — a 2.5x reduction in body re-evaluations of the
-        //     storyCard ZStack (audit E1: ~10% CPU continuous). Authority on
-        //     elapsed time stays wall-clock so a missed display frame doesn't
-        //     drift the story duration.
-        let started = CACurrentMediaTime()
+        //     storyCard ZStack (audit E1: ~10% CPU continuous).
+        //
+        // Elapsed time is a PAUSE-AWARE ACCUMULATOR rather than raw wall-clock:
+        // each frame adds its delta to `accumulated` ONLY while the timer is not
+        // paused AND the slide's real media has loaded (`isContentReady`). This
+        // gates the progress bar on content readiness (it stays at 0 until the
+        // canvas signals `onContentReady`) and fixes the legacy pause-jump bug
+        // where wall-clock kept running behind a sheet/composer/drag pause.
+        let accumulated = StoryProgressDisplayLinkProxy.MutableDouble(0)
+        let lastFrame = StoryProgressDisplayLinkProxy.MutableDouble(CACurrentMediaTime())
         let lastCommitted = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let proxy = StoryProgressDisplayLinkProxy { [self] in
-            guard !shouldPauseTimer else { return }
-            let elapsed = CACurrentMediaTime() - started
-            let raw = min(1.0, CGFloat(elapsed / duration))
+            let now = CACurrentMediaTime()
+            let delta = now - lastFrame.value
+            lastFrame.value = now
+            guard !shouldPauseTimer, isContentReady else { return }
+            accumulated.value += delta
+            let raw = min(1.0, CGFloat(accumulated.value / duration))
             if abs(raw - CGFloat(lastCommitted.value)) >= 1.0 / 300.0 || raw >= 1.0 {
                 lastCommitted.value = Double(raw)
                 progress = raw

@@ -22,6 +22,11 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// which Swift coerces automatically when the closure itself has no captures
     /// that prevent Sendability.
     let onCompletion: (@Sendable () -> Void)?
+    /// Fires exactly once per `rebuildLayers()` cycle when the slide's background
+    /// media is fully usable (real bitmap replaced the thumbhash placeholder,
+    /// video reached `.readyToPlay`, or solid-color/gradient — immediate).
+    /// Used by the viewer to gate the slide progress timer and a loading spinner.
+    let onContentReady: (() -> Void)?
 
     // MARK: - Primary init
 
@@ -33,7 +38,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 preloadedVideoURLs: [String: URL] = [:],
                 preloadedAudioURLs: [String: URL] = [:],
                 mute: Bool = false,
-                onCompletion: (@Sendable () -> Void)? = nil) {
+                onCompletion: (@Sendable () -> Void)? = nil,
+                onContentReady: (() -> Void)? = nil) {
         self.storyItem = story
         // `preferredContentLanguages` is the legacy label; it takes priority over
         // `preferredLanguages` when provided so existing call-sites compile unchanged.
@@ -44,6 +50,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.preferredLanguages = chain
         self.mute = mute
         self.onCompletion = onCompletion
+        self.onContentReady = onContentReady
         // preloadedImages / preloadedVideoURLs / preloadedAudioURLs are accepted for
         // call-site backward-compat but intentionally unused — the new canvas resolves
         // media from StoryItem.media and StoryReaderContext.postMediaURLResolver.
@@ -56,10 +63,12 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         let view = StoryCanvasUIView(slide: slide, mode: .play)
         let mediaList = storyItem.media
         let completion = onCompletion
+        let contentReady = onContentReady
         let resolver: @Sendable (String) -> URL? = { postId in
             mediaList.first { $0.id == postId }
                      .flatMap { $0.url.flatMap(URL.init(string:)) }
         }
+        view.onContentReady = { contentReady?() }
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,
@@ -100,7 +109,8 @@ extension StoryReaderRepresentable {
         self.init(story: synthetic,
                   preferredLanguages: preferredContentLanguages ?? [],
                   mute: mute,
-                  onCompletion: onCompletion)
+                  onCompletion: onCompletion,
+                  onContentReady: nil)
     }
 
     /// Construct from an `APIPost` (used in feed contexts where stories arrive
@@ -139,7 +149,8 @@ extension StoryReaderRepresentable {
         self.init(story: synthetic,
                   preferredLanguages: chain,
                   mute: mute,
-                  onCompletion: onCompletion)
+                  onCompletion: onCompletion,
+                  onContentReady: nil)
     }
 
     // MARK: - Private helpers

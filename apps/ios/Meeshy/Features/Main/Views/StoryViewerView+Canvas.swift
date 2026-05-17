@@ -222,6 +222,7 @@ struct StoryCardView: View {
     let commentsUserLang: String
 
     // Bindings — UI state owned by the viewer
+    @Binding var isContentReady: Bool
     @Binding var showEmojiStrip: Bool
     @Binding var showFullEmojiPicker: Bool
     @Binding var showCommentsOverlay: Bool
@@ -298,7 +299,8 @@ struct StoryCardView: View {
                                       preferredContentLanguages: resolvedViewerLanguageChain,
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
-                                      preloadedAudioURLs: preloadedAudioURLs)
+                                      preloadedAudioURLs: preloadedAudioURLs,
+                                      onContentReady: { isContentReady = true })
                     .id(story.id)
                     .opacity(contentOpacity)
                     .offset(y: textSlideOffset)
@@ -306,6 +308,24 @@ struct StoryCardView: View {
                     .clipShape(
                         RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
                     )
+            }
+
+            // === Loading spinner — shown until the slide's media is ready ===
+            // Gates with the same `isContentReady` flag that drives the progress
+            // timer. `.allowsHitTesting(false)` keeps tap-to-advance working.
+            if currentStory != nil && !isContentReady {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.white)
+                    .scaleEffect(1.4)
+                    .padding(20)
+                    .background(
+                        Circle()
+                            .fill(Color.black.opacity(0.35))
+                    )
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .allowsHitTesting(false)
+                    .accessibilityHidden(true)
             }
 
             // === Voice caption overlay (transcription voix) ===

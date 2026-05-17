@@ -94,6 +94,10 @@ struct StoryViewerView: View {
 
     @State var currentStoryIndex = 0 // internal for cross-file extension access
     @State var progress: CGFloat = 0 // internal for cross-file extension access
+    /// True once the visible slide's background media is fully usable (real
+    /// bitmap / video `.readyToPlay` / solid color). Gates the progress timer
+    /// and the centered loading spinner.
+    @State var isContentReady: Bool = false // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
     @State var isGlobalMuted = false // internal for cross-file extension access
     /// True when user is actively engaging with the composer (focused, recording, emoji panel, etc.)
@@ -310,6 +314,7 @@ struct StoryViewerView: View {
             }
         }
         .onChange(of: currentStoryIndex) { oldValue, _ in
+            isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory = currentGroup.flatMap { group in
                 group.stories.indices.contains(oldValue) ? group.stories[oldValue] : nil
@@ -317,6 +322,7 @@ struct StoryViewerView: View {
             transitionPostRoom(from: previousStory, to: currentStory)
         }
         .onChange(of: currentGroupIndex) { oldValue, _ in
+            isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory: StoryItem? = (oldValue >= 0 && oldValue < groups.count &&
                 groups[oldValue].stories.indices.contains(currentStoryIndex))
@@ -701,6 +707,7 @@ struct StoryViewerView: View {
             storyCommentLoadingReplies: storyCommentLoadingReplies,
             isLoadingComments: isLoadingComments,
             commentsUserLang: AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr",
+            isContentReady: $isContentReady,
             showEmojiStrip: $showEmojiStrip,
             showFullEmojiPicker: $showFullEmojiPicker,
             showCommentsOverlay: $showCommentsOverlay,
