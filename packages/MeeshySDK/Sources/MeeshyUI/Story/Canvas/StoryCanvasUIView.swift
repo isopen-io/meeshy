@@ -248,7 +248,11 @@ public final class StoryCanvasUIView: UIView {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
-        audioMixer.shutdown()
+        // `shutdown()` is @MainActor-isolated and deinit is nonisolated —
+        // capture the mixer and defer the call to the main actor so it
+        // outlives this view's deallocation.
+        let mixer = audioMixer
+        Task { @MainActor in mixer.shutdown() }
     }
 
     @available(*, unavailable)
