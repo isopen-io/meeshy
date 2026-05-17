@@ -7706,6 +7706,9 @@
     "Faites glisser vers le bas pour réduire ou fermer." : {
 
     },
+    "Ferme l'éditeur et masque le clavier" : {
+
+    },
     "Fermer" : {
 
     },
@@ -7713,9 +7716,6 @@
 
     },
     "Fond" : {
-
-    },
-    "Font" : {
 
     },
     "Francais" : {
@@ -19108,6 +19108,9 @@
 
     },
     "Tap to open full map" : {
+
+    },
+    "Terminer l'édition du texte" : {
 
     },
     "Touchez deux fois pour fermer. Faites glisser vers le bas pour masquer la barre." : {
