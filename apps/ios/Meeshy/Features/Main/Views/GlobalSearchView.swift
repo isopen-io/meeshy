@@ -490,12 +490,7 @@ struct GlobalSearchView: View {
                     }
                 }
 
-                if let preview = result.lastMessagePreview, !preview.isEmpty {
-                    Text(preview)
-                        .font(.system(size: 13))
-                        .foregroundColor(theme.textSecondary)
-                        .lineLimit(1)
-                }
+                conversationLastMessageLabel(result)
             }
         }
         .padding(12)
@@ -511,6 +506,49 @@ struct GlobalSearchView: View {
         .accessibilityLabel(label)
         .accessibilityHint(String(localized: "accessibility.opens_conversation", defaultValue: "Ouvre la conversation"))
         .accessibilityAddTraits(.isButton)
+    }
+
+    @ViewBuilder
+    private func conversationLastMessageLabel(_ result: GlobalSearchConversationResult) -> some View {
+        switch result.conversation.lastMessageSummaryKind() {
+        case .hidden:
+            HStack(spacing: 4) {
+                Image(systemName: "eye.slash")
+                    .font(.system(size: 11, weight: .medium))
+                Text(String(localized: "conversation.summary.hidden", defaultValue: "1 message caché"))
+                    .font(.system(size: 13).italic())
+            }
+            .foregroundColor(theme.textSecondary)
+            .lineLimit(1)
+
+        case .viewOnce:
+            HStack(spacing: 4) {
+                Image(systemName: "flame")
+                    .font(.system(size: 11, weight: .medium))
+                Text(String(localized: "conversation.summary.view_once", defaultValue: "1 message vue unique"))
+                    .font(.system(size: 13).italic())
+            }
+            .foregroundColor(theme.textSecondary)
+            .lineLimit(1)
+
+        case .expired:
+            HStack(spacing: 4) {
+                Image(systemName: "timer.badge.xmark")
+                    .font(.system(size: 11, weight: .medium))
+                Text(String(localized: "message.expired", defaultValue: "Message expiré"))
+                    .font(.system(size: 13).italic())
+            }
+            .foregroundColor(theme.textSecondary)
+            .lineLimit(1)
+
+        case .ephemeralActive, .standard:
+            if let preview = result.lastMessagePreview, !preview.isEmpty {
+                Text(preview)
+                    .font(.system(size: 13))
+                    .foregroundColor(theme.textSecondary)
+                    .lineLimit(1)
+            }
+        }
     }
 
     // MARK: - Users Results
@@ -592,8 +630,17 @@ struct GlobalSearchView: View {
         if result.unreadCount > 0 {
             parts.append("\(result.unreadCount) \(unreadUnit)")
         }
-        if let preview = result.lastMessagePreview, !preview.isEmpty {
-            parts.append("\(lastMessageLabel): \(preview)")
+        switch result.conversation.lastMessageSummaryKind() {
+        case .hidden:
+            parts.append("\(lastMessageLabel): masqué")
+        case .viewOnce:
+            parts.append("\(lastMessageLabel): vue unique")
+        case .expired:
+            parts.append("\(lastMessageLabel): expiré")
+        case .ephemeralActive, .standard:
+            if let preview = result.lastMessagePreview, !preview.isEmpty {
+                parts.append("\(lastMessageLabel): \(preview)")
+            }
         }
         return parts.joined(separator: ", ")
     }
