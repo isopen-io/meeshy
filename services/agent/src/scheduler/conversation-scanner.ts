@@ -127,7 +127,7 @@ export class ConversationScanner {
       minResponsesPerCycle: config?.minResponsesPerCycle ?? 2,
       maxResponsesPerCycle: config?.maxResponsesPerCycle ?? 12,
       reactionsEnabled: config?.reactionsEnabled ?? true,
-      maxReactionsPerCycle: config?.maxReactionsPerCycle ?? 8,
+      maxReactionsPerCycle: config?.maxReactionsPerCycle ?? 4,
       contextWindowSize: config?.contextWindowSize ?? 50,
       useFullHistory: config?.useFullHistory ?? false,
       agentType: config?.agentType ?? 'personal',
