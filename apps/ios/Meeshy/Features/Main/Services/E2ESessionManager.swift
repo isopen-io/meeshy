@@ -9,11 +9,13 @@ public actor SessionManager {
     enum SessionError: LocalizedError {
         case invalidBase64Payload
         case missingSession
+        case sessionUnavailable
 
         var errorDescription: String? {
             switch self {
             case .invalidBase64Payload: return "Invalid base64 payload from backend"
             case .missingSession: return "Session not initialized and senderIdentityPublic missing"
+            case .sessionUnavailable: return "E2EE session unavailable — establishment recently failed, retry on cooldown"
             }
         }
     }
@@ -30,6 +32,14 @@ public actor SessionManager {
     }
 
     private var activeSessions: [String: SymmetricKey] = [:]
+
+    /// Negative cache: peers whose session establishment recently failed.
+    /// Prevents re-hitting the (possibly permanently unavailable) Signal
+    /// Protocol endpoints on every message — see `getOrCreateSession`.
+    private var failedSessionAttempts: [String: Date] = [:]
+
+    /// Cooldown before a peer with a failed establishment is retried.
+    private static let failedSessionCooldown: TimeInterval = 600
 
     private init() {}
 
@@ -96,27 +106,43 @@ public actor SessionManager {
             return key
         }
 
-        // Fetch bundle from server
-        let bundle = try await E2EAPI.shared.fetchBundle(for: userId)
-
-        // Notify the server we establish a session
-        try await E2EAPI.shared.establishSession(with: userId, in: conversationId)
-
-        // Derive symmetric key based on our local IdentityKey and recipient's SignedPreKey
-        let myIdentityKey = try E2EEService.shared.getOrGenerateIdentityKey()
-
-        guard let signedPreKeyData = Data(base64Encoded: bundle.signedPreKeyPublic) else {
-            throw SessionError.invalidBase64Payload
+        // Negative cache — when session establishment recently failed (the
+        // gateway Signal Protocol endpoint is unavailable), fail fast instead
+        // of re-hitting the network on every message. `sendMessage` catches
+        // this and falls back to a plaintext send; the cooldown lets a
+        // server-side recovery eventually get picked up.
+        if let failedAt = failedSessionAttempts[userId],
+           Date().timeIntervalSince(failedAt) < Self.failedSessionCooldown {
+            throw SessionError.sessionUnavailable
         }
 
-        // MVP: Double Ratchet simplifé via un ECDH unique pour générer la session.
-        let symmetricKey = try E2EEService.shared.deriveSymmetricKey(
-            privateKey: myIdentityKey,
-            publicKeyData: signedPreKeyData
-        )
+        do {
+            // Fetch bundle from server
+            let bundle = try await E2EAPI.shared.fetchBundle(for: userId)
 
-        await persistSession(peerId: userId, key: symmetricKey)
-        return symmetricKey
+            // Notify the server we establish a session
+            try await E2EAPI.shared.establishSession(with: userId, in: conversationId)
+
+            // Derive symmetric key based on our local IdentityKey and recipient's SignedPreKey
+            let myIdentityKey = try E2EEService.shared.getOrGenerateIdentityKey()
+
+            guard let signedPreKeyData = Data(base64Encoded: bundle.signedPreKeyPublic) else {
+                throw SessionError.invalidBase64Payload
+            }
+
+            // MVP: Double Ratchet simplifé via un ECDH unique pour générer la session.
+            let symmetricKey = try E2EEService.shared.deriveSymmetricKey(
+                privateKey: myIdentityKey,
+                publicKeyData: signedPreKeyData
+            )
+
+            await persistSession(peerId: userId, key: symmetricKey)
+            failedSessionAttempts.removeValue(forKey: userId)
+            return symmetricKey
+        } catch {
+            failedSessionAttempts[userId] = Date()
+            throw error
+        }
     }
 
     /// Appelé lors de la réception du premier message E2EE d'un User B.

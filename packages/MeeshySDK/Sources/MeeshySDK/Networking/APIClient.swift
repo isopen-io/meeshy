@@ -323,6 +323,12 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         do {
             var lastHTTPResponse: HTTPURLResponse?
             var lastStatusCode = 0
+            // Signal Protocol endpoints answer 503 for a permanent "Signal
+            // Protocol not available" state, never a transient overload —
+            // retrying just burns the 2 s + 4 s back-off and can never
+            // succeed. Opt them out of the retry loop so the caller fails
+            // fast and falls back (e.g. a plaintext message send).
+            let endpointAllowsRetry = !endpoint.hasPrefix("/signal/")
 
             for attempt in 0..<(Self.maxRetryAttempts + 1) {
                 if attempt > 0 {
@@ -347,7 +353,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                 lastHTTPResponse = httpResponse
                 lastStatusCode = statusCode
 
-                if Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
+                if endpointAllowsRetry && Self.retryableStatusCodes.contains(statusCode) && attempt < Self.maxRetryAttempts {
                     continue
                 }
 

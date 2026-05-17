@@ -19,6 +19,12 @@ final class E2ESessionManagerTests: XCTestCase {
         XCTAssertEqual(error.errorDescription, "Session not initialized and senderIdentityPublic missing")
     }
 
+    func test_sessionError_sessionUnavailable_hasDescription() {
+        let error = SessionManager.SessionError.sessionUnavailable
+        XCTAssertEqual(error.errorDescription,
+                       "E2EE session unavailable — establishment recently failed, retry on cooldown")
+    }
+
     func test_sessionError_invalidBase64Payload_isLocalizedError() {
         let error: any LocalizedError = SessionManager.SessionError.invalidBase64Payload
         XCTAssertNotNil(error.errorDescription)
