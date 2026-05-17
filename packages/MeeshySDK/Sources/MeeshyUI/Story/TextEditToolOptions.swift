@@ -12,6 +12,10 @@ struct TextEditToolOptions: View {
     @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
+        // Rangée nue : pas de conteneur de panneau (fond arrondi, contour). Les
+        // options s'affichent directement au-dessus de la barre de bulles, sur
+        // le `.ultraThinMaterial` partagé de `StoryTextEditToolbar` — évite le
+        // panneau-dans-panneau et la troncature verticale des pastilles.
         Group {
             switch tool {
             case .style:      styleOptions
@@ -22,16 +26,7 @@ struct TextEditToolOptions: View {
             case .border:     borderOptions
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 12)
         .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 16, style: .continuous).fill(.ultraThinMaterial)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(MeeshyColors.indigo400.opacity(0.25), lineWidth: 0.5)
-        )
     }
 
     // MARK: - Style
@@ -272,12 +267,15 @@ struct TextEditToolOptions: View {
     // MARK: - Shared
 
     private func colorDot(hex: String, selected: Bool, size: CGFloat) -> some View {
+        // Pas de `scaleEffect` sur la sélection : agrandir la pastille la fait
+        // déborder de son cadre, et le `ScrollView` horizontal qui la contient
+        // rogne ce débordement. La sélection est marquée par l'anneau blanc seul
+        // (`.padding(1)` le garde dans le cadre — aucune troncature).
         Circle()
             .fill(Color(hex: hex))
             .frame(width: size, height: size)
             .overlay(Circle().stroke(Color.white, lineWidth: selected ? 3 : 0).padding(1))
             .overlay(Circle().stroke(Color.black.opacity(0.15), lineWidth: 0.5))
-            .scaleEffect(selected ? 1.1 : 1.0)
             .animation(.spring(response: 0.2), value: selected)
     }
 }
