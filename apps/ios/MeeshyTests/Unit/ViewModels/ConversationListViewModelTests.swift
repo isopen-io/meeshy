@@ -1,6 +1,8 @@
 import XCTest
 import Combine
 import MeeshySDK
+import SwiftUI
+import MeeshyUI
 @testable import Meeshy
 
 @MainActor
@@ -2030,6 +2032,18 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(conversationService.lastListPageCursor, "deep-tail",
                        "Cold start must resume from the persisted cursor instead of refetching page 1")
+    }
+
+    // MARK: - ThemedConversationRow timestamp color
+
+    func test_themedRow_timestampColor_withUnread_isErrorRed() {
+        let color = ThemedConversationRow.timestampColor(unreadCount: 3, accent: .blue)
+        XCTAssertEqual(color, MeeshyColors.error)
+    }
+
+    func test_themedRow_timestampColor_noUnread_isAccent() {
+        let color = ThemedConversationRow.timestampColor(unreadCount: 0, accent: .blue)
+        XCTAssertEqual(color, Color.blue)
     }
 }
 

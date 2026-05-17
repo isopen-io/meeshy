@@ -153,7 +153,7 @@ struct ThemedConversationRow: View {
                     // Timestamp — layoutPriority(1) pour ne jamais être écrasé
                     Text(timeAgo(conversation.lastMessageAt))
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(accent)
+                        .foregroundColor(Self.timestampColor(unreadCount: conversation.unreadCount, accent: accent))
                         .layoutPriority(1)
                         .padding(.top, 2)
                 }
@@ -327,6 +327,14 @@ struct ThemedConversationRow: View {
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.white)
         }
+    }
+
+    /// Teinte de l'indicateur de durée. Reprend le rouge du badge de non-lus
+    /// quand la conversation a des messages non lus, sinon l'accent de la
+    /// conversation. On utilise `error` (#F87171) plutôt que le fond sombre du
+    /// badge (#991B1B) pour que le texte 11pt reste lisible en mode sombre.
+    static func timestampColor(unreadCount: Int, accent: Color) -> Color {
+        unreadCount > 0 ? MeeshyColors.error : accent
     }
 
     private func timeAgo(_ date: Date) -> String {
