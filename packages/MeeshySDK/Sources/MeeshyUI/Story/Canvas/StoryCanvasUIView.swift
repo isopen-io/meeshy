@@ -122,7 +122,7 @@ public final class StoryCanvasUIView: UIView {
     // MARK: - Internal layers
 
     private let rootLayer = CALayer()
-    private let itemsContainer = CALayer()
+    let itemsContainer = CALayer()
     private let editOverlayLayer = CALayer()
 
     /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
@@ -228,6 +228,17 @@ public final class StoryCanvasUIView: UIView {
     /// inside the gesture handlers; this link's tick is a no-op for now and exists
     /// so the display server keeps the high-rate clock running while editing).
     private var editDisplayLink: CADisplayLink?
+
+    // MARK: - Inline text editing
+
+    /// Champ d'édition en place, sous-vue du canvas. Non-nil pendant l'édition.
+    var inlineEditor: StoryInlineTextEditor?
+    /// Id du texte en cours d'édition en place (nil hors édition).
+    public internal(set) var inlineEditingTextId: String?
+    /// Notifié à chaque frappe : (textId, nouvelle chaîne).
+    public var onInlineTextChanged: ((String, String) -> Void)?
+    /// Notifié quand l'édition se termine (textId).
+    public var onInlineTextEditEnded: ((String) -> Void)?
 
     // MARK: - Init
 
@@ -687,6 +698,7 @@ public final class StoryCanvasUIView: UIView {
         applyForegroundFrames()
         updateFilterLayer()
         scheduleContentReadyEvaluation(for: bgKind)
+        reapplyInlineEditingIfNeeded()
     }
 
     /// Edit-mode only: trace un cadre permanent sur les éléments foreground
