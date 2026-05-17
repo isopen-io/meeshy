@@ -58,7 +58,7 @@ const DEFAULTS: AgentConfigUpsert = {
   minResponsesPerCycle: 2,
   maxResponsesPerCycle: 12,
   reactionsEnabled: true,
-  maxReactionsPerCycle: 8,
+  maxReactionsPerCycle: 4,
   agentInstructions: null,
   webSearchEnabled: false,
   minWordsPerMessage: 3,
@@ -530,7 +530,7 @@ export function AgentConfigDialog({ open, onOpenChange, config, onSave }: AgentC
                 </div>
                 <Input
                   type="number"
-                  value={form.maxReactionsPerCycle ?? 8}
+                  value={form.maxReactionsPerCycle ?? 4}
                   onChange={e => updateField('maxReactionsPerCycle', Math.max(0, Math.min(50, parseInt(e.target.value) || 0)))}
                   min={0}
                   max={50}

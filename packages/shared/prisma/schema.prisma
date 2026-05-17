@@ -3101,7 +3101,7 @@ model AgentConfig {
   minResponsesPerCycle     Int      @default(2)
   maxResponsesPerCycle     Int      @default(12)
   reactionsEnabled         Boolean  @default(true)
-  maxReactionsPerCycle     Int      @default(8)
+  maxReactionsPerCycle     Int      @default(4)
 
   agentInstructions        String?
   webSearchEnabled         Boolean  @default(true)
