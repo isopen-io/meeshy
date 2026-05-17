@@ -223,7 +223,10 @@ class ConversationListViewModel: ObservableObject {
     /// loaded so the engine's full-row prepend in handleNewMessage
     /// stays the source of truth for unknown conversations.
     func bumpToTop(conversationId: String, newLastMessageAt: Date) {
-        guard let idx = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let idx = convIndex(for: conversationId) else {
+            Logger.messages.warning("[bumpToTop] conversation introuvable id=\(conversationId, privacy: .public)")
+            return
+        }
         var updated = conversations[idx]
         updated.lastMessageAt = newLastMessageAt
         conversations.remove(at: idx)
@@ -608,6 +611,7 @@ class ConversationListViewModel: ObservableObject {
                 // trigger a re-render of every cell behind it.
                 if let newLastAt = event.lastMessageAt,
                    newLastAt > self.conversations[index].lastMessageAt {
+                    Logger.messages.debug("[conversationUpdated] bump websocket id=\(event.conversationId, privacy: .public)")
                     self.bumpToTop(conversationId: event.conversationId, newLastMessageAt: newLastAt)
                 } else {
                     // Metadata-only mutation (rename, avatar swap, broadcast
