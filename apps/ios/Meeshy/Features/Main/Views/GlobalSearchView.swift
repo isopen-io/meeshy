@@ -630,8 +630,17 @@ struct GlobalSearchView: View {
         if result.unreadCount > 0 {
             parts.append("\(result.unreadCount) \(unreadUnit)")
         }
-        if let preview = result.lastMessagePreview, !preview.isEmpty {
-            parts.append("\(lastMessageLabel): \(preview)")
+        switch result.conversation.lastMessageSummaryKind() {
+        case .hidden:
+            parts.append("\(lastMessageLabel): masqué")
+        case .viewOnce:
+            parts.append("\(lastMessageLabel): vue unique")
+        case .expired:
+            parts.append("\(lastMessageLabel): expiré")
+        case .ephemeralActive, .standard:
+            if let preview = result.lastMessagePreview, !preview.isEmpty {
+                parts.append("\(lastMessageLabel): \(preview)")
+            }
         }
         return parts.joined(separator: ", ")
     }

@@ -66,4 +66,11 @@ struct LastMessageSummaryKindTests {
         let conv = makeConversation(blurred: true, expiresAt: now.addingTimeInterval(60))
         #expect(conv.lastMessageSummaryKind(now: now) == .hidden)
     }
+
+    @Test("Vue-unique prime sur éphémère encore actif")
+    func viewOnceBeatsEphemeralActive() {
+        let now = Date()
+        let conv = makeConversation(viewOnce: true, expiresAt: now.addingTimeInterval(60))
+        #expect(conv.lastMessageSummaryKind(now: now) == .viewOnce)
+    }
 }

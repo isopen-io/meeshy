@@ -225,7 +225,7 @@ struct ThemedConversationRow: View {
         case .hidden:
             parts.append("dernier message masqué")
         case .viewOnce:
-            parts.append("dernier message : voir une fois")
+            parts.append("dernier message : vue unique")
         case .ephemeralActive:
             if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 parts.append("dernier message éphémère : \(preview)")
