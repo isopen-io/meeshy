@@ -59,6 +59,14 @@ public final class StoryCanvasUIView: UIView {
             // already invalidate via `lastCapturedSize`.
             slideContentRevision &+= 1
             rebuildLayers()
+            // Slide content (incl. audio model) changed — reload the mixer and
+            // restart playback so the new slide's audio is heard. No-op outside
+            // `.play` mode. `reconfigureAudioForPlayback()` guards on the
+            // revision token, so this fires at most once per slide change.
+            if mode == .play {
+                reconfigureAudioForPlayback()
+                try? audioMixer.play()
+            }
         }
     }
     public private(set) var mode: RenderMode
@@ -203,6 +211,12 @@ public final class StoryCanvasUIView: UIView {
     /// Reflects the current mute state driven by `setReaderContext` or
     /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` notifications.
     public private(set) var isAudioMuted: Bool = false
+    /// `slideContentRevision` the `audioMixer` was last configured against.
+    /// Lets `reconfigureAudioForPlayback()` skip the (expensive) AVAudioFile
+    /// reload when the slide content hasn't changed — `rebuildLayers()` runs
+    /// every display-link tick in `.play` mode, but the audio model only
+    /// changes when `slide` itself is reassigned.
+    private var lastAudioConfigRevision: UInt64?
 
     // MARK: - Display link
 
@@ -234,6 +248,7 @@ public final class StoryCanvasUIView: UIView {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        audioMixer.shutdown()
     }
 
     @available(*, unavailable)
@@ -522,6 +537,15 @@ public final class StoryCanvasUIView: UIView {
         isAudioMuted = context.mute
         audioMixer.setMute(context.mute)
         rebuildLayers()
+        // The context carries `postMediaURLResolver` / `preferredLanguages`,
+        // both inputs to audio URL resolution. A context swap (e.g. `.empty`
+        // placeholder → real resolver) must force a mixer reload, so drop the
+        // revision gate and reconfigure when already playing.
+        if mode == .play {
+            lastAudioConfigRevision = nil
+            reconfigureAudioForPlayback()
+            try? audioMixer.play()
+        }
     }
 
     public func setMode(_ newMode: RenderMode, time: CMTime = .zero) {
@@ -545,6 +569,7 @@ public final class StoryCanvasUIView: UIView {
             case .play:
                 stopEditDisplayLink()
                 startPlayback()
+                reconfigureAudioForPlayback()
                 try? audioMixer.play()
             case .edit:
                 stopPlayback()
@@ -552,6 +577,52 @@ public final class StoryCanvasUIView: UIView {
                 startEditDisplayLinkIfNeeded()
             }
         }
+    }
+
+    /// Loads the slide's foreground + background audio clips into the
+    /// `audioMixer` so `audioMixer.play()` actually emits sound. No-op outside
+    /// `.play` mode (the composer never plays audio while editing) and skipped
+    /// when the slide content hasn't changed since the last configure pass —
+    /// `configure(audios:urls:)` tears down prior clips, so repeated calls are
+    /// safe but reload AVAudioFiles, which we avoid on every display-link tick.
+    ///
+    /// URL resolution: `ReaderAudioMixer` keys the `urls` dict by the audio
+    /// object's `id`, but `StoryReaderContext.postMediaURLResolver` maps a
+    /// `postMediaId` → `URL`. We bridge the two here, dropping any clip whose
+    /// `postMediaId` does not resolve.
+    private func reconfigureAudioForPlayback() {
+        guard mode == .play else { return }
+        guard lastAudioConfigRevision != slideContentRevision else { return }
+        lastAudioConfigRevision = slideContentRevision
+
+        let effects = slide.effects
+        let languages = readerContext.preferredLanguages
+        let resolver = readerContext.postMediaURLResolver
+
+        // Foreground clips.
+        let foreground = effects.resolvedForegroundAudioPlayers
+        var urls: [String: URL] = [:]
+        for audio in foreground {
+            let mediaId = audio.resolvedPostMediaId(preferredLanguages: languages)
+            if let url = resolver?(mediaId) {
+                urls[audio.id] = url
+            }
+        }
+        try? audioMixer.configure(audios: foreground, urls: urls)
+
+        // Background clip (at most one per slide).
+        if let background = effects.resolvedBackgroundAudio {
+            let mediaId = background.resolvedPostMediaId(preferredLanguages: languages)
+            if let url = resolver?(mediaId) {
+                try? audioMixer.configureBackground(
+                    audio: background,
+                    url: url,
+                    looping: background.loop ?? true
+                )
+            }
+        }
+
+        audioMixer.setMute(readerContext.mute)
     }
 
     // MARK: - Rendering
