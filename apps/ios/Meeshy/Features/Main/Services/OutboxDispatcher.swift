@@ -239,7 +239,13 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchMarkAsRead(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: MarkAsReadPayload.self)
         do {
-            let _: APIResponse<[String: Int]> = try await APIClient.shared.request(
+            // Decode the envelope loosely as a dictionary (same pattern as
+            // `dispatchUpdateProfile` / `dispatchCreateConversation` above).
+            // The mark-read response `data` carries a string `message` field,
+            // so the previous `[String: Int]` decode threw a DecodingError on
+            // an otherwise-successful 2xx — the read receipt looked like a
+            // failure and was retried until exhausted for nothing.
+            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.request(
                 endpoint: "/conversations/\(payload.conversationId)/mark-read",
                 method: "POST",
                 body: nil,
