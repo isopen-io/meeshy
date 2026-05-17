@@ -1548,52 +1548,21 @@ class ConversationViewModel: ObservableObject {
                 encryptionMode: encryptionMode,
                 clientMessageId: tempId
             )
-            // WebSocket-first — emit `message:send` over the already-open
-            // Socket.IO connection (parity with reactions / comments / status,
-            // which already travel over the socket). The socket event carries
-            // the full message effect set (blur, ephemeral `expiresAt`, effect
-            // flags bitfield, view-once) at parity with REST. REST stays the
-            // fallback: socket down, no ACK within the timeout, OR a message
-            // the `message:send` event cannot transport — E2EE payload,
-            // attachments — which keep the REST / dedicated send paths.
-            let socketEligible = !isEncrypted
-                && (attachmentIds ?? []).isEmpty
-
-            let serverId: String
-            let serverCreatedAt: Date
-            let sentViaSocket: Bool
-
-            if socketEligible,
-               MessageSocketManager.shared.isConnected,
-               let ack = await MessageSocketManager.shared.sendAsync(
-                   conversationId: conversationId,
-                   content: finalContent,
-                   originalLanguage: body.originalLanguage,
-                   replyToId: replyToId,
-                   storyReplyToId: storyReplyToId,
-                   forwardedFromId: forwardedFromId,
-                   forwardedFromConversationId: forwardedFromConversationId,
-                   isBlurred: resolvedBlur,
-                   expiresAt: resolvedExpiresAt,
-                   effectFlags: body.effectFlags,
-                   isViewOnce: resolvedIsViewOnce ? true : nil,
-                   maxViewOnceCount: resolvedMaxViewOnceCount,
-                   clientMessageId: tempId
-               ) {
-                serverId = ack.messageId
-                serverCreatedAt = ack.createdAt ?? Date()
-                sentViaSocket = true
-                print("[SendFlow] WS message:send OK tempId=\(tempId) serverId=\(serverId)")
-            } else {
-                print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
-                let responseData = try await messageService.send(
-                    conversationId: conversationId, request: body
-                )
-                serverId = responseData.id
-                serverCreatedAt = responseData.createdAt
-                sentViaSocket = false
-                print("[SendFlow] POST OK tempId=\(tempId) serverId=\(responseData.id) createdAt=\(responseData.createdAt)")
-            }
+            // Send via REST. The WebSocket-first send path (commit 35b399f9,
+            // 2026-05-16) is disabled: the `message:send` Socket.IO event
+            // never reached the gateway handler — the socket data channel was
+            // non-functional, so every send burned the full 10 s `emitWithAck`
+            // timeout before falling back to REST anyway (root-cause
+            // investigation 2026-05-17). REST is direct (~25 ms server-side).
+            // Re-enable the WebSocket-first path once the Socket.IO channel
+            // is repaired and the `message:send` ACK round-trip is verified.
+            print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
+            let responseData = try await messageService.send(
+                conversationId: conversationId, request: body
+            )
+            let serverId = responseData.id
+            let serverCreatedAt = responseData.createdAt
+            print("[SendFlow] POST OK tempId=\(tempId) serverId=\(responseData.id) createdAt=\(responseData.createdAt)")
 
             // Register tempId → serverId mapping so the socket handler can reconcile
             // the `message:new` broadcast without creating a duplicate row.
@@ -1611,7 +1580,7 @@ class ConversationViewModel: ObservableObject {
             )
             print("[SendFlow] applyEvent serverAck tempId=\(tempId) → resultState=\(ackResult.map { String(describing: $0) } ?? "nil")")
             let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
-            Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=\(sentViaSocket ? "ws" : "rest", privacy: .public) durationMs=\(ackElapsedMs, privacy: .public)")
+            Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=rest durationMs=\(ackElapsedMs, privacy: .public)")
 
             // Move conversation to top of list immediately (optimistic)
             let convId = conversationId
