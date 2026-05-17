@@ -72,6 +72,7 @@ struct TextEditToolOptions: View {
                     .buttonStyle(.plain)
                 }
             }
+            .padding(4)   // marge pour le `scaleEffect` des pastilles sélectionnées
         }
     }
 
@@ -229,6 +230,7 @@ struct TextEditToolOptions: View {
                         .buttonStyle(.plain)
                     }
                 }
+                .padding(4)   // marge pour le `scaleEffect` des pastilles sélectionnées
             }
             .opacity(textObject.borderColor == nil ? 0.4 : 1)
             .disabled(textObject.borderColor == nil)
@@ -267,15 +269,15 @@ struct TextEditToolOptions: View {
     // MARK: - Shared
 
     private func colorDot(hex: String, selected: Bool, size: CGFloat) -> some View {
-        // Pas de `scaleEffect` sur la sélection : agrandir la pastille la fait
-        // déborder de son cadre, et le `ScrollView` horizontal qui la contient
-        // rogne ce débordement. La sélection est marquée par l'anneau blanc seul
-        // (`.padding(1)` le garde dans le cadre — aucune troncature).
+        // L'agrandissement `scaleEffect` de la sélection est conservé ; les
+        // `ScrollView` de pastilles ont une marge interne (`.padding(4)`) pour
+        // que ce débordement ne soit pas rogné.
         Circle()
             .fill(Color(hex: hex))
             .frame(width: size, height: size)
             .overlay(Circle().stroke(Color.white, lineWidth: selected ? 3 : 0).padding(1))
             .overlay(Circle().stroke(Color.black.opacity(0.15), lineWidth: 0.5))
+            .scaleEffect(selected ? 1.1 : 1.0)
             .animation(.spring(response: 0.2), value: selected)
     }
 }
