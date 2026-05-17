@@ -28,6 +28,17 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// Used by the viewer to gate the slide progress timer and a loading spinner.
     let onContentReady: (() -> Void)?
 
+    /// Locally-loaded assets handed in by the composer "Preview" path for a
+    /// story whose media has not been uploaded yet. Keyed by media id.
+    /// `preloadedImages` are in-memory bitmaps (e.g. from `PhotosPicker`);
+    /// `preloadedVideoURLs` / `preloadedAudioURLs` are `file://` URLs.
+    /// These are consumed by `makeUIView` so the canvas — which resolves media
+    /// strictly through `StoryReaderContext.postMediaURLResolver` /
+    /// `imageCache` — can render assets that have no usable remote URL yet.
+    let preloadedImages: [String: UIImage]
+    let preloadedVideoURLs: [String: URL]
+    let preloadedAudioURLs: [String: URL]
+
     // MARK: - Primary init
 
     public init(story: StoryItem,
@@ -51,9 +62,9 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.mute = mute
         self.onCompletion = onCompletion
         self.onContentReady = onContentReady
-        // preloadedImages / preloadedVideoURLs / preloadedAudioURLs are accepted for
-        // call-site backward-compat but intentionally unused — the new canvas resolves
-        // media from StoryItem.media and StoryReaderContext.postMediaURLResolver.
+        self.preloadedImages = preloadedImages
+        self.preloadedVideoURLs = preloadedVideoURLs
+        self.preloadedAudioURLs = preloadedAudioURLs
     }
 
     // MARK: - UIViewRepresentable
@@ -64,19 +75,63 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         let mediaList = storyItem.media
         let completion = onCompletion
         let contentReady = onContentReady
+
+        // Preloaded composer assets. `preloadedImages` are in-memory bitmaps
+        // (non-`Sendable`), so we persist them to temp `file://` URLs ONCE here
+        // — URLs are `Sendable`, which lets both the resolver closure and the
+        // `ImageCacheReader` capture them without crossing Swift 6 strict
+        // concurrency. `makeUIView` runs once per representable instance, so
+        // the writes happen exactly once.
+        let videoURLs = preloadedVideoURLs
+        let audioURLs = preloadedAudioURLs
+        let imageURLs = Self.persistPreloadedImages(preloadedImages)
+
+        // Resolver: preloaded local assets take priority (composer preview),
+        // then fall through to the published `StoryItem.media` remote URLs so
+        // the live viewer behaves identically when the preloaded dicts are empty.
         let resolver: @Sendable (String) -> URL? = { postId in
-            mediaList.first { $0.id == postId }
+            if let local = videoURLs[postId] ?? audioURLs[postId] ?? imageURLs[postId] {
+                return local
+            }
+            return mediaList.first { $0.id == postId }
                      .flatMap { $0.url.flatMap(URL.init(string:)) }
         }
+
+        // The background-image branch of `StoryBackgroundLayer.configure`
+        // only consults the resolver when `imageCache` is non-nil. Supply a
+        // file-backed cache reader so preloaded images reach the resolver path;
+        // it stays `nil` when no images were preloaded so the live viewer is
+        // unaffected.
+        let imageCache: ImageCacheReader? = imageURLs.isEmpty
+            ? nil
+            : PreloadedImageCacheReader(fileURLs: imageURLs)
+
         view.onContentReady = { contentReady?() }
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,
             onCompletion: completion,
             postMediaURLResolver: resolver,
-            imageCache: nil
+            imageCache: imageCache
         ))
         return view
+    }
+
+    /// Writes each preloaded `UIImage` to a unique temp `file://` URL and
+    /// returns a `[mediaId: URL]` map. PNG keeps the bitmap lossless (composer
+    /// previews may include transparency). Images that fail to encode are
+    /// silently dropped — the resolver then falls back to the remote lookup.
+    private static func persistPreloadedImages(_ images: [String: UIImage]) -> [String: URL] {
+        guard !images.isEmpty else { return [:] }
+        let dir = FileManager.default.temporaryDirectory
+        var result: [String: URL] = [:]
+        for (mediaId, image) in images {
+            guard let data = image.pngData() else { continue }
+            let url = dir.appendingPathComponent("story-preview-\(UUID().uuidString).png")
+            guard (try? data.write(to: url, options: .atomic)) != nil else { continue }
+            result[mediaId] = url
+        }
+        return result
     }
 
     public func updateUIView(_ view: StoryCanvasUIView, context: Context) {
@@ -161,5 +216,24 @@ extension StoryReaderRepresentable {
         if mime.hasPrefix("audio/") { return "9B59B6" }
         if mime.hasPrefix("application/") { return "F8B500" }
         return "4ECDC4"
+    }
+}
+
+// MARK: - Preloaded image cache
+
+/// `ImageCacheReader` backed by composer-preloaded images that were persisted
+/// to temp `file://` URLs by `StoryReaderRepresentable.persistPreloadedImages`.
+///
+/// Only a `[String: URL]` is captured — `URL` is `Sendable`, so the struct is
+/// trivially `Sendable` and sidesteps the fact that `UIImage` is not. The
+/// background image layer calls `cachedImage(for:)` with the media id; we
+/// decode the matching temp file lazily on first lookup.
+struct PreloadedImageCacheReader: ImageCacheReader {
+    let fileURLs: [String: URL]
+
+    func cachedImage(for key: String) async -> UIImage? {
+        guard let url = fileURLs[key],
+              let data = try? Data(contentsOf: url) else { return nil }
+        return UIImage(data: data)
     }
 }
