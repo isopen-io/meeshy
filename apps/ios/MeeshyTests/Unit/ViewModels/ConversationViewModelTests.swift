@@ -229,18 +229,21 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageService.listCallCount, 1)
     }
 
-    func test_loadMessages_callsMarkRead() async {
+    func test_loadMessages_marksConversationAsRead() async {
         let response: MessagesAPIResponse = JSONStub.decode("""
         {"success":true,"data":[],"pagination":null,"cursorPagination":null,"hasNewer":null}
         """)
         mockMessageService.listResult = .success(response)
         let sut = makeSUT()
+        // markAsRead routes through ConversationSyncEngine + the offline outbox;
+        // the .conversationMarkedRead notification is its observable contract.
+        let marked = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == self.testConversationId
+        }
 
         await sut.loadMessages()
 
-        // markAsRead fires markRead via Task, give it a moment
-        try? await Task.sleep(nanoseconds: 100_000_000)
-        XCTAssertEqual(mockConversationService.markReadCallCount, 1)
+        await fulfillment(of: [marked], timeout: 1.0)
     }
 
     // MARK: - sendMessage Tests
@@ -904,18 +907,6 @@ final class ConversationViewModelTests: XCTestCase {
         sut.markAsRead()
 
         wait(for: [expectation], timeout: 1.0)
-    }
-
-    func test_markAsRead_callsConversationServiceMarkRead() {
-        let sut = makeSUT()
-        let expectation = XCTestExpectation(description: "markRead called on service")
-        mockConversationService.onMarkReadCalled = { expectation.fulfill() }
-
-        sut.markAsRead()
-
-        wait(for: [expectation], timeout: 2.0)
-        XCTAssertEqual(mockConversationService.markReadCallCount, 1)
-        XCTAssertEqual(mockConversationService.lastMarkReadConversationId, testConversationId)
     }
 
     // MARK: - messageIndex Tests
