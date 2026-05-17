@@ -17,26 +17,23 @@ import QuartzCore
 @MainActor
 final class StoryGlassBackdropLayerFilterRetainTests: XCTestCase {
 
-    /// Reproduit la séquence exacte du crash : configurer le layer (construit le
-    /// `CAFilter`, le range dans `filters`), désallouer le layer, puis drainer
-    /// l'autorelease pool. Avec le bug → double-free → SIGSEGV. Avec le fix →
-    /// le pool draine proprement sur les 64 itérations.
-    func test_configure_caFilterFallback_doesNotOverReleaseFilter() {
-        for _ in 0..<64 {
-            autoreleasepool {
-                let layer = StoryGlassBackdropLayer()
-                layer.configure(sigma: 24)
-                XCTAssertEqual(
-                    (layer.value(forKeyPath: "filters") as? [Any])?.count, 1,
-                    "applyCAFilterFallback doit ranger un CAFilter dans `filters`"
-                )
-            }
-        }
+    /// Test fonctionnel de base : le repli `CAFilter` installe exactement un
+    /// filtre dans `filters`. La régression de sur-libération elle-même est
+    /// couverte par `test_configure_filterSurvivesAutoreleasePoolDrain`.
+    func test_configure_caFilterFallback_installsExactlyOneFilter() {
+        let layer = StoryGlassBackdropLayer()
+        layer.configure(sigma: 24)
+        XCTAssertEqual((layer.value(forKeyPath: "filters") as? [Any])?.count, 1,
+                       "applyCAFilterFallback doit ranger un CAFilter dans `filters`")
     }
 
-    /// Le `CAFilter` rangé dans `filters` reste un objet vivant et adressable
-    /// après le drain du pool — preuve que le tableau en détient une référence
-    /// forte valide, et non un pointeur pendouillant.
+    /// Régression du crash. Configure le layer (construit le `CAFilter`, le
+    /// range dans `filters`) à l'intérieur d'un `autoreleasepool` qu'on draine,
+    /// puis lit une propriété du filtre. Avec le bug `takeRetainedValue()` le
+    /// filtre était sur-libéré → libéré au drain du pool → l'accès ci-dessous
+    /// touchait de la mémoire libérée (crash du runner, observé avant le fix).
+    /// Avec `takeUnretainedValue()`, `filters` détient une référence forte
+    /// valide et la lecture renvoie la valeur configurée.
     func test_configure_filterSurvivesAutoreleasePoolDrain() {
         let layer = StoryGlassBackdropLayer()
         autoreleasepool {
@@ -45,6 +42,10 @@ final class StoryGlassBackdropLayerFilterRetainTests: XCTestCase {
         guard let filter = (layer.value(forKeyPath: "filters") as? [Any])?.first else {
             return XCTFail("`filters` devrait contenir le CAFilter de repli")
         }
-        XCTAssertEqual(String(describing: type(of: filter as AnyObject)), "CAFilter")
+        // Lire `inputRadius` prouve que l'objet est vivant ET est bien le
+        // filtre configuré (sigma 12 → inputRadius 12), sans dépendre du nom
+        // de la classe privée `CAFilter`.
+        let radius = ((filter as AnyObject).value(forKey: "inputRadius") as? NSNumber)?.floatValue
+        XCTAssertEqual(radius ?? -1, 12, accuracy: 0.001)
     }
 }
