@@ -237,7 +237,7 @@ export const ConversationStateAnnotation = Annotation.Root({
   }),
   maxReactionsPerCycle: Annotation<number>({
     reducer: (_current, update) => update,
-    default: () => 8,
+    default: () => 4,
   }),
   budgetRemaining: Annotation<number>({
     reducer: (_current, update) => update,

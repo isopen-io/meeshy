@@ -406,7 +406,7 @@ export default memo(function ScanControlPanel() {
                         <Label className="text-[10px]">Max reactions</Label>
                         <Input
                           type="number"
-                          value={convForm.maxReactionsPerCycle ?? 8}
+                          value={convForm.maxReactionsPerCycle ?? 4}
                           onChange={e => updateConv('maxReactionsPerCycle', Math.max(0, parseInt(e.target.value) || 0))}
                           min={0}
                           max={50}
