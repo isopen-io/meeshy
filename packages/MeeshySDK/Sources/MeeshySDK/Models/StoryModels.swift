@@ -231,6 +231,12 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     /// `nil` means "fall back to legacy `textBg`" for backward compat.
     public var backgroundStyle: StoryTextBackgroundStyle?
 
+    /// Outline / contour du texte. `borderColor == nil` ⇒ pas de bord
+    /// (pas de booléen séparé). Hex "RRGGBB" ou "RRGGBBAA".
+    public var borderColor: String?
+    /// Épaisseur du contour, en design-pixels (référentiel 1080). `nil` ⇒ défaut 3.0.
+    public var borderWidth: Double?
+
     // Translations (kept)
     public var translations: [String: String]?
     public var sourceLanguage: String?
@@ -250,6 +256,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         case id, text, x, y, scale, rotation, zIndex, anchor
         case fontSize, fontFamily
         case textStyle, textColor, textAlign, textBg, backgroundStyle
+        case borderColor, borderWidth
         case translations, sourceLanguage
         case startTime, duration, fadeIn, fadeOut
         case isLocked, keyframes
@@ -270,6 +277,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 textAlign: String? = "center",
                 textBg: String? = nil,
                 backgroundStyle: StoryTextBackgroundStyle? = nil,
+                borderColor: String? = nil,
+                borderWidth: Double? = nil,
                 translations: [String: String]? = nil,
                 sourceLanguage: String? = nil,
                 startTime: Double? = nil,
@@ -287,6 +296,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         self.textStyle = textStyle; self.textColor = textColor
         self.textAlign = textAlign; self.textBg = textBg
         self.backgroundStyle = backgroundStyle
+        self.borderColor = borderColor; self.borderWidth = borderWidth
         self.translations = translations
         self.sourceLanguage = sourceLanguage
         self.startTime = startTime; self.duration = duration
@@ -333,6 +343,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         textAlign = try c.decodeIfPresent(String.self, forKey: .textAlign)
         textBg = try c.decodeIfPresent(String.self, forKey: .textBg)
         backgroundStyle = try c.decodeIfPresent(StoryTextBackgroundStyle.self, forKey: .backgroundStyle)
+        borderColor = try c.decodeIfPresent(String.self, forKey: .borderColor)
+        borderWidth = try c.decodeIfPresent(Double.self, forKey: .borderWidth)
         translations = try c.decodeIfPresent([String: String].self, forKey: .translations)
         sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
         startTime = try c.decodeIfPresent(Double.self, forKey: .startTime)
@@ -367,6 +379,8 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(textAlign, forKey: .textAlign)
         try c.encodeIfPresent(textBg, forKey: .textBg)
         try c.encodeIfPresent(backgroundStyle, forKey: .backgroundStyle)
+        try c.encodeIfPresent(borderColor, forKey: .borderColor)
+        try c.encodeIfPresent(borderWidth, forKey: .borderWidth)
         try c.encodeIfPresent(translations, forKey: .translations)
         try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encodeIfPresent(startTime, forKey: .startTime)

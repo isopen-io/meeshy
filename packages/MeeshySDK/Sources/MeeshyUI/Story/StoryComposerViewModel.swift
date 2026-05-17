@@ -335,6 +335,15 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     var selectedElementId: String?
 
+    // MARK: - Floating Text Edit Mode
+
+    /// Mode d'édition de texte plein écran (overlay flottant). `.inactive` par
+    /// défaut. Voir `StoryComposerViewModel+TextEditing.swift` pour les
+    /// transitions. La géométrie du texte (`x/y/scale/rotation/zIndex/fontSize`)
+    /// n'est JAMAIS mutée pour l'édition : le texte est édité dans un overlay
+    /// centré, le modèle reste la source de vérité pour le rendu et l'export.
+    var textEditingMode: TextEditingMode = .inactive
+
     // MARK: - Active Tool
 
     var activeTool: StoryToolMode?
@@ -1045,6 +1054,8 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         effects.stickerObjects?.removeAll { $0.id == id }
         currentEffects = effects
         if selectedElementId == id { selectedElementId = nil }
+        // Si on supprime le texte en cours d'édition flottante, sortir du mode.
+        if textEditingMode.activeTextId == id { textEditingMode = .inactive }
         loadedImages.removeValue(forKey: id)
         loadedVideoURLs.removeValue(forKey: id)
         loadedAudioURLs.removeValue(forKey: id)

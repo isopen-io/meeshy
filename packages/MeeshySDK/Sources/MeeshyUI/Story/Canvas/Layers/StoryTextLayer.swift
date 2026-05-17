@@ -58,12 +58,25 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         para.alignment = alignment
         para.baseWritingDirection = .natural   // RTL auto-detect for Arabic/Hebrew
 
+        // Outline / contour : `.strokeWidth` est un pourcentage de la taille de
+        // police ; une valeur NÉGATIVE remplit ET contoure (positif = texte
+        // creux). `borderWidth` est en design-px absolus → le diviser par la
+        // taille de police design donne un pourcentage indépendant de la
+        // résolution ET de l'échelle (le contour garde la même épaisseur design
+        // quel que soit `text.scale`).
+        var strokeAttrs: [NSAttributedString.Key: Any] = [:]
+        if let borderHex = text.borderColor, let borderColor = parseHexColor(borderHex) {
+            let widthPx = CGFloat(text.borderWidth ?? 3.0)
+            strokeAttrs[.strokeColor] = borderColor.cgColor
+            strokeAttrs[.strokeWidth] = -(widthPx / max(designFontSize, 1)) * 100.0
+        }
+
         // Measure in design space.
         let designAttr = NSAttributedString(string: text.text, attributes: [
             .font: designFont,
             .foregroundColor: color.cgColor,
             .paragraphStyle: para
-        ])
+        ].merging(strokeAttrs) { _, new in new })
         let designSize = designAttr.size()
         // Symmetric pad in design pixels (16 design px ≈ ~6 px on iPhone, ~12 on iPad).
         let designBounds = CGSize(width: ceil(designSize.width) + 16,
@@ -80,7 +93,7 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
             .font: renderedFont,
             .foregroundColor: color.cgColor,
             .paragraphStyle: para
-        ])
+        ].merging(strokeAttrs) { _, new in new })
         string = renderedAttr
         // Mirror the rendered font size on the CATextLayer property so callers
         // (and tests) can read it directly without unwrapping the attributed string.
