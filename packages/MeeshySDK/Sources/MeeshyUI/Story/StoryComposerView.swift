@@ -207,6 +207,13 @@ public struct StoryComposerView: View {
     @State private var openingEffect: StoryTransitionEffect?
     @State private var closingEffect: StoryTransitionEffect?
 
+    // MARK: - Keyboard observation + canvas shift
+
+    @State private var keyboardHeight: CGFloat = 0
+    @State private var canvasEditShift: CGFloat = 0
+    /// Frame naturelle (non décalée) du canvas, mesurée hors `.offset`.
+    @State private var canvasNaturalFrame: CGRect = .zero
+
     @Environment(\.theme) private var theme
 
     // MARK: - Callbacks (public API preserved)
@@ -295,10 +302,12 @@ public struct StoryComposerView: View {
             // Floating text edit overlay — sits above every composer control.
             // Empty view when `textEditingMode == .inactive`.
             StoryTextEditToolbar(viewModel: viewModel)
+                .padding(.bottom, keyboardHeight)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.textEditingMode)
         .statusBarHidden()
+        .ignoresSafeArea(.keyboard)
         .onAppear {
             viewModel.startMemoryObserver()
             viewModel.loadCurrentSlideIntoTimeline()
@@ -335,6 +344,19 @@ public struct StoryComposerView: View {
         // each toolbar mutation. Five separate `.onChange` modifiers tipped
         // the type-checker over the time-out threshold, so we collapse them
         // into a single extension modifier to maintain performance in O(1).
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIResponder.keyboardWillShowNotification)) { note in
+            let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey]
+                as? NSValue)?.cgRectValue ?? .zero
+            keyboardHeight = frame.height
+            recomputeCanvasShift()
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardHeight = 0
+            canvasEditShift = 0
+        }
+        .onChange(of: viewModel.textEditingMode) { _, _ in recomputeCanvasShift() }
         .granularCanvasSync(
             filter: selectedFilter?.rawValue,
             hasImage: selectedImage != nil,
@@ -1042,6 +1064,17 @@ public struct StoryComposerView: View {
             .overlay { mediaLoadingOverlay }
             .overlay(alignment: .topTrailing) { canvasZoomResetButton }
             .ignoresSafeArea()
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { canvasNaturalFrame = proxy.frame(in: .global) }
+                        .onChange(of: proxy.frame(in: .global)) { _, f in
+                            canvasNaturalFrame = f
+                        }
+                }
+            )
+            .offset(y: -canvasEditShift)
+            .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasEditShift)
     }
 
     @ViewBuilder
@@ -1096,6 +1129,17 @@ public struct StoryComposerView: View {
                         viewModel.loadedVideoURLs[newId] = url
                     }
                 }
+            },
+            editingTextId: viewModel.textEditingMode.activeTextId,
+            onInlineTextChanged: { id, str in
+                guard let i = viewModel.currentEffects.textObjects.firstIndex(where: { $0.id == id })
+                else { return }
+                var effects = viewModel.currentEffects
+                effects.textObjects[i].text = str
+                viewModel.currentEffects = effects
+            },
+            onInlineTextEditEnded: { _ in
+                viewModel.exitTextEditingMode()
             }
         )
         .allowsHitTesting(!viewModel.isDrawingActive)
@@ -1180,6 +1224,26 @@ public struct StoryComposerView: View {
 
 
     // MARK: - Helpers
+
+    /// Décale le canvas vers le haut juste assez pour que le texte édité reste
+    /// au-dessus de (clavier + barre d'outils). Basé sur la position normalisée
+    /// `y` du modèle — pas de pont de coordonnées UIKit↔SwiftUI.
+    private func recomputeCanvasShift() {
+        guard keyboardHeight > 0,
+              let id = viewModel.textEditingMode.activeTextId,
+              let textObj = viewModel.currentEffects.textObjects.first(where: { $0.id == id }),
+              canvasNaturalFrame.height > 0 else {
+            canvasEditShift = 0
+            return
+        }
+        let toolbarHeight: CGFloat = 132   // barre bulles + marge (ajuster au visuel)
+        let margin: CGFloat = 24
+        let screenHeight = UIScreen.main.bounds.height
+        let textCenterY = canvasNaturalFrame.minY
+            + CGFloat(textObj.y) * canvasNaturalFrame.height
+        let visibleBottom = screenHeight - keyboardHeight - toolbarHeight - margin
+        canvasEditShift = max(0, textCenterY - visibleBottom)
+    }
 
     private var safeAreaBottomInset: CGFloat {
         UIApplication.shared.connectedScenes
