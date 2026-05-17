@@ -5,10 +5,24 @@ import XCTest
 /// Singleton actor — each test purges state at start/end to avoid cross-test pollution.
 final class StoryOfflineQueueTests: XCTestCase {
 
+    private var mediaDir: URL!
+
+    /// Builds an item that references real on-disk visual-media AND audio
+    /// files. The unified `StoryPublishQueue.processNext` validates that every
+    /// referenced media file still exists before publishing, so the fixture
+    /// must carry real files — otherwise flush would skip every item as
+    /// missing-media. Both `mediaURLPaths` (image/video) and `audioURLPaths`
+    /// are populated so the converter's audio/non-audio split is exercised.
     private func makeItem(slideId: String = "slide-1") -> StoryOfflineQueueItem {
-        StoryOfflineQueueItem(
+        let mediaURL = mediaDir.appendingPathComponent("\(slideId)-media.jpg")
+        let audioURL = mediaDir.appendingPathComponent("\(slideId)-audio.m4a")
+        try? Data([0xFF, 0xD8, 0xFF]).write(to: mediaURL)
+        try? Data([0x00, 0x01, 0x02]).write(to: audioURL)
+        return StoryOfflineQueueItem(
             slideIds: [slideId],
             slidePayloadJSON: #"{"slides":[{"id":"\#(slideId)","duration":5}]}"#,
+            mediaURLPaths: ["media-1": mediaURL.path],
+            audioURLPaths: ["audio-1": audioURL.path],
             originalLanguage: "fr",
             visibility: "PUBLIC"
         )
@@ -16,11 +30,15 @@ final class StoryOfflineQueueTests: XCTestCase {
 
     override func setUp() async throws {
         try await super.setUp()
+        mediaDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("StoryOfflineQueueTests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: mediaDir, withIntermediateDirectories: true)
         await StoryOfflineQueue.shared.purge()
     }
 
     override func tearDown() async throws {
         await StoryOfflineQueue.shared.purge()
+        try? FileManager.default.removeItem(at: mediaDir)
         try await super.tearDown()
     }
 
@@ -36,6 +54,21 @@ final class StoryOfflineQueueTests: XCTestCase {
         await queue.dequeue(item.id)
         let pendingAfter = await queue.pendingItems
         XCTAssertEqual(pendingAfter.count, 0)
+    }
+
+    /// The converter forwards `mediaURLPaths` and `audioURLPaths` through
+    /// `StoryPublishQueueItem.mediaReferences` (tagged image vs audio) and
+    /// `reverse` splits them back apart. Both dictionaries must survive the
+    /// round-trip.
+    func test_enqueueDequeue_roundTripsMediaAndAudioPaths() async {
+        let queue = StoryOfflineQueue.shared
+        await queue.enqueue(makeItem())
+
+        let pending = await queue.pendingItems
+
+        XCTAssertEqual(pending.count, 1)
+        XCTAssertEqual(pending.first?.mediaURLPaths.keys.sorted(), ["media-1"])
+        XCTAssertEqual(pending.first?.audioURLPaths.keys.sorted(), ["audio-1"])
     }
 
     func test_multipleEnqueue_maintainsFIFOOrder() async {
