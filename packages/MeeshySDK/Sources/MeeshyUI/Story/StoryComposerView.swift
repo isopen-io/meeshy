@@ -294,7 +294,7 @@ public struct StoryComposerView: View {
 
             // Floating text edit overlay — sits above every composer control.
             // Empty view when `textEditingMode == .inactive`.
-            FloatingTextEditOverlay(viewModel: viewModel)
+            StoryTextEditToolbar(viewModel: viewModel)
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.85),
                    value: viewModel.textEditingMode)
