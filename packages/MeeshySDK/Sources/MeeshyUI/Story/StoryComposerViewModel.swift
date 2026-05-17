@@ -922,7 +922,9 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         selectedElementId = obj.id
         bringToFront(id: obj.id)
         activeTool = .text
-        return obj
+        // `bringToFront` persists a new `zIndex` onto the stored object — return
+        // the post-mutation copy so callers never see a stale `zIndex`.
+        return currentEffects.textObjects.first { $0.id == obj.id } ?? obj
     }
 
     @discardableResult
