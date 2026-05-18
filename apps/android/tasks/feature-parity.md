@@ -118,7 +118,9 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       `MeeshySkeletonBox` done (Login + Conversations screens de-duplicated);
       identity bar, fields, toasts, swipeable rows, tag input, pickers,
       progressive image (Coil + ThumbHash) pending
-- [ ] Message Bubble component family (immutable `BubbleContent` + skippable composables)
+- [~] Message Bubble: `BubbleContent` (`@Immutable`) + pure `BubbleContentBuilder`
+      (Prisme-aware) + `MessageBubble` done; reactions/attachments/reply-preview/
+      audio variants pending
 - [ ] Roborazzi fidelity baseline for every primitive (light + dark)
 
 ## Phase 5 — Feature slices (`:feature:*`)
