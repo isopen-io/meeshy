@@ -94,10 +94,21 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         currentLoadTask
     }
 
+    /// Configures the layer for a foreground media object.
+    ///
+    /// `resolver` / `imageCache` close the URL-resolution gap that left
+    /// foreground media invisible (RC4.1). Unlike `StoryBackgroundLayer`,
+    /// `StoryMediaLayer` previously read `media.mediaURL` directly — but a
+    /// published story never stamps `mediaURL` onto a per-object `StoryMediaObject`
+    /// (the URL lives on `StoryItem.media`, reachable only via the resolver),
+    /// and the composer preview hands its bitmaps through the resolver too.
+    /// The signature mirrors `StoryBackgroundLayer.configure(...,resolver:imageCache:)`.
     @MainActor
     public func configure(with media: StoryMediaObject,
                           geometry: CanvasGeometry,
-                          mode: RenderMode) {
+                          mode: RenderMode,
+                          resolver: (@Sendable (String) -> URL?)? = nil,
+                          imageCache: ImageCacheReader? = nil) {
         self.media = media
 
         // Design-space frame (1080-référentiel) → render-space via geometry.
@@ -128,9 +139,9 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
 
         switch media.kind {
         case .image:
-            configureImage(media)
+            configureImage(media, resolver: resolver, imageCache: imageCache)
         case .video:
-            configureVideo(media, mode: mode)
+            configureVideo(media, mode: mode, resolver: resolver)
         case .none:
             break
         }
@@ -165,6 +176,27 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         return CGSize(width: target, height: target / ratio)
     }
 
+    // MARK: - URL resolution
+
+    /// Resolves the playable URL for a foreground media object.
+    ///
+    /// Order (identical to `StoryReaderContext.postMediaURLResolver`):
+    ///  1. `resolver(media.postMediaId)` — preloaded composer-preview asset,
+    ///     then the published `StoryItem.media` remote URL.
+    ///  2. Fallback `media.mediaURL` — fixtures and the `file://` URL the
+    ///     composer edition embeds directly on the object.
+    @MainActor
+    private func resolvedMediaURL(for media: StoryMediaObject,
+                                  resolver: (@Sendable (String) -> URL?)?) -> URL? {
+        if !media.postMediaId.isEmpty, let resolved = resolver?(media.postMediaId) {
+            return resolved
+        }
+        if let urlString = media.mediaURL, let url = URL(string: urlString) {
+            return url
+        }
+        return nil
+    }
+
     // MARK: - Image path
 
     /// Configure the layer's `contents` from a media URL.
@@ -186,25 +218,26 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     ///   has been set. The continuation also guards with `Task.isCancelled`
     ///   before mutating `contents`.
     @MainActor
-    private func configureImage(_ media: StoryMediaObject) {
+    private func configureImage(_ media: StoryMediaObject,
+                                resolver: (@Sendable (String) -> URL?)?,
+                                imageCache: ImageCacheReader?) {
         // Cancel any in-flight load from a previous configure() call before
         // we mutate `contents`. The previous Task observes `isCancelled`
         // and returns without touching `contents`.
         currentLoadTask?.cancel()
         currentLoadTask = nil
 
-        guard let urlString = media.mediaURL,
-              let url = URL(string: urlString) else { return }
-
         contentsGravity = .resizeAspectFill
         masksToBounds = true
+
+        let resolvedURL = resolvedMediaURL(for: media, resolver: resolver)
 
         // Local file:// URLs stay on the synchronous path — they are not
         // blocking in any meaningful sense (no DNS / TCP / TLS) and the
         // composer preview relies on the image being present by the time
         // `configure(with:)` returns. Anything with a network scheme goes
         // through the async cache.
-        if url.isFileURL {
+        if let url = resolvedURL, url.isFileURL {
             if let data = try? Data(contentsOf: url),
                let cgImage = UIImage(data: data)?.cgImage {
                 contents = cgImage
@@ -213,8 +246,18 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         }
 
         let loader = imageLoader
+        let postMediaId = media.postMediaId
         currentLoadTask = Task { @MainActor [weak self] in
-            let loaded = await loader.image(for: urlString)
+            // (1) Fast-path image cache (composer preview / disk-backed reader).
+            if let imageCache,
+               let cached = await imageCache.cachedImage(for: postMediaId)?.cgImage {
+                guard let self, !Task.isCancelled else { return }
+                self.contents = cached
+                return
+            }
+            // (2) Network URL through the disk-cache-backed loader.
+            guard let url = resolvedURL else { return }
+            let loaded = await loader.image(for: url.absoluteString)
             guard let self,
                   !Task.isCancelled,
                   let cgImage = loaded?.cgImage else { return }
@@ -225,9 +268,10 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     // MARK: - Video path
 
     @MainActor
-    private func configureVideo(_ media: StoryMediaObject, mode: RenderMode) {
-        guard let urlString = media.mediaURL,
-              let url = URL(string: urlString) else { return }
+    private func configureVideo(_ media: StoryMediaObject,
+                                mode: RenderMode,
+                                resolver: (@Sendable (String) -> URL?)?) {
+        guard let url = resolvedMediaURL(for: media, resolver: resolver) else { return }
         let player = AVPlayer(url: url)
         let playerLayer = AVPlayerLayer(player: player)
         playerLayer.frame = bounds
