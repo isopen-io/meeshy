@@ -1879,7 +1879,7 @@ struct StoryActionButton: View {
                     Image(systemName: icon)
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(isActive ? activeColor : .white)
-                        .symbolEffect(.bounce, value: isActive)
+                        .adaptiveSymbolBounce(value: isActive)
                 }
                 .shadow(
                     color: isActive ? (activeGlow ?? activeColor).opacity(0.3) : .black.opacity(0.2),

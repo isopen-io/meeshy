@@ -194,7 +194,7 @@ struct MagicLinkView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .symbolEffect(.pulse, options: .repeating)
+                    .adaptiveSymbolPulse()
             }
             .padding(.bottom, MeeshySpacing.md)
 

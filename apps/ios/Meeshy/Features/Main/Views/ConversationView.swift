@@ -1270,7 +1270,7 @@ struct ConversationView: View {
                 Image(systemName: "sparkles")
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
-                    .symbolEffect(.pulse, options: .repeating)
+                    .adaptiveSymbolPulse()
                     .accessibilityLabel("Actualisation en arriere-plan")
             }
         }

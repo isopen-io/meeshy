@@ -216,7 +216,7 @@ struct EmailVerificationView: View {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 72))
                         .foregroundStyle(MeeshyColors.success)
-                        .symbolEffect(.bounce, value: viewModel.verificationSuccess)
+                        .adaptiveSymbolBounce(value: viewModel.verificationSuccess)
 
                     Text(String(localized: "emailVerification.success", defaultValue: "Email verifie !"))
                         .font(.system(size: 24, weight: .bold, design: .rounded))

@@ -455,14 +455,11 @@ struct FeedView: View {
 
                     // Empty state when no posts and no error
                     if viewModel.hasLoaded && viewModel.posts.isEmpty && !viewModel.isLoading && viewModel.error == nil {
-                        ContentUnavailableView {
-                            Label(
-                                String(localized: "Aucune publication", defaultValue: "Aucune publication"),
-                                systemImage: "text.bubble"
-                            )
-                        } description: {
-                            Text(String(localized: "Les publications de vos contacts apparaitront ici", defaultValue: "Les publications de vos contacts apparaitront ici"))
-                        }
+                        AdaptiveContentUnavailableView(
+                            String(localized: "Aucune publication", defaultValue: "Aucune publication"),
+                            systemImage: "text.bubble",
+                            description: Text(String(localized: "Les publications de vos contacts apparaitront ici", defaultValue: "Les publications de vos contacts apparaitront ici"))
+                        )
                     }
 
                     // Cold-start skeleton list: only when no cached posts
