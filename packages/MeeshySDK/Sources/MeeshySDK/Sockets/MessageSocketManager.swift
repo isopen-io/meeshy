@@ -795,6 +795,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
     func emitLiveLocationStop(conversationId: String)
     func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?)
+    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck?
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
@@ -1373,6 +1374,48 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                 }
             }
         }
+    }
+
+    /// Chemin de repli socket pour `ConversationViewModel.sendMessage`, appelé
+    /// quand le POST REST a échoué. Réémet le message sur le socket avec le
+    /// MÊME `clientMessageId` : le dedup gateway `(conversationId, clientMessageId)`
+    /// garantit l'absence de doublon si l'outbox rejoue le REST plus tard.
+    ///
+    /// Route vers `message:send-with-attachments` (média) ou `message:send`
+    /// (texte). Un texte chiffré E2EE renvoie `nil` — l'event `message:send` ne
+    /// transporte pas le chiffrement, on ne réémet pas un payload en clair ;
+    /// ces messages restent sur le retry REST de l'outbox.
+    public func sendViaSocketFallback(
+        conversationId: String,
+        content: String?,
+        attachmentIds: [String],
+        replyToId: String?,
+        storyReplyToId: String?,
+        originalLanguage: String?,
+        isEncrypted: Bool,
+        clientMessageId: String
+    ) async -> SendMessageAck? {
+        if attachmentIds.isEmpty {
+            if isEncrypted { return nil }
+            return await sendAsync(
+                conversationId: conversationId,
+                content: content,
+                originalLanguage: originalLanguage,
+                replyToId: replyToId,
+                storyReplyToId: storyReplyToId,
+                clientMessageId: clientMessageId
+            )
+        }
+        return await sendWithAttachmentsAsync(
+            conversationId: conversationId,
+            content: content,
+            attachmentIds: attachmentIds,
+            replyToId: replyToId,
+            storyReplyToId: storyReplyToId,
+            originalLanguage: originalLanguage,
+            isEncrypted: isEncrypted,
+            clientMessageId: clientMessageId
+        )
     }
 
     // MARK: - Call Signaling Emission

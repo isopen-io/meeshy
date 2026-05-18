@@ -496,6 +496,7 @@ class ConversationViewModel: ObservableObject {
     private let reportService: ReportServiceProviding
     private let syncEngine: ConversationSyncEngineProviding
     private let mentionService: MentionServiceProviding
+    private let messageSocket: MessageSocketProviding
     private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
@@ -618,6 +619,7 @@ class ConversationViewModel: ObservableObject {
         reportService: ReportServiceProviding = ReportService.shared,
         syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
         mentionService: MentionServiceProviding = MentionService.shared,
+        messageSocket: MessageSocketProviding = MessageSocketManager.shared,
         dependencies: ConversationDependencies = .live
     ) {
         self.conversationId = conversationId
@@ -633,6 +635,7 @@ class ConversationViewModel: ObservableObject {
         self.reportService = reportService
         self.syncEngine = syncEngine
         self.mentionService = mentionService
+        self.messageSocket = messageSocket
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
         let store = MessageStore(
@@ -860,6 +863,12 @@ class ConversationViewModel: ObservableObject {
         guard !isLoadingInitial else { return }
         isLoadingInitial = true
         error = nil
+
+        // Réconcilie les messages bloqués en .sending/.queued dont le record
+        // outbox est épuisé → .failed. Couvre le cas « conversation rouverte
+        // après épuisement des tentatives » : la bulle affiche alors la barre
+        // « Échec · Réessayer · Supprimer » au lieu d'un spinner figé.
+        await messagePersistence.reconcileFailedFromOutbox(conversationId: conversationId)
 
         print("[DIAG] loadMessages start conv=\(conversationId) storeAtStart=\(messageStore.messages.count)")
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
@@ -1515,9 +1524,10 @@ class ConversationViewModel: ObservableObject {
             }
         }
 
+        // Déclarés hors du `do` : le bloc `catch` (repli socket) les relit.
+        var finalContent: String? = text.isEmpty ? nil : text
+        var isEncrypted = false
         do {
-            var finalContent: String? = text.isEmpty ? nil : text
-            var isEncrypted = false
             var encryptionMode: String? = nil
 
             // E2EE logic for Direct Messages
@@ -1625,6 +1635,40 @@ class ConversationViewModel: ObservableObject {
         } catch {
             let failElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
             Logger.messages.warning("perf:ios.send.fail clientMessageId=\(tempId, privacy: .public) durationMs=\(failElapsedMs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+
+            // Repli socket : le POST REST a échoué — réémettre une fois via le
+            // socket avec le MÊME clientMessageId (dedup gateway → pas de doublon
+            // si l'outbox rejoue le REST ensuite). On exclut les messages à
+            // propriétés sensibles (éphémère, vue unique, flou, effets) que le
+            // canal socket ne transporte pas intégralement : ceux-là restent sur
+            // le retry REST de l'outbox qui, lui, les préserve.
+            let hasSpecialProps = resolvedExpiresAt != nil
+                || resolvedIsViewOnce
+                || resolvedBlur == true
+                || pendingEffects.hasAnyEffect
+            if !hasSpecialProps {
+                let socketAck = await messageSocket.sendViaSocketFallback(
+                    conversationId: conversationId,
+                    content: finalContent,
+                    attachmentIds: attachmentIds ?? [],
+                    replyToId: replyToId,
+                    storyReplyToId: storyReplyToId,
+                    originalLanguage: originalLanguage ?? "fr",
+                    isEncrypted: isEncrypted,
+                    clientMessageId: tempId
+                )
+                if let socketAck {
+                    pendingServerIds[tempId] = socketAck.messageId
+                    _ = try? await messagePersistence.applyEvent(
+                        localId: tempId,
+                        event: .serverAck(serverId: socketAck.messageId, at: socketAck.createdAt ?? Date())
+                    )
+                    Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(socketAck.messageId, privacy: .public) transport=socket-fallback durationMs=\(failElapsedMs, privacy: .public)")
+                    isSending = false
+                    return true
+                }
+            }
+
             // Apply sendFailed — state machine increments retryCount and transitions
             // to .queued (retries remaining) or .failed (budget exhausted).
             // The store observation surfaces the updated state to the view.
