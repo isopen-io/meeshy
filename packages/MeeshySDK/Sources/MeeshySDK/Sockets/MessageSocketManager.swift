@@ -529,6 +529,23 @@ public struct ReactionSyncEvent: Decodable, Sendable {
 public struct SystemMessageEvent: Decodable, Sendable {
     public let type: String
     public let content: String
+
+    private enum CodingKeys: String, CodingKey {
+        case type, messageType, content
+    }
+
+    public init(from decoder: Decoder) throws {
+        // Le gateway broadcaste `system:message` avec un objet message complet
+        // (MeeshySocketIOHandler.broadcastMessage) : la clé porte le nom
+        // `messageType`, pas `type`, et tous les champs message sont présents.
+        // On accepte les deux clés et on retombe sur des valeurs sûres pour ne
+        // jamais échouer le décodage d'un event temps réel.
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = (try? container.decode(String.self, forKey: .type))
+            ?? (try? container.decode(String.self, forKey: .messageType))
+            ?? "system"
+        content = (try? container.decode(String.self, forKey: .content)) ?? ""
+    }
 }
 
 // MARK: - Attachment Status Event Data
@@ -998,7 +1015,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         DispatchQueue.main.async { self.connectionState = .connecting }
 
         manager = SocketManager(socketURL: url, config: [
-            .log(true),
+            .log(false),
             // Transport HTTP long-polling uniquement. Le transport WebSocket
             // (Starscream) ne s'établit pas de façon fiable ici : forcé, le
             // handshake restait bloqué ; en upgrade, la connexion tombait au
@@ -1015,7 +1032,6 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket = manager?.defaultSocket
         setupEventHandlers()
-        Logger.socket.info("MessageSocket: DIAG connect() proceeding url=\(url.absoluteString, privacy: .public) tokenLen=\(token.count, privacy: .public)")
         socket?.connect()
     }
 
@@ -1030,7 +1046,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         DispatchQueue.main.async { self.connectionState = .connecting }
 
         manager = SocketManager(socketURL: url, config: [
-            .log(true),
+            .log(false),
             // Voir connect() : transport long-polling uniquement.
             .forcePolling(true),
             .extraHeaders(["X-Session-Token": sessionToken]),
