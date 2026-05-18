@@ -549,11 +549,7 @@ public struct StoryComposerView: View {
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
                     showVoiceRecorderSheet: $showVoiceRecorderSheet,
-                    onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
-                    onOpenFilterForElement: { id in
-                        viewModel.selectedElementId = id
-                        viewModel.activeTool = .filters
-                    }
+                    onOpenMediaCrop: { id in openMediaEditor(elementId: id) }
                 )
             }
         }
@@ -1095,7 +1091,9 @@ public struct StoryComposerView: View {
                     // Tap on a text → open the floating text edit overlay.
                     viewModel.enterTextEditingMode(textId: id)
                 case .media:
-                    bandStateMachine.openFormatPanel(.media, id: id)
+                    // Tap sur un média → éditeur d'image plein écran (recadrage,
+                    // filtres, ajustements). Plus de panneau intermédiaire.
+                    openMediaEditor(elementId: id)
                 case .sticker:
                     break
                 }
