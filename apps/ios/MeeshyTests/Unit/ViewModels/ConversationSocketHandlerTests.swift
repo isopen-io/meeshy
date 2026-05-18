@@ -601,6 +601,17 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(delegate.typingUsernames, ["Alice"])
     }
 
+    func test_typingStarted_addsDisplayName_notHandle() async throws {
+        let (sut, delegate, socket) = makeSUT()
+        _ = sut
+
+        socket.typingStarted.send(TypingEvent(userId: otherUserId, username: "alice_handle", displayName: "Alice Martin", conversationId: conversationId))
+
+        try await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(delegate.typingUsernames, ["Alice Martin"])
+    }
+
     func test_typingStarted_fromSelf_ignored() async throws {
         let (sut, delegate, socket) = makeSUT()
         _ = sut

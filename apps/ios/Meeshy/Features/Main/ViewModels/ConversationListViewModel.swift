@@ -577,7 +577,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                typingUsernames[event.conversationId] = event.username
+                typingUsernames[event.conversationId] = event.preferredDisplayName
                 scheduleTypingCleanup(for: event.conversationId)
             }
             .store(in: &cancellables)
