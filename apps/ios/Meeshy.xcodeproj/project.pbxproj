@@ -127,6 +127,7 @@
 		AE4100000000002F41 /* AudioEffectsPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = AE4100000000001F41 /* AudioEffectsPanel.swift */; };
 		AEFX000100010001000100B0 /* AudioEffectTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFX000100010001000100F0 /* AudioEffectTypes.swift */; };
 		AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */; };
+		ATDLT0001000100010001001 /* AttachmentDownloaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */; };
 		ANA00100010001000100B001 /* AnalyticsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANA00100010001000100F001 /* AnalyticsManager.swift */; };
 		ANONSC00000000002001 /* AnonymousSessionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANONSC00000000001001 /* AnonymousSessionContext.swift */; };
 		ANYCD00000000002001 /* AnyCodable.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANYCD00000000001001 /* AnyCodable.swift */; };
@@ -607,6 +608,7 @@
 		AE4100000000001F41 /* AudioEffectsPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectsPanel.swift; sourceTree = "<group>"; };
 		AEFX000100010001000100F0 /* AudioEffectTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectTypes.swift; sourceTree = "<group>"; };
 		AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMediaViewRenderTests.swift; sourceTree = "<group>"; };
+		ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDownloaderTests.swift; sourceTree = "<group>"; };
 		ANA00100010001000100F001 /* AnalyticsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsManager.swift; sourceTree = "<group>"; };
 		ANONSC00000000001001 /* AnonymousSessionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionContext.swift; sourceTree = "<group>"; };
 		ANYCD00000000001001 /* AnyCodable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyCodable.swift; sourceTree = "<group>"; };
@@ -1555,6 +1557,7 @@
 				CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */,
 				CVRC0001000100010001000 /* ConversationReplyContextTests.swift */,
 				AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */,
+				ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */,
 				TSTVWHLPR000G000G000001 /* Helpers */,
 				BBLM0001000100010001GRP /* Bubble */,
 				SKLN0002000100010001GRP /* Skeletons */,
@@ -2368,6 +2371,7 @@
 				CVLT0001000100010001001 /* ConversationViewLifecycleTests.swift in Sources */,
 				CVRC0001000100010001001 /* ConversationReplyContextTests.swift in Sources */,
 				AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */,
+				ATDLT0001000100010001001 /* AttachmentDownloaderTests.swift in Sources */,
 				SKLN0005000100010001BLD /* MeeshyTests/Unit/Views/Skeletons/SkeletonVisibilityResolverTests.swift in Sources */,
 				TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */,
 				NTFY0001000100010001001 /* NotificationTests.swift in Sources */,

@@ -55,7 +55,20 @@ public final class MeeshyConfig: @unchecked Sendable {
     /// Resolve a potentially relative media URL (e.g. "/api/v1/attachments/file/...")
     /// into an absolute URL by prepending the server origin.
     /// Validates scheme (https only, http for localhost) and blocks private IPs (SSRF protection).
+    ///
+    /// Contract: a `file://` URL is returned verbatim — it is NEVER prefixed
+    /// with the server origin and NEVER subject to the SSRF host checks. Local
+    /// optimistic media (camera capture, recorded audio, picked file) is
+    /// referenced by its on-device `file://` URL; it does not touch the
+    /// network. Returning it unchanged makes the `cacheImageForPreview()` seed
+    /// key and `DiskCacheStore.image(for:)`'s `file://` filesystem fast-path
+    /// line up. See Sprint 3 RC3.1.
     public static func resolveMediaURL(_ urlString: String) -> URL? {
+        if urlString.hasPrefix("file://"),
+           let fileURL = URL(string: urlString),
+           fileURL.isFileURL {
+            return fileURL
+        }
         let resolved: String
         if urlString.hasPrefix("http://") || urlString.hasPrefix("https://") {
             resolved = urlString

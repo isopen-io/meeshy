@@ -94,18 +94,28 @@ extension ConversationView {
         var previewAttachments: [MeeshyMessageAttachment] = []
         for att in attachments where att.type != .audio {
             if let fileURL = mediaFiles[att.id] {
-                if att.mimeType.hasPrefix("image/"),
+                let isImage = att.mimeType.hasPrefix("image/")
+                if isImage,
                    let data = try? Data(contentsOf: fileURL),
                    let image = UIImage(data: data) {
                     DiskCacheStore.cacheImageForPreview(image, key: fileURL.absoluteString)
                 }
+                // A video's file:// URL points at an .mp4 — it cannot be
+                // decoded as a still image. Seed a ThumbHash from the generated
+                // thumbnail so the bubble shows a recognisable preview instantly
+                // (ProgressiveCachedImage decodes ThumbHash with zero I/O).
+                // Images render straight from the cache seeded just above.
+                let optimisticThumbHash = isImage
+                    ? nil
+                    : composerState.pendingThumbnails[att.id]?.toThumbHash()
                 previewAttachments.append(MeeshyMessageAttachment(
                     id: att.id,
                     mimeType: att.mimeType,
                     fileUrl: fileURL.absoluteString,
                     width: att.width,
                     height: att.height,
-                    thumbnailUrl: fileURL.absoluteString,
+                    thumbnailUrl: isImage ? fileURL.absoluteString : nil,
+                    thumbHash: optimisticThumbHash,
                     uploadedBy: currentUserId,
                     thumbnailColor: senderColor
                 ))
@@ -235,7 +245,11 @@ extension ConversationView {
                     )
                     uploadedIds.append(result.id)
                     if let audioData {
-                        await CacheCoordinator.shared.audio.store(audioData, for: result.fileUrl)
+                        // Seed under the exact key the renderer resolves to so
+                        // the optimistic→confirmed transition reads a hot cache
+                        // and never re-downloads our own upload. See RC3.3.
+                        let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
+                        await CacheCoordinator.shared.audio.store(audioData, for: renderKey)
                     }
                     let userId = AuthManager.shared.currentUser?.id ?? ""
                     localAttachments.append(result.toMessageAttachment(uploadedBy: userId))
@@ -251,11 +265,34 @@ extension ConversationView {
                         )
                         uploadedIds.append(result.id)
                         if let fileData {
-                            await CacheCoordinator.shared.images.store(fileData, for: result.fileUrl)
+                            // Seed under the exact key the renderer resolves to
+                            // so the optimistic→confirmed transition (file:// →
+                            // server URL) reads a hot cache and never
+                            // re-downloads our own upload. See RC3.3.
+                            let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
+                            if attachment.mimeType.hasPrefix("image/") {
+                                await CacheCoordinator.shared.images.store(fileData, for: renderKey)
+                                // Pre-seed the in-memory UIImage cache under the
+                                // SAME key so ProgressiveCachedImage reads it
+                                // synchronously on the confirmed render — no
+                                // decode, no shimmer.
+                                if let image = UIImage(data: fileData) {
+                                    DiskCacheStore.cacheImageForPreview(image, key: renderKey)
+                                }
+                            } else {
+                                // Video / file: route to the video store — the
+                                // same store checkCache(.video) and the badge
+                                // downloader read — so a confirmed own video
+                                // resolves as cached and never offers a
+                                // re-download of media we just uploaded.
+                                await CacheCoordinator.shared.video.store(fileData, for: renderKey)
+                            }
                             if let thumbUrl = result.thumbnailUrl,
-                               let thumbId = composerState.pendingThumbnails[attachment.id],
-                               let thumbData = thumbId.jpegData(compressionQuality: 0.8) {
-                                await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbUrl)
+                               let thumbImage = composerState.pendingThumbnails[attachment.id],
+                               let thumbData = thumbImage.jpegData(compressionQuality: 0.8) {
+                                let thumbKey = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString ?? thumbUrl
+                                await CacheCoordinator.shared.thumbnails.store(thumbData, for: thumbKey)
+                                DiskCacheStore.cacheImageForPreview(thumbImage, key: thumbKey)
                             }
                         }
                         localAttachments.append(result.toMessageAttachment(uploadedBy: currentUserId))
