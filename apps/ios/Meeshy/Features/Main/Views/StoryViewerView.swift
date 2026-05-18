@@ -301,6 +301,10 @@ struct StoryViewerView: View {
             prefetcher.detach()
             hasInstalledPrefetchPipeline = false
             StoryMediaCoordinator.shared.deactivate()
+            // RC4.5 — cut the reader audio engine on exit. `ReaderAudioMixer`
+            // is a registered external player, so `stopAll()` reaches it
+            // without the viewer needing a direct reference.
+            PlaybackCoordinator.shared.stopAll()
             if let story = currentStory {
                 SocialSocketManager.shared.leavePostRoom(postId: story.id)
             }
@@ -310,6 +314,9 @@ struct StoryViewerView: View {
                 timerCancellable?.cancel()
                 slideTimer.reset()
                 PlaybackCoordinator.shared.stopAll()
+                // Release the shared playback session so other apps' audio
+                // un-ducks while Meeshy is backgrounded (RC4.3 / RC4.5).
+                Task { await MediaSessionCoordinator.shared.deactivateForBackground() }
                 isPresented = false
             }
         }
