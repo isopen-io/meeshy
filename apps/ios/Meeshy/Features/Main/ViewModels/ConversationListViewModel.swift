@@ -57,10 +57,11 @@ class ConversationListViewModel: ObservableObject {
     /// « Brouillon » de la ligne et la priorité de tri. Concept client-local
     /// — jamais stocké dans le modèle SDK `Conversation`.
     @Published private(set) var draftSummaries: [String: DraftSummary] = [:]
-    /// Typing usernames indexed by conversationId. NOT @Published to avoid triggering
-    /// a full list re-render on every typing event from any conversation.
-    /// Rows read this during natural re-renders (scroll, message arrival).
-    var typingUsernames: [String: String] = [:]  // conversationId → displayName
+    /// Typing usernames indexed by conversationId. @Published — ConversationRowItem
+    /// + ThemedConversationRow are Equatable with .equatable() applied
+    /// (ConversationListView+Rows.swift:70), so only the row whose typingUsername
+    /// changed re-evaluates its body. The full list does NOT re-render.
+    @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName
     var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
     private var previewLoadingInFlight: Set<String> = []
     private var typingTimers: [String: Timer] = [:]
