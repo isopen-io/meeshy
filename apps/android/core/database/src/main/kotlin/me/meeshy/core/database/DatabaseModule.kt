@@ -8,6 +8,7 @@ import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import me.meeshy.core.database.dao.ConversationDao
+import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import javax.inject.Singleton
 
@@ -29,6 +30,10 @@ internal object DatabaseModule {
     @Provides
     fun providesSyncMetaDao(database: MeeshyDatabase): SyncMetaDao =
         database.syncMetaDao()
+
+    @Provides
+    fun providesOutboxDao(database: MeeshyDatabase): OutboxDao =
+        database.outboxDao()
 
     private const val DATABASE_NAME = "meeshy.db"
 }

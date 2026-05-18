@@ -85,9 +85,10 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       `cacheFirstFlow {}` + `SwrCacheSource` — TDD, 5 tests green
 - [x] **SWR backing**: Room DB + `sync_meta` + `ConversationCacheSource` —
       conversation list is genuinely cache-first (skeleton only on cold `Empty`)
-- [ ] **Offline outbox**: one Room `outbox` table, **lane-partitioned** drain
-      (`WorkManager` per lane, FIFO per conversation, backoff ×5, coalescing,
-      device-scoped `cmid` idempotency, outcome `SharedFlow`)
+- [x] **Outbox model**: `outbox` table + DAO, lanes, `OutboxCoalescer`
+      (send+delete / edit-merge / reaction-toggle), device-scoped `cmid`/`cid`
+- [ ] **Outbox runtime**: `OutboxRepository` (enqueue+coalesce, boot recovery,
+      outcome `SharedFlow`) + `WorkManager` per-lane flusher with ×5 backoff
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload
 - [ ] `MessageStateMachine` (pure) + `PendingId` localId↔serverId reconciliation
