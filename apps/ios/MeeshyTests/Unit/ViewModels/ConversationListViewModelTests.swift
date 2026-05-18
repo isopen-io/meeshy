@@ -2084,10 +2084,11 @@ final class ConversationListViewModelTests: XCTestCase {
 
     func test_handleForegroundReactivation_triggersDeltaSync() {
         let syncEngine = MockConversationSyncEngine()
+        let exp = expectation(description: "delta sync ran")
+        exp.assertForOverFulfill = false
+        syncEngine.onSyncSinceLastCheckpoint = { exp.fulfill() }
         let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
         sut.handleForegroundReactivation()
-        let exp = expectation(description: "delta sync ran")
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { exp.fulfill() }
         wait(for: [exp], timeout: 2)
         XCTAssertGreaterThan(syncEngine.syncSinceLastCheckpointCallCount, 0)
     }

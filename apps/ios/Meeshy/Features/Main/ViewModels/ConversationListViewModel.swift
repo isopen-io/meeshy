@@ -262,6 +262,7 @@ class ConversationListViewModel: ObservableObject {
         case socketNew              // conversation:new (typed event, primary path)
         case socketNotification     // notification:new legacy fallback (~3-month deprecation window)
         case socketUpdated          // CONVERSATION_UPDATED (first activity on unknown id)
+        case pushNotification       // APNs message notification for an unknown conversation
         case syncDelta              // syncSinceLastCheckpoint (foreground / reconnect)
         case pullRefresh            // user pulled to refresh
         case coldCache              // initial cache load on app start
@@ -762,7 +763,7 @@ class ConversationListViewModel: ObservableObject {
                 if self.convIndex(for: conversationId) != nil {
                     self.bumpToTop(conversationId: conversationId, newLastMessageAt: self.dateProvider())
                 } else {
-                    self.fetchAndPrependMissingConversation(id: conversationId, source: .socketUpdated)
+                    self.fetchAndPrependMissingConversation(id: conversationId, source: .pushNotification)
                 }
             }
             .store(in: &cancellables)
