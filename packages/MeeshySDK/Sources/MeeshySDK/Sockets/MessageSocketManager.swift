@@ -992,7 +992,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         DispatchQueue.main.async { self.connectionState = .connecting }
 
         manager = SocketManager(socketURL: url, config: [
-            .log(false),
+            .log(true),
             .compress,
             .extraHeaders(["Authorization": "Bearer \(token)"]),
             .forceWebsockets(true),
@@ -1004,6 +1004,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         socket = manager?.defaultSocket
         setupEventHandlers()
+        Logger.socket.info("MessageSocket: DIAG connect() proceeding url=\(url.absoluteString, privacy: .public) tokenLen=\(token.count, privacy: .public)")
         socket?.connect()
     }
 
@@ -1015,7 +1016,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         DispatchQueue.main.async { self.connectionState = .connecting }
 
         manager = SocketManager(socketURL: url, config: [
-            .log(false),
+            .log(true),
             .compress,
             .extraHeaders(["X-Session-Token": sessionToken]),
             .forceWebsockets(true),
