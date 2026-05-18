@@ -1,0 +1,28 @@
+package me.meeshy.sdk.net.api
+
+import me.meeshy.sdk.model.ApiConversation
+import me.meeshy.sdk.model.ApiResponse
+import me.meeshy.sdk.model.CreateConversationRequest
+import retrofit2.http.Body
+import retrofit2.http.GET
+import retrofit2.http.POST
+import retrofit2.http.PATCH
+import retrofit2.http.Path
+import retrofit2.http.Query
+
+interface ConversationApi {
+    @GET("conversations")
+    suspend fun list(
+        @Query("offset") offset: Int? = null,
+        @Query("limit") limit: Int? = null,
+    ): ApiResponse<List<ApiConversation>>
+
+    @GET("conversations/{id}")
+    suspend fun getById(@Path("id") id: String): ApiResponse<ApiConversation>
+
+    @POST("conversations")
+    suspend fun create(@Body body: CreateConversationRequest): ApiResponse<ApiConversation>
+
+    @PATCH("conversations/{id}/read")
+    suspend fun markRead(@Path("id") id: String): ApiResponse<Unit>
+}
