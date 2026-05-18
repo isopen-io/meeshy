@@ -313,7 +313,12 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     // MARK: - Connection
 
     public func connect() {
-        guard socket == nil || socket?.status != .connected else { return }
+        // Ne JAMAIS reconstruire le socket tant qu'une connexion existe ou est
+        // en cours : réassigner `manager`/`socket` relâche l'instance courante
+        // en plein handshake et la connexion n'aboutit jamais.
+        if let socket, socket.status == .connected || socket.status == .connecting {
+            return
+        }
 
         guard let token = APIClient.shared.authToken else {
             Logger.socket.warning("No auth token, skipping SocialSocket connect")
@@ -337,7 +342,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             .log(false),
             .compress,
             .extraHeaders(["Authorization": "Bearer \(token)"]),
-            .forceWebsockets(true),
+            // Pas de forceWebsockets : handshake polling puis upgrade WebSocket.
             .reconnects(true),
             .reconnectWait(1),
             .reconnectWaitMax(16),

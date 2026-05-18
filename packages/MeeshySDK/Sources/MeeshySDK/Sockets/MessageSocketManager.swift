@@ -971,7 +971,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // MARK: - Connection
 
     public func connect() {
-        guard socket == nil || socket?.status != .connected else { return }
+        // Ne JAMAIS reconstruire le socket tant qu'une connexion existe ou est
+        // en cours. Réassigner `manager`/`socket` relâche l'instance courante
+        // en plein handshake : la connexion n'aboutit alors jamais et tous les
+        // emits échouent avec « Tried emitting when not connected ».
+        if let socket, socket.status == .connected || socket.status == .connecting {
+            return
+        }
 
         guard let token = APIClient.shared.authToken else {
             Logger.socket.warning("No auth token, skipping connect")
@@ -995,7 +1001,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .log(true),
             .compress,
             .extraHeaders(["Authorization": "Bearer \(token)"]),
-            .forceWebsockets(true),
+            // Pas de forceWebsockets : on laisse Socket.IO faire le handshake
+            // polling (URLSession, fiable) puis tenter l'upgrade WebSocket. En
+            // websocket-only forcé, le handshake n'aboutissait jamais.
             .reconnects(true),
             .reconnectWait(1),
             .reconnectWaitMax(16),
@@ -1009,6 +1017,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     }
 
     public func connectAnonymous(sessionToken: String) {
+        if let socket, socket.status == .connected || socket.status == .connecting {
+            return
+        }
         disconnect()
 
         guard let url = SocketConfig.baseURL else { return }
@@ -1019,7 +1030,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             .log(true),
             .compress,
             .extraHeaders(["X-Session-Token": sessionToken]),
-            .forceWebsockets(true),
+            // Voir connect() : handshake polling puis upgrade WebSocket.
             .reconnects(true),
             .reconnectWait(1),
             .reconnectWaitMax(16),
