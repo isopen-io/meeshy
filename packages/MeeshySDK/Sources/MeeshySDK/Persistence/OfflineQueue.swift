@@ -1495,7 +1495,13 @@ public actor OfflineQueue {
                     conversationId: item.conversationId
                 ))
             } else {
-                break
+                // Pas de `break` : un échec ne doit PAS bloquer la file.
+                // Avec `break`, un item définitivement cassé en tête (ex :
+                // conversation supprimée → 4xx permanent) bloquait tous les
+                // items suivants — ils n'étaient jamais tentés. On passe au
+                // suivant ; l'item échoué reste en file (non retiré) et sera
+                // retenté au prochain cycle (front socket/réseau, backoff).
+                continue
             }
         }
 

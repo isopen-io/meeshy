@@ -181,6 +181,39 @@ public actor MessagePersistenceActor {
         return result
     }
 
+    // MARK: - Outbox Reconciliation
+
+    /// Réconcilie l'état des messages depuis l'outbox.
+    ///
+    /// Tout `MessageRecord` encore `.sending` ou `.queued` dont le record
+    /// outbox `.sendMessage` correspondant est `.exhausted` passe `.failed`.
+    /// Sans ça, un message dont les tentatives d'envoi s'épuisent pendant que
+    /// la conversation est fermée — aucun `ConversationViewModel` vivant abonné
+    /// au signal `retryExhausted` — restait bloqué sur un spinner `.sending`
+    /// à la réouverture. Appelé au chargement d'une conversation : l'état
+    /// affiché est ainsi toujours juste, indépendamment du cycle de vie des
+    /// ViewModels.
+    public func reconcileFailedFromOutbox(conversationId: String) {
+        let didChange = (try? dbWriter.write { db -> Bool in
+            let exhaustedLocalIds = try OutboxRecord
+                .filter(Column("conversationId") == conversationId)
+                .filter(Column("kind") == OutboxKind.sendMessage.rawValue)
+                .filter(Column("status") == OutboxStatus.exhausted.rawValue)
+                .fetchAll(db)
+                .compactMap(\.messageLocalId)
+            guard !exhaustedLocalIds.isEmpty else { return false }
+            let stuckStates = [MessageState.sending.rawValue, MessageState.queued.rawValue]
+            let updated = try MessageRecord
+                .filter(exhaustedLocalIds.contains(Column("localId")))
+                .filter(stuckStates.contains(Column("state")))
+                .updateAll(db, Column("state").set(to: MessageState.failed.rawValue))
+            return updated > 0
+        }) ?? false
+        if didChange {
+            postMessageStoreRefresh(conversationIds: [conversationId])
+        }
+    }
+
     // MARK: - Buffered Writes
 
     public func bufferIncoming(_ messages: [IncomingMessageData]) {

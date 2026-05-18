@@ -13,6 +13,7 @@ final class ConversationViewModelTests: XCTestCase {
     private var mockConversationService: MockConversationService!
     private var mockReactionService: MockReactionService!
     private var mockReportService: MockReportService!
+    private var mockMessageSocket: MockMessageSocket!
     private let testConversationId = "000000000000000000000001"
     private let testUserId = "000000000000000000000099"
 
@@ -26,6 +27,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockConversationService = MockConversationService()
         mockReactionService = MockReactionService()
         mockReportService = MockReportService()
+        mockMessageSocket = MockMessageSocket()
         // ConversationViewModel.sendMessage references MessageSocketManager.shared
         // directly (the singleton, not an injected dep) at line 1318: if the
         // socket is not connected it routes through the offline OutboxQueue
@@ -44,6 +46,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockConversationService = nil
         mockReactionService = nil
         mockReportService = nil
+        mockMessageSocket = nil
         super.tearDown()
     }
 
@@ -72,6 +75,7 @@ final class ConversationViewModelTests: XCTestCase {
             conversationService: mockConversationService,
             reactionService: mockReactionService,
             reportService: mockReportService,
+            messageSocket: mockMessageSocket,
             dependencies: deps
         )
     }
@@ -338,6 +342,58 @@ final class ConversationViewModelTests: XCTestCase {
         _ = await sut.sendMessage(content: "Reply", replyToId: "parent-msg")
 
         XCTAssertEqual(mockMessageService.lastSendRequest?.replyToId, "parent-msg")
+    }
+
+    // MARK: - sendMessage Socket Fallback Tests
+
+    func test_sendMessage_restFails_fallsBackToSocket() async {
+        mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500))
+        mockMessageSocket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(
+            messageId: "server-id-from-socket", clientMessageId: nil, createdAt: Date()
+        )
+        let sut = makeSUT()
+
+        let result = await sut.sendMessage(content: "Fallback me")
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1)
+    }
+
+    func test_sendMessage_restSucceeds_skipsSocketFallback() async {
+        let sut = makeSUT()
+
+        let result = await sut.sendMessage(content: "Plain send")
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 0)
+    }
+
+    func test_sendMessage_restAndSocketBothFail_returnsFalse() async {
+        mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500))
+        mockMessageSocket.sendViaSocketFallbackResult = nil
+        let sut = makeSUT()
+
+        let result = await sut.sendMessage(content: "Both down")
+
+        XCTAssertFalse(result)
+        XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1)
+    }
+
+    func test_sendMessage_socketFallbackReusesOptimisticClientMessageId() async {
+        mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500))
+        mockMessageSocket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(
+            messageId: "server-id", clientMessageId: nil, createdAt: nil
+        )
+        let sut = makeSUT()
+
+        _ = await sut.sendMessage(content: "Dedup key check")
+
+        // The fallback MUST reuse the cid_<uuid> optimistic id so the gateway
+        // dedup (conversationId, clientMessageId) prevents a duplicate when the
+        // outbox later replays the REST request.
+        let cid = mockMessageSocket.lastSendViaSocketFallbackClientMessageId
+        XCTAssertNotNil(cid)
+        XCTAssertEqual(cid?.hasPrefix("cid_"), true)
     }
 
     // MARK: - insertOptimisticMediaMessage Tests
