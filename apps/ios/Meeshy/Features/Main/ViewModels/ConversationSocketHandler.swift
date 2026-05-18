@@ -11,7 +11,6 @@ protocol ConversationSocketDelegate: AnyObject {
     var messages: [Message] { get set }
     var typingUsernames: [String] { get set }
     var lastUnreadMessage: Message? { get set }
-    var newMessageAppended: Int { get set }
     var messageTranslations: [String: [MessageTranslation]] { get set }
     var messageTranscriptions: [String: MessageTranscription] { get set }
     var messageTranslatedAudios: [String: [MessageTranslatedAudio]] { get set }
@@ -228,18 +227,29 @@ final class ConversationSocketHandler {
                 Task { [weak self] in
                     guard let self, let delegate = self.delegate else { return }
 
+                    // RC2.3 — reconcile an optimistic echo by `clientMessageId`.
+                    // The optimistic row's localId IS the `cid_*` (Phase 4
+                    // contract), so `messageIndex(for: cid)` resolves it
+                    // directly — independent of `pendingServerIds`, which is
+                    // only populated AFTER the REST POST returns. A broadcast
+                    // that raced ahead of the ACK used to miss the map, fall
+                    // into the `senderId == userId` branch and get dropped
+                    // (Sprint 2 RC2.3b). The serverId scan stays as a
+                    // retro-compat fallback for payloads without a cid.
+                    let reconcileTempId: String? = {
+                        if let cid = apiMsg.clientMessageId, !cid.isEmpty,
+                           delegate.messageIndex(for: cid) != nil {
+                            return cid
+                        }
+                        return delegate.pendingServerIds.first(where: { $0.value == apiMsg.id })?.key
+                    }()
+
                     // Atomic in-place upgrade of an optimistic row. We DO NOT
                     // swap the SwiftUI `id` (that would unmount the bubble and
                     // flash). Instead we mutate the server-derived fields on
                     // the existing struct so the ForEach key stays the
-                    // optimistic `tempId`. The `pendingServerIds` map stays
-                    // populated for the lifetime of the VM so backend ops
-                    // (delete/edit/react/pin) keep resolving the right server
-                    // id, and cache writes swap to the server id only when
-                    // persisting (see `ConversationViewModel.serverIdMappedSnapshot`).
-                    print("[SocketRecv] message:new id=\(apiMsg.id) senderId=\(apiMsg.senderId) userId=\(userId) — pendingServerIds keys=\(delegate.pendingServerIds.keys.count) lookup=\(delegate.pendingServerIds.first(where: { $0.value == apiMsg.id })?.key ?? "nil")")
-                    if apiMsg.senderId == userId,
-                       let tempId = delegate.pendingServerIds.first(where: { $0.value == apiMsg.id })?.key,
+                    // optimistic `tempId`.
+                    if apiMsg.senderId == userId, let tempId = reconcileTempId,
                        delegate.messageIndex(for: tempId) != nil {
                         let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
                         var msgArray = [decoded]
@@ -254,6 +264,10 @@ final class ConversationSocketHandler {
                             )
                             // Persist server-confirmed content/attachments/reactions
                             // so the store snapshot reflects ground-truth values.
+                            // `nil` attachments/reactions are preserved by
+                            // `updateServerAckedFields` (COALESCE) so a media
+                            // echo that races server-side processing never
+                            // blanks the optimistic preview.
                             let attachmentsJson = serverMsg.attachments.isEmpty ? nil
                                 : try? JSONEncoder().encode(serverMsg.attachments)
                             let reactionsJson = serverMsg.reactions.isEmpty ? nil
@@ -275,9 +289,6 @@ final class ConversationSocketHandler {
                                 updatedAt: serverMsg.updatedAt
                             )
                         }
-                        // Keep pendingServerIds[tempId] = serverId so future
-                        // backend ops keep resolving correctly until reload.
-
                         // Persist using server id so a future cold-start REST
                         // fetch reconciles cleanly without duplicates.
                         await delegate.persistMessagesUsingServerIds()
@@ -305,54 +316,54 @@ final class ConversationSocketHandler {
                         return
                     }
 
-                    if apiMsg.senderId == userId { return }
-
                     if self.wasSeen(apiMsg.id) { return }
                     self.markSeen(apiMsg.id)
 
+                    // RC2.2 — persist the FULL APIMessage through the same path
+                    // REST uses. `bufferIncomingAPIMessages` →
+                    // `upsertFromAPIMessages` writes attachments, reactions,
+                    // reply/forward refs, encryption flags and mentions. The
+                    // legacy 6-field `IncomingMessageData` dropped every one of
+                    // them — a media-only or encrypted message received via
+                    // socket rendered as an empty bubble. The upsert reconciles
+                    // by clientMessageId / server id, so an own echo never
+                    // duplicates a pending send.
+                    if let persistence = self.persistence {
+                        await persistence.bufferIncomingAPIMessages([apiMsg])
+                    }
+
+                    // Own message with no local optimistic row — a send from
+                    // another of this user's devices. Persisted above; nothing
+                    // is "unread" for us, so skip the badge / mark-as-read.
+                    if apiMsg.senderId == userId { return }
+
+                    // Inbound message from someone else. Decode + decrypt only
+                    // for the transient UI signals (scroll-to-bottom preview) —
+                    // the persisted row stays ciphertext on disk and the
+                    // display pipeline decrypts it.
                     let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
                     var msgArray = [decoded]
                     await delegate.decryptMessagesIfNeeded(&msgArray)
                     guard let msg = msgArray.first else { return }
 
-                    // Persist incoming message; store observation will surface
-                    // the new row to viewModel.messages automatically.
-                    if let persistence = self.persistence {
-                        let incoming = MessagePersistenceActor.IncomingMessageData(
-                            id: msg.id,
-                            conversationId: msg.conversationId,
-                            senderId: msg.senderId,
-                            content: msg.content,
-                            createdAt: msg.createdAt,
-                            computedState: .delivered
-                        )
-                        await persistence.bufferIncoming([incoming])
+                    // UI signals: unread badge anchor + auto mark-as-read.
+                    delegate.lastUnreadMessage = msg
+
+                    if let sender = apiMsg.sender {
+                        let senderName = sender.displayName ?? sender.username ?? sender.id
+                        delegate.typingUsernames.removeAll { $0 == senderName }
+                        self.clearTypingSafetyTimer(for: senderName)
                     }
 
-                    await MainActor.run {
-                        guard !delegate.containsMessage(id: msg.id) else { return }
-                        // UI signals: unread badge and scroll anchor.
-                        // These are not "messages" mutations — they remain as-is
-                        // until a future task derives them from the store delta.
-                        delegate.lastUnreadMessage = msg
-                        delegate.newMessageAppended += 1
-
-                        if let sender = apiMsg.sender {
-                            let senderName = sender.displayName ?? sender.username ?? sender.id
-                            delegate.typingUsernames.removeAll { $0 == senderName }
-                            self.clearTypingSafetyTimer(for: senderName)
-                        }
-
-                        // The handler is only subscribed while this conversation is on
-                        // screen, so an incoming message means the recipient is actively
-                        // looking at it — fire `mark-as-read` so the sender's checkmark
-                        // upgrades from `.delivered` (gray ✓✓) to `.read` (purple ✓✓)
-                        // without waiting for the user to navigate away and back.
-                        // markAsRead is idempotent (REST endpoint dedups within 2s and
-                        // the cache update is local-first), so calling it per inbound
-                        // message is safe.
-                        delegate.markAsRead()
-                    }
+                    // The handler is only subscribed while this conversation is on
+                    // screen, so an incoming message means the recipient is actively
+                    // looking at it — fire `mark-as-read` so the sender's checkmark
+                    // upgrades from `.delivered` (gray ✓✓) to `.read` (purple ✓✓)
+                    // without waiting for the user to navigate away and back.
+                    // markAsRead is idempotent (REST endpoint dedups within 2s and
+                    // the cache update is local-first), so calling it per inbound
+                    // message is safe.
+                    delegate.markAsRead()
 
                     // mark-as-received is handled globally by ConversationListViewModel
                 }

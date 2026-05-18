@@ -123,8 +123,6 @@ class ConversationViewModel: ObservableObject {
 
     /// Set before prepend so the view can restore scroll position
     @Published var scrollAnchorId: String?
-    /// Incremented when a new message is appended at the end (not prepended)
-    @Published var newMessageAppended: Int = 0
 
     /// Users currently typing in this conversation
     @Published var typingUsernames: [String] = []
@@ -700,6 +698,11 @@ class ConversationViewModel: ObservableObject {
     /// When the store emits a change, this method maps the `[MessageRecord]`
     /// snapshot to `[MeeshyMessage]`, replaces `messages`, and calls
     /// `objectWillChange` so SwiftUI re-renders.
+    /// Monotonic token bumped on every store-driven refresh. An async
+    /// decryption pass that finishes after a newer refresh started checks this
+    /// before assigning, so a stale snapshot never overwrites a fresher one.
+    private var storeRefreshGeneration: Int = 0
+
     private func subscribeToMessageStore() {
         storeObservation = messageStore.messagesDidChange
             .sink { [weak self] in
@@ -712,15 +715,30 @@ class ConversationViewModel: ObservableObject {
                 // iteration AFTER the current view body evaluation completes.
                 DispatchQueue.main.async { [weak self] in
                     guard let self else { return }
+                    self.storeRefreshGeneration &+= 1
+                    let generation = self.storeRefreshGeneration
                     let userId = self.currentUserId
-                    let previousCount = self.messages.count
                     let mapped = self.messageStore.messages.map { $0.toMessage(currentUserId: userId) }
-                    self.messages = mapped
-                    // Increment scroll-to-bottom counter when an optimistic send
-                    // surfaces via store observation (replaces the former increment
-                    // that sat next to messages.append in sendMessage).
-                    if mapped.count > previousCount {
-                        self.newMessageAppended += 1
+                    // E2EE: encrypted DMs are persisted as ciphertext — the
+                    // socket and REST ingestion paths both store `api.content`
+                    // verbatim, so cleartext never touches disk. Decrypt the
+                    // mapped snapshot in memory so every store-driven refresh
+                    // surfaces readable content. Meeshy E2EE uses a per-peer
+                    // symmetric key, so re-decrypting the same ciphertext on
+                    // each refresh is idempotent and cheap.
+                    let needsDecryption = self.isDirect
+                        && mapped.contains { $0.isEncrypted && !$0.content.isEmpty }
+                    guard needsDecryption else {
+                        self.messages = mapped
+                        return
+                    }
+                    Task { @MainActor [weak self] in
+                        guard let self else { return }
+                        var decrypted = mapped
+                        await self.decryptMessagesIfNeeded(&decrypted)
+                        // Drop a stale decrypt that lost the race to a newer refresh.
+                        guard generation == self.storeRefreshGeneration else { return }
+                        self.messages = decrypted
                     }
                 }
             }

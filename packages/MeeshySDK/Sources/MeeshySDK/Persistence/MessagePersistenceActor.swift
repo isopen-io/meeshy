@@ -46,9 +46,23 @@ public actor MessagePersistenceActor {
 
     enum WriteOperation: Sendable {
         case reconcileBatch([IncomingMessageData])
+        /// Buffered ingestion of fully-decoded `APIMessage` payloads. Routes
+        /// through `upsertFromAPIMessages` — the same path REST uses — so
+        /// attachments, reactions, reply/forward refs, encryption flags and
+        /// mentions are all persisted. The 6-field `IncomingMessageData` path
+        /// below drops every one of them (a media-only or encrypted message
+        /// ingested that way renders as an empty bubble — Sprint 2 RC2.2).
+        case upsertAPIMessages([APIMessage])
         case batchDeliveryUpdate(conversationId: String, event: MessageEvent)
     }
 
+    /// Minimal-data ingestion payload. Use ONLY when the caller genuinely has
+    /// nothing richer than these six fields (e.g. a NotificationServiceExtension
+    /// pre-persist). Any caller holding a decoded `APIMessage` MUST go through
+    /// `bufferIncomingAPIMessages` instead — `reconcileBatchSync` hard-codes
+    /// `attachmentsJson/reactionsJson/replyToJson = nil`, `messageType = "text"`
+    /// and `isEncrypted = false`, so media / encrypted / reply messages lose
+    /// their payload here.
     public struct IncomingMessageData: Sendable {
         public let id: String
         public let conversationId: String
@@ -96,6 +110,11 @@ public actor MessagePersistenceActor {
                     // a manual reload.
                     let convIds = Set(messages.map(\.conversationId))
                     postMessageStoreRefresh(conversationIds: convIds)
+                case .upsertAPIMessages(let messages):
+                    guard !messages.isEmpty else { continue }
+                    // `upsertFromAPIMessages` posts its own scoped refresh via
+                    // a `defer` — do NOT re-post here or observers refresh twice.
+                    try? await self.upsertFromAPIMessages(messages)
                 case .batchDeliveryUpdate(let convId, let event):
                     try? await self.batchDeliverySync(conversationId: convId, event: event)
                     postMessageStoreRefresh(conversationIds: [convId])
@@ -162,10 +181,15 @@ public actor MessagePersistenceActor {
             if case .serverAck(let serverId, let at) = event {
                 record.serverId = serverId
                 record.sentAt = at
+                // `save` (upsert) not `insert`: the socket ingestion path may
+                // have already reconciled this optimistic row and written its
+                // PendingIdRecord (echo racing ahead of the REST ACK). A raw
+                // `insert` would hit the PK and roll back the whole state
+                // transition with it.
                 try PendingIdRecord(
                     localId: localId, serverId: serverId,
                     conversationId: record.conversationId, reconciledAt: nil
-                ).insert(db)
+                ).save(db)
             }
 
             try record.update(db)
@@ -221,6 +245,17 @@ public actor MessagePersistenceActor {
         // (see `start()`). Posting here would race the async write — observers
         // would refresh against an empty database and never see the new row.
         writeContinuation.yield(.reconcileBatch(messages))
+    }
+
+    /// Buffered ingestion of fully-decoded `APIMessage` payloads — the socket
+    /// `message:new` path. Routes through `upsertFromAPIMessages` (the REST
+    /// path) on the serial write stream, so attachments, reactions, reply /
+    /// forward refs, encryption flags and mentions all land in GRDB. The
+    /// upsert reconciles an optimistic row by `clientMessageId`, server id or
+    /// `PendingIdRecord`, so a same-user echo never duplicates a pending send.
+    /// The refresh notification is posted by `upsertFromAPIMessages` itself.
+    public func bufferIncomingAPIMessages(_ messages: [APIMessage]) {
+        writeContinuation.yield(.upsertAPIMessages(messages))
     }
 
     public func bufferBatchDelivery(conversationId: String, event: MessageEvent) {
@@ -509,10 +544,17 @@ public actor MessagePersistenceActor {
             affectedConversationId = try MessageRecord
                 .filter(Column("localId") == localId)
                 .fetchOne(db)?.conversationId
+            // `COALESCE(?, col)` keeps the existing blob when the caller passes
+            // `nil`. A server ACK echo never *removes* a message's attachments
+            // or reactions; a media echo that races server-side processing can
+            // legitimately arrive attachment-less, and a hard overwrite would
+            // blank the optimistic file:// preview into an empty bubble.
             try db.execute(
                 sql: """
                     UPDATE messages
-                    SET content = ?, attachmentsJson = ?, reactionsJson = ?,
+                    SET content = ?,
+                    attachmentsJson = COALESCE(?, attachmentsJson),
+                    reactionsJson = COALESCE(?, reactionsJson),
                     pinnedAt = ?, pinnedBy = ?,
                     isEdited = ?, editedAt = ?, deletedAt = ?,
                     deliveredCount = ?, readCount = ?,
@@ -876,11 +918,25 @@ public actor MessagePersistenceActor {
                 // 3. serverId column scan — final safety net for rows that
                 //    ran serverAck on a build that didn't yet insert
                 //    PendingIdRecord (legacy GRDB rows).
+                // 0. clientMessageId — the optimistic row's primary key IS the
+                //    `cid_*` (Phase 4). This catches an echo that races ahead
+                //    of `applyEvent(.serverAck)` (which is what populates
+                //    PendingIdRecord). Without it, an echo arriving before the
+                //    REST ACK falls through to the insert branch and produces a
+                //    duplicate `cid` / server-id pair (Sprint 2 RC2.3b).
+                let cidMatch: MessageRecord?
+                if let cid = api.clientMessageId, !cid.isEmpty {
+                    cidMatch = try MessageRecord.fetchOne(db, key: cid)
+                } else {
+                    cidMatch = nil
+                }
                 let pendingMatch = try PendingIdRecord
                     .filter(Column("serverId") == api.id)
                     .fetchOne(db)
                 let existingRecord: MessageRecord?
-                if let pendingMatch,
+                if let cidMatch {
+                    existingRecord = cidMatch
+                } else if let pendingMatch,
                    let optimistic = try MessageRecord.fetchOne(db, key: pendingMatch.localId) {
                     existingRecord = optimistic
                 } else if let direct = try MessageRecord.fetchOne(db, key: api.id) {
@@ -900,8 +956,17 @@ public actor MessagePersistenceActor {
                     existing.isEdited = api.isEdited ?? false
                     existing.editedAt = nil
                     existing.deletedAt = api.deletedAt
-                    existing.attachmentsJson = attachmentsJson
+                    // Preserve existing attachments when the payload carries
+                    // none: a media echo that races server-side processing can
+                    // arrive attachment-less, and a hard overwrite would blank
+                    // the optimistic file:// preview into an empty bubble.
+                    existing.attachmentsJson = attachmentsJson ?? existing.attachmentsJson
                     existing.reactionsJson = reactionsJson
+                    // Keep the encryption flags coherent so the display
+                    // pipeline knows to decrypt — a row first inserted via the
+                    // legacy socket path may have had them cleared.
+                    existing.isEncrypted = api.isEncrypted ?? existing.isEncrypted
+                    existing.encryptionMode = api.encryptionMode ?? existing.encryptionMode
                     existing.reactionCount = uiReactions.count
                     existing.deliveredCount = deliveredCount
                     existing.readCount = readCount
@@ -923,6 +988,17 @@ public actor MessagePersistenceActor {
                     existing.updatedAt = api.updatedAt ?? Date()
                     existing.changeVersion += 1
                     try existing.update(db)
+                    // When this upsert reconciled an optimistic row (its PK is
+                    // the `cid`, not the server id), keep PendingIdRecord
+                    // coherent so `resolveServerId` / future reconciliations
+                    // resolve the server id even when the row landed purely via
+                    // the socket path (no `applyEvent(.serverAck)` ran).
+                    if existing.localId != api.id {
+                        try PendingIdRecord(
+                            localId: existing.localId, serverId: api.id,
+                            conversationId: api.conversationId, reconciledAt: Date()
+                        ).save(db)
+                    }
                 } else {
                     let record = MessageRecord(
                         localId: api.id, serverId: api.id,
@@ -979,11 +1055,14 @@ public actor MessagePersistenceActor {
                         changeVersion: 0
                     )
                     try record.insert(db)
+                    // `save` (upsert): a dangling PendingIdRecord from a
+                    // previously purged message row must not roll back this
+                    // fresh insert on a PK clash.
                     try PendingIdRecord(
                         localId: api.id, serverId: api.id,
                         conversationId: api.conversationId,
                         reconciledAt: Date()
-                    ).insert(db)
+                    ).save(db)
                 }
 
                 // Persist text translations from REST into GRDB so they

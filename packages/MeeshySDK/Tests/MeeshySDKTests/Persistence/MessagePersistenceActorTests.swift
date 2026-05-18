@@ -607,4 +607,129 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertTrue(expARows.isEmpty)
         XCTAssertTrue(expBRows.isEmpty)
     }
+
+    // MARK: - Sprint 2 — APIMessage ingestion (RC2.2 / RC2.3)
+
+    private func makeAPIMessage(
+        id: String,
+        conversationId: String,
+        senderId: String = "sender_1",
+        content: String? = "Hello",
+        clientMessageId: String? = nil,
+        isEncrypted: Bool = false,
+        attachments: [[String: Any]] = [],
+        createdAt: Date = Date()
+    ) -> APIMessage {
+        var json: [String: Any] = [
+            "id": id,
+            "conversationId": conversationId,
+            "senderId": senderId,
+            "createdAt": ISO8601DateFormatter().string(from: createdAt),
+            "updatedAt": ISO8601DateFormatter().string(from: createdAt),
+        ]
+        if let content { json["content"] = content }
+        if let clientMessageId { json["clientMessageId"] = clientMessageId }
+        if isEncrypted { json["isEncrypted"] = true }
+        if !attachments.isEmpty { json["attachments"] = attachments }
+        let data = try! JSONSerialization.data(withJSONObject: json)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try! decoder.decode(APIMessage.self, from: data)
+    }
+
+    /// RC2.2 — a media message ingested via `upsertFromAPIMessages` must keep
+    /// its attachments (the legacy 6-field path dropped them → empty bubble).
+    func test_upsertFromAPIMessages_withImageAttachment_persistsAttachmentsAndThumbHash() async throws {
+        let apiMsg = makeAPIMessage(
+            id: "srv_img_1",
+            conversationId: "conv_img",
+            content: nil,
+            attachments: [[
+                "id": "att_1",
+                "mimeType": "image/jpeg",
+                "fileUrl": "https://cdn.example/a.jpg",
+                "thumbnailUrl": "https://cdn.example/a_thumb.jpg",
+                "thumbHash": "1QcSHQRnh493V4dIh4eXh1h4kJUI",
+                "width": 1200,
+                "height": 800
+            ]]
+        )
+
+        try await actor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try actor.messages(for: "conv_img", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        let json = try XCTUnwrap(rows[0].attachmentsJson,
+            "a media message ingested via the APIMessage path must persist attachmentsJson")
+        let attachments = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: json)
+        XCTAssertEqual(attachments.count, 1)
+        XCTAssertEqual(attachments[0].id, "att_1")
+        XCTAssertEqual(attachments[0].fileUrl, "https://cdn.example/a.jpg")
+        XCTAssertEqual(attachments[0].thumbHash, "1QcSHQRnh493V4dIh4eXh1h4kJUI",
+            "ThumbHash must survive ingestion so the bubble shows an instant blur placeholder")
+    }
+
+    /// RC2.2 — an encrypted DM keeps its ciphertext + flag; cleartext never
+    /// touches disk (the display pipeline decrypts in memory).
+    func test_upsertFromAPIMessages_encryptedMessage_persistsCiphertextAndFlag() async throws {
+        let apiMsg = makeAPIMessage(
+            id: "srv_enc_1",
+            conversationId: "conv_enc",
+            content: "Y2lwaGVydGV4dA==",
+            isEncrypted: true
+        )
+
+        try await actor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try actor.messages(for: "conv_enc", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertTrue(rows[0].isEncrypted,
+            "an encrypted DM must keep isEncrypted so the display pipeline decrypts it")
+        XCTAssertEqual(rows[0].content, "Y2lwaGVydGV4dA==",
+            "ciphertext must be stored verbatim — never decrypted to disk")
+    }
+
+    /// RC2.3 — an echo reconciles the optimistic row by `clientMessageId`
+    /// (the optimistic row's localId IS the cid) without duplicating it.
+    func test_upsertFromAPIMessages_reconcilesOptimisticByClientMessageId() async throws {
+        let cid = "cid_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        let optimistic = MessageRecordFactory.make(
+            localId: cid, conversationId: "conv_recon", state: .sending
+        )
+        try await actor.insertOptimistic(optimistic)
+
+        let echo = makeAPIMessage(
+            id: "srv_recon_1",
+            conversationId: "conv_recon",
+            content: "Hello",
+            clientMessageId: cid
+        )
+        try await actor.upsertFromAPIMessages([echo])
+
+        let rows = try actor.messages(for: "conv_recon", limit: 10)
+        XCTAssertEqual(rows.count, 1, "reconciling by clientMessageId must NOT create a duplicate row")
+        XCTAssertEqual(rows[0].localId, cid, "the optimistic row's localId is preserved")
+        XCTAssertEqual(rows[0].serverId, "srv_recon_1", "the server id is backfilled onto the optimistic row")
+
+        let resolved = try actor.resolveServerId(for: cid)
+        XCTAssertEqual(resolved, "srv_recon_1",
+            "PendingIdRecord must be coherent so backend ops resolve the server id")
+    }
+
+    /// The buffered entry point routes through the serial write stream.
+    func test_bufferIncomingAPIMessages_writesThroughSerialStream() async throws {
+        await actor.start()
+        let apiMsg = makeAPIMessage(id: "srv_buf_1", conversationId: "conv_buf", content: "Buffered")
+
+        await actor.bufferIncomingAPIMessages([apiMsg])
+
+        var rows: [MessageRecord] = []
+        for _ in 0..<60 {
+            rows = try actor.messages(for: "conv_buf", limit: 10)
+            if !rows.isEmpty { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertEqual(rows.count, 1, "bufferIncomingAPIMessages must commit through the write stream")
+        XCTAssertEqual(rows.first?.content, "Buffered")
+    }
 }

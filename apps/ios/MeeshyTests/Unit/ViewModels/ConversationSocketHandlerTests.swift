@@ -11,7 +11,6 @@ final class MockConversationSocketDelegate: ConversationSocketDelegate {
     var messages: [Message] = []
     var typingUsernames: [String] = []
     var lastUnreadMessage: Message?
-    var newMessageAppended: Int = 0
     var messageTranslations: [String: [MessageTranslation]] = [:]
     var messageTranscriptions: [String: MessageTranscription] = [:]
     var messageTranslatedAudios: [String: [MessageTranslatedAudio]] = [:]
@@ -177,12 +176,12 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
     // MARK: - messageReceived: From Other User
     //
-    // Post Phase 1.5: messageReceived no longer mutates delegate.messages
-    // directly. The socket handler writes to GRDB via
-    // `persistence.bufferIncoming(...)` and emits UI signals through the
-    // delegate (lastUnreadMessage, newMessageAppended, markAsRead). This
-    // test seeds a persistence actor on the handler and verifies that the
-    // record landed in the database and the UI signals fired.
+    // Post Sprint 2: messageReceived no longer mutates delegate.messages
+    // directly. The socket handler persists the full APIMessage to GRDB via
+    // `persistence.bufferIncomingAPIMessages(...)` and emits UI signals
+    // through the delegate (lastUnreadMessage, markAsRead). This test seeds a
+    // persistence actor on the handler and verifies that the record landed in
+    // the database and the UI signals fired.
 
     func test_messageReceived_fromOtherUser_appendsToDelegate() async throws {
         let (db, actor) = try makeDB()
@@ -207,7 +206,6 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(records.first?.conversationId, conversationId)
 
         // 2. UI signals on delegate are still expected.
-        XCTAssertEqual(delegate.newMessageAppended, 1)
         XCTAssertNotNil(delegate.lastUnreadMessage)
         XCTAssertEqual(delegate.lastUnreadMessage?.id, "newmsg")
         XCTAssertEqual(
@@ -906,11 +904,10 @@ final class ConversationSocketHandlerTests: XCTestCase {
         await Task.yield()
         try await Task.sleep(nanoseconds: 500_000_000)
 
-        // Post Phase 1.5: delegate.messages is no longer mutated. The
-        // newMessageAppended counter is the canonical "message appended"
-        // UI signal — and `armSocketSubscriptions` early-returns on the
-        // second call so only one subscription fires per event.
-        XCTAssertEqual(delegate.newMessageAppended, 1, "Should receive message only once despite double armSocketSubscriptions()")
+        // Post Sprint 2: delegate.messages is no longer mutated. `markAsRead`
+        // fires exactly once per inbound message — `armSocketSubscriptions`
+        // early-returns on the second call so only one subscription is wired.
+        XCTAssertEqual(delegate.markAsReadCallCount, 1, "Should receive message only once despite double armSocketSubscriptions()")
     }
 
     // MARK: - Persistence Actor Integration
@@ -945,11 +942,11 @@ final class ConversationSocketHandlerTests: XCTestCase {
         await Task.yield()
         try await Task.sleep(nanoseconds: 800_000_000)
 
-        // Post Phase 1.5: delegate.messages is no longer appended to. The
-        // socket handler emits UI signals (lastUnreadMessage, newMessageAppended)
-        // and writes the row through persistence — the view layer surfaces
-        // it via store observation. We verify the persistence side here.
-        XCTAssertEqual(delegate.newMessageAppended, 1, "newMessageAppended UI signal must fire")
+        // Post Sprint 2: delegate.messages is no longer appended to. The
+        // socket handler emits UI signals (lastUnreadMessage, markAsRead) and
+        // writes the full APIMessage through persistence — the view layer
+        // surfaces it via store observation. We verify the persistence side.
+        XCTAssertEqual(delegate.markAsReadCallCount, 1, "inbound message must auto-fire markAsRead")
         XCTAssertEqual(delegate.lastUnreadMessage?.id, "persist_new", "lastUnreadMessage must be set")
 
         // Verify the record was written to the database
@@ -1079,5 +1076,124 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(fetched?.content, "Edited content")
         XCTAssertTrue(fetched?.isEdited == true)
         XCTAssertNotNil(fetched?.editedAt)
+    }
+
+    // MARK: - Sprint 2 — RC2.2: full APIMessage ingestion (no empty bubbles)
+
+    /// A media message received via socket must persist its attachments —
+    /// the legacy 6-field `IncomingMessageData` path dropped them and the
+    /// bubble rendered empty.
+    func test_messageNew_withMediaAttachment_persistsAttachmentsJson() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+        await actor.start()
+
+        let apiMsg: APIMessage = JSONStub.decode("""
+        {
+            "id":"img_msg",
+            "conversationId":"\(conversationId)",
+            "senderId":"\(otherUserId)",
+            "createdAt":"2026-03-06T12:00:00.000Z",
+            "messageType":"image",
+            "attachments":[{
+                "id":"att_img",
+                "mimeType":"image/jpeg",
+                "fileUrl":"https://cdn.example/p.jpg",
+                "thumbHash":"1QcSHQRnh493V4dIh4eXh1h4kJUI",
+                "width":800,"height":600
+            }]
+        }
+        """)
+        socket.simulateMessage(apiMsg)
+
+        try await Task.sleep(nanoseconds: 800_000_000)
+
+        let record = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: "img_msg")
+        }
+        let json = try XCTUnwrap(record?.attachmentsJson,
+            "RC2.2: a media message received via socket must persist its attachments")
+        let attachments = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: json)
+        XCTAssertEqual(attachments.first?.id, "att_img")
+        XCTAssertEqual(attachments.first?.thumbHash, "1QcSHQRnh493V4dIh4eXh1h4kJUI",
+            "ThumbHash must reach GRDB for the instant blur placeholder")
+    }
+
+    // MARK: - Sprint 2 — RC2.3: reconcile own echo by clientMessageId
+
+    /// An own-message broadcast that races ahead of the REST POST response
+    /// must reconcile the optimistic row by `clientMessageId` — NOT fall into
+    /// the `senderId == userId` branch and get dropped (RC2.3b). The
+    /// `pendingServerIds` map is empty here, exactly as it is before the
+    /// REST ACK returns.
+    func test_messageNew_ownEcho_reconcilesByClientMessageId_beforeRestResponse() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+
+        let cid = "cid_bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+        let optimistic = MessageRecord(
+            localId: cid, serverId: nil,
+            conversationId: conversationId, senderId: currentUserId,
+            content: "Race me", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sending, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        try await actor.insertOptimistic(optimistic)
+        // The optimistic row is visible to the handler via the delegate index,
+        // but pendingServerIds is still empty (REST POST not yet returned).
+        delegate.messages = [makeMessage(id: cid, senderId: currentUserId,
+                                         content: "Race me", isMe: true,
+                                         deliveryStatus: .sending)]
+        delegate.invalidateIndex()
+        XCTAssertTrue(delegate.pendingServerIds.isEmpty)
+
+        let echo: APIMessage = JSONStub.decode("""
+        {
+            "id":"srv_race_1",
+            "clientMessageId":"\(cid)",
+            "conversationId":"\(conversationId)",
+            "senderId":"\(currentUserId)",
+            "content":"Race me",
+            "createdAt":"2026-03-06T12:00:00.000Z"
+        }
+        """)
+        socket.simulateMessage(echo)
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let rows = try await db.read { db in
+            try MessageRecord
+                .filter(Column("conversationId") == conversationId)
+                .fetchAll(db)
+        }
+        XCTAssertEqual(rows.count, 1,
+            "RC2.3b: an echo racing the REST ACK must reconcile in place — not duplicate or drop")
+        XCTAssertEqual(rows.first?.localId, cid, "the optimistic row's localId is preserved")
+        XCTAssertEqual(rows.first?.serverId, "srv_race_1",
+            "applyEvent(.serverAck) must backfill the server id on the optimistic row")
     }
 }
