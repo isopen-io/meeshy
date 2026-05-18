@@ -735,8 +735,19 @@ public final class StoryCanvasUIView: UIView {
             if fgMediaIds.contains(name) || fgTextIds.contains(name) {
                 sub.borderColor = frameColor
                 sub.borderWidth = 2
-                sub.cornerRadius = 2
-                sub.masksToBounds = false
+                // cornerRadius 0 : le média est rendu à coins droits
+                // (`StoryMediaLayer.configureImage` clippe en `masksToBounds`
+                // sans rayon). Le cadre doit épouser ce contour rectangulaire
+                // réel — un rayon ferait flotter l'arc du border hors des
+                // coins carrés de la photo. `borderWidth`/`borderColor` sont
+                // portés par le `StoryMediaLayer` lui-même : ils héritent de
+                // son `transform` (rotation) et de sa `position`, donc le
+                // cadre reste solidaire des déplacements et rotations du
+                // média sans re-synchronisation. `masksToBounds` n'est pas
+                // touché : un border CALayer est dessiné au ras des bounds et
+                // n'est jamais clippé — l'override `= false` était inutile et
+                // dé-clippait le rendu `resizeAspectFill` de l'image.
+                sub.cornerRadius = 0
             }
         }
     }
