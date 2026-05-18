@@ -62,10 +62,16 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [x] Architecture observations consolidated → `ARCHITECTURE.md`, `decisions.md`
 
 ## Phase 2 — Module + architecture setup `[next]`
-- [ ] Module graph: `:sdk-core`, `:sdk-ui`, `:core:common`, `:feature:*`, `:app`
+- [x] `ARCHITECTURE.md` reviewed by a SOTA peer audit (`tasks/architecture-review.md`)
+- [ ] Module graph: `:core:{common,network,database,datastore,crypto,navigation}`,
+      `:sdk-core`, `:sdk-ui`, `:feature:*`, `:app`, `:macrobenchmark`
+- [ ] `build-logic/` convention plugins + enforced dependency rules
 - [ ] Hilt DI graph; dispatcher injection; `Result`/error model
 - [ ] Type-safe Navigation-Compose graph + `NavigableListDetailPaneScaffold`
-- [ ] `ARCHITECTURE.md` validated with product owner
+- [ ] Observability bootstrap (Crashlytics, ANR, structured logging w/ redaction,
+      remote config / feature flags) — ADR-022
+- [ ] CI/CD bootstrap (lint/detekt, screenshot gate, macrobenchmark, baseline
+      profile generation, Play tracks) — ADR-023
 
 ## Phase 3 — SDK foundation (`:sdk-core`)
 - [x] Models: `ApiResponse`, `MeeshyUser`/`UserRole`, auth, conversation, message
@@ -73,17 +79,25 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [x] `DynamicColorGenerator` — accent color (blend + hue shift + DJB2 palette)
 - [x] Networking: `MeeshyConfig`, `EncryptedTokenStore`, `AuthInterceptor`, `apiCall`, Retrofit
 - [x] Repositories: `AuthRepository`, `ConversationRepository`, `MessageRepository`
-- [ ] **SWR cache**: Room DB (single SoT) + `CacheResult`/`CachePolicy` + `cacheFirstFlow {}`
-- [ ] **Offline outbox**: one Room `outbox` table + `WorkManager` flusher (FIFO,
-      backoff ×5, coalescing, `cmid` idempotency, outcome `SharedFlow`)
+- [ ] **SWR cache**: Room DB (single SoT) + `CacheResult` (4-state incl. `Syncing`)
+      + `CachePolicy` + `cacheFirstFlow {}`
+- [ ] **Offline outbox**: one Room `outbox` table, **lane-partitioned** drain
+      (`WorkManager` per lane, FIFO per conversation, backoff ×5, coalescing,
+      device-scoped `cmid` idempotency, outcome `SharedFlow`)
+- [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
+      progress); message-send items `dependsOn` the upload
 - [ ] `MessageStateMachine` (pure) + `PendingId` localId↔serverId reconciliation
-- [ ] Socket.IO wrappers ×2 (message + social) exposing sealed-class `SharedFlow`s
-- [ ] `ConversationSyncEngine` — cache-first sync, atomic merge, gap-fill, bounded fan-out
-- [ ] Resilient `kotlinx.serialization` config (`coerceInputValues`, `@JsonNames`, `id`/`_id`)
-- [ ] TUS resumable upload manager (checkpoint store, survives app kill)
-- [ ] FCM push integration + `NotificationCoordinator` authority model
-- [ ] E2EE (libsignal) — fail-closed, real ratchet
-- [ ] Encrypted Room (sensitive tables) + per-user namespacing + logout wipe
+- [ ] **Message ordering**: per-conversation `seq` sort key + continuity gap
+      detection + server-time offset (ADR-021)
+- [ ] Transport spike: WebSocket vs long-polling on Android (ADR-015) →
+      Socket.IO wrappers ×2 exposing sealed-class `SharedFlow`s
+- [ ] Foreground-socket / background-FCM delivery doctrine
+- [ ] `ConversationSyncEngine` — cache-first sync, atomic merge, `seq` gap-fill, bounded fan-out
+- [ ] Dual `kotlinx.serialization` config (lenient DTOs / strict crypto+auth)
+- [ ] FCM push (notify-then-fetch) + `NotificationCoordinator` authority model
+- [ ] **E2EE** — gated behind ADR-018..020: threat model, libsignal pairwise +
+      Sender Keys groups, multi-device, fail-closed, call media (DTLS-SRTP + SFrame)
+- [ ] SQLCipher-encrypted Room + per-user namespacing + provably complete logout wipe
 - [ ] Remaining REST services (≈29) — see `audit/part-17.md`
 
 ## Phase 4 — Design system (`:sdk-ui`) — **CHARTE GRAPHIQUE (locked, see ARCHITECTURE.md §Design System)**
