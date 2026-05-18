@@ -3,9 +3,11 @@ package me.meeshy.core.database
 import androidx.room.Database
 import androidx.room.RoomDatabase
 import me.meeshy.core.database.dao.ConversationDao
+import me.meeshy.core.database.dao.MessageDao
 import me.meeshy.core.database.dao.OutboxDao
 import me.meeshy.core.database.dao.SyncMetaDao
 import me.meeshy.core.database.entity.ConversationEntity
+import me.meeshy.core.database.entity.MessageEntity
 import me.meeshy.core.database.entity.OutboxEntity
 import me.meeshy.core.database.entity.SyncMetaEntity
 
@@ -21,12 +23,14 @@ import me.meeshy.core.database.entity.SyncMetaEntity
         ConversationEntity::class,
         SyncMetaEntity::class,
         OutboxEntity::class,
+        MessageEntity::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = false,
 )
 public abstract class MeeshyDatabase : RoomDatabase() {
     public abstract fun conversationDao(): ConversationDao
     public abstract fun syncMetaDao(): SyncMetaDao
     public abstract fun outboxDao(): OutboxDao
+    public abstract fun messageDao(): MessageDao
 }
