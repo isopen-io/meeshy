@@ -268,19 +268,18 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_insertsOptimisticMessage() async {
         let sut = makeSUT()
 
-        // Trigger send but delay the mock response
+        // Trigger the send concurrently. The optimistic row surfaces in
+        // `messages` through the GRDB -> MessageStore -> ViewModel pipeline,
+        // which crosses several runloop hops — poll for the condition instead
+        // of a fixed sleep (a 50 ms delay races the pipeline under load).
         let sendTask = Task {
             await sut.sendMessage(content: "Hello world")
         }
 
-        // Give optimistic insert a moment
-        try? await Task.sleep(nanoseconds: 50_000_000)
-
-        // At this point, optimistic message should be in the array
-        let hasOptimistic = sut.messages.contains { $0.content == "Hello world" && $0.deliveryStatus == .sending }
-        // The task may have already completed, so check either sending or sent
-        let hasSendingOrSent = sut.messages.contains { $0.content == "Hello world" }
-        XCTAssertTrue(hasSendingOrSent)
+        let surfaced = await MessageStoreObservationHelper.awaitMessage(in: sut) {
+            $0.content == "Hello world"
+        }
+        XCTAssertNotNil(surfaced, "Optimistic message must surface in `messages`")
 
         _ = await sendTask.value
     }
