@@ -81,8 +81,9 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [x] `DynamicColorGenerator` — accent color (blend + hue shift + DJB2 palette)
 - [x] Networking: `MeeshyConfig`, `EncryptedTokenStore`, `AuthInterceptor`, `apiCall`, Retrofit
 - [x] Repositories: `AuthRepository`, `ConversationRepository`, `MessageRepository`
-- [ ] **SWR cache**: Room DB (single SoT) + `CacheResult` (4-state incl. `Syncing`)
-      + `CachePolicy` + `cacheFirstFlow {}`
+- [x] **SWR engine**: `CacheResult` (4-state incl. `Syncing`) + `CachePolicy` +
+      `cacheFirstFlow {}` + `SwrCacheSource` — TDD, 5 tests green
+- [ ] **SWR backing**: Room DB (single SoT) + `sync_meta` + Room-backed sources
 - [ ] **Offline outbox**: one Room `outbox` table, **lane-partitioned** drain
       (`WorkManager` per lane, FIFO per conversation, backoff ×5, coalescing,
       device-scoped `cmid` idempotency, outcome `SharedFlow`)
