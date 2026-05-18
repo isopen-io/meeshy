@@ -30,6 +30,7 @@ struct ConversationRowItem<Menu: View>: View {
     let moodStatus: StatusEntry?
     let typingUsername: String?
     let isSelected: Bool
+    let draftSummary: DraftSummary?
     let cachedPreviewMessages: [Message]
     let leadingActions: [SwipeAction]
     let trailingActions: [SwipeAction]
@@ -63,7 +64,8 @@ struct ConversationRowItem<Menu: View>: View {
                 storyRingState: storyRingState,
                 moodStatus: moodStatus,
                 typingUsername: typingUsername,
-                isSelected: isSelected
+                isSelected: isSelected,
+                draftSummary: draftSummary
             )
             .equatable()
             .contentShape(Rectangle())

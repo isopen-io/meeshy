@@ -135,6 +135,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         // state in a small actor so the expiration handler and the happy
         // path can't race — whichever fires first wins.
         Task { @MainActor in
+            PushNotificationManager.shared.noteMessageActivity(userInfo: userInfo)
             let state = SilentPushState(completionHandler: completionHandler)
             let taskId = UIApplication.shared.beginBackgroundTask(withName: "meeshy.silent-push") {
                 Task { @MainActor in state.expire() }
@@ -427,6 +428,9 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let userInfo = notification.request.content.userInfo
+        Task { @MainActor in
+            PushNotificationManager.shared.noteMessageActivity(userInfo: userInfo)
+        }
         let type = userInfo["type"] as? String ?? "unknown"
         let conversationId = userInfo["conversationId"] as? String
         let activeConversationId = NotificationManager.shared.activeConversationId

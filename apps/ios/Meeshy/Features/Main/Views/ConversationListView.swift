@@ -272,6 +272,7 @@ struct ConversationListView: View {
             moodStatus: conversationMoodStatus(for: conversation),
             typingUsername: conversationViewModel.typingUsernames[conversation.id],
             isSelected: selectedConversationId == conversation.id,
+            draftSummary: conversationViewModel.draftSummaries[conversation.id],
             cachedPreviewMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
             leadingActions: leadingSwipeActions(for: conversation),
             trailingActions: trailingSwipeActions(for: conversation),
@@ -548,6 +549,7 @@ struct ConversationListView: View {
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     conversationViewModel.handleForegroundReturn()
+                    conversationViewModel.handleForegroundReactivation()
                 }
             }
             .onChange(of: conversationViewModel.userCategories) { _, categories in
