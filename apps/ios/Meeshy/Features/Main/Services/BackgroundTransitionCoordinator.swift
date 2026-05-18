@@ -120,7 +120,8 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
                     Task { await OfflineQueue.shared.publishOutcome(outcome) }
                 }
             )
-            await flusher.flush()
+            let nextRetry = await flusher.flush()
+            OutboxRetryScheduler.shared.schedule(at: nextRetry)
         }
     }
 

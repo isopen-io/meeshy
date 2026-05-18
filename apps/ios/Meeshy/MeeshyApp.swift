@@ -268,7 +268,8 @@ struct MeeshyApp: App {
                                 Task { await OfflineQueue.shared.publishOutcome(outcome) }
                             }
                         )
-                        await flusher.flush()
+                        let nextRetry = await flusher.flush()
+                        await OutboxRetryScheduler.shared.schedule(at: nextRetry)
                     }
 
                     // Parallelize: friendship hydration + session check are independent
