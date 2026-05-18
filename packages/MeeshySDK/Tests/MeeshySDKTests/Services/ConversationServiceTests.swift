@@ -118,7 +118,10 @@ final class ConversationServiceTests: XCTestCase {
     // MARK: - markRead
 
     func testMarkReadCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        // Fire-and-forget : la réponse est ignorée, décodée en
+        // `SimpleAPIResponse` (body-agnostic). Le `data` du gateway varie
+        // selon l'endpoint — un type strict cassait le décodage.
+        let response = SimpleAPIResponse(success: true, message: nil, error: nil)
         mock.stub("/conversations/conv1/mark-read", result: response)
 
         try await service.markRead(conversationId: "conv1")
@@ -131,13 +134,33 @@ final class ConversationServiceTests: XCTestCase {
     // MARK: - markUnread
 
     func testMarkUnreadCallsCorrectEndpoint() async throws {
-        let response = APIResponse(success: true, data: ["status": "ok"], error: nil)
+        let response = SimpleAPIResponse(success: true, message: nil, error: nil)
         mock.stub("/conversations/conv1/mark-unread", result: response)
 
         try await service.markUnread(conversationId: "conv1")
 
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/conv1/mark-unread")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+    }
+
+    // MARK: - markAsReceived
+
+    /// Regression guard for the production `DecodingError: Type mismatch for
+    /// type Int at path data.message`. The gateway `/mark-as-received`
+    /// endpoint historically returned `data: { message: "<String>" }`;
+    /// decoding that body as `APIResponse<[String: Int]>` threw on the
+    /// String. `markAsReceived` (like `markRead`/`markUnread`) must decode a
+    /// body-agnostic `SimpleAPIResponse` so it succeeds whatever shape the
+    /// gateway gives `data`.
+    func testMarkAsReceivedCallsCorrectEndpoint() async throws {
+        let response = SimpleAPIResponse(success: true, message: "Messages marqués comme reçus", error: nil)
+        mock.stub("/conversations/conv1/mark-as-received", result: response)
+
+        try await service.markAsReceived(conversationId: "conv1")
+
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/conversations/conv1/mark-as-received")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
     }
 

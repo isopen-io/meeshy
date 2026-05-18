@@ -52,18 +52,13 @@ struct ConversationMediaGalleryView: View {
     // MARK: - Pager
 
     private var galleryPager: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            LazyHStack(spacing: 0) {
-                ForEach(allAttachments) { attachment in
-                    galleryPage(attachment)
-                        .containerRelativeFrame(.horizontal)
-                        .containerRelativeFrame(.vertical)
-                }
-            }
-            .scrollTargetLayout()
+        AdaptiveHorizontalPager(
+            items: allAttachments,
+            currentPageID: $currentPageID,
+            fillVertical: true
+        ) { _, attachment in
+            galleryPage(attachment)
         }
-        .scrollTargetBehavior(.paging)
-        .scrollPosition(id: $currentPageID)
         .ignoresSafeArea()
         .onChange(of: currentPageID) { _, newID in
             guard let newID,

@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - CreateShareLinkView
 
@@ -570,7 +571,7 @@ private struct ConversationPickerSheet: View {
                         }
                     }
                     if filtered.isEmpty {
-                        ContentUnavailableView(
+                        AdaptiveContentUnavailableView(
                             "Aucun groupe trouvé",
                             systemImage: "bubble.left.and.bubble.right",
                             description: Text("Créez un groupe ou une communauté pour partager un lien d'invitation")

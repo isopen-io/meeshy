@@ -239,7 +239,13 @@ struct OutboxDispatcher: OutboxDispatching {
     private func dispatchMarkAsRead(_ record: OutboxRecord) async throws {
         let payload = try decodePayload(record, as: MarkAsReadPayload.self)
         do {
-            let _: APIResponse<[String: Int]> = try await APIClient.shared.request(
+            // Decode the envelope loosely as a dictionary (same pattern as
+            // `dispatchUpdateProfile` / `dispatchCreateConversation` above).
+            // The mark-read response `data` carries a string `message` field,
+            // so the previous `[String: Int]` decode threw a DecodingError on
+            // an otherwise-successful 2xx — the read receipt looked like a
+            // failure and was retried until exhausted for nothing.
+            let _: APIResponse<[String: AnyCodable]> = try await APIClient.shared.request(
                 endpoint: "/conversations/\(payload.conversationId)/mark-read",
                 method: "POST",
                 body: nil,
@@ -723,6 +729,64 @@ struct OutboxDispatcher: OutboxDispatching {
             // Returning normally drains the row. The flusher.deleteOne path
             // is the same as for a true success — gateway dedup means the
             // server-side outcome is already terminal regardless.
+        }
+    }
+}
+
+// MARK: - On-demand outbox drain
+
+/// Triggers an immediate outbox drain. `OutboxFlusher.flush()` otherwise
+/// only runs at app boot (`MeeshyApp`) and on background→foreground
+/// transitions (`BackgroundTransitionCoordinator`) — so an optimistic
+/// mutation enqueued mid-session (a reaction in particular, which has no
+/// other send path) would sit `pending` in the outbox until one of those
+/// events and never reach the server. Call this right after enqueueing so
+/// the change leaves the device immediately.
+@MainActor
+enum OutboxFlushTrigger {
+    static func flushNow() async {
+        let flusher = OutboxFlusher(
+            pool: DependencyContainer.shared.dbPool,
+            dispatcher: OutboxDispatcher(),
+            onOutcome: { @Sendable outcome in
+                Task { await OfflineQueue.shared.publishOutcome(outcome) }
+            }
+        )
+        let nextRetry = await flusher.flush()
+        OutboxRetryScheduler.shared.schedule(at: nextRetry)
+    }
+}
+
+/// Possède l'unique timer de re-flush de l'outbox.
+///
+/// `OutboxFlusher` repousse `nextAttemptAt` sur échec (backoff exponentiel)
+/// mais ne se rappelle jamais lui-même : sans ce planificateur, un record en
+/// backoff attendait le prochain évènement de cycle de vie (boot, retour au
+/// premier plan, enqueue, BGTask) pour être retenté. Ici, dès qu'un flush
+/// laisse un record différé, on (ré)arme un timer unique qui rejoue le flush
+/// pile à l'échéance. Le timer est dédupliqué : `schedule` annule toujours le
+/// précédent, il n'y a donc jamais plus d'un timer en vol.
+@MainActor
+final class OutboxRetryScheduler {
+    static let shared = OutboxRetryScheduler()
+    private var timer: Task<Void, Never>?
+    private init() {}
+
+    /// (Ré)arme le timer pour rejouer un flush à `date`. `nil` annule le
+    /// timer en attente (plus rien n'est différé).
+    func schedule(at date: Date?) {
+        timer?.cancel()
+        guard let date else {
+            timer = nil
+            return
+        }
+        timer = Task {
+            // Cap à 1 h : au-delà, un évènement de cycle de vie aura de toute
+            // façon redéclenché un flush entre-temps.
+            let delay = min(max(0, date.timeIntervalSinceNow), 3600)
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await OutboxFlushTrigger.flushNow()
         }
     }
 }

@@ -710,12 +710,28 @@ struct MessageDetailSheet: View {
             }
         }
 
+        // `GET /messages/:id/translations` returns `data` as an OBJECT that
+        // nests the list under `translations` (next to the original-message
+        // metadata) — NOT a bare array. Decoding `APIResponse<[TranslationData]>`
+        // threw `Type mismatch for type Array<Any> at path data` on every
+        // fetch. This local payload matches the real shape and only declares
+        // the two fields consumed below, so it is also immune to the SDK
+        // `TranslationData` field set (the REST elements omit `sourceLanguage`,
+        // which `TranslationData` requires).
+        struct TranslationsPayload: Decodable {
+            struct Item: Decodable {
+                let targetLanguage: String
+                let translatedContent: String
+            }
+            let translations: [Item]
+        }
+
         do {
-            let response: APIResponse<[TranslationData]> = try await APIClient.shared.request(
+            let response: APIResponse<TranslationsPayload> = try await APIClient.shared.request(
                 endpoint: "/messages/\(message.id)/translations"
             )
             if response.success {
-                for t in response.data {
+                for t in response.data.translations {
                     translations[t.targetLanguage] = t.translatedContent
                 }
             }

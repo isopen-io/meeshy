@@ -59,6 +59,14 @@ public final class StoryCanvasUIView: UIView {
             // already invalidate via `lastCapturedSize`.
             slideContentRevision &+= 1
             rebuildLayers()
+            // Slide content (incl. audio model) changed — reload the mixer and
+            // restart playback so the new slide's audio is heard. No-op outside
+            // `.play` mode. `reconfigureAudioForPlayback()` guards on the
+            // revision token, so this fires at most once per slide change.
+            if mode == .play {
+                reconfigureAudioForPlayback()
+                try? audioMixer.play()
+            }
         }
     }
     public private(set) var mode: RenderMode
@@ -114,7 +122,7 @@ public final class StoryCanvasUIView: UIView {
     // MARK: - Internal layers
 
     private let rootLayer = CALayer()
-    private let itemsContainer = CALayer()
+    let itemsContainer = CALayer()
     private let editOverlayLayer = CALayer()
 
     /// Background layer (color/gradient/image/video). Inserted at z=0 beneath itemsContainer.
@@ -203,6 +211,12 @@ public final class StoryCanvasUIView: UIView {
     /// Reflects the current mute state driven by `setReaderContext` or
     /// `.storyComposerMuteCanvas` / `.storyComposerUnmuteCanvas` notifications.
     public private(set) var isAudioMuted: Bool = false
+    /// `slideContentRevision` the `audioMixer` was last configured against.
+    /// Lets `reconfigureAudioForPlayback()` skip the (expensive) AVAudioFile
+    /// reload when the slide content hasn't changed — `rebuildLayers()` runs
+    /// every display-link tick in `.play` mode, but the audio model only
+    /// changes when `slide` itself is reassigned.
+    private var lastAudioConfigRevision: UInt64?
 
     // MARK: - Display link
 
@@ -214,6 +228,17 @@ public final class StoryCanvasUIView: UIView {
     /// inside the gesture handlers; this link's tick is a no-op for now and exists
     /// so the display server keeps the high-rate clock running while editing).
     private var editDisplayLink: CADisplayLink?
+
+    // MARK: - Inline text editing
+
+    /// Champ d'édition en place, sous-vue du canvas. Non-nil pendant l'édition.
+    var inlineEditor: StoryInlineTextEditor?
+    /// Id du texte en cours d'édition en place (nil hors édition).
+    public internal(set) var inlineEditingTextId: String?
+    /// Notifié à chaque frappe : (textId, nouvelle chaîne).
+    public var onInlineTextChanged: ((String, String) -> Void)?
+    /// Notifié quand l'édition se termine (textId).
+    public var onInlineTextEditEnded: ((String) -> Void)?
 
     // MARK: - Init
 
@@ -234,6 +259,11 @@ public final class StoryCanvasUIView: UIView {
 
     deinit {
         NotificationCenter.default.removeObserver(self)
+        // `shutdown()` is @MainActor-isolated and deinit is nonisolated —
+        // capture the mixer and defer the call to the main actor so it
+        // outlives this view's deallocation.
+        let mixer = audioMixer
+        Task { @MainActor in mixer.shutdown() }
     }
 
     @available(*, unavailable)
@@ -522,6 +552,15 @@ public final class StoryCanvasUIView: UIView {
         isAudioMuted = context.mute
         audioMixer.setMute(context.mute)
         rebuildLayers()
+        // The context carries `postMediaURLResolver` / `preferredLanguages`,
+        // both inputs to audio URL resolution. A context swap (e.g. `.empty`
+        // placeholder → real resolver) must force a mixer reload, so drop the
+        // revision gate and reconfigure when already playing.
+        if mode == .play {
+            lastAudioConfigRevision = nil
+            reconfigureAudioForPlayback()
+            try? audioMixer.play()
+        }
     }
 
     public func setMode(_ newMode: RenderMode, time: CMTime = .zero) {
@@ -545,6 +584,7 @@ public final class StoryCanvasUIView: UIView {
             case .play:
                 stopEditDisplayLink()
                 startPlayback()
+                reconfigureAudioForPlayback()
                 try? audioMixer.play()
             case .edit:
                 stopPlayback()
@@ -552,6 +592,52 @@ public final class StoryCanvasUIView: UIView {
                 startEditDisplayLinkIfNeeded()
             }
         }
+    }
+
+    /// Loads the slide's foreground + background audio clips into the
+    /// `audioMixer` so `audioMixer.play()` actually emits sound. No-op outside
+    /// `.play` mode (the composer never plays audio while editing) and skipped
+    /// when the slide content hasn't changed since the last configure pass —
+    /// `configure(audios:urls:)` tears down prior clips, so repeated calls are
+    /// safe but reload AVAudioFiles, which we avoid on every display-link tick.
+    ///
+    /// URL resolution: `ReaderAudioMixer` keys the `urls` dict by the audio
+    /// object's `id`, but `StoryReaderContext.postMediaURLResolver` maps a
+    /// `postMediaId` → `URL`. We bridge the two here, dropping any clip whose
+    /// `postMediaId` does not resolve.
+    private func reconfigureAudioForPlayback() {
+        guard mode == .play else { return }
+        guard lastAudioConfigRevision != slideContentRevision else { return }
+        lastAudioConfigRevision = slideContentRevision
+
+        let effects = slide.effects
+        let languages = readerContext.preferredLanguages
+        let resolver = readerContext.postMediaURLResolver
+
+        // Foreground clips.
+        let foreground = effects.resolvedForegroundAudioPlayers
+        var urls: [String: URL] = [:]
+        for audio in foreground {
+            let mediaId = audio.resolvedPostMediaId(preferredLanguages: languages)
+            if let url = resolver?(mediaId) {
+                urls[audio.id] = url
+            }
+        }
+        try? audioMixer.configure(audios: foreground, urls: urls)
+
+        // Background clip (at most one per slide).
+        if let background = effects.resolvedBackgroundAudio {
+            let mediaId = background.resolvedPostMediaId(preferredLanguages: languages)
+            if let url = resolver?(mediaId) {
+                try? audioMixer.configureBackground(
+                    audio: background,
+                    url: url,
+                    looping: background.loop ?? true
+                )
+            }
+        }
+
+        audioMixer.setMute(readerContext.mute)
     }
 
     // MARK: - Rendering
@@ -612,20 +698,18 @@ public final class StoryCanvasUIView: UIView {
         applyForegroundFrames()
         updateFilterLayer()
         scheduleContentReadyEvaluation(for: bgKind)
+        reapplyInlineEditingIfNeeded()
     }
 
-    /// Edit-mode only: trace un cadre permanent sur les éléments foreground
-    /// (medias non-bg + textes). C'est l'indicateur visuel que demande l'UX :
-    /// l'utilisateur voit immédiatement quelles zones du canvas sont
-    /// manipulables sans avoir à toucher chaque élément.
+    /// Trace un cadre autour des médias foreground (images / vidéos non-bg).
+    /// Appliqué dans TOUS les modes — édition, preview ET viewer — car le cadre
+    /// fait partie du rendu de la story, pas seulement une aide d'édition.
     ///
     /// Implémentation : on définit `borderWidth` / `borderColor` directement sur
     /// chaque sublayer (le `name` du layer == element id) plutôt qu'un overlay
     /// CAShapeLayer séparé. Ça suit les transformations / drag / pinch sans
     /// avoir besoin de re-synchroniser un layer supplémentaire à chaque tick.
-    /// Le contour reste désactivé en `.play` mode pour ne pas polluer le rendu.
     private func applyForegroundFrames() {
-        guard mode == .edit else { return }
         // Les textes ne reçoivent PAS de cadre permanent : le contour
         // rectangulaire entoure inutilement la chaîne de caractères et alourdit
         // le rendu (le glyph dessine déjà sa propre forme). Seuls les médias
@@ -633,26 +717,23 @@ public final class StoryCanvasUIView: UIView {
         let fgMediaIds = Set((slide.effects.mediaObjects ?? []).filter { !$0.isBackground }.map { $0.id })
         let fgTextIds: Set<String> = []
 
-        // Couleur contrastante. Le cadre doit être très visible (demande UX) :
-        //  - Sur slide sombre / image foncée → blanc franc (95%)
-        //  - Sur slide clair (background pastel) → indigo950 marqué (85%)
-        let bgHex = (slide.effects.background ?? "#000000").replacingOccurrences(of: "#", with: "")
-        var rgb: UInt64 = 0; Scanner(string: bgHex).scanHexInt64(&rgb)
-        let r = CGFloat((rgb & 0xFF0000) >> 16) / 255.0
-        let g = CGFloat((rgb & 0x00FF00) >> 8) / 255.0
-        let b = CGFloat(rgb & 0x0000FF) / 255.0
-        let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        let frameColor: CGColor = lum > 0.6
-            ? UIColor(red: 0.12, green: 0.11, blue: 0.29, alpha: 0.85).cgColor // indigo950 @ 85%
-            : UIColor.white.withAlphaComponent(0.95).cgColor
+        // Cadre blanc franc. Le média se détache toujours du fond (slide
+        // sombre, photo, dégradé) avec un liseré blanc — c'est le rendu
+        // attendu pour un média foreground, façon photo encadrée.
+        let frameColor: CGColor = UIColor.white.cgColor
 
         for sub in itemsContainer.sublayers ?? [] {
             guard let name = sub.name else { continue }
             if fgMediaIds.contains(name) || fgTextIds.contains(name) {
                 sub.borderColor = frameColor
                 sub.borderWidth = 2
-                sub.cornerRadius = 2
-                sub.masksToBounds = false
+                // `cornerRadius` n'est PAS écrasé ici : `StoryMediaLayer`
+                // l'a déjà posé sur ce même layer. Le border CALayer suit
+                // automatiquement ce rayon — bordure et image partagent donc
+                // l'arrondi exact. `borderWidth`/`borderColor` étant portés
+                // par le `StoryMediaLayer`, ils héritent de son `transform`
+                // (rotation) et de sa `position` : le cadre reste solidaire
+                // des déplacements et rotations du média.
             }
         }
     }
@@ -1105,13 +1186,20 @@ public final class StoryCanvasUIView: UIView {
     @objc private func handleSingleTap(_ recognizer: UITapGestureRecognizer) {
         guard mode == .edit, recognizer.state == .ended else { return }
         let location = recognizer.location(in: self)
-        guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else { return }
-        // Pour cohérence avec la sémantique tactile attendue (tap = sélection,
-        // double-tap = édition avancée), le single-tap ouvre le format panel
-        // de l'élément ; le double-tap conserve son rôle historique (édition
-        // dédiée — image cropper / video editor — pour les médias). Sur un
-        // élément texte les deux gestes ouvrent le même panneau, le single
-        // étant le geste primaire annoncé par le UX.
+        guard let id = hitTestItem(at: location), let kind = itemKind(forId: id) else {
+            // Tap sur une zone vide du canvas pendant l'édition de texte en
+            // place → sortie de l'édition (déclencheur nº2 de la spec). `endEditing`
+            // résigne le `StoryInlineTextEditor`, ce qui déclenche
+            // `textViewDidEndEditing` → `onInlineTextEditEnded`.
+            if inlineEditingTextId != nil { endEditing(true) }
+            return
+        }
+        // Sémantique tactile : le tap simple ramène l'élément touché au
+        // premier plan (`bringForegroundToFront`) puis le sélectionne via
+        // `onItemTapped`. Le double-tap reste réservé à l'édition dédiée
+        // (cropper image / éditeur vidéo). `bringForegroundToFront` est un
+        // no-op si l'élément est déjà au sommet ou si c'est un média de fond.
+        bringForegroundToFront(id: id)
         onItemTapped?(id, kind)
     }
 
@@ -1620,45 +1708,14 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         guard let id = configuration.identifier as? String,
               let layer = itemsContainer.sublayers?.first(where: { $0.name == id }) else { return nil }
 
-        // Use a transparent overlay with a contrasting border instead of a
-        // snapshot of the layer. UITargetedPreview applies a system blur on
-        // image-backed previews, which made the image look "ghosted" during
-        // long-press. A clear view + border keeps the element visible behind
-        // the menu and reads as a simple selection marker.
-        //
-        // Border color choice:
-        //  - Background image/video → off-white (#F5F5F5) so the cadre stands
-        //    out against the photographic content of the bg.
-        //  - Foreground element → high-contrast vs the slide background color
-        //    (white on dark slide, dark on light slide).
-        let isBgElement: Bool = {
-            if slide.effects.resolvedBackgroundMedia?.id == id { return true }
-            if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
-                return m.isBackground == true
-            }
-            return false
-        }()
-        // Border color choice — keep it deterministic and high-contrast without
-        // peeking at the (composer-owned) slide backgroundColor property which
-        // is not in the SDK model and therefore not reachable from here.
-        //  - Background image/video element → off-white (#F5F5F0) so the cadre
-        //    reads against photographic content.
-        //  - Foreground element → white@95% which sits well against the dark
-        //    safe-area letterboxing and the typical (saturated indigo) slide
-        //    canvas; a future refinement can sample the slide's average
-        //    luminance to flip black/white if needed.
-        let borderColor: UIColor = {
-            if isBgElement {
-                return UIColor(red: 0.96, green: 0.96, blue: 0.94, alpha: 1.0) // #F5F5F0
-            }
-            return UIColor.white.withAlphaComponent(0.95)
-        }()
-
+        // Aperçu de lift transparent. `UITargetedPreview` applique un flou
+        // système sur les aperçus adossés à une image, ce qui « fantômait »
+        // le média pendant le long-press ; une `UIView` claire garde
+        // l'élément net derrière le menu. Aucune bordure : le média porte
+        // déjà son propre cadre blanc — un liseré d'aperçu en doublon était
+        // superflu et a été retiré (le cadre apparaissait « à la sélection »).
         let overlay = UIView(frame: layer.frame)
         overlay.backgroundColor = .clear
-        overlay.layer.cornerRadius = 8
-        overlay.layer.borderColor = borderColor.cgColor
-        overlay.layer.borderWidth = 2
         overlay.isUserInteractionEnabled = false
         addSubview(overlay)
 

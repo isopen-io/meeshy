@@ -20,7 +20,7 @@ final class ReactionServiceTests: XCTestCase {
     // MARK: - add
 
     func testAddPostsReactionToEndpoint() async throws {
-        let response = APIResponse<[String: String]>(success: true, data: [:], error: nil)
+        let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
         mock.stub("/reactions", result: response)
 
         try await service.add(messageId: "msg001", emoji: "thumbsup")
@@ -31,7 +31,7 @@ final class ReactionServiceTests: XCTestCase {
     }
 
     func testAddWithDifferentEmoji() async throws {
-        let response = APIResponse<[String: String]>(success: true, data: [:], error: nil)
+        let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
         mock.stub("/reactions", result: response)
 
         try await service.add(messageId: "msg002", emoji: "heart")
@@ -43,7 +43,7 @@ final class ReactionServiceTests: XCTestCase {
     // MARK: - remove
 
     func testRemoveCallsDeleteWithEncodedEmoji() async throws {
-        let response = APIResponse<[String: String]>(success: true, data: [:], error: nil)
+        let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
         mock.stub("/reactions/msg001/thumbsup", result: response)
 
         try await service.remove(messageId: "msg001", emoji: "thumbsup")
@@ -56,7 +56,7 @@ final class ReactionServiceTests: XCTestCase {
     func testRemoveWithUnicodeEmoji() async throws {
         let emoji = "\u{1F44D}"
         let encoded = emoji.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? emoji
-        let response = APIResponse<[String: String]>(success: true, data: [:], error: nil)
+        let response = APIResponse<DiscardedReactionResponse>(success: true, data: DiscardedReactionResponse(), error: nil)
         mock.stub("/reactions/msg001/\(encoded)", result: response)
 
         try await service.remove(messageId: "msg001", emoji: emoji)

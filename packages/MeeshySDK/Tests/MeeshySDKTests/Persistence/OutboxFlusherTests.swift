@@ -53,7 +53,7 @@ final class OutboxFlusherTests: XCTestCase {
         }
 
         let flusher = OutboxFlusher(pool: pool, dispatcher: MockOutboxDispatcher(shouldFail: true))
-        await flusher.flush()
+        let nextRetry = await flusher.flush()
 
         let after = try await pool.read { db in
             try OutboxRecord.fetchOne(db, key: "x")!
@@ -62,6 +62,8 @@ final class OutboxFlusherTests: XCTestCase {
         XCTAssertEqual(after.status, .pending)
         XCTAssertGreaterThan(after.nextAttemptAt, now,
             "Failed item must be rescheduled after a backoff delay")
+        XCTAssertEqual(nextRetry, after.nextAttemptAt,
+            "flush() must report the earliest deferred retry so OutboxRetryScheduler can re-arm")
     }
 
     func test_flush_marksExhausted_after5Attempts() async throws {

@@ -3,6 +3,8 @@
 import { useState, useRef, useCallback } from 'react';
 import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
+import { useMentions } from '@/hooks/composer/useMentions';
+import { MentionAutocomplete } from '@/components/common/MentionAutocomplete';
 
 export interface CommentComposerProps {
   postId: string;
@@ -16,7 +18,7 @@ export interface CommentComposerProps {
 }
 
 function CommentComposer({
-  _postId,
+  postId,
   parentId,
   parentAuthor,
   currentUser,
@@ -28,12 +30,24 @@ function CommentComposer({
   const [content, setContent] = useState('');
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
+  const {
+    showMentionAutocomplete,
+    mentionQuery,
+    mentionPosition,
+    handleTextChange,
+    handleMentionSelect,
+    closeMentionAutocomplete,
+    getMentionedUserIds,
+    clearMentionedUserIds,
+  } = useMentions({ conversationId: postId });
+
   const handleSubmit = useCallback(() => {
     const trimmed = content.trim();
     if (!trimmed || disabled) return;
     onSubmit(trimmed, parentId ?? undefined);
     setContent('');
-  }, [content, disabled, onSubmit, parentId]);
+    clearMentionedUserIds();
+  }, [content, disabled, onSubmit, parentId, clearMentionedUserIds]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -45,10 +59,29 @@ function CommentComposer({
     [handleSubmit],
   );
 
+  const handleChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      const value = e.target.value;
+      setContent(value);
+      handleTextChange(value, e.target.selectionStart ?? 0, inputRef.current);
+    },
+    [handleTextChange],
+  );
+
+  const handleMentionPick = useCallback(
+    (username: string, userId: string) => {
+      handleMentionSelect(username, userId, inputRef.current, content, setContent);
+    },
+    [handleMentionSelect, content],
+  );
+
+  // expose getMentionedUserIds for parent if needed (kept for parity)
+  void getMentionedUserIds;
+
   const isValid = content.trim().length > 0 && content.trim().length <= 2000;
 
   return (
-    <div className={cn('flex gap-3 items-start', className)} data-testid="comment-composer">
+    <div className={cn('flex gap-3 items-start relative', className)} data-testid="comment-composer">
       <Avatar
         name={currentUser?.username ?? '?'}
         src={currentUser?.avatar ?? undefined}
@@ -75,7 +108,7 @@ function CommentComposer({
           <textarea
             ref={inputRef}
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={handleChange}
             onKeyDown={handleKeyDown}
             placeholder={parentId ? 'Write a reply...' : 'Write a comment...'}
             rows={1}
@@ -108,6 +141,16 @@ function CommentComposer({
           </button>
         </div>
       </div>
+
+      {showMentionAutocomplete && (
+        <MentionAutocomplete
+          conversationId={postId}
+          query={mentionQuery}
+          onSelect={handleMentionPick}
+          onClose={closeMentionAutocomplete}
+          position={mentionPosition}
+        />
+      )}
     </div>
   );
 }

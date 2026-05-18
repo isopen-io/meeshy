@@ -43,6 +43,8 @@ export function registerFeedRoutes(
 
       const result = await feedService.getFeed(authContext.registeredUser.id, cursor, limit);
 
+      reply.header('Cache-Control', 'private, no-cache');
+
       const feedContents = collectPostContents(result.items);
       const mentionedUsers = feedContents.length > 0
         ? await resolveMentionedUsers(prisma, feedContents)
@@ -69,6 +71,8 @@ export function registerFeedRoutes(
       }
 
       const stories = await feedService.getStories(authContext.registeredUser.id);
+
+      reply.header('Cache-Control', 'private, no-cache');
 
       const storyContents = collectPostContents(stories);
       const storyMentionedUsers = storyContents.length > 0
@@ -156,6 +160,8 @@ export function registerFeedRoutes(
 
       const result = await feedService.getUserPosts(userId, viewerUserId, cursor, limit);
 
+      reply.header('Cache-Control', 'private, no-cache');
+
       const userPostContents = collectPostContents(result.items);
       const userPostMentionedUsers = userPostContents.length > 0
         ? await resolveMentionedUsers(prisma, userPostContents)
@@ -184,6 +190,8 @@ export function registerFeedRoutes(
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
       const result = await feedService.getCommunityFeed(communityId, viewerUserId, cursor, limit);
+
+      reply.header('Cache-Control', 'private, no-cache');
 
       const communityContents = collectPostContents(result.items);
       const communityMentionedUsers = communityContents.length > 0
@@ -214,6 +222,8 @@ export function registerFeedRoutes(
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
       const result = await feedService.getBookmarks(authContext.registeredUser.id, cursor, limit);
+
+      reply.header('Cache-Control', 'private, no-cache');
 
       const bookmarkContents = collectPostContents(result.items);
       const bookmarkMentionedUsers = bookmarkContents.length > 0

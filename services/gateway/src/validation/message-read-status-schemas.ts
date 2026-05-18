@@ -22,6 +22,12 @@ export const ReadStatusesQuerySchema = z.object({
     )
 }).strict();
 
+export const DeliveryReceiptParamsSchema = z.object({
+  conversationId: z.string().min(1, 'conversationId is required'),
+  messageId: mongoId
+}).strict();
+
 export type MessageIdParam = z.infer<typeof MessageIdParamSchema>;
 export type ConversationIdParam = z.infer<typeof ConversationIdParamSchema>;
 export type ReadStatusesQuery = z.infer<typeof ReadStatusesQuerySchema>;
+export type DeliveryReceiptParams = z.infer<typeof DeliveryReceiptParamsSchema>;

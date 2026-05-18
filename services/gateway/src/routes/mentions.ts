@@ -4,18 +4,22 @@ import { MentionService } from '../services/MentionService.js';
 import { validateParams, validateQuery } from '../validation/helpers.js';
 import { SuggestionsQuerySchema, MessageIdParamSchema, MyMentionsQuerySchema } from '../validation/mentions-schemas.js';
 import type {
-  MentionSuggestionsRequest,
   MentionSuggestionsResponse,
   GetMessageMentionsResponse,
   GetUserMentionsResponse
 } from '@meeshy/shared/types/index';
+import type { MentionSuggestion } from '../services/MentionService.js';
 
 interface MessageParams {
   messageId: string;
 }
 
 interface SuggestionsQuery {
-  conversationId: string;
+  // New unified params
+  contextId?: string;
+  contextType?: 'conversation' | 'post';
+  // Legacy (backwards compat)
+  conversationId?: string;
   query?: string;
 }
 
@@ -47,7 +51,7 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
     preHandler: [validateQuery(SuggestionsQuerySchema)]
   }, async (request, reply) => {
     try {
-      const { conversationId, query } = request.query;
+      const { contextId, contextType, conversationId, query } = request.query;
       const authRequest = request as UnifiedAuthRequest;
       const userId = authRequest.authContext.userId;
 
@@ -58,27 +62,32 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
         });
       }
 
-      if (!conversationId) {
+      // Resolve unified params: prefer contextId+contextType, fallback to legacy conversationId
+      const resolvedContextType = contextType ?? 'conversation';
+      const resolvedContextId = contextId ?? conversationId;
+
+      if (!resolvedContextId) {
         return reply.code(400).send({
           success: false,
-          error: 'conversationId est requis'
+          error: 'Either (contextId + contextType) or conversationId is required'
         });
       }
 
-      // Valider que conversationId est un ID MongoDB valide (24 caractères hexadécimaux)
-      if (!/^[a-f\d]{24}$/i.test(conversationId)) {
-        return reply.code(400).send({
-          success: false,
-          error: 'conversationId invalide'
-        });
-      }
+      let suggestions: MentionSuggestion[];
 
-      // Récupérer les suggestions
-      const suggestions = await mentionService.getUserSuggestionsForConversation(
-        conversationId,
-        userId,
-        query || ''
-      );
+      if (resolvedContextType === 'post') {
+        suggestions = await mentionService.getUserSuggestionsForPost(
+          resolvedContextId,
+          userId,
+          query || ''
+        );
+      } else {
+        suggestions = await mentionService.getUserSuggestionsForConversation(
+          resolvedContextId,
+          userId,
+          query || ''
+        );
+      }
 
       const response: MentionSuggestionsResponse = {
         success: true,
@@ -87,9 +96,19 @@ export default async function mentionRoutes(fastify: FastifyInstance) {
 
       return reply.send(response);
     } catch (error) {
+      // Post/conversation not found or access denied
+      if (error instanceof Error && error.message.includes('non trouvé ou accès refusé')) {
+        return reply.code(403).send({
+          success: false,
+          error: error.message
+        });
+      }
+
       // Log détaillé de l'erreur pour debug
       fastify.log.error({
         err: error,
+        contextId: request.query.contextId,
+        contextType: request.query.contextType,
         conversationId: request.query.conversationId,
         query: request.query.query,
         userId: (request as UnifiedAuthRequest).authContext.userId,

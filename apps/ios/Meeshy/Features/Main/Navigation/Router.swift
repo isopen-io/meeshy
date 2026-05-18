@@ -182,10 +182,23 @@ final class Router: ObservableObject {
 
     func navigateToConversation(_ conversation: Conversation, highlightMessageId: String? = nil) {
         pendingHighlightMessageId = highlightMessageId
-        popToRoot()
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-            self.push(.conversation(conversation))
+
+        // iPad deux colonnes : les routes sont forwardees via `onRouteRequested`
+        // (pas de NavigationStack `path`) — comportement inchange.
+        if onRouteRequested != nil {
+            popToRoot()
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                self.push(.conversation(conversation))
+            }
+            return
         }
+
+        // iPhone : remplace la pile en UNE seule mutation de `path`.
+        // L'ancien `popToRoot()` + `push()` differe de 0.05s produisait deux
+        // mutations rapprochees → "NavigationRequestObserver tried to update
+        // multiple times per frame". `NavigationStack(path:)` recoit
+        // desormais une transition atomique.
+        path = [.conversation(conversation)]
     }
 
     // MARK: - Deep Link Handling

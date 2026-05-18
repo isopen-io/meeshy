@@ -2,6 +2,8 @@
 
 import { useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle } from 'react';
 import { Tooltip } from './Tooltip';
+import { useMentions } from '@/hooks/composer/useMentions';
+import { MentionAutocomplete } from '@/components/common/MentionAutocomplete';
 
 export interface Attachment {
   id: string;
@@ -39,6 +41,8 @@ export interface MessageComposerProps {
   availableLanguages?: LanguageOption[];
   /** Callback quand la langue change */
   onLanguageChange?: (code: string) => void;
+  /** ID de la conversation pour les mentions (ObjectId MongoDB) */
+  conversationId?: string;
   className?: string;
 }
 
@@ -158,6 +162,7 @@ export const MessageComposer = forwardRef<
   selectedLanguage = 'fr',
   availableLanguages = DEFAULT_LANGUAGES,
   onLanguageChange,
+  conversationId,
   className = '',
 }: MessageComposerProps, ref) {
   const [message, setMessage] = useState(value);
@@ -177,6 +182,17 @@ export const MessageComposer = forwardRef<
 
   const currentLangOption = availableLanguages.find(l => l.code === currentLanguage) || availableLanguages[0];
 
+  const {
+    showMentionAutocomplete,
+    mentionQuery,
+    mentionPosition,
+    handleTextChange: handleMentionTextChange,
+    handleMentionSelect,
+    closeMentionAutocomplete,
+    getMentionedUserIds,
+    clearMentionedUserIds,
+  } = useMentions({ conversationId });
+
   // Exposer les méthodes publiques au parent via useImperativeHandle
   useImperativeHandle(ref, () => ({
     focus: () => {
@@ -185,14 +201,12 @@ export const MessageComposer = forwardRef<
     blur: () => {
       textareaRef.current?.blur();
     },
-    getMentionedUserIds: () => [],
+    getMentionedUserIds,
     clearAttachments: () => {
       setAttachments([]);
     },
-    clearMentionedUserIds: () => {
-      // À implémenter si les mentions sont supportées
-    }
-  }), []);
+    clearMentionedUserIds,
+  }), [getMentionedUserIds, clearMentionedUserIds]);
 
   useEffect(() => {
     setMessage(value);
@@ -218,7 +232,8 @@ export const MessageComposer = forwardRef<
     const newValue = maxLength ? e.target.value.slice(0, maxLength) : e.target.value;
     setMessage(newValue);
     onChange?.(newValue);
-  }, [onChange, maxLength]);
+    handleMentionTextChange(newValue, e.target.selectionStart ?? 0, textareaRef.current);
+  }, [onChange, maxLength, handleMentionTextChange]);
 
   const handleSend = useCallback(() => {
     if ((!message.trim() && attachments.length === 0) || disabled) return;
@@ -227,11 +242,12 @@ export const MessageComposer = forwardRef<
     setMessage('');
     setAttachments([]);
     onChange?.('');
+    clearMentionedUserIds();
 
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
     }
-  }, [message, attachments, disabled, onSend, onChange, currentLanguage]);
+  }, [message, attachments, disabled, onSend, onChange, currentLanguage, clearMentionedUserIds]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -583,6 +599,18 @@ export const MessageComposer = forwardRef<
           )}
         </div>
       </div>
+
+      {showMentionAutocomplete && (
+        <MentionAutocomplete
+          conversationId={conversationId ?? ''}
+          query={mentionQuery}
+          onSelect={(username, userId) =>
+            handleMentionSelect(username, userId, textareaRef.current, message, setMessage)
+          }
+          onClose={closeMentionAutocomplete}
+          position={mentionPosition}
+        />
+      )}
     </div>
   );
 });

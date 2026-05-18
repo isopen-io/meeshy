@@ -11,15 +11,24 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public var onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)?
     public var onItemDuplicated: ((_ oldId: String, _ newId: String, _ kind: StoryCanvasUIView.CanvasItemKind) -> Void)?
+    public var editingTextId: String?
+    public var onInlineTextChanged: ((String, String) -> Void)?
+    public var onInlineTextEditEnded: ((String) -> Void)?
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 onItemDoubleTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
-                onItemDuplicated: ((String, String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil) {
+                onItemDuplicated: ((String, String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
+                editingTextId: String? = nil,
+                onInlineTextChanged: ((String, String) -> Void)? = nil,
+                onInlineTextEditEnded: ((String) -> Void)? = nil) {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
         self.onItemDuplicated = onItemDuplicated
+        self.editingTextId = editingTextId
+        self.onInlineTextChanged = onInlineTextChanged
+        self.onInlineTextEditEnded = onInlineTextEditEnded
     }
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
@@ -30,6 +39,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onItemTapped = onItemTapped
         view.onItemDoubleTapped = onItemDoubleTapped
         view.onItemDuplicated = onItemDuplicated
+        view.onInlineTextChanged = onInlineTextChanged
+        view.onInlineTextEditEnded = onInlineTextEditEnded
         return view
     }
 
@@ -46,6 +57,15 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // semantically identical to avoid redundant `rebuildLayers()` calls.
         if !Self.slidesEqualForCanvas(uiView.slide, slide) {
             uiView.slide = slide
+        }
+        uiView.onInlineTextChanged = onInlineTextChanged
+        uiView.onInlineTextEditEnded = onInlineTextEditEnded
+        if uiView.inlineEditingTextId != editingTextId {
+            if let id = editingTextId {
+                uiView.beginInlineTextEdit(textId: id)
+            } else {
+                uiView.endInlineTextEdit()
+            }
         }
     }
 

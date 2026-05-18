@@ -75,7 +75,7 @@ final class StoryRepostFlowTests: XCTestCase {
             repostOf: repostOf, originalRepostOfId: nil, isQuote: false,
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: nil,
             translations: nil, isLikedByMe: nil, isViewedByMe: nil,
-            mentionedUsers: nil, viaUsername: nil
+            currentUserReactions: nil, mentionedUsers: nil, viaUsername: nil
         )
     }
 
@@ -207,9 +207,12 @@ final class StoryRepostFlowTests: XCTestCase {
         XCTAssertEqual(composer.repostSourceForTests?.id, "story-1",
                        "Composer captured the source story for the embedded canvas")
 
-        // 3.b — Internal `triggerPublishForTests` simulates the publish button
-        // tap without driving the SwiftUI hierarchy.
-        composer.triggerPublishForTests(content: "Mon commentaire")
+        // 3.b — `triggerPublishForTestsAwaiting` simulates the publish button
+        // tap and awaits the publish path, so the callback has run before we
+        // assert. The fire-and-forget `triggerPublishForTests` spawns a Task
+        // and would race the synchronous assertions below.
+        let published = await composer.triggerPublishForTestsAwaiting(content: "Mon commentaire")
+        XCTAssertTrue(published, "Repost publish path completed without throwing")
 
         XCTAssertEqual(capturedContent, "Mon commentaire",
                        "onPublishRepost receives the typed commentary verbatim")

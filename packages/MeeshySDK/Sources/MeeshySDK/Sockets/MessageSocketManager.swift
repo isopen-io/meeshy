@@ -529,6 +529,23 @@ public struct ReactionSyncEvent: Decodable, Sendable {
 public struct SystemMessageEvent: Decodable, Sendable {
     public let type: String
     public let content: String
+
+    private enum CodingKeys: String, CodingKey {
+        case type, messageType, content
+    }
+
+    public init(from decoder: Decoder) throws {
+        // Le gateway broadcaste `system:message` avec un objet message complet
+        // (MeeshySocketIOHandler.broadcastMessage) : la clé porte le nom
+        // `messageType`, pas `type`, et tous les champs message sont présents.
+        // On accepte les deux clés et on retombe sur des valeurs sûres pour ne
+        // jamais échouer le décodage d'un event temps réel.
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        type = (try? container.decode(String.self, forKey: .type))
+            ?? (try? container.decode(String.self, forKey: .messageType))
+            ?? "system"
+        content = (try? container.decode(String.self, forKey: .content)) ?? ""
+    }
 }
 
 // MARK: - Attachment Status Event Data
@@ -778,6 +795,7 @@ public protocol MessageSocketProviding: Sendable {
     func emitLiveLocationUpdate(payload: LiveLocationUpdatePayload)
     func emitLiveLocationStop(conversationId: String)
     func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?)
+    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck?
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck
     func emitCallJoin(callId: String)
     func emitCallLeave(callId: String)
@@ -971,7 +989,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // MARK: - Connection
 
     public func connect() {
-        guard socket == nil || socket?.status != .connected else { return }
+        // Ne JAMAIS reconstruire le socket tant qu'une connexion existe ou est
+        // en cours. Réassigner `manager`/`socket` relâche l'instance courante
+        // en plein handshake : la connexion n'aboutit alors jamais et tous les
+        // emits échouent avec « Tried emitting when not connected ».
+        if let socket, socket.status == .connected || socket.status == .connecting {
+            return
+        }
 
         guard let token = APIClient.shared.authToken else {
             Logger.socket.warning("No auth token, skipping connect")
@@ -993,9 +1017,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
-            .compress,
+            // Transport HTTP long-polling uniquement. Le transport WebSocket
+            // (Starscream) ne s'établit pas de façon fiable ici : forcé, le
+            // handshake restait bloqué ; en upgrade, la connexion tombait au
+            // bout de ~35 s (timeout ping Engine.IO). Le long-polling s'appuie
+            // sur URLSession — fiable, comme le REST — et reste un transport
+            // temps réel Socket.IO pleinement valide.
+            .forcePolling(true),
             .extraHeaders(["Authorization": "Bearer \(token)"]),
-            .forceWebsockets(true),
             .reconnects(true),
             .reconnectWait(1),
             .reconnectWaitMax(16),
@@ -1008,6 +1037,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     }
 
     public func connectAnonymous(sessionToken: String) {
+        if let socket, socket.status == .connected || socket.status == .connecting {
+            return
+        }
         disconnect()
 
         guard let url = SocketConfig.baseURL else { return }
@@ -1016,9 +1048,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
-            .compress,
+            // Voir connect() : transport long-polling uniquement.
+            .forcePolling(true),
             .extraHeaders(["X-Session-Token": sessionToken]),
-            .forceWebsockets(true),
             .reconnects(true),
             .reconnectWait(1),
             .reconnectWaitMax(16),
@@ -1095,8 +1127,18 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     public func joinConversation(_ conversationId: String) {
         guard !joinedConversations.contains(conversationId) else { return }
-        socket?.emit("conversation:join", ["conversationId": conversationId])
+        // Tracker la room AVANT toute emission : le handler `.connect`
+        // (re-join loop) re-emet `conversation:join` pour toutes les rooms
+        // de `joinedConversations` une fois le handshake termine.
         joinedConversations.insert(conversationId)
+        guard socket?.status == .connected else {
+            // Socket pas encore connecte : emettre ici serait perdu et
+            // declencherait l'erreur `Tried emitting when not connected`.
+            // Le re-join du handler `.connect` prendra le relais.
+            Logger.socket.info("Queued conversation join (socket not connected): \(conversationId)")
+            return
+        }
+        socket?.emit("conversation:join", ["conversationId": conversationId])
         Logger.socket.info("Joined conversation: \(conversationId)")
     }
 
@@ -1150,20 +1192,34 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Send With Attachments
 
-    /// ACK returned by the gateway after `message:send-with-attachments`.
+    /// ACK returned by the gateway after `message:send` / `message:send-with-attachments`.
     /// Phase 4 (spec §6.2) requires `_sendResponse()` to echo back the same
     /// `clientMessageId` the client supplied in the request so the local
     /// outbox/optimistic layer can match the row without scraping the
     /// `message:new` broadcast. `clientMessageId` is optional on the wire
     /// during the rollout window — older gateway builds drop the field.
+    /// `createdAt` carries the authoritative server timestamp so the WS-first
+    /// send path can stamp the optimistic row without waiting for the
+    /// `message:new` broadcast; it is `nil` against older gateway builds.
     public struct SendMessageAck: Sendable {
         public let messageId: String
         public let clientMessageId: String?
+        public let createdAt: Date?
 
-        public init(messageId: String, clientMessageId: String?) {
+        public init(messageId: String, clientMessageId: String?, createdAt: Date? = nil) {
             self.messageId = messageId
             self.clientMessageId = clientMessageId
+            self.createdAt = createdAt
         }
+    }
+
+    /// Parses the ISO-8601 `createdAt` echoed in a send ACK, tolerating both
+    /// the fractional-seconds and basic forms. Returns `nil` on any mismatch
+    /// so the caller can fall back to the local send time.
+    private static func parseAckDate(_ value: Any?) -> Date? {
+        guard let string = value as? String, !string.isEmpty else { return nil }
+        return isoFormatterWithFractional.date(from: string)
+            ?? isoFormatterBasic.date(from: string)
     }
 
     private func buildAttachmentPayload(
@@ -1233,12 +1289,133 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
                    let data = response["data"] as? [String: Any],
                    let messageId = data["messageId"] as? String {
                     let ackCid = data["clientMessageId"] as? String ?? cid
-                    continuation.resume(returning: SendMessageAck(messageId: messageId, clientMessageId: ackCid))
+                    continuation.resume(returning: SendMessageAck(
+                        messageId: messageId,
+                        clientMessageId: ackCid,
+                        createdAt: MessageSocketManager.parseAckDate(data["createdAt"])
+                    ))
                 } else {
                     continuation.resume(returning: nil)
                 }
             }
         }
+    }
+
+    // MARK: - Send Text (WebSocket-first)
+
+    /// Emits a plain-text `message:send` over the open Socket.IO connection and
+    /// awaits the gateway ACK. This is the WebSocket-first send path used for
+    /// regular text messages — parity with reactions / comments / status, which
+    /// already travel over the socket. Carries the full message effect set
+    /// (`isBlurred`, `expiresAt` for ephemeral, `effectFlags` bitfield,
+    /// `isViewOnce` / `maxViewOnceCount`) at parity with the REST route.
+    ///
+    /// Returns the `SendMessageAck` (server `messageId`, echoed
+    /// `clientMessageId`, server `createdAt`) on success, or `nil` on timeout /
+    /// no socket / server error so the caller can fall back to the REST send.
+    ///
+    /// NOT for E2EE payloads or attachments — the `message:send` event does not
+    /// transport those; the caller routes them through REST or
+    /// `sendWithAttachments`.
+    ///
+    /// - Important: Currently UNUSED. `ConversationViewModel.sendMessage`
+    ///   routes text sends through REST because the `message:send` Socket.IO
+    ///   event does not reach the gateway handler (investigation 2026-05-17).
+    ///   Re-wire this path once the Socket.IO channel is repaired.
+    public func sendAsync(
+        conversationId: String,
+        content: String?,
+        originalLanguage: String? = nil,
+        replyToId: String? = nil,
+        storyReplyToId: String? = nil,
+        forwardedFromId: String? = nil,
+        forwardedFromConversationId: String? = nil,
+        messageType: String? = nil,
+        isBlurred: Bool? = nil,
+        expiresAt: Date? = nil,
+        effectFlags: UInt32? = nil,
+        isViewOnce: Bool? = nil,
+        maxViewOnceCount: Int? = nil,
+        clientMessageId: String? = nil,
+        timeoutSeconds: Double = 10
+    ) async -> SendMessageAck? {
+        guard let socket else { return nil }
+        let cid = clientMessageId ?? ClientMessageId.generate()
+        var payload: [String: Any] = [
+            "conversationId": conversationId,
+            "content": content ?? "",
+            "clientMessageId": cid
+        ]
+        if let originalLanguage { payload["originalLanguage"] = originalLanguage }
+        if let messageType { payload["messageType"] = messageType }
+        if let replyToId { payload["replyToId"] = replyToId }
+        if let storyReplyToId { payload["storyReplyToId"] = storyReplyToId }
+        if let forwardedFromId { payload["forwardedFromId"] = forwardedFromId }
+        if let forwardedFromConversationId { payload["forwardedFromConversationId"] = forwardedFromConversationId }
+        if let isBlurred { payload["isBlurred"] = isBlurred }
+        if let expiresAt { payload["expiresAt"] = MessageSocketManager.isoFormatterWithFractional.string(from: expiresAt) }
+        if let effectFlags { payload["effectFlags"] = Int(effectFlags) }
+        if let isViewOnce { payload["isViewOnce"] = isViewOnce }
+        if let maxViewOnceCount { payload["maxViewOnceCount"] = maxViewOnceCount }
+        return await withCheckedContinuation { continuation in
+            socket.emitWithAck("message:send", payload).timingOut(after: timeoutSeconds) { items in
+                if let response = items.first as? [String: Any],
+                   let success = response["success"] as? Bool, success,
+                   let data = response["data"] as? [String: Any],
+                   let messageId = data["messageId"] as? String {
+                    let ackCid = data["clientMessageId"] as? String ?? cid
+                    continuation.resume(returning: SendMessageAck(
+                        messageId: messageId,
+                        clientMessageId: ackCid,
+                        createdAt: MessageSocketManager.parseAckDate(data["createdAt"])
+                    ))
+                } else {
+                    continuation.resume(returning: nil)
+                }
+            }
+        }
+    }
+
+    /// Chemin de repli socket pour `ConversationViewModel.sendMessage`, appelé
+    /// quand le POST REST a échoué. Réémet le message sur le socket avec le
+    /// MÊME `clientMessageId` : le dedup gateway `(conversationId, clientMessageId)`
+    /// garantit l'absence de doublon si l'outbox rejoue le REST plus tard.
+    ///
+    /// Route vers `message:send-with-attachments` (média) ou `message:send`
+    /// (texte). Un texte chiffré E2EE renvoie `nil` — l'event `message:send` ne
+    /// transporte pas le chiffrement, on ne réémet pas un payload en clair ;
+    /// ces messages restent sur le retry REST de l'outbox.
+    public func sendViaSocketFallback(
+        conversationId: String,
+        content: String?,
+        attachmentIds: [String],
+        replyToId: String?,
+        storyReplyToId: String?,
+        originalLanguage: String?,
+        isEncrypted: Bool,
+        clientMessageId: String
+    ) async -> SendMessageAck? {
+        if attachmentIds.isEmpty {
+            if isEncrypted { return nil }
+            return await sendAsync(
+                conversationId: conversationId,
+                content: content,
+                originalLanguage: originalLanguage,
+                replyToId: replyToId,
+                storyReplyToId: storyReplyToId,
+                clientMessageId: clientMessageId
+            )
+        }
+        return await sendWithAttachmentsAsync(
+            conversationId: conversationId,
+            content: content,
+            attachmentIds: attachmentIds,
+            replyToId: replyToId,
+            storyReplyToId: storyReplyToId,
+            originalLanguage: originalLanguage,
+            isEncrypted: isEncrypted,
+            clientMessageId: clientMessageId
+        )
     }
 
     // MARK: - Call Signaling Emission
@@ -1518,6 +1695,13 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         // --- Reaction events ---
 
+        // NOTE (Fix E5 — v1 limitation): realtime reaction events for messages NOT
+        // currently held in the active conversation cache are silently dropped here.
+        // When the user opens that conversation later, the server-persisted
+        // `reactionSummary` on the Message document is the authoritative source of
+        // truth and will reflect all reactions. Adding a dedicated reactions cache
+        // store was evaluated (approach A) but deferred — the cross-conversation
+        // realtime delta is low-value for v1 and the implementation cost is high.
         socket.on("reaction:added") { [weak self] data, _ in
             guard let self else { return }
             let recvAt = Date()

@@ -260,21 +260,47 @@ export function MentionAutocomplete({
             `,
         }}
       >
-      {isLoading && (
+      {isLoading && suggestions.length === 0 && (
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          className="p-4 text-center text-sm text-gray-600 dark:text-gray-400"
+          className="p-3 space-y-2"
+          data-testid="mention-shimmer"
         >
-          <motion.div
-            className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500 dark:border-blue-400 mx-auto mb-2"
-            style={{
-              boxShadow: isDarkMode
-                ? '0 2px 8px rgba(59, 130, 246, 0.4)'
-                : '0 2px 8px rgba(59, 130, 246, 0.3)',
-            }}
-          />
-          Recherche...
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-3 animate-pulse">
+              {/* Avatar circle shimmer */}
+              <div
+                className="w-8 h-8 rounded-full flex-shrink-0"
+                style={{
+                  background: isDarkMode
+                    ? 'rgba(59, 130, 246, 0.15)'
+                    : 'rgba(59, 130, 246, 0.1)',
+                }}
+              />
+              {/* Text bars shimmer */}
+              <div className="flex-1 space-y-1.5">
+                <div
+                  className="h-3 rounded-full"
+                  style={{
+                    width: `${60 + i * 15}%`,
+                    background: isDarkMode
+                      ? 'rgba(59, 130, 246, 0.15)'
+                      : 'rgba(59, 130, 246, 0.1)',
+                  }}
+                />
+                <div
+                  className="h-2.5 rounded-full"
+                  style={{
+                    width: `${40 + i * 10}%`,
+                    background: isDarkMode
+                      ? 'rgba(59, 130, 246, 0.1)'
+                      : 'rgba(59, 130, 246, 0.07)',
+                  }}
+                />
+              </div>
+            </div>
+          ))}
         </motion.div>
       )}
 

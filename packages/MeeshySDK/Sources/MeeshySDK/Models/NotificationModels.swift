@@ -102,6 +102,14 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
     case statusReaction = "status_reaction"
     case commentLike = "comment_like"
     case commentReply = "comment_reply"
+    case commentReaction = "comment_reaction"
+    case storyNewComment = "story_new_comment"
+    case friendStoryComment = "friend_story_comment"
+    case storyThreadReply = "story_thread_reply"
+    // Friend content events (Phase 4F) — fired when a friend publishes new content
+    case friendNewStory = "friend_new_story"
+    case friendNewPost = "friend_new_post"
+    case friendNewMood = "friend_new_mood"
 
     // Call events
     case missedCall = "missed_call"
@@ -178,7 +186,12 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .missedCall, .callDeclined, .legacyCallMissed: return "phone.arrow.down.left"
         case .incomingCall, .callEnded, .legacyCallIncoming: return "phone.fill"
         case .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike: return "hand.thumbsup.fill"
+        case .commentReaction: return "heart.fill"
         case .postComment, .commentReply, .legacyPostComment, .legacyStoryReply: return "text.bubble.fill"
+        case .storyNewComment, .friendStoryComment, .storyThreadReply: return "text.bubble.fill"
+        case .friendNewStory: return "camera.fill"
+        case .friendNewPost: return "square.text.square.fill"
+        case .friendNewMood: return "face.smiling.fill"
         case .achievementUnlocked, .legacyAchievementUnlocked, .streakMilestone, .badgeEarned: return "trophy.fill"
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted: return "globe"
         case .securityAlert, .loginNewDevice, .legacySystemAlert, .passwordChanged, .twoFactorEnabled, .twoFactorDisabled: return "exclamationmark.triangle.fill"
@@ -203,9 +216,9 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
 
     public var accentHex: String {
         switch self {
-        case .newMessage, .legacyNewMessage, .messageReply, .reply, .postComment, .commentReply, .legacyPostComment, .legacyStoryReply:
+        case .newMessage, .legacyNewMessage, .messageReply, .reply, .postComment, .commentReply, .legacyPostComment, .legacyStoryReply, .storyNewComment, .friendStoryComment, .storyThreadReply:
             return "3498DB"
-        case .messageReaction, .reaction, .legacyMessageReaction, .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike:
+        case .messageReaction, .reaction, .legacyMessageReaction, .postLike, .legacyPostLike, .storyReaction, .statusReaction, .commentLike, .commentReaction:
             return "FF6B6B"
         case .userMentioned, .mention, .legacyMention:
             return "9B59B6"
@@ -222,6 +235,8 @@ public enum MeeshyNotificationType: String, Codable, CaseIterable, Sendable {
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted, .voiceCloneReady:
             return "08D9D6"
         case .system, .maintenance, .updateAvailable:
+            return "6366F1"
+        case .friendNewStory, .friendNewPost, .friendNewMood:
             return "6366F1"
         case .postRepost:
             return "9B59B6"
@@ -457,8 +472,27 @@ public struct APINotification: Codable, Identifiable, Sendable, CacheIdentifiabl
                 return "\(actorName) a reagi \(emoji) a votre \(typeLabel)"
             }
             return "\(actorName) a aime votre \(typeLabel)"
+        case .commentReaction:
+            let emoji = metadata?.emoji ?? metadata?.reactionEmoji
+            if let emoji {
+                return "\(actorName) a reagi \(emoji) a votre commentaire"
+            }
+            return "\(actorName) a reagi a votre commentaire"
         case .postComment, .commentReply, .legacyPostComment:
             return "\(actorName) a commente votre publication"
+        case .storyNewComment:
+            return "\(actorName) a commente votre story"
+        case .friendStoryComment:
+            return "\(actorName) a commente une story"
+        case .storyThreadReply:
+            return "\(actorName) a repondu dans un fil de commentaires"
+        // Phase 4F — friend new content
+        case .friendNewStory:
+            return "\(actorName) a publie une nouvelle story"
+        case .friendNewPost:
+            return "\(actorName) a publie une nouvelle publication"
+        case .friendNewMood:
+            return "\(actorName) a partage une humeur"
         case .postRepost:
             return "\(actorName) a repartage votre publication"
         case .translationCompleted, .translationReady, .legacyTranslationReady, .transcriptionCompleted:

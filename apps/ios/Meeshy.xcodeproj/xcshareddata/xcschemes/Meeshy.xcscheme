@@ -107,5 +107,23 @@
    <ArchiveAction
       buildConfiguration = "Release"
       revealArchiveInOrganizer = "YES">
+      <PostActions>
+         <ExecutionAction
+            ActionType = "Xcode.IDEStandardExecutionActionsCore.ExecutionActionType.ShellScriptAction">
+            <ActionContent
+               title = "Strip embedded framework signatures (ITMS-90035)"
+               scriptText = "export CI_XCODEBUILD_ACTION=archive&#10;export CI_ARCHIVE_PATH=&quot;${ARCHIVE_PATH}&quot;&#10;&quot;${PROJECT_DIR}/ci_scripts/ci_post_xcodebuild.sh&quot;&#10;">
+               <EnvironmentBuildable>
+                  <BuildableReference
+                     BuildableIdentifier = "primary"
+                     BlueprintIdentifier = "9999AD8C50CACBF85DF613CF"
+                     BuildableName = "Meeshy Dev.app"
+                     BlueprintName = "Meeshy"
+                     ReferencedContainer = "container:Meeshy.xcodeproj">
+                  </BuildableReference>
+               </EnvironmentBuildable>
+            </ActionContent>
+         </ExecutionAction>
+      </PostActions>
    </ArchiveAction>
 </Scheme>

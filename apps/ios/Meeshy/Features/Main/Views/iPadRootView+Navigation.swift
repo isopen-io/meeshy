@@ -165,12 +165,12 @@ extension iPadRootView {
                 navigateToConversationById(conversationId)
             }
 
-        case .postLike, .legacyPostLike, .postRepost:
+        case .postLike, .legacyPostLike, .postRepost, .friendNewPost:
             if let postId = notification.context?.postId ?? data?.postId {
                 rightPanelRoute = .postDetail(postId)
             }
 
-        case .postComment, .legacyPostComment, .commentLike, .commentReply:
+        case .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction:
             if let postId = notification.context?.postId ?? data?.postId {
                 let postType = notification.metadata?.postType
                 if isStoryPost(postId: postId, postType: postType) {
@@ -196,6 +196,24 @@ extension iPadRootView {
                 router.push(.storyNotificationTarget(
                     storyId: postId,
                     intent: .reactions,
+                    context: StoryNotificationContext.from(notification)
+                ))
+            }
+
+        case .storyNewComment, .friendStoryComment, .storyThreadReply:
+            if let postId = notification.context?.postId ?? data?.postId {
+                router.push(.storyNotificationTarget(
+                    storyId: postId,
+                    intent: .comments,
+                    context: StoryNotificationContext.from(notification)
+                ))
+            }
+
+        case .friendNewStory, .friendNewMood:
+            if let postId = notification.context?.postId ?? data?.postId {
+                router.push(.storyNotificationTarget(
+                    storyId: postId,
+                    intent: .view,
                     context: StoryNotificationContext.from(notification)
                 ))
             }
@@ -308,12 +326,12 @@ extension iPadRootView {
                 navigateToConversationById(conversationId)
             }
 
-        case .postLike, .legacyPostLike, .postRepost:
+        case .postLike, .legacyPostLike, .postRepost, .friendNewPost:
             if let postId = payload.postId, !postId.isEmpty {
                 rightPanelRoute = .postDetail(postId)
             }
 
-        case .postComment, .legacyPostComment, .commentLike, .commentReply:
+        case .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction:
             if let postId = payload.postId, !postId.isEmpty {
                 if isStoryPost(postId: postId, postType: payload.postType) {
                     router.push(.storyNotificationTarget(
@@ -331,6 +349,24 @@ extension iPadRootView {
                 router.push(.storyNotificationTarget(
                     storyId: postId,
                     intent: .reactions,
+                    context: makeStoryContext(from: payload)
+                ))
+            }
+
+        case .storyNewComment, .friendStoryComment, .storyThreadReply:
+            if let postId = payload.postId, !postId.isEmpty {
+                router.push(.storyNotificationTarget(
+                    storyId: postId,
+                    intent: .comments,
+                    context: makeStoryContext(from: payload)
+                ))
+            }
+
+        case .friendNewStory, .friendNewMood:
+            if let postId = payload.postId, !postId.isEmpty {
+                router.push(.storyNotificationTarget(
+                    storyId: postId,
+                    intent: .view,
                     context: makeStoryContext(from: payload)
                 ))
             }

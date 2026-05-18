@@ -5,7 +5,7 @@ import MeeshySDK
 
 struct ComposerBottomBand: View {
     let state: BandState
-    @Bindable var viewModel: StoryComposerViewModel
+    @ObservedObject var viewModel: StoryComposerViewModel
 
     @Binding var drawingCanvas: PKCanvasView
     @Binding var drawingTool: DrawingTool
@@ -17,8 +17,6 @@ struct ComposerBottomBand: View {
     let onTapTile: (StoryToolMode) -> Void
     let onBackFromToolPanel: () -> Void
     let onCloseFormatPanel: () -> Void
-    let onOpenMediaCrop: (String) -> Void
-    let onOpenFilterForElement: (String) -> Void
     var onEditMedia: ((String) -> Void)? = nil
     var onEditText: ((String) -> Void)? = nil
     var onDeleteText: ((String) -> Void)? = nil
@@ -48,7 +46,7 @@ struct ComposerBottomBand: View {
 
     /// Binding pour un `StoryTextObject` identifié, dérivée à la volée de
     /// `viewModel.currentEffects.textObjects`. Le setter remplace l'élément
-    /// dans le tableau, ce qui propage aux observateurs `@Bindable` du modèle
+    /// dans le tableau, ce qui propage aux observateurs `@ObservedObject` du modèle
     /// (canvas, slideStrip, badges) et déclenche la re-sérialisation slide
     /// via le pipeline `granularCanvasSync`.
     private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {
@@ -134,14 +132,11 @@ struct ComposerBottomBand: View {
                         Color.clear
                             .onAppear { onCloseFormatPanel() }
                     }
-                case .formatPanel(.media, let elementId):
-                    ComposerMediaFormatBand(
-                        elementId: elementId,
-                        viewModel: viewModel,
-                        onDone: onCloseFormatPanel,
-                        onOpenCropEditor: onOpenMediaCrop,
-                        onOpenFilterPicker: onOpenFilterForElement
-                    )
+                case .formatPanel(.media, _):
+                    // Panneau de contrôles média retiré : l'édition d'un média
+                    // passe par l'éditeur d'image plein écran (ouvert au tap
+                    // sur le média). Cet état n'est plus produit.
+                    EmptyView()
                 }
             }
             .id(stateKey)

@@ -94,6 +94,31 @@ function validatePagination(
   return { offsetNum, limitNum };
 }
 
+type CommunityWithCount = {
+  _count: { members: number; Conversation: number };
+  members?: unknown;
+  [key: string]: unknown;
+};
+
+/**
+ * Flatten a Prisma community's `_count` aggregate into the flat
+ * `memberCount` / `conversationCount` fields declared by `communitySchema`.
+ *
+ * Every route that returns a community MUST call this before `reply.send`:
+ * Fastify `fast-json-stringify` serialises strictly against the response
+ * schema and silently strips the undeclared raw `_count` object — without
+ * the flatten the client always reads 0. `members` is dropped here too (it
+ * is not in `communitySchema` and is stripped anyway).
+ */
+function flattenCommunityCounts(community: CommunityWithCount) {
+  const { _count, members, ...rest } = community;
+  return {
+    ...rest,
+    memberCount: _count.members,
+    conversationCount: _count.Conversation
+  };
+}
+
 /**
  * Enregistre les routes de gestion des communautes.
  * @param fastify Instance Fastify injectee par le serveur
@@ -305,7 +330,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        data: communities,
+        data: communities.map(flattenCommunityCounts),
         pagination: {
           total: totalCount,
           limit: limitNum,
@@ -740,7 +765,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        data: community
+        data: flattenCommunityCounts(community)
       });
     } catch (error) {
       console.error('Error fetching community:', error);
@@ -861,7 +886,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
       reply.status(201).send({
         success: true,
-        data: community
+        data: flattenCommunityCounts(community)
       });
     } catch (error) {
       console.error('Error creating community:', error);
@@ -1586,7 +1611,7 @@ export async function communityRoutes(fastify: FastifyInstance) {
 
       reply.send({
         success: true,
-        data: updatedCommunity
+        data: flattenCommunityCounts(updatedCommunity)
       });
     } catch (error) {
       console.error('Error updating community:', error);

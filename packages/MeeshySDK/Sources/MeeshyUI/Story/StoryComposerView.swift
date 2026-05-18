@@ -74,7 +74,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Single source of truth
 
-    @State private var viewModel = StoryComposerViewModel()
+    @StateObject private var viewModel = StoryComposerViewModel()
 
     // MARK: - System environment
 
@@ -207,6 +207,13 @@ public struct StoryComposerView: View {
     @State private var openingEffect: StoryTransitionEffect?
     @State private var closingEffect: StoryTransitionEffect?
 
+    // MARK: - Keyboard observation + canvas shift
+
+    @State private var keyboardHeight: CGFloat = 0
+    @State private var canvasEditShift: CGFloat = 0
+    /// Frame naturelle (non décalée) du canvas, mesurée hors `.offset`.
+    @State private var canvasNaturalFrame: CGRect = .zero
+
     @Environment(\.theme) private var theme
 
     // MARK: - Callbacks (public API preserved)
@@ -250,7 +257,7 @@ public struct StoryComposerView: View {
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {
-        self._viewModel = State(wrappedValue: viewModel)
+        self._viewModel = StateObject(wrappedValue: viewModel)
         self.onPublishSlide = onPublishSlide
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPreview = onPreview
@@ -268,7 +275,8 @@ public struct StoryComposerView: View {
             // doesn't time out on this body's full modifier chain.
             canvasComposerLayer
 
-            // Top bar — auto-hides during canvas zoom to reveal canvas controls
+            // Top bar — auto-hides during canvas zoom to reveal canvas controls.
+            // Hidden (non-interactive) while the floating text editor is open.
             VStack(spacing: 0) {
                 if showTopBar {
                     topBar
@@ -277,6 +285,8 @@ public struct StoryComposerView: View {
                 Spacer()
             }
             .animation(.spring(response: 0.3, dampingFraction: 0.85), value: showTopBar)
+            .opacity(viewModel.textEditingMode == .inactive ? 1 : 0)
+            .allowsHitTesting(viewModel.textEditingMode == .inactive)
 
             // Bottom: toolbar + active panel.
             // When the composer is empty (no content + no tool selected) we
@@ -284,9 +294,20 @@ public struct StoryComposerView: View {
             // rectangular tiles in a horizontal carousel taking the bottom
             // half of the screen. The compact toolbar comes back as soon as
             // a tool is selected OR a slide has any content.
+            // Hidden (non-interactive) while the floating text editor is open.
             bottomRegion
+                .opacity(viewModel.textEditingMode == .inactive ? 1 : 0)
+                .allowsHitTesting(viewModel.textEditingMode == .inactive)
+
+            // Floating text edit overlay — sits above every composer control.
+            // Empty view when `textEditingMode == .inactive`.
+            StoryTextEditToolbar(viewModel: viewModel)
+                .padding(.bottom, keyboardHeight)
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.85),
+                   value: viewModel.textEditingMode)
         .statusBarHidden()
+        .ignoresSafeArea(.keyboard)
         .onAppear {
             viewModel.startMemoryObserver()
             viewModel.loadCurrentSlideIntoTimeline()
@@ -303,6 +324,9 @@ public struct StoryComposerView: View {
             viewModel.loadCurrentSlideIntoTimeline()
             bandStateMachine.reset()
             areFabsVisible = true
+            // A text edit overlay open on the previous slide references an
+            // element that does not exist on the new one — close it.
+            viewModel.exitTextEditingMode()
         }
         .onDisappear {
             StoryMediaCoordinator.shared.deactivate()
@@ -320,6 +344,19 @@ public struct StoryComposerView: View {
         // each toolbar mutation. Five separate `.onChange` modifiers tipped
         // the type-checker over the time-out threshold, so we collapse them
         // into a single extension modifier to maintain performance in O(1).
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIResponder.keyboardWillShowNotification)) { note in
+            let frame = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey]
+                as? NSValue)?.cgRectValue ?? .zero
+            keyboardHeight = frame.height
+            recomputeCanvasShift()
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIResponder.keyboardWillHideNotification)) { _ in
+            keyboardHeight = 0
+            canvasEditShift = 0
+        }
+        .onChange(of: viewModel.textEditingMode) { _, _ in recomputeCanvasShift() }
         .granularCanvasSync(
             filter: selectedFilter?.rawValue,
             hasImage: selectedImage != nil,
@@ -512,11 +549,7 @@ public struct StoryComposerView: View {
                     fgMediaItem: $fgMediaItem,
                     showAudioDocumentPicker: $showAudioDocumentPicker,
                     showVoiceRecorderSheet: $showVoiceRecorderSheet,
-                    onOpenMediaCrop: { id in openMediaEditor(elementId: id) },
-                    onOpenFilterForElement: { id in
-                        viewModel.selectedElementId = id
-                        viewModel.activeTool = .filters
-                    }
+                    onOpenMediaCrop: { id in openMediaEditor(elementId: id) }
                 )
             }
         }
@@ -931,13 +964,17 @@ public struct StoryComposerView: View {
                 // viewModel.addText() itself spawns a fresh text + sets
                 // selectedElementId + sets activeTool = .text, so calling
                 // selectTool(.text) before it would toggle activeTool off
-                // when addText then re-sets it back — and the @Observable
+                // when addText then re-sets it back — and the @Published
                 // re-render race could leave activeTool nil at the end.
                 // Adopt the simpler invariant : addText is the sole entry
                 // point for the .text tool when the slide has no text yet.
                 if tool == .text,
                    viewModel.currentEffects.textObjects.isEmpty {
-                    _ = viewModel.addText()
+                    // Create the text and jump straight into the floating
+                    // editor so the user can type immediately.
+                    if let newText = viewModel.addText() {
+                        viewModel.enterTextEditingMode(textId: newText.id)
+                    }
                 } else {
                     viewModel.selectTool(tool)
                 }
@@ -1023,6 +1060,17 @@ public struct StoryComposerView: View {
             .overlay { mediaLoadingOverlay }
             .overlay(alignment: .topTrailing) { canvasZoomResetButton }
             .ignoresSafeArea()
+            .background(
+                GeometryReader { proxy in
+                    Color.clear
+                        .onAppear { canvasNaturalFrame = proxy.frame(in: .global) }
+                        .onChange(of: proxy.frame(in: .global)) { _, f in
+                            canvasNaturalFrame = f
+                        }
+                }
+            )
+            .offset(y: -canvasEditShift)
+            .animation(.spring(response: 0.32, dampingFraction: 0.85), value: canvasEditShift)
     }
 
     @ViewBuilder
@@ -1030,19 +1078,21 @@ public struct StoryComposerView: View {
         StoryComposerCanvasView(
             slide: $viewModel.currentSlide,
             onItemTapped: { id, kind in
-                // Tap simple = ouverture du format panel pour TOUT type d'élément.
-                // Reproduit la sémantique « toucher = révéler les contrôles »
-                // demandée pour les textes et déjà acquise pour les médias.
-                // Le double-tap reste réservé à l'édition avancée (cropper /
-                // video editor) ; sur un texte il ouvre simplement le même
-                // panel — c'est volontaire et idempotent.
+                // Tap simple = sélection. Le canvas a déjà ramené l'élément
+                // touché au premier plan. Le double-tap est réservé à
+                // l'édition dédiée (overlay texte / éditeur d'image).
                 HapticFeedback.light()
                 viewModel.selectedElementId = id
                 switch kind {
                 case .text:
-                    bandStateMachine.openFormatPanel(.text, id: id)
+                    // Tap on a text → open the floating text edit overlay.
+                    viewModel.enterTextEditingMode(textId: id)
                 case .media:
-                    bandStateMachine.openFormatPanel(.media, id: id)
+                    // Tap simple sur un média : sélection seule. Le canvas
+                    // l'a remonté au premier plan et `selectedElementId` est
+                    // posé ci-dessus. L'éditeur d'image plein écran s'ouvre
+                    // au double-tap.
+                    break
                 case .sticker:
                     break
                 }
@@ -1052,8 +1102,9 @@ public struct StoryComposerView: View {
                 viewModel.selectedElementId = id
                 switch kind {
                 case .text:
-                    // Open inline text editing
-                    bandStateMachine.openFormatPanel(.text, id: id)
+                    // Double-tap on a text behaves like a single tap —
+                    // opens the floating text edit overlay (idempotent).
+                    viewModel.enterTextEditingMode(textId: id)
                 case .media:
                     // Open dedicated full-screen media editor (image crop / video editor)
                     openMediaEditor(elementId: id)
@@ -1075,6 +1126,17 @@ public struct StoryComposerView: View {
                         viewModel.loadedVideoURLs[newId] = url
                     }
                 }
+            },
+            editingTextId: viewModel.textEditingMode.activeTextId,
+            onInlineTextChanged: { id, str in
+                guard let i = viewModel.currentEffects.textObjects.firstIndex(where: { $0.id == id })
+                else { return }
+                var effects = viewModel.currentEffects
+                effects.textObjects[i].text = str
+                viewModel.currentEffects = effects
+            },
+            onInlineTextEditEnded: { _ in
+                viewModel.exitTextEditingMode()
             }
         )
         .allowsHitTesting(!viewModel.isDrawingActive)
@@ -1159,6 +1221,26 @@ public struct StoryComposerView: View {
 
 
     // MARK: - Helpers
+
+    /// Décale le canvas vers le haut juste assez pour que le texte édité reste
+    /// au-dessus de (clavier + barre d'outils). Basé sur la position normalisée
+    /// `y` du modèle — pas de pont de coordonnées UIKit↔SwiftUI.
+    private func recomputeCanvasShift() {
+        guard keyboardHeight > 0,
+              let id = viewModel.textEditingMode.activeTextId,
+              let textObj = viewModel.currentEffects.textObjects.first(where: { $0.id == id }),
+              canvasNaturalFrame.height > 0 else {
+            canvasEditShift = 0
+            return
+        }
+        let toolbarHeight: CGFloat = 132   // barre bulles + marge (ajuster au visuel)
+        let margin: CGFloat = 24
+        let screenHeight = UIScreen.main.bounds.height
+        let textCenterY = canvasNaturalFrame.minY
+            + CGFloat(textObj.y) * canvasNaturalFrame.height
+        let visibleBottom = screenHeight - keyboardHeight - toolbarHeight - margin
+        canvasEditShift = max(0, textCenterY - visibleBottom)
+    }
 
     private var safeAreaBottomInset: CGFloat {
         UIApplication.shared.connectedScenes

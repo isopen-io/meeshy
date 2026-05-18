@@ -235,47 +235,6 @@ extension StoryViewerView {
         .accessibilityHidden(true)
     }
 
-    // MARK: - Gesture Overlay
-
-    func gestureOverlay(geometry: GeometryProxy) -> some View {
-        HStack(spacing: 0) {
-            // Left half — previous
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if isComposerEngaged { dismissComposer(); return }
-                    goToPrevious()
-                }
-                .accessibilityLabel("Story precedente")
-                .accessibilityHint("Toucher pour revenir a la story precedente")
-                .accessibilityAddTraits(.isButton)
-
-            // Right half — next
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if isComposerEngaged { dismissComposer(); return }
-                    goToNext()
-                }
-                .accessibilityLabel("Story suivante")
-                .accessibilityHint("Toucher pour passer a la story suivante")
-                .accessibilityAddTraits(.isButton)
-        }
-        // Exclude the bottom composer zone from tap targets
-        .padding(.bottom, 120 + geometry.safeAreaInsets.bottom)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.2)
-                .onChanged { _ in
-                    guard !isComposerEngaged else { return }
-                    pauseTimer()
-                }
-                .onEnded { _ in
-                    guard !isComposerEngaged else { return }
-                    resumeTimer()
-                }
-        )
-    }
-
     // MARK: - Unified Drag Gesture (horizontal = groups, vertical = dismiss)
 
     var unifiedDragGesture: some Gesture {
@@ -369,7 +328,7 @@ extension StoryViewerView {
 
     // MARK: - Navigation
 
-    private func goToNext() {
+    func goToNext() {
         guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
         HapticFeedback.light()
         guard let group = currentGroup else { return }
@@ -398,7 +357,7 @@ extension StoryViewerView {
         }
     }
 
-    private func goToPrevious() {
+    func goToPrevious() {
         guard !isDismissing && !isTransitioning && !isComposerEngaged else { return }
         HapticFeedback.light()
 
@@ -570,6 +529,7 @@ extension StoryViewerView {
     func startTimer() {
         timerCancellable?.cancel()
         progress = 0
+        isContentReady = false
         hasFiredFadeOut = false
         showCommentsOverlay = false
         replyingToStoryComment = nil
@@ -591,15 +551,24 @@ extension StoryViewerView {
         //     visually advance by at least 1/300 (≈1 pixel on a 300pt-wide
         //     viewer). On a 5s story that's ~60 commits total instead of ~165
         //     timer fires — a 2.5x reduction in body re-evaluations of the
-        //     storyCard ZStack (audit E1: ~10% CPU continuous). Authority on
-        //     elapsed time stays wall-clock so a missed display frame doesn't
-        //     drift the story duration.
-        let started = CACurrentMediaTime()
+        //     storyCard ZStack (audit E1: ~10% CPU continuous).
+        //
+        // Elapsed time is a PAUSE-AWARE ACCUMULATOR rather than raw wall-clock:
+        // each frame adds its delta to `accumulated` ONLY while the timer is not
+        // paused AND the slide's real media has loaded (`isContentReady`). This
+        // gates the progress bar on content readiness (it stays at 0 until the
+        // canvas signals `onContentReady`) and fixes the legacy pause-jump bug
+        // where wall-clock kept running behind a sheet/composer/drag pause.
+        let accumulated = StoryProgressDisplayLinkProxy.MutableDouble(0)
+        let lastFrame = StoryProgressDisplayLinkProxy.MutableDouble(CACurrentMediaTime())
         let lastCommitted = StoryProgressDisplayLinkProxy.MutableDouble(0)
         let proxy = StoryProgressDisplayLinkProxy { [self] in
-            guard !shouldPauseTimer else { return }
-            let elapsed = CACurrentMediaTime() - started
-            let raw = min(1.0, CGFloat(elapsed / duration))
+            let now = CACurrentMediaTime()
+            let delta = now - lastFrame.value
+            lastFrame.value = now
+            guard !shouldPauseTimer, isContentReady else { return }
+            accumulated.value += delta
+            let raw = min(1.0, CGFloat(accumulated.value / duration))
             if abs(raw - CGFloat(lastCommitted.value)) >= 1.0 / 300.0 || raw >= 1.0 {
                 lastCommitted.value = Double(raw)
                 progress = raw
@@ -1174,17 +1143,40 @@ struct StoryViewersSheet: View {
 
 // MARK: - Story Comments Overlay (live-chat style with replies)
 
-extension StoryViewerView {
+/// Full-featured comment overlay: occupies bottom half of screen with
+/// infinite scroll, reply threading (simple indentation), inline
+/// UniversalComposerBar, and timer pause. All other controls except
+/// the composer are hidden.
+///
+/// Extracted from `StoryViewerView.storyCommentsOverlay` (formerly an
+/// `AnyView`) so the deeply-nested comment panel becomes its own
+/// type-metadata unit instead of inflating the viewer's opaque type.
+struct StoryCommentsOverlayView: View {
+    let storyComments: [FeedComment]
+    let storyCommentCount: Int
+    let storyCommentRepliesMap: [String: [FeedComment]]
+    let storyCommentExpandedThreads: Set<String>
+    let storyCommentLoadingReplies: Set<String>
+    let isLoadingComments: Bool
+    let userLang: String
+    let composerAccentColor: String
 
-    /// Full-featured comment overlay: occupies bottom half of screen with
-    /// infinite scroll, reply threading (simple indentation), inline
-    /// UniversalComposerBar, and timer pause. All other controls except
-    /// the composer are hidden.
-    var storyCommentsOverlay: some View {
-        let userLang = AuthManager.shared.currentUser?.preferredContentLanguages.first ?? "fr"
-        let topLevelComments = storyComments.filter { $0.parentId == nil }
+    @Binding var showCommentsOverlay: Bool
+    @Binding var replyingToStoryComment: FeedComment?
+    @Binding var composerLanguage: String
+    @Binding var commentEffects: MessageEffects
+    @Binding var commentBlurEnabled: Bool
 
-        return VStack(spacing: 0) {
+    let makeStoryCommentRow: (FeedComment, String) -> StoryCommentRowView
+    let toggleStoryCommentThread: (String) async -> Void
+    let sendComment: (_ text: String, _ effectFlags: Int?, _ parentId: String?) -> Void
+
+    private var topLevelComments: [FeedComment] {
+        storyComments.filter { $0.parentId == nil }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
             // Tap-to-dismiss upper half
             Color.black.opacity(0.3)
                 .contentShape(Rectangle())
@@ -1230,14 +1222,14 @@ extension StoryViewerView {
                     ScrollView(.vertical, showsIndicators: false) {
                         LazyVStack(alignment: .leading, spacing: 6) {
                             ForEach(topLevelComments) { comment in
-                                makeStoryCommentRow(comment, userLang: userLang)
+                                makeStoryCommentRow(comment, userLang)
                                     .id(comment.id)
 
                                 let replies = storyCommentRepliesMap[comment.id] ?? []
                                 let autoPreview = Array(replies.prefix(2))
                                 if !autoPreview.isEmpty && !storyCommentExpandedThreads.contains(comment.id) {
                                     ForEach(autoPreview) { reply in
-                                        makeStoryCommentRow(reply, userLang: userLang)
+                                        makeStoryCommentRow(reply, userLang)
                                             .padding(.leading, 32)
                                             .id(reply.id)
                                     }
@@ -1275,7 +1267,7 @@ extension StoryViewerView {
                                     }
 
                                     ForEach(replies) { reply in
-                                        makeStoryCommentRow(reply, userLang: userLang)
+                                        makeStoryCommentRow(reply, userLang)
                                             .padding(.leading, 32)
                                             .id(reply.id)
                                     }
@@ -1352,7 +1344,7 @@ extension StoryViewerView {
         return UniversalComposerBar(
             style: .dark,
             mode: .comment,
-            accentColor: replyContext?.authorColor ?? currentGroup?.avatarColor ?? "6366F1",
+            accentColor: replyContext?.authorColor ?? composerAccentColor,
             selectedLanguage: composerLanguage,
             onLanguageChange: { composerLanguage = $0 },
             onSend: { text in
@@ -1364,7 +1356,7 @@ extension StoryViewerView {
                 let effectFlags = flags > 0 ? Int(flags) : nil
                 let parentId = replyingToStoryComment?.id
                 replyingToStoryComment = nil
-                sendComment(text: text, effectFlags: effectFlags, parentId: parentId)
+                sendComment(text, effectFlags, parentId)
             },
             replyBanner: replyContext.map { reply in
                 AnyView(
@@ -1419,6 +1411,9 @@ extension StoryViewerView {
         .padding(.horizontal, 8)
         .padding(.bottom, 4)
     }
+}
+
+extension StoryViewerView {
 
     // MARK: - Story Comment Thread Management
 
@@ -1462,13 +1457,13 @@ extension StoryViewerView {
         }
     }
 
-    @ViewBuilder
-    func makeStoryCommentRow(_ comment: FeedComment, userLang: String) -> some View {
+    func makeStoryCommentRow(_ comment: FeedComment, userLang: String) -> StoryCommentRowView {
         StoryCommentRowView(
             comment: comment,
             userLang: userLang,
             isLiked: storyCommentLikedIds.contains(comment.id),
             likeCount: max(0, comment.likes + (storyCommentLikeDelta[comment.id] ?? 0)),
+            isInFlight: heartInFlightIds.contains(comment.id),
             onReply: {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     replyingToStoryComment = comment
@@ -1485,9 +1480,13 @@ extension StoryViewerView {
     // MARK: - Story Comment Reactions
 
     func toggleStoryCommentLike(_ comment: FeedComment) async {
-        guard let story = currentStory else { return }
         let id = comment.id
+        guard !heartInFlightIds.contains(id) else { return }
+        heartInFlightIds.insert(id)
+        defer { heartInFlightIds.remove(id) }
+
         let wasLiked = storyCommentLikedIds.contains(id)
+        let postId = currentStory?.id ?? ""
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.6)) {
             if wasLiked {
@@ -1501,9 +1500,9 @@ extension StoryViewerView {
 
         do {
             if wasLiked {
-                try await PostService.shared.unlikeComment(postId: story.id, commentId: id)
+                _ = try await SocialSocketManager.shared.removeCommentReaction(commentId: id, postId: postId, emoji: StoryViewerView.heartEmoji)
             } else {
-                try await PostService.shared.likeComment(postId: story.id, commentId: id)
+                _ = try await SocialSocketManager.shared.addCommentReaction(commentId: id, postId: postId, emoji: StoryViewerView.heartEmoji)
             }
         } catch {
             withAnimation {
@@ -1520,49 +1519,75 @@ extension StoryViewerView {
 
     // MARK: - Load Comments
 
+    static func computeLikedIds(from comments: [APIPostComment]) -> Set<String> {
+        return Set(
+            comments
+                .filter { $0.currentUserReactions?.contains(StoryViewerView.heartEmoji) == true }
+                .map { $0.id }
+        )
+    }
+
     func loadStoryComments() {
         guard let story = currentStory, !isLoadingComments else { return }
-        isLoadingComments = true
-        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        Task { await loadStoryCommentsAsync(story: story) }
+    }
 
-        Task {
-            do {
-                let response = try await PostService.shared.getComments(postId: story.id, limit: 50)
-                if response.success {
-                    let comments = response.data.map { c -> FeedComment in
-                        let translated: String? = {
-                            guard let dict = c.translations else { return nil }
-                            for lang in langs {
-                                if let entry = dict[lang] { return entry.text }
-                            }
-                            return nil
-                        }()
-                        return FeedComment(
-                            id: c.id, author: c.author.name, authorId: c.author.id,
-                            authorAvatarURL: c.author.avatar,
-                            content: c.content, timestamp: c.createdAt,
-                            likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
-                            parentId: c.parentId,
-                            originalLanguage: c.originalLanguage, translatedContent: translated
-                        )
-                    }
-                    storyComments = comments
-                    let topAll = comments.filter { $0.parentId == nil }
-                    let totalReplies = topAll.reduce(0) { $0 + $1.replies }
-                    storyCommentCount = topAll.count + totalReplies
+    private func loadStoryCommentsAsync(story: StoryItem) async {
+        let cacheKey = "post-\(story.id)"
 
-                    // Auto-fetch replies for top-level comments that have replies
-                    // Sequential to avoid burst of concurrent requests
-                    let topLevel = topAll.filter { $0.replies > 0 }
-                    Task {
-                        for comment in topLevel.prefix(5) {
-                            await loadStoryCommentReplies(commentId: comment.id)
-                        }
-                    }
-                }
-            } catch {}
-            isLoadingComments = false
+        let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+        switch cached {
+        case .fresh(let comments, _):
+            storyComments = comments
+            let topAll = comments.filter { $0.parentId == nil }
+            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
+            return
+        case .stale(let comments, _):
+            storyComments = comments
+            let topAll = comments.filter { $0.parentId == nil }
+            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
+        case .expired, .empty:
+            isLoadingComments = true
         }
+
+        await fetchStoryCommentsFromNetwork(story: story, cacheKey: cacheKey)
+        isLoadingComments = false
+    }
+
+    private func fetchStoryCommentsFromNetwork(story: StoryItem, cacheKey: String) async {
+        let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+        do {
+            let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
+            let comments = response.data.map { c -> FeedComment in
+                let translated: String? = {
+                    guard let dict = c.translations else { return nil }
+                    for lang in langs {
+                        if let entry = dict[lang] { return entry.text }
+                    }
+                    return nil
+                }()
+                return FeedComment(
+                    id: c.id, author: c.author.name, authorId: c.author.id,
+                    authorAvatarURL: c.author.avatar,
+                    content: c.content, timestamp: c.createdAt,
+                    likes: c.likeCount ?? 0, replies: c.replyCount ?? 0,
+                    parentId: c.parentId,
+                    originalLanguage: c.originalLanguage, translatedContent: translated
+                )
+            }
+            storyComments = comments
+            storyCommentLikedIds = Self.computeLikedIds(from: response.data)
+            let topAll = comments.filter { $0.parentId == nil }
+            storyCommentCount = topAll.count + topAll.reduce(0) { $0 + $1.replies }
+            try? await CacheCoordinator.shared.comments.save(comments, for: cacheKey)
+
+            let topLevel = topAll.filter { $0.replies > 0 }
+            Task {
+                for comment in topLevel.prefix(5) {
+                    await loadStoryCommentReplies(commentId: comment.id)
+                }
+            }
+        } catch {}
     }
 
     func loadStoryCommentCount() {
@@ -1575,15 +1600,28 @@ extension StoryViewerView {
         storyCommentCount = story.commentCount
 
         Task {
+            let cacheKey = "post-\(story.id)"
+            let cached = await CacheCoordinator.shared.comments.load(for: cacheKey)
+            switch cached {
+            case .fresh(let comments, _):
+                let top = comments.filter { $0.parentId == nil }
+                let total = top.count + top.reduce(0) { $0 + $1.replies }
+                if total != storyCommentCount { storyCommentCount = total }
+                return
+            case .stale(let comments, _):
+                let top = comments.filter { $0.parentId == nil }
+                let total = top.count + top.reduce(0) { $0 + $1.replies }
+                if total != storyCommentCount { storyCommentCount = total }
+            case .expired, .empty:
+                break
+            }
             do {
-                let response = try await PostService.shared.getComments(postId: story.id, limit: 50)
+                let response = try await PostService.shared.getComments(postId: story.id, cursor: nil, limit: 50)
                 if response.success {
                     let top = response.data.filter { $0.parentId == nil }
                     let totalReplies = top.reduce(0) { $0 + ($1.replyCount ?? 0) }
                     let total = top.count + totalReplies
-                    if total != storyCommentCount {
-                        storyCommentCount = total
-                    }
+                    if total != storyCommentCount { storyCommentCount = total }
                 }
             } catch {}
         }
@@ -1597,14 +1635,25 @@ extension StoryViewerView {
 // - Header pair of language flags lets the viewer toggle between original and
 //   prisme-translated content without leaving the overlay.
 // - Heart reaction + Reply CTAs sit below the text in their own action row.
-struct StoryCommentRowView: View {
+struct StoryCommentRowView: View, Equatable {
     let comment: FeedComment
     let userLang: String
     let isLiked: Bool
     let likeCount: Int
+    var isInFlight: Bool = false
     let onReply: () -> Void
     let onToggleLike: () -> Void
 
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.comment.id == rhs.comment.id &&
+        lhs.isLiked == rhs.isLiked &&
+        lhs.likeCount == rhs.likeCount &&
+        lhs.isInFlight == rhs.isInFlight &&
+        lhs.comment.content == rhs.comment.content &&
+        lhs.comment.translatedContent == rhs.comment.translatedContent
+    }
+
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var showOriginal: Bool = false
 
     private var hasTranslation: Bool {
@@ -1746,7 +1795,11 @@ struct StoryCommentRowView: View {
 
     private var actionRow: some View {
         HStack(spacing: 16) {
-            Button(action: onToggleLike) {
+            Button {
+                withAnimation(reduceMotion ? nil : .spring(response: 0.3, dampingFraction: 0.6)) {
+                    onToggleLike()
+                }
+            } label: {
                 HStack(spacing: 3) {
                     Image(systemName: isLiked ? "heart.fill" : "heart")
                         .font(.system(size: 11, weight: .semibold))
@@ -1761,6 +1814,8 @@ struct StoryCommentRowView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .disabled(isInFlight)
+            .frame(minHeight: 44)
 
             Button(action: onReply) {
                 HStack(spacing: 3) {
@@ -1773,9 +1828,134 @@ struct StoryCommentRowView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .frame(minHeight: 44)
 
             Spacer()
         }
         .padding(.top, 2)
+    }
+}
+
+// MARK: - Story Action Button
+
+/// Single circular action button used in the story viewer's right sidebar.
+/// Extracted from `StoryViewerView.storyActionButton(...)` so the sidebar
+/// no longer inlines this subtree ~9 times into one opaque type.
+struct StoryActionButton: View {
+    let icon: String
+    let label: String
+    var isActive: Bool = false
+    var activeColor: Color = .white
+    var activeGlow: Color? = nil
+    let action: () -> Void
+
+    var body: some View {
+        Button {
+            action()
+        } label: {
+            VStack(spacing: 4) {
+                ZStack {
+                    // Outer glow when active
+                    if isActive, let glow = activeGlow {
+                        Circle()
+                            .fill(glow.opacity(0.2))
+                            .frame(width: 52, height: 52)
+                            .blur(radius: 4)
+                    }
+
+                    Circle()
+                        .fill(isActive ? activeColor.opacity(0.15) : Color.white.opacity(0.08))
+                        .overlay(
+                            Circle()
+                                .stroke(
+                                    isActive ?
+                                        AnyShapeStyle(activeColor.opacity(0.4)) :
+                                        AnyShapeStyle(Color.white.opacity(0.15)),
+                                    lineWidth: isActive ? 1 : 0.5
+                                )
+                        )
+                        .frame(width: 46, height: 46)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(isActive ? activeColor : .white)
+                        .adaptiveSymbolBounce(value: isActive)
+                }
+                .shadow(
+                    color: isActive ? (activeGlow ?? activeColor).opacity(0.3) : .black.opacity(0.2),
+                    radius: isActive ? 8 : 4,
+                    y: isActive ? 0 : 2
+                )
+
+                Text(label)
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(.white.opacity(isActive ? 0.95 : 0.65))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+            .frame(width: 56)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(label)
+        .accessibilityHint(isActive ? "\(label) actif, toucher pour desactiver" : "Toucher pour \(label.lowercased())")
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+}
+
+// MARK: - Story Progress Bars
+
+/// Segmented progress indicator for the story viewer's current group.
+/// Extracted from `StoryViewerView.progressBars` so the header layer no
+/// longer inlines a `ForEach` / `GeometryReader` subtree into the viewer's
+/// opaque type.
+struct StoryProgressBarsView: View {
+    let group: StoryGroup?
+    let currentIndex: Int
+    let progress: CGFloat
+
+    var body: some View {
+        HStack(spacing: 3) {
+            if let group {
+                ForEach(Array(group.stories.enumerated()), id: \.element.id) { index, _ in
+                    GeometryReader { barGeo in
+                        let w = width(for: index, totalWidth: barGeo.size.width)
+                        ZStack(alignment: .leading) {
+                            Capsule()
+                                .fill(Color.white.opacity(0.2))
+                            Capsule()
+                                .fill(
+                                    index == currentIndex ?
+                                    AnyShapeStyle(LinearGradient(
+                                        colors: [MeeshyColors.indigo500, MeeshyColors.error, MeeshyColors.indigo400],
+                                        startPoint: .leading,
+                                        endPoint: .trailing
+                                    )) :
+                                    AnyShapeStyle(Color.white)
+                                )
+                                .frame(width: w)
+                                .shadow(
+                                    color: index == currentIndex ? MeeshyColors.indigo500.opacity(0.6) : .clear,
+                                    radius: 4, y: 0
+                                )
+                        }
+                    }
+                    .frame(height: 3)
+                    .accessibilityHidden(true)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Story \(currentIndex + 1) sur \(group?.stories.count ?? 0)")
+        .accessibilityValue("\(Int(progress * 100)) pourcent")
+    }
+
+    private func width(for index: Int, totalWidth: CGFloat) -> CGFloat {
+        if index < currentIndex {
+            return totalWidth
+        } else if index == currentIndex {
+            return totalWidth * progress
+        } else {
+            return 0
+        }
     }
 }

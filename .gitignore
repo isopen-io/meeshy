@@ -215,6 +215,10 @@ xcuserdata/
 # Build artifacts
 DerivedData/
 apps/ios/Build/
+# Xcode index / module / compilation caches dropped next to the
+# workspace-relative DerivedData (apps/ios/Build/). Never committed.
+apps/ios/*.noindex/
+apps/ios/info.plist
 *.moved-aside
 *.hmap
 *.ipa

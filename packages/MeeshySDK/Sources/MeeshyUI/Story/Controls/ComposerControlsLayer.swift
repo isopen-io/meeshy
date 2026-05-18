@@ -6,7 +6,7 @@ import MeeshySDK
 
 public struct ComposerControlsLayer: View {
 
-    @Bindable var viewModel: StoryComposerViewModel
+    @ObservedObject var viewModel: StoryComposerViewModel
 
     @Binding var bandStateMachine: BandStateMachine
     @Binding var areFabsVisible: Bool
@@ -18,11 +18,10 @@ public struct ComposerControlsLayer: View {
     @Binding var showAudioDocumentPicker: Bool
     @Binding var showVoiceRecorderSheet: Bool
 
-    /// Forwarded to the parent for handling element-scoped sheets/editors.
+    /// Ouvre l'éditeur d'image plein écran pour un média (recadrage/filtres/
+    /// ajustements). Seul point d'entrée d'édition média — il n'y a plus de
+    /// panneau de contrôles média redondant dans le composer.
     let onOpenMediaCrop: (String) -> Void
-    let onOpenFilterForElement: (String) -> Void
-
-
 
     public init(
         viewModel: StoryComposerViewModel,
@@ -34,8 +33,7 @@ public struct ComposerControlsLayer: View {
         fgMediaItem: Binding<PhotosPickerItem?>,
         showAudioDocumentPicker: Binding<Bool>,
         showVoiceRecorderSheet: Binding<Bool>,
-        onOpenMediaCrop: @escaping (String) -> Void,
-        onOpenFilterForElement: @escaping (String) -> Void
+        onOpenMediaCrop: @escaping (String) -> Void
     ) {
         self.viewModel = viewModel
         self._bandStateMachine = bandStateMachine
@@ -47,7 +45,6 @@ public struct ComposerControlsLayer: View {
         self._showAudioDocumentPicker = showAudioDocumentPicker
         self._showVoiceRecorderSheet = showVoiceRecorderSheet
         self.onOpenMediaCrop = onOpenMediaCrop
-        self.onOpenFilterForElement = onOpenFilterForElement
     }
 
     /// FABs are visible when the band is hidden; when a band panel is open,
@@ -104,21 +101,17 @@ public struct ComposerControlsLayer: View {
                         bandStateMachine.closeFormatPanel()
                         viewModel.selectedElementId = nil
                     },
-                    onOpenMediaCrop: onOpenMediaCrop,
-                    onOpenFilterForElement: { id in
-                        bandStateMachine.tapTile(.filters)
-                        onOpenFilterForElement(id)
-                    },
                     onEditMedia: { mediaId in
-                        bandStateMachine.openFormatPanel(.media, id: mediaId)
+                        // Édition d'un média depuis la liste d'outils → éditeur
+                        // d'image plein écran (plus de panneau intermédiaire).
                         viewModel.selectedElementId = mediaId
+                        onOpenMediaCrop(mediaId)
                     },
                     onEditText: { textId in
                         // Action « éditer » depuis la liste des textes :
-                        // sélectionne l'élément et bascule le band sur le
-                        // format panel — même chemin que le single-tap canvas.
-                        viewModel.selectedElementId = textId
-                        bandStateMachine.openFormatPanel(.text, id: textId)
+                        // ouvre l'overlay d'édition de texte flottant — même
+                        // chemin que le tap sur un texte du canvas.
+                        viewModel.enterTextEditingMode(textId: textId)
                     },
                     onDeleteText: { textId in
                         // Suppression d'un texte depuis la liste. Si le panel

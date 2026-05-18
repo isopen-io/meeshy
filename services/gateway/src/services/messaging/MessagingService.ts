@@ -19,6 +19,19 @@ import { enhancedLogger, performanceLogger } from '../../utils/logger-enhanced';
 
 const logger = enhancedLogger.child({ module: 'MessagingService' });
 
+/**
+ * Translation status reported in the send response. Translation is queued as
+ * a post-save side effect (off the ACK path), so the response can only ever
+ * report "pending" — the actual results arrive later via Socket.IO events.
+ */
+const PENDING_TRANSLATION_STATUS = {
+  status: 'pending' as const,
+  languagesRequested: [] as string[],
+  languagesCompleted: [] as string[],
+  languagesFailed: [] as string[],
+  estimatedCompletionTime: 1000
+};
+
 export class MessagingService {
   private validator: MessageValidator;
   private processor: MessageProcessor;
@@ -153,26 +166,31 @@ export class MessagingService {
       const isDuplicate =
         Boolean((message as { isDuplicate?: boolean }).isDuplicate);
 
+      // The client ACK must be returned the instant the message is persisted —
+      // it is what flips the sender's bubble from the pending clock to the
+      // single checkmark. Every post-save side effect (conversation bump,
+      // sender read-cursor, translation queue, stats) is therefore moved OFF
+      // the ACK path and runs in the background. Both the Socket.IO and the
+      // REST entry points funnel through `handleMessage`, so both inherit the
+      // fast ACK.
+
       if (isDuplicate) {
-        // Dedup hit: skip the post-create side effects (mark as read was
-        // already done on the first attempt, conversation was already
-        // bumped, stats were already incremented). Re-translate ONLY when
-        // the existing record has no translations attached — the
-        // translator was likely down on the first attempt and the message
-        // would otherwise stay unilingual forever.
+        // Dedup hit: the first attempt already ran the side effects (mark as
+        // read, conversation bump, stats). Re-translate ONLY when the stored
+        // record has no translations — the translator was likely down on the
+        // first attempt — and do it off the ACK path.
         const translations = (message as { translations?: unknown }).translations;
-        const needsRetranslate = this.isTranslationsEmpty(translations);
-        const translationStatus = await this.queueTranslation(
-          message,
-          originalLanguage,
-          { skip: !needsRetranslate }
-        );
+        if (this.isTranslationsEmpty(translations)) {
+          void this.queueTranslation(message, originalLanguage).catch((err) =>
+            console.error('[MessagingService] background re-translation failed:', err)
+          );
+        }
         const response = await this.createSuccessResponse(
           message,
           requestId,
           startTime,
           /* stats: pas de double-comptage sur dedup hit */ undefined,
-          translationStatus
+          PENDING_TRANSLATION_STATUS
         );
         logger.info('perf:messaging.handleMessage', {
           ...corr, step: 'messaging.handleMessage', phase: 'end',
@@ -182,46 +200,23 @@ export class MessagingService {
         return response;
       }
 
-      // 6. Mise à jour de la conversation
-      await performanceLogger.withTiming(
-        'messaging.updateConversation',
-        () => this.updateConversation(conversationId),
-        { ...corr, conversationId }
-      );
-
-      // 7. Marquer comme reçu ET lu pour l'expéditeur
-      await performanceLogger.withTiming(
-        'messaging.markAsRead',
-        () => this.readStatusService.markMessagesAsRead(
-          participant!.id,
-          conversationId,
-          message.id
-        ),
-        { ...corr, conversationId, messageId: message.id }
-      );
-
-      // 8. Queue de traduction (async)
-      const translationStatus = await performanceLogger.withTiming(
-        'messaging.queueTranslation',
-        () => this.queueTranslation(message, originalLanguage),
-        { ...corr, messageId: message.id }
-      );
-
-      // 9. Mise à jour des statistiques (async)
-      const stats = await performanceLogger.withTiming(
-        'messaging.updateStats',
-        () => this.updateStats(conversationId, originalLanguage),
-        { ...corr, conversationId }
-      );
-
-      // 10. Génération de la réponse unifiée
+      // 6. Réponse unifiée — générée immédiatement après la persistance.
       const response = await this.createSuccessResponse(
         message,
         requestId,
         startTime,
-        stats,
-        translationStatus
+        /* stats: calculées en arrière-plan */ undefined,
+        PENDING_TRANSLATION_STATUS
       );
+
+      // 7. Effets de bord post-save — exécutés en arrière-plan, JAMAIS sur le
+      //    chemin de l'ACK (cf. note ci-dessus).
+      this.runPostSaveSideEffects({
+        message,
+        conversationId,
+        senderParticipantId: participant!.id,
+        originalLanguage
+      });
 
       logger.info('perf:messaging.handleMessage', {
         ...corr, step: 'messaging.handleMessage', phase: 'end',
@@ -242,6 +237,41 @@ export class MessagingService {
         requestId
       );
     }
+  }
+
+  /**
+   * Effets de bord post-save qui ne doivent JAMAIS retarder l'ACK client :
+   * bump du timestamp de conversation, marquage du message comme lu pour son
+   * propre expéditeur, mise en file de la traduction, et mise à jour des
+   * statistiques. Chacun s'exécute indépendamment avec sa propre capture
+   * d'erreur — une défaillance n'empêche pas les autres, et aucun ne bloque
+   * la réponse qui fait passer la coche de l'expéditeur.
+   */
+  private runPostSaveSideEffects(args: {
+    message: Message;
+    conversationId: string;
+    senderParticipantId: string;
+    originalLanguage: string;
+  }): void {
+    const { message, conversationId, senderParticipantId, originalLanguage } = args;
+
+    void this.updateConversation(conversationId).catch((err) =>
+      console.error('[MessagingService] post-save updateConversation failed:', err)
+    );
+
+    void this.readStatusService
+      .markMessagesAsRead(senderParticipantId, conversationId, message.id)
+      .catch((err) =>
+        console.error('[MessagingService] post-save markMessagesAsRead failed:', err)
+      );
+
+    void this.queueTranslation(message, originalLanguage).catch((err) =>
+      console.error('[MessagingService] post-save queueTranslation failed:', err)
+    );
+
+    void this.updateStats(conversationId, originalLanguage).catch((err) =>
+      console.error('[MessagingService] post-save updateStats failed:', err)
+    );
   }
 
   /**

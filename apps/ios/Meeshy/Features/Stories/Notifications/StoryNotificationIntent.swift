@@ -2,13 +2,15 @@ import Foundation
 import MeeshySDK
 
 // MARK: - StoryIntent
-// Intent describes WHICH list (comments vs reactions) the user wants to consult
-// when tapping a story-related notification. The screen uses it to focus the
-// correct tab on the story details view.
+// Intent describes WHICH surface the user wants when tapping a story-related
+// notification: the comments list, the reactions/viewers sheet, or just the
+// story itself (`.view`, used by friend-new-content notifications where the
+// user simply wants to watch the freshly published story).
 
 public enum StoryIntent: Hashable, Codable {
     case comments
     case reactions
+    case view
 }
 
 // MARK: - StoryNotificationContext

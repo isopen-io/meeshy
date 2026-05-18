@@ -776,14 +776,14 @@ struct RootView: View {
                 navigateToConversationById(conversationId)
             }
 
-        case .postLike, .legacyPostLike, .postRepost:
+        case .postLike, .legacyPostLike, .postRepost, .friendNewPost:
             if let postId = ctx.postId, !postId.isEmpty {
                 router.push(.postDetail(postId))
             } else if let conversationId = ctx.conversationId, !conversationId.isEmpty {
                 navigateToConversationById(conversationId)
             }
 
-        case .postComment, .legacyPostComment, .commentLike, .commentReply:
+        case .postComment, .legacyPostComment, .commentLike, .commentReply, .commentReaction:
             if let postId = ctx.postId, !postId.isEmpty {
                 // Phase G — story-flavoured comments route to the
                 // notification target screen (which redirects into the
@@ -816,6 +816,24 @@ struct RootView: View {
                 router.push(.storyNotificationTarget(
                     storyId: postId,
                     intent: .reactions,
+                    context: ctx.storyContext
+                ))
+            }
+
+        case .storyNewComment, .friendStoryComment, .storyThreadReply:
+            if let postId = ctx.postId, !postId.isEmpty {
+                router.push(.storyNotificationTarget(
+                    storyId: postId,
+                    intent: .comments,
+                    context: ctx.storyContext
+                ))
+            }
+
+        case .friendNewStory, .friendNewMood:
+            if let postId = ctx.postId, !postId.isEmpty {
+                router.push(.storyNotificationTarget(
+                    storyId: postId,
+                    intent: .view,
                     context: ctx.storyContext
                 ))
             }

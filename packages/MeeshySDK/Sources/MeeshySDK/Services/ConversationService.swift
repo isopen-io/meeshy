@@ -154,23 +154,25 @@ public final class ConversationService: ConversationServiceProviding, @unchecked
         let _: APIResponse<[String: Bool]> = try await api.delete(endpoint: "/conversations/\(conversationId)")
     }
 
+    // Endpoints fire-and-forget : la reponse est ignoree (`let _`). Les trois
+    // handlers gateway ne renvoient PAS la meme forme de `data` — `/mark-read`
+    // et `/mark-unread` renvoient `{ markedCount }` / `{ unreadCount }` (Int),
+    // mais `/mark-as-received` renvoyait `{ message: String }`. Decoder un
+    // `APIResponse<[String: Int]>` strict cassait sur cette String avec
+    // `DecodingError: Type mismatch for type Int at path data.message` a
+    // chaque ouverture de conversation. `SimpleAPIResponse` n'a pas de champ
+    // `data` : il tolere n'importe quelle forme de corps, quel que soit
+    // l'endpoint et quelle que soit l'evolution future du gateway.
     public func markRead(conversationId: String) async throws {
-        // Le gateway renvoie `data: { markedCount: number }` (Int, pas String).
-        // Decoder en `[String: String]` declenchait `Type mismatch for type
-        // String at path data.markedCount` a chaque mark-read — visible dans
-        // le log du 2026-05-11 quand l'utilisateur ouvrait une conversation.
-        // Conversion vers `[String: Int]` qui matche les 3 endpoints
-        // (mark-read, mark-as-received, mark-unread) dont les handlers
-        // retournent tous `{ markedCount: number }` ou `{ markedAs: number }`.
-        let _: APIResponse<[String: Int]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-read", method: "POST")
+        let _: SimpleAPIResponse = try await api.request(endpoint: "/conversations/\(conversationId)/mark-read", method: "POST")
     }
 
     public func markAsReceived(conversationId: String) async throws {
-        let _: APIResponse<[String: Int]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-as-received", method: "POST")
+        let _: SimpleAPIResponse = try await api.request(endpoint: "/conversations/\(conversationId)/mark-as-received", method: "POST")
     }
 
     public func markUnread(conversationId: String) async throws {
-        let _: APIResponse<[String: Int]> = try await api.request(endpoint: "/conversations/\(conversationId)/mark-unread", method: "POST")
+        let _: SimpleAPIResponse = try await api.request(endpoint: "/conversations/\(conversationId)/mark-unread", method: "POST")
     }
 
     public func getParticipants(conversationId: String, limit: Int = 100, cursor: String? = nil) async throws -> PaginatedAPIResponse<[APIParticipant]> {

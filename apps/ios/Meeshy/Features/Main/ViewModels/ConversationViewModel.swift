@@ -195,16 +195,12 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Mention Autocomplete State
 
-    struct MentionCandidate: Identifiable, Equatable {
-        let id: String          // userId or username
-        let username: String
-        let displayName: String
-        let avatarURL: String?
-    }
+    @Published var mentionController: MentionComposerController = MentionComposerController(context: .conversation(id: ""))
 
-    @Published var mentionSuggestions: [MentionCandidate] = []
-    @Published var activeMentionQuery: String? = nil
-    private(set) var draftMentions: [String: MentionCandidate] = [:]
+    // MARK: - Mention Forwarding (backwards compat for ConversationView)
+
+    var mentionSuggestions: [MentionCandidate] { mentionController.suggestions }
+    var activeMentionQuery: String? { mentionController.activeQuery }
 
     // MARK: - Search State
 
@@ -500,9 +496,8 @@ class ConversationViewModel: ObservableObject {
     private let reportService: ReportServiceProviding
     private let syncEngine: ConversationSyncEngineProviding
     private let mentionService: MentionServiceProviding
-    private var mentionDebounceTask: Task<Void, Never>?
+    private let messageSocket: MessageSocketProviding
     private let decryptionActor = DecryptionActor(provider: LiveSessionProvider())
-    private static let mentionDebounceMs: UInt64 = 300_000_000
 
     private var currentUserId: String { authManager.currentUser?.id ?? "" }
     /// Public read-only accessor for the view layer (UIKit bridge needs the user id).
@@ -561,96 +556,20 @@ class ConversationViewModel: ObservableObject {
         return candidates
     }
 
-    /// Called from the composer's `onTextChange` callback.
-    /// Detects `@query` at the end of typed text (after the last `@` that has no space before content).
+    // MARK: - Mention Delegation
+
+    /// Delegates to the controller. Called from `onTextChanged`.
     func handleMentionQuery(in text: String) {
-        // Find the last @ that could start a mention (not preceded by alphanumeric)
-        guard let atRange = text.range(of: "@", options: .backwards) else {
-            clearMentionSuggestions()
-            return
-        }
-
-        let afterAt = text[atRange.upperBound...]
-        // Query with spaces is allowed — but stop if we see a newline
-        let query = String(afterAt)
-        guard !query.contains("\n") else {
-            clearMentionSuggestions()
-            return
-        }
-
-        activeMentionQuery = query
-        let queryLower = query.lowercased()
-
-        let filtered = mentionCandidates.filter { candidate in
-            queryLower.isEmpty
-                || candidate.username.lowercased().hasPrefix(queryLower)
-                || candidate.displayName.lowercased().hasPrefix(queryLower)
-        }
-
-        mentionSuggestions = filtered
-
-        mentionDebounceTask?.cancel()
-        let convId = conversationId
-        let service = mentionService
-        mentionDebounceTask = Task { [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: Self.mentionDebounceMs)
-            } catch { return }
-            guard !Task.isCancelled else { return }
-            do {
-                let apiSuggestions = try await service.suggestions(conversationId: convId, query: query)
-                guard !Task.isCancelled else { return }
-                let merged = self?.mergeAPISuggestions(apiSuggestions, localCandidates: filtered) ?? []
-                guard self?.activeMentionQuery == query else { return }
-                self?.mentionSuggestions = merged
-            } catch {
-                // API failure is non-fatal — local suggestions remain visible
-            }
-        }
-    }
-
-    private func mergeAPISuggestions(_ apiResults: [MentionSuggestion], localCandidates: [MentionCandidate]) -> [MentionCandidate] {
-        UserDisplayNameCache.shared.trackFromMentionSuggestions(apiResults)
-        var seen = Set<String>()
-        var merged: [MentionCandidate] = []
-        for s in apiResults {
-            let candidate = MentionCandidate(
-                id: s.id,
-                username: s.username,
-                displayName: s.displayName ?? s.username,
-                avatarURL: s.avatar
-            )
-            if seen.insert(s.id).inserted {
-                merged.append(candidate)
-            }
-        }
-        for c in localCandidates where !seen.contains(c.id) {
-            seen.insert(c.id)
-            merged.append(c)
-        }
-        return merged
+        mentionController.handleQuery(in: text)
     }
 
     func clearMentionSuggestions() {
-        mentionDebounceTask?.cancel()
-        mentionDebounceTask = nil
-        mentionSuggestions = []
-        activeMentionQuery = nil
+        mentionController.clearSuggestions()
     }
 
-    /// Replaces the active `@query` at the end of `text` with `@username `.
-    /// Always inserts `@username` so the server regex `/@(\w{1,30})/g` reliably matches.
-    /// `MessageTextRenderer` resolves `@username` → display name for rendering.
+    /// Delegates insertion to the controller and returns the updated text.
     func insertMention(_ candidate: MentionCandidate, into text: String) -> String {
-        let insertText = "@\(candidate.username) "
-
-        guard let atRange = text.range(of: "@", options: .backwards) else {
-            return text + insertText
-        }
-        let newText = text[..<atRange.lowerBound] + insertText
-        draftMentions[candidate.username] = candidate
-        clearMentionSuggestions()
-        return String(newText)
+        mentionController.insertMention(candidate, into: text)
     }
 
     // MARK: - Top Active Members (cached)
@@ -700,6 +619,7 @@ class ConversationViewModel: ObservableObject {
         reportService: ReportServiceProviding = ReportService.shared,
         syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
         mentionService: MentionServiceProviding = MentionService.shared,
+        messageSocket: MessageSocketProviding = MessageSocketManager.shared,
         dependencies: ConversationDependencies = .live
     ) {
         self.conversationId = conversationId
@@ -715,6 +635,7 @@ class ConversationViewModel: ObservableObject {
         self.reportService = reportService
         self.syncEngine = syncEngine
         self.mentionService = mentionService
+        self.messageSocket = messageSocket
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
         let store = MessageStore(
@@ -722,6 +643,17 @@ class ConversationViewModel: ObservableObject {
             persistence: dependencies.persistence
         )
         self.messageStore = store
+        // Wire up the mention controller for this conversation.
+        // localCandidates closure is evaluated lazily when a mention query fires,
+        // so mentionCandidates (which depend on messages) is always up-to-date.
+        // messageStore is initialized first: the localCandidates closure
+        // transitively reads it through `mentionCandidates` -> `messages`,
+        // so forming it before messageStore is set is a use-before-init error.
+        self.mentionController = MentionComposerController(
+            context: .conversation(id: conversationId),
+            localCandidates: { [weak self] in self?.mentionCandidates ?? [] },
+            service: mentionService
+        )
         let handler = ConversationSocketHandler(
             conversationId: conversationId,
             currentUserId: authManager.currentUser?.id ?? ""
@@ -897,11 +829,7 @@ class ConversationViewModel: ObservableObject {
 
     func onTextChanged(_ text: String) {
         socketHandler?.onTextChanged(text)
-        if text.contains("@") {
-            handleMentionQuery(in: text)
-        } else {
-            clearMentionSuggestions()
-        }
+        mentionController.handleQuery(in: text)
     }
 
     func stopTypingEmission() {
@@ -936,11 +864,20 @@ class ConversationViewModel: ObservableObject {
         isLoadingInitial = true
         error = nil
 
+        // Réconcilie les messages bloqués en .sending/.queued dont le record
+        // outbox est épuisé → .failed. Couvre le cas « conversation rouverte
+        // après épuisement des tentatives » : la bulle affiche alors la barre
+        // « Échec · Réessayer · Supprimer » au lieu d'un spinner figé.
+        await messagePersistence.reconcileFailedFromOutbox(conversationId: conversationId)
+
         print("[DIAG] loadMessages start conv=\(conversationId) storeAtStart=\(messageStore.messages.count)")
         let cached = await CacheCoordinator.shared.messages.load(for: conversationId)
         switch cached {
         case .fresh:
             // Surface GRDB data immediately (fast path for returning to a conversation).
+            // Pré-hydrate les traductions AVANT loadInitial : les bulles
+            // s'affichent dès le premier rendu avec le Prisme Linguistique.
+            await hydratePersistedTranslations()
             await messageStore.loadInitial()
             await hydrateTranslationsFromCache()
             hydrateMetadataFromGRDB()
@@ -960,6 +897,8 @@ class ConversationViewModel: ObservableObject {
 
         case .stale:
             // Surface GRDB data immediately, then revalidate in background.
+            // Pré-hydrate les traductions AVANT loadInitial (cf. .fresh).
+            await hydratePersistedTranslations()
             await messageStore.loadInitial()
             if messageStore.messages.isEmpty {
                 // GRDB cold for this conversation — fetch synchronously to render now.
@@ -1585,9 +1524,10 @@ class ConversationViewModel: ObservableObject {
             }
         }
 
+        // Déclarés hors du `do` : le bloc `catch` (repli socket) les relit.
+        var finalContent: String? = text.isEmpty ? nil : text
+        var isEncrypted = false
         do {
-            var finalContent: String? = text.isEmpty ? nil : text
-            var isEncrypted = false
             var encryptionMode: String? = nil
 
             // E2EE logic for Direct Messages
@@ -1623,16 +1563,26 @@ class ConversationViewModel: ObservableObject {
                 encryptionMode: encryptionMode,
                 clientMessageId: tempId
             )
+            // Send via REST. The WebSocket-first send path (commit 35b399f9,
+            // 2026-05-16) is disabled: the `message:send` Socket.IO event
+            // never reached the gateway handler — the socket data channel was
+            // non-functional, so every send burned the full 10 s `emitWithAck`
+            // timeout before falling back to REST anyway (root-cause
+            // investigation 2026-05-17). REST is direct (~25 ms server-side).
+            // Re-enable the WebSocket-first path once the Socket.IO channel
+            // is repaired and the `message:send` ACK round-trip is verified.
             print("[SendFlow] POST /messages tempId=\(tempId) — awaiting response")
             let responseData = try await messageService.send(
                 conversationId: conversationId, request: body
             )
+            let serverId = responseData.id
+            let serverCreatedAt = responseData.createdAt
             print("[SendFlow] POST OK tempId=\(tempId) serverId=\(responseData.id) createdAt=\(responseData.createdAt)")
 
             // Register tempId → serverId mapping so the socket handler can reconcile
             // the `message:new` broadcast without creating a duplicate row.
             // UI update (sent state) flows through persistence → store observation.
-            pendingServerIds[tempId] = responseData.id
+            pendingServerIds[tempId] = serverId
 
             // GRDB server ack — state machine transitions to .sent; store observation
             // surfaces the change to the view without a direct messages[idx] write.
@@ -1641,16 +1591,16 @@ class ConversationViewModel: ObservableObject {
             // the state machine rejects the event or the record is missing).
             let ackResult = try? await messagePersistence.applyEvent(
                 localId: tempId,
-                event: .serverAck(serverId: responseData.id, at: responseData.createdAt)
+                event: .serverAck(serverId: serverId, at: serverCreatedAt)
             )
             print("[SendFlow] applyEvent serverAck tempId=\(tempId) → resultState=\(ackResult.map { String(describing: $0) } ?? "nil")")
             let ackElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
-            Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(responseData.id, privacy: .public) durationMs=\(ackElapsedMs, privacy: .public)")
+            Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(serverId, privacy: .public) transport=rest durationMs=\(ackElapsedMs, privacy: .public)")
 
             // Move conversation to top of list immediately (optimistic)
             let convId = conversationId
             let msgContent = text
-            let msgTime = responseData.createdAt
+            let msgTime = serverCreatedAt
 
             // Persist the server-id mapping so that a future cold-start REST fetch
             // reconciles without duplicate `temp_…` / server-id pairs.
@@ -1679,12 +1629,46 @@ class ConversationViewModel: ObservableObject {
             if pendingEffects.hasAnyEffect {
                 pendingEffects = .none
             }
-            draftMentions.removeAll()
+            mentionController.clearDraft()
             isSending = false
             return true
         } catch {
             let failElapsedMs = Int(Date().timeIntervalSince(sendStartedAt) * 1000)
             Logger.messages.warning("perf:ios.send.fail clientMessageId=\(tempId, privacy: .public) durationMs=\(failElapsedMs, privacy: .public) error=\(error.localizedDescription, privacy: .public)")
+
+            // Repli socket : le POST REST a échoué — réémettre une fois via le
+            // socket avec le MÊME clientMessageId (dedup gateway → pas de doublon
+            // si l'outbox rejoue le REST ensuite). On exclut les messages à
+            // propriétés sensibles (éphémère, vue unique, flou, effets) que le
+            // canal socket ne transporte pas intégralement : ceux-là restent sur
+            // le retry REST de l'outbox qui, lui, les préserve.
+            let hasSpecialProps = resolvedExpiresAt != nil
+                || resolvedIsViewOnce
+                || resolvedBlur == true
+                || pendingEffects.hasAnyEffect
+            if !hasSpecialProps {
+                let socketAck = await messageSocket.sendViaSocketFallback(
+                    conversationId: conversationId,
+                    content: finalContent,
+                    attachmentIds: attachmentIds ?? [],
+                    replyToId: replyToId,
+                    storyReplyToId: storyReplyToId,
+                    originalLanguage: originalLanguage ?? "fr",
+                    isEncrypted: isEncrypted,
+                    clientMessageId: tempId
+                )
+                if let socketAck {
+                    pendingServerIds[tempId] = socketAck.messageId
+                    _ = try? await messagePersistence.applyEvent(
+                        localId: tempId,
+                        event: .serverAck(serverId: socketAck.messageId, at: socketAck.createdAt ?? Date())
+                    )
+                    Logger.messages.info("perf:ios.send.ack clientMessageId=\(tempId, privacy: .public) serverId=\(socketAck.messageId, privacy: .public) transport=socket-fallback durationMs=\(failElapsedMs, privacy: .public)")
+                    isSending = false
+                    return true
+                }
+            }
+
             // Apply sendFailed — state machine increments retryCount and transitions
             // to .queued (retries remaining) or .failed (budget exhausted).
             // The store observation surfaces the updated state to the view.
@@ -1926,6 +1910,11 @@ class ConversationViewModel: ObservableObject {
                 try? await OfflineQueue.shared.enqueueReaction(
                     messageId: remoteId, emoji: emoji, action: .remove, conversationId: convId
                 )
+                // Draine l'outbox tout de suite : sans ca la reaction reste
+                // `pending` jusqu'au prochain lancement / retour avant-plan de
+                // l'app (seuls moments ou le flusher tourne) et n'atteint
+                // jamais le serveur.
+                await OutboxFlushTrigger.flushNow()
             }
         } else {
             let reactionId = UUID().uuidString
@@ -1939,6 +1928,11 @@ class ConversationViewModel: ObservableObject {
                 try? await OfflineQueue.shared.enqueueReaction(
                     messageId: remoteId, emoji: emoji, action: .add, conversationId: convId
                 )
+                // Draine l'outbox tout de suite : sans ca la reaction reste
+                // `pending` jusqu'au prochain lancement / retour avant-plan de
+                // l'app (seuls moments ou le flusher tourne) et n'atteint
+                // jamais le serveur.
+                await OutboxFlushTrigger.flushNow()
             }
         }
 
@@ -2585,6 +2579,54 @@ class ConversationViewModel: ObservableObject {
         }) ?? [:]
 
         for (msgId, records) in grdbTranslations {
+            var existing = messageTranslations[msgId] ?? []
+            for r in records {
+                let mt = MessageTranslation(
+                    id: r.id,
+                    messageId: msgId,
+                    sourceLanguage: r.sourceLanguage ?? "auto",
+                    targetLanguage: r.targetLanguage,
+                    translatedContent: r.translatedContent,
+                    translationModel: r.translationModel,
+                    confidenceScore: r.confidenceScore
+                )
+                if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
+                    existing[idx] = mt
+                } else {
+                    existing.append(mt)
+                }
+            }
+            messageTranslations[msgId] = existing
+        }
+    }
+
+    /// Pré-hydrate `messageTranslations` depuis GRDB AVANT que `messageStore`
+    /// ne fasse surfacer les messages. Sans ça, les bulles se rendent une
+    /// première fois sans traduction, puis re-rendent quand
+    /// `hydrateTranslationsFromCache()` (appelé après `loadInitial`) se termine
+    /// — d'où l'apparition « en second temps » des données de langue. En
+    /// peuplant le dictionnaire en amont, le tout premier rendu applique déjà
+    /// le Prisme Linguistique (contenu traduit affiché comme du natif).
+    private func hydratePersistedTranslations() async {
+        let convId = conversationId
+        let reader = messagePersistence.reader
+        let grouped: [String: [TranslationRecord]] = (try? await reader.read { db in
+            let localIds = try MessageRecord
+                .filter(Column("conversationId") == convId)
+                .order(Column("createdAt").desc)
+                .limit(80)
+                .fetchAll(db)
+                .map(\.localId)
+            guard !localIds.isEmpty else { return [:] }
+            let records = try TranslationRecord
+                .filter(localIds.contains(Column("messageLocalId")))
+                .fetchAll(db)
+            return Dictionary(grouping: records, by: \.messageLocalId)
+        }) ?? [:]
+
+        guard !grouped.isEmpty else { return }
+
+        for (msgId, records) in grouped {
             var existing = messageTranslations[msgId] ?? []
             for r in records {
                 let mt = MessageTranslation(

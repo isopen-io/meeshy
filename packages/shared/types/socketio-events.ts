@@ -54,15 +54,23 @@ import type {
   StoryDeletedEventData,
   StoryViewedEventData,
   StoryReactedEventData,
+  StoryUnreactedEventData,
   StatusCreatedEventData,
   StatusUpdatedEventData,
   StatusDeletedEventData,
   StatusReactedEventData,
+  StatusUnreactedEventData,
   CommentAddedEventData,
   CommentDeletedEventData,
   CommentLikedEventData,
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
+  CommentReactionUpdateEventData,
+  CommentReactionSyncEventData,
+  PostReactionUpdateEventData,
+  PostReactionSyncEventData,
+  PostReactionAddData,
+  PostReactionRemoveData,
 } from './post.js';
 
 // ===== ROOM HELPERS =====
@@ -73,6 +81,7 @@ export const ROOMS = {
   user: (id: string) => `user:${id}`,
   feed: (id: string) => `feed:${id}`,
   call: (id: string) => `call:${id}`,
+  post: (id: string) => `post:${id}`,
 } as const;
 
 // ===== CONSTANTES D'ÉVÉNEMENTS =====
@@ -197,18 +206,28 @@ export const SERVER_EVENTS = {
   STORY_DELETED: 'story:deleted',
   STORY_VIEWED: 'story:viewed',
   STORY_REACTED: 'story:reacted',
-  STORY_TRANSLATION_UPDATED: 'post:story-translation-updated',
+  STORY_UNREACTED: 'story:unreacted',
+  STORY_TRANSLATION_UPDATED: 'story:translation-updated',
 
   // --- Moods/Statuses ---
   STATUS_CREATED: 'status:created',
   STATUS_UPDATED: 'status:updated',
   STATUS_DELETED: 'status:deleted',
   STATUS_REACTED: 'status:reacted',
+  STATUS_UNREACTED: 'status:unreacted',
 
   // --- Comments ---
   COMMENT_ADDED: 'comment:added',
   COMMENT_DELETED: 'comment:deleted',
   COMMENT_LIKED: 'comment:liked',
+  COMMENT_REACTION_ADDED: 'comment:reaction-added',
+  COMMENT_REACTION_REMOVED: 'comment:reaction-removed',
+  COMMENT_REACTION_SYNC: 'comment:reaction-sync',
+
+  // --- Post reactions (Phase 3B) ---
+  POST_REACTION_ADDED: 'post:reaction-added',
+  POST_REACTION_REMOVED: 'post:reaction-removed',
+  POST_REACTION_SYNC: 'post:reaction-sync',
 
   // --- Post/Comment Translations ---
   POST_TRANSLATION_UPDATED: 'post:translation-updated',
@@ -265,6 +284,20 @@ export const CLIENT_EVENTS = {
   // --- Feed subscription ---
   FEED_SUBSCRIBE: 'feed:subscribe',
   FEED_UNSUBSCRIBE: 'feed:unsubscribe',
+
+  // --- Post room membership ---
+  JOIN_POST: 'post:join',
+  LEAVE_POST: 'post:leave',
+
+  // --- Comment reactions ---
+  COMMENT_REACTION_ADD: 'comment:reaction-add',
+  COMMENT_REACTION_REMOVE: 'comment:reaction-remove',
+  COMMENT_REACTION_REQUEST_SYNC: 'comment:reaction-request-sync',
+
+  // --- Post reactions (Phase 3B) ---
+  POST_REACTION_ADD: 'post:reaction-add',
+  POST_REACTION_REMOVE: 'post:reaction-remove',
+  POST_REACTION_REQUEST_SYNC: 'post:reaction-request-sync',
 
   // --- Presence ---
   HEARTBEAT: 'heartbeat',
@@ -786,6 +819,7 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.STORY_DELETED]: (data: StoryDeletedEventData) => void;
   [SERVER_EVENTS.STORY_VIEWED]: (data: StoryViewedEventData) => void;
   [SERVER_EVENTS.STORY_REACTED]: (data: StoryReactedEventData) => void;
+  [SERVER_EVENTS.STORY_UNREACTED]: (data: StoryUnreactedEventData) => void;
   [SERVER_EVENTS.STORY_TRANSLATION_UPDATED]: (data: StoryTranslationUpdatedEventData) => void;
 
   // Moods/Statuses
@@ -793,11 +827,20 @@ export interface ServerToClientEvents {
   [SERVER_EVENTS.STATUS_UPDATED]: (data: StatusUpdatedEventData) => void;
   [SERVER_EVENTS.STATUS_DELETED]: (data: StatusDeletedEventData) => void;
   [SERVER_EVENTS.STATUS_REACTED]: (data: StatusReactedEventData) => void;
+  [SERVER_EVENTS.STATUS_UNREACTED]: (data: StatusUnreactedEventData) => void;
 
   // Comments
   [SERVER_EVENTS.COMMENT_ADDED]: (data: CommentAddedEventData) => void;
   [SERVER_EVENTS.COMMENT_DELETED]: (data: CommentDeletedEventData) => void;
   [SERVER_EVENTS.COMMENT_LIKED]: (data: CommentLikedEventData) => void;
+  [SERVER_EVENTS.COMMENT_REACTION_ADDED]: (data: CommentReactionUpdateEventData) => void;
+  [SERVER_EVENTS.COMMENT_REACTION_REMOVED]: (data: CommentReactionUpdateEventData) => void;
+  [SERVER_EVENTS.COMMENT_REACTION_SYNC]: (data: CommentReactionSyncEventData) => void;
+
+  // Post reactions (Phase 3B)
+  [SERVER_EVENTS.POST_REACTION_ADDED]: (data: PostReactionUpdateEventData) => void;
+  [SERVER_EVENTS.POST_REACTION_REMOVED]: (data: PostReactionUpdateEventData) => void;
+  [SERVER_EVENTS.POST_REACTION_SYNC]: (data: PostReactionSyncEventData) => void;
 
   // Post/Comment Translations
   [SERVER_EVENTS.POST_TRANSLATION_UPDATED]: (data: PostTranslationUpdatedEventData) => void;
@@ -926,6 +969,31 @@ export interface ReactionRemoveData {
   readonly emoji: string;
 }
 
+/**
+ * Données pour ajouter une réaction à un commentaire
+ */
+export interface CommentReactionAddData {
+  readonly commentId: string;
+  readonly postId: string;
+  readonly emoji: string;
+}
+
+/**
+ * Données pour retirer une réaction d'un commentaire
+ */
+export interface CommentReactionRemoveData {
+  readonly commentId: string;
+  readonly postId: string;
+  readonly emoji: string;
+}
+
+/**
+ * Données pour rejoindre/quitter une room de post
+ */
+export interface PostRoomActionData {
+  readonly postId: string;
+}
+
 // Événements du client vers le serveur
 export interface ClientToServerEvents {
   [CLIENT_EVENTS.MESSAGE_SEND]: (data: MessageSendData, callback?: (response: SocketIOResponse<MessageSendResponseData>) => void) => void;
@@ -973,6 +1041,20 @@ export interface ClientToServerEvents {
   // Feed subscription
   [CLIENT_EVENTS.FEED_SUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
   [CLIENT_EVENTS.FEED_UNSUBSCRIBE]: (callback?: (response: SocketIOResponse) => void) => void;
+
+  // Post room membership
+  [CLIENT_EVENTS.JOIN_POST]: (data: PostRoomActionData, callback?: (response: SocketIOResponse) => void) => void;
+  [CLIENT_EVENTS.LEAVE_POST]: (data: PostRoomActionData, callback?: (response: SocketIOResponse) => void) => void;
+
+  // Comment reactions
+  [CLIENT_EVENTS.COMMENT_REACTION_ADD]: (data: CommentReactionAddData, callback?: (response: SocketIOResponse<CommentReactionUpdateEventData>) => void) => void;
+  [CLIENT_EVENTS.COMMENT_REACTION_REMOVE]: (data: CommentReactionRemoveData, callback?: (response: SocketIOResponse<CommentReactionUpdateEventData>) => void) => void;
+  [CLIENT_EVENTS.COMMENT_REACTION_REQUEST_SYNC]: (data: { commentId: string }, callback?: (response: SocketIOResponse<CommentReactionSyncEventData>) => void) => void;
+
+  // Post reactions (Phase 3B)
+  [CLIENT_EVENTS.POST_REACTION_ADD]: (data: PostReactionAddData, callback?: (response: SocketIOResponse<PostReactionUpdateEventData>) => void) => void;
+  [CLIENT_EVENTS.POST_REACTION_REMOVE]: (data: PostReactionRemoveData, callback?: (response: SocketIOResponse<PostReactionUpdateEventData>) => void) => void;
+  [CLIENT_EVENTS.POST_REACTION_REQUEST_SYNC]: (data: { postId: string }, callback?: (response: SocketIOResponse<PostReactionSyncEventData>) => void) => void;
 
   // Presence
   [CLIENT_EVENTS.HEARTBEAT]: () => void;

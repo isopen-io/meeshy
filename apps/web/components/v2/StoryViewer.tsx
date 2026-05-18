@@ -5,6 +5,10 @@ import { createPortal } from 'react-dom';
 import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
+import { CommentList } from './CommentList';
+import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
+import { useCreateCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation, useDeleteCommentMutation } from '@/hooks/queries/use-comment-mutations';
+import { useAuthStore } from '@/stores/auth-store';
 
 // ============================================================================
 // Types
@@ -98,6 +102,8 @@ interface StoryViewerProps {
   onView?: (storyId: string) => void;
   onReply?: (storyId: string, text: string) => void;
   onDelete?: (storyId: string) => void;
+  /** Whether to show the comments panel (default: true) */
+  enableComments?: boolean;
 }
 
 // ============================================================================
@@ -318,46 +324,31 @@ function StoryViewer({
   onView,
   onReply,
   onDelete,
+  enableComments = true,
 }: StoryViewerProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
   const [replyText, setReplyText] = useState('');
   const [isPaused, setIsPaused] = useState(false);
+  const [showComments, setShowComments] = useState(false);
   const timerRef = useRef<NodeJS.Timeout | null>(null);
   const viewedRef = useRef<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement>(null);
 
+  const authUser = useAuthStore((s) => s.user);
+
+  // Story comments — query is enabled only when a valid story is active and comments are enabled
+  const currentStoryId = stories[currentIndex]?.id ?? '';
+  const commentsQuery = useCommentsInfiniteQuery({
+    postId: currentStoryId,
+    enabled: enableComments && !!currentStoryId,
+  });
+  const comments = useCommentsList(commentsQuery);
+  const createCommentMutation = useCreateCommentMutation();
+  const likeCommentMutation = useLikeCommentMutation();
+  const unlikeCommentMutation = useUnlikeCommentMutation();
+  const deleteCommentMutation = useDeleteCommentMutation();
+
   const story = stories[currentIndex];
-  if (!story) {
-    onClose();
-    return null;
-  }
-
-  const effects = story.storyEffects;
-  const bgStyles = parseBackground(effects?.background);
-  const cssFilter = effects?.filter ? FILTER_MAP[effects.filter] : undefined;
-  const textColor = effects?.textColor || '#ffffff';
-  const textPos = effects?.textPosition || { x: 50, y: 50 };
-
-  // Text style class
-  const textStyleClass = (() => {
-    switch (effects?.textStyle) {
-      case 'bold':
-        return 'font-bold text-2xl';
-      case 'typewriter':
-        return 'font-mono text-lg';
-      case 'handwriting':
-        return 'italic text-xl';
-      case 'neon':
-        return 'font-semibold text-xl';
-      default:
-        return 'text-lg';
-    }
-  })();
-
-  const textShadow =
-    effects?.textStyle === 'neon'
-      ? `0 0 10px currentColor, 0 0 20px currentColor`
-      : '0 1px 4px rgba(0,0,0,0.5)';
 
   // ---- Navigation ----
   const goNext = useCallback(() => {
@@ -386,7 +377,7 @@ function StoryViewer({
   // ---- Auto-advance timer ----
   // Honor the per-story `slideDurationMs` (set by the composer to fit longer
   // videos / TTS narrations) instead of a global 5s constant.
-  const storyDurationMs = story.storyEffects?.slideDurationMs ?? DEFAULT_STORY_DURATION_MS;
+  const storyDurationMs = stories[currentIndex]?.storyEffects?.slideDurationMs ?? DEFAULT_STORY_DURATION_MS;
   useEffect(() => {
     if (isPaused) return;
 
@@ -472,10 +463,83 @@ function StoryViewer({
     [goPrev, goNext]
   );
 
-  // Reset reply text on story change
+  // Reset reply text and close comments panel on story change
   useEffect(() => {
     setReplyText('');
+    setShowComments(false);
   }, [currentIndex]);
+
+  // Comments handlers
+  const handleOpenComments = useCallback(() => {
+    setShowComments(true);
+    setIsPaused(true);
+  }, []);
+
+  const handleCloseComments = useCallback(() => {
+    setShowComments(false);
+    setIsPaused(false);
+  }, []);
+
+  const handleSubmitComment = useCallback(
+    (content: string, parentId?: string) => {
+      if (!currentStoryId) return;
+      createCommentMutation.mutate({ postId: currentStoryId, content, parentId });
+    },
+    [currentStoryId, createCommentMutation],
+  );
+
+  const handleLikeComment = useCallback(
+    (commentId: string) => {
+      likeCommentMutation.mutate({ postId: currentStoryId, commentId });
+    },
+    [currentStoryId, likeCommentMutation],
+  );
+
+  const handleUnlikeComment = useCallback(
+    (commentId: string) => {
+      unlikeCommentMutation.mutate({ postId: currentStoryId, commentId });
+    },
+    [currentStoryId, unlikeCommentMutation],
+  );
+
+  const handleDeleteComment = useCallback(
+    (commentId: string) => {
+      deleteCommentMutation.mutate({ postId: currentStoryId, commentId });
+    },
+    [currentStoryId, deleteCommentMutation],
+  );
+
+  // All hooks are declared above — safe to early-return here
+  if (!story) {
+    onClose();
+    return null;
+  }
+
+  const effects = story.storyEffects;
+  const bgStyles = parseBackground(effects?.background);
+  const cssFilter = effects?.filter ? FILTER_MAP[effects.filter] : undefined;
+  const textColor = effects?.textColor || '#ffffff';
+  const textPos = effects?.textPosition || { x: 50, y: 50 };
+
+  const textStyleClass = (() => {
+    switch (effects?.textStyle) {
+      case 'bold':
+        return 'font-bold text-2xl';
+      case 'typewriter':
+        return 'font-mono text-lg';
+      case 'handwriting':
+        return 'italic text-xl';
+      case 'neon':
+        return 'font-semibold text-xl';
+      default:
+        return 'text-lg';
+    }
+  })();
+
+  const textShadow =
+    effects?.textStyle === 'neon'
+      ? `0 0 10px currentColor, 0 0 20px currentColor`
+      : '0 1px 4px rgba(0,0,0,0.5)';
 
   return createPortal(
     <div className="fixed inset-0 z-50 bg-black flex items-center justify-center">
@@ -753,10 +817,61 @@ function StoryViewer({
             )}
           </div>
 
-          {/* Reply input */}
-          {onReply && (
-            <div className="px-3 pb-4 pt-1 pointer-events-auto">
+          {/* Reply / Comments row */}
+          <div className="px-3 pb-4 pt-1 pointer-events-auto flex flex-col gap-2">
+            {/* Comments panel — slide up above the input */}
+            {enableComments && showComments && (
+              <div
+                className="bg-black/70 backdrop-blur-md rounded-2xl border border-white/10 p-3 max-h-64 overflow-y-auto"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-white text-sm font-semibold">Comments</span>
+                  <button
+                    onClick={handleCloseComments}
+                    className="text-white/60 hover:text-white text-xs"
+                    aria-label="Close comments"
+                  >
+                    ✕
+                  </button>
+                </div>
+                <CommentList
+                  postId={currentStoryId}
+                  comments={comments}
+                  currentUserId={authUser?.id ?? null}
+                  currentUser={authUser ? { username: authUser.username, avatar: authUser.avatar } : null}
+                  userLanguage={userLanguage}
+                  isLoading={commentsQuery.isLoading}
+                  hasMore={commentsQuery.hasNextPage}
+                  onLoadMore={() => commentsQuery.fetchNextPage()}
+                  isLoadingMore={commentsQuery.isFetchingNextPage}
+                  onLikeComment={handleLikeComment}
+                  onUnlikeComment={handleUnlikeComment}
+                  onDeleteComment={handleDeleteComment}
+                  onSubmitComment={handleSubmitComment}
+                  className="text-white"
+                />
+              </div>
+            )}
+
+            {/* Input row */}
+            {onReply && (
               <div className="flex items-center gap-2 bg-white/15 backdrop-blur-sm rounded-full px-4 py-2 border border-white/20">
+                {enableComments && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleOpenComments();
+                    }}
+                    className="text-white/70 hover:text-white transition-colors"
+                    aria-label="Show comments"
+                    data-testid="story-comments-button"
+                  >
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                  </button>
+                )}
                 <input
                   ref={inputRef}
                   type="text"
@@ -785,8 +900,8 @@ function StoryViewer({
                   <SendIcon />
                 </button>
               </div>
-            </div>
-          )}
+            )}
+          </div>
         </div>
       </div>
 

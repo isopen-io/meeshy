@@ -467,4 +467,47 @@ final class RouterTests: XCTestCase {
         let url = URL(string: "meeshy://share?url=https://example.com")!
         router.handleDeepLink(url)
     }
+
+    // MARK: - navigateToConversation
+
+    /// `navigateToConversation` must replace the stack in ONE synchronous
+    /// mutation of `path`. The previous `popToRoot()` + 0.05s-deferred
+    /// `push()` produced two mutations landing in the same render frame,
+    /// triggering SwiftUI's "NavigationRequestObserver tried to update
+    /// multiple times per frame" warning. A single atomic assignment to
+    /// `path` fixes it — and makes navigation synchronous.
+    func test_navigateToConversation_replacesPathInOneSynchronousStep() {
+        let router = Router()
+        router.push(.profile)
+        router.push(.settings)
+
+        router.navigateToConversation(makeConversation(id: "000000000000000000000099"))
+
+        XCTAssertEqual(router.path.count, 1)
+        if case .conversation = router.currentRoute {} else {
+            XCTFail("Expected .conversation route")
+        }
+    }
+
+    /// iPad two-column mode (`onRouteRequested` set) keeps forwarding the
+    /// route via the callback instead of mutating `path`.
+    func test_navigateToConversation_iPad_forwardsViaOnRouteRequested() {
+        let router = Router()
+        var interceptedRoute: Route?
+        router.onRouteRequested = { route in
+            interceptedRoute = route
+            return true
+        }
+        let forwarded = expectation(description: "route forwarded to callback")
+
+        router.navigateToConversation(makeConversation(id: "000000000000000000000099"))
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { forwarded.fulfill() }
+        wait(for: [forwarded], timeout: 1.0)
+
+        XCTAssertTrue(router.path.isEmpty)
+        if case .conversation = interceptedRoute {} else {
+            XCTFail("Expected .conversation forwarded via onRouteRequested")
+        }
+    }
 }

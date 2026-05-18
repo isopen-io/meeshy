@@ -53,6 +53,10 @@ class ConversationListViewModel: ObservableObject {
     @Published var selectedFilter: ConversationFilter = .all
     private(set) var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
+    /// Brouillons actifs indexés par conversationId. Alimente le badge
+    /// « Brouillon » de la ligne et la priorité de tri. Concept client-local
+    /// — jamais stocké dans le modèle SDK `Conversation`.
+    @Published private(set) var draftSummaries: [String: DraftSummary] = [:]
     /// Typing usernames indexed by conversationId. NOT @Published to avoid triggering
     /// a full list re-render on every typing event from any conversation.
     /// Rows read this during natural re-renders (scroll, message arrival).
@@ -73,6 +77,13 @@ class ConversationListViewModel: ObservableObject {
     private let authManager: AuthManaging
     private let storyService: StoryServiceProviding
     private let syncEngine: ConversationSyncEngineProviding
+    /// Publisher des notifications push « message » (conversationId). Injecté
+    /// pour la testabilité ; en production, branché sur
+    /// `PushNotificationManager.shared.messageNotificationReceived`.
+    private let messageNotificationPublisher: AnyPublisher<String, Never>
+    /// Source des brouillons persistés (UserDefaults). Injecté pour la
+    /// testabilité ; en production, `DraftStore.shared`.
+    private let draftStore: DraftStore
     /// Number of conversations fetched per `loadMore` page.
     ///
     /// Tuned at 100 (gateway max) so the first paginated page after the
@@ -120,7 +131,8 @@ class ConversationListViewModel: ObservableObject {
     /// after 30 s.
     func setConversations(_ items: [Conversation]) {
         let merged = mergePreservingRecentlyCreated(incoming: items, current: conversations, now: dateProvider())
-        conversations = merged.sorted { $0.lastMessageAt > $1.lastMessageAt }
+        let drafts = draftSummaries
+        conversations = merged.sorted { Self.conversationsAreInOrder($0, $1, draftSummaries: drafts) }
     }
 
     /// Local-creation registry: maps conversationId → insertion timestamp.
@@ -223,7 +235,10 @@ class ConversationListViewModel: ObservableObject {
     /// loaded so the engine's full-row prepend in handleNewMessage
     /// stays the source of truth for unknown conversations.
     func bumpToTop(conversationId: String, newLastMessageAt: Date) {
-        guard let idx = conversations.firstIndex(where: { $0.id == conversationId }) else { return }
+        guard let idx = convIndex(for: conversationId) else {
+            Logger.messages.warning("[bumpToTop] conversation introuvable id=\(conversationId, privacy: .public)")
+            return
+        }
         var updated = conversations[idx]
         updated.lastMessageAt = newLastMessageAt
         conversations.remove(at: idx)
@@ -247,6 +262,7 @@ class ConversationListViewModel: ObservableObject {
         case socketNew              // conversation:new (typed event, primary path)
         case socketNotification     // notification:new legacy fallback (~3-month deprecation window)
         case socketUpdated          // CONVERSATION_UPDATED (first activity on unknown id)
+        case pushNotification       // APNs message notification for an unknown conversation
         case syncDelta              // syncSinceLastCheckpoint (foreground / reconnect)
         case pullRefresh            // user pulled to refresh
         case coldCache              // initial cache load on app start
@@ -316,7 +332,9 @@ class ConversationListViewModel: ObservableObject {
         messageService: MessageServiceProviding = MessageService.shared,
         authManager: AuthManaging = AuthManager.shared,
         storyService: StoryServiceProviding = StoryService.shared,
-        syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared
+        syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
+        messageNotificationPublisher: AnyPublisher<String, Never> = PushNotificationManager.shared.messageNotificationReceived.eraseToAnyPublisher(),
+        draftStore: DraftStore = DraftStore.shared
     ) {
         self.api = api
         self.conversationService = conversationService
@@ -326,7 +344,12 @@ class ConversationListViewModel: ObservableObject {
         self.authManager = authManager
         self.storyService = storyService
         self.syncEngine = syncEngine
+        self.messageNotificationPublisher = messageNotificationPublisher
+        self.draftStore = draftStore
+        reloadDraftSummaries()
         subscribeToSocketEvents()
+        subscribeToPushNotifications()
+        subscribeToDrafts()
         syncBadgeOnUnreadChange()
         setupBackgroundProcessing()
         observeMarkAsRead()
@@ -353,10 +376,11 @@ class ConversationListViewModel: ObservableObject {
                 guard let self else { return }
                 let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
                 self.filteredConversations = filtered
+                let drafts = self.draftSummaries
                 self.groupingTask?.cancel()
                 self.groupingTask = Task.detached(priority: .userInitiated) { [weak self] in
                     guard !Task.isCancelled else { return }
-                    let grouped = Self.groupConversations(filtered, categories: categories)
+                    let grouped = Self.groupConversations(filtered, categories: categories, draftSummaries: drafts)
                     guard !Task.isCancelled else { return }
                     await MainActor.run { [weak self] in
                         self?.groupedConversations = grouped
@@ -399,15 +423,13 @@ class ConversationListViewModel: ObservableObject {
     /// - Peut s'exécuter sur n'importe quel thread (pas d'accès à self)
     nonisolated private static func groupConversations(
         _ filtered: [Conversation],
-        categories: [ConversationSection]
+        categories: [ConversationSection],
+        draftSummaries: [String: DraftSummary]
     ) -> [(section: ConversationSection, conversations: [Conversation])] {
         // No categories → flat list, no section headers needed
         let hasPinned = filtered.contains { $0.isPinned && $0.sectionId == nil }
         if categories.isEmpty && !hasPinned {
-            let sorted = filtered.sorted { a, b in
-                if a.isPinned != b.isPinned { return a.isPinned }
-                return a.lastMessageAt > b.lastMessageAt
-            }
+            let sorted = filtered.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }
             return sorted.isEmpty ? [] : [(ConversationSection.other, sorted)]
         }
 
@@ -424,16 +446,13 @@ class ConversationListViewModel: ObservableObject {
 
         // Pinned section
         if let pinned = bySection["__pinned__"], !pinned.isEmpty {
-            result.append((ConversationSection.pinned, pinned.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+            result.append((ConversationSection.pinned, pinned.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }))
         }
 
         // User categories (order preserved)
         for category in categories {
             if let sectionConvs = bySection[category.id], !sectionConvs.isEmpty {
-                let sorted = sectionConvs.sorted { a, b in
-                    if a.isPinned != b.isPinned { return a.isPinned }
-                    return a.lastMessageAt > b.lastMessageAt
-                }
+                let sorted = sectionConvs.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }
                 result.append((category, sorted))
             }
         }
@@ -444,10 +463,32 @@ class ConversationListViewModel: ObservableObject {
             return !categoryIds.contains(sid)
         }
         if !otherConvs.isEmpty {
-            result.append((ConversationSection.other, otherConvs.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+            result.append((ConversationSection.other, otherConvs.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }))
         }
 
         return result
+    }
+
+    /// Ordre total de la liste de conversations. Épinglées d'abord ; parmi les
+    /// non-épinglées, les conversations avec un brouillon actif flottent en
+    /// tête (brouillon le plus récemment édité d'abord) ; le reste retombe sur
+    /// `lastMessageAt` décroissant. Les épinglées conservent leur tri
+    /// `lastMessageAt` — la priorité brouillon ne s'applique qu'aux
+    /// non-épinglées.
+    nonisolated static func conversationsAreInOrder(
+        _ a: Conversation,
+        _ b: Conversation,
+        draftSummaries: [String: DraftSummary]
+    ) -> Bool {
+        if a.isPinned != b.isPinned { return a.isPinned }
+        if a.isPinned && b.isPinned { return a.lastMessageAt > b.lastMessageAt }
+        let aHasDraft = draftSummaries[a.id] != nil
+        let bHasDraft = draftSummaries[b.id] != nil
+        if aHasDraft != bHasDraft { return aHasDraft }
+        if let aDraft = draftSummaries[a.id], let bDraft = draftSummaries[b.id] {
+            return aDraft.updatedAt > bDraft.updatedAt
+        }
+        return a.lastMessageAt > b.lastMessageAt
     }
 
     // MARK: - Sync Engine Observation
@@ -608,6 +649,7 @@ class ConversationListViewModel: ObservableObject {
                 // trigger a re-render of every cell behind it.
                 if let newLastAt = event.lastMessageAt,
                    newLastAt > self.conversations[index].lastMessageAt {
+                    Logger.messages.debug("[conversationUpdated] bump websocket id=\(event.conversationId, privacy: .public)")
                     self.bumpToTop(conversationId: event.conversationId, newLastMessageAt: newLastAt)
                 } else {
                     // Metadata-only mutation (rename, avatar swap, broadcast
@@ -703,6 +745,58 @@ class ConversationListViewModel: ObservableObject {
         // 2026-05-11 audit traced a `/conversations` request burst back to
         // exactly this duplication. Keeping the relay in the engine keeps
         // one and only one delta sync per reconnect.
+    }
+
+    // MARK: - Push Notification Subscription
+
+    /// Remonte une conversation en tête dès qu'une notification push
+    /// « message » arrive — couvre les messages reçus alors que le websocket
+    /// était déconnecté (app en arrière-plan). Le payload push ne porte pas
+    /// l'horodatage du message ; on utilise `dateProvider()` (instant de
+    /// réception). La conséquence — `lastMessageAt` légèrement dans le futur
+    /// jusqu'au prochain sync — est documentée comme bénigne dans le spec.
+    private func subscribeToPushNotifications() {
+        messageNotificationPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] conversationId in
+                guard let self else { return }
+                if self.convIndex(for: conversationId) != nil {
+                    self.bumpToTop(conversationId: conversationId, newLastMessageAt: self.dateProvider())
+                } else {
+                    self.fetchAndPrependMissingConversation(id: conversationId, source: .pushNotification)
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Draft Summaries
+
+    /// Recharge `draftSummaries` depuis le `DraftStore`. `internal` pour que
+    /// les tests pilotent la synchro de façon déterministe.
+    func reloadDraftSummaries() {
+        draftSummaries = draftStore.allNonEmptyDrafts().mapValues { draft in
+            DraftSummary(
+                previewText: draft.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                updatedAt: draft.updatedAt
+            )
+        }
+    }
+
+    /// S'abonne aux mutations de brouillon. Le composer persiste à chaque
+    /// frappe, donc `changed` émet en rafale — d'où le debounce de 300 ms qui
+    /// évite de recharger tous les brouillons + re-trier à chaque caractère.
+    /// Le re-`setConversations` ré-émet `$conversations`, ce qui relance le
+    /// pipeline de groupement avec les `draftSummaries` fraîchement rechargés.
+    private func subscribeToDrafts() {
+        draftStore.changed
+            .receive(on: DispatchQueue.main)
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self else { return }
+                self.reloadDraftSummaries()
+                self.setConversations(self.conversations)
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Typing Cleanup
@@ -1440,6 +1534,19 @@ class ConversationListViewModel: ObservableObject {
             case .fresh:
                 break
             }
+        }
+    }
+
+    /// Appelée quand la liste de conversations revient au premier plan.
+    /// Re-trie la liste en mémoire immédiatement (retour instantané), puis
+    /// lance un delta sync pour que les messages reçus via APNs pendant que
+    /// l'app était en arrière-plan remontent et réordonnent la liste.
+    /// Distinct de `handleForegroundReturn()`, qui ne rafraîchit que les
+    /// stories.
+    func handleForegroundReactivation() {
+        setConversations(conversations)
+        Task { [weak self] in
+            await self?.refresh()
         }
     }
 

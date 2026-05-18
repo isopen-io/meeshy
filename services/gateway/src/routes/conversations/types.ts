@@ -21,7 +21,7 @@ export interface CreateConversationBody {
 }
 
 export interface SendMessageBody {
-  content: string;
+  content?: string;
   /**
    * Phase 4 §6.2 — mandatory client-generated idempotency key, format
    * `cid_<uuid v4 lowercase>`. The gateway uses
@@ -44,10 +44,12 @@ export interface SendMessageBody {
   isEncrypted?: boolean;
   // Audio attachments (pre-uploaded via /attachments/upload)
   attachmentIds?: string[];
-  // Ephemeral/blurred message fields
+  // Ephemeral/blurred/view-once message fields
   isBlurred?: boolean;
   expiresAt?: string;
   effectFlags?: number;
+  isViewOnce?: boolean;
+  maxViewOnceCount?: number;
   mentionedUserIds?: string[];
 }
 

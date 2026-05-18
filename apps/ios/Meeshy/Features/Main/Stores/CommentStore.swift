@@ -1,7 +1,7 @@
 // apps/ios/Meeshy/Features/Main/Stores/CommentStore.swift
 
 import Foundation
-import Observation
+import Combine
 // See `FeedStore.swift` / `MessageStore.swift` for the rationale behind
 // `@preconcurrency import GRDB`: Swift 6 strict concurrency injects
 // `_swift_task_checkIsolatedSwift` at the invocation of closures passed
@@ -51,11 +51,10 @@ private func fetchReplies(
     }
 }
 
-@Observable
 @MainActor
-public final class CommentStore {
-    private(set) var topLevelComments: [CommentRecord] = []
-    private(set) var expandedThreads: Set<String> = []
+public final class CommentStore: ObservableObject {
+    @Published private(set) var topLevelComments: [CommentRecord] = []
+    @Published private(set) var expandedThreads: Set<String> = []
     private var repliesCache: [String: [CommentRecord]] = [:]
 
     private let postId: String

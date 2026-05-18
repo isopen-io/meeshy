@@ -207,7 +207,8 @@ async function generateMessage(
   const maxWords = Math.min(baseMaxWords, tierMax);
 
   const temperature = state.generationTemperature ?? 0.85;
-  const maxTokens = Math.max(64, Math.round(maxWords * 1.5));
+  // Generous ceiling — never the reason a message ends; completeness beats a strict word count (French runs ~2.5-3 tokens/word).
+  const maxTokens = Math.max(320, Math.round(maxWords * 5));
 
   const recentTopicCategoriesText = (state.recentTopicCategories ?? []).length > 0
     ? state.recentTopicCategories.join(', ') : 'aucun';

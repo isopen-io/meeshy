@@ -288,41 +288,35 @@ struct ConversationPreviewView: View {
 }
 
 // MARK: - Themed Community Card
-struct ThemedCommunityCard: View {
+struct ThemedCommunityCard: View, Equatable {
     let community: Community
     var action: (() -> Void)? = nil
     @State private var isPressed = false
     @State private var displayColor: String
-    @State private var displayEmoji: String
 
     init(community: Community, action: (() -> Void)? = nil) {
         self.community = community
         self.action = action
         _displayColor = State(initialValue: UserDefaults.standard.string(forKey: "community.color.\(community.id)") ?? community.color)
-        _displayEmoji = State(initialValue: UserDefaults.standard.string(forKey: "community.emoji.\(community.id)") ?? community.emoji)
+    }
+
+    // Leaf-cell equality (CLAUDE.md "Leaf Views"): only the community data
+    // drives the body — the `action` closure and transient `@State` do not.
+    static func == (lhs: ThemedCommunityCard, rhs: ThemedCommunityCard) -> Bool {
+        lhs.community == rhs.community
     }
 
     var body: some View {
         ZStack(alignment: .bottomLeading) {
-            // Gradient background
-            LinearGradient(
-                colors: [
-                    Color(hex: displayColor),
-                    Color(hex: displayColor).opacity(0.85)
-                ],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+            // Banner image — full-bleed. Falls back to the community's
+            // derived accent colour gradient when no banner is set.
+            CachedBannerImage(
+                urlString: community.banner,
+                fallbackColor: displayColor,
+                height: 110
             )
 
-            // Banner emoji
-            Text(displayEmoji.isEmpty ? community.name.prefix(1).uppercased() : displayEmoji)
-                .font(.system(size: displayEmoji.isEmpty ? 28 : 36))
-                .offset(x: 70, y: -20)
-                .opacity(1.0)
-                .rotationEffect(.degrees(isPressed ? -10 : 0))
-                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-
-            // Dark overlay for text readability
+            // Dark overlay for text readability over any banner
             LinearGradient(
                 colors: [.clear, .clear, Color.black.opacity(0.7)],
                 startPoint: .top,
@@ -358,6 +352,8 @@ struct ThemedCommunityCard: View {
         }
         .frame(width: 130, height: 110)
         .clipShape(RoundedRectangle(cornerRadius: 16))
+        .scaleEffect(isPressed ? 0.95 : 1)
+        .animation(.spring(response: 0.25, dampingFraction: 0.65), value: isPressed)
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
@@ -371,6 +367,13 @@ struct ThemedCommunityCard: View {
             }
             HapticFeedback.light()
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            "\(community.name), "
+            + "\(community.memberCount) " + String(localized: "unit.members", defaultValue: "membres") + ", "
+            + "\(community.conversationCount) " + String(localized: "tab.conversations", defaultValue: "Conversations")
+        )
+        .accessibilityAddTraits(.isButton)
     }
 
     private func formatCount(_ count: Int) -> String {
@@ -472,6 +475,7 @@ struct CommunityCard: View {
 
     var body: some View {
         ThemedCommunityCard(community: community)
+            .equatable()
     }
 }
 

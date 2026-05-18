@@ -169,8 +169,25 @@ export class PostFeedService {
       ? encodeCursor(lastItem.post.createdAt, lastItem.post.id)
       : null;
 
+    const postIds = items.map((s) => s.post.id);
+    const userReactions = postIds.length > 0
+      ? await this.prisma.postReaction.findMany({
+          where: { userId, postId: { in: postIds } },
+          select: { postId: true, emoji: true },
+        })
+      : [];
+    const userReactionsMap = new Map<string, string[]>();
+    for (const r of userReactions) {
+      const list = userReactionsMap.get(r.postId) ?? [];
+      list.push(r.emoji);
+      userReactionsMap.set(r.postId, list);
+    }
+
     return {
-      items: items.map((s) => this.enrichWithLikeStatus(s.post, userId)),
+      items: items.map((s) => ({
+        ...this.enrichWithLikeStatus(s.post, userId),
+        currentUserReactions: userReactionsMap.get(s.post.id) ?? [],
+      })),
       nextCursor,
       hasMore,
     };
@@ -202,17 +219,30 @@ export class PostFeedService {
     });
 
     const storyIds = stories.map((s) => s.id);
-    const viewedRows = storyIds.length > 0
-      ? await this.prisma.postView.findMany({
-          where: { postId: { in: storyIds }, userId },
-          select: { postId: true },
-        })
-      : [];
+    const [viewedRows, userReactions] = storyIds.length > 0
+      ? await Promise.all([
+          this.prisma.postView.findMany({
+            where: { postId: { in: storyIds }, userId },
+            select: { postId: true },
+          }),
+          this.prisma.postReaction.findMany({
+            where: { userId, postId: { in: storyIds } },
+            select: { postId: true, emoji: true },
+          }),
+        ])
+      : [[], []];
     const viewedSet = new Set(viewedRows.map((v) => v.postId));
+    const userReactionsMap = new Map<string, string[]>();
+    for (const r of userReactions) {
+      const list = userReactionsMap.get(r.postId) ?? [];
+      list.push(r.emoji);
+      userReactionsMap.set(r.postId, list);
+    }
 
     return stories.map((s) => ({
       ...this.enrichWithLikeStatus(s, userId),
       isViewedByMe: viewedSet.has(s.id),
+      currentUserReactions: userReactionsMap.get(s.id) ?? [],
     }));
   }
 
@@ -336,7 +366,34 @@ export class PostFeedService {
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
 
-    return { items: viewerUserId ? items.map((p) => this.enrichWithLikeStatus(p, viewerUserId)) : items, nextCursor, hasMore };
+    if (!viewerUserId || items.length === 0) {
+      return {
+        items: items.map((p) => ({ ...p, currentUserReactions: [] as string[] })),
+        nextCursor,
+        hasMore,
+      };
+    }
+
+    const postIds = items.map((p) => p.id);
+    const userReactions = await this.prisma.postReaction.findMany({
+      where: { userId: viewerUserId, postId: { in: postIds } },
+      select: { postId: true, emoji: true },
+    });
+    const userReactionsMap = new Map<string, string[]>();
+    for (const r of userReactions) {
+      const list = userReactionsMap.get(r.postId) ?? [];
+      list.push(r.emoji);
+      userReactionsMap.set(r.postId, list);
+    }
+
+    return {
+      items: items.map((p) => ({
+        ...this.enrichWithLikeStatus(p, viewerUserId),
+        currentUserReactions: userReactionsMap.get(p.id) ?? [],
+      })),
+      nextCursor,
+      hasMore,
+    };
   }
 
   async getCommunityFeed(communityId: string, viewerUserId: string | undefined, cursor?: string, limit: number = 20) {
@@ -369,7 +426,34 @@ export class PostFeedService {
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
 
-    return { items: viewerUserId ? items.map((p) => this.enrichWithLikeStatus(p, viewerUserId)) : items, nextCursor, hasMore };
+    if (!viewerUserId || items.length === 0) {
+      return {
+        items: items.map((p) => ({ ...p, currentUserReactions: [] as string[] })),
+        nextCursor,
+        hasMore,
+      };
+    }
+
+    const communityPostIds = items.map((p) => p.id);
+    const communityUserReactions = await this.prisma.postReaction.findMany({
+      where: { userId: viewerUserId, postId: { in: communityPostIds } },
+      select: { postId: true, emoji: true },
+    });
+    const communityReactionsMap = new Map<string, string[]>();
+    for (const r of communityUserReactions) {
+      const list = communityReactionsMap.get(r.postId) ?? [];
+      list.push(r.emoji);
+      communityReactionsMap.set(r.postId, list);
+    }
+
+    return {
+      items: items.map((p) => ({
+        ...this.enrichWithLikeStatus(p, viewerUserId),
+        currentUserReactions: communityReactionsMap.get(p.id) ?? [],
+      })),
+      nextCursor,
+      hasMore,
+    };
   }
 
   async getBookmarks(userId: string, cursor?: string, limit: number = 20) {
@@ -401,8 +485,23 @@ export class PostFeedService {
       ? encodeCursor(items[items.length - 1].createdAt, items[items.length - 1].id)
       : null;
 
+    const posts = items.map((b) => b.post).filter((p) => p && !p.isDeleted);
+    const bookmarkPostIds = posts.map((p) => p.id);
+    const bookmarkUserReactions = bookmarkPostIds.length > 0
+      ? await this.prisma.postReaction.findMany({
+          where: { userId, postId: { in: bookmarkPostIds } },
+          select: { postId: true, emoji: true },
+        })
+      : [];
+    const bookmarkReactionsMap = new Map<string, string[]>();
+    for (const r of bookmarkUserReactions) {
+      const list = bookmarkReactionsMap.get(r.postId) ?? [];
+      list.push(r.emoji);
+      bookmarkReactionsMap.set(r.postId, list);
+    }
+
     return {
-      items: items.map((b) => b.post).filter((p) => p && !p.isDeleted),
+      items: posts.map((p) => ({ ...p, currentUserReactions: bookmarkReactionsMap.get(p.id) ?? [] })),
       nextCursor,
       hasMore,
     };

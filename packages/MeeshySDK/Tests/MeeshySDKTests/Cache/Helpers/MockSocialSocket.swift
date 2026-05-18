@@ -1,6 +1,8 @@
 import Combine
 @testable import MeeshySDK
 
+enum MockSocialSocketError: Error { case notImplemented }
+
 final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let postCreated = PassthroughSubject<APIPost, Never>()
     let postUpdated = PassthroughSubject<APIPost, Never>()
@@ -22,6 +24,14 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     let storyTranslationUpdated = PassthroughSubject<SocketStoryTranslationUpdatedData, Never>()
     let postTranslationUpdated = PassthroughSubject<SocketPostTranslationUpdatedData, Never>()
     let commentTranslationUpdated = PassthroughSubject<SocketCommentTranslationUpdatedData, Never>()
+    let storyUpdated = PassthroughSubject<SocketStoryUpdatedData, Never>()
+    let storyDeleted = PassthroughSubject<SocketStoryDeletedData, Never>()
+    let commentReactionAdded = PassthroughSubject<SocketCommentReactionUpdateEvent, Never>()
+    let commentReactionRemoved = PassthroughSubject<SocketCommentReactionUpdateEvent, Never>()
+    let commentReactionSync = PassthroughSubject<SocketCommentReactionSyncEvent, Never>()
+    let postReactionAdded = PassthroughSubject<SocketPostReactionUpdateEvent, Never>()
+    let postReactionRemoved = PassthroughSubject<SocketPostReactionUpdateEvent, Never>()
+    let postReactionSync = PassthroughSubject<SocketPostReactionSyncEvent, Never>()
 
     var isConnected: Bool = false
     var connectionState: ConnectionState = .disconnected
@@ -34,4 +44,26 @@ final class MockSocialSocket: SocialSocketProviding, @unchecked Sendable {
     func disconnect() { disconnectCallCount += 1 }
     func subscribeFeed() { subscribeFeedCallCount += 1 }
     func unsubscribeFeed() {}
+
+    func joinPostRoom(postId: String) {}
+    func leavePostRoom(postId: String) {}
+
+    func addCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
+        throw MockSocialSocketError.notImplemented
+    }
+    func removeCommentReaction(commentId: String, postId: String, emoji: String) async throws -> SocketCommentReactionUpdateEvent {
+        throw MockSocialSocketError.notImplemented
+    }
+    func requestCommentReactionSync(commentId: String) async throws -> SocketCommentReactionSyncEvent {
+        throw MockSocialSocketError.notImplemented
+    }
+    func addPostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent {
+        throw MockSocialSocketError.notImplemented
+    }
+    func removePostReaction(postId: String, emoji: String) async throws -> SocketPostReactionUpdateEvent {
+        throw MockSocialSocketError.notImplemented
+    }
+    func requestPostReactionSync(postId: String) async throws -> SocketPostReactionSyncEvent {
+        throw MockSocialSocketError.notImplemented
+    }
 }

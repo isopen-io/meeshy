@@ -9,6 +9,12 @@ import MeeshyUI
 struct FeedPostCard: View {
     let post: FeedPost
     var isCommentsExpanded: Bool = false
+    /// Socket-driven liked state. When nil, falls back to post.isLiked (legacy path).
+    var isLiked: Bool? = nil
+    /// Display like count with optimistic delta already applied. When nil, falls back to post.likes.
+    var displayLikeCount: Int? = nil
+    /// True while a socket reaction request is in-flight — disables the button.
+    var isHeartInFlight: Bool = false
     var onToggleComments: (() -> Void)? = nil
     var onLike: ((String) -> Void)? = nil
     var onRepost: ((String) -> Void)? = nil
@@ -511,9 +517,14 @@ struct FeedPostCard: View {
     // MARK: - Actions Bar
     @State private var likeAnimating = false
 
+    /// Effective liked state: socket-driven override when available, else post.isLiked.
+    private var effectiveIsLiked: Bool { isLiked ?? post.isLiked }
+    /// Effective display count: socket-driven override when available, else post.likes.
+    private var effectiveLikeCount: Int { max(0, displayLikeCount ?? post.likes) }
+
     private var actionsBar: some View {
         HStack(spacing: 0) {
-            // Like with heart burst animation
+            // Like with heart burst animation (socket-driven — see FeedView.postLikedIds)
             Button {
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.5)) {
                     likeAnimating = true
@@ -527,29 +538,31 @@ struct FeedPostCard: View {
                 HStack(spacing: 6) {
                     ZStack {
                         // Burst ring behind heart
-                        if post.isLiked {
+                        if effectiveIsLiked {
                             Circle()
                                 .stroke(MeeshyColors.error.opacity(likeAnimating ? 0.6 : 0), lineWidth: likeAnimating ? 2 : 0)
                                 .frame(width: likeAnimating ? 32 : 18, height: likeAnimating ? 32 : 18)
                                 .animation(.easeOut(duration: 0.4), value: likeAnimating)
                         }
 
-                        let heartColor: Color = post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textSecondary)
-                        Image(systemName: post.isLiked || post.likes > 0 ? "heart.fill" : "heart")
+                        let heartColor: Color = effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary)
+                        Image(systemName: effectiveIsLiked || effectiveLikeCount > 0 ? "heart.fill" : "heart")
                             .font(.system(size: 18))
                             .foregroundColor(heartColor)
-                            .scaleEffect(likeAnimating ? 1.3 : (post.isLiked ? 1.1 : 1.0))
+                            .scaleEffect(likeAnimating ? 1.3 : (effectiveIsLiked ? 1.1 : 1.0))
                             .rotationEffect(.degrees(likeAnimating ? -15 : 0))
+                            .opacity(isHeartInFlight ? 0.5 : 1.0)
                     }
 
-                    Text("\(post.likes)")
+                    Text("\(effectiveLikeCount)")
                         .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(post.isLiked ? MeeshyColors.error : (post.likes > 0 ? Color(hex: accentColor) : theme.textSecondary))
+                        .foregroundColor(effectiveIsLiked ? MeeshyColors.error : (effectiveLikeCount > 0 ? Color(hex: accentColor) : theme.textSecondary))
                         .contentTransition(.numericText())
                 }
             }
-            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: post.isLiked)
-            .accessibilityLabel("\(post.likes) j'aime")
+            .disabled(isHeartInFlight)
+            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: effectiveIsLiked)
+            .accessibilityLabel("\(effectiveLikeCount) j'aime")
 
             Spacer()
 
@@ -793,6 +806,9 @@ extension FeedPostCard: Equatable {
         lhs.post.id == rhs.post.id
             && lhs.post.likes == rhs.post.likes
             && lhs.post.isLiked == rhs.post.isLiked
+            && lhs.isLiked == rhs.isLiked
+            && lhs.displayLikeCount == rhs.displayLikeCount
+            && lhs.isHeartInFlight == rhs.isHeartInFlight
             && lhs.post.commentCount == rhs.post.commentCount
             && lhs.post.translatedContent == rhs.post.translatedContent
             && lhs.isCommentsExpanded == rhs.isCommentsExpanded

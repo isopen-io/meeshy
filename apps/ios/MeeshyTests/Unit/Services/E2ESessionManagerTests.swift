@@ -19,6 +19,12 @@ final class E2ESessionManagerTests: XCTestCase {
         XCTAssertEqual(error.errorDescription, "Session not initialized and senderIdentityPublic missing")
     }
 
+    func test_sessionError_sessionUnavailable_hasDescription() {
+        let error = SessionManager.SessionError.sessionUnavailable
+        XCTAssertEqual(error.errorDescription,
+                       "E2EE session unavailable — establishment recently failed, retry on cooldown")
+    }
+
     func test_sessionError_invalidBase64Payload_isLocalizedError() {
         let error: any LocalizedError = SessionManager.SessionError.invalidBase64Payload
         XCTAssertNotNil(error.errorDescription)
@@ -43,5 +49,34 @@ final class E2ESessionManagerTests: XCTestCase {
         let a = SessionManager.shared
         let b = SessionManager.shared
         XCTAssertTrue(a === b)
+    }
+
+    // MARK: - Negative Cache Cooldown
+
+    func test_isWithinFailureCooldown_noPriorFailure_returnsFalse() {
+        let result = SessionManager.isWithinFailureCooldown(
+            failedAt: nil, now: Date(), cooldown: 600)
+        XCTAssertFalse(result)
+    }
+
+    func test_isWithinFailureCooldown_recentFailure_returnsTrue() {
+        let now = Date()
+        let result = SessionManager.isWithinFailureCooldown(
+            failedAt: now.addingTimeInterval(-60), now: now, cooldown: 600)
+        XCTAssertTrue(result)
+    }
+
+    func test_isWithinFailureCooldown_expiredFailure_returnsFalse() {
+        let now = Date()
+        let result = SessionManager.isWithinFailureCooldown(
+            failedAt: now.addingTimeInterval(-601), now: now, cooldown: 600)
+        XCTAssertFalse(result)
+    }
+
+    func test_isWithinFailureCooldown_exactlyAtCooldownBoundary_returnsFalse() {
+        let now = Date()
+        let result = SessionManager.isWithinFailureCooldown(
+            failedAt: now.addingTimeInterval(-600), now: now, cooldown: 600)
+        XCTAssertFalse(result)
     }
 }

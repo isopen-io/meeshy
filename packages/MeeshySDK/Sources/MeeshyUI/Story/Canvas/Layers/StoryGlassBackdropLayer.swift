@@ -85,12 +85,17 @@ public final class StoryGlassBackdropLayer: CALayer, @unchecked Sendable {
         }
         let selector = NSSelectorFromString("filterWithName:")
         let unmanaged = filterClass.perform(selector, with: "gaussianBlur")
-        // `+filterWithName:` returns an autoreleased object (+0 retain in Obj-C
-        // class factory convention). `takeRetainedValue` transfers ownership
-        // into ARC so it stays alive until `setValue([filter], forKeyPath:)`
-        // stores it into the layer's filter chain. `takeUnretainedValue` would
-        // risk dealloc under autorelease pool pressure during the render loop.
-        guard let filter = unmanaged?.takeRetainedValue() else { return }
+        // `+filterWithName:` is a class factory method — its name is not
+        // alloc/new/copy/mutableCopy — so it returns a +0, autoreleased object
+        // the caller does NOT own. `perform(_:with:)` hands that pointer back
+        // verbatim without applying any ARR convention, so it must be consumed
+        // with `takeUnretainedValue()`: ARC retains the object as it is bound
+        // here, and the filters array retains it again when `setValue` stores
+        // it — both balanced. `takeRetainedValue()` would consume a +1 that was
+        // never transferred, over-releasing the filter by one: it is freed
+        // early and the deferred autorelease-pool `release` then double-frees
+        // it → EXC_BAD_ACCESS in `objc_release` during `objc_autoreleasePoolPop`.
+        guard let filter = unmanaged?.takeUnretainedValue() else { return }
         // inputRadius mirrors MPSImageGaussianBlur sigma (CAFilter uses radius
         // units that are visually equivalent within ±1 px at our scales).
         (filter as AnyObject).setValue(sigma, forKey: "inputRadius")

@@ -4,7 +4,7 @@
  * - Reads the Post from MongoDB
  * - Merges new translations into storyEffects.textObjects[n].translations
  * - Persists the updated storyEffects
- * - Broadcasts post:story-translation-updated to the author's feed room
+ * - Broadcasts story:translation-updated to the author's feed room
  */
 
 import type { PrismaClient } from '@meeshy/shared/prisma/client';

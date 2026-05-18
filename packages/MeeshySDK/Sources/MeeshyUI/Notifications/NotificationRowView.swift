@@ -214,6 +214,20 @@ public struct NotificationRowView: View {
             return "Message transfere"
         case .reply:
             return notification.data?.preview ?? "A repondu a votre message"
+        case .commentReaction:
+            return "A reagi a votre commentaire"
+        case .storyNewComment:
+            return "A commente votre story"
+        case .friendStoryComment:
+            return "A commente une story"
+        case .storyThreadReply:
+            return "A repondu a un commentaire"
+        case .friendNewStory:
+            return "A publie une nouvelle story"
+        case .friendNewPost:
+            return "A publie une nouvelle publication"
+        case .friendNewMood:
+            return "A partage une humeur"
         }
     }
 

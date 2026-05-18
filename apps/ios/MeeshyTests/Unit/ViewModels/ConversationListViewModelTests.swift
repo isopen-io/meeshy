@@ -1,6 +1,8 @@
 import XCTest
 import Combine
 import MeeshySDK
+import SwiftUI
+import MeeshyUI
 @testable import Meeshy
 
 @MainActor
@@ -16,7 +18,9 @@ final class ConversationListViewModelTests: XCTestCase {
         messageService: MockMessageService? = nil,
         authManager: MockAuthManager? = nil,
         storyService: MockStoryService? = nil,
-        syncEngine: MockConversationSyncEngine? = nil
+        syncEngine: MockConversationSyncEngine? = nil,
+        messageNotificationPublisher: AnyPublisher<String, Never>? = nil,
+        draftStore: DraftStore? = nil
     ) -> (
         sut: ConversationListViewModel,
         api: MockAPIClientForApp,
@@ -34,6 +38,14 @@ final class ConversationListViewModelTests: XCTestCase {
         let authManager = authManager ?? MockAuthManager()
         let storyService = storyService ?? MockStoryService()
         let syncEngine = syncEngine ?? MockConversationSyncEngine()
+        let pushPublisher = messageNotificationPublisher
+            ?? PassthroughSubject<String, Never>().eraseToAnyPublisher()
+        let resolvedDraftStore: DraftStore = {
+            if let draftStore { return draftStore }
+            let store = DraftStore(userDefaults: UserDefaults(suiteName: "ConvListVMTests-\(UUID().uuidString)")!)
+            store.clearAll()
+            return store
+        }()
         let sut = ConversationListViewModel(
             api: api,
             conversationService: conversationService,
@@ -42,7 +54,9 @@ final class ConversationListViewModelTests: XCTestCase {
             messageService: messageService,
             authManager: authManager,
             storyService: storyService,
-            syncEngine: syncEngine
+            syncEngine: syncEngine,
+            messageNotificationPublisher: pushPublisher,
+            draftStore: resolvedDraftStore
         )
         return (sut, api, conversationService, preferenceService, messageSocket, messageService, authManager)
     }
@@ -2030,6 +2044,138 @@ final class ConversationListViewModelTests: XCTestCase {
 
         XCTAssertEqual(conversationService.lastListPageCursor, "deep-tail",
                        "Cold start must resume from the persisted cursor instead of refetching page 1")
+    }
+
+    // MARK: - ThemedConversationRow timestamp color
+
+    func test_themedRow_timestampColor_withUnread_isErrorRed() {
+        let color = ThemedConversationRow.timestampColor(unreadCount: 3, accent: .blue)
+        XCTAssertEqual(color, MeeshyColors.error)
+    }
+
+    func test_themedRow_timestampColor_noUnread_isAccent() {
+        let color = ThemedConversationRow.timestampColor(unreadCount: 0, accent: .blue)
+        XCTAssertEqual(color, Color.blue)
+    }
+
+    // MARK: - Push notification bump
+
+    func test_pushNotification_messageForKnownConversation_bumpsToTop() {
+        let subject = PassthroughSubject<String, Never>()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageNotificationPublisher: subject.eraseToAnyPublisher())
+        sut.conversations = [makeConversation(id: "a"), makeConversation(id: "b")]
+        subject.send("b")
+        let exp = expectation(description: "bump applied on main")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 1)
+        XCTAssertEqual(sut.conversations.first?.id, "b")
+    }
+
+    // MARK: - Foreground reactivation
+
+    func test_handleForegroundReactivation_resortsConversations() {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let recent = makeConversation(id: "recent", lastMessageAt: Date(timeIntervalSince1970: 9999))
+        let old = makeConversation(id: "old", lastMessageAt: Date(timeIntervalSince1970: 1))
+        sut.conversations = [old, recent]
+        sut.handleForegroundReactivation()
+        XCTAssertEqual(sut.conversations.first?.id, "recent")
+    }
+
+    func test_handleForegroundReactivation_triggersDeltaSync() {
+        let syncEngine = MockConversationSyncEngine()
+        let exp = expectation(description: "delta sync ran")
+        exp.assertForOverFulfill = false
+        syncEngine.onSyncSinceLastCheckpoint = { exp.fulfill() }
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+        sut.handleForegroundReactivation()
+        wait(for: [exp], timeout: 2)
+        XCTAssertGreaterThan(syncEngine.syncSinceLastCheckpointCallCount, 0)
+    }
+
+    // MARK: - conversationsAreInOrder comparator
+
+    func test_conversationsAreInOrder_pinnedBeforeUnpinned() {
+        let pinned = makeConversation(id: "p", isPinned: true, lastMessageAt: Date(timeIntervalSince1970: 1))
+        let normal = makeConversation(id: "n", isPinned: false, lastMessageAt: Date(timeIntervalSince1970: 999))
+        XCTAssertTrue(ConversationListViewModel.conversationsAreInOrder(pinned, normal, draftSummaries: [:]))
+        XCTAssertFalse(ConversationListViewModel.conversationsAreInOrder(normal, pinned, draftSummaries: [:]))
+    }
+
+    func test_conversationsAreInOrder_draftBeforeNonDraft_amongUnpinned() {
+        let withDraft = makeConversation(id: "d", isPinned: false, lastMessageAt: Date(timeIntervalSince1970: 1))
+        let noDraft = makeConversation(id: "x", isPinned: false, lastMessageAt: Date(timeIntervalSince1970: 999))
+        let drafts = ["d": DraftSummary(previewText: "wip", updatedAt: Date())]
+        XCTAssertTrue(ConversationListViewModel.conversationsAreInOrder(withDraft, noDraft, draftSummaries: drafts))
+        XCTAssertFalse(ConversationListViewModel.conversationsAreInOrder(noDraft, withDraft, draftSummaries: drafts))
+    }
+
+    func test_conversationsAreInOrder_draftsOrderedByUpdatedAtDescending() {
+        let older = makeConversation(id: "o", isPinned: false)
+        let newer = makeConversation(id: "n", isPinned: false)
+        let drafts = [
+            "o": DraftSummary(previewText: "a", updatedAt: Date(timeIntervalSince1970: 100)),
+            "n": DraftSummary(previewText: "b", updatedAt: Date(timeIntervalSince1970: 200))
+        ]
+        XCTAssertTrue(ConversationListViewModel.conversationsAreInOrder(newer, older, draftSummaries: drafts))
+    }
+
+    func test_conversationsAreInOrder_pinnedBeatsDraft() {
+        let pinnedNoDraft = makeConversation(id: "p", isPinned: true, lastMessageAt: Date(timeIntervalSince1970: 1))
+        let unpinnedWithDraft = makeConversation(id: "d", isPinned: false, lastMessageAt: Date(timeIntervalSince1970: 999))
+        let drafts = ["d": DraftSummary(previewText: "wip", updatedAt: Date())]
+        XCTAssertTrue(ConversationListViewModel.conversationsAreInOrder(pinnedNoDraft, unpinnedWithDraft, draftSummaries: drafts))
+    }
+
+    func test_conversationsAreInOrder_twoPinned_orderedByLastMessageAt() {
+        let pinnedOld = makeConversation(id: "po", isPinned: true, lastMessageAt: Date(timeIntervalSince1970: 1))
+        let pinnedRecent = makeConversation(id: "pr", isPinned: true, lastMessageAt: Date(timeIntervalSince1970: 999))
+        XCTAssertTrue(ConversationListViewModel.conversationsAreInOrder(pinnedRecent, pinnedOld, draftSummaries: [:]))
+    }
+
+    // MARK: - Draft summaries integration
+
+    func test_reloadDraftSummaries_populatesFromDraftStore() {
+        let store = DraftStore(userDefaults: UserDefaults(suiteName: "VMDraft-\(UUID().uuidString)")!)
+        store.clearAll()
+        store.save(MessageDraft(text: "hello"), for: "conv1")
+        let (sut, _, _, _, _, _, _) = makeSUT(draftStore: store)
+        sut.reloadDraftSummaries()
+        XCTAssertEqual(sut.draftSummaries["conv1"]?.previewText, "hello")
+    }
+
+    func test_setConversations_draftConversationSortsAboveNonPinned() {
+        let store = DraftStore(userDefaults: UserDefaults(suiteName: "VMDraft-\(UUID().uuidString)")!)
+        store.clearAll()
+        store.save(MessageDraft(text: "wip"), for: "old")
+        let (sut, _, _, _, _, _, _) = makeSUT(draftStore: store)
+        sut.reloadDraftSummaries()
+        let old = makeConversation(id: "old", lastMessageAt: Date(timeIntervalSince1970: 1))
+        let recent = makeConversation(id: "recent", lastMessageAt: Date(timeIntervalSince1970: 9999))
+        sut.setConversations([old, recent])
+        XCTAssertEqual(sut.conversations.first?.id, "old")
+    }
+
+    // MARK: - ThemedConversationRow draft badge
+
+    @MainActor
+    func test_themedRow_equatable_differsByDraftSummary() {
+        let conv = makeConversation(id: "c1")
+        let plain = ThemedConversationRow(conversation: conv)
+        let withDraft = ThemedConversationRow(
+            conversation: conv,
+            draftSummary: DraftSummary(previewText: "hi", updatedAt: Date(timeIntervalSince1970: 1))
+        )
+        XCTAssertNotEqual(plain, withDraft)
+    }
+
+    @MainActor
+    func test_themedRow_equatable_sameDraftSummary_equal() {
+        let conv = makeConversation(id: "c1")
+        let draft = DraftSummary(previewText: "hi", updatedAt: Date(timeIntervalSince1970: 1))
+        let a = ThemedConversationRow(conversation: conv, draftSummary: draft)
+        let b = ThemedConversationRow(conversation: conv, draftSummary: draft)
+        XCTAssertEqual(a, b)
     }
 }
 

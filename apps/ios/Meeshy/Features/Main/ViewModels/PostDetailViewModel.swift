@@ -25,6 +25,7 @@ class PostDetailViewModel: ObservableObject {
     private let postService: PostServiceProviding
     private let socialSocket = SocialSocketManager.shared
     private let languageProvider: LanguageProviding
+    private let offlineQueue: OfflineQueueing
     private var cancellables = Set<AnyCancellable>()
 
     // MARK: - Persistence Layer
@@ -34,10 +35,12 @@ class PostDetailViewModel: ObservableObject {
 
     init(
         postService: PostServiceProviding = PostService.shared,
-        languageProvider: LanguageProviding = AuthManagerLanguageProvider()
+        languageProvider: LanguageProviding = AuthManagerLanguageProvider(),
+        offlineQueue: OfflineQueueing = OfflineQueue.shared
     ) {
         self.postService = postService
         self.languageProvider = languageProvider
+        self.offlineQueue = offlineQueue
     }
 
     /// Wire persistence store for GRDB-backed comments.
@@ -224,7 +227,7 @@ class PostDetailViewModel: ObservableObject {
             liked: nowLiked
         )
         do {
-            try await OfflineQueue.shared.enqueue(.toggleLikePost, payload: payload)
+            try await offlineQueue.enqueue(.toggleLikePost, payload: payload, conversationId: nil)
         } catch {
             // Roll back optimistic state if the outbox refuses the row.
             current.isLiked = !nowLiked
@@ -275,7 +278,7 @@ class PostDetailViewModel: ObservableObject {
             content: content
         )
         do {
-            try await OfflineQueue.shared.enqueue(.createComment, payload: payload, conversationId: post.id)
+            try await offlineQueue.enqueue(.createComment, payload: payload, conversationId: post.id)
             try? await CacheCoordinator.shared.comments.save(comments, for: "post-\(post.id)")
         } catch {
             comments = snapshot

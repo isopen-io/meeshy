@@ -6,7 +6,8 @@ import { PostService } from '../../services/PostService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreatePostSchema, UpdatePostSchema, TranslatePostSchema, PostParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError, sendError } from '../../utils/response';
-import { resolveMentionedUsers } from '../../services/MentionService';
+import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
+import { NotificationService } from '../../services/notifications/NotificationService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 
@@ -16,6 +17,8 @@ export function registerCoreRoutes(
   requiredAuth: any
 ) {
   const postService = new PostService(prisma);
+  const mentionService = new MentionService(prisma);
+  const notificationService = new NotificationService(prisma);
 
   // POST /posts — Create a new post
   fastify.post('/posts', {
@@ -89,6 +92,45 @@ export function registerCoreRoutes(
         ? await resolveMentionedUsers(prisma, [postContent])
         : [];
 
+      let mentionedUserIdsForDedup: string[] = [];
+
+      // Persist and notify post-body mentions (fire-and-forget)
+      if (postContent) {
+        const usernames = mentionService.extractMentions(postContent);
+        if (usernames.length > 0) {
+          const usernameMap = await mentionService.resolveUsernames(usernames);
+          const mentionedUserIds = Array.from(usernameMap.values()).map((u) => u.id);
+          if (mentionedUserIds.length > 0) {
+            mentionedUserIdsForDedup = mentionedUserIds;
+            const postId = (post as any).id as string;
+            const posterId = authContext.registeredUser.id;
+            mentionService.createPostMentions(postId, mentionedUserIds).catch((err: unknown) => {
+              fastify.log.error(`[POST /posts] post mention persist failed: ${err}`);
+            });
+            notificationService.createPostMentionNotificationsBatch({
+              postId,
+              posterId,
+              mentionedUserIds,
+              postExcerpt: postContent.slice(0, 100),
+            }).catch((err: unknown) => {
+              fastify.log.error(`[POST /posts] post mention notify failed: ${err}`);
+            });
+          }
+        }
+      }
+
+      // Fan-out to friends: user_mentioned takes priority (dedup via excludeUserIds)
+      const postTypeForNotif = ((post as any).type ?? parsed.data.type ?? 'POST') as 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+      notificationService.createFriendContentNotificationsBatch({
+        postId: (post as any).id as string,
+        authorId: authContext.registeredUser.id,
+        contentType: postTypeForNotif,
+        excerpt: postContent?.slice(0, 100),
+        excludeUserIds: mentionedUserIdsForDedup,
+      }).catch((err: unknown) => {
+        fastify.log.error(`[POST /posts] friend content notification fan-out failed: ${err}`);
+      });
+
       return sendSuccess(reply, post, { statusCode: 201, meta: { mentionedUsers } });
     } catch (error) {
       fastify.log.error(`[POST /posts] Error: ${error}`);
@@ -109,6 +151,8 @@ export function registerCoreRoutes(
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
+
+      reply.header('Cache-Control', 'private, no-cache');
 
       const contentStrings: string[] = [];
       if ((post as any).content) contentStrings.push((post as any).content);
@@ -162,13 +206,44 @@ export function registerCoreRoutes(
         ? await resolveMentionedUsers(prisma, updateContentStrings)
         : [];
 
-      // Broadcast story edits to viewers so they don't render stale content.
-      // Regular posts already have `broadcastPostUpdated`; stories need their
-      // own event so iOS / web can listen narrowly to story changes (per audit
-      // X7 — without this, deletes and edits silently desync the cached tray).
+      // Persist and notify post-body mentions on edit (re-fires all; idempotent via P2002 swallow)
+      const editedContent = (post as any).content as string | undefined;
+      if (editedContent) {
+        const editUsernames = mentionService.extractMentions(editedContent);
+        if (editUsernames.length > 0) {
+          const editUsernameMap = await mentionService.resolveUsernames(editUsernames);
+          const editMentionedUserIds = Array.from(editUsernameMap.values()).map((u) => u.id);
+          if (editMentionedUserIds.length > 0) {
+            const editPosterId = authContext.registeredUser.id;
+            mentionService.createPostMentions(postId, editMentionedUserIds).catch((err: unknown) => {
+              fastify.log.error(`[PUT /posts/:postId] post mention persist failed: ${err}`);
+            });
+            notificationService.createPostMentionNotificationsBatch({
+              postId,
+              posterId: editPosterId,
+              mentionedUserIds: editMentionedUserIds,
+              postExcerpt: editedContent.slice(0, 100),
+            }).catch((err: unknown) => {
+              fastify.log.error(`[PUT /posts/:postId] post mention notify failed: ${err}`);
+            });
+          }
+        }
+      }
+
+      // Broadcast post edits. Each type has its own event so clients can listen narrowly:
+      // - STORY → story:updated (visibility-filtered, per audit X7)
+      // - STATUS → status:updated (visibility-filtered)
+      // - POST/MOOD → post:updated to friends feed
       const socialEvents = fastify.socialEvents;
-      if (socialEvents && (post as any).type === 'STORY') {
-        socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+      if (socialEvents) {
+        const updatedPostType = (post as any).type as string;
+        if (updatedPostType === 'STORY') {
+          socialEvents.broadcastStoryUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+        } else if (updatedPostType === 'STATUS') {
+          socialEvents.broadcastStatusUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+        } else {
+          socialEvents.broadcastPostUpdated(post as any, authContext.registeredUser.id).catch(() => {});
+        }
       }
 
       return sendSuccess(reply, post, { meta: { mentionedUsers: updateMentionedUsers } });

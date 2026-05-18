@@ -1052,6 +1052,44 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                 }
             }
             .store(in: &cancellables)
+
+        socialSocket.storyUpdated
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                let updated = [event.story].toStoryGroups()
+                for updatedGroup in updated {
+                    guard let groupIdx = self.storyGroups.firstIndex(where: { $0.id == updatedGroup.id }) else { continue }
+                    var stories = self.storyGroups[groupIdx].stories
+                    for newStory in updatedGroup.stories {
+                        if let storyIdx = stories.firstIndex(where: { $0.id == newStory.id }) {
+                            stories[storyIdx] = newStory
+                        }
+                    }
+                    self.storyGroups[groupIdx] = self.storyGroups[groupIdx].with(stories: stories)
+                }
+                self.persistStoryCache()
+            }
+            .store(in: &cancellables)
+
+        socialSocket.storyDeleted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                for i in self.storyGroups.indices {
+                    let filtered = self.storyGroups[i].stories.filter { $0.id != event.storyId }
+                    if filtered.count != self.storyGroups[i].stories.count {
+                        if filtered.isEmpty {
+                            self.storyGroups.remove(at: i)
+                        } else {
+                            self.storyGroups[i] = self.storyGroups[i].with(stories: filtered)
+                        }
+                        self.persistStoryCache()
+                        return
+                    }
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Helpers

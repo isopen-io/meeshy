@@ -12,5 +12,7 @@
 	<true/>
 	<key>uploadBitcode</key>
 	<false/>
+	<key>stripSwiftSymbols</key>
+	<true/>
 </dict>
 </plist>

@@ -83,6 +83,11 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
     var liveLocationUpdatePayloads: [LiveLocationUpdatePayload] = []
     var liveLocationStopConversationIds: [String] = []
     var sendWithAttachmentsCallCount = 0
+    var sendViaSocketFallbackCallCount = 0
+    var sendViaSocketFallbackResult: MessageSocketManager.SendMessageAck?
+    var lastSendViaSocketFallbackClientMessageId: String?
+    var lastSendViaSocketFallbackAttachmentIds: [String]?
+    var lastSendViaSocketFallbackIsEncrypted: Bool?
     var callInitiateCallCount = 0
     var callInitiateResult: Result<MessageSocketManager.CallInitiateAck, Error> = .success(
         MessageSocketManager.CallInitiateAck(callId: "mock-call-id", mode: "audio", iceServers: [])
@@ -154,6 +159,14 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
 
     func sendWithAttachments(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String?) {
         sendWithAttachmentsCallCount += 1
+    }
+
+    func sendViaSocketFallback(conversationId: String, content: String?, attachmentIds: [String], replyToId: String?, storyReplyToId: String?, originalLanguage: String?, isEncrypted: Bool, clientMessageId: String) async -> MessageSocketManager.SendMessageAck? {
+        sendViaSocketFallbackCallCount += 1
+        lastSendViaSocketFallbackClientMessageId = clientMessageId
+        lastSendViaSocketFallbackAttachmentIds = attachmentIds
+        lastSendViaSocketFallbackIsEncrypted = isEncrypted
+        return sendViaSocketFallbackResult
     }
 
     func emitCallInitiate(conversationId: String, isVideo: Bool) async throws -> MessageSocketManager.CallInitiateAck {
@@ -245,6 +258,11 @@ final class MockMessageSocket: MessageSocketProviding, @unchecked Sendable {
         liveLocationUpdatePayloads.removeAll()
         liveLocationStopConversationIds.removeAll()
         sendWithAttachmentsCallCount = 0
+        sendViaSocketFallbackCallCount = 0
+        sendViaSocketFallbackResult = nil
+        lastSendViaSocketFallbackClientMessageId = nil
+        lastSendViaSocketFallbackAttachmentIds = nil
+        lastSendViaSocketFallbackIsEncrypted = nil
         callInitiateCallCount = 0
         callJoinCallCount = 0
         callLeaveCallCount = 0

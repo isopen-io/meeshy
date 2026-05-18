@@ -25,7 +25,8 @@ final class CommunityServiceTests: XCTestCase {
             description: "A test community", avatar: nil, banner: nil,
             isPrivate: false, createdBy: "user1",
             createdAt: Date(), updatedAt: nil,
-            creator: nil, members: nil, _count: nil
+            creator: nil, members: nil, _count: nil,
+            memberCount: nil, conversationCount: nil
         )
     }
 

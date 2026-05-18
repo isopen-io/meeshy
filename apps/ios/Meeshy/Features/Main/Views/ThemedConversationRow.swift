@@ -1,5 +1,6 @@
 import SwiftUI
 import MeeshySDK
+import MeeshyUI
 
 // MARK: - Extracted from ConversationListView.swift
 
@@ -26,6 +27,10 @@ struct ThemedConversationRow: View {
     /// iPad / macOS split-view selection: row highlighted with accent tint + leading bar.
     /// iPhone passes false (NavigationStack hides the list when a conversation opens).
     var isSelected: Bool = false
+    /// Brouillon actif de la conversation (concept client-local). Non nil →
+    /// la ligne affiche « Brouillon : … » au lieu de l'aperçu du dernier
+    /// message.
+    var draftSummary: DraftSummary? = nil
 
     private var accentColor: String { conversation.accentColor }
 
@@ -106,31 +111,10 @@ struct ThemedConversationRow: View {
         return (visibleTags, remaining)
     }
 
-    // MARK: - Last Message Effect State
+    // MARK: - Last Message Summary
 
-    private enum LastMessageEffect {
-        case expired
-        case blurred
-        case viewOnce
-        case ephemeralActive
-        case none
-    }
-
-    private var lastMessageEffect: LastMessageEffect {
-        let now = Date()
-        if let expiresAt = conversation.lastMessageExpiresAt, expiresAt <= now {
-            return .expired
-        }
-        if conversation.lastMessageIsBlurred {
-            return .blurred
-        }
-        if conversation.lastMessageIsViewOnce {
-            return .viewOnce
-        }
-        if let expiresAt = conversation.lastMessageExpiresAt, expiresAt > now {
-            return .ephemeralActive
-        }
-        return .none
+    private var lastMessageSummary: LastMessageSummaryKind {
+        conversation.lastMessageSummaryKind()
     }
 
     var body: some View {
@@ -149,7 +133,7 @@ struct ThemedConversationRow: View {
                     // Name with type indicator
                     HStack(spacing: 6) {
                         Text(conversation.displayName)
-                            .font(.system(size: 15, weight: .semibold))
+                            .font(.system(size: 15, weight: conversation.unreadCount > 0 ? .bold : .semibold))
                             .foregroundColor(textPrimary)
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
@@ -173,7 +157,7 @@ struct ThemedConversationRow: View {
                     // Timestamp — layoutPriority(1) pour ne jamais être écrasé
                     Text(timeAgo(conversation.lastMessageAt))
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundColor(accent)
+                        .foregroundColor(Self.timestampColor(unreadCount: conversation.unreadCount, accent: accent))
                         .layoutPriority(1)
                         .padding(.top, 2)
                 }
@@ -239,18 +223,18 @@ struct ThemedConversationRow: View {
     private var conversationAccessibilityLabel: String {
         var parts: [String] = []
         parts.append("Conversation avec \(conversation.name)")
-        switch lastMessageEffect {
+        switch lastMessageSummary {
         case .expired:
             parts.append("dernier message expiré")
-        case .blurred:
-            parts.append("dernier message flouté")
+        case .hidden:
+            parts.append("dernier message masqué")
         case .viewOnce:
-            parts.append("dernier message : voir une fois")
+            parts.append("dernier message : vue unique")
         case .ephemeralActive:
             if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 parts.append("dernier message éphémère : \(preview)")
             }
-        case .none:
+        case .standard:
             if let preview = conversation.lastMessagePreview, !preview.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 parts.append("dernier message: \(preview)")
             }
@@ -336,22 +320,25 @@ struct ThemedConversationRow: View {
 
     // MARK: - Unread Badge
     private var unreadBadge: some View {
-        ZStack {
+        let badgeColor = MeeshyColors.unreadBadgeBackground(isDark: isDark)
+        return ZStack {
             Circle()
-                .fill(
-                    LinearGradient(
-                        colors: [accent, accentSecondary],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(badgeColor)
                 .frame(width: 24, height: 24)
-                .shadow(color: accent.opacity(0.25), radius: 3)
+                .shadow(color: badgeColor.opacity(0.25), radius: 3)
 
             Text("\(min(conversation.unreadCount, 99))")
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(.white)
         }
+    }
+
+    /// Teinte de l'indicateur de durée. Reprend le rouge du badge de non-lus
+    /// quand la conversation a des messages non lus, sinon l'accent de la
+    /// conversation. On utilise `error` (#F87171) plutôt que le fond sombre du
+    /// badge (#991B1B) pour que le texte 11pt reste lisible en mode sombre.
+    static func timestampColor(unreadCount: Int, accent: Color) -> Color {
+        unreadCount > 0 ? MeeshyColors.error : accent
     }
 
     private func timeAgo(_ date: Date) -> String {
@@ -401,6 +388,23 @@ struct ThemedConversationRow: View {
         }
     }
 
+    // MARK: - Draft Preview
+
+    @ViewBuilder
+    private func draftPreviewView(_ draft: DraftSummary) -> some View {
+        HStack(spacing: 4) {
+            Text(draft.previewText.isEmpty ? "Brouillon" : "Brouillon :")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(MeeshyColors.error)
+            if !draft.previewText.isEmpty {
+                Text(draft.previewText)
+                    .font(.system(size: 13))
+                    .foregroundColor(textSecondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
     // MARK: - Last Message Preview
 
     @ViewBuilder
@@ -441,8 +445,10 @@ struct ThemedConversationRow: View {
     private var lastMessagePreviewView: some View {
         if typingUsername != nil {
             typingIndicatorView
+        } else if let draftSummary {
+            draftPreviewView(draftSummary)
         } else {
-            switch lastMessageEffect {
+            switch lastMessageSummary {
             case .expired:
                 HStack(spacing: 4) {
                     Image(systemName: "timer.badge.xmark")
@@ -454,17 +460,16 @@ struct ThemedConversationRow: View {
                         .lineLimit(1)
                 }
 
-            case .blurred:
+            case .hidden:
                 HStack(spacing: 4) {
                     senderLabel
                     Image(systemName: "eye.slash")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(textSecondary)
-                    Text(conversation.lastMessagePreview ?? "")
-                        .font(.system(size: 13))
+                    Text(String(localized: "conversation.summary.hidden", defaultValue: "1 message caché"))
+                        .font(.system(size: 13).italic())
                         .foregroundColor(textSecondary)
                         .lineLimit(1)
-                        .blur(radius: 4)
                 }
 
             case .viewOnce:
@@ -473,8 +478,8 @@ struct ThemedConversationRow: View {
                     Image(systemName: "flame")
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(accent)
-                    Text(String(localized: "message.view_once", defaultValue: "Voir une fois"))
-                        .font(.system(size: 13))
+                    Text(String(localized: "conversation.summary.view_once", defaultValue: "1 message vue unique"))
+                        .font(.system(size: 13).italic())
                         .foregroundColor(accent)
                         .lineLimit(1)
                 }
@@ -482,7 +487,7 @@ struct ThemedConversationRow: View {
             case .ephemeralActive:
                 standardMessageContent(showEphemeralIcon: true)
 
-            case .none:
+            case .standard:
                 let hasText = !(conversation.lastMessagePreview ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 let attachments = conversation.lastMessageAttachments
                 if hasText || !attachments.isEmpty {
@@ -572,7 +577,8 @@ extension ThemedConversationRow: @MainActor Equatable {
         lhs.storyRingState == rhs.storyRingState &&
         lhs.moodStatus?.id == rhs.moodStatus?.id &&
         lhs.presenceState == rhs.presenceState &&
-        lhs.isSelected == rhs.isSelected
+        lhs.isSelected == rhs.isSelected &&
+        lhs.draftSummary == rhs.draftSummary
     }
 }
 

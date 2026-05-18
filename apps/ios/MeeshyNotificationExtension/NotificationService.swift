@@ -34,6 +34,7 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         updateSharedUnreadCount(from: bestAttemptContent.userInfo)
         prefetchMessageData(from: bestAttemptContent.userInfo)
         prePersistMessage(from: bestAttemptContent.userInfo)
+        postDeliveryReceipt(from: bestAttemptContent.userInfo)
 
         let userInfo = bestAttemptContent.userInfo
 
@@ -209,8 +210,18 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
              "post_comment",
              "post_repost",
              "story_reaction",
+             "status_reaction",
              "comment_like",
-             "comment_reply":
+             "comment_reply",
+             "comment_reaction",
+             // Story comment fan-out (Phase 1) — author / thread / friends
+             "story_new_comment",
+             "story_thread_reply",
+             "friend_story_comment",
+             // Friend content fan-out (Phase 4F)
+             "friend_new_story",
+             "friend_new_post",
+             "friend_new_mood":
             category = "MEESHY_SOCIAL"
 
         // Call events — callback / answer / decline actions
@@ -385,6 +396,42 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         return dbDir.appendingPathComponent("meeshy_messages.sqlite").path
     }
 
+    // MARK: - Delivery Receipt
+
+    /// Push types that mean "a new message was delivered to this recipient".
+    /// Reactions and social events also carry a `messageId`, but they do not
+    /// constitute message delivery, so they are excluded.
+    private static let deliveryReceiptTypes: Set<String> = [
+        "new_message", "message_reply", "reply", "message_forwarded",
+        "new_conversation", "new_conversation_direct", "new_conversation_group",
+        "added_to_conversation"
+    ]
+
+    /// Acknowledge delivery of a push-delivered message to the gateway.
+    ///
+    /// For an OFFLINE recipient the gateway's online auto-delivery path never
+    /// fires (the extension holds no socket), so the author would stay stuck
+    /// on a single checkmark until the recipient opens the app. Posting a
+    /// receipt here lets the gateway mark the message delivered and broadcast
+    /// `read-status:updated`, upgrading the author's checkmark ✓ → ✓✓.
+    ///
+    /// Fire-and-forget via a background `URLSession` — it survives the
+    /// extension being torn down and never delays the banner. The gateway
+    /// still enforces the recipient's `showReadReceipts` preference.
+    private func postDeliveryReceipt(from userInfo: [AnyHashable: Any]) {
+        guard let messageId = userInfo["messageId"] as? String,
+              let conversationId = userInfo["conversationId"] as? String,
+              !messageId.isEmpty, !conversationId.isEmpty else { return }
+
+        let type = userInfo["type"] as? String ?? ""
+        guard Self.deliveryReceiptTypes.contains(type) else { return }
+
+        NSEDataSync.postDeliveryReceipt(
+            conversationId: conversationId,
+            messageId: messageId
+        )
+    }
+
     // MARK: - Communication Notifications
 
     /// Notification types that should use iOS Communication Notification style.
@@ -401,7 +448,10 @@ nonisolated class NotificationService: UNNotificationServiceExtension {
         "new_conversation", "new_conversation_direct", "new_conversation_group", "added_to_conversation",
         "message_reaction", "mention", "user_mentioned",
         "missed_call", "call_ended", "call_declined", "call_recording_ready",
-        "post_like", "post_comment", "post_repost", "story_reaction", "comment_like", "comment_reply",
+        "post_like", "post_comment", "post_repost", "story_reaction", "status_reaction",
+        "comment_like", "comment_reply", "comment_reaction",
+        "story_new_comment", "story_thread_reply", "friend_story_comment",
+        "friend_new_story", "friend_new_post", "friend_new_mood",
         "friend_request", "contact_request"
     ]
 

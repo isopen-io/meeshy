@@ -2,7 +2,7 @@ import Foundation
 
 // MARK: - Category & ElementKind
 
-public enum BandCategory: Equatable, Sendable {
+public nonisolated enum BandCategory: Equatable, Sendable {
     case contenu, effets
 
     public var swapped: BandCategory {
@@ -13,13 +13,13 @@ public enum BandCategory: Equatable, Sendable {
     }
 }
 
-public enum BandElementKind: Equatable, Sendable {
+public nonisolated enum BandElementKind: Equatable, Sendable {
     case text, media
 }
 
 // MARK: - BandState
 
-public enum BandState: Equatable, Sendable {
+public nonisolated enum BandState: Equatable, Sendable {
     case hidden
     case tiles(BandCategory)
     case toolPanel(StoryToolMode)
@@ -36,7 +36,7 @@ public enum BandState: Equatable, Sendable {
 
 // MARK: - StoryToolMode.bandCategory
 
-extension StoryToolMode {
+nonisolated extension StoryToolMode {
     /// Bridges the existing `StoryToolMode` enum to `BandCategory` for the new layer.
     /// Kept separate from the existing `tab: StoryTab` property to avoid coupling
     /// the legacy `ContextualToolbar` symbol (`StoryTab`) with the new layer.
@@ -50,7 +50,7 @@ extension StoryToolMode {
 
 // MARK: - BandStateMachine
 
-public struct BandStateMachine: Equatable, Sendable {
+public nonisolated struct BandStateMachine: Equatable, Sendable {
     public private(set) var state: BandState = .hidden
     private var lastCategoryBeforeFormat: BandCategory? = nil
 

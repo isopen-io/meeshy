@@ -172,6 +172,48 @@ struct ThemedFeedOverlay: View {
     @State private var pendingAttachmentType: String?
     @State private var quoteOriginalPost: FeedPost?
 
+    // Post reaction state — socket-driven, mirrors FeedView pattern.
+    @State private var postLikedIds: Set<String> = []
+    @State private var postLikeDelta: [String: Int] = [:]
+    @State private var postHeartInFlightIds: Set<String> = []
+
+    @MainActor
+    private func togglePostHeart(post: FeedPost) {
+        let postId = post.id
+        Task {
+            guard !postHeartInFlightIds.contains(postId) else { return }
+            postHeartInFlightIds.insert(postId)
+            defer { Task { @MainActor in postHeartInFlightIds.remove(postId) } }
+            let wasLiked = postLikedIds.contains(postId)
+            if wasLiked {
+                postLikedIds.remove(postId)
+                postLikeDelta[postId, default: 0] -= 1
+            } else {
+                postLikedIds.insert(postId)
+                postLikeDelta[postId, default: 0] += 1
+            }
+            do {
+                if wasLiked {
+                    _ = try await SocialSocketManager.shared.removePostReaction(
+                        postId: postId, emoji: StoryViewerView.heartEmoji
+                    )
+                } else {
+                    _ = try await SocialSocketManager.shared.addPostReaction(
+                        postId: postId, emoji: StoryViewerView.heartEmoji
+                    )
+                }
+            } catch {
+                if wasLiked {
+                    postLikedIds.insert(postId)
+                    postLikeDelta[postId, default: 0] += 1
+                } else {
+                    postLikedIds.remove(postId)
+                    postLikeDelta[postId, default: 0] -= 1
+                }
+            }
+        }
+    }
+
     var body: some View {
         ZStack {
             // Background
@@ -246,8 +288,11 @@ struct ThemedFeedOverlay: View {
                     ForEach(Array(viewModel.posts.enumerated()), id: \.element.id) { index, post in
                         FeedPostCard(
                             post: post,
-                            onLike: { postId in
-                                Task { await viewModel.likePost(postId) }
+                            isLiked: postLikedIds.contains(post.id),
+                            displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
+                            isHeartInFlight: postHeartInFlightIds.contains(post.id),
+                            onLike: { _ in
+                                togglePostHeart(post: post)
                             },
                             onRepost: { postId in
                                 Task { await viewModel.repostPost(postId) }
@@ -313,9 +358,42 @@ struct ThemedFeedOverlay: View {
             if viewModel.posts.isEmpty {
                 await viewModel.loadFeed()
             }
+            let newLiked = FeedView.computePostLikedIds(from: viewModel.posts)
+            for id in newLiked where !postLikedIds.contains(id) && postLikeDelta[id] == nil {
+                postLikedIds.insert(id)
+            }
             viewModel.subscribeToSocketEvents()
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
+        }
+        .onChange(of: viewModel.posts) { _, newPosts in
+            for post in newPosts where postLikeDelta[post.id] == nil && !postHeartInFlightIds.contains(post.id) {
+                if post.isLiked {
+                    postLikedIds.insert(post.id)
+                } else {
+                    postLikedIds.remove(post.id)
+                }
+            }
+        }
+        .onReceive(SocialSocketManager.shared.postReactionAdded.receive(on: DispatchQueue.main)) { event in
+            let heart = StoryViewerView.heartEmoji
+            guard event.emoji == heart else { return }
+            let currentUserId = AuthManager.shared.currentUser?.id
+            if event.userId == currentUserId {
+                postLikedIds.insert(event.postId)
+            } else {
+                postLikeDelta[event.postId, default: 0] += 1
+            }
+        }
+        .onReceive(SocialSocketManager.shared.postReactionRemoved.receive(on: DispatchQueue.main)) { event in
+            let heart = StoryViewerView.heartEmoji
+            guard event.emoji == heart else { return }
+            let currentUserId = AuthManager.shared.currentUser?.id
+            if event.userId == currentUserId {
+                postLikedIds.remove(event.postId)
+            } else {
+                postLikeDelta[event.postId, default: 0] -= 1
+            }
         }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()

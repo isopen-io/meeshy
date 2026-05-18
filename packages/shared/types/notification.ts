@@ -67,6 +67,18 @@ export enum NotificationTypeEnum {
   STATUS_REACTION = 'status_reaction',
   COMMENT_LIKE = 'comment_like',
   COMMENT_REPLY = 'comment_reply',
+  COMMENT_REACTION = 'comment_reaction',
+  STORY_NEW_COMMENT = 'story_new_comment',
+  FRIEND_STORY_COMMENT = 'friend_story_comment',
+  STORY_THREAD_REPLY = 'story_thread_reply',
+
+  // ===== FRIEND CONTENT EVENTS (Phase 4F) =====
+  // Fired when a friend publishes new content.
+  // STATUS and MOOD share friend_new_mood — they are lightweight
+  // ephemeral content and grouping avoids type proliferation.
+  FRIEND_NEW_STORY = 'friend_new_story',
+  FRIEND_NEW_POST = 'friend_new_post',
+  FRIEND_NEW_MOOD = 'friend_new_mood',
 
   // ===== CALL EVENTS =====
   MISSED_CALL = 'missed_call',
@@ -358,6 +370,16 @@ export interface CommentLikeNotificationMetadata extends BaseNotificationMetadat
 }
 
 /**
+ * Metadata pour friend_new_story / friend_new_post / friend_new_mood (Phase 4F)
+ */
+export interface FriendContentNotificationMetadata extends BaseNotificationMetadata {
+  readonly postId: string;
+  readonly contentType: 'STORY' | 'POST' | 'MOOD' | 'STATUS';
+  readonly excerpt?: string;
+  readonly action: 'view_post';
+}
+
+/**
  * Metadata pour login_new_device
  */
 export interface LoginNewDeviceNotificationMetadata extends BaseNotificationMetadata {
@@ -399,6 +421,7 @@ export type NotificationMetadata =
   | PostCommentNotificationMetadata
   | PostRepostNotificationMetadata
   | CommentLikeNotificationMetadata
+  | FriendContentNotificationMetadata
   | LoginNewDeviceNotificationMetadata
   | GenericNotificationMetadata;
 

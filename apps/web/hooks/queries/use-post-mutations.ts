@@ -4,9 +4,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { queryKeys } from '@/lib/react-query/query-keys';
 import { postsService } from '@/services/posts.service';
 import type { CreatePostRequest, UpdatePostRequest, RepostRequest } from '@/services/posts.service';
+import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { CLIENT_EVENTS } from '@meeshy/shared/types/socketio-events';
 import type { Post } from '@meeshy/shared/types/post';
 import type { InfiniteFeedData } from './types';
 import { useAuthStore } from '@/stores/auth-store';
+
+const HEART_EMOJI = '❤️';
+const SOCKET_ACK_TIMEOUT_MS = 10_000;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -186,10 +191,31 @@ export function useLikePostMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ postId, emoji }: { postId: string; emoji?: string }) =>
-      postsService.likePost(postId, emoji),
+    mutationFn: ({ postId, emoji = HEART_EMOJI }: { postId: string; emoji?: string }) =>
+      new Promise<void>((resolve, reject) => {
+        const socket = meeshySocketIOService.getSocket();
+        if (!socket?.connected) {
+          reject(new Error('Socket not connected'));
+          return;
+        }
 
-    onMutate: async ({ postId, emoji = '❤️' }) => {
+        const timer = setTimeout(() => reject(new Error('Socket ack timeout')), SOCKET_ACK_TIMEOUT_MS);
+
+        socket.emit(
+          CLIENT_EVENTS.POST_REACTION_ADD,
+          { postId, emoji },
+          (response: { success: boolean; error?: string }) => {
+            clearTimeout(timer);
+            if (response.success) {
+              resolve();
+            } else {
+              reject(new Error(response.error ?? 'Failed to add reaction'));
+            }
+          },
+        );
+      }),
+
+    onMutate: async ({ postId, emoji = HEART_EMOJI }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.posts.infinite('feed') });
       const previous = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
 
@@ -202,6 +228,9 @@ export function useLikePostMutation() {
             ...p.reactionSummary,
             [emoji]: ((p.reactionSummary ?? {})[emoji] ?? 0) + 1,
           },
+          currentUserReactions: (p.currentUserReactions ?? []).includes(emoji)
+            ? p.currentUserReactions
+            : [...(p.currentUserReactions ?? []), emoji],
         })),
       );
 
@@ -220,9 +249,31 @@ export function useUnlikePostMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (postId: string) => postsService.unlikePost(postId),
+    mutationFn: ({ postId, emoji = HEART_EMOJI }: { postId: string; emoji?: string }) =>
+      new Promise<void>((resolve, reject) => {
+        const socket = meeshySocketIOService.getSocket();
+        if (!socket?.connected) {
+          reject(new Error('Socket not connected'));
+          return;
+        }
 
-    onMutate: async (postId) => {
+        const timer = setTimeout(() => reject(new Error('Socket ack timeout')), SOCKET_ACK_TIMEOUT_MS);
+
+        socket.emit(
+          CLIENT_EVENTS.POST_REACTION_REMOVE,
+          { postId, emoji },
+          (response: { success: boolean; error?: string }) => {
+            clearTimeout(timer);
+            if (response.success) {
+              resolve();
+            } else {
+              reject(new Error(response.error ?? 'Failed to remove reaction'));
+            }
+          },
+        );
+      }),
+
+    onMutate: async ({ postId, emoji = HEART_EMOJI }: { postId: string; emoji?: string }) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.posts.infinite('feed') });
       const previous = queryClient.getQueryData<InfiniteFeedData>(queryKeys.posts.infinite('feed'));
 
@@ -231,6 +282,11 @@ export function useUnlikePostMutation() {
         (old) => patchPostInFeed(old, postId, (p) => ({
           ...p,
           likeCount: Math.max(0, p.likeCount - 1),
+          reactionSummary: {
+            ...p.reactionSummary,
+            [emoji]: Math.max(0, ((p.reactionSummary ?? {})[emoji] ?? 1) - 1),
+          },
+          currentUserReactions: (p.currentUserReactions ?? []).filter((e) => e !== emoji),
         })),
       );
 

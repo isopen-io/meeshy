@@ -1,4 +1,5 @@
 import Foundation
+import Combine
 
 /// Per-conversation draft state preserved across kills and navigation so the
 /// user never loses an in-progress message. Mirrors the WhatsApp/iMessage
@@ -63,8 +64,21 @@ public struct MessageDraft: Codable, Equatable, Sendable {
     }
 }
 
+/// Projection légère et prête au rendu d'un brouillon persisté, pour la liste
+/// de conversations. Ne porte que ce dont la ligne et le comparateur de tri
+/// ont besoin.
+struct DraftSummary: Equatable, Sendable {
+    let previewText: String
+    let updatedAt: Date
+}
+
 final class DraftStore: @unchecked Sendable {
     static let shared = DraftStore()
+
+    /// Émis à chaque mutation de brouillon (save, remove, clearAll,
+    /// purgeExpired). La liste de conversations s'y abonne pour ré-annoter et
+    /// re-trier en temps réel.
+    let changed = PassthroughSubject<Void, Never>()
 
     private let defaults: UserDefaults
     private let prefix = "meeshy_draft_"
@@ -88,12 +102,14 @@ final class DraftStore: @unchecked Sendable {
     func save(_ draft: MessageDraft, for conversationId: String) {
         if draft.isEffectivelyEmpty {
             defaults.removeObject(forKey: key(for: conversationId))
+            changed.send()
             return
         }
         var stamped = draft
         stamped.updatedAt = Date()
         guard let data = try? encoder.encode(stamped) else { return }
         defaults.set(data, forKey: key(for: conversationId))
+        changed.send()
     }
 
     func load(for conversationId: String) -> MessageDraft? {
@@ -113,10 +129,27 @@ final class DraftStore: @unchecked Sendable {
 
     func remove(for conversationId: String) {
         defaults.removeObject(forKey: key(for: conversationId))
+        changed.send()
     }
 
     func hasDraft(for conversationId: String) -> Bool {
         load(for: conversationId) != nil
+    }
+
+    /// Tous les brouillons persistés qui ont encore du contenu, indexés par
+    /// conversationId. Parcourt l'espace de clés `meeshy_draft_` — utilisé par
+    /// la liste de conversations pour afficher le badge « Brouillon » et
+    /// remonter la ligne en tête.
+    func allNonEmptyDrafts() -> [String: MessageDraft] {
+        var result: [String: MessageDraft] = [:]
+        for k in defaults.dictionaryRepresentation().keys where k.hasPrefix(prefix) {
+            let conversationId = String(k.dropFirst(prefix.count))
+            guard !conversationId.isEmpty,
+                  let draft = load(for: conversationId),
+                  !draft.isEffectivelyEmpty else { continue }
+            result[conversationId] = draft
+        }
+        return result
     }
 
     /// Purge the reply reference (`replyToId`) of an existing draft so the
@@ -160,6 +193,7 @@ final class DraftStore: @unchecked Sendable {
         for k in allKeys where k.hasPrefix(prefix) {
             defaults.removeObject(forKey: k)
         }
+        changed.send()
     }
 
     /// Sweep drafts older than `maxAge` so abandoned compose sessions don't
@@ -175,6 +209,7 @@ final class DraftStore: @unchecked Sendable {
                 defaults.removeObject(forKey: k)
             }
         }
+        changed.send()
     }
 
     private func key(for conversationId: String) -> String {

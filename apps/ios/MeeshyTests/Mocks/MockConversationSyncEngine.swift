@@ -31,6 +31,11 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
     var lastMarkReadConversationId: String?
     var updateConversationAfterSendCallCount = 0
 
+    /// Optional hook invoked inside `syncSinceLastCheckpoint()` so tests can
+    /// fulfill an expectation the moment the delta sync runs, instead of
+    /// waiting on a fixed delay.
+    var onSyncSinceLastCheckpoint: (() -> Void)?
+
     // MARK: - Protocol Conformance
 
     @discardableResult
@@ -42,6 +47,7 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
     @discardableResult
     func syncSinceLastCheckpoint() async -> Bool {
         syncSinceLastCheckpointCallCount += 1
+        onSyncSinceLastCheckpoint?()
         return syncSinceLastCheckpointResult
     }
 
@@ -99,5 +105,6 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         markConversationReadLocallyCallCount = 0
         lastMarkReadConversationId = nil
         updateConversationAfterSendCallCount = 0
+        onSyncSinceLastCheckpoint = nil
     }
 }

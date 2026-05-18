@@ -18,7 +18,7 @@
 import { describe, it, expect, beforeEach, jest } from '@jest/globals';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
 import { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
-import type { Post, PostLikedEventData, PostUnlikedEventData, PostRepostedEventData, StoryViewedEventData, StoryReactedEventData, StatusReactedEventData, CommentAddedEventData, CommentDeletedEventData, CommentLikedEventData } from '@meeshy/shared/types/post';
+import type { Post, PostLikedEventData, PostUnlikedEventData, PostRepostedEventData, StoryViewedEventData, StoryReactedEventData, StoryUnreactedEventData, StatusReactedEventData, StatusUnreactedEventData, CommentAddedEventData, CommentDeletedEventData, CommentLikedEventData } from '@meeshy/shared/types/post';
 
 // ===== MOCKS =====
 
@@ -264,7 +264,7 @@ describe('SocialEventsHandler', () => {
   });
 
   describe('broadcastStoryReacted', () => {
-    it('should emit STORY_REACTED ONLY to the story author', () => {
+    it('should emit STORY_REACTED to the story author AND to the post room', () => {
       const data: StoryReactedEventData = {
         storyId: 'story-1',
         userId: VIEWER_ID,
@@ -273,8 +273,10 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStoryReacted(data, AUTHOR_ID);
 
-      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      // Two emits: feed:{authorId} and post:{storyId}
+      expect(mockIO.to).toHaveBeenCalledTimes(2);
       expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post('story-1'));
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.STORY_REACTED, data);
     });
   });
@@ -295,7 +297,7 @@ describe('SocialEventsHandler', () => {
   });
 
   describe('broadcastStatusReacted', () => {
-    it('should emit STATUS_REACTED ONLY to the status author', () => {
+    it('should emit STATUS_REACTED to the status author AND to the post room', () => {
       const data: StatusReactedEventData = {
         statusId: 'status-1',
         userId: VIEWER_ID,
@@ -304,12 +306,14 @@ describe('SocialEventsHandler', () => {
 
       handler.broadcastStatusReacted(data, AUTHOR_ID);
 
-      expect(mockIO.to).toHaveBeenCalledTimes(1);
+      // Two emits: feed:{authorId} and post:{statusId}
+      expect(mockIO.to).toHaveBeenCalledTimes(2);
       expect(mockIO.to).toHaveBeenCalledWith(ROOMS.feed(AUTHOR_ID));
+      expect(mockIO.to).toHaveBeenCalledWith(ROOMS.post('status-1'));
       expect(mockIO.emit).toHaveBeenCalledWith(SERVER_EVENTS.STATUS_REACTED, data);
     });
 
-    it('should NOT emit to friends', () => {
+    it('should NOT emit to friend feed rooms', () => {
       const data: StatusReactedEventData = {
         statusId: 'status-1',
         userId: VIEWER_ID,
@@ -612,6 +616,135 @@ describe('SocialEventsHandler', () => {
         const emittedEvents = mockIO.emit.mock.calls.map((call: any[]) => call[0]);
         expect(emittedEvents).toContain(expectedEvent);
       }
+    });
+  });
+
+  // ==============================================
+  // PHASE 4B — B2: broadcastStoryReacted emits to ROOMS.post
+  // ==============================================
+
+  describe('broadcastStoryReacted — B2 room emit', () => {
+    it('should emit STORY_REACTED to the author feed room AND to ROOMS.post(storyId)', () => {
+      const data: StoryReactedEventData = {
+        storyId: 'story-42',
+        userId: VIEWER_ID,
+        emoji: 'fire',
+      };
+
+      handler.broadcastStoryReacted(data, AUTHOR_ID);
+
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
+      expect(calledRooms).toContain(ROOMS.post('story-42'));
+      // Both emits use the same event constant
+      const emittedEvents = mockIO.emit.mock.calls.map((call: any[]) => call[0]);
+      expect(emittedEvents.every((e: string) => e === SERVER_EVENTS.STORY_REACTED)).toBe(true);
+    });
+
+    it('should NOT emit STORY_REACTED to friend feed rooms', () => {
+      const data: StoryReactedEventData = {
+        storyId: 'story-42',
+        userId: VIEWER_ID,
+        emoji: 'fire',
+      };
+
+      handler.broadcastStoryReacted(data, AUTHOR_ID);
+
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      expect(calledRooms).not.toContain(ROOMS.feed(FRIEND_1));
+      expect(calledRooms).not.toContain(ROOMS.feed(FRIEND_2));
+    });
+  });
+
+  // ==============================================
+  // PHASE 4B — B3: broadcastStoryUnreacted
+  // ==============================================
+
+  describe('broadcastStoryUnreacted — B3', () => {
+    it('should emit STORY_UNREACTED to the author feed room AND to ROOMS.post(storyId)', () => {
+      const data: StoryUnreactedEventData = {
+        storyId: 'story-42',
+        userId: VIEWER_ID,
+        emoji: 'fire',
+      };
+
+      handler.broadcastStoryUnreacted(data, AUTHOR_ID);
+
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
+      expect(calledRooms).toContain(ROOMS.post('story-42'));
+      const emittedEvents = mockIO.emit.mock.calls.map((call: any[]) => call[0]);
+      expect(emittedEvents.every((e: string) => e === SERVER_EVENTS.STORY_UNREACTED)).toBe(true);
+    });
+
+    it('should use the STORY_UNREACTED event constant ("story:unreacted")', () => {
+      expect(SERVER_EVENTS.STORY_UNREACTED).toBe('story:unreacted');
+
+      const data: StoryUnreactedEventData = { storyId: 's1', userId: 'u1', emoji: 'fire' };
+      handler.broadcastStoryUnreacted(data, AUTHOR_ID);
+
+      const emittedEvents = mockIO.emit.mock.calls.map((call: any[]) => call[0]);
+      expect(emittedEvents).toContain('story:unreacted');
+    });
+  });
+
+  // ==============================================
+  // PHASE 4B — B3: broadcastStatusReacted emits to ROOMS.post
+  // ==============================================
+
+  describe('broadcastStatusReacted — B2 room emit', () => {
+    it('should emit STATUS_REACTED to the author feed room AND to ROOMS.post(statusId)', () => {
+      const data: StatusReactedEventData = {
+        statusId: 'status-99',
+        userId: VIEWER_ID,
+        emoji: 'heart',
+      };
+
+      handler.broadcastStatusReacted(data, AUTHOR_ID);
+
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
+      expect(calledRooms).toContain(ROOMS.post('status-99'));
+    });
+  });
+
+  // ==============================================
+  // PHASE 4B — B3: broadcastStatusUnreacted
+  // ==============================================
+
+  describe('broadcastStatusUnreacted — B3', () => {
+    it('should emit STATUS_UNREACTED to the author feed room AND to ROOMS.post(statusId)', () => {
+      const data: StatusUnreactedEventData = {
+        statusId: 'status-99',
+        userId: VIEWER_ID,
+        emoji: 'heart',
+      };
+
+      handler.broadcastStatusUnreacted(data, AUTHOR_ID);
+
+      const calledRooms = mockIO.to.mock.calls.map((call: any[]) => call[0]);
+      expect(calledRooms).toContain(ROOMS.feed(AUTHOR_ID));
+      expect(calledRooms).toContain(ROOMS.post('status-99'));
+      const emittedEvents = mockIO.emit.mock.calls.map((call: any[]) => call[0]);
+      expect(emittedEvents.every((e: string) => e === SERVER_EVENTS.STATUS_UNREACTED)).toBe(true);
+    });
+
+    it('should use the STATUS_UNREACTED event constant ("status:unreacted")', () => {
+      expect(SERVER_EVENTS.STATUS_UNREACTED).toBe('status:unreacted');
+    });
+  });
+
+  // ==============================================
+  // PHASE 4B — B7: STORY_TRANSLATION_UPDATED renamed value
+  // ==============================================
+
+  describe('STORY_TRANSLATION_UPDATED event constant — B7', () => {
+    it('should use "story:translation-updated" (not "post:story-translation-updated")', () => {
+      expect(SERVER_EVENTS.STORY_TRANSLATION_UPDATED).toBe('story:translation-updated');
+    });
+
+    it('should NOT use the old "post:story-translation-updated" value', () => {
+      expect(SERVER_EVENTS.STORY_TRANSLATION_UPDATED).not.toBe('post:story-translation-updated');
     });
   });
 

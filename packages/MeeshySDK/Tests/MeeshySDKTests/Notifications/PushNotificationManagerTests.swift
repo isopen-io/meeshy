@@ -1,4 +1,5 @@
 import XCTest
+import Combine
 @testable import MeeshySDK
 
 final class PushNotificationManagerTests: XCTestCase {
@@ -67,5 +68,47 @@ final class PushNotificationManagerTests: XCTestCase {
         let json = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
 
         XCTAssertNil(json["apnsEnvironment"])
+    }
+
+    // MARK: - noteMessageActivity
+
+    @MainActor
+    func test_noteMessageActivity_messageType_emitsConversationId() {
+        let sut = PushNotificationManager.shared
+        var received: [String] = []
+        let c = sut.messageNotificationReceived.sink { received.append($0) }
+        sut.noteMessageActivity(userInfo: ["type": "message", "conversationId": "conv-1"])
+        c.cancel()
+        XCTAssertEqual(received, ["conv-1"])
+    }
+
+    @MainActor
+    func test_noteMessageActivity_messageIdPresent_emitsConversationId() {
+        let sut = PushNotificationManager.shared
+        var received: [String] = []
+        let c = sut.messageNotificationReceived.sink { received.append($0) }
+        sut.noteMessageActivity(userInfo: ["messageId": "msg-9", "conversationId": "conv-2"])
+        c.cancel()
+        XCTAssertEqual(received, ["conv-2"])
+    }
+
+    @MainActor
+    func test_noteMessageActivity_friendRequest_emitsNothing() {
+        let sut = PushNotificationManager.shared
+        var received: [String] = []
+        let c = sut.messageNotificationReceived.sink { received.append($0) }
+        sut.noteMessageActivity(userInfo: ["type": "friend_request", "conversationId": "conv-1"])
+        c.cancel()
+        XCTAssertTrue(received.isEmpty)
+    }
+
+    @MainActor
+    func test_noteMessageActivity_missingConversationId_emitsNothing() {
+        let sut = PushNotificationManager.shared
+        var received: [String] = []
+        let c = sut.messageNotificationReceived.sink { received.append($0) }
+        sut.noteMessageActivity(userInfo: ["type": "message"])
+        c.cancel()
+        XCTAssertTrue(received.isEmpty)
     }
 }

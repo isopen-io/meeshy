@@ -87,7 +87,6 @@ struct ConversationListView: View {
     // Search and Filters
     @FocusState var isSearching: Bool
     @State var showSearchOverlay: Bool = false
-    @State var searchBounce: Bool = false
     @State private var animateGradient = false
     @State private var expandedSections: Set<String> = ["pinned", "other"]
 
@@ -248,7 +247,13 @@ struct ConversationListView: View {
         return statusViewModel.statusForUser(userId: userId)
     }
 
-    @ViewBuilder
+    // Builds one conversation row. The heavy subtree (swipe actions +
+    // context menu + preview) lives in the nominal `ConversationRowItem`
+    // struct (ConversationListView+Rows.swift) so it no longer bloats the
+    // ConversationListView body type — that monolithic type was the
+    // type-metadata instantiation crash on low-memory devices. This builder
+    // only wires the row's inputs; the returned `some View` is the nominal
+    // `ConversationRowItem`, which keeps the enclosing list type small.
     private func conversationRow(for conversation: Conversation, rowWidth: CGFloat) -> some View {
         let community: MeeshyCommunity? = {
             guard conversation.type == .community || conversation.communityId != nil,
@@ -256,67 +261,45 @@ struct ConversationListView: View {
             return userCommunityLookup[communityId] ?? userCommunities.first(where: { $0.id == communityId })
         }()
 
-        SwipeableRow(
+        return ConversationRowItem(
+            conversation: conversation,
+            community: community,
+            rowWidth: rowWidth,
+            isDragging: draggingConversation?.id == conversation.id,
+            presenceState: presenceManager.presenceState(for: conversation.participantUserId ?? ""),
+            isDark: theme.mode.isDark,
+            storyRingState: storyRingState(for: conversation),
+            moodStatus: conversationMoodStatus(for: conversation),
+            typingUsername: conversationViewModel.typingUsernames[conversation.id],
+            isSelected: selectedConversationId == conversation.id,
+            draftSummary: conversationViewModel.draftSummaries[conversation.id],
+            cachedPreviewMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
             leadingActions: leadingSwipeActions(for: conversation),
-            trailingActions: trailingSwipeActions(for: conversation)
-        ) {
-            ThemedConversationRow(
-                conversation: conversation,
-                community: community,
-                availableWidth: rowWidth,
-                isDragging: draggingConversation?.id == conversation.id,
-                presenceState: presenceManager.presenceState(for: conversation.participantUserId ?? ""),
-                onViewStory: {
-                    handleStoryView(conversation)
-                },
-                onViewProfile: {
-                    handleProfileView(conversation)
-                },
-                onViewConversationInfo: {
-                    handleConversationInfoView(conversation)
-                },
-                onMoodBadgeTap: { anchor in
-                    handleMoodBadgeTap(conversation, at: anchor)
-                },
-                onCreateShareLink: canCreateShareLink(for: conversation) ? {
-                    inviteSheetConversation = conversation
-                } : nil,
-                isDark: theme.mode.isDark,
-                storyRingState: storyRingState(for: conversation),
-                moodStatus: conversationMoodStatus(for: conversation),
-                typingUsername: conversationViewModel.typingUsernames[conversation.id],
-                isSelected: selectedConversationId == conversation.id
-            )
-            .equatable()
-            .contentShape(Rectangle())
-            .onTapGesture {
-                HapticFeedback.light()
+            trailingActions: trailingSwipeActions(for: conversation),
+            onViewStory: { handleStoryView(conversation) },
+            onViewProfile: { handleProfileView(conversation) },
+            onViewConversationInfo: { handleConversationInfoView(conversation) },
+            onMoodBadgeTap: { anchor in handleMoodBadgeTap(conversation, at: anchor) },
+            onCreateShareLink: canCreateShareLink(for: conversation) ? {
+                inviteSheetConversation = conversation
+            } : nil,
+            onTap: {
                 if ConversationLockManager.shared.isLocked(conversation.id) {
                     lockSheetMode = .openConversation
                     lockSheetConversation = conversation
                 } else {
                     onSelect(conversation)
                 }
-            }
-            .accessibilityElement(children: .combine)
-            .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Ouvre la conversation")
-            .onDrag {
+            },
+            onDragStart: {
                 draggingConversation = conversation
                 HapticFeedback.medium()
-                return NSItemProvider(object: conversation.id as NSString)
-            }
-            .contextMenu {
-                conversationContextMenu(for: conversation)
-            } preview: {
-                ConversationPreviewView(
-                    conversation: conversation,
-                    cachedMessages: conversationViewModel.previewMessages[conversation.id] ?? []
-                )
-            }
-            .task {
+            },
+            onLoadPreview: {
                 await conversationViewModel.loadPreviewMessages(for: conversation.id)
             }
+        ) {
+            conversationContextMenu(for: conversation)
         }
     }
 
@@ -473,64 +456,8 @@ struct ConversationListView: View {
         return actions
     }
 
-    @ViewBuilder
-    private var paginationFooter: some View {
-        switch conversationViewModel.paginationState {
-        case .loadingMore:
-            HStack {
-                Spacer()
-                ProgressView()
-                    .tint(MeeshyColors.indigo400)
-                Spacer()
-            }
-            .padding(.vertical, 16)
-        case .exhausted:
-            // Show the "all loaded" hint only on lists that actually
-            // had to paginate -- avoids cluttering empty/small lists.
-            if conversationViewModel.conversations.count > 30 {
-                Text(String(
-                    localized: "conversations.pagination.allLoaded",
-                    defaultValue: "Toutes les conversations chargees"
-                ))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-            }
-        case .error:
-            VStack(spacing: 6) {
-                Text(String(
-                    localized: "conversations.pagination.errorTitle",
-                    defaultValue: "Erreur de chargement"
-                ))
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                Button {
-                    Task { await conversationViewModel.loadMore() }
-                } label: {
-                    Text(String(
-                        localized: "conversations.pagination.retry",
-                        defaultValue: "Reessayer"
-                    ))
-                    .font(.caption.weight(.medium))
-                    .foregroundStyle(MeeshyColors.indigo400)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-        case .idle:
-            // Invisible sentinel: when the user scrolls deep enough to
-            // reveal this row, fire `loadMore`. The ViewModel guards
-            // against re-entry and short-circuits when hasMore=false.
-            if conversationViewModel.hasMore {
-                Color.clear
-                    .frame(height: 1)
-                    .onAppear {
-                        Task { await conversationViewModel.loadMore() }
-                    }
-            }
-        }
-    }
+    // Pagination footer now lives in `ConversationPaginationFooter`
+    // (ConversationListView+Rows.swift).
 
     private func triggerLoadMoreIfNeeded(conversation: Conversation) {
         let all = conversationViewModel.conversations
@@ -622,6 +549,7 @@ struct ConversationListView: View {
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     conversationViewModel.handleForegroundReturn()
+                    conversationViewModel.handleForegroundReactivation()
                 }
             }
             .onChange(of: conversationViewModel.userCategories) { _, categories in
@@ -705,6 +633,9 @@ struct ConversationListView: View {
             // tel quel, le wrapper s'occupe du sentinel scrollOffset, du
             // MeeshyPullIndicator au top, des haptics et de l'orchestration
             // de la sequence pull -> armed -> refreshing -> completing -> idle.
+            // The scroll subtree's type is kept small by the nominal
+            // ConversationRowItem / ConversationPaginationFooter structs
+            // (ConversationListView+Rows.swift) — no AnyView seam needed.
             MeeshyRefreshableScroll(
                 onRefresh: {
                     async let convRefresh: Void = conversationViewModel.pullToRefresh()
@@ -799,7 +730,7 @@ struct ConversationListView: View {
                     //                 loadMore via onAppear once the
                     //                 user reaches the tail (back-up to
                     //                 the per-row threshold trigger)
-                    paginationFooter
+                    ConversationPaginationFooter()
 
                     Color.clear.frame(height: 280)
                         .onChange(of: draggingConversation) { oldValue, newValue in
@@ -816,25 +747,13 @@ struct ConversationListView: View {
             .scrollDismissesKeyboard(.interactively)
 
             // Layer 2: Bottom overlay — Search bar + Communities & Filters
-            VStack(spacing: 0) {
-                Spacer()
-
-                // Communities carousel - only when search overlay is open (loupe tap)
-                if showSearchOverlay {
-                    communitiesSection
-                        .padding(.vertical, 10)
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-
-                // Category filters - only when search overlay is open (loupe tap)
-                if showSearchOverlay {
-                    categoryFilters
-                        .transition(.opacity.combined(with: .move(edge: .bottom)))
-                }
-
-                // Search bar - always visible (unless scrolled away)
-                themedSearchBar
-            }
+            ConversationListBottomBar(
+                showSearchOverlay: $showSearchOverlay,
+                isSearching: $isSearching,
+                showWidgetPreview: $showWidgetPreview,
+                showGlobalSearch: $showGlobalSearch,
+                userCommunities: userCommunities
+            )
             .padding(.bottom, 8)
             // Hide on scroll down
             .offset(y: isScrollingDown ? 150 : 0)
@@ -844,100 +763,14 @@ struct ConversationListView: View {
         }
         // Layer 3: Collapsible header overlay — pinned to top, respects safe area
         .overlay(alignment: .top) {
-            CollapsibleHeader(
-                title: "Meeshy",
+            ConversationListHeaderOverlay(
                 scrollOffset: headerScrollOffset,
-                showBackButton: false,
-                titleColor: theme.textPrimary,
-                backArrowColor: MeeshyColors.indigo500,
-                backgroundColor: theme.backgroundPrimary,
-                leading: {
-                    if let iPadFeedAction {
-                        Button {
-                            HapticFeedback.light()
-                            iPadFeedAction()
-                        } label: {
-                            HStack(spacing: 4) {
-                                Image(systemName: "square.stack.fill")
-                                    .font(.system(size: 13, weight: .semibold))
-                                Text("Feed")
-                                    .font(.system(size: 13, weight: .semibold))
-                            }
-                            .foregroundStyle(
-                                LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
-                            )
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(
-                                Capsule()
-                                    .fill(MeeshyColors.indigo100.opacity(theme.mode.isDark ? 0.15 : 1))
-                            )
-                        }
-                    }
-                },
-                titleView: {
-                    Text("Meeshy")
-                        .font(.system(size: 28, weight: .bold, design: .rounded))
-                        .foregroundStyle(
-                            LinearGradient(colors: [MeeshyColors.indigo500, MeeshyColors.indigo700], startPoint: .leading, endPoint: .trailing)
-                        )
-                },
-                trailing: {
-                    HStack(spacing: 12) {
-                        Button {
-                            showShareLinkSheet = true
-                        } label: {
-                            Image(systemName: "link.badge.plus")
-                                .font(.system(size: 20, weight: .semibold))
-                                .foregroundColor(MeeshyColors.indigo500)
-                        }
-                        .accessibilityLabel("Creer un lien de partage")
-
-                        Button {
-                            onNewConversation?()
-                        } label: {
-                            Image(systemName: "plus.circle.fill")
-                                .font(.system(size: 22, weight: .semibold))
-                                .foregroundColor(MeeshyColors.indigo500)
-                        }
-                        .accessibilityLabel("Nouvelle conversation")
-
-                        if let onNotificationsTap {
-                            Button {
-                                HapticFeedback.light()
-                                onNotificationsTap()
-                            } label: {
-                                ZStack(alignment: .topTrailing) {
-                                    Image(systemName: "bell.fill")
-                                        .font(.system(size: 18, weight: .semibold))
-                                        .foregroundColor(MeeshyColors.indigo500)
-
-                                    if iPadNotificationCount > 0 {
-                                        Text("\(min(iPadNotificationCount, 99))")
-                                            .font(.system(size: 9, weight: .bold))
-                                            .foregroundColor(.white)
-                                            .frame(width: 16, height: 16)
-                                            .background(Circle().fill(MeeshyColors.error))
-                                            .offset(x: 6, y: -6)
-                                    }
-                                }
-                            }
-                            .accessibilityLabel("Notifications")
-                        }
-
-                        if let onSettingsTap {
-                            Button {
-                                HapticFeedback.light()
-                                onSettingsTap()
-                            } label: {
-                                Image(systemName: "gearshape.fill")
-                                    .font(.system(size: 18, weight: .semibold))
-                                    .foregroundColor(MeeshyColors.indigo500)
-                            }
-                            .accessibilityLabel("Reglages")
-                        }
-                    }
-                }
+                iPadFeedAction: iPadFeedAction,
+                iPadNotificationCount: iPadNotificationCount,
+                onNotificationsTap: onNotificationsTap,
+                onSettingsTap: onSettingsTap,
+                onNewConversation: onNewConversation,
+                showShareLinkSheet: $showShareLinkSheet
             )
         }
         .sheet(isPresented: $showShareLinkSheet) {
@@ -1057,7 +890,8 @@ struct ConversationListView: View {
         userCommunityLookup = Dictionary(uniqueKeysWithValues: mapped.map { ($0.id, $0) })
     }
 
-    // See ConversationListView+Overlays.swift for communitiesSection, categoryFilters, themedSearchBar
+    // communitiesSection, categoryFilters, themedSearchBar now live in
+    // ConversationListBottomBar (ConversationListView+Overlays.swift).
 
     // Pull-to-refresh entierement gere par MeeshyRefreshableScroll.
     // Voir Layer 1 dans `mainContentZStack`.

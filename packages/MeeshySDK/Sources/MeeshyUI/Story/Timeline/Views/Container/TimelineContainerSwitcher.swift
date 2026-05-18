@@ -6,7 +6,7 @@ import SwiftUI
 /// lives in `TimelineViewModel` so a swap never loses anything.
 public struct TimelineContainerSwitcher: View {
 
-    @Bindable private var viewModel: TimelineViewModel
+    @ObservedObject private var viewModel: TimelineViewModel
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.colorScheme) private var colorScheme

@@ -2,6 +2,13 @@ import type { PrismaClient, UserRole } from '@meeshy/shared/prisma/client';
 import type { ToneProfile, ControlledUser, TraitValue } from '../graph/state';
 import { toneProfileToGlobalFields } from './profile-merger';
 
+// Single inactivity delay shared by pickup and pool cleanup: a user is only
+// controllable after this many hours without connecting, and is released as
+// soon as they reconnect. Mirrors AgentConfig.inactivityThresholdHours.
+const DEFAULT_INACTIVITY_THRESHOLD_HOURS = 72;
+// Upper bound of the configurable delay (see agentConfigSchema in the gateway).
+const MAX_INACTIVITY_THRESHOLD_HOURS = 720;
+
 const TRAIT_FIELDS = [
   'verbosity', 'formality', 'responseSpeed', 'initiativeRate', 'clarity', 'argumentation',
   'socialStyle', 'assertiveness', 'agreeableness', 'humor', 'emotionality', 'openness',
@@ -156,21 +163,32 @@ export class MongoPersistence {
   }
 
   async evictRecentlyActiveUsers(): Promise<number> {
-    const recentLoginThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    // Release a controlled user as soon as they reconnect within their
+    // conversation's inactivity delay. Pre-filter with the widest possible
+    // delay, then refine per conversation against its own threshold.
+    const widestThreshold = new Date(Date.now() - MAX_INACTIVITY_THRESHOLD_HOURS * 60 * 60 * 1000);
 
     const roles = await this.prisma.agentUserRole.findMany({
-      where: { user: { lastActiveAt: { gte: recentLoginThreshold } } },
-      select: { id: true, userId: true, conversationId: true },
+      where: { user: { lastActiveAt: { gte: widestThreshold } } },
+      select: { id: true, userId: true, conversationId: true, user: { select: { lastActiveAt: true } } },
     });
     if (roles.length === 0) return 0;
 
-    const manualConfigs = await this.prisma.agentConfig.findMany({
+    const configs = await this.prisma.agentConfig.findMany({
       where: { conversationId: { in: [...new Set(roles.map((r) => r.conversationId))] } },
-      select: { conversationId: true, manualUserIds: true },
+      select: { conversationId: true, manualUserIds: true, inactivityThresholdHours: true },
     });
-    const manualMap = new Map(manualConfigs.map((c) => [c.conversationId, new Set((c.manualUserIds ?? []) as string[])]));
+    const configMap = new Map(configs.map((c) => [c.conversationId, c]));
 
-    const toDelete = roles.filter((r) => !manualMap.get(r.conversationId)?.has(r.userId));
+    const now = Date.now();
+    const toDelete = roles.filter((r) => {
+      const config = configMap.get(r.conversationId);
+      const manualIds = new Set((config?.manualUserIds ?? []) as string[]);
+      if (manualIds.has(r.userId)) return false;
+      const thresholdHours = config?.inactivityThresholdHours ?? DEFAULT_INACTIVITY_THRESHOLD_HOURS;
+      const evictAfter = now - thresholdHours * 60 * 60 * 1000;
+      return r.user.lastActiveAt.getTime() >= evictAfter;
+    });
     if (toDelete.length === 0) return 0;
 
     await this.prisma.agentUserRole.deleteMany({
@@ -185,7 +203,7 @@ export class MongoPersistence {
       this.prisma.agentUserRole.findMany({ where: { conversationId } }),
       this.prisma.agentConfig.findUnique({
         where: { conversationId },
-        select: { manualUserIds: true },
+        select: { manualUserIds: true, inactivityThresholdHours: true },
       }),
     ]);
 
@@ -203,7 +221,10 @@ export class MongoPersistence {
     type UserInfo = { displayName: string; username: string; systemLanguage: string | null; lastActiveAt: Date };
     const userMap: Map<string, UserInfo> = new Map(users.map((u: { id: string; displayName: string | null; username: string | null; systemLanguage: string | null; lastActiveAt: Date }) => [u.id, { displayName: u.displayName ?? u.username ?? u.id, username: u.username ?? u.id, systemLanguage: u.systemLanguage, lastActiveAt: u.lastActiveAt }]));
 
-    const recentLoginThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    // A user reconnecting within the inactivity delay is released from agent
+    // control (manual picks are always kept).
+    const thresholdHours = config?.inactivityThresholdHours ?? DEFAULT_INACTIVITY_THRESHOLD_HOURS;
+    const recentLoginThreshold = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
 
     const results: ControlledUser[] = roles
       .filter((r: Record<string, any>) => {
@@ -303,8 +324,9 @@ export class MongoPersistence {
     excludedRoles: string[],
     excludedUserIds: string[],
   ) {
+    // Single delay: a user is only pickable after `thresholdHours` without
+    // connecting AND without posting in this conversation.
     const threshold = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
-    const recentLoginThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const existingRoles = await this.prisma.agentUserRole.findMany({
       where: { conversationId },
       select: { userId: true },
@@ -319,7 +341,7 @@ export class MongoPersistence {
         userId: { not: null, notIn: [...excludedUserIds, ...existingRoleUserIds] },
         user: {
           role: { notIn: excludedRoles as UserRole[] },
-          lastActiveAt: { lt: recentLoginThreshold },
+          lastActiveAt: { lt: threshold },
         },
       },
       select: {
@@ -347,8 +369,9 @@ export class MongoPersistence {
     limit: number,
     excludedUserIds: string[],
     existingControlledUserIds: string[],
+    thresholdHours: number = DEFAULT_INACTIVITY_THRESHOLD_HOURS,
   ) {
-    const recentLoginThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    const recentLoginThreshold = new Date(Date.now() - thresholdHours * 60 * 60 * 1000);
     const participants = await this.prisma.participant.findMany({
       where: {
         conversationId,
@@ -400,7 +423,9 @@ export class MongoPersistence {
     const maxConversations = options?.maxConversations ?? 0;
 
     const freshnessThreshold = new Date(Date.now() - freshnessHours * 60 * 60 * 1000);
-    const recentLoginThreshold = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    // Coarse "is this conversation worth scanning" gate; precise per-conversation
+    // eligibility is enforced later by getPotentialControlledUsers.
+    const recentLoginThreshold = new Date(Date.now() - DEFAULT_INACTIVITY_THRESHOLD_HOURS * 60 * 60 * 1000);
 
     const [configuredConversations, freshConversations] = await Promise.all([
       this.prisma.conversation.findMany({

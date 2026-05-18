@@ -125,7 +125,21 @@ final class AttachmentServiceTests: XCTestCase {
         """.data(using: .utf8)!
 
         let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        // Mirror APIClient's production strategy: ISO8601 with fractional
+        // seconds, falling back to whole-second ISO8601. The gateway sends
+        // millisecond precision (e.g. "2026-05-11T08:00:00.000Z"), which the
+        // plain .iso8601 strategy rejects.
+        let isoFractional = ISO8601DateFormatter()
+        isoFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let isoBasic = ISO8601DateFormatter()
+        isoBasic.formatOptions = [.withInternetDateTime]
+        decoder.dateDecodingStrategy = .custom { decoder in
+            let container = try decoder.singleValueContainer()
+            let dateStr = try container.decode(String.self)
+            if let date = isoFractional.date(from: dateStr) { return date }
+            if let date = isoBasic.date(from: dateStr) { return date }
+            throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
+        }
 
         let user = try decoder.decode(AttachmentStatusUser.self, from: json)
 

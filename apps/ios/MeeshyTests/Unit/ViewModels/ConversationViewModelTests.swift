@@ -13,6 +13,7 @@ final class ConversationViewModelTests: XCTestCase {
     private var mockConversationService: MockConversationService!
     private var mockReactionService: MockReactionService!
     private var mockReportService: MockReportService!
+    private var mockMessageSocket: MockMessageSocket!
     private let testConversationId = "000000000000000000000001"
     private let testUserId = "000000000000000000000099"
 
@@ -26,6 +27,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockConversationService = MockConversationService()
         mockReactionService = MockReactionService()
         mockReportService = MockReportService()
+        mockMessageSocket = MockMessageSocket()
         // ConversationViewModel.sendMessage references MessageSocketManager.shared
         // directly (the singleton, not an injected dep) at line 1318: if the
         // socket is not connected it routes through the offline OutboxQueue
@@ -44,6 +46,7 @@ final class ConversationViewModelTests: XCTestCase {
         mockConversationService = nil
         mockReactionService = nil
         mockReportService = nil
+        mockMessageSocket = nil
         super.tearDown()
     }
 
@@ -72,6 +75,7 @@ final class ConversationViewModelTests: XCTestCase {
             conversationService: mockConversationService,
             reactionService: mockReactionService,
             reportService: mockReportService,
+            messageSocket: mockMessageSocket,
             dependencies: deps
         )
     }
@@ -229,18 +233,21 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(mockMessageService.listCallCount, 1)
     }
 
-    func test_loadMessages_callsMarkRead() async {
+    func test_loadMessages_marksConversationAsRead() async {
         let response: MessagesAPIResponse = JSONStub.decode("""
         {"success":true,"data":[],"pagination":null,"cursorPagination":null,"hasNewer":null}
         """)
         mockMessageService.listResult = .success(response)
         let sut = makeSUT()
+        // markAsRead routes through ConversationSyncEngine + the offline outbox;
+        // the .conversationMarkedRead notification is its observable contract.
+        let marked = expectation(forNotification: .conversationMarkedRead, object: nil) { notification in
+            (notification.object as? String) == self.testConversationId
+        }
 
         await sut.loadMessages()
 
-        // markAsRead fires markRead via Task, give it a moment
-        try? await Task.sleep(nanoseconds: 100_000_000)
-        XCTAssertEqual(mockConversationService.markReadCallCount, 1)
+        await fulfillment(of: [marked], timeout: 1.0)
     }
 
     // MARK: - sendMessage Tests
@@ -265,19 +272,18 @@ final class ConversationViewModelTests: XCTestCase {
     func test_sendMessage_insertsOptimisticMessage() async {
         let sut = makeSUT()
 
-        // Trigger send but delay the mock response
+        // Trigger the send concurrently. The optimistic row surfaces in
+        // `messages` through the GRDB -> MessageStore -> ViewModel pipeline,
+        // which crosses several runloop hops — poll for the condition instead
+        // of a fixed sleep (a 50 ms delay races the pipeline under load).
         let sendTask = Task {
             await sut.sendMessage(content: "Hello world")
         }
 
-        // Give optimistic insert a moment
-        try? await Task.sleep(nanoseconds: 50_000_000)
-
-        // At this point, optimistic message should be in the array
-        let hasOptimistic = sut.messages.contains { $0.content == "Hello world" && $0.deliveryStatus == .sending }
-        // The task may have already completed, so check either sending or sent
-        let hasSendingOrSent = sut.messages.contains { $0.content == "Hello world" }
-        XCTAssertTrue(hasSendingOrSent)
+        let surfaced = await MessageStoreObservationHelper.awaitMessage(in: sut) {
+            $0.content == "Hello world"
+        }
+        XCTAssertNotNil(surfaced, "Optimistic message must surface in `messages`")
 
         _ = await sendTask.value
     }
@@ -336,6 +342,58 @@ final class ConversationViewModelTests: XCTestCase {
         _ = await sut.sendMessage(content: "Reply", replyToId: "parent-msg")
 
         XCTAssertEqual(mockMessageService.lastSendRequest?.replyToId, "parent-msg")
+    }
+
+    // MARK: - sendMessage Socket Fallback Tests
+
+    func test_sendMessage_restFails_fallsBackToSocket() async {
+        mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500))
+        mockMessageSocket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(
+            messageId: "server-id-from-socket", clientMessageId: nil, createdAt: Date()
+        )
+        let sut = makeSUT()
+
+        let result = await sut.sendMessage(content: "Fallback me")
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1)
+    }
+
+    func test_sendMessage_restSucceeds_skipsSocketFallback() async {
+        let sut = makeSUT()
+
+        let result = await sut.sendMessage(content: "Plain send")
+
+        XCTAssertTrue(result)
+        XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 0)
+    }
+
+    func test_sendMessage_restAndSocketBothFail_returnsFalse() async {
+        mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500))
+        mockMessageSocket.sendViaSocketFallbackResult = nil
+        let sut = makeSUT()
+
+        let result = await sut.sendMessage(content: "Both down")
+
+        XCTAssertFalse(result)
+        XCTAssertEqual(mockMessageSocket.sendViaSocketFallbackCallCount, 1)
+    }
+
+    func test_sendMessage_socketFallbackReusesOptimisticClientMessageId() async {
+        mockMessageService.sendResult = .failure(NSError(domain: "test", code: 500))
+        mockMessageSocket.sendViaSocketFallbackResult = MessageSocketManager.SendMessageAck(
+            messageId: "server-id", clientMessageId: nil, createdAt: nil
+        )
+        let sut = makeSUT()
+
+        _ = await sut.sendMessage(content: "Dedup key check")
+
+        // The fallback MUST reuse the cid_<uuid> optimistic id so the gateway
+        // dedup (conversationId, clientMessageId) prevents a duplicate when the
+        // outbox later replays the REST request.
+        let cid = mockMessageSocket.lastSendViaSocketFallbackClientMessageId
+        XCTAssertNotNil(cid)
+        XCTAssertEqual(cid?.hasPrefix("cid_"), true)
     }
 
     // MARK: - insertOptimisticMediaMessage Tests
@@ -904,18 +962,6 @@ final class ConversationViewModelTests: XCTestCase {
         sut.markAsRead()
 
         wait(for: [expectation], timeout: 1.0)
-    }
-
-    func test_markAsRead_callsConversationServiceMarkRead() {
-        let sut = makeSUT()
-        let expectation = XCTestExpectation(description: "markRead called on service")
-        mockConversationService.onMarkReadCalled = { expectation.fulfill() }
-
-        sut.markAsRead()
-
-        wait(for: [expectation], timeout: 2.0)
-        XCTAssertEqual(mockConversationService.markReadCallCount, 1)
-        XCTAssertEqual(mockConversationService.lastMarkReadConversationId, testConversationId)
     }
 
     // MARK: - messageIndex Tests

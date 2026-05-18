@@ -31,7 +31,7 @@ final class PostServiceTests: XCTestCase {
             originalRepostOfId: nil, isQuote: nil,
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: nil,
             translations: nil, isLikedByMe: nil,
-            isViewedByMe: nil, mentionedUsers: nil, viaUsername: nil
+            isViewedByMe: nil, currentUserReactions: nil, mentionedUsers: nil, viaUsername: nil
         )
     }
 
@@ -42,7 +42,8 @@ final class PostServiceTests: XCTestCase {
             translations: nil, likeCount: 0, replyCount: 0,
             effectFlags: nil,
             createdAt: Date(),
-            author: APIAuthor(id: "author2", username: "bob", displayName: "Bob", avatar: nil)
+            author: APIAuthor(id: "author2", username: "bob", displayName: "Bob", avatar: nil),
+            currentUserReactions: nil
         )
     }
 

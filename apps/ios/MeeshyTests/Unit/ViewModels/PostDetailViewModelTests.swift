@@ -16,12 +16,14 @@ final class PostDetailViewModelTests: XCTestCase {
 
     private func makeSUT(
         postService: MockPostService = MockPostService(),
-        preferredLanguages: [String] = []
+        preferredLanguages: [String] = [],
+        offlineQueue: OfflineQueueing = OfflineQueue.shared
     ) -> (sut: PostDetailViewModel, postService: MockPostService) {
         let languageProvider = MockLanguageProvider(preferredLanguages: preferredLanguages)
         let sut = PostDetailViewModel(
             postService: postService,
-            languageProvider: languageProvider
+            languageProvider: languageProvider,
+            offlineQueue: offlineQueue
         )
         return (sut, postService)
     }
@@ -120,32 +122,31 @@ final class PostDetailViewModelTests: XCTestCase {
 
     // MARK: - sendComment
 
-    func test_sendComment_success_insertsAtTop() async {
-        let (sut, mock) = makeSUT()
+    func test_sendComment_success_insertsOptimisticCommentAtTop() async {
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
         let apiPost = Self.makeAPIPost(id: "p1")
         mock.getPostResult = .success(apiPost)
         await sut.loadPost("p1")
-
-        let apiComment: APIPostComment = JSONStub.decode("""
-        {"id":"c-new","content":"New comment","createdAt":"2026-01-01T00:00:00.000Z","author":{"id":"a1","username":"alice"}}
-        """)
-        mock.addCommentResult = .success(apiComment)
 
         await sut.sendComment("New comment")
 
+        // sendComment inserts an optimistic comment carrying a `cmid` id and
+        // enqueues a createComment outbox op; the authoritative server id
+        // arrives later via the `comment:added` socket broadcast.
         XCTAssertEqual(sut.comments.count, 1)
-        XCTAssertEqual(sut.comments[0].id, "c-new")
-        XCTAssertEqual(mock.addCommentCallCount, 1)
-        XCTAssertEqual(mock.lastAddCommentContent, "New comment")
+        XCTAssertEqual(sut.comments[0].content, "New comment")
+        XCTAssertTrue(sut.comments[0].id.hasPrefix("cmid"))
+        XCTAssertEqual(queue.enqueueCalls.count, 1)
     }
 
-    func test_sendComment_error_doesNotInsert() async {
-        let (sut, mock) = makeSUT()
+    func test_sendComment_outboxRefuses_rollsBackOptimisticInsert() async {
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(NSError(domain: "test", code: 500))
+        let (sut, mock) = makeSUT(offlineQueue: queue)
         let apiPost = Self.makeAPIPost(id: "p1")
         mock.getPostResult = .success(apiPost)
         await sut.loadPost("p1")
-
-        mock.addCommentResult = .failure(NSError(domain: "test", code: 500))
 
         await sut.sendComment("Failing comment")
 
@@ -155,7 +156,8 @@ final class PostDetailViewModelTests: XCTestCase {
     // MARK: - likePost
 
     func test_likePost_togglesLikeState() async {
-        let (sut, mock) = makeSUT()
+        let queue = MockOfflineQueue()
+        let (sut, mock) = makeSUT(offlineQueue: queue)
         let apiPost = Self.makeAPIPost(id: "p1")
         mock.getPostResult = .success(apiPost)
         await sut.loadPost("p1")
@@ -165,16 +167,16 @@ final class PostDetailViewModelTests: XCTestCase {
 
         XCTAssertEqual(sut.post?.isLiked, true)
         XCTAssertEqual(sut.post?.likes, initialLikes + 1)
-        XCTAssertEqual(mock.likeCallCount, 1)
+        XCTAssertEqual(queue.enqueueCalls.count, 1)
     }
 
-    func test_likePost_error_rollsBack() async {
-        let (sut, mock) = makeSUT()
+    func test_likePost_outboxRefuses_rollsBack() async {
+        let queue = MockOfflineQueue()
+        queue.enqueueResult = .failure(NSError(domain: "test", code: 500))
+        let (sut, mock) = makeSUT(offlineQueue: queue)
         let apiPost = Self.makeAPIPost(id: "p1")
         mock.getPostResult = .success(apiPost)
         await sut.loadPost("p1")
-
-        mock.likeResult = .failure(NSError(domain: "test", code: 500))
         let initialLikes = sut.post?.likes ?? 0
 
         await sut.likePost()

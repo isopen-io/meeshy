@@ -5,7 +5,7 @@ import { PostCommentService } from '../../services/PostCommentService';
 import { PostTranslationService } from '../../services/posts/PostTranslationService';
 import { CreateCommentSchema, FeedQuerySchema, LikeSchema, PostParams, CommentParams } from './types';
 import { sendSuccess, sendUnauthorized, sendBadRequest, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
-import { resolveMentionedUsers } from '../../services/MentionService';
+import { resolveMentionedUsers, MentionService } from '../../services/MentionService';
 import { createPostRouteRateLimitConfig } from '../../middleware/rate-limiter';
 import { withMutationLog } from '../../utils/withMutationLog';
 
@@ -15,6 +15,7 @@ export function registerCommentRoutes(
   requiredAuth: any
 ) {
   const commentService = new PostCommentService(prisma);
+  const mentionService = new MentionService(prisma);
 
   // GET /posts/:postId/comments — Top-level comments, cursor-paginated
   fastify.get('/posts/:postId/comments', {
@@ -25,7 +26,10 @@ export function registerCommentRoutes(
       const query = FeedQuerySchema.safeParse(request.query);
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
-      const result = await commentService.getComments(postId, cursor, limit);
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const currentUserId = authContext.type === 'user' && !authContext.isAnonymous ? authContext.userId : undefined;
+
+      const result = await commentService.getComments(postId, cursor, limit, currentUserId);
 
       const commentContents = result.items
         .map((c: any) => c.content as string)
@@ -34,6 +38,7 @@ export function registerCommentRoutes(
         ? await resolveMentionedUsers(prisma, commentContents)
         : [];
 
+      reply.header('Cache-Control', 'private, no-cache');
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
         meta: { mentionedUsers },
@@ -53,7 +58,10 @@ export function registerCommentRoutes(
       const query = FeedQuerySchema.safeParse(request.query);
       const { cursor, limit } = query.success ? query.data : { cursor: undefined, limit: 20 };
 
-      const result = await commentService.getReplies(commentId, cursor, limit);
+      const authContext = (request as UnifiedAuthRequest).authContext;
+      const currentUserId = authContext.type === 'user' && !authContext.isAnonymous ? authContext.userId : undefined;
+
+      const result = await commentService.getReplies(commentId, cursor, limit, currentUserId);
 
       const replyContents = result.items
         .map((c: any) => c.content as string)
@@ -62,6 +70,7 @@ export function registerCommentRoutes(
         ? await resolveMentionedUsers(prisma, replyContents)
         : [];
 
+      reply.header('Cache-Control', 'private, no-cache');
       return sendSuccess(reply, result.items, {
         pagination: { limit, hasMore: result.hasMore, nextCursor: result.nextCursor },
         meta: { mentionedUsers: replyMentionedUsers },
@@ -163,6 +172,45 @@ export function registerCommentRoutes(
             commentPreview: parsed.data.content,
           }).catch(() => {});
         }
+      }
+
+      // Mention persistence + notifications (Phase 2B)
+      // Extract, resolve, persist CommentMentions, fire user_mentioned notifications.
+      // mentionedUserIds is also used to exclude mentioned users from the lower-priority
+      // story fan-out buckets (priority: user_mentioned > story_thread_reply > friend_story_comment).
+      let mentionedUserIds: string[] = [];
+      if (parsed.data.content && notifService) {
+        const mentionedUsernames = mentionService.extractMentions(parsed.data.content);
+        if (mentionedUsernames.length > 0) {
+          const resolvedUsers = await mentionService.resolveUsernames(mentionedUsernames);
+          mentionedUserIds = Array.from(resolvedUsers.values()).map(u => u.id);
+
+          if (mentionedUserIds.length > 0) {
+            mentionService.createCommentMentions(comment.id, mentionedUserIds)
+              .catch(err => fastify.log.error(`comment mention persistence failed: ${err}`));
+
+            notifService.createCommentMentionNotificationsBatch({
+              commentId: comment.id,
+              postId,
+              commenterId: authContext.registeredUser.id,
+              mentionedUserIds,
+              commentExcerpt: parsed.data.content?.slice(0, 100),
+            }).catch(err => fastify.log.error(`comment mention notification failed: ${err}`));
+          }
+        }
+      }
+
+      // Story comment fan-out notifications (Phase 1D)
+      // excludeUserIds: skip users who already received user_mentioned (higher priority)
+      if (notifService && post?.authorId && !parsed.data.parentId) {
+        notifService.createStoryCommentNotificationsBatch({
+          postId,
+          commentId: comment.id,
+          storyAuthorId: post.authorId,
+          commenterId: authContext.registeredUser.id,
+          commentExcerpt: parsed.data.content?.slice(0, 100),
+          excludeUserIds: mentionedUserIds,
+        }).catch(err => fastify.log.error(`story comment notification fan-out failed: ${err}`));
       }
 
       // Trigger async translation for comment content (fire-and-forget)

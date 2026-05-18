@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { LanguageOrb } from './LanguageOrb';
@@ -74,6 +75,10 @@ function PostCard({
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const reduceMotion = useReducedMotion();
+  const heartSpring = reduceMotion
+    ? {}
+    : { type: 'spring' as const, stiffness: 400, damping: 15 };
 
   useEffect(() => {
     if (!showReactionPicker && !showContextMenu) return;
@@ -271,19 +276,38 @@ function PostCard({
         <div className="flex items-center gap-4">
           <div className="relative" ref={pickerRef}>
             <button
-              className="flex items-center gap-2 text-sm transition-colors duration-300"
+              className="flex items-center gap-2 text-sm transition-colors duration-300 min-w-[44px] min-h-[44px] px-2 -mx-2"
               style={{ color: isLiked || userReaction ? 'var(--gp-terracotta)' : 'var(--gp-text-secondary)' }}
               onClick={onLike}
               onPointerDown={handleLikePointerDown}
               onPointerUp={handleLikePointerUp}
               onPointerLeave={handleLikePointerUp}
+              aria-label={isLiked ? 'Unlike post' : 'Like post'}
+              aria-pressed={isLiked}
             >
               {userReaction ? (
-                <span className="text-lg leading-none">{userReaction}</span>
+                <motion.span
+                  key={userReaction}
+                  className="text-lg leading-none"
+                  initial={reduceMotion ? false : { scale: 0.7 }}
+                  animate={{ scale: 1 }}
+                  transition={heartSpring}
+                >
+                  {userReaction}
+                </motion.span>
               ) : (
-                <svg className="w-5 h-5" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+                <motion.svg
+                  key={isLiked ? 'liked' : 'unliked'}
+                  className="w-5 h-5"
+                  fill={isLiked ? 'currentColor' : 'none'}
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  initial={reduceMotion ? false : { scale: 0.7 }}
+                  animate={{ scale: 1 }}
+                  transition={heartSpring}
+                >
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                </svg>
+                </motion.svg>
               )}
               {likes}
             </button>

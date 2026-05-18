@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useCallback } from 'react';
+import { motion, useReducedMotion } from 'framer-motion';
 import { cn } from '@/lib/utils';
 import { Avatar } from './Avatar';
 import { TranslationToggle } from './TranslationToggle';
@@ -61,6 +62,10 @@ function CommentItem({
   className,
 }: CommentItemProps) {
   const [showActions, setShowActions] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const heartSpring = reduceMotion
+    ? {}
+    : { type: 'spring' as const, stiffness: 400, damping: 15 };
   const translationItems = translationsToItems(comment.translations);
   const hasTranslations = translationItems.length > 0;
   const indentPx = Math.min(depth * 24, 72);
@@ -130,14 +135,24 @@ function CommentItem({
           <button
             onClick={handleLikeToggle}
             className={cn(
-              'flex items-center gap-1 text-xs transition-colors',
+              'flex items-center gap-1 text-xs transition-colors min-w-[44px] min-h-[44px] px-1 -mx-1',
               isLiked ? 'text-[var(--gp-terracotta)]' : 'text-[var(--gp-text-muted)]',
             )}
             aria-label={isLiked ? 'Unlike comment' : 'Like comment'}
+            aria-pressed={isLiked}
           >
-            <svg className="w-3.5 h-3.5" fill={isLiked ? 'currentColor' : 'none'} stroke="currentColor" viewBox="0 0 24 24">
+            <motion.svg
+              key={isLiked ? 'liked' : 'unliked'}
+              className="w-3.5 h-3.5"
+              fill={isLiked ? 'currentColor' : 'none'}
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              initial={reduceMotion ? false : { scale: 0.6 }}
+              animate={{ scale: 1 }}
+              transition={heartSpring}
+            >
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-            </svg>
+            </motion.svg>
             {comment.likeCount > 0 && <span>{comment.likeCount}</span>}
           </button>
 

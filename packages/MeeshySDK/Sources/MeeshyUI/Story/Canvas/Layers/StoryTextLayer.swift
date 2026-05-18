@@ -23,6 +23,13 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
     private var backgroundFillLayer: CALayer?
     private var glassBackdropLayer: StoryGlassBackdropLayer?
 
+    /// Chaînes attribuées mémorisées par `configure`, permettant à
+    /// `setGlyphsHidden` de basculer les glyphes sans toucher `bounds` ni les
+    /// sous-calques de fond.
+    private var visibleString: NSAttributedString?
+    private var hiddenString: NSAttributedString?
+    public private(set) var glyphsHidden: Bool = false
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -50,7 +57,7 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         // Auparavant `resolveFont(family:size:)` ignorait textStyle, donc le
         // panel d'édition affichait le bon style mais le canvas restait dans
         // le default semibold system font.
-        let designFont = resolveFont(forTextObject: text, size: designFontSize)
+        let designFont = StoryTextFontResolver.resolveFont(forTextObject: text, size: designFontSize)
         let color = parseHexColor(text.textColor) ?? UIColor.white
 
         let alignment = parseAlignment(text.textAlign)
@@ -58,13 +65,35 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         para.alignment = alignment
         para.baseWritingDirection = .natural   // RTL auto-detect for Arabic/Hebrew
 
+        // Outline / contour : `.strokeWidth` est un pourcentage de la taille de
+        // police ; une valeur NÉGATIVE remplit ET contoure (positif = texte
+        // creux). `borderWidth` est en design-px absolus → le diviser par la
+        // taille de police design donne un pourcentage indépendant de la
+        // résolution ET de l'échelle (le contour garde la même épaisseur design
+        // quel que soit `text.scale`).
+        var strokeAttrs: [NSAttributedString.Key: Any] = [:]
+        if let borderHex = text.borderColor, let borderColor = parseHexColor(borderHex) {
+            let widthPx = CGFloat(text.borderWidth ?? 3.0)
+            strokeAttrs[.strokeColor] = borderColor.cgColor
+            strokeAttrs[.strokeWidth] = -(widthPx / max(designFontSize, 1)) * 100.0
+        }
+
         // Measure in design space.
         let designAttr = NSAttributedString(string: text.text, attributes: [
             .font: designFont,
             .foregroundColor: color.cgColor,
             .paragraphStyle: para
-        ])
-        let designSize = designAttr.size()
+        ].merging(strokeAttrs) { _, new in new })
+        // Mesure AVEC retour à la ligne : la largeur est plafonnée à ~88 % de la
+        // largeur design (marge symétrique) pour qu'un texte long wrappe sur
+        // plusieurs lignes au lieu de déborder du canvas. `size()` mesurait en
+        // mono-ligne, ce qui forçait des largeurs hors-canvas et un rendu tronqué.
+        let maxDesignWidth = CanvasGeometry.designWidth * 0.88
+        let designSize = designAttr.boundingRect(
+            with: CGSize(width: maxDesignWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        ).size
         // Symmetric pad in design pixels (16 design px ≈ ~6 px on iPhone, ~12 on iPad).
         let designBounds = CGSize(width: ceil(designSize.width) + 16,
                                   height: ceil(designSize.height) + 16)
@@ -75,20 +104,30 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
 
         // Render-space font for actual painting — applique aussi le textStyle.
         let renderedFontSize = geometry.render(designFontSize)
-        let renderedFont = resolveFont(forTextObject: text, size: renderedFontSize)
+        let renderedFont = StoryTextFontResolver.resolveFont(forTextObject: text, size: renderedFontSize)
         let renderedAttr = NSAttributedString(string: text.text, attributes: [
             .font: renderedFont,
             .foregroundColor: color.cgColor,
             .paragraphStyle: para
-        ])
+        ].merging(strokeAttrs) { _, new in new })
         string = renderedAttr
+        visibleString = renderedAttr
+        hiddenString = NSAttributedString(string: text.text, attributes: [
+            .font: renderedFont,
+            .foregroundColor: UIColor.clear.cgColor,
+            .paragraphStyle: para
+        ])
+        if glyphsHidden { string = hiddenString }
         // Mirror the rendered font size on the CATextLayer property so callers
         // (and tests) can read it directly without unwrapping the attributed string.
         fontSize = renderedFontSize
         alignmentMode = caTextAlignment(from: alignment)
         contentsScale = UIScreen.main.scale
         isWrapped = true
-        truncationMode = .end
+        // Jamais de troncature « … » : la mesure ci-dessus dimensionne `bounds`
+        // pour contenir tout le texte wrappé. `.none` garantit l'absence
+        // d'ellipse même si la mesure et le layout CATextLayer divergent d'un px.
+        truncationMode = .none
 
         let designCenterX = geometry.designLength(forNormalized: CGFloat(text.x))
         let designCenterY = CGFloat(text.y) * CanvasGeometry.designHeight
@@ -107,6 +146,16 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
         // background must live in a *sublayer* placed at zPosition < 0 so the
         // CATextLayer's own drawn glyphs paint above it.
         applyBackgroundStyle(text.resolvedBackgroundStyle, geometry: geometry)
+    }
+
+    /// Rend les glyphes invisibles (couleur de premier plan transparente) tout
+    /// en conservant `bounds` et les sous-calques de fond (solide / glass).
+    /// Utilisé pendant l'édition de texte en place : `StoryInlineTextEditor`
+    /// peint les glyphes éditables par-dessus, le vrai fond reste visible.
+    @MainActor
+    public func setGlyphsHidden(_ hidden: Bool) {
+        glyphsHidden = hidden
+        string = hidden ? hiddenString : visibleString
     }
 
     // MARK: - Background style
@@ -175,44 +224,6 @@ public final class StoryTextLayer: CATextLayer, @unchecked Sendable {
             return custom
         }
         return UIFont.systemFont(ofSize: size, weight: .semibold)
-    }
-
-    /// Resolves the canvas-side `UIFont` for a `StoryTextObject`, taking its
-    /// `textStyle` into account. Mirrors the SwiftUI helper `storyFont(for:size:)`
-    /// (FontStylePicker.swift) so the canvas rendering matches the panel preview:
-    /// previously the canvas only consulted `fontFamily` (always "system" for
-    /// new texts) and ignored `textStyle`, so picking "Neon" / "Typewriter" /
-    /// "Handwriting" / "Classic" in the editor updated the panel preview but
-    /// the canvas glyphs stayed in the default semibold system font.
-    @MainActor
-    private func resolveFont(forTextObject text: StoryTextObject, size: CGFloat) -> UIFont {
-        // Family-specific custom font takes precedence (e.g. user-loaded font).
-        if text.fontFamily != "system",
-           let custom = UIFont(name: text.fontFamily, size: size) {
-            return custom
-        }
-        switch text.parsedTextStyle {
-        case .bold:
-            return UIFont.systemFont(ofSize: size, weight: .black)
-        case .neon:
-            let base = UIFont.systemFont(ofSize: size, weight: .semibold)
-            let descriptor = base.fontDescriptor.withDesign(.rounded) ?? base.fontDescriptor
-            return UIFont(descriptor: descriptor, size: size)
-        case .typewriter:
-            return UIFont.monospacedSystemFont(ofSize: size, weight: .regular)
-        case .handwriting:
-            if let name = text.parsedTextStyle.fontName,
-               let custom = UIFont(name: name, size: size) {
-                return custom
-            }
-            let base = UIFont.systemFont(ofSize: size, weight: .regular)
-            let descriptor = base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor
-            return UIFont(descriptor: descriptor, size: size)
-        case .classic:
-            let base = UIFont.systemFont(ofSize: size, weight: .medium)
-            let descriptor = base.fontDescriptor.withDesign(.serif) ?? base.fontDescriptor
-            return UIFont(descriptor: descriptor, size: size)
-        }
     }
 
     private nonisolated func parseAlignment(_ raw: String?) -> NSTextAlignment {

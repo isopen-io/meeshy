@@ -154,11 +154,12 @@ private struct StoryOfflineRetryableError: Error, Sendable {
 extension StoryQueueItemConverter {
 
     /// Rebuilds a `StoryOfflineQueueItem` from a unified `StoryPublishQueueItem`.
-    /// The conversion is lossy : the legacy `originalLanguage` is dropped
-    /// (not represented in the publish item) and `slideIds` are reconstructed
-    /// from `mediaReferences.elementId`. Callers that round-trip the same
-    /// item observe the original `id` via `tempStoryId` which the forward
-    /// converter carries through.
+    /// The conversion is lossy only for `originalLanguage` (not represented in
+    /// the publish item). `slideIds` are recovered from the serialized slide
+    /// payload — NOT from `mediaReferences`, whose `elementId`s are media
+    /// object ids, not slide ids. Callers that round-trip the same item
+    /// observe the original `id` via `tempStoryId` which the forward converter
+    /// carries through.
     public static func reverse(_ unified: StoryPublishQueueItem) -> StoryOfflineQueueItem {
         let payloadString = String(data: unified.slidesPayload, encoding: .utf8) ?? "{}"
         let mediaPairs = unified.mediaReferences
@@ -169,16 +170,35 @@ extension StoryQueueItemConverter {
             .map { ($0.elementId, $0.localFilePath) }
         let mediaPaths = Dictionary(uniqueKeysWithValues: mediaPairs)
         let audioPaths = Dictionary(uniqueKeysWithValues: audioPairs)
-        let slideIds = unified.mediaReferences.map(\.elementId)
 
         return StoryOfflineQueueItem(
             id: unified.tempStoryId,
-            slideIds: slideIds,
+            slideIds: extractSlideIds(fromPayload: payloadString),
             slidePayloadJSON: payloadString,
             mediaURLPaths: mediaPaths,
             audioURLPaths: audioPaths,
             originalLanguage: nil,
             visibility: unified.visibility
         )
+    }
+
+    /// Extracts slide identifiers from the serialized slide payload. The
+    /// payload is either a `{"slides":[{"id":...}]}` object or a bare
+    /// `[{"id":...}]` array — both are accepted. Returns `[]` when the payload
+    /// cannot be parsed.
+    private static func extractSlideIds(fromPayload payloadString: String) -> [String] {
+        guard let data = payloadString.data(using: .utf8),
+              let root = try? JSONSerialization.jsonObject(with: data) else {
+            return []
+        }
+        let slideObjects: [[String: Any]]
+        if let object = root as? [String: Any], let slides = object["slides"] as? [[String: Any]] {
+            slideObjects = slides
+        } else if let array = root as? [[String: Any]] {
+            slideObjects = array
+        } else {
+            return []
+        }
+        return slideObjects.compactMap { $0["id"] as? String }
     }
 }

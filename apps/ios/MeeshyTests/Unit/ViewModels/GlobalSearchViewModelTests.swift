@@ -10,11 +10,15 @@ final class GlobalSearchViewModelTests: XCTestCase {
 
     // MARK: - Lifecycle
 
-    override func setUp() {
-        super.setUp()
+    override func setUp() async throws {
+        try await super.setUp()
         // Recent searches persist via UserDefaults — clear so a previous run
         // doesn't bleed into `test_init_*` and `test_addToRecentSearches_*`.
         UserDefaults.standard.removeObject(forKey: defaultsKey)
+        // performSearch hydrates local hits from the process-wide SearchIndex.shared
+        // FTS index; clear it so rows indexed by another test can't inflate the
+        // conversation/user result counts here.
+        await SearchIndex.shared.clearAll()
     }
 
     override func tearDown() {

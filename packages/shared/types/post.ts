@@ -48,6 +48,8 @@ export interface PostComment {
   readonly likeCount: number;
   readonly replyCount: number;
   readonly reactionSummary?: Record<string, number> | null;
+  readonly currentUserReactions?: readonly string[];
+  readonly isLikedByMe?: boolean;
   readonly isEdited?: boolean;
   readonly isDeleted?: boolean;
   readonly createdAt: string | Date;
@@ -71,6 +73,9 @@ export interface Post {
   readonly reactions?: readonly PostReaction[] | null;
   readonly reactionSummary?: Record<string, number> | null;
   readonly reactionCount?: number;
+  readonly currentUserReactions?: readonly string[];
+  readonly isLikedByMe?: boolean;
+  readonly bookmarkedAt?: string | Date | null;
   readonly likeCount: number;
   readonly commentCount: number;
   readonly repostCount: number;
@@ -175,6 +180,12 @@ export interface StoryReactedEventData {
   readonly emoji: string;
 }
 
+export interface StoryUnreactedEventData {
+  readonly storyId: string;
+  readonly userId: string;
+  readonly emoji: string;
+}
+
 export interface StatusCreatedEventData {
   readonly status: Post;
 }
@@ -189,6 +200,12 @@ export interface StatusDeletedEventData {
 }
 
 export interface StatusReactedEventData {
+  readonly statusId: string;
+  readonly userId: string;
+  readonly emoji: string;
+}
+
+export interface StatusUnreactedEventData {
   readonly statusId: string;
   readonly userId: string;
   readonly emoji: string;
@@ -235,4 +252,64 @@ export interface CommentTranslationUpdatedEventData {
     readonly confidenceScore?: number;
     readonly createdAt: string;
   };
+}
+
+export interface CommentReactionAggregation {
+  readonly emoji: string;
+  readonly count: number;
+  readonly userIds: string[];
+  readonly hasCurrentUser: boolean;
+}
+
+export interface CommentReactionUpdateEventData {
+  readonly commentId: string;
+  readonly postId: string;
+  readonly userId: string;
+  readonly emoji: string;
+  readonly action: 'add' | 'remove';
+  readonly aggregation: CommentReactionAggregation;
+  readonly timestamp: Date | string;
+}
+
+export interface CommentReactionSyncEventData {
+  readonly commentId: string;
+  readonly reactions: readonly CommentReactionAggregation[];
+  readonly totalCount: number;
+  readonly userReactions: readonly string[];
+}
+
+// =====================================================
+// POST REACTION EVENT DATA (Phase 3 — privacy-trimmed)
+// NO userIds, NO hasCurrentUser (count only)
+// =====================================================
+
+export interface PostReactionAggregation {
+  readonly emoji: string;
+  readonly count: number;
+}
+
+export interface PostReactionUpdateEventData {
+  readonly postId: string;
+  readonly userId: string;
+  readonly emoji: string;
+  readonly action: 'add' | 'remove';
+  readonly aggregation: PostReactionAggregation;
+  readonly timestamp: Date | string;
+}
+
+export interface PostReactionSyncEventData {
+  readonly postId: string;
+  readonly reactions: readonly PostReactionAggregation[];
+  readonly totalCount: number;
+  readonly userReactions: readonly string[];
+}
+
+export interface PostReactionAddData {
+  readonly postId: string;
+  readonly emoji: string;
+}
+
+export interface PostReactionRemoveData {
+  readonly postId: string;
+  readonly emoji: string;
 }

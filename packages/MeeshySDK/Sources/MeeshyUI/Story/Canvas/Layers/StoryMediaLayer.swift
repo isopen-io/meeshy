@@ -120,6 +120,12 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         contentsScale = UIScreen.main.scale
         name = media.id
 
+        // Coins arrondis du média (image ET vidéo). `masksToBounds` clippe le
+        // contenu — y compris le sublayer `AVPlayerLayer` du chemin vidéo — au
+        // rectangle arrondi. Le cadre foreground réutilise ce `cornerRadius`.
+        cornerRadius = min(renderedSize.width, renderedSize.height) * Self.cornerRadiusFraction
+        masksToBounds = true
+
         switch media.kind {
         case .image:
             configureImage(media)
@@ -137,6 +143,12 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     }
 
     // MARK: - Sizing
+
+    /// Rayon des coins arrondis du média, exprimé en proportion de son petit
+    /// côté rendu. Le cadre foreground (`StoryCanvasUIView.applyForegroundFrames`)
+    /// pose son `border` sur ce même layer : bordure et image héritent donc
+    /// exactement du même arrondi, sans constante dupliquée.
+    static let cornerRadiusFraction: CGFloat = 0.06
 
     /// Base design size (in 1080-référentiel pixels) of a media before user `scale`
     /// is layered on. Envelope is 65 % of the short canvas side, fitted to aspect.

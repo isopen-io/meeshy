@@ -268,6 +268,13 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
         _setMediaDurationLastArgs = (id, duration, slideId)
     }
 
+    var _setMediaURLCalls: Int = 0
+    var _setMediaURLLastArgs: (id: String, url: String, slideId: String?)?
+    func setMediaURL(id: String, url: String, slideId: String?) {
+        _setMediaURLCalls += 1
+        _setMediaURLLastArgs = (id, url, slideId)
+    }
+
     var _addAudioObjectCalls: Int = 0
     var stubAddAudioObject: StoryAudioPlayerObject?
     @discardableResult
@@ -332,6 +339,28 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
     func sendToBack(id: String) {
         _sendToBackCalls += 1
         _sendToBackLastId = id
+    }
+
+    var _bringForwardCalls: Int = 0
+    var _bringForwardLastId: String?
+    func bringForward(id: String) {
+        _bringForwardCalls += 1
+        _bringForwardLastId = id
+    }
+
+    var _sendBackwardCalls: Int = 0
+    var _sendBackwardLastId: String?
+    func sendBackward(id: String) {
+        _sendBackwardCalls += 1
+        _sendBackwardLastId = id
+    }
+
+    // MARK: - Media Reorder
+    var _moveMediaCalls: Int = 0
+    var _moveMediaLastArgs: (source: IndexSet, destination: Int)?
+    func moveMedia(from source: IndexSet, to destination: Int) {
+        _moveMediaCalls += 1
+        _moveMediaLastArgs = (source, destination)
     }
 
     // MARK: - Tool Actions

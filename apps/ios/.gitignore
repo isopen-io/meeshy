@@ -99,6 +99,7 @@ vendor/bundle/
 
 # Test Results
 test-results/
+TestResults/
 coverage/
 *.lcov
 
