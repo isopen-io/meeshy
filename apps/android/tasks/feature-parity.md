@@ -114,8 +114,10 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [x] `MeeshyThemeTokens` light/dark + `MeeshyTheme`
 - [ ] Typography + spacing + shape + motion tokens
 - [ ] Conversation `accentColor` Compose integration (palette propagation)
-- [ ] Reusable primitives: avatar, identity bar, buttons, fields, skeletons, toasts,
-      swipeable rows, tag input, pickers, progressive image (Coil + ThumbHash)
+- [~] Reusable primitives: `MeeshyAvatar`, `BrandLogo`, `MeeshyPrimaryButton`,
+      `MeeshySkeletonBox` done (Login + Conversations screens de-duplicated);
+      identity bar, fields, toasts, swipeable rows, tag input, pickers,
+      progressive image (Coil + ThumbHash) pending
 - [ ] Message Bubble component family (immutable `BubbleContent` + skippable composables)
 - [ ] Roborazzi fidelity baseline for every primitive (light + dark)
 

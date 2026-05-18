@@ -1,6 +1,5 @@
 package me.meeshy.app.conversations
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -27,14 +26,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import me.meeshy.sdk.model.ApiConversation
-import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.component.MeeshyAvatar
+import me.meeshy.ui.component.MeeshySkeletonBox
 import me.meeshy.ui.theme.MeeshyTheme
 import me.meeshy.ui.theme.hexColor
 
@@ -91,7 +90,10 @@ private fun ConversationRow(conversation: ApiConversation) {
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ConversationAvatar(conversation)
+        MeeshyAvatar(
+            name = conversation.displayTitle(),
+            containerColor = hexColor(conversation.accentHex()),
+        )
         Column(
             modifier = Modifier
                 .weight(1f)
@@ -120,25 +122,6 @@ private fun ConversationRow(conversation: ApiConversation) {
 }
 
 @Composable
-private fun ConversationAvatar(conversation: ApiConversation) {
-    val accent = hexColor(conversation.accentHex())
-    Box(
-        modifier = Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .background(accent),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = conversation.displayTitle().take(1).uppercase(),
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MeeshyPalette.White,
-        )
-    }
-}
-
-@Composable
 private fun SkeletonList() {
     Column(modifier = Modifier.fillMaxSize()) {
         repeat(8) {
@@ -148,17 +131,11 @@ private fun SkeletonList() {
                     .padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(48.dp)
-                        .clip(CircleShape)
-                        .background(MeeshyTheme.tokens.backgroundTertiary),
-                )
-                Box(
+                MeeshySkeletonBox(modifier = Modifier.size(48.dp), shape = CircleShape)
+                MeeshySkeletonBox(
                     modifier = Modifier
                         .padding(start = 12.dp)
-                        .size(width = 160.dp, height = 14.dp)
-                        .background(MeeshyTheme.tokens.backgroundTertiary),
+                        .size(width = 160.dp, height = 14.dp),
                 )
             }
         }
