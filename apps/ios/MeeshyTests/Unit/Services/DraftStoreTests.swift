@@ -1,10 +1,11 @@
 import XCTest
+import Combine
 @testable import Meeshy
 
 final class DraftStoreTests: XCTestCase {
 
     private func makeSUT() -> DraftStore {
-        let store = DraftStore(userDefaults: UserDefaults(suiteName: "DraftStoreTests")!)
+        let store = DraftStore(userDefaults: UserDefaults(suiteName: "DraftStoreTests-\(UUID().uuidString)")!)
         store.clearAll()
         return store
     }
@@ -118,5 +119,56 @@ final class DraftStoreTests: XCTestCase {
         sut.save("Draft", for: "conv1")
         sut.save("\n\n\n", for: "conv1")
         XCTAssertNil(sut.load(for: "conv1"))
+    }
+
+    // MARK: - allNonEmptyDrafts
+
+    func test_allNonEmptyDrafts_excludesEmptyDrafts() {
+        let sut = makeSUT()
+        sut.save(MessageDraft(text: "hello"), for: "conv1")
+        sut.save(MessageDraft(text: "   "), for: "conv2")
+        let drafts = sut.allNonEmptyDrafts()
+        XCTAssertEqual(Array(drafts.keys), ["conv1"])
+        XCTAssertEqual(drafts["conv1"]?.text, "hello")
+    }
+
+    func test_allNonEmptyDrafts_emptyStore_returnsEmpty() {
+        let sut = makeSUT()
+        XCTAssertTrue(sut.allNonEmptyDrafts().isEmpty)
+    }
+
+    // MARK: - changed publisher
+
+    func test_save_emitsChanged() {
+        let sut = makeSUT()
+        var changeCount = 0
+        let c = sut.changed.sink { changeCount += 1 }
+        sut.save(MessageDraft(text: "hi"), for: "conv1")
+        c.cancel()
+        XCTAssertEqual(changeCount, 1)
+    }
+
+    func test_remove_emitsChanged() {
+        let sut = makeSUT()
+        sut.save(MessageDraft(text: "hi"), for: "conv1")
+        var changeCount = 0
+        let c = sut.changed.sink { changeCount += 1 }
+        sut.remove(for: "conv1")
+        c.cancel()
+        XCTAssertEqual(changeCount, 1)
+    }
+
+    // MARK: - DraftSummary
+
+    func test_draftSummary_equatable() {
+        let date = Date(timeIntervalSince1970: 100)
+        XCTAssertEqual(
+            DraftSummary(previewText: "a", updatedAt: date),
+            DraftSummary(previewText: "a", updatedAt: date)
+        )
+        XCTAssertNotEqual(
+            DraftSummary(previewText: "a", updatedAt: date),
+            DraftSummary(previewText: "b", updatedAt: date)
+        )
     }
 }
