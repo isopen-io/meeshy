@@ -2062,6 +2062,27 @@ final class ConversationListViewModelTests: XCTestCase {
         wait(for: [exp], timeout: 1)
         XCTAssertEqual(sut.conversations.first?.id, "b")
     }
+
+    // MARK: - Foreground reactivation
+
+    func test_handleForegroundReactivation_resortsConversations() {
+        let (sut, _, _, _, _, _, _) = makeSUT()
+        let recent = makeConversation(id: "recent", lastMessageAt: Date(timeIntervalSince1970: 9999))
+        let old = makeConversation(id: "old", lastMessageAt: Date(timeIntervalSince1970: 1))
+        sut.conversations = [old, recent]
+        sut.handleForegroundReactivation()
+        XCTAssertEqual(sut.conversations.first?.id, "recent")
+    }
+
+    func test_handleForegroundReactivation_triggersDeltaSync() {
+        let syncEngine = MockConversationSyncEngine()
+        let (sut, _, _, _, _, _, _) = makeSUT(syncEngine: syncEngine)
+        sut.handleForegroundReactivation()
+        let exp = expectation(description: "delta sync ran")
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) { exp.fulfill() }
+        wait(for: [exp], timeout: 2)
+        XCTAssertGreaterThan(syncEngine.syncSinceLastCheckpointCallCount, 0)
+    }
 }
 
 // MARK: - ConversationUpdatedEvent factory

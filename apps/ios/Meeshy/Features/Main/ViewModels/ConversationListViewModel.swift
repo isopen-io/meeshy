@@ -1476,6 +1476,19 @@ class ConversationListViewModel: ObservableObject {
         }
     }
 
+    /// Appelée quand la liste de conversations revient au premier plan.
+    /// Re-trie la liste en mémoire immédiatement (retour instantané), puis
+    /// lance un delta sync pour que les messages reçus via APNs pendant que
+    /// l'app était en arrière-plan remontent et réordonnent la liste.
+    /// Distinct de `handleForegroundReturn()`, qui ne rafraîchit que les
+    /// stories.
+    func handleForegroundReactivation() {
+        setConversations(conversations)
+        Task { [weak self] in
+            await self?.refresh()
+        }
+    }
+
     // MARK: - Mark as Read (local update from ConversationView)
 
     private func observeMarkAsRead() {

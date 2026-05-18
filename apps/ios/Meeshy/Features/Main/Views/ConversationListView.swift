@@ -548,6 +548,7 @@ struct ConversationListView: View {
             .onChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     conversationViewModel.handleForegroundReturn()
+                    conversationViewModel.handleForegroundReactivation()
                 }
             }
             .onChange(of: conversationViewModel.userCategories) { _, categories in
