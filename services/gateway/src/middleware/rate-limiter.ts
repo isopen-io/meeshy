@@ -101,7 +101,7 @@ export function validateMentionCount(content: string): { valid: boolean; error?:
  * Hook pour valider le contenu du message avant traitement
  */
 export async function messageValidationHook(
-  request: FastifyRequest<{ Body: { content: string } }>,
+  request: FastifyRequest<{ Body: { content?: string } }>,
   reply: FastifyReply
 ) {
   const { content } = request.body;

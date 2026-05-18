@@ -21,7 +21,7 @@ export interface CreateConversationBody {
 }
 
 export interface SendMessageBody {
-  content: string;
+  content?: string;
   /**
    * Phase 4 §6.2 — mandatory client-generated idempotency key, format
    * `cid_<uuid v4 lowercase>`. The gateway uses

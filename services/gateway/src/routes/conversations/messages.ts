@@ -13,6 +13,7 @@ import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { validatePagination, buildPaginationMeta, buildCursorPaginationMeta } from '../../utils/pagination';
 import { messageValidationHook } from '../../middleware/rate-limiter';
+import { MESSAGE_LIMITS } from '../../config/message-limits';
 import {
   messageSchema,
   errorResponseSchema
@@ -33,8 +34,18 @@ import { PrivacyPreferencesService } from '../../services/PrivacyPreferencesServ
 
 import { CLIENT_MESSAGE_ID_REGEX } from '@meeshy/shared/utils/client-message-id';
 
-const SendMessageBodySchema = z.object({
-  content: CommonSchemas.messageContent,
+// `content` est optionnel : un message média-seul (image/vidéo/fichier sans
+// légende) ou un forward arrive avec un contenu vide. Le `.refine()` final
+// exige qu'au moins une source de contenu soit présente. Restaure le
+// comportement du commit ee9a29db, perdu lors de la migration Zod (Phase 4).
+export const SendMessageBodySchema = z.object({
+  content: z
+    .string()
+    .max(
+      MESSAGE_LIMITS.MAX_MESSAGE_LENGTH,
+      `Le message ne peut pas dépasser ${MESSAGE_LIMITS.MAX_MESSAGE_LENGTH} caractères`,
+    )
+    .optional(),
   // Phase 4 §6.2 — mandatory `cid_<uuid v4 lowercase>` idempotency key.
   clientMessageId: z
     .string()
@@ -56,7 +67,14 @@ const SendMessageBodySchema = z.object({
   isViewOnce: z.boolean().optional(),
   maxViewOnceCount: z.number().int().optional(),
   mentionedUserIds: z.array(z.string()).optional(),
-});
+}).refine(
+  (data) =>
+    (data.content?.trim().length ?? 0) > 0 ||
+    (data.attachmentIds?.length ?? 0) > 0 ||
+    Boolean(data.forwardedFromId) ||
+    Boolean(data.encryptedContent),
+  { message: 'Le message ne peut pas être vide', path: ['content'] },
+);
 import { transformTranslationsToArray } from '../../utils/translation-transformer';
 // Logger dédié pour messages
 const logger = enhancedLogger.child({ module: 'messages' });
