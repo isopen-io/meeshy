@@ -5,8 +5,7 @@
 **Scope:**
 - `apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift`
 - `apps/ios/Meeshy/Features/Main/Views/ConversationView.swift`
-- `apps/ios/Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift`
-- (lecture seule, vérification) `apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift`, `apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift`, `apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift`, `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift`, `packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift`, `services/gateway/src/socketio/handlers/StatusHandler.ts`
+- (lecture seule, vérification) `apps/ios/Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift`, `apps/ios/Meeshy/Features/Main/Views/ThemedConversationRow.swift`, `apps/ios/Meeshy/Features/Main/Views/ConversationListView+Rows.swift`, `apps/ios/Meeshy/Features/Main/Views/ConversationListView.swift`, `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift`, `packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift`, `services/gateway/src/socketio/handlers/StatusHandler.ts`
 
 ---
 
@@ -140,33 +139,9 @@ if !scrollState.isNearBottom || viewModel.isSearchingQuotedMessage {
 
 C'est exactement le même pattern que `inlineTypingIndicator` (`ConversationView+ScrollIndicators.swift:118-121`) pour `inlineTypingDotPhase`. Le `guard` évite d'avancer la phase quand personne ne tape (économie de re-render). Le publisher est connecté/déconnecté avec le cycle de vie de la vue (`:722-724`, `:728-729`) — pas de fuite, pas de `[weak self]` (vue = struct).
 
-### RC1.4 (REFACTOR, T4) — Mutualiser l'animation des points
+### Pas de mutualisation de l'animation des points
 
-`inlineTypingIndicator` (`inlineTypingDotPhase`) et le bouton (`typingDotPhase`) appliquent le **même** incrément `(phase + 1) % 3` sur réception du même publisher. Option de refactor : extraire un modificateur de vue dédié.
-
-```swift
-// ConversationView+ScrollIndicators.swift
-private struct TypingDotPhaseAdvancer: ViewModifier {
-    let publisher: Publishers.Autoconnect<Timer.TimerPublisher>   // ou le type exact du shared publisher
-    let isActive: Bool
-    @Binding var phase: Int
-
-    func body(content: Content) -> some View {
-        content.onReceive(publisher) { _ in
-            guard isActive else { return }
-            phase = (phase + 1) % 3
-        }
-    }
-}
-
-extension View {
-    func advancingTypingDotPhase(_ phase: Binding<Int>, on publisher: ..., isActive: Bool) -> some View {
-        modifier(TypingDotPhaseAdvancer(publisher: publisher, isActive: isActive, phase: phase))
-    }
-}
-```
-
-Appliqué ensuite sur `inlineTypingIndicator` ET sur le bloc bouton. **Conditionnel** : si le type exact du publisher (`typingDotPublisher` est un `Timer.TimerPublisher`, pas autoconnect — il est `.connect()`-é manuellement) rend la signature lourde, garder les deux `.onReceive` en l'état (3 lignes chacun) et documenter le pattern par un commentaire. Ne pas sur-ingénier — c'est un REFACTOR optionnel, exécuté seulement s'il ajoute de la valeur.
+`inlineTypingIndicator` et le bloc bouton appliquent tous deux le même incrément `(phase + 1) % 3` dans un `.onReceive`. La duplication est de **3 lignes**, deux fois. Extraire un `ViewModifier` générique + une extension `View` pour dédupliquer 6 lignes au total — sur un publisher manuellement `.connect()`-é dont le type rend la signature lourde — serait du sur-engineering, contraire à « Simplicity First / ne pas sur-ingénier » du `CLAUDE.md`. **On garde donc volontairement les deux `.onReceive` en clair**, en miroir du pattern déjà présent pour `inlineTypingDotPhase` (`ConversationView+ScrollIndicators.swift:118-121`). Aucune abstraction n'est introduite.
 
 ---
 
@@ -204,11 +179,7 @@ UI / comportement de ligne :
 
 - Ajouter `.onReceive(typingDotPublisher)` sur le bloc `scrollToBottomButton` (`ConversationView.swift:1021-1027`) pour avancer `headerState.typingDotPhase`, gardé par `!viewModel.typingUsernames.isEmpty`.
 
-### T4 — REFACTOR (optionnel)
-
-- Mutualiser l'avancée de phase (`inlineTypingDotPhase` + `typingDotPhase`) via `TypingDotPhaseAdvancer` si la signature du publisher reste lisible. Sinon, conserver les deux `.onReceive` et documenter.
-
-### T5 — VÉRIFICATION
+### T4 — VÉRIFICATION
 
 - `./apps/ios/meeshy.sh test` au vert (unitaires). `./apps/ios/meeshy.sh test --ui` si snapshot ajouté.
 - `./apps/ios/meeshy.sh build` propre.
@@ -238,7 +209,7 @@ UI / comportement de ligne :
 5. `./apps/ios/meeshy.sh test` au vert.
 6. **Zero Unnecessary Re-render** : lors d'une frappe distante, seule la ligne concernée re-render son body (vérifiable via SwiftUI Instruments ou un `let _ = Self._printChanges()` temporaire).
 
-### Protocole de test manuel (T5)
+### Protocole de test manuel (T4)
 
 1. Connecter `atabeth` (simulateur) et `jcharlesnm` (second simulateur ou device).
 2. `jcharlesnm` ouvre une conversation commune et tape — sur l'écran liste de `atabeth`, la ligne montre « jcharlesnm écrit » + points animés en < 1 s.
@@ -254,7 +225,6 @@ UI / comportement de ligne :
 |---|---|
 | `apps/ios/Meeshy/Features/Main/ViewModels/ConversationListViewModel.swift` | `var typingUsernames` → `@Published var typingUsernames` (`:63`) ; commentaire mis à jour (`:60-62`). |
 | `apps/ios/Meeshy/Features/Main/Views/ConversationView.swift` | Overlay `inlineTypingIndicator` ancré bas dans `bodyContent` (dans le `ZStack` `:794`) ; `.onReceive(typingDotPublisher)` sur le bloc `scrollToBottomButton` (`:1021-1027`). |
-| `apps/ios/Meeshy/Features/Main/Views/ConversationView+ScrollIndicators.swift` | (T4 optionnel) extraction de `TypingDotPhaseAdvancer`. Sinon, fichier inchangé. |
 | `apps/ios/MeeshyTests/Unit/ViewModels/ConversationListViewModelTests.swift` | Nouveaux tests T0 (fichier existant — extension). |
 | `apps/ios/MeeshyTests/Unit/ViewModels/ConversationViewModelTests.swift` | Confirmation/ajout test T0 (fichier existant — extension). |
 

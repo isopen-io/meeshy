@@ -45,7 +45,7 @@ du rendu** par `MeeshyConfig.resolveMediaURL`.
 ### Note sur l'audio (cause derivee de RC3.1)
 
 `AudioPlayerView.AudioPlaybackManager.play(urlString:)` (`AudioPlayerView.swift:32-55`,
-appel ligne 369) lit l'audio via `CacheCoordinator.shared.audio.data(for: resolved)`.
+appel `playButton` ligne 544) lit l'audio via `CacheCoordinator.shared.audio.data(for: resolved)`.
 `DiskCacheStore.data(for:)` (`DiskCacheStore.swift:150-181`) **rejette explicitement**
 tout schema non `http/https` (`scheme == "https" || scheme == "http"` sinon
 `throw DiskCacheError.notCached`, lignes 162-166). Donc meme avec RC3.1 corrige, un
@@ -111,10 +111,21 @@ Deux changements dans `ConversationMediaViews.swift`.
 
 **a) `AttachmentDownloader.checkCache` doit aussi consulter le store images.**
 Actuellement il choisit `audio` ou `video` selon `isAudio` et ignore les images.
-Le rendre conscient du type de media et du schema `file://` :
+Le rendre conscient du type de media et du schema `file://`.
+
+**Pas de nouveau type.** Une premiere version de cette spec introduisait un
+`enum MediaKind { case image, video, audio }` deduit de `attachment.mimeType`. C'est
+rejete : `MeeshyMessageAttachment` expose deja `var type: AttachmentType`
+(`CoreModels.swift:687-693`) qui mappe les prefixes mime `image/` / `video/` / `audio/`
+vers `.image` / `.video` / `.audio` (sinon `.file` / `.location`). Reintroduire un
+`MediaKind` dupliquerait cette logique de derivation — violation directe de « Single
+Source of Truth » (CLAUDE.md). `checkCache` switche donc sur le `AttachmentType` existant.
+On passe l'`attachment` complet : la methode lit `attachment.type` et
+`attachment.fileUrl` en interne, ce qui evite aussi un parametre redondant cote appelant :
 
 ```swift
-func checkCache(_ urlString: String, mediaKind: MediaKind) async {
+func checkCache(_ attachment: MeeshyMessageAttachment) async {
+    let urlString = attachment.fileUrl
     // Local optimistic media is, by definition, already on disk — no
     // download badge should ever appear for it.
     if urlString.hasPrefix("file://") {
@@ -125,19 +136,19 @@ func checkCache(_ urlString: String, mediaKind: MediaKind) async {
     }
     let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
     let cached: Bool
-    switch mediaKind {
+    switch attachment.type {
     case .audio: cached = await CacheCoordinator.shared.audio.isCached(resolved)
     case .video: cached = await CacheCoordinator.shared.video.isCached(resolved)
     case .image: cached = await CacheCoordinator.shared.images.isCached(resolved)
+    case .file, .location: cached = false
     }
     if cached { isCached = true }
 }
 ```
 
-`MediaKind` est un `enum { case image, video, audio }` deduit de `attachment.mimeType`
-(prefixe `image/`, `video/`, `audio/`). Les appelants de `checkCache` (le `.task` de
-`idleBadge` lignes 77-80, et le `.task` polling lignes 81-94) passent la bonne valeur.
-Le polling `.task` (`:81-94`) doit lui aussi router vers le bon store et court-circuiter
+Les appelants de `checkCache` (le `.task` de `idleBadge` lignes 77-80, et le `.task`
+polling lignes 81-94) passent l'`attachment` deja en scope. Le polling `.task` (`:81-94`)
+route ainsi automatiquement vers le bon store via `attachment.type` et court-circuite
 sur `file://` (sortie immediate avec `isCached = true`).
 
 **b) Masquer le badge pour tout attachment local ou en cours d'envoi.**
@@ -146,10 +157,18 @@ URL `file://`, OU dont le message porteur est en etat `.sending` / optimiste, ne
 JAMAIS afficher de badge de telechargement — le media est deja local.
 
 `DownloadBadgeView` ne recoit aujourd'hui que `attachment` + `accentColor`. Il faut lui
-passer l'etat du message (le `Message.deliveryStatus` du porteur) — propage depuis
-`BubbleGridCell` (`ThemedMessageBubble+Media.swift:144-184`, qui a deja `messageId` ; on
-ajoute `messageDeliveryStatus: Message.DeliveryStatus` en `let`). Le `body` de
-`DownloadBadgeView` devient :
+passer l'etat de livraison du message porteur (`Message.deliveryStatus`).
+
+**C'est de la reutilisation d'une valeur deja en scope, pas de la nouvelle plomberie.**
+`BubbleGridCell` est construit par `makeGridCell` sur `BubbleStandardLayout`, lequel
+detient deja `let message: Message` (`BubbleStandardLayout.swift:37`) et lit deja
+`message.deliveryStatus` directement (`:188`, `:619`). `DeliveryStatus`
+(`CoreModels.swift:369`) possede deja les cas `.sending` / `.invisible`. On se contente
+donc d'ajouter **un seul `let messageDeliveryStatus: Message.DeliveryStatus`** sur
+`BubbleGridCell` (`ThemedMessageBubble+Media.swift:144-184`, qui a deja `messageId`),
+alimente par la valeur `message.deliveryStatus` deja disponible chez le parent — puis on
+le transmet a `DownloadBadgeView`. Aucun nouveau type, aucun nouveau flux d'etat. Le
+`body` de `DownloadBadgeView` devient :
 
 ```swift
 private var isLocalMedia: Bool { attachment.fileUrl.hasPrefix("file://") }
@@ -180,12 +199,14 @@ matchera jamais (l'audio local n'est pas dans le store). Donc :
   `isCached = true` immediatement (le fichier est local) ;
 - `AudioPlayerView` doit, pour un `file://`, jouer via `playLocal(url:)` plutot que
   `play(urlString:)` (qui passerait par `data(for:)` qui rejette `file://` — voir §2).
-  L'aiguillage se fait dans le call-site `AudioPlayerView.swift:369` :
-  `if attachment.fileUrl.hasPrefix("file://"), let u = URL(string: attachment.fileUrl) { player.playLocal(url: u) } else { player.play(urlString: attachment.fileUrl) }`.
+  L'aiguillage se fait dans le call-site `playButton` `AudioPlayerView.swift:544`
+  (`player.play(urlString: currentAudioUrl)`) :
+  `if attachment.fileUrl.hasPrefix("file://"), let u = URL(string: attachment.fileUrl) { player.playLocal(url: u) } else { player.play(urlString: currentAudioUrl) }`.
+  Le call-site `:369` (`switchToLanguage`, replay en langue d'origine) n'est PAS concerne.
 
 ### RC3.3 — Alignement de cle post-upload + pas d'ecrasement premature
 
-Apres l'upload TUS (`ConversationView+AttachmentHandlers.swift:245-263`), le seed se fait
+Apres l'upload TUS (`ConversationView+AttachmentHandlers.swift:243-263`), le seed se fait
 via `CacheCoordinator.shared.images.store(fileData, for: result.fileUrl)` (`:254`). Si
 `result.fileUrl` est relatif, la cle ne matchera pas le render. Corriger en seedant
 **sous la cle exacte que le renderer utilisera** :
@@ -206,22 +227,29 @@ if let fileData {
 ```
 
 Le pre-seed doit avoir lieu **avant** que l'echo `message:new` n'ecrase l'attachment
-optimiste. Comme l'upload se termine puis `sendMessage(...)` / `sendWithAttachmentsAsync`
-est appele (qui declenche l'echo), seeder dans la boucle d'upload (avant l'envoi socket)
-garantit que le cache est chaud sous la cle serveur au moment ou
-`ConversationSocketHandler` substitue l'`attachmentsJson` serveur. Resultat : la bulle
-passe de `file://` → URL serveur **sans cache miss**, donc sans flicker ni shimmer.
+optimiste. Tous les medias — image, video, **audio** et fichier — empruntent desormais
+le meme envoi REST unifie `viewModel.sendMessage(...)` (`ConversationView+AttachmentHandlers.swift:271-289`).
+La branche socket dediee `sendWithAttachmentsAsync` pour l'audio a ete supprimee par le
+merge de `main` (commit `2818653` « fix(ios): l'audio emprunte l'envoi REST unifie comme
+les autres medias ») ; en cas d'echec REST, `sendMessage` bascule automatiquement sur le
+socket avec le meme `clientMessageId` (dedup → pas de doublon). Comme l'upload se termine
+puis `viewModel.sendMessage(...)` est appele (ce qui declenche l'echo), seeder dans la
+boucle d'upload (avant l'envoi) garantit que le cache est chaud sous la cle serveur au
+moment ou `ConversationSocketHandler` substitue l'`attachmentsJson` serveur. Resultat :
+la bulle passe de `file://` → URL serveur **sans cache miss**, donc sans flicker ni
+shimmer.
 
 Le meme principe vaut pour l'audio (`:238`,
 `CacheCoordinator.shared.audio.store(audioData, for: result.fileUrl)`) et pour les
 thumbnails (`:258`) : utiliser systematiquement la cle resolue via `resolveMediaURL`.
 
-**Cleanup des fichiers temp.** `ConversationView+AttachmentHandlers.swift:306-307`
-supprime les `file://` temporaires apres l'upload. Cette suppression ne doit intervenir
-qu'**apres** le pre-seed du cache sous la cle serveur, sinon la preview optimiste se base
-sur un fichier deja supprime entre la fin d'upload et l'arrivee de l'echo. L'ordre
-actuel (seed dans la boucle `:245-263`, suppression dans le `MainActor.run` final
-`:305-317`) est correct ; veiller a ne pas le reordonnancer.
+**Cleanup des fichiers temp.** `ConversationView+AttachmentHandlers.swift:290-291`
+supprime les `file://` temporaires apres l'upload (chemin de succes ; le chemin `catch`
+fait de meme `:310-311`). Cette suppression ne doit intervenir qu'**apres** le pre-seed
+du cache sous la cle serveur, sinon la preview optimiste se base sur un fichier deja
+supprime entre la fin d'upload et l'arrivee de l'echo. L'ordre actuel (seed dans la
+boucle `:243-263`, suppression dans le `MainActor.run` final `:288-300`) est correct ;
+veiller a ne pas le reordonnancer.
 
 ### RC3.3 + dependance Sprint 2 (zone `ConversationSocketHandler.swift:257-303`)
 
@@ -254,16 +282,16 @@ defensif decrit ci-dessus, sans toucher au routage `clientMessageId` de Sprint 2
 Une fois RC3.1 en place, auditer tous les call-sites de `resolveMediaURL` pour garantir
 un comportement uniforme face au `file://` :
 - `CachedAsyncImage` / `CachedAvatarImage` / `CachedBannerImage` / `ProgressiveCachedImage`
-  (`CachedAsyncImage.swift` — `resolveMediaURL` utilise lignes 28, 68, 86, 129, 153, 175,
-  200, 230, 241, 276, 285, 326, 331, 342, 352) : tous passent deja par `resolveMediaURL`,
-  donc le fast-path RC3.1 les corrige sans changement.
+  (`MeeshyUI/Primitives/CachedAsyncImage.swift` — `resolveMediaURL` utilise lignes 28, 68,
+  86, 129, 153, 175, 200, 230, 241, 276, 285, 326, 331, 342, 352) : tous passent deja par
+  `resolveMediaURL`, donc le fast-path RC3.1 les corrige sans changement.
 - `VideoPlayerView` (`VideoPlayerView.swift:63` lecture inline, `:134` thumbnail, `:382`
   et `:411` fullscreen) : consomme directement l'URL resolue dans `AVPlayer(url:)` —
   RC3.1 suffit (AVPlayer lit nativement un `file://`).
 - `DownloadBadgeView` (`ConversationMediaViews.swift:83`, `:150`, `:167`, `:207`) :
   corrige par RC3.2.
 - `AudioPlayerView` (`AudioPlayerView.swift:39`, `:742`) : RC3.1 + l'aiguillage
-  `playLocal` decrit en RC3.2.
+  `playLocal` decrit en RC3.2 (call-site `playButton` `:544`).
 
 Le refactor se limite a vérifier l'uniformite et a documenter, dans un commentaire au
 sommet de `resolveMediaURL`, le contrat « `file://` => passthrough, jamais de SSRF ».
@@ -307,10 +335,11 @@ Fast-path `file://` au sommet de `resolveMediaURL` (`MeeshyConfig.swift`). Les t
 SSRF existants restent verts (non-regression).
 
 ### T2 — GREEN (RC3.2)
-`checkCache` multi-store + `MediaKind` ; `DownloadBadgeView` masque pour media local /
-optimiste ; propagation de `messageDeliveryStatus` depuis `BubbleGridCell` ;
-aiguillage `playLocal` pour l'audio `file://` dans `AudioPlayerView`. Les tests
-`AttachmentDownloaderTests` passent au vert.
+`checkCache` multi-store switchant sur le `AttachmentType` existant (pas de nouveau
+`MediaKind`) ; `DownloadBadgeView` masque pour media local / optimiste ; reutilisation de
+`message.deliveryStatus` (deja en scope) propagee via un `let` sur `BubbleGridCell` ;
+aiguillage `playLocal` pour l'audio `file://` dans `AudioPlayerView` (call-site `:544`).
+Les tests `AttachmentDownloaderTests` passent au vert.
 
 ### T3 — GREEN (RC3.3)
 Seed post-upload sous la cle `resolveMediaURL(result.fileUrl)` pour images / audio /
