@@ -42,3 +42,43 @@ public object OutboxLanes {
     public const val PROFILE: String = "profile"
     public const val SETTINGS: String = "settings"
 }
+
+/** Input to [OutboxRepository.enqueue] — a mutation to deliver. */
+public data class OutboxMutation(
+    val kind: OutboxKind,
+    val lane: String,
+    val targetId: String,
+    val payload: String,
+    val dependsOn: String? = null,
+    val cmid: String = OutboxIds.cmid(),
+)
+
+internal fun OutboxMutation.toEntity(now: Long): OutboxEntity = OutboxEntity(
+    cmid = cmid,
+    lane = lane,
+    kind = kind.name,
+    targetId = targetId,
+    payload = payload,
+    dependsOn = dependsOn,
+    attempts = 0,
+    state = OutboxState.PENDING.name,
+    createdAt = now,
+    updatedAt = now,
+)
+
+/** Terminal (or near-terminal) signal for a queued mutation, keyed by [cmid]. */
+public sealed interface OutboxOutcome {
+    public val cmid: String
+
+    /** Delivered and acknowledged by the gateway. */
+    public data class Succeeded(override val cmid: String) : OutboxOutcome
+
+    /** Gave up after the maximum number of attempts — surfaced to the user. */
+    public data class Exhausted(override val cmid: String, val reason: String) : OutboxOutcome
+
+    /** Replaced by a newer mutation of the same target (coalesced). */
+    public data class Superseded(override val cmid: String) : OutboxOutcome
+
+    /** Annihilated before delivery (e.g. send + delete, reaction toggle). */
+    public data class Cancelled(override val cmid: String) : OutboxOutcome
+}

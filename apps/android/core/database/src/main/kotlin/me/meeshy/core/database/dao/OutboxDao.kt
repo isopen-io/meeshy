@@ -19,6 +19,9 @@ public interface OutboxDao {
     @Query("SELECT * FROM outbox WHERE state = :state ORDER BY createdAt ASC")
     public suspend fun byState(state: String): List<OutboxEntity>
 
+    @Query("SELECT * FROM outbox WHERE cmid = :cmid")
+    public suspend fun find(cmid: String): OutboxEntity?
+
     @Upsert
     public suspend fun upsert(row: OutboxEntity)
 
