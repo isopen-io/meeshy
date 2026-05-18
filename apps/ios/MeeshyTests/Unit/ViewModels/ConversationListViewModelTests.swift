@@ -19,7 +19,8 @@ final class ConversationListViewModelTests: XCTestCase {
         authManager: MockAuthManager? = nil,
         storyService: MockStoryService? = nil,
         syncEngine: MockConversationSyncEngine? = nil,
-        messageNotificationPublisher: AnyPublisher<String, Never>? = nil
+        messageNotificationPublisher: AnyPublisher<String, Never>? = nil,
+        draftStore: DraftStore? = nil
     ) -> (
         sut: ConversationListViewModel,
         api: MockAPIClientForApp,
@@ -39,6 +40,12 @@ final class ConversationListViewModelTests: XCTestCase {
         let syncEngine = syncEngine ?? MockConversationSyncEngine()
         let pushPublisher = messageNotificationPublisher
             ?? PassthroughSubject<String, Never>().eraseToAnyPublisher()
+        let resolvedDraftStore: DraftStore = {
+            if let draftStore { return draftStore }
+            let store = DraftStore(userDefaults: UserDefaults(suiteName: "ConvListVMTests-\(UUID().uuidString)")!)
+            store.clearAll()
+            return store
+        }()
         let sut = ConversationListViewModel(
             api: api,
             conversationService: conversationService,
@@ -48,7 +55,8 @@ final class ConversationListViewModelTests: XCTestCase {
             authManager: authManager,
             storyService: storyService,
             syncEngine: syncEngine,
-            messageNotificationPublisher: pushPublisher
+            messageNotificationPublisher: pushPublisher,
+            draftStore: resolvedDraftStore
         )
         return (sut, api, conversationService, preferenceService, messageSocket, messageService, authManager)
     }
@@ -2122,6 +2130,29 @@ final class ConversationListViewModelTests: XCTestCase {
         let pinnedOld = makeConversation(id: "po", isPinned: true, lastMessageAt: Date(timeIntervalSince1970: 1))
         let pinnedRecent = makeConversation(id: "pr", isPinned: true, lastMessageAt: Date(timeIntervalSince1970: 999))
         XCTAssertTrue(ConversationListViewModel.conversationsAreInOrder(pinnedRecent, pinnedOld, draftSummaries: [:]))
+    }
+
+    // MARK: - Draft summaries integration
+
+    func test_reloadDraftSummaries_populatesFromDraftStore() {
+        let store = DraftStore(userDefaults: UserDefaults(suiteName: "VMDraft-\(UUID().uuidString)")!)
+        store.clearAll()
+        store.save(MessageDraft(text: "hello"), for: "conv1")
+        let (sut, _, _, _, _, _, _) = makeSUT(draftStore: store)
+        sut.reloadDraftSummaries()
+        XCTAssertEqual(sut.draftSummaries["conv1"]?.previewText, "hello")
+    }
+
+    func test_setConversations_draftConversationSortsAboveNonPinned() {
+        let store = DraftStore(userDefaults: UserDefaults(suiteName: "VMDraft-\(UUID().uuidString)")!)
+        store.clearAll()
+        store.save(MessageDraft(text: "wip"), for: "old")
+        let (sut, _, _, _, _, _, _) = makeSUT(draftStore: store)
+        sut.reloadDraftSummaries()
+        let old = makeConversation(id: "old", lastMessageAt: Date(timeIntervalSince1970: 1))
+        let recent = makeConversation(id: "recent", lastMessageAt: Date(timeIntervalSince1970: 9999))
+        sut.setConversations([old, recent])
+        XCTAssertEqual(sut.conversations.first?.id, "old")
     }
 }
 

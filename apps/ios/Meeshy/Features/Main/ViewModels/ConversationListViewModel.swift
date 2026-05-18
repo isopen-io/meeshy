@@ -53,6 +53,10 @@ class ConversationListViewModel: ObservableObject {
     @Published var selectedFilter: ConversationFilter = .all
     private(set) var filteredConversations: [Conversation] = []
     @Published var groupedConversations: [(section: ConversationSection, conversations: [Conversation])] = []
+    /// Brouillons actifs indexés par conversationId. Alimente le badge
+    /// « Brouillon » de la ligne et la priorité de tri. Concept client-local
+    /// — jamais stocké dans le modèle SDK `Conversation`.
+    @Published private(set) var draftSummaries: [String: DraftSummary] = [:]
     /// Typing usernames indexed by conversationId. NOT @Published to avoid triggering
     /// a full list re-render on every typing event from any conversation.
     /// Rows read this during natural re-renders (scroll, message arrival).
@@ -77,6 +81,9 @@ class ConversationListViewModel: ObservableObject {
     /// pour la testabilité ; en production, branché sur
     /// `PushNotificationManager.shared.messageNotificationReceived`.
     private let messageNotificationPublisher: AnyPublisher<String, Never>
+    /// Source des brouillons persistés (UserDefaults). Injecté pour la
+    /// testabilité ; en production, `DraftStore.shared`.
+    private let draftStore: DraftStore
     /// Number of conversations fetched per `loadMore` page.
     ///
     /// Tuned at 100 (gateway max) so the first paginated page after the
@@ -124,7 +131,8 @@ class ConversationListViewModel: ObservableObject {
     /// after 30 s.
     func setConversations(_ items: [Conversation]) {
         let merged = mergePreservingRecentlyCreated(incoming: items, current: conversations, now: dateProvider())
-        conversations = merged.sorted { $0.lastMessageAt > $1.lastMessageAt }
+        let drafts = draftSummaries
+        conversations = merged.sorted { Self.conversationsAreInOrder($0, $1, draftSummaries: drafts) }
     }
 
     /// Local-creation registry: maps conversationId → insertion timestamp.
@@ -324,7 +332,8 @@ class ConversationListViewModel: ObservableObject {
         authManager: AuthManaging = AuthManager.shared,
         storyService: StoryServiceProviding = StoryService.shared,
         syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
-        messageNotificationPublisher: AnyPublisher<String, Never> = PushNotificationManager.shared.messageNotificationReceived.eraseToAnyPublisher()
+        messageNotificationPublisher: AnyPublisher<String, Never> = PushNotificationManager.shared.messageNotificationReceived.eraseToAnyPublisher(),
+        draftStore: DraftStore = DraftStore.shared
     ) {
         self.api = api
         self.conversationService = conversationService
@@ -335,8 +344,11 @@ class ConversationListViewModel: ObservableObject {
         self.storyService = storyService
         self.syncEngine = syncEngine
         self.messageNotificationPublisher = messageNotificationPublisher
+        self.draftStore = draftStore
+        reloadDraftSummaries()
         subscribeToSocketEvents()
         subscribeToPushNotifications()
+        subscribeToDrafts()
         syncBadgeOnUnreadChange()
         setupBackgroundProcessing()
         observeMarkAsRead()
@@ -363,10 +375,11 @@ class ConversationListViewModel: ObservableObject {
                 guard let self else { return }
                 let filtered = Self.filterConversations(convs, searchText: text, filter: filter)
                 self.filteredConversations = filtered
+                let drafts = self.draftSummaries
                 self.groupingTask?.cancel()
                 self.groupingTask = Task.detached(priority: .userInitiated) { [weak self] in
                     guard !Task.isCancelled else { return }
-                    let grouped = Self.groupConversations(filtered, categories: categories)
+                    let grouped = Self.groupConversations(filtered, categories: categories, draftSummaries: drafts)
                     guard !Task.isCancelled else { return }
                     await MainActor.run { [weak self] in
                         self?.groupedConversations = grouped
@@ -409,15 +422,13 @@ class ConversationListViewModel: ObservableObject {
     /// - Peut s'exécuter sur n'importe quel thread (pas d'accès à self)
     nonisolated private static func groupConversations(
         _ filtered: [Conversation],
-        categories: [ConversationSection]
+        categories: [ConversationSection],
+        draftSummaries: [String: DraftSummary]
     ) -> [(section: ConversationSection, conversations: [Conversation])] {
         // No categories → flat list, no section headers needed
         let hasPinned = filtered.contains { $0.isPinned && $0.sectionId == nil }
         if categories.isEmpty && !hasPinned {
-            let sorted = filtered.sorted { a, b in
-                if a.isPinned != b.isPinned { return a.isPinned }
-                return a.lastMessageAt > b.lastMessageAt
-            }
+            let sorted = filtered.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }
             return sorted.isEmpty ? [] : [(ConversationSection.other, sorted)]
         }
 
@@ -434,16 +445,13 @@ class ConversationListViewModel: ObservableObject {
 
         // Pinned section
         if let pinned = bySection["__pinned__"], !pinned.isEmpty {
-            result.append((ConversationSection.pinned, pinned.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+            result.append((ConversationSection.pinned, pinned.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }))
         }
 
         // User categories (order preserved)
         for category in categories {
             if let sectionConvs = bySection[category.id], !sectionConvs.isEmpty {
-                let sorted = sectionConvs.sorted { a, b in
-                    if a.isPinned != b.isPinned { return a.isPinned }
-                    return a.lastMessageAt > b.lastMessageAt
-                }
+                let sorted = sectionConvs.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }
                 result.append((category, sorted))
             }
         }
@@ -454,7 +462,7 @@ class ConversationListViewModel: ObservableObject {
             return !categoryIds.contains(sid)
         }
         if !otherConvs.isEmpty {
-            result.append((ConversationSection.other, otherConvs.sorted { $0.lastMessageAt > $1.lastMessageAt }))
+            result.append((ConversationSection.other, otherConvs.sorted { conversationsAreInOrder($0, $1, draftSummaries: draftSummaries) }))
         }
 
         return result
@@ -756,6 +764,36 @@ class ConversationListViewModel: ObservableObject {
                 } else {
                     self.fetchAndPrependMissingConversation(id: conversationId, source: .socketUpdated)
                 }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Draft Summaries
+
+    /// Recharge `draftSummaries` depuis le `DraftStore`. `internal` pour que
+    /// les tests pilotent la synchro de façon déterministe.
+    func reloadDraftSummaries() {
+        draftSummaries = draftStore.allNonEmptyDrafts().mapValues { draft in
+            DraftSummary(
+                previewText: draft.text.trimmingCharacters(in: .whitespacesAndNewlines),
+                updatedAt: draft.updatedAt
+            )
+        }
+    }
+
+    /// S'abonne aux mutations de brouillon. Le composer persiste à chaque
+    /// frappe, donc `changed` émet en rafale — d'où le debounce de 300 ms qui
+    /// évite de recharger tous les brouillons + re-trier à chaque caractère.
+    /// Le re-`setConversations` ré-émet `$conversations`, ce qui relance le
+    /// pipeline de groupement avec les `draftSummaries` fraîchement rechargés.
+    private func subscribeToDrafts() {
+        draftStore.changed
+            .receive(on: DispatchQueue.main)
+            .debounce(for: .milliseconds(300), scheduler: DispatchQueue.main)
+            .sink { [weak self] in
+                guard let self else { return }
+                self.reloadDraftSummaries()
+                self.setConversations(self.conversations)
             }
             .store(in: &cancellables)
     }
