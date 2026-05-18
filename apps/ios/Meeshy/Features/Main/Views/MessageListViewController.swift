@@ -18,10 +18,15 @@ final class MessageListViewController: UIViewController {
     private let conversationListViewModel: ConversationListViewModel
     private var cancellables = Set<AnyCancellable>()
     private var isLoadingOlder = false
-    /// Tracks the item count from the last snapshot so we can detect genuinely
-    /// new messages (appended at the bottom) vs. older messages (prepended via
-    /// pagination). Only new messages bump the unread badge.
+    /// Tracks the item count from the last snapshot so we can detect that the
+    /// snapshot grew at all.
     private var previousSnapshotCount: Int = 0
+    /// The newest item (index 0 in the inverted layout) from the last snapshot.
+    /// A genuinely-new message changes item 0; older-message pagination
+    /// prepends to the tail and leaves item 0 untouched. Comparing against
+    /// this is deterministic — unlike the `isLoadingOlder` flag, which the
+    /// ViewModel's anticipatory prefetch bypasses entirely.
+    private var previousNewestItem: MessageListItem?
     /// Running counter of messages that arrived while the user was scrolled
     /// away from the bottom. Reset to 0 when the user returns to near-bottom.
     private var pendingUnreadCount: Int = 0
@@ -349,17 +354,40 @@ final class MessageListViewController: UIViewController {
         // without triggering the costly insert/move/delete diff animation.
         snapshot.reconfigureItems(items)
 
-        // Unread badge: if the snapshot grew at the BOTTOM (new messages, not
-        // older pagination) while the user is scrolled away, bump the counter.
+        // Detect genuinely-new messages: the snapshot grew AND item 0 (the
+        // newest, in the inverted layout) changed. Older-message pagination
+        // prepends to the tail and leaves item 0 untouched, so it never
+        // counts — including the ViewModel's anticipatory prefetch, which
+        // loads older pages from an internal Task that bypasses the
+        // `isLoadingOlder` flag entirely (the flag is therefore NOT a
+        // reliable discriminator). The very first load
+        // (previousSnapshotCount == 0) is excluded.
         let newCount = items.count
         let delta = newCount - previousSnapshotCount
-        if delta > 0, !isCurrentlyNearBottom, !isLoadingOlder, previousSnapshotCount > 0 {
+        let newestItem = items.first
+        let hasGenuinelyNewMessages = delta > 0
+            && previousSnapshotCount > 0
+            && newestItem != previousNewestItem
+        // RC2.1 — when the user is following the conversation (near bottom),
+        // auto-scroll onto the new message; otherwise bump the unread badge.
+        // `ConversationViewModel.newMessageAppended` used to carry this signal
+        // but was observed by nobody — the auto-scroll now lives here, derived
+        // from the snapshot delta.
+        let shouldAutoScroll = hasGenuinelyNewMessages && isCurrentlyNearBottom
+        if hasGenuinelyNewMessages && !isCurrentlyNearBottom {
             pendingUnreadCount += delta
             onNewMessagesBadge?(pendingUnreadCount)
         }
         previousSnapshotCount = newCount
+        previousNewestItem = newestItem
 
-        dataSource.apply(snapshot, animatingDifferences: animated)
+        // Scroll in the apply completion handler so the new item exists in the
+        // layout before `scrollToItem` runs (apply is asynchronous for the
+        // animated diff path).
+        dataSource.apply(snapshot, animatingDifferences: animated) { [weak self] in
+            guard let self, shouldAutoScroll else { return }
+            self.scrollToBottom(animated: animated)
+        }
     }
 
     // MARK: - Observation
@@ -402,6 +430,19 @@ final class MessageListViewController: UIViewController {
     func scrollToBottom(animated: Bool = true) {
         guard collectionView.numberOfItems(inSection: 0) > 0 else { return }
         collectionView.scrollToItem(at: IndexPath(item: 0, section: 0), at: .top, animated: animated)
+        // RC2.4 — a programmatic scroll does not reliably fire
+        // `scrollViewDidScroll` (no drag/decelerate phase), so the near-bottom
+        // state and the unread badge must be resynced here. Without this the
+        // NEXT `applySnapshot` re-bumps the badge against a stale
+        // `isCurrentlyNearBottom`, and the badge never reliably clears.
+        if !isCurrentlyNearBottom {
+            isCurrentlyNearBottom = true
+            onNearBottomChanged?(true)
+        }
+        if pendingUnreadCount > 0 {
+            pendingUnreadCount = 0
+            onNewMessagesBadge?(0)
+        }
     }
 
     // MARK: - Scroll to specific message (reply chip tap)

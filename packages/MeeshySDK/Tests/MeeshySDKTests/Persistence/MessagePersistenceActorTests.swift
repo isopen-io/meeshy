@@ -607,4 +607,240 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertTrue(expARows.isEmpty)
         XCTAssertTrue(expBRows.isEmpty)
     }
+
+    // MARK: - Sprint 2 — APIMessage ingestion (RC2.2 / RC2.3)
+
+    private func makeAPIMessage(
+        id: String,
+        conversationId: String,
+        senderId: String = "sender_1",
+        content: String? = "Hello",
+        clientMessageId: String? = nil,
+        isEncrypted: Bool = false,
+        attachments: [[String: Any]] = [],
+        createdAt: Date = Date()
+    ) -> APIMessage {
+        var json: [String: Any] = [
+            "id": id,
+            "conversationId": conversationId,
+            "senderId": senderId,
+            "createdAt": ISO8601DateFormatter().string(from: createdAt),
+            "updatedAt": ISO8601DateFormatter().string(from: createdAt),
+        ]
+        if let content { json["content"] = content }
+        if let clientMessageId { json["clientMessageId"] = clientMessageId }
+        if isEncrypted { json["isEncrypted"] = true }
+        if !attachments.isEmpty { json["attachments"] = attachments }
+        let data = try! JSONSerialization.data(withJSONObject: json)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try! decoder.decode(APIMessage.self, from: data)
+    }
+
+    /// RC2.2 — a media message ingested via `upsertFromAPIMessages` must keep
+    /// its attachments (the legacy 6-field path dropped them → empty bubble).
+    func test_upsertFromAPIMessages_withImageAttachment_persistsAttachmentsAndThumbHash() async throws {
+        let apiMsg = makeAPIMessage(
+            id: "srv_img_1",
+            conversationId: "conv_img",
+            content: nil,
+            attachments: [[
+                "id": "att_1",
+                "mimeType": "image/jpeg",
+                "fileUrl": "https://cdn.example/a.jpg",
+                "thumbnailUrl": "https://cdn.example/a_thumb.jpg",
+                "thumbHash": "1QcSHQRnh493V4dIh4eXh1h4kJUI",
+                "width": 1200,
+                "height": 800
+            ]]
+        )
+
+        try await actor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try actor.messages(for: "conv_img", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        let json = try XCTUnwrap(rows[0].attachmentsJson,
+            "a media message ingested via the APIMessage path must persist attachmentsJson")
+        let attachments = try JSONDecoder().decode([MeeshyMessageAttachment].self, from: json)
+        XCTAssertEqual(attachments.count, 1)
+        XCTAssertEqual(attachments[0].id, "att_1")
+        XCTAssertEqual(attachments[0].fileUrl, "https://cdn.example/a.jpg")
+        XCTAssertEqual(attachments[0].thumbHash, "1QcSHQRnh493V4dIh4eXh1h4kJUI",
+            "ThumbHash must survive ingestion so the bubble shows an instant blur placeholder")
+    }
+
+    /// RC2.2 — an encrypted DM keeps its ciphertext + flag; cleartext never
+    /// touches disk (the display pipeline decrypts in memory).
+    func test_upsertFromAPIMessages_encryptedMessage_persistsCiphertextAndFlag() async throws {
+        let apiMsg = makeAPIMessage(
+            id: "srv_enc_1",
+            conversationId: "conv_enc",
+            content: "Y2lwaGVydGV4dA==",
+            isEncrypted: true
+        )
+
+        try await actor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try actor.messages(for: "conv_enc", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertTrue(rows[0].isEncrypted,
+            "an encrypted DM must keep isEncrypted so the display pipeline decrypts it")
+        XCTAssertEqual(rows[0].content, "Y2lwaGVydGV4dA==",
+            "ciphertext must be stored verbatim — never decrypted to disk")
+    }
+
+    /// RC2.3 — an echo reconciles the optimistic row by `clientMessageId`
+    /// (the optimistic row's localId IS the cid) without duplicating it.
+    func test_upsertFromAPIMessages_reconcilesOptimisticByClientMessageId() async throws {
+        let cid = "cid_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        let optimistic = MessageRecordFactory.make(
+            localId: cid, conversationId: "conv_recon", state: .sending
+        )
+        try await actor.insertOptimistic(optimistic)
+
+        let echo = makeAPIMessage(
+            id: "srv_recon_1",
+            conversationId: "conv_recon",
+            content: "Hello",
+            clientMessageId: cid
+        )
+        try await actor.upsertFromAPIMessages([echo])
+
+        let rows = try actor.messages(for: "conv_recon", limit: 10)
+        XCTAssertEqual(rows.count, 1, "reconciling by clientMessageId must NOT create a duplicate row")
+        XCTAssertEqual(rows[0].localId, cid, "the optimistic row's localId is preserved")
+        XCTAssertEqual(rows[0].serverId, "srv_recon_1", "the server id is backfilled onto the optimistic row")
+        XCTAssertEqual(rows[0].state, .sent,
+            "a reconciled row with no delivery signal must stay .sent — not jump to .delivered (✓✓)")
+
+        let resolved = try actor.resolveServerId(for: cid)
+        XCTAssertEqual(resolved, "srv_recon_1",
+            "PendingIdRecord must be coherent so backend ops resolve the server id")
+    }
+
+    /// The buffered entry point routes through the serial write stream.
+    func test_bufferIncomingAPIMessages_writesThroughSerialStream() async throws {
+        await actor.start()
+        let apiMsg = makeAPIMessage(id: "srv_buf_1", conversationId: "conv_buf", content: "Buffered")
+
+        await actor.bufferIncomingAPIMessages([apiMsg])
+
+        var rows: [MessageRecord] = []
+        for _ in 0..<60 {
+            rows = try actor.messages(for: "conv_buf", limit: 10)
+            if !rows.isEmpty { break }
+            try await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertEqual(rows.count, 1, "bufferIncomingAPIMessages must commit through the write stream")
+        XCTAssertEqual(rows.first?.content, "Buffered")
+    }
+
+    // MARK: - Socket mutators resolve own messages by serverId
+
+    // Socket `message:edited` / `message:deleted` / `reaction:*` events carry
+    // the SERVER id. An own message's GRDB row keeps its optimistic
+    // `localId` (`cid_*`) with the server id only in the `serverId` column —
+    // these mutators must resolve `localId == ? OR serverId == ?` or the
+    // event silently no-ops on the user's own messages.
+
+    func test_markEdited_resolvesByServerId_forOwnOptimisticRow() async throws {
+        let cid = "cid_dddddddddddddddddddddddddddddddd"
+        let serverId = "srv_edit_target_1"
+        var record = MessageRecordFactory.make(localId: cid, conversationId: "conv_edit")
+        record.serverId = serverId
+        try await actor.insertOptimistic(record)
+
+        // The message:edited socket event is keyed by the server id.
+        try await actor.markEdited(localId: serverId, newContent: "edited body", editedAt: Date())
+
+        let rows = try actor.messages(for: "conv_edit", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].content, "edited body",
+            "a serverId-keyed edit must reach the own optimistic row (localId = cid)")
+        XCTAssertTrue(rows[0].isEdited)
+    }
+
+    func test_markDeleted_resolvesByServerId_forOwnOptimisticRow() async throws {
+        let cid = "cid_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        let serverId = "srv_delete_target_1"
+        var record = MessageRecordFactory.make(localId: cid, conversationId: "conv_del")
+        record.serverId = serverId
+        try await actor.insertOptimistic(record)
+
+        try await actor.markDeleted(localId: serverId, deletedAt: Date())
+
+        let rows = try actor.messages(for: "conv_del", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertNotNil(rows[0].deletedAt,
+            "a serverId-keyed delete must reach the own optimistic row")
+    }
+
+    func test_appendReaction_resolvesByServerId_forOwnOptimisticRow() async throws {
+        let cid = "cid_ffffffffffffffffffffffffffffffff"
+        let serverId = "srv_react_target_1"
+        var record = MessageRecordFactory.make(localId: cid, conversationId: "conv_react")
+        record.serverId = serverId
+        try await actor.insertOptimistic(record)
+
+        try await actor.appendReaction(
+            localId: serverId, reactionId: "r1",
+            messageId: serverId, participantId: "peer_1", emoji: "❤️"
+        )
+
+        let rows = try actor.messages(for: "conv_react", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        let json = try XCTUnwrap(rows[0].reactionsJson,
+            "a serverId-keyed reaction must reach the own optimistic row")
+        let reactions = try JSONDecoder().decode([MeeshyReaction].self, from: json)
+        XCTAssertEqual(reactions.first?.emoji, "❤️")
+    }
+
+    /// An own E2EE message: the optimistic row holds the plaintext we typed.
+    /// The server echo carries only ciphertext we cannot decrypt (no E2EE
+    /// session with ourselves) — the upsert must keep the local plaintext.
+    func test_upsertFromAPIMessages_keepsOwnPlaintextWhenServerSaysEncrypted() async throws {
+        let cid = "cid_77777777777777777777777777777777"
+        var optimistic = MessageRecordFactory.make(localId: cid, conversationId: "conv_e2ee")
+        optimistic.content = "salut en clair"
+        optimistic.isEncrypted = false
+        try await actor.insertOptimistic(optimistic)
+
+        let echo = makeAPIMessage(
+            id: "srv_e2ee_own_1", conversationId: "conv_e2ee",
+            content: "Y2lwaGVydGV4dA==", clientMessageId: cid, isEncrypted: true
+        )
+        try await actor.upsertFromAPIMessages([echo])
+
+        let rows = try actor.messages(for: "conv_e2ee", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].content, "salut en clair",
+            "an own E2EE message's local plaintext must NOT be clobbered by the server ciphertext")
+        XCTAssertFalse(rows[0].isEncrypted,
+            "isEncrypted must stay false so the display shows the plaintext directly")
+    }
+
+    /// Regression: a genuinely received encrypted message (its row already
+    /// `isEncrypted == true`) is still updated normally on re-upsert — the
+    /// keep-plaintext guard only triggers when the local row holds readable
+    /// content (`isEncrypted == false`).
+    func test_upsertFromAPIMessages_receivedEncrypted_stillUpdatesOnReupsert() async throws {
+        let serverId = "srv_recv_enc_1"
+        let first = makeAPIMessage(
+            id: serverId, conversationId: "conv_recv_enc",
+            content: "Y2lwaGVyMQ==", isEncrypted: true
+        )
+        try await actor.upsertFromAPIMessages([first])
+
+        let second = makeAPIMessage(
+            id: serverId, conversationId: "conv_recv_enc",
+            content: "Y2lwaGVyMg==", isEncrypted: true
+        )
+        try await actor.upsertFromAPIMessages([second])
+
+        let rows = try actor.messages(for: "conv_recv_enc", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].content, "Y2lwaGVyMg==",
+            "a received encrypted row must still take server updates")
+        XCTAssertTrue(rows[0].isEncrypted)
+    }
 }

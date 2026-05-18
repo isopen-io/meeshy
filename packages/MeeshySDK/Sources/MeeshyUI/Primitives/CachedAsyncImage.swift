@@ -9,9 +9,15 @@ public struct CachedAsyncImage<Placeholder: View>: View {
     /// thumbnails (avatars, covers) from allocating full-resolution bitmaps.
     /// Pass `nil` (default) to keep the existing behaviour unchanged.
     public let targetSize: CGSize?
+    /// Optional base64 ThumbHash. When provided and the full image is not yet
+    /// resident, its decoded ~32 px blur is shown instead of the bare
+    /// placeholder — the bubble fills in instantly with a recognisable preview
+    /// rather than an empty shimmer while the network fetch runs.
+    public let thumbHash: String?
     public let placeholder: () -> Placeholder
 
     @State private var image: UIImage?
+    @State private var thumbHashImage: UIImage?
     @State private var isLoading = false
     @State private var hasFailed = false
     @State private var retryCount = 0
@@ -19,16 +25,23 @@ public struct CachedAsyncImage<Placeholder: View>: View {
     public init(
         url urlString: String?,
         targetSize: CGSize? = nil,
+        thumbHash: String? = nil,
         @ViewBuilder placeholder: @escaping () -> Placeholder
     ) {
         self.urlString = urlString
         self.targetSize = targetSize
+        self.thumbHash = thumbHash
         self.placeholder = placeholder
+        let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            _image = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
+            cachedFull = DiskCacheStore.cachedImage(for: resolved)
         } else {
-            _image = State(initialValue: nil)
+            cachedFull = nil
+        }
+        _image = State(initialValue: cachedFull)
+        if cachedFull == nil, let thumbHash, !thumbHash.isEmpty {
+            _thumbHashImage = State(initialValue: UIImage.fromThumbHash(thumbHash))
         }
     }
 
@@ -37,42 +50,59 @@ public struct CachedAsyncImage<Placeholder: View>: View {
             if let image {
                 Image(uiImage: image).resizable()
             } else if hasFailed {
-                placeholder()
-                    .overlay {
-                        Button {
-                            hasFailed = false
-                            retryCount += 1
-                        } label: {
-                            VStack(spacing: 4) {
-                                Image(systemName: "arrow.clockwise.circle.fill")
-                                    .font(.system(size: 22, weight: .medium))
-                                    .foregroundStyle(.white.opacity(0.7))
-                                Text(String(localized: "common.retry", defaultValue: "Retry", bundle: .module))
-                                    .font(.system(size: 10, weight: .semibold))
-                                    .foregroundStyle(.white.opacity(0.5))
-                            }
+                thumbHashBackdrop {
+                    Button {
+                        hasFailed = false
+                        retryCount += 1
+                    } label: {
+                        VStack(spacing: 4) {
+                            Image(systemName: "arrow.clockwise.circle.fill")
+                                .font(.system(size: 22, weight: .medium))
+                                .foregroundStyle(.white.opacity(0.7))
+                            Text(String(localized: "common.retry", defaultValue: "Retry", bundle: .module))
+                                .font(.system(size: 10, weight: .semibold))
+                                .foregroundStyle(.white.opacity(0.5))
                         }
                     }
+                }
             } else {
-                placeholder()
-                    .overlay { if isLoading { ProgressView().tint(.white.opacity(0.6)) } }
+                thumbHashBackdrop {
+                    if isLoading { ProgressView().tint(.white.opacity(0.6)) }
+                }
             }
         }
         .task(id: "\(urlString ?? "")_\(retryCount)") { await loadImage(for: urlString) }
         .onChange(of: urlString) { _, newUrl in
+            hasFailed = false
             guard let newUrl, !newUrl.isEmpty else {
                 image = nil
-                hasFailed = false
+                thumbHashImage = nil
                 return
             }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            if let cached = DiskCacheStore.cachedImage(for: resolved) {
-                image = cached
-                hasFailed = false
-            } else {
-                image = nil
-                hasFailed = false
-            }
+            let cached = DiskCacheStore.cachedImage(for: resolved)
+            image = cached
+            // Refresh the ThumbHash blur for the new url — cells are reused, so
+            // stale @State from the previous message must not bleed through.
+            thumbHashImage = (cached == nil)
+                ? thumbHash.flatMap { $0.isEmpty ? nil : UIImage.fromThumbHash($0) }
+                : nil
+        }
+    }
+
+    /// While the full image loads, render the decoded ThumbHash blur when one
+    /// is available; otherwise fall back to the caller's placeholder. The
+    /// supplied `overlay` (spinner / retry button) is layered on top.
+    @ViewBuilder
+    private func thumbHashBackdrop<Overlay: View>(@ViewBuilder overlay: () -> Overlay) -> some View {
+        if let thumbHashImage {
+            Image(uiImage: thumbHashImage)
+                .resizable()
+                .interpolation(.low)
+                .overlay { overlay() }
+        } else {
+            placeholder()
+                .overlay { overlay() }
         }
     }
 
@@ -106,8 +136,8 @@ public struct CachedAsyncImage<Placeholder: View>: View {
 }
 
 extension CachedAsyncImage where Placeholder == Color {
-    public init(url urlString: String?, targetSize: CGSize? = nil) {
-        self.init(url: urlString, targetSize: targetSize) { Color.gray.opacity(0.2) }
+    public init(url urlString: String?, targetSize: CGSize? = nil, thumbHash: String? = nil) {
+        self.init(url: urlString, targetSize: targetSize, thumbHash: thumbHash) { Color.gray.opacity(0.2) }
     }
 }
 

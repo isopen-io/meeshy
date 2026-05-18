@@ -326,13 +326,22 @@ final class ConversationViewModelTests: XCTestCase {
         XCTAssertEqual(sut.messages.first?.deliveryStatus, .sending)
     }
 
-    func test_sendMessage_incrementsNewMessageAppended() async {
+    func test_sendMessage_surfacesOptimisticMessage() async {
         let sut = makeSUT()
-        let before = sut.newMessageAppended
+        XCTAssertEqual(sut.messages.count, 0)
 
         _ = await sut.sendMessage(content: "Test")
 
-        XCTAssertGreaterThan(sut.newMessageAppended, before)
+        // The optimistic GRDB insert surfaces through the store observation
+        // (notification → store refresh → @Published messages), which hops the
+        // main runloop a couple of times — poll briefly rather than racing it.
+        // The auto-scroll signal is now derived from the snapshot delta in
+        // MessageListViewController, not a ViewModel counter.
+        for _ in 0..<40 where sut.messages.isEmpty {
+            try? await Task.sleep(nanoseconds: 25_000_000)
+        }
+        XCTAssertEqual(sut.messages.count, 1)
+        XCTAssertEqual(sut.messages.first?.content, "Test")
     }
 
     func test_sendMessage_passesReplyToId() async {
