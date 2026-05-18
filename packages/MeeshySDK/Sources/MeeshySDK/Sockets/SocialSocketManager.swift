@@ -340,9 +340,9 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
 
         manager = SocketManager(socketURL: url, config: [
             .log(false),
-            .compress,
+            // Voir MessageSocketManager : transport long-polling uniquement.
+            .forcePolling(true),
             .extraHeaders(["Authorization": "Bearer \(token)"]),
-            // Pas de forceWebsockets : handshake polling puis upgrade WebSocket.
             .reconnects(true),
             .reconnectWait(1),
             .reconnectWaitMax(16),

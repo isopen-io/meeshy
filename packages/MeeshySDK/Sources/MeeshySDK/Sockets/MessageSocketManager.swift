@@ -999,11 +999,14 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         manager = SocketManager(socketURL: url, config: [
             .log(true),
-            .compress,
+            // Transport HTTP long-polling uniquement. Le transport WebSocket
+            // (Starscream) ne s'établit pas de façon fiable ici : forcé, le
+            // handshake restait bloqué ; en upgrade, la connexion tombait au
+            // bout de ~35 s (timeout ping Engine.IO). Le long-polling s'appuie
+            // sur URLSession — fiable, comme le REST — et reste un transport
+            // temps réel Socket.IO pleinement valide.
+            .forcePolling(true),
             .extraHeaders(["Authorization": "Bearer \(token)"]),
-            // Pas de forceWebsockets : on laisse Socket.IO faire le handshake
-            // polling (URLSession, fiable) puis tenter l'upgrade WebSocket. En
-            // websocket-only forcé, le handshake n'aboutissait jamais.
             .reconnects(true),
             .reconnectWait(1),
             .reconnectWaitMax(16),
@@ -1028,9 +1031,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
         manager = SocketManager(socketURL: url, config: [
             .log(true),
-            .compress,
+            // Voir connect() : transport long-polling uniquement.
+            .forcePolling(true),
             .extraHeaders(["X-Session-Token": sessionToken]),
-            // Voir connect() : handshake polling puis upgrade WebSocket.
             .reconnects(true),
             .reconnectWait(1),
             .reconnectWaitMax(16),
