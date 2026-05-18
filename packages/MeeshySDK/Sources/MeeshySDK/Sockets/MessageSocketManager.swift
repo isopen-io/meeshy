@@ -1285,6 +1285,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     /// NOT for E2EE payloads or attachments — the `message:send` event does not
     /// transport those; the caller routes them through REST or
     /// `sendWithAttachments`.
+    ///
+    /// - Important: Currently UNUSED. `ConversationViewModel.sendMessage`
+    ///   routes text sends through REST because the `message:send` Socket.IO
+    ///   event does not reach the gateway handler (investigation 2026-05-17).
+    ///   Re-wire this path once the Socket.IO channel is repaired.
     public func sendAsync(
         conversationId: String,
         content: String?,

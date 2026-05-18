@@ -50,4 +50,33 @@ final class E2ESessionManagerTests: XCTestCase {
         let b = SessionManager.shared
         XCTAssertTrue(a === b)
     }
+
+    // MARK: - Negative Cache Cooldown
+
+    func test_isWithinFailureCooldown_noPriorFailure_returnsFalse() {
+        let result = SessionManager.isWithinFailureCooldown(
+            failedAt: nil, now: Date(), cooldown: 600)
+        XCTAssertFalse(result)
+    }
+
+    func test_isWithinFailureCooldown_recentFailure_returnsTrue() {
+        let now = Date()
+        let result = SessionManager.isWithinFailureCooldown(
+            failedAt: now.addingTimeInterval(-60), now: now, cooldown: 600)
+        XCTAssertTrue(result)
+    }
+
+    func test_isWithinFailureCooldown_expiredFailure_returnsFalse() {
+        let now = Date()
+        let result = SessionManager.isWithinFailureCooldown(
+            failedAt: now.addingTimeInterval(-601), now: now, cooldown: 600)
+        XCTAssertFalse(result)
+    }
+
+    func test_isWithinFailureCooldown_exactlyAtCooldownBoundary_returnsFalse() {
+        let now = Date()
+        let result = SessionManager.isWithinFailureCooldown(
+            failedAt: now.addingTimeInterval(-600), now: now, cooldown: 600)
+        XCTAssertFalse(result)
+    }
 }

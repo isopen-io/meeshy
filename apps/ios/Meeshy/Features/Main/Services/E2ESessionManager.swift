@@ -38,8 +38,25 @@ public actor SessionManager {
     /// Protocol endpoints on every message — see `getOrCreateSession`.
     private var failedSessionAttempts: [String: Date] = [:]
 
-    /// Cooldown before a peer with a failed establishment is retried.
+    /// Cooldown before a peer with a failed establishment is retried. While a
+    /// peer is in cooldown its DMs fall back to the existing plaintext path
+    /// (the MVP fallback in `ConversationViewModel.sendMessage`); the window
+    /// is bounded so a server-side Signal Protocol recovery is picked up
+    /// without requiring an app restart.
     private static let failedSessionCooldown: TimeInterval = 600
+
+    /// Pure decision for the negative cache: is a peer still within its
+    /// post-failure cooldown? Extracted as a `nonisolated static` so the
+    /// policy is unit-testable without the E2EAPI / E2EEService / Keychain
+    /// singletons that `getOrCreateSession` otherwise pulls in.
+    nonisolated static func isWithinFailureCooldown(
+        failedAt: Date?,
+        now: Date,
+        cooldown: TimeInterval
+    ) -> Bool {
+        guard let failedAt else { return false }
+        return now.timeIntervalSince(failedAt) < cooldown
+    }
 
     private init() {}
 
@@ -111,8 +128,11 @@ public actor SessionManager {
         // of re-hitting the network on every message. `sendMessage` catches
         // this and falls back to a plaintext send; the cooldown lets a
         // server-side recovery eventually get picked up.
-        if let failedAt = failedSessionAttempts[userId],
-           Date().timeIntervalSince(failedAt) < Self.failedSessionCooldown {
+        if Self.isWithinFailureCooldown(
+            failedAt: failedSessionAttempts[userId],
+            now: Date(),
+            cooldown: Self.failedSessionCooldown
+        ) {
             throw SessionError.sessionUnavailable
         }
 
@@ -140,7 +160,13 @@ public actor SessionManager {
             failedSessionAttempts.removeValue(forKey: userId)
             return symmetricKey
         } catch {
-            failedSessionAttempts[userId] = Date()
+            // A cancelled send (user left the screen, switched conversation…)
+            // is not a server failure — recording it would poison the negative
+            // cache and silently downgrade this peer's DMs to plaintext for the
+            // whole cooldown window. Only cache genuine establishment failures.
+            if !Task.isCancelled {
+                failedSessionAttempts[userId] = Date()
+            }
             throw error
         }
     }
