@@ -132,6 +132,13 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 See the per-domain catalogue below. Build order: Auth → Conversations → Chat →
 Feed → Stories → Calls → the rest.
 
+Wired so far (login → conversations → chat, all on the SWR + Hilt foundation):
+- [x] `:feature:auth` — login screen + `AuthViewModel`
+- [x] `:feature:conversations` — cache-first conversation list, tap-through
+- [x] `:feature:chat` — cache-first message list + `MessageBubble` + composer
+- [ ] Pending: session layer (current user → outgoing bubbles + Prisme prefs),
+      outbox-backed send, then Feed / Stories / Calls / the rest
+
 ## Phase 6 — Integration & final audit
 - [ ] Navigation graph + deep links (`meeshy://`, `https://meeshy.me`)
 - [ ] Adaptive tablet/foldable layouts verified (list-detail two-pane)
