@@ -227,12 +227,18 @@ public final class StoryCanvasUIView: UIView {
 
     /// `true` while this view holds a balanced `.playback` claim on the shared
     /// `MediaSessionCoordinator` (RC4.3). Keeps request/release symmetric.
-    private var didRequestPlaybackSession: Bool = false
+    /// `nonisolated(unsafe)` so the `nonisolated deinit` can read it to decide
+    /// whether to release the session — all mutations happen in MainActor
+    /// playback methods, so single-context mutation is preserved.
+    private nonisolated(unsafe) var didRequestPlaybackSession: Bool = false
 
     /// Subscription to `MediaSessionCoordinator.events` — pauses the mixer on
     /// interruptions / headset unplug and resumes it on an explicit
     /// shouldResume while the viewer is still foreground (RC4.3 / T7).
-    private var audioSessionEventsCancellable: AnyCancellable?
+    /// `nonisolated(unsafe)` so the `nonisolated deinit` can cancel it without
+    /// a MainActor hop — `AnyCancellable.cancel()` is idempotent and the
+    /// property is only assigned once, from a MainActor init path.
+    private nonisolated(unsafe) var audioSessionEventsCancellable: AnyCancellable?
 
     /// KVO tokens watching foreground video readiness so `onContentReady`
     /// does not fire while a foreground clip is still a black rectangle (T6).
@@ -282,7 +288,7 @@ public final class StoryCanvasUIView: UIView {
         observeAudioSessionEvents()
     }
 
-    deinit {
+    nonisolated deinit {
         NotificationCenter.default.removeObserver(self)
         audioSessionEventsCancellable?.cancel()
         // `shutdown()` is @MainActor-isolated and deinit is nonisolated —
