@@ -17,6 +17,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import me.meeshy.ui.theme.MeeshyPalette
+import me.meeshy.ui.theme.MeeshyRadius
 
 /**
  * The primary call-to-action — the Indigo brand gradient (charte graphique
@@ -34,7 +35,7 @@ public fun MeeshyPrimaryButton(
     Box(
         modifier = modifier
             .height(52.dp)
-            .clip(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(MeeshyRadius.lg))
             .background(
                 if (active) {
                     Brush.linearGradient(MeeshyPalette.BrandGradient)
