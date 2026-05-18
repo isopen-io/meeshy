@@ -894,7 +894,15 @@ public actor MessagePersistenceActor {
                 let computedState: MessageState = {
                     if readCount > 0 || api.readByAllAt != nil { return .delivered }
                     if deliveredCount > 0 || api.deliveredToAllAt != nil { return .delivered }
-                    return .delivered
+                    // No delivery signal yet → `.sent`, NOT `.delivered`. The
+                    // old unconditional `.delivered` flipped a just-reconciled
+                    // optimistic row straight to ✓✓ via
+                    // `state = max(.sending, computedState)` before any
+                    // recipient had actually received it. `MessageRecord.toMessage`
+                    // derives the checkmark from the delivery counters first
+                    // and only falls back to `state`, so this is the correct
+                    // floor for a sent-but-unconfirmed message.
+                    return .sent
                 }()
 
                 let timeString = MessageRecord.computeTimeString(for: api.createdAt)

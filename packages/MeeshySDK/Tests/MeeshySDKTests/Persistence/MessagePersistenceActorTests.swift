@@ -710,6 +710,8 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(rows.count, 1, "reconciling by clientMessageId must NOT create a duplicate row")
         XCTAssertEqual(rows[0].localId, cid, "the optimistic row's localId is preserved")
         XCTAssertEqual(rows[0].serverId, "srv_recon_1", "the server id is backfilled onto the optimistic row")
+        XCTAssertEqual(rows[0].state, .sent,
+            "a reconciled row with no delivery signal must stay .sent — not jump to .delivered (✓✓)")
 
         let resolved = try actor.resolveServerId(for: cid)
         XCTAssertEqual(resolved, "srv_recon_1",
