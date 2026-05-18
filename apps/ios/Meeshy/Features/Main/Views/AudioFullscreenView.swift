@@ -24,30 +24,25 @@ struct AudioFullscreenView: View {
             Color.black.ignoresSafeArea()
 
             if !allAudioItems.isEmpty {
-                ScrollView(.horizontal, showsIndicators: false) {
-                    LazyHStack(spacing: 0) {
-                        ForEach(Array(allAudioItems.enumerated()), id: \.element.id) { index, item in
-                            AudioFullscreenPage(
-                                item: item,
-                                contactColor: contactColor,
-                                mentionDisplayNames: mentionDisplayNames,
-                                isActive: index == currentIndex,
-                                pageIndex: index,
-                                totalPages: allAudioItems.count,
-                                onDismiss: { dismissView() },
-                                onDismissToMessage: { messageId in
-                                    onDismissToMessage?(messageId)
-                                    dismiss()
-                                }
-                            )
-                            .containerRelativeFrame(.horizontal)
-                            .containerRelativeFrame(.vertical)
+                AdaptiveHorizontalPager(
+                    items: allAudioItems,
+                    currentPageID: $currentPageID,
+                    fillVertical: true
+                ) { index, item in
+                    AudioFullscreenPage(
+                        item: item,
+                        contactColor: contactColor,
+                        mentionDisplayNames: mentionDisplayNames,
+                        isActive: index == currentIndex,
+                        pageIndex: index,
+                        totalPages: allAudioItems.count,
+                        onDismiss: { dismissView() },
+                        onDismissToMessage: { messageId in
+                            onDismissToMessage?(messageId)
+                            dismiss()
                         }
-                    }
-                    .scrollTargetLayout()
+                    )
                 }
-                .scrollTargetBehavior(.paging)
-                .scrollPosition(id: $currentPageID)
                 .offset(y: dragOffset)
                 .gesture(verticalDismissGesture)
                 .opacity(isDismissing ? 0 : 1)
