@@ -1264,4 +1264,70 @@ final class ConversationSocketHandlerTests: XCTestCase {
             "an own echo without clientMessageId must not insert a duplicate row")
         XCTAssertEqual(rows.first?.localId, cid, "only the optimistic row remains")
     }
+
+    /// An own E2EE message: the optimistic row holds the plaintext we typed.
+    /// The encrypted `message:new` echo carries only ciphertext we cannot
+    /// decrypt (no E2EE session with ourselves) — branch A must keep the
+    /// optimistic plaintext rather than clobber the bubble with base64.
+    func test_messageNew_ownEncryptedEcho_keepsOptimisticPlaintext() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+
+        let cid = "cid_e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2e2"
+        let optimistic = MessageRecord(
+            localId: cid, serverId: nil,
+            conversationId: conversationId, senderId: currentUserId,
+            content: "message en clair", originalLanguage: "fr",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sending, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        try await actor.insertOptimistic(optimistic)
+        delegate.messages = [makeMessage(id: cid, senderId: currentUserId,
+                                         content: "message en clair", isMe: true,
+                                         deliveryStatus: .sending)]
+        delegate.invalidateIndex()
+
+        let echo: APIMessage = JSONStub.decode("""
+        {
+            "id":"srv_enc_echo_1",
+            "clientMessageId":"\(cid)",
+            "conversationId":"\(conversationId)",
+            "senderId":"\(currentUserId)",
+            "content":"Y2lwaGVydGV4dA==",
+            "isEncrypted":true,
+            "createdAt":"2026-03-06T12:00:00.000Z"
+        }
+        """)
+        socket.simulateMessage(echo)
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let row = try await db.read { db in
+            try MessageRecord.fetchOne(db, key: cid)
+        }
+        XCTAssertEqual(row?.content, "message en clair",
+            "an own E2EE message's optimistic plaintext must survive the encrypted server echo")
+    }
 }

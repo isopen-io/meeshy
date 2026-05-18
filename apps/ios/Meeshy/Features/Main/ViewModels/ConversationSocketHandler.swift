@@ -250,11 +250,27 @@ final class ConversationSocketHandler {
                     // the existing struct so the ForEach key stays the
                     // optimistic `tempId`.
                     if apiMsg.senderId == userId, let tempId = reconcileTempId,
-                       delegate.messageIndex(for: tempId) != nil {
+                       let optimisticIdx = delegate.messageIndex(for: tempId) {
+                        // Capture the optimistic plaintext BEFORE the await
+                        // below — `delegate.messages` (and therefore this
+                        // index) can change across the suspension point.
+                        let optimisticContent = delegate.messages[optimisticIdx].content
                         let decoded = apiMsg.toMessage(currentUserId: userId, currentUsername: AuthManager.shared.currentUser?.username)
                         var msgArray = [decoded]
                         await delegate.decryptMessagesIfNeeded(&msgArray)
                         guard let serverMsg = msgArray.first else { return }
+                        // For an own E2EE message we keep the OPTIMISTIC
+                        // plaintext: the server echo only carries ciphertext,
+                        // and there is no E2EE session to decrypt our OWN
+                        // message with (sessions are keyed by the peer, never
+                        // self) — so `serverMsg.content` is still ciphertext.
+                        // An own message's content never legitimately changes
+                        // on server-ACK, so the optimistic row is the
+                        // authoritative readable copy. Without this the bubble
+                        // would flip plaintext → base64 ciphertext on echo.
+                        let reconciledContent: String? = (apiMsg.isEncrypted == true)
+                            ? optimisticContent
+                            : serverMsg.content
                         // Persist server ACK (state machine) via actor — store
                         // observation will surface the delivery-status change.
                         if let persistence = self.persistence {
@@ -274,7 +290,7 @@ final class ConversationSocketHandler {
                                 : try? JSONEncoder().encode(serverMsg.reactions)
                             try? await persistence.updateServerAckedFields(
                                 localId: tempId,
-                                content: serverMsg.content,
+                                content: reconciledContent,
                                 attachmentsJson: attachmentsJson,
                                 reactionsJson: reactionsJson,
                                 pinnedAt: serverMsg.pinnedAt,

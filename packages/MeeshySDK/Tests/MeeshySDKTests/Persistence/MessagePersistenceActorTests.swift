@@ -794,4 +794,53 @@ final class MessagePersistenceActorTests: XCTestCase {
         let reactions = try JSONDecoder().decode([MeeshyReaction].self, from: json)
         XCTAssertEqual(reactions.first?.emoji, "❤️")
     }
+
+    /// An own E2EE message: the optimistic row holds the plaintext we typed.
+    /// The server echo carries only ciphertext we cannot decrypt (no E2EE
+    /// session with ourselves) — the upsert must keep the local plaintext.
+    func test_upsertFromAPIMessages_keepsOwnPlaintextWhenServerSaysEncrypted() async throws {
+        let cid = "cid_77777777777777777777777777777777"
+        var optimistic = MessageRecordFactory.make(localId: cid, conversationId: "conv_e2ee")
+        optimistic.content = "salut en clair"
+        optimistic.isEncrypted = false
+        try await actor.insertOptimistic(optimistic)
+
+        let echo = makeAPIMessage(
+            id: "srv_e2ee_own_1", conversationId: "conv_e2ee",
+            content: "Y2lwaGVydGV4dA==", clientMessageId: cid, isEncrypted: true
+        )
+        try await actor.upsertFromAPIMessages([echo])
+
+        let rows = try actor.messages(for: "conv_e2ee", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].content, "salut en clair",
+            "an own E2EE message's local plaintext must NOT be clobbered by the server ciphertext")
+        XCTAssertFalse(rows[0].isEncrypted,
+            "isEncrypted must stay false so the display shows the plaintext directly")
+    }
+
+    /// Regression: a genuinely received encrypted message (its row already
+    /// `isEncrypted == true`) is still updated normally on re-upsert — the
+    /// keep-plaintext guard only triggers when the local row holds readable
+    /// content (`isEncrypted == false`).
+    func test_upsertFromAPIMessages_receivedEncrypted_stillUpdatesOnReupsert() async throws {
+        let serverId = "srv_recv_enc_1"
+        let first = makeAPIMessage(
+            id: serverId, conversationId: "conv_recv_enc",
+            content: "Y2lwaGVyMQ==", isEncrypted: true
+        )
+        try await actor.upsertFromAPIMessages([first])
+
+        let second = makeAPIMessage(
+            id: serverId, conversationId: "conv_recv_enc",
+            content: "Y2lwaGVyMg==", isEncrypted: true
+        )
+        try await actor.upsertFromAPIMessages([second])
+
+        let rows = try actor.messages(for: "conv_recv_enc", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].content, "Y2lwaGVyMg==",
+            "a received encrypted row must still take server updates")
+        XCTAssertTrue(rows[0].isEncrypted)
+    }
 }

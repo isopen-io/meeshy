@@ -977,8 +977,25 @@ public actor MessagePersistenceActor {
                         .fetchOne(db)
                 }
                 if var existing = existingRecord {
-                    // Update mutable fields; preserve layout cache
-                    existing.content = api.content
+                    // E2EE: when the local row already holds readable content
+                    // (`isEncrypted == false`, non-empty) and the server now
+                    // reports the message encrypted, the local copy is an own
+                    // message we authored — we hold the plaintext while the
+                    // server only has ciphertext we cannot decrypt (E2EE
+                    // sessions are keyed by the peer, never self), or it is a
+                    // legacy row decrypted on ingest. Keep the local readable
+                    // content and do NOT flip `isEncrypted`, or the display
+                    // pipeline would try (and fail) to decrypt readable text.
+                    // A received encrypted message already has
+                    // `isEncrypted == true` (set on insert), so this never
+                    // blocks the normal decrypt path.
+                    let keepLocalPlaintext = api.isEncrypted == true
+                        && !existing.isEncrypted
+                        && !(existing.content ?? "").isEmpty
+                    // Update mutable fields; preserve layout cache.
+                    if !keepLocalPlaintext {
+                        existing.content = api.content
+                    }
                     // Backfill the server id so future reconciliations can find
                     // the row via the serverId column or PendingIdRecord even
                     // if applyEvent(.serverAck) didn't run for some reason.
@@ -992,11 +1009,13 @@ public actor MessagePersistenceActor {
                     // the optimistic file:// preview into an empty bubble.
                     existing.attachmentsJson = attachmentsJson ?? existing.attachmentsJson
                     existing.reactionsJson = reactionsJson
-                    // Keep the encryption flags coherent so the display
-                    // pipeline knows to decrypt — a row first inserted via the
-                    // legacy socket path may have had them cleared.
-                    existing.isEncrypted = api.isEncrypted ?? existing.isEncrypted
-                    existing.encryptionMode = api.encryptionMode ?? existing.encryptionMode
+                    if !keepLocalPlaintext {
+                        // Keep the encryption flags coherent so the display
+                        // pipeline knows to decrypt — a row first inserted via
+                        // the legacy socket path may have had them cleared.
+                        existing.isEncrypted = api.isEncrypted ?? existing.isEncrypted
+                        existing.encryptionMode = api.encryptionMode ?? existing.encryptionMode
+                    }
                     existing.reactionCount = uiReactions.count
                     existing.deliveredCount = deliveredCount
                     existing.readCount = readCount
