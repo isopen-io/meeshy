@@ -17,6 +17,7 @@ import me.meeshy.sdk.model.RefreshTokenRequest
 import me.meeshy.sdk.model.RegisterRequest
 import me.meeshy.sdk.net.InMemoryTokenStore
 import me.meeshy.sdk.net.api.AuthApi
+import me.meeshy.sdk.session.SessionRepository
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -33,8 +34,11 @@ class AuthViewModelTest {
         override suspend fun me() = ApiResponse<MeeshyUser>(success = false)
     }
 
-    private fun viewModel(response: ApiResponse<AuthSession>) =
-        AuthViewModel(AuthRepository(FakeAuthApi(response), InMemoryTokenStore()))
+    private fun viewModel(response: ApiResponse<AuthSession>): AuthViewModel {
+        val api = FakeAuthApi(response)
+        val store = InMemoryTokenStore()
+        return AuthViewModel(AuthRepository(api, store, SessionRepository(api, store)))
+    }
 
     @Before
     fun setUp() {

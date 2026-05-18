@@ -9,6 +9,7 @@ import io.mockk.mockk
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -18,7 +19,9 @@ import kotlinx.coroutines.test.setMain
 import me.meeshy.sdk.cache.CacheResult
 import me.meeshy.sdk.conversation.MessageRepository
 import me.meeshy.sdk.model.ApiMessage
+import me.meeshy.sdk.model.MeeshyUser
 import me.meeshy.sdk.net.NetworkResult
+import me.meeshy.sdk.session.SessionRepository
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -40,11 +43,14 @@ class ChatViewModelTest {
 
     private fun viewModel(
         stream: Flow<CacheResult<List<ApiMessage>>>,
+        currentUser: MeeshyUser? = null,
     ): Pair<ChatViewModel, MessageRepository> {
         val repo = mockk<MessageRepository>(relaxed = true)
         every { repo.messagesStream(any(), any(), any()) } returns stream
+        val session = mockk<SessionRepository>(relaxed = true)
+        every { session.currentUser } returns MutableStateFlow(currentUser)
         val handle = SavedStateHandle(mapOf(ChatViewModel.CONVERSATION_ID_ARG to "c1"))
-        return ChatViewModel(repo, handle) to repo
+        return ChatViewModel(repo, session, handle) to repo
     }
 
     @Test
@@ -61,6 +67,26 @@ class ChatViewModelTest {
         assertThat(vm.state.value.messages).hasSize(1)
         assertThat(vm.state.value.messages.single().text).isEqualTo("hi")
         assertThat(vm.state.value.showSkeleton).isFalse()
+    }
+
+    @Test
+    fun own_messages_are_outgoing_once_the_session_is_known() = runTest(dispatcher) {
+        val (vm, _) = viewModel(
+            stream = flowOf(
+                CacheResult.Fresh(
+                    listOf(
+                        ApiMessage(id = "m1", conversationId = "c1", senderId = "me", content = "mine"),
+                        ApiMessage(id = "m2", conversationId = "c1", senderId = "other", content = "theirs"),
+                    ),
+                ),
+            ),
+            currentUser = MeeshyUser(id = "me", username = "atabeth"),
+        )
+        advanceUntilIdle()
+
+        val bubbles = vm.state.value.messages
+        assertThat(bubbles.single { it.messageId == "m1" }.isOutgoing).isTrue()
+        assertThat(bubbles.single { it.messageId == "m2" }.isOutgoing).isFalse()
     }
 
     @Test

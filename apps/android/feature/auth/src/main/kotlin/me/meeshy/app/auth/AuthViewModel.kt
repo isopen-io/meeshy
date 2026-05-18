@@ -30,6 +30,12 @@ class AuthViewModel @Inject constructor(
     private val _state = MutableStateFlow(AuthUiState(isAuthenticated = authRepository.isAuthenticated))
     val state: StateFlow<AuthUiState> = _state.asStateFlow()
 
+    init {
+        if (authRepository.isAuthenticated) {
+            viewModelScope.launch { authRepository.restoreSession() }
+        }
+    }
+
     fun onUsernameChange(value: String) {
         _state.update { it.copy(username = value, errorMessage = null) }
     }
