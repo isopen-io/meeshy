@@ -717,26 +717,23 @@ public final class StoryCanvasUIView: UIView {
         let fgMediaIds = Set((slide.effects.mediaObjects ?? []).filter { !$0.isBackground }.map { $0.id })
         let fgTextIds: Set<String> = []
 
-        // Couleur contrastante. Le cadre doit être très visible (demande UX) :
-        //  - Sur slide sombre / image foncée → blanc franc (95%)
-        //  - Sur slide clair (background pastel) → indigo950 marqué (85%)
-        let bgHex = (slide.effects.background ?? "#000000").replacingOccurrences(of: "#", with: "")
-        var rgb: UInt64 = 0; Scanner(string: bgHex).scanHexInt64(&rgb)
-        let r = CGFloat((rgb & 0xFF0000) >> 16) / 255.0
-        let g = CGFloat((rgb & 0x00FF00) >> 8) / 255.0
-        let b = CGFloat(rgb & 0x0000FF) / 255.0
-        let lum = 0.2126 * r + 0.7152 * g + 0.0722 * b
-        let frameColor: CGColor = lum > 0.6
-            ? UIColor(red: 0.12, green: 0.11, blue: 0.29, alpha: 0.85).cgColor // indigo950 @ 85%
-            : UIColor.white.withAlphaComponent(0.95).cgColor
+        // Cadre blanc franc. Le média se détache toujours du fond (slide
+        // sombre, photo, dégradé) avec un liseré blanc — c'est le rendu
+        // attendu pour un média foreground, façon photo encadrée.
+        let frameColor: CGColor = UIColor.white.cgColor
 
         for sub in itemsContainer.sublayers ?? [] {
             guard let name = sub.name else { continue }
             if fgMediaIds.contains(name) || fgTextIds.contains(name) {
                 sub.borderColor = frameColor
                 sub.borderWidth = 2
-                sub.cornerRadius = 2
-                sub.masksToBounds = false
+                // `cornerRadius` n'est PAS écrasé ici : `StoryMediaLayer`
+                // l'a déjà posé sur ce même layer. Le border CALayer suit
+                // automatiquement ce rayon — bordure et image partagent donc
+                // l'arrondi exact. `borderWidth`/`borderColor` étant portés
+                // par le `StoryMediaLayer`, ils héritent de son `transform`
+                // (rotation) et de sa `position` : le cadre reste solidaire
+                // des déplacements et rotations du média.
             }
         }
     }
@@ -1197,12 +1194,12 @@ public final class StoryCanvasUIView: UIView {
             if inlineEditingTextId != nil { endEditing(true) }
             return
         }
-        // Pour cohérence avec la sémantique tactile attendue (tap = sélection,
-        // double-tap = édition avancée), le single-tap ouvre le format panel
-        // de l'élément ; le double-tap conserve son rôle historique (édition
-        // dédiée — image cropper / video editor — pour les médias). Sur un
-        // élément texte les deux gestes ouvrent le même panneau, le single
-        // étant le geste primaire annoncé par le UX.
+        // Sémantique tactile : le tap simple ramène l'élément touché au
+        // premier plan (`bringForegroundToFront`) puis le sélectionne via
+        // `onItemTapped`. Le double-tap reste réservé à l'édition dédiée
+        // (cropper image / éditeur vidéo). `bringForegroundToFront` est un
+        // no-op si l'élément est déjà au sommet ou si c'est un média de fond.
+        bringForegroundToFront(id: id)
         onItemTapped?(id, kind)
     }
 
@@ -1711,45 +1708,14 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         guard let id = configuration.identifier as? String,
               let layer = itemsContainer.sublayers?.first(where: { $0.name == id }) else { return nil }
 
-        // Use a transparent overlay with a contrasting border instead of a
-        // snapshot of the layer. UITargetedPreview applies a system blur on
-        // image-backed previews, which made the image look "ghosted" during
-        // long-press. A clear view + border keeps the element visible behind
-        // the menu and reads as a simple selection marker.
-        //
-        // Border color choice:
-        //  - Background image/video → off-white (#F5F5F5) so the cadre stands
-        //    out against the photographic content of the bg.
-        //  - Foreground element → high-contrast vs the slide background color
-        //    (white on dark slide, dark on light slide).
-        let isBgElement: Bool = {
-            if slide.effects.resolvedBackgroundMedia?.id == id { return true }
-            if let m = slide.effects.mediaObjects?.first(where: { $0.id == id }) {
-                return m.isBackground == true
-            }
-            return false
-        }()
-        // Border color choice — keep it deterministic and high-contrast without
-        // peeking at the (composer-owned) slide backgroundColor property which
-        // is not in the SDK model and therefore not reachable from here.
-        //  - Background image/video element → off-white (#F5F5F0) so the cadre
-        //    reads against photographic content.
-        //  - Foreground element → white@95% which sits well against the dark
-        //    safe-area letterboxing and the typical (saturated indigo) slide
-        //    canvas; a future refinement can sample the slide's average
-        //    luminance to flip black/white if needed.
-        let borderColor: UIColor = {
-            if isBgElement {
-                return UIColor(red: 0.96, green: 0.96, blue: 0.94, alpha: 1.0) // #F5F5F0
-            }
-            return UIColor.white.withAlphaComponent(0.95)
-        }()
-
+        // Aperçu de lift transparent. `UITargetedPreview` applique un flou
+        // système sur les aperçus adossés à une image, ce qui « fantômait »
+        // le média pendant le long-press ; une `UIView` claire garde
+        // l'élément net derrière le menu. Aucune bordure : le média porte
+        // déjà son propre cadre blanc — un liseré d'aperçu en doublon était
+        // superflu et a été retiré (le cadre apparaissait « à la sélection »).
         let overlay = UIView(frame: layer.frame)
         overlay.backgroundColor = .clear
-        overlay.layer.cornerRadius = 8
-        overlay.layer.borderColor = borderColor.cgColor
-        overlay.layer.borderWidth = 2
         overlay.isUserInteractionEnabled = false
         addSubview(overlay)
 

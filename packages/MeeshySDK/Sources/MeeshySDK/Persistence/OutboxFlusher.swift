@@ -53,7 +53,15 @@ public actor OutboxFlusher {
         self.onOutcome = onOutcome
     }
 
-    public func flush() async {
+    /// Draine les records `.pending` dont le `nextAttemptAt` est échu.
+    ///
+    /// Retourne le `nextAttemptAt` le plus proche parmi les records encore
+    /// `.pending` mais différés dans le futur (échec récent → backoff), ou
+    /// `nil` si rien n'est différé. Le planificateur de re-flush s'en sert
+    /// pour rejouer le flush à l'échéance plutôt que d'attendre un évènement
+    /// de cycle de vie de l'app (boot / premier plan / enqueue / BGTask).
+    @discardableResult
+    public func flush() async -> Date? {
         let now = Date()
         let pending: [OutboxRecord] = (try? await pool.read { db in
             try OutboxRecord
@@ -67,6 +75,15 @@ public actor OutboxFlusher {
         for record in pending {
             await processRecord(record)
         }
+
+        let earliestDeferred: OutboxRecord? = (try? await pool.read { db in
+            try OutboxRecord
+                .filter(Column("status") == OutboxStatus.pending.rawValue)
+                .filter(Column("nextAttemptAt") > Date())
+                .order(Column("nextAttemptAt").asc)
+                .fetchOne(db)
+        }) ?? nil
+        return earliestDeferred?.nextAttemptAt
     }
 
     private func processRecord(_ record: OutboxRecord) async {

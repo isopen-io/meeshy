@@ -111,6 +111,16 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
         await withBudget("push.retryPending") {
             await PushDeliveryReceiptService.shared.flushPending()
         }
+        await withBudget("outbox.recovery") {
+            // Récupère les records orphelins laissés en `.inflight` si le
+            // process a été tué pendant un dispatch. `bootRecovery()` ne
+            // tournait qu'au cold start : un retour de background « warm »
+            // (sans relance du process) laissait l'orphelin compté par
+            // `pendingCount` — bannière « Synchronisation… » bloquée — mais
+            // jamais repris par `flush()` qui ne SELECT que les `.pending`.
+            // On le remet donc `.pending` ici aussi, avant le flush.
+            _ = try? await OfflineQueue.shared.bootRecovery()
+        }
         await withBudget("outbox.flush") {
             let pool = DependencyContainer.shared.dbPool
             let flusher = OutboxFlusher(
@@ -120,7 +130,8 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
                     Task { await OfflineQueue.shared.publishOutcome(outcome) }
                 }
             )
-            await flusher.flush()
+            let nextRetry = await flusher.flush()
+            OutboxRetryScheduler.shared.schedule(at: nextRetry)
         }
     }
 

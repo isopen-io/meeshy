@@ -82,8 +82,7 @@ final class ComposerControlsLayerTests: XCTestCase {
             fgMediaItem: .constant(nil),
             showAudioDocumentPicker: .constant(false),
             showVoiceRecorderSheet: .constant(false),
-            onOpenMediaCrop: { _ in },
-            onOpenFilterForElement: { _ in }
+            onOpenMediaCrop: { _ in }
         )
     }
 }

@@ -752,6 +752,41 @@ enum OutboxFlushTrigger {
                 Task { await OfflineQueue.shared.publishOutcome(outcome) }
             }
         )
-        await flusher.flush()
+        let nextRetry = await flusher.flush()
+        OutboxRetryScheduler.shared.schedule(at: nextRetry)
+    }
+}
+
+/// Possède l'unique timer de re-flush de l'outbox.
+///
+/// `OutboxFlusher` repousse `nextAttemptAt` sur échec (backoff exponentiel)
+/// mais ne se rappelle jamais lui-même : sans ce planificateur, un record en
+/// backoff attendait le prochain évènement de cycle de vie (boot, retour au
+/// premier plan, enqueue, BGTask) pour être retenté. Ici, dès qu'un flush
+/// laisse un record différé, on (ré)arme un timer unique qui rejoue le flush
+/// pile à l'échéance. Le timer est dédupliqué : `schedule` annule toujours le
+/// précédent, il n'y a donc jamais plus d'un timer en vol.
+@MainActor
+final class OutboxRetryScheduler {
+    static let shared = OutboxRetryScheduler()
+    private var timer: Task<Void, Never>?
+    private init() {}
+
+    /// (Ré)arme le timer pour rejouer un flush à `date`. `nil` annule le
+    /// timer en attente (plus rien n'est différé).
+    func schedule(at date: Date?) {
+        timer?.cancel()
+        guard let date else {
+            timer = nil
+            return
+        }
+        timer = Task {
+            // Cap à 1 h : au-delà, un évènement de cycle de vie aura de toute
+            // façon redéclenché un flush entre-temps.
+            let delay = min(max(0, date.timeIntervalSinceNow), 3600)
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            await OutboxFlushTrigger.flushNow()
+        }
     }
 }

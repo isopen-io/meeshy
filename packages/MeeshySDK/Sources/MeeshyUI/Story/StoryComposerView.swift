@@ -1078,12 +1078,9 @@ public struct StoryComposerView: View {
         StoryComposerCanvasView(
             slide: $viewModel.currentSlide,
             onItemTapped: { id, kind in
-                // Tap simple = ouverture du format panel pour TOUT type d'élément.
-                // Reproduit la sémantique « toucher = révéler les contrôles »
-                // demandée pour les textes et déjà acquise pour les médias.
-                // Le double-tap reste réservé à l'édition avancée (cropper /
-                // video editor) ; sur un texte il ouvre simplement le même
-                // panel — c'est volontaire et idempotent.
+                // Tap simple = sélection. Le canvas a déjà ramené l'élément
+                // touché au premier plan. Le double-tap est réservé à
+                // l'édition dédiée (overlay texte / éditeur d'image).
                 HapticFeedback.light()
                 viewModel.selectedElementId = id
                 switch kind {
@@ -1091,9 +1088,11 @@ public struct StoryComposerView: View {
                     // Tap on a text → open the floating text edit overlay.
                     viewModel.enterTextEditingMode(textId: id)
                 case .media:
-                    // Tap sur un média → éditeur d'image plein écran (recadrage,
-                    // filtres, ajustements). Plus de panneau intermédiaire.
-                    openMediaEditor(elementId: id)
+                    // Tap simple sur un média : sélection seule. Le canvas
+                    // l'a remonté au premier plan et `selectedElementId` est
+                    // posé ci-dessus. L'éditeur d'image plein écran s'ouvre
+                    // au double-tap.
+                    break
                 case .sticker:
                     break
                 }

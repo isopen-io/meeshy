@@ -866,6 +866,9 @@ class ConversationViewModel: ObservableObject {
         switch cached {
         case .fresh:
             // Surface GRDB data immediately (fast path for returning to a conversation).
+            // Pré-hydrate les traductions AVANT loadInitial : les bulles
+            // s'affichent dès le premier rendu avec le Prisme Linguistique.
+            await hydratePersistedTranslations()
             await messageStore.loadInitial()
             await hydrateTranslationsFromCache()
             hydrateMetadataFromGRDB()
@@ -885,6 +888,8 @@ class ConversationViewModel: ObservableObject {
 
         case .stale:
             // Surface GRDB data immediately, then revalidate in background.
+            // Pré-hydrate les traductions AVANT loadInitial (cf. .fresh).
+            await hydratePersistedTranslations()
             await messageStore.loadInitial()
             if messageStore.messages.isEmpty {
                 // GRDB cold for this conversation — fetch synchronously to render now.
@@ -2530,6 +2535,54 @@ class ConversationViewModel: ObservableObject {
         }) ?? [:]
 
         for (msgId, records) in grdbTranslations {
+            var existing = messageTranslations[msgId] ?? []
+            for r in records {
+                let mt = MessageTranslation(
+                    id: r.id,
+                    messageId: msgId,
+                    sourceLanguage: r.sourceLanguage ?? "auto",
+                    targetLanguage: r.targetLanguage,
+                    translatedContent: r.translatedContent,
+                    translationModel: r.translationModel,
+                    confidenceScore: r.confidenceScore
+                )
+                if let idx = existing.firstIndex(where: { $0.targetLanguage == mt.targetLanguage }) {
+                    existing[idx] = mt
+                } else {
+                    existing.append(mt)
+                }
+            }
+            messageTranslations[msgId] = existing
+        }
+    }
+
+    /// Pré-hydrate `messageTranslations` depuis GRDB AVANT que `messageStore`
+    /// ne fasse surfacer les messages. Sans ça, les bulles se rendent une
+    /// première fois sans traduction, puis re-rendent quand
+    /// `hydrateTranslationsFromCache()` (appelé après `loadInitial`) se termine
+    /// — d'où l'apparition « en second temps » des données de langue. En
+    /// peuplant le dictionnaire en amont, le tout premier rendu applique déjà
+    /// le Prisme Linguistique (contenu traduit affiché comme du natif).
+    private func hydratePersistedTranslations() async {
+        let convId = conversationId
+        let reader = messagePersistence.reader
+        let grouped: [String: [TranslationRecord]] = (try? await reader.read { db in
+            let localIds = try MessageRecord
+                .filter(Column("conversationId") == convId)
+                .order(Column("createdAt").desc)
+                .limit(80)
+                .fetchAll(db)
+                .map(\.localId)
+            guard !localIds.isEmpty else { return [:] }
+            let records = try TranslationRecord
+                .filter(localIds.contains(Column("messageLocalId")))
+                .fetchAll(db)
+            return Dictionary(grouping: records, by: \.messageLocalId)
+        }) ?? [:]
+
+        guard !grouped.isEmpty else { return }
+
+        for (msgId, records) in grouped {
             var existing = messageTranslations[msgId] ?? []
             for r in records {
                 let mt = MessageTranslation(

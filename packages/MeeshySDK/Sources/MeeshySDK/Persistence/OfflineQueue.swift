@@ -400,6 +400,7 @@ public actor OfflineQueue {
 
     private init() {
         Task { await self.observeConnection() }
+        Task { await self.observeNetwork() }
     }
 
     // MARK: - Outcome Observation (Phase 4 prereq)
@@ -1547,6 +1548,32 @@ public actor OfflineQueue {
                     // Brief delay to let the socket handshake complete before
                     // draining the outbox — avoids sending on an unhealthy pipe
                     // while keeping the UX snappy (was 2 000 ms, now 200 ms).
+                    try? await Task.sleep(nanoseconds: 200_000_000)
+                    await self.retryAll()
+                }
+            }
+            .store(in: &cancellables)
+    }
+
+    // MARK: - Network Observer
+
+    /// Symétrique de `observeConnection()`, mais piloté par la connectivité
+    /// réseau et non par le socket. Au front montant (`isOffline` repasse à
+    /// `false` — le réseau est revenu), on draine l'outbox. C'est un filet de
+    /// sécurité indépendant du socket : si la reconnexion Socket.IO tarde ou
+    /// n'a pas lieu, le simple retour du réseau suffit à repartir, `retryAll`
+    /// envoyant en REST.
+    private func observeNetwork() {
+        NetworkMonitor.shared.$isOffline
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.global(qos: .utility))
+            .sink { [weak self] _ in
+                guard let self else { return }
+                Task {
+                    // Même délai que la voie socket : laisser la pile réseau
+                    // se stabiliser avant de réémettre.
                     try? await Task.sleep(nanoseconds: 200_000_000)
                     await self.retryAll()
                 }
