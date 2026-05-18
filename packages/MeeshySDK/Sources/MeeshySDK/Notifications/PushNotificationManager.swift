@@ -17,6 +17,15 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// The app layer observes this to perform navigation.
     @Published public var pendingNotificationPayload: NotificationPayload?
 
+    /// Émet un conversationId chaque fois qu'une notification entrante
+    /// (bannière au premier plan ou push silencieux) signale une activité de
+    /// message. La liste de conversations s'y abonne pour remonter la ligne
+    /// en tête en temps réel — y compris quand le message est arrivé via APNs
+    /// alors que le websocket était déconnecté. Distinct de
+    /// `pendingNotificationPayload`, qui porte une intention de navigation sur
+    /// un tap explicite.
+    public let messageNotificationReceived = PassthroughSubject<String, Never>()
+
     private static let persistedTokenKey = "com.meeshy.push.deviceToken"
     private static let lastRegisteredTokenKey = "com.meeshy.push.lastRegisteredToken"
     private static let lastRegisteredAtKey = "com.meeshy.push.lastRegisteredAt"
@@ -144,6 +153,22 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// Clear the pending notification after the app has navigated.
     public func clearPendingNotification() {
         pendingNotificationPayload = nil
+    }
+
+    /// Émet le conversationId sur `messageNotificationReceived` quand une
+    /// notification entrante dénote une activité de message — pour que la
+    /// liste de conversations remonte la ligne. NE touche PAS
+    /// `pendingNotificationPayload` : c'est un signal de tri, pas une
+    /// intention de navigation. Accepte les deux formes de payload : push
+    /// d'alerte (`type == "message"`) et push silencieux (présence d'un
+    /// `messageId`).
+    public func noteMessageActivity(userInfo: [AnyHashable: Any]) {
+        guard let conversationId = userInfo["conversationId"] as? String,
+              !conversationId.isEmpty else { return }
+        let isMessage = (userInfo["type"] as? String) == "message"
+            || (userInfo["messageId"] as? String)?.isEmpty == false
+        guard isMessage else { return }
+        messageNotificationReceived.send(conversationId)
     }
 
     // MARK: - Badge
