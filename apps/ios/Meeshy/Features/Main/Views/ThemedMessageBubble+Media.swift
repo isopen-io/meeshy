@@ -89,6 +89,7 @@ extension BubbleStandardLayout {
             contactColor: contactColor,
             allVisualAttachments: visualAttachments,
             messageId: message.id,
+            messageDeliveryStatus: message.deliveryStatus,
             revealedAttachmentIds: $revealedAttachmentIds,
             carouselIndex: $carouselIndex,
             showCarousel: $showCarousel,
@@ -108,7 +109,8 @@ extension BubbleStandardLayout {
             carouselIndex: $carouselIndex,
             showCarousel: $showCarousel,
             fullscreenAttachment: $fullscreenAttachment,
-            contactColor: contactColor
+            contactColor: contactColor,
+            messageDeliveryStatus: message.deliveryStatus
         )
     }
 
@@ -118,6 +120,7 @@ extension BubbleStandardLayout {
         DownloadBadgeView(
             attachment: attachment,
             accentColor: contactColor,
+            messageDeliveryStatus: message.deliveryStatus,
             onShareFile: { url in
                 shareURL = url
                 showShareSheet = true
@@ -148,6 +151,7 @@ fileprivate struct BubbleGridCell: View {
     let contactColor: String
     let allVisualAttachments: [MessageAttachment]
     let messageId: String
+    let messageDeliveryStatus: Message.DeliveryStatus
 
     @Binding var revealedAttachmentIds: Set<String>
     @Binding var carouselIndex: Int
@@ -245,6 +249,7 @@ fileprivate struct BubbleGridCell: View {
             DownloadBadgeView(
                 attachment: attachment,
                 accentColor: contactColor,
+                messageDeliveryStatus: messageDeliveryStatus,
                 onShareFile: { url in
                     shareURL = url
                     showShareSheet = true
@@ -433,6 +438,7 @@ struct BubbleCarouselView: View {
     @Binding var showCarousel: Bool
     @Binding var fullscreenAttachment: MessageAttachment?
     let contactColor: String
+    let messageDeliveryStatus: Message.DeliveryStatus
 
     @State private var currentPageID: String?
 
@@ -576,6 +582,7 @@ struct BubbleCarouselView: View {
             DownloadBadgeView(
                 attachment: attachment,
                 accentColor: contactColor,
+                messageDeliveryStatus: messageDeliveryStatus,
                 onShareFile: { _ in }
             )
             .padding(.bottom, 8)

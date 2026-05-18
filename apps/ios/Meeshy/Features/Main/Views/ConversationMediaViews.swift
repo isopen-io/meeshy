@@ -1,5 +1,6 @@
 // MARK: - Extracted from ConversationView.swift
 import SwiftUI
+import UIKit
 import Combine
 import MeeshySDK
 import MeeshyUI
@@ -19,10 +20,32 @@ struct ShareSheet: UIViewControllerRepresentable {
 struct DownloadBadgeView: View {
     let attachment: MessageAttachment
     let accentColor: String
+    let messageDeliveryStatus: Message.DeliveryStatus
     var onShareFile: ((URL) -> Void)? = nil
 
     @StateObject private var downloader = AttachmentDownloader()
     private var accent: Color { Color(hex: accentColor) }
+
+    /// Local optimistic media (a `file://` URL) and messages still in their
+    /// optimistic phase (`.sending` / `.invisible`) are already on disk — a
+    /// download badge must never appear for them. See Sprint 3 RC3.2.
+    var hidesForLocalOrOptimisticMedia: Bool {
+        attachment.fileUrl.hasPrefix("file://")
+            || messageDeliveryStatus == .sending
+            || messageDeliveryStatus == .invisible
+    }
+
+    /// Synchronous probe of the in-memory UIImage cache. For an image whose
+    /// bytes are already resident (our own confirmed upload — pre-seeded by
+    /// RC3.3 — or a previously decoded remote image) this resolves "cached"
+    /// within the first render, so the download affordance never flashes over
+    /// media we already hold. The async `checkCache` still covers disk-only
+    /// hits and the audio / video stores.
+    private var isImageAlreadyResident: Bool {
+        guard attachment.type == .image else { return false }
+        let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
+        return DiskCacheStore.cachedImage(for: resolved) != nil
+    }
 
     private var totalSizeText: String {
         if downloader.totalBytes > 0 { return AttachmentDownloader.fmt(downloader.totalBytes) }
@@ -32,7 +55,9 @@ struct DownloadBadgeView: View {
 
     var body: some View {
         Group {
-            if downloader.isCached {
+            if hidesForLocalOrOptimisticMedia || isImageAlreadyResident {
+                EmptyView()
+            } else if downloader.isCached {
                 EmptyView()
             } else if downloader.isDownloading {
                 downloadingBadge
@@ -75,17 +100,21 @@ struct DownloadBadgeView: View {
             }
         }
         .task {
-            let isAudio = attachment.mimeType.hasPrefix("audio/")
-            await downloader.checkCache(attachment.fileUrl, isAudio: isAudio)
+            await downloader.checkCache(attachment)
         }
         .task {
-            let isAudio = attachment.mimeType.hasPrefix("audio/")
+            guard !attachment.fileUrl.hasPrefix("file://") else { return }
             let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
             while !Task.isCancelled && !downloader.isCached {
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 guard !Task.isCancelled else { break }
-                let store = isAudio ? await CacheCoordinator.shared.audio : await CacheCoordinator.shared.video
-                let cached = await store.isCached(resolved)
+                let cached: Bool
+                switch attachment.type {
+                case .audio: cached = await CacheCoordinator.shared.audio.isCached(resolved)
+                case .video: cached = await CacheCoordinator.shared.video.isCached(resolved)
+                case .image: cached = await CacheCoordinator.shared.images.isCached(resolved)
+                case .file, .location: cached = false
+                }
                 if cached {
                     downloader.isCached = true
                     break
@@ -146,17 +175,34 @@ final class AttachmentDownloader: ObservableObject {
 
     private var downloadTask: Task<Void, Never>?
 
-    func checkCache(_ urlString: String, isAudio: Bool = false) async {
+    /// Resolves whether the attachment's media is already available locally.
+    /// Routes to the correct typed cache store via `attachment.type` and
+    /// short-circuits on `file://` — local optimistic media is, by definition,
+    /// already on disk and never needs a download badge. See Sprint 3 RC3.2.
+    func checkCache(_ attachment: MessageAttachment) async {
+        let urlString = attachment.fileUrl
+        if urlString.hasPrefix("file://") {
+            if FileManager.default.fileExists(atPath: URL(string: urlString)?.path ?? "") {
+                isCached = true
+            }
+            return
+        }
         let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-        let store = isAudio ? await CacheCoordinator.shared.audio : await CacheCoordinator.shared.video
-        let cached = await store.isCached(resolved)
+        let cached: Bool
+        switch attachment.type {
+        case .audio: cached = await CacheCoordinator.shared.audio.isCached(resolved)
+        case .video: cached = await CacheCoordinator.shared.video.isCached(resolved)
+        case .image: cached = await CacheCoordinator.shared.images.isCached(resolved)
+        case .file, .location: cached = false
+        }
         if cached { isCached = true }
     }
 
     func start(attachment: MessageAttachment, onShare: ((URL) -> Void)?) {
         let fileUrl = attachment.fileUrl
         guard !fileUrl.isEmpty else { return }
-        let isAudio = attachment.mimeType.hasPrefix("audio/")
+        let isAudio = attachment.type == .audio
+        let isImage = attachment.type == .image
         isDownloading = true
         downloadedBytes = 0
         totalBytes = Int64(attachment.fileSize)
@@ -204,9 +250,20 @@ final class AttachmentDownloader: ObservableObject {
                     data.append(contentsOf: buffer)
                 }
 
+                // Seed under the exact key the renderer resolves to, in the
+                // store that matches the media type — a download triggered by
+                // the badge must never need to re-fetch on the next render.
                 let resolvedKey = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
-                let store = isAudio ? await CacheCoordinator.shared.audio : await CacheCoordinator.shared.video
-                await store.store(data, for: resolvedKey)
+                if isAudio {
+                    await CacheCoordinator.shared.audio.store(data, for: resolvedKey)
+                } else if isImage {
+                    await CacheCoordinator.shared.images.store(data, for: resolvedKey)
+                    if let image = UIImage(data: data) {
+                        DiskCacheStore.cacheImageForPreview(image, key: resolvedKey)
+                    }
+                } else {
+                    await CacheCoordinator.shared.video.store(data, for: resolvedKey)
+                }
 
                 let finalSize = Int64(data.count)
                 await MainActor.run { [weak self] in
@@ -312,10 +369,17 @@ struct AudioMediaView: View, Equatable {
         return formatter.string(from: message.createdAt)
     }
 
+    /// Local optimistic audio (a `file://` URL) is on disk already — the player
+    /// is playable on the very first render, with no placeholder flash and no
+    /// cache poll. Server audio falls back to the `isCached` poll. RC3.2.
+    private var isPlayable: Bool {
+        isCached || attachment.fileUrl.hasPrefix("file://")
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             ZStack {
-                if isCached {
+                if isPlayable {
                     AudioPlayerView(
                         attachment: attachment,
                         context: .messageBubble,
@@ -338,9 +402,9 @@ struct AudioMediaView: View, Equatable {
                         .transition(.opacity)
                 }
             }
-            .animation(.easeInOut(duration: 0.25), value: isCached)
+            .animation(.easeInOut(duration: 0.25), value: isPlayable)
             .overlay(alignment: .topTrailing) {
-                if !isCached, let dur = attachment.duration, dur > 0 {
+                if !isPlayable, let dur = attachment.duration, dur > 0 {
                     audioDurationBadge(seconds: Double(dur) / 1000.0)
                         .padding(.trailing, 8)
                         .padding(.top, 6)
@@ -379,6 +443,12 @@ struct AudioMediaView: View, Equatable {
             }
         }
         .task {
+            // Local optimistic audio (file:// URL) is already on disk — render
+            // the player straight away, no cache poll. See Sprint 3 RC3.2.
+            if attachment.fileUrl.hasPrefix("file://") {
+                isCached = true
+                return
+            }
             let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
             while !Task.isCancelled && !isCached {
                 let cached = await CacheCoordinator.shared.audio.isCached(resolved)
@@ -544,6 +614,14 @@ struct AudioMediaView: View, Equatable {
 
             // Static waveform placeholder (deterministic heights)
             waveformPlaceholder(accent: accent)
+
+            // Surface the download weight (KB / MB) so the user knows the
+            // cost before tapping play to fetch the audio. See Sprint 3.
+            if attachment.fileSize > 0 {
+                Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
+                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                    .foregroundColor(accent.opacity(0.65))
+            }
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)

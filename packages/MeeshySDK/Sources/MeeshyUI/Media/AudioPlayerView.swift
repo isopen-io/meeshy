@@ -341,8 +341,16 @@ public struct AudioPlayerView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTranscriptionExpanded)
         .onAppear {
             player.attachmentId = attachment.id
-            AudioPlaybackManager.registerAutoplay(url: attachment.fileUrl) { [player] in
-                player.play(urlString: attachment.fileUrl)
+            let autoplayUrl = attachment.fileUrl
+            AudioPlaybackManager.registerAutoplay(url: autoplayUrl) { [player] in
+                // Optimistic local audio can never load through the cache
+                // (DiskCacheStore.data(for:) rejects file://) — autoplay it
+                // straight from disk. See Sprint 3 RC3.2.
+                if autoplayUrl.hasPrefix("file://"), let localURL = URL(string: autoplayUrl) {
+                    player.playLocal(url: localURL)
+                } else {
+                    player.play(urlString: autoplayUrl)
+                }
             }
             loadWaveformSamples()
         }
@@ -540,6 +548,13 @@ public struct AudioPlayerView: View {
         Button {
             if player.isPlaying || player.progress > 0 {
                 player.togglePlayPause()
+            } else if attachment.fileUrl.hasPrefix("file://"),
+                      let localURL = URL(string: attachment.fileUrl) {
+                // Optimistic local audio: AudioPlaybackManager.play(urlString:)
+                // routes through DiskCacheStore.data(for:), which rejects
+                // file:// schemes. Read the on-device file directly instead.
+                // See Sprint 3 RC3.2.
+                player.playLocal(url: localURL)
             } else {
                 player.play(urlString: currentAudioUrl)
             }
