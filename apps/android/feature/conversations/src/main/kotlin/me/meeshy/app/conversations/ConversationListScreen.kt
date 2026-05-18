@@ -1,5 +1,6 @@
 package me.meeshy.app.conversations
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -40,6 +41,7 @@ import me.meeshy.ui.theme.hexColor
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ConversationListScreen(
+    onConversationClick: (String) -> Unit,
     onLogout: () -> Unit,
     viewModel: ConversationListViewModel = hiltViewModel(),
 ) {
@@ -74,7 +76,10 @@ fun ConversationListScreen(
 
                 else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                     items(state.conversations, key = { it.id }) { conversation ->
-                        ConversationRow(conversation)
+                        ConversationRow(
+                            conversation = conversation,
+                            onClick = { onConversationClick(conversation.id) },
+                        )
                     }
                 }
             }
@@ -83,10 +88,11 @@ fun ConversationListScreen(
 }
 
 @Composable
-private fun ConversationRow(conversation: ApiConversation) {
+private fun ConversationRow(conversation: ApiConversation, onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .clickable(onClick = onClick)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
