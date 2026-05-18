@@ -91,7 +91,8 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       outcome `SharedFlow`) + `WorkManager` per-lane flusher with ×5 backoff
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload
-- [ ] `MessageStateMachine` (pure) + `PendingId` localId↔serverId reconciliation
+- [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests
+- [ ] `PendingId` localId↔serverId reconciliation (3-tier lookup)
 - [ ] **Message ordering**: per-conversation `seq` sort key + continuity gap
       detection + server-time offset (ADR-021)
 - [ ] Transport spike: WebSocket vs long-polling on Android (ADR-015) →
