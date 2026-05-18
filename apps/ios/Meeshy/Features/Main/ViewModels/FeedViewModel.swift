@@ -73,32 +73,37 @@ class FeedViewModel: ObservableObject {
 
     // MARK: - Initial Load
 
-    func loadFeed() async {
+    /// Loads the feed cache-first. Pass `forceRefresh: true` (pull-to-refresh) to
+    /// bypass the cache read entirely and always fetch from the network — the
+    /// fetch's write-back save then overwrites the cache with fresh data.
+    func loadFeed(forceRefresh: Bool = false) async {
         guard !isFeedLoadInProgress else { return }
         isFeedLoadInProgress = true
         defer { isFeedLoadInProgress = false }
         error = nil
 
-        let cacheResult = await CacheCoordinator.shared.feed.load(for: "main-feed")
+        if !forceRefresh {
+            let cacheResult = await CacheCoordinator.shared.feed.load(for: "main-feed")
 
-        switch cacheResult {
-        case .fresh(let cachedPosts, _):
-            posts = cachedPosts
-            hasLoaded = true
-            prefetchMedia(around: 0)
-            return
+            switch cacheResult {
+            case .fresh(let cachedPosts, _):
+                posts = cachedPosts
+                hasLoaded = true
+                prefetchMedia(around: 0)
+                return
 
-        case .stale(let cachedPosts, _):
-            posts = cachedPosts
-            hasLoaded = true
-            prefetchMedia(around: 0)
-            Task {
-                await fetchFeedFromNetwork(showLoading: false)
+            case .stale(let cachedPosts, _):
+                posts = cachedPosts
+                hasLoaded = true
+                prefetchMedia(around: 0)
+                Task {
+                    await fetchFeedFromNetwork(showLoading: false)
+                }
+                return
+
+            case .expired, .empty:
+                break
             }
-            return
-
-        case .expired, .empty:
-            break
         }
 
         await fetchFeedFromNetwork(showLoading: posts.isEmpty)
@@ -209,8 +214,7 @@ class FeedViewModel: ObservableObject {
         nextCursor = nil
         hasMore = true
         newPostsCount = 0
-        Task.detached { await CacheCoordinator.shared.feed.invalidate(for: "main-feed") }
-        await loadFeed()
+        await loadFeed(forceRefresh: true)
     }
 
     // MARK: - Comments Prefetch

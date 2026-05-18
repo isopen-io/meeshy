@@ -497,10 +497,14 @@ final class FeedViewModelTests: XCTestCase {
 
         // Simulate new posts arriving
         sut.newPostsCount = 5
+
+        // Seed a FRESH cache entry: a cache-first load short-circuits on it,
+        // but refresh() must bypass the cache and always reload from network.
+        try? await CacheCoordinator.shared.feed.save(
+            [Self.makeFeedPost(id: "cached")], for: "main-feed"
+        )
         let countBefore = api.requestCount
 
-        // Invalidate cache so refresh's loadFeed goes to network
-        await CacheCoordinator.shared.feed.invalidate(for: "main-feed")
         await sut.refresh()
 
         XCTAssertEqual(sut.newPostsCount, 0)
