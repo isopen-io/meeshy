@@ -73,6 +73,10 @@ class ConversationListViewModel: ObservableObject {
     private let authManager: AuthManaging
     private let storyService: StoryServiceProviding
     private let syncEngine: ConversationSyncEngineProviding
+    /// Publisher des notifications push « message » (conversationId). Injecté
+    /// pour la testabilité ; en production, branché sur
+    /// `PushNotificationManager.shared.messageNotificationReceived`.
+    private let messageNotificationPublisher: AnyPublisher<String, Never>
     /// Number of conversations fetched per `loadMore` page.
     ///
     /// Tuned at 100 (gateway max) so the first paginated page after the
@@ -319,7 +323,8 @@ class ConversationListViewModel: ObservableObject {
         messageService: MessageServiceProviding = MessageService.shared,
         authManager: AuthManaging = AuthManager.shared,
         storyService: StoryServiceProviding = StoryService.shared,
-        syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared
+        syncEngine: ConversationSyncEngineProviding = ConversationSyncEngine.shared,
+        messageNotificationPublisher: AnyPublisher<String, Never> = PushNotificationManager.shared.messageNotificationReceived.eraseToAnyPublisher()
     ) {
         self.api = api
         self.conversationService = conversationService
@@ -329,7 +334,9 @@ class ConversationListViewModel: ObservableObject {
         self.authManager = authManager
         self.storyService = storyService
         self.syncEngine = syncEngine
+        self.messageNotificationPublisher = messageNotificationPublisher
         subscribeToSocketEvents()
+        subscribeToPushNotifications()
         syncBadgeOnUnreadChange()
         setupBackgroundProcessing()
         observeMarkAsRead()
@@ -707,6 +714,28 @@ class ConversationListViewModel: ObservableObject {
         // 2026-05-11 audit traced a `/conversations` request burst back to
         // exactly this duplication. Keeping the relay in the engine keeps
         // one and only one delta sync per reconnect.
+    }
+
+    // MARK: - Push Notification Subscription
+
+    /// Remonte une conversation en tête dès qu'une notification push
+    /// « message » arrive — couvre les messages reçus alors que le websocket
+    /// était déconnecté (app en arrière-plan). Le payload push ne porte pas
+    /// l'horodatage du message ; on utilise `dateProvider()` (instant de
+    /// réception). La conséquence — `lastMessageAt` légèrement dans le futur
+    /// jusqu'au prochain sync — est documentée comme bénigne dans le spec.
+    private func subscribeToPushNotifications() {
+        messageNotificationPublisher
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] conversationId in
+                guard let self else { return }
+                if self.convIndex(for: conversationId) != nil {
+                    self.bumpToTop(conversationId: conversationId, newLastMessageAt: self.dateProvider())
+                } else {
+                    self.fetchAndPrependMissingConversation(id: conversationId, source: .socketUpdated)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Typing Cleanup

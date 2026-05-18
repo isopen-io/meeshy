@@ -18,7 +18,8 @@ final class ConversationListViewModelTests: XCTestCase {
         messageService: MockMessageService? = nil,
         authManager: MockAuthManager? = nil,
         storyService: MockStoryService? = nil,
-        syncEngine: MockConversationSyncEngine? = nil
+        syncEngine: MockConversationSyncEngine? = nil,
+        messageNotificationPublisher: AnyPublisher<String, Never>? = nil
     ) -> (
         sut: ConversationListViewModel,
         api: MockAPIClientForApp,
@@ -36,6 +37,8 @@ final class ConversationListViewModelTests: XCTestCase {
         let authManager = authManager ?? MockAuthManager()
         let storyService = storyService ?? MockStoryService()
         let syncEngine = syncEngine ?? MockConversationSyncEngine()
+        let pushPublisher = messageNotificationPublisher
+            ?? PassthroughSubject<String, Never>().eraseToAnyPublisher()
         let sut = ConversationListViewModel(
             api: api,
             conversationService: conversationService,
@@ -44,7 +47,8 @@ final class ConversationListViewModelTests: XCTestCase {
             messageService: messageService,
             authManager: authManager,
             storyService: storyService,
-            syncEngine: syncEngine
+            syncEngine: syncEngine,
+            messageNotificationPublisher: pushPublisher
         )
         return (sut, api, conversationService, preferenceService, messageSocket, messageService, authManager)
     }
@@ -2044,6 +2048,19 @@ final class ConversationListViewModelTests: XCTestCase {
     func test_themedRow_timestampColor_noUnread_isAccent() {
         let color = ThemedConversationRow.timestampColor(unreadCount: 0, accent: .blue)
         XCTAssertEqual(color, Color.blue)
+    }
+
+    // MARK: - Push notification bump
+
+    func test_pushNotification_messageForKnownConversation_bumpsToTop() {
+        let subject = PassthroughSubject<String, Never>()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageNotificationPublisher: subject.eraseToAnyPublisher())
+        sut.conversations = [makeConversation(id: "a"), makeConversation(id: "b")]
+        subject.send("b")
+        let exp = expectation(description: "bump applied on main")
+        DispatchQueue.main.async { exp.fulfill() }
+        wait(for: [exp], timeout: 1)
+        XCTAssertEqual(sut.conversations.first?.id, "b")
     }
 }
 
