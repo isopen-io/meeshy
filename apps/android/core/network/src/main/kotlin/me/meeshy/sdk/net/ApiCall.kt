@@ -31,3 +31,21 @@ suspend fun <T> apiCall(block: suspend () -> ApiResponse<T>): NetworkResult<T> =
             ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
         )
     }
+
+/**
+ * Run an API call whose response does NOT use the standard [ApiResponse] envelope
+ * (e.g. `{ success, count }`). [block] extracts the value directly; transport/HTTP
+ * exceptions are folded into [NetworkResult.Failure].
+ */
+suspend fun <T> rawApiCall(block: suspend () -> T): NetworkResult<T> =
+    try {
+        NetworkResult.Success(block())
+    } catch (e: HttpException) {
+        NetworkResult.Failure(
+            ApiError(message = e.message(), code = "HTTP_${e.code()}", httpStatus = e.code()),
+        )
+    } catch (e: IOException) {
+        NetworkResult.Failure(
+            ApiError(message = e.message ?: "Network unavailable", code = "NETWORK"),
+        )
+    }
