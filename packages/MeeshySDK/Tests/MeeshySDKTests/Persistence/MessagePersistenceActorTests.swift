@@ -734,4 +734,64 @@ final class MessagePersistenceActorTests: XCTestCase {
         XCTAssertEqual(rows.count, 1, "bufferIncomingAPIMessages must commit through the write stream")
         XCTAssertEqual(rows.first?.content, "Buffered")
     }
+
+    // MARK: - Socket mutators resolve own messages by serverId
+
+    // Socket `message:edited` / `message:deleted` / `reaction:*` events carry
+    // the SERVER id. An own message's GRDB row keeps its optimistic
+    // `localId` (`cid_*`) with the server id only in the `serverId` column —
+    // these mutators must resolve `localId == ? OR serverId == ?` or the
+    // event silently no-ops on the user's own messages.
+
+    func test_markEdited_resolvesByServerId_forOwnOptimisticRow() async throws {
+        let cid = "cid_dddddddddddddddddddddddddddddddd"
+        let serverId = "srv_edit_target_1"
+        var record = MessageRecordFactory.make(localId: cid, conversationId: "conv_edit")
+        record.serverId = serverId
+        try await actor.insertOptimistic(record)
+
+        // The message:edited socket event is keyed by the server id.
+        try await actor.markEdited(localId: serverId, newContent: "edited body", editedAt: Date())
+
+        let rows = try actor.messages(for: "conv_edit", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertEqual(rows[0].content, "edited body",
+            "a serverId-keyed edit must reach the own optimistic row (localId = cid)")
+        XCTAssertTrue(rows[0].isEdited)
+    }
+
+    func test_markDeleted_resolvesByServerId_forOwnOptimisticRow() async throws {
+        let cid = "cid_eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee"
+        let serverId = "srv_delete_target_1"
+        var record = MessageRecordFactory.make(localId: cid, conversationId: "conv_del")
+        record.serverId = serverId
+        try await actor.insertOptimistic(record)
+
+        try await actor.markDeleted(localId: serverId, deletedAt: Date())
+
+        let rows = try actor.messages(for: "conv_del", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        XCTAssertNotNil(rows[0].deletedAt,
+            "a serverId-keyed delete must reach the own optimistic row")
+    }
+
+    func test_appendReaction_resolvesByServerId_forOwnOptimisticRow() async throws {
+        let cid = "cid_ffffffffffffffffffffffffffffffff"
+        let serverId = "srv_react_target_1"
+        var record = MessageRecordFactory.make(localId: cid, conversationId: "conv_react")
+        record.serverId = serverId
+        try await actor.insertOptimistic(record)
+
+        try await actor.appendReaction(
+            localId: serverId, reactionId: "r1",
+            messageId: serverId, participantId: "peer_1", emoji: "❤️"
+        )
+
+        let rows = try actor.messages(for: "conv_react", limit: 10)
+        XCTAssertEqual(rows.count, 1)
+        let json = try XCTUnwrap(rows[0].reactionsJson,
+            "a serverId-keyed reaction must reach the own optimistic row")
+        let reactions = try JSONDecoder().decode([MeeshyReaction].self, from: json)
+        XCTAssertEqual(reactions.first?.emoji, "❤️")
+    }
 }

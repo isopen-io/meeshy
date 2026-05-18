@@ -358,18 +358,33 @@ public actor MessagePersistenceActor {
 
     // MARK: - Edit / Delete / Reactions / ViewOnce
 
+    // The socket-driven mutators below (`markEdited` / `markDeleted` /
+    // `appendReaction` / `removeReaction` / `updateViewOnceCount` /
+    // `touchUpdatedAt`) are fed by `message:edited` / `message:deleted` /
+    // `reaction:*` / attachment-status events, which all carry the SERVER
+    // message id. A received message's row is keyed by that id
+    // (`localId == serverId`), but an OWN message's row keeps its optimistic
+    // `localId` (the `cid_*`); its server id lives only in the `serverId`
+    // column. Resolving by `localId == ? OR serverId == ?` lets a
+    // server-id-keyed event reach an own optimistic row — without it, an
+    // edit / delete / reaction on one of the user's own messages (e.g. made
+    // from another device) silently no-ops. `localId` (`cid_*` or an
+    // ObjectId) and `serverId` (an ObjectId) never collide, so the OR
+    // resolves at most one row.
+
     public func markEdited(localId: String, newContent: String, editedAt: Date) throws {
         var affectedConversationId: String?
         try dbWriter.write { db in
             affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
+                .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET content = ?, isEdited = 1, editedAt = ?,
-                    updatedAt = ?, changeVersion = changeVersion + 1 WHERE localId = ?
+                    updatedAt = ?, changeVersion = changeVersion + 1
+                    WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [newContent, editedAt, Date(), localId]
+                arguments: [newContent, editedAt, Date(), localId, localId]
             )
         }
         if let convId = affectedConversationId {
@@ -381,14 +396,15 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         try dbWriter.write { db in
             affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
+                .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET deletedAt = ?, content = NULL,
-                    updatedAt = ?, changeVersion = changeVersion + 1 WHERE localId = ?
+                    updatedAt = ?, changeVersion = changeVersion + 1
+                    WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [deletedAt, Date(), localId]
+                arguments: [deletedAt, Date(), localId, localId]
             )
         }
         if let convId = affectedConversationId {
@@ -504,14 +520,15 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         try dbWriter.write { db in
             affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
+                .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET viewOnceCount = ?, updatedAt = ?,
-                    changeVersion = changeVersion + 1 WHERE localId = ?
+                    changeVersion = changeVersion + 1
+                    WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [count, Date(), localId]
+                arguments: [count, Date(), localId, localId]
             )
         }
         if let convId = affectedConversationId {
@@ -608,7 +625,9 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         var didMutate = false
         try dbWriter.write { db in
-            guard var record = try MessageRecord.filter(Column("localId") == localId).fetchOne(db) else { return }
+            guard var record = try MessageRecord
+                .filter(Column("localId") == localId || Column("serverId") == localId)
+                .fetchOne(db) else { return }
             affectedConversationId = record.conversationId
             var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
                                 from: record.reactionsJson ?? Data())) ?? []
@@ -637,7 +656,9 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         var didMutate = false
         try dbWriter.write { db in
-            guard var record = try MessageRecord.filter(Column("localId") == localId).fetchOne(db) else { return }
+            guard var record = try MessageRecord
+                .filter(Column("localId") == localId || Column("serverId") == localId)
+                .fetchOne(db) else { return }
             affectedConversationId = record.conversationId
             var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
                                 from: record.reactionsJson ?? Data())) ?? []
@@ -663,14 +684,15 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         try dbWriter.write { db in
             affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
+                .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET updatedAt = ?,
-                    changeVersion = changeVersion + 1 WHERE localId = ?
+                    changeVersion = changeVersion + 1
+                    WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [Date(), localId]
+                arguments: [Date(), localId, localId]
             )
         }
         if let convId = affectedConversationId {
