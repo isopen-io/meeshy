@@ -17,8 +17,13 @@ final class SearchPerformanceTests: XCTestCase {
     // MARK: - Setup
 
     override func setUpWithError() throws {
-        // Gate disabled for runbook execution — re-enable via the scheme env vars
-        // ("RUN_PERF_BENCHMARKS=1") in normal CI runs to keep the test suite fast.
+        // Perf benchmarks are gated to keep the regular CI/fastlane suite fast
+        // (100k-row seeding + wall-clock thresholds flake under build load).
+        // Run via `scripts/ios-perf-benchmark.sh`, which sets RUN_PERF_BENCHMARKS=1.
+        try XCTSkipIf(
+            ProcessInfo.processInfo.environment["RUN_PERF_BENCHMARKS"] != "1",
+            "Perf benchmarks skipped — set RUN_PERF_BENCHMARKS=1 to run"
+        )
     }
 
     // MARK: - 100k corpus
