@@ -332,9 +332,14 @@ final class ConversationViewModelTests: XCTestCase {
 
         _ = await sut.sendMessage(content: "Test")
 
-        // The optimistic GRDB insert surfaces through the store observation —
-        // the auto-scroll signal is now derived from the snapshot delta in
+        // The optimistic GRDB insert surfaces through the store observation
+        // (notification → store refresh → @Published messages), which hops the
+        // main runloop a couple of times — poll briefly rather than racing it.
+        // The auto-scroll signal is now derived from the snapshot delta in
         // MessageListViewController, not a ViewModel counter.
+        for _ in 0..<40 where sut.messages.isEmpty {
+            try? await Task.sleep(nanoseconds: 25_000_000)
+        }
         XCTAssertEqual(sut.messages.count, 1)
         XCTAssertEqual(sut.messages.first?.content, "Test")
     }

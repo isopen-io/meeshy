@@ -1196,4 +1196,72 @@ final class ConversationSocketHandlerTests: XCTestCase {
         XCTAssertEqual(rows.first?.serverId, "srv_race_1",
             "applyEvent(.serverAck) must backfill the server id on the optimistic row")
     }
+
+    /// An own-message echo from the REST broadcast path carries NO
+    /// clientMessageId. It must NOT be persisted again — the optimistic GRDB
+    /// row is reconciled by the REST ACK, and a blind upsert here would insert
+    /// a duplicate row.
+    func test_messageNew_ownEcho_withoutClientMessageId_doesNotDuplicate() async throws {
+        let (db, actor) = try makeDB()
+        let (sut, delegate, socket) = makeSUT()
+        sut.persistence = actor
+        _ = delegate
+        // start() so a regression that DID buffer the echo would actually
+        // commit a duplicate row — otherwise the test could pass falsely.
+        await actor.start()
+
+        let cid = "cid_cccccccccccccccccccccccccccccccc"
+        let optimistic = MessageRecord(
+            localId: cid, serverId: nil,
+            conversationId: conversationId, senderId: currentUserId,
+            content: "No cid echo", originalLanguage: "en",
+            messageType: "text", messageSource: "user", contentType: "text",
+            state: .sending, retryCount: 0, lastError: nil,
+            isEncrypted: false, encryptionMode: nil, encryptedPayload: nil,
+            replyToId: nil, storyReplyToId: nil,
+            forwardedFromId: nil, forwardedFromConversationId: nil,
+            replyToJson: nil, forwardedFromJson: nil,
+            expiresAt: nil, effectFlags: 0,
+            maxViewOnceCount: nil, viewOnceCount: 0,
+            isEdited: false, editedAt: nil, deletedAt: nil,
+            pinnedAt: nil, pinnedBy: nil,
+            senderName: nil, senderUsername: nil,
+            senderColor: nil, senderAvatarURL: nil,
+            deliveredCount: 0, readCount: 0,
+            deliveredToAllAt: nil, readByAllAt: nil,
+            createdAt: Date(), sentAt: nil,
+            deliveredAt: nil, readAt: nil, updatedAt: Date(),
+            attachmentsJson: nil, reactionsJson: nil,
+            reactionCount: 0, currentUserReactionsJson: nil,
+            mentionedUsersJson: nil,
+            cachedBubbleWidth: nil, cachedBubbleHeight: nil,
+            cachedLastLineWidth: nil, cachedLineCount: nil,
+            cachedTimestampInline: nil,
+            layoutVersion: 0, layoutMaxWidth: nil, changeVersion: 0
+        )
+        try await actor.insertOptimistic(optimistic)
+
+        // Echo from _broadcastNewMessage — own message, server id, NO cid.
+        let echo: APIMessage = JSONStub.decode("""
+        {
+            "id":"srv_nocid_1",
+            "conversationId":"\(conversationId)",
+            "senderId":"\(currentUserId)",
+            "content":"No cid echo",
+            "createdAt":"2026-03-06T12:00:00.000Z"
+        }
+        """)
+        socket.simulateMessage(echo)
+
+        try await Task.sleep(nanoseconds: 600_000_000)
+
+        let rows = try await db.read { db in
+            try MessageRecord
+                .filter(Column("conversationId") == conversationId)
+                .fetchAll(db)
+        }
+        XCTAssertEqual(rows.count, 1,
+            "an own echo without clientMessageId must not insert a duplicate row")
+        XCTAssertEqual(rows.first?.localId, cid, "only the optimistic row remains")
+    }
 }

@@ -319,23 +319,37 @@ final class ConversationSocketHandler {
                     if self.wasSeen(apiMsg.id) { return }
                     self.markSeen(apiMsg.id)
 
+                    // An own echo reaching this point means no in-memory
+                    // optimistic row matched (branch A missed it).
+                    //  - WITH clientMessageId: safe to persist —
+                    //    `upsertFromAPIMessages` reconciles the GRDB optimistic
+                    //    row by cid (PK lookup), or inserts cleanly when it is a
+                    //    genuine send from another of this user's devices.
+                    //  - WITHOUT clientMessageId: an echo from the REST
+                    //    broadcast path (`MeeshySocketIOManager._broadcastNewMessage`
+                    //    omits the cid). Our optimistic row will be reconciled
+                    //    by the REST ACK; persisting here cannot match it and
+                    //    would insert a DUPLICATE row. Drop it — the legacy
+                    //    behaviour was correct for this specific case.
+                    let isOwnEcho = apiMsg.senderId == userId
+                    if isOwnEcho, (apiMsg.clientMessageId ?? "").isEmpty {
+                        return
+                    }
+
                     // RC2.2 — persist the FULL APIMessage through the same path
                     // REST uses. `bufferIncomingAPIMessages` →
                     // `upsertFromAPIMessages` writes attachments, reactions,
                     // reply/forward refs, encryption flags and mentions. The
                     // legacy 6-field `IncomingMessageData` dropped every one of
                     // them — a media-only or encrypted message received via
-                    // socket rendered as an empty bubble. The upsert reconciles
-                    // by clientMessageId / server id, so an own echo never
-                    // duplicates a pending send.
+                    // socket rendered as an empty bubble.
                     if let persistence = self.persistence {
                         await persistence.bufferIncomingAPIMessages([apiMsg])
                     }
 
-                    // Own message with no local optimistic row — a send from
-                    // another of this user's devices. Persisted above; nothing
-                    // is "unread" for us, so skip the badge / mark-as-read.
-                    if apiMsg.senderId == userId { return }
+                    // Own message from another device — persisted above;
+                    // nothing is "unread" for us, so skip the badge / read.
+                    if isOwnEcho { return }
 
                     // Inbound message from someone else. Decode + decrypt only
                     // for the transient UI signals (scroll-to-bottom preview) —
