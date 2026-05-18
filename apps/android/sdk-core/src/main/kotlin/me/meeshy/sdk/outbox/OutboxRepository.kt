@@ -85,6 +85,13 @@ class OutboxRepository @Inject constructor(
         }
     }
 
+    /** A permanent (non-retryable) failure — exhaust immediately, ignoring the attempt count. */
+    suspend fun markExhausted(cmid: String, reason: String) {
+        val row = outboxDao.find(cmid) ?: return
+        outboxDao.updateState(cmid, OutboxState.EXHAUSTED.name, row.attempts, now())
+        emit(OutboxOutcome.Exhausted(cmid, reason))
+    }
+
     /** Crash-safe boot recovery (ARCHITECTURE.md §5) — any orphaned `INFLIGHT` row becomes `PENDING`. */
     suspend fun recoverInflight(): Int = outboxDao.resetInflight(now())
 

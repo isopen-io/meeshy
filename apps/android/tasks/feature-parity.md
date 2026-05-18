@@ -87,8 +87,11 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       conversation list is genuinely cache-first (skeleton only on cold `Empty`)
 - [x] **Outbox model**: `outbox` table + DAO, lanes, `OutboxCoalescer`
       (send+delete / edit-merge / reaction-toggle), device-scoped `cmid`/`cid`
-- [ ] **Outbox runtime**: `OutboxRepository` (enqueue+coalesce, boot recovery,
-      outcome `SharedFlow`) + `WorkManager` per-lane flusher with ×5 backoff
+- [x] **Outbox runtime**: `OutboxRepository` (enqueue+coalesce, boot recovery,
+      outcome `SharedFlow`, ×5 limit) + `OutboxDrainer` (FIFO lane drain,
+      `MutationSender`, transient/permanent classification)
+- [ ] `WorkManager` per-lane `CoroutineWorker` + Hilt-WorkManager + scheduling
+      (glue — lands with the first feature `MutationSender`s)
 - [ ] TUS resumable uploads in a **dedicated `WorkManager` chain** (foreground
       progress); message-send items `dependsOn` the upload
 - [x] `MessageStateMachine` (pure, monotonic 8-state delivery FSM) — 9 tests
