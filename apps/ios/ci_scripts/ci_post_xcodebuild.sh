@@ -1,5 +1,12 @@
 #!/bin/sh
-# Xcode Cloud — runs after each xcodebuild action.
+# Strips ad-hoc / development signatures from embedded SPM binary frameworks
+# in an .xcarchive, so the distribution step re-signs them cleanly.
+#
+# Invoked after the 'archive' action from THREE places:
+#   1. Xcode Cloud — auto-runs ci_scripts/ci_post_xcodebuild.sh after each action.
+#   2. fastlane — the `build_production` lane calls it between archive and export.
+#   3. Xcode GUI — the Meeshy scheme's Archive post-action runs it before the
+#      archive reaches the Organizer, so "Distribute App" works directly.
 #
 # After the 'archive' action, embedded SPM frameworks (FirebaseAnalytics,
 # GoogleAdsOnDeviceConversion, GoogleAppMeasurement,
@@ -7,7 +14,7 @@
 # applied by the build with CODE_SIGN_IDENTITY=- (visible as
 # 'Signing Identity: "Sign to Run Locally"' in xcodebuild-archive.log).
 #
-# Xcode Cloud's subsequent distribution action does re-sign them with the
+# The subsequent distribution action does re-sign them with the
 # Apple Distribution certificate, but the "replace existing signature"
 # operation leaves residual metadata from the original ad-hoc signature.
 # App Store Connect's static analyzer then rejects the upload with
@@ -18,8 +25,10 @@
 # re-signing is a clean operation on unsigned bundles. This forces
 # xcodebuild -exportArchive to do a fresh sign rather than a replace.
 #
-# Local builds (fastlane build_production, ./apps/ios/meeshy.sh) are NEVER
-# affected because this script only runs inside Xcode Cloud.
+# The script is idempotent: it acts only when CI_XCODEBUILD_ACTION=archive and
+# CI_ARCHIVE_PATH points at a valid archive. Re-running it on already-stripped
+# frameworks is a no-op, and simulator builds (./apps/ios/meeshy.sh) never set
+# those vars, so they are unaffected.
 
 set -eu
 
