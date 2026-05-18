@@ -114,7 +114,14 @@ final class BackgroundTaskManager {
 
     private func handleConversationSync(task: BGAppRefreshTask) async {
         let syncTask = Task<Bool, Never> {
-            await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
+            // Pull : récupère les nouveautés depuis le dernier checkpoint.
+            let synced = await ConversationSyncEngine.shared.syncSinceLastCheckpoint()
+            // Push : draine l'outbox. Le BGAppRefreshTask est le seul moment où
+            // les messages/réactions mis en file hors-ligne peuvent partir sans
+            // que l'utilisateur ait à rouvrir l'app — sans ça, un envoi fait
+            // hors-ligne attend le prochain passage au premier plan.
+            await OutboxFlushTrigger.flushNow()
+            return synced
         }
         activeSyncTask = Task { _ = await syncTask.value }
 
