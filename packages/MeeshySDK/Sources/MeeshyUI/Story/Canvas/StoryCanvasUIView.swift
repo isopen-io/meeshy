@@ -701,18 +701,15 @@ public final class StoryCanvasUIView: UIView {
         reapplyInlineEditingIfNeeded()
     }
 
-    /// Edit-mode only: trace un cadre permanent sur les éléments foreground
-    /// (medias non-bg + textes). C'est l'indicateur visuel que demande l'UX :
-    /// l'utilisateur voit immédiatement quelles zones du canvas sont
-    /// manipulables sans avoir à toucher chaque élément.
+    /// Trace un cadre autour des médias foreground (images / vidéos non-bg).
+    /// Appliqué dans TOUS les modes — édition, preview ET viewer — car le cadre
+    /// fait partie du rendu de la story, pas seulement une aide d'édition.
     ///
     /// Implémentation : on définit `borderWidth` / `borderColor` directement sur
     /// chaque sublayer (le `name` du layer == element id) plutôt qu'un overlay
     /// CAShapeLayer séparé. Ça suit les transformations / drag / pinch sans
     /// avoir besoin de re-synchroniser un layer supplémentaire à chaque tick.
-    /// Le contour reste désactivé en `.play` mode pour ne pas polluer le rendu.
     private func applyForegroundFrames() {
-        guard mode == .edit else { return }
         // Les textes ne reçoivent PAS de cadre permanent : le contour
         // rectangulaire entoure inutilement la chaîne de caractères et alourdit
         // le rendu (le glyph dessine déjà sa propre forme). Seuls les médias
