@@ -2,15 +2,14 @@ package me.meeshy.app.navigation
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import me.meeshy.app.auth.AuthViewModel
 import me.meeshy.app.auth.LoginScreen
 import me.meeshy.app.conversations.ConversationListScreen
-import me.meeshy.app.di.AppViewModelProvider
 
 object Routes {
     const val LOGIN = "login"
@@ -20,7 +19,7 @@ object Routes {
 @Composable
 fun MeeshyApp() {
     val navController = rememberNavController()
-    val authViewModel: AuthViewModel = viewModel(factory = AppViewModelProvider.Factory)
+    val authViewModel: AuthViewModel = hiltViewModel()
     val authState by authViewModel.state.collectAsStateWithLifecycle()
 
     val startDestination = if (authState.isAuthenticated) Routes.CONVERSATIONS else Routes.LOGIN

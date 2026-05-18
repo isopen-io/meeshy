@@ -71,6 +71,9 @@ not a module-level monolith.
 
 - **`:core:common`** — `CoroutineDispatchers`, `MeeshyResult`/error model,
   `Clock` + server-time offset, Timber facade, pure utils. No Android-UI deps.
+- **`:core:model`** — pure domain models & DTOs (`kotlinx.serialization`) plus
+  `LanguageResolver` (the Prisme resolution the models implement). Depends on
+  nothing — the base of the graph.
 - **`:core:network`** — Retrofit/OkHttp (one HTTP client), the two Socket.IO
   wrappers, `MeeshyConfig`, interceptors, certificate pinning, correlation-ID
   propagation. Two `Json` instances (lenient + strict — §8.6).
@@ -82,7 +85,7 @@ not a module-level monolith.
   security-audit surface is one small module.
 - **`:sdk-core`** — the domain SDK: repositories, use-cases, the SWR engine
   (`CacheResult`/`cacheFirstFlow`), the outbox, `ConversationSyncEngine`,
-  `MessageStateMachine`, `LanguageResolver`, `NotificationCoordinator`.
+  `MessageStateMachine`, `NotificationCoordinator`, `DynamicColorGenerator`.
   `explicitApi()`, publishable, no Compose.
 - **`:sdk-ui`** — the Compose **design system** + reusable UI (charte graphique,
   primitives, the Message Bubble family). `explicitApi()`.

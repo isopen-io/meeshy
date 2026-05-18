@@ -17,4 +17,15 @@ dependencyResolutionManagement {
 
 rootProject.name = "meeshy-android"
 
-include(":app", ":sdk-core", ":sdk-ui")
+include(":app")
+include(":sdk-core")
+include(":sdk-ui")
+include(":core:common")
+include(":core:model")
+include(":core:network")
+include(":core:database")
+include(":core:datastore")
+include(":core:crypto")
+include(":core:navigation")
+include(":feature:auth")
+include(":feature:conversations")

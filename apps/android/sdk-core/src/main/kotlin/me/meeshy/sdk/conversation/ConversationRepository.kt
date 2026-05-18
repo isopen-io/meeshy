@@ -5,8 +5,13 @@ import me.meeshy.sdk.model.CreateConversationRequest
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.apiCall
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class ConversationRepository(private val conversationApi: ConversationApi) {
+@Singleton
+class ConversationRepository @Inject constructor(
+    private val conversationApi: ConversationApi,
+) {
 
     suspend fun list(offset: Int = 0, limit: Int = 30): NetworkResult<List<ApiConversation>> =
         apiCall { conversationApi.list(offset, limit) }

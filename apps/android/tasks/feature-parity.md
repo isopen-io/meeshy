@@ -63,10 +63,12 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 
 ## Phase 2 — Module + architecture setup `[next]`
 - [x] `ARCHITECTURE.md` reviewed by a SOTA peer audit (`tasks/architecture-review.md`)
-- [ ] Module graph: `:core:{common,network,database,datastore,crypto,navigation}`,
-      `:sdk-core`, `:sdk-ui`, `:feature:*`, `:app`, `:macrobenchmark`
+- [x] Module graph: `:core:{common,model,network,database,datastore,crypto,navigation}`,
+      `:sdk-core`, `:sdk-ui`, `:feature:{auth,conversations}`, `:app` — build + tests green
+- [x] Hilt DI graph (replaces manual `AppContainer`); `NetworkModule`, `DispatchersModule`
 - [ ] `build-logic/` convention plugins + enforced dependency rules
-- [ ] Hilt DI graph; dispatcher injection; `Result`/error model
+- [ ] Remaining `:feature:*` modules created with their slices (Phase 5)
+- [ ] Dispatcher injection wired into ViewModels; `Result`/error model
 - [ ] Type-safe Navigation-Compose graph + `NavigableListDetailPaneScaffold`
 - [ ] Observability bootstrap (Crashlytics, ANR, structured logging w/ redaction,
       remote config / feature flags) — ADR-022

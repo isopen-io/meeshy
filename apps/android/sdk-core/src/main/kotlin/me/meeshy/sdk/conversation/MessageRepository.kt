@@ -6,8 +6,13 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.MessageApi
 import me.meeshy.sdk.net.apiCall
 import java.util.UUID
+import javax.inject.Inject
+import javax.inject.Singleton
 
-class MessageRepository(private val messageApi: MessageApi) {
+@Singleton
+class MessageRepository @Inject constructor(
+    private val messageApi: MessageApi,
+) {
 
     suspend fun list(
         conversationId: String,

@@ -7,9 +7,12 @@ import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.TokenStore
 import me.meeshy.sdk.net.api.AuthApi
 import me.meeshy.sdk.net.apiCall
+import javax.inject.Inject
+import javax.inject.Singleton
 
 /** Authentication use cases — owns persisting tokens on successful login/register. */
-class AuthRepository(
+@Singleton
+class AuthRepository @Inject constructor(
     private val authApi: AuthApi,
     private val tokenStore: TokenStore,
 ) {
