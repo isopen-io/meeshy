@@ -83,7 +83,8 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [x] Repositories: `AuthRepository`, `ConversationRepository`, `MessageRepository`
 - [x] **SWR engine**: `CacheResult` (4-state incl. `Syncing`) + `CachePolicy` +
       `cacheFirstFlow {}` + `SwrCacheSource` — TDD, 5 tests green
-- [ ] **SWR backing**: Room DB (single SoT) + `sync_meta` + Room-backed sources
+- [x] **SWR backing**: Room DB + `sync_meta` + `ConversationCacheSource` —
+      conversation list is genuinely cache-first (skeleton only on cold `Empty`)
 - [ ] **Offline outbox**: one Room `outbox` table, **lane-partitioned** drain
       (`WorkManager` per lane, FIFO per conversation, backoff ×5, coalescing,
       device-scoped `cmid` idempotency, outcome `SharedFlow`)
