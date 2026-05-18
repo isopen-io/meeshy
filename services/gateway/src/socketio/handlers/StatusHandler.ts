@@ -78,12 +78,13 @@ export class StatusHandler {
         return;
       }
 
-      const displayName = await this._getDisplayName(userId, connectedUser.isAnonymous);
-      if (!displayName) return;
+      const identity = await this._resolveTypingIdentity(userId, connectedUser.isAnonymous);
+      if (!identity) return;
 
       const typingEvent: TypingEvent = {
         userId: userId,
-        username: displayName,
+        username: identity.username,
+        displayName: identity.displayName,
         conversationId: normalizedId,
         isTyping: true
       };
@@ -130,12 +131,13 @@ export class StatusHandler {
         return;
       }
 
-      const displayName = await this._getDisplayName(userId, connectedUser.isAnonymous);
-      if (!displayName) return;
+      const identity = await this._resolveTypingIdentity(userId, connectedUser.isAnonymous);
+      if (!identity) return;
 
       const typingEvent: TypingEvent = {
         userId: userId,
-        username: displayName,
+        username: identity.username,
+        displayName: identity.displayName,
         conversationId: normalizedId,
         isTyping: false
       };
@@ -148,11 +150,19 @@ export class StatusHandler {
   }
 
   /**
-   * Récupère le nom d'affichage d'un utilisateur.
-   * For anonymous users, resolve from Participant table.
+   * Résout l'identité de frappe d'un utilisateur : son `username` (handle) et son
+   * `displayName` (nom à afficher).
+   *
+   * `displayName` suit l'ordre : displayName explicite > « Prénom Nom » > username.
+   *
+   * For anonymous users, resolve from Participant table — un participant anonyme n'a
+   * pas de handle, donc `username` retombe sur le nom d'affichage.
    * For registered users, resolve from User table.
    */
-  private async _getDisplayName(userId: string, isAnonymous: boolean): Promise<string | null> {
+  private async _resolveTypingIdentity(
+    userId: string,
+    isAnonymous: boolean
+  ): Promise<{ username: string; displayName: string } | null> {
     if (isAnonymous) {
       // userId is actually a participantId for anonymous users
       const participant = await this.prisma.participant.findUnique({
@@ -169,7 +179,9 @@ export class StatusHandler {
         return null;
       }
 
-      return participant.nickname || participant.displayName;
+      const displayName = participant.nickname || participant.displayName;
+      // Pas de handle pour un anonyme : le username retombe sur le nom d'affichage.
+      return { username: displayName, displayName };
     } else {
       const dbUser = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -187,11 +199,11 @@ export class StatusHandler {
         return null;
       }
 
-      return (
+      const displayName =
         dbUser.displayName ||
         `${dbUser.firstName || ''} ${dbUser.lastName || ''}`.trim() ||
-        dbUser.username
-      );
+        dbUser.username;
+      return { username: dbUser.username, displayName };
     }
   }
 }

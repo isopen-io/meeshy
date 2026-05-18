@@ -479,18 +479,21 @@ final class ConversationSocketHandler {
             }
             .store(in: &cancellables)
 
-        // Typing started (with safety timeout)
+        // Typing started (with safety timeout). The client picks the name to show —
+        // `preferredDisplayName` is displayName-first, username-fallback. It matches
+        // the `sender.displayName` used by the message-received cleanup above, so
+        // entries clear correctly.
         socketManager.typingStarted
             .filter { $0.conversationId == convId }
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let delegate = self.delegate else { return }
-                if event.userId != userId, !delegate.typingUsernames.contains(event.username) {
-                    delegate.typingUsernames.append(event.username)
+                guard event.userId != userId else { return }
+                let name = event.preferredDisplayName
+                if !delegate.typingUsernames.contains(name) {
+                    delegate.typingUsernames.append(name)
                 }
-                if event.userId != userId {
-                    self.resetTypingSafetyTimer(for: event.username)
-                }
+                self.resetTypingSafetyTimer(for: name)
             }
             .store(in: &cancellables)
 
@@ -500,8 +503,9 @@ final class ConversationSocketHandler {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self, let delegate = self.delegate else { return }
-                delegate.typingUsernames.removeAll { $0 == event.username }
-                self.clearTypingSafetyTimer(for: event.username)
+                let name = event.preferredDisplayName
+                delegate.typingUsernames.removeAll { $0 == name }
+                self.clearTypingSafetyTimer(for: name)
             }
             .store(in: &cancellables)
 

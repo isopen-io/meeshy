@@ -472,6 +472,33 @@ final class ConversationListViewModelTests: XCTestCase {
         XCTAssertNil(sut.typingUsernames["conv1"])
     }
 
+    func test_typingStartedEvent_publishesTypingUsername_triggersObjectWillChange() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+
+        let expectation = XCTestExpectation(description: "objectWillChange fires on typing event")
+        expectation.assertForOverFulfill = false
+        let cancellable = sut.objectWillChange.sink { _ in expectation.fulfill() }
+
+        messageSocket.typingStarted.send(TypingEvent(userId: "user1", username: "Alice", conversationId: "conv1"))
+
+        await fulfillment(of: [expectation], timeout: 1.0)
+        cancellable.cancel()
+
+        XCTAssertEqual(sut.typingUsernames["conv1"], "Alice")
+    }
+
+    func test_socketTypingStarted_storesDisplayName_notHandle() async throws {
+        let messageSocket = MockMessageSocket()
+        let (sut, _, _, _, _, _, _) = makeSUT(messageSocket: messageSocket)
+
+        messageSocket.typingStarted.send(TypingEvent(userId: "u1", username: "alice_handle", displayName: "Alice Martin", conversationId: "conv1"))
+
+        try await Task.sleep(nanoseconds: 50_000_000)
+
+        XCTAssertEqual(sut.typingUsernames["conv1"], "Alice Martin")
+    }
+
     // MARK: - Socket: New Message (via sync engine)
 
     func test_conversationPreviewUpdatesWhenSetDirectly() async throws {

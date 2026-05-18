@@ -36,11 +36,26 @@ public struct ReactionUpdateEvent: Decodable, Sendable {
 
 public struct TypingEvent: Decodable, Sendable {
     public let userId: String
+    /// Identifiant (handle) de l'utilisateur.
     public let username: String
+    /// Nom d'affichage explicite (displayName saisi ou « Prénom Nom »). `nil` si le
+    /// gateway ne l'a pas transmis (version antérieure). Le gateway transmet les deux
+    /// valeurs brutes — le client choisit quoi afficher via `preferredDisplayName`.
+    public let displayName: String?
     public let conversationId: String
 
-    public init(userId: String, username: String, conversationId: String) {
-        self.userId = userId; self.username = username; self.conversationId = conversationId
+    /// Nom à afficher dans l'indicateur de frappe : `displayName` en priorité,
+    /// `username` en repli. La décision d'affichage appartient au client.
+    public var preferredDisplayName: String {
+        if let displayName, !displayName.isEmpty { return displayName }
+        return username
+    }
+
+    public init(userId: String, username: String, displayName: String? = nil, conversationId: String) {
+        self.userId = userId
+        self.username = username
+        self.displayName = displayName
+        self.conversationId = conversationId
     }
 }
 

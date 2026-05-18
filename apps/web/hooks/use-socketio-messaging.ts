@@ -129,7 +129,8 @@ export function useSocketIOMessaging(options: UseSocketIOMessagingOptions = {}) 
     
     if (onUserTyping) {
       const unsub = meeshySocketIOService.onTyping((event: TypingEvent) => {
-        onUserTyping(event.userId, event.username, event.isTyping || false, event.conversationId);
+        // Le front-end décide : displayName en priorité, username en repli.
+        onUserTyping(event.userId, event.displayName || event.username, event.isTyping || false, event.conversationId);
       });
       unsubscribers.push(unsub);
     }

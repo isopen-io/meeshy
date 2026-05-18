@@ -948,6 +948,24 @@ struct ConversationView: View {
                 }
             )
 
+            // Typing bubble anchored above the composer. Visible only when a
+            // third party is typing. When the user is scrolled to the bottom
+            // this reads as a "typing bubble after the last message"; when
+            // scrolled up it stays anchored low and the scroll-to-bottom
+            // button (zIndex 60) carries the dominant indicator.
+            if !viewModel.typingUsernames.isEmpty {
+                VStack {
+                    Spacer()
+                    inlineTypingIndicator
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, composerHeight + 8)
+                }
+                .zIndex(58)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.typingUsernames.isEmpty)
+                .allowsHitTesting(false)
+            }
+
             floatingHeaderSection
 
             // Quick reaction bar — a floating overlay anchored to the bubble
@@ -1024,6 +1042,10 @@ struct ConversationView: View {
                     .transition(.asymmetric(insertion: .scale(scale: 0.8).combined(with: .opacity), removal: .scale(scale: 0.6).combined(with: .opacity)))
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: scrollState.isNearBottom)
                     .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.isSearchingQuotedMessage)
+                    .onReceive(typingDotPublisher) { _ in
+                        guard !viewModel.typingUsernames.isEmpty else { return }
+                        headerState.typingDotPhase = (headerState.typingDotPhase + 1) % 3
+                    }
             }
 
             VStack {
