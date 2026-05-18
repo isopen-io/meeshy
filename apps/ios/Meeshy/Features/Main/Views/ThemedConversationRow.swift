@@ -27,6 +27,10 @@ struct ThemedConversationRow: View {
     /// iPad / macOS split-view selection: row highlighted with accent tint + leading bar.
     /// iPhone passes false (NavigationStack hides the list when a conversation opens).
     var isSelected: Bool = false
+    /// Brouillon actif de la conversation (concept client-local). Non nil →
+    /// la ligne affiche « Brouillon : … » au lieu de l'aperçu du dernier
+    /// message.
+    var draftSummary: DraftSummary? = nil
 
     private var accentColor: String { conversation.accentColor }
 
@@ -384,6 +388,23 @@ struct ThemedConversationRow: View {
         }
     }
 
+    // MARK: - Draft Preview
+
+    @ViewBuilder
+    private func draftPreviewView(_ draft: DraftSummary) -> some View {
+        HStack(spacing: 4) {
+            Text(draft.previewText.isEmpty ? "Brouillon" : "Brouillon :")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(MeeshyColors.error)
+            if !draft.previewText.isEmpty {
+                Text(draft.previewText)
+                    .font(.system(size: 13))
+                    .foregroundColor(textSecondary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
     // MARK: - Last Message Preview
 
     @ViewBuilder
@@ -424,6 +445,8 @@ struct ThemedConversationRow: View {
     private var lastMessagePreviewView: some View {
         if typingUsername != nil {
             typingIndicatorView
+        } else if let draftSummary {
+            draftPreviewView(draftSummary)
         } else {
             switch lastMessageSummary {
             case .expired:
@@ -554,7 +577,8 @@ extension ThemedConversationRow: @MainActor Equatable {
         lhs.storyRingState == rhs.storyRingState &&
         lhs.moodStatus?.id == rhs.moodStatus?.id &&
         lhs.presenceState == rhs.presenceState &&
-        lhs.isSelected == rhs.isSelected
+        lhs.isSelected == rhs.isSelected &&
+        lhs.draftSummary == rhs.draftSummary
     }
 }
 

@@ -2154,6 +2154,28 @@ final class ConversationListViewModelTests: XCTestCase {
         sut.setConversations([old, recent])
         XCTAssertEqual(sut.conversations.first?.id, "old")
     }
+
+    // MARK: - ThemedConversationRow draft badge
+
+    @MainActor
+    func test_themedRow_equatable_differsByDraftSummary() {
+        let conv = makeConversation(id: "c1")
+        let plain = ThemedConversationRow(conversation: conv)
+        let withDraft = ThemedConversationRow(
+            conversation: conv,
+            draftSummary: DraftSummary(previewText: "hi", updatedAt: Date(timeIntervalSince1970: 1))
+        )
+        XCTAssertNotEqual(plain, withDraft)
+    }
+
+    @MainActor
+    func test_themedRow_equatable_sameDraftSummary_equal() {
+        let conv = makeConversation(id: "c1")
+        let draft = DraftSummary(previewText: "hi", updatedAt: Date(timeIntervalSince1970: 1))
+        let a = ThemedConversationRow(conversation: conv, draftSummary: draft)
+        let b = ThemedConversationRow(conversation: conv, draftSummary: draft)
+        XCTAssertEqual(a, b)
+    }
 }
 
 // MARK: - ConversationUpdatedEvent factory
