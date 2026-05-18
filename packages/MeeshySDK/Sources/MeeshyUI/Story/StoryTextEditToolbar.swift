@@ -8,7 +8,7 @@ import MeeshySDK
 ///
 /// Vide tant que `viewModel.textEditingMode` est `.inactive`.
 struct StoryTextEditToolbar: View {
-    @Bindable var viewModel: StoryComposerViewModel
+    @ObservedObject var viewModel: StoryComposerViewModel
 
     var body: some View {
         if case .active(let textId, let expandedTool) = viewModel.textEditingMode,

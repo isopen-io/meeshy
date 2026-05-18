@@ -76,7 +76,7 @@ enum MediaAsset {
 // class declaration with no shim layer.
 //
 // Why a protocol? The host view's smoke / behavior tests need a way to drive
-// the composer surface without standing up the real `@Observable` class
+// the composer surface without standing up the real `ObservableObject` class
 // (which transitively pulls `AuthManager.shared`, `CacheCoordinator.shared`,
 // `StoryTimelineEngine`, `TimelineViewModel`, `PencilKit`, etc.). A protocol
 // existential lets the tests inject `MockStoryComposerViewModel` with
@@ -89,8 +89,8 @@ enum MediaAsset {
 // documents the contract for adopters defined in other modules.
 //
 // `AnyObject` constrains adopters to reference types: the composer is a
-// long-lived `@Observable final class` that views hold via `@State` /
-// `@Bindable`. Mocks use the same identity-based bookkeeping.
+// long-lived `ObservableObject final class` that views hold via `@StateObject` /
+// `@ObservedObject`. Mocks use the same identity-based bookkeeping.
 //
 // Members intentionally omitted (documented mismatches with earlier design):
 //   - selectElement(id:) / deselectElement() — selection happens via
@@ -248,9 +248,8 @@ protocol StoryComposerProviding: AnyObject {
 
 // MARK: - ViewModel
 
-@Observable
 @MainActor
-public final class StoryComposerViewModel: StoryComposerProviding {
+public final class StoryComposerViewModel: StoryComposerProviding, ObservableObject {
 
     // MARK: - Source Language Resolution (Prisme Linguistique)
 
@@ -287,14 +286,14 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Slides
 
-    var slides: [StorySlide] = [StorySlide()]
-    var currentSlideIndex: Int = 0
-    var slideImages: [String: UIImage] = [:]
+    @Published var slides: [StorySlide] = [StorySlide()]
+    @Published var currentSlideIndex: Int = 0
+    @Published var slideImages: [String: UIImage] = [:]
 
     // MARK: - Repost source (Patch B.6 — exposed publicly so the iOS caller in Phase C
     // can read them before invoking PostService.create / createStory with repostOfId).
-    var repostOfId: String?
-    var originalRepostOfId: String?
+    @Published var repostOfId: String?
+    @Published var originalRepostOfId: String?
 
     // Cancellable preload Task started by `init(reposting:authorHandle:)`.
     // Marked `nonisolated(unsafe)` so the `nonisolated deinit` below can cancel it
@@ -333,7 +332,7 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Selection
 
-    var selectedElementId: String?
+    @Published var selectedElementId: String?
 
     // MARK: - Floating Text Edit Mode
 
@@ -342,24 +341,24 @@ public final class StoryComposerViewModel: StoryComposerProviding {
     /// transitions. La géométrie du texte (`x/y/scale/rotation/zIndex/fontSize`)
     /// n'est JAMAIS mutée pour l'édition : le texte est édité dans un overlay
     /// centré, le modèle reste la source de vérité pour le rendu et l'export.
-    var textEditingMode: TextEditingMode = .inactive
+    @Published var textEditingMode: TextEditingMode = .inactive
 
     // MARK: - Active Tool
 
-    var activeTool: StoryToolMode?
+    @Published var activeTool: StoryToolMode?
 
     var isContentToolActive: Bool { activeTool?.tab == .contenu }
 
     // MARK: - Drawing
 
-    var drawingData: Data?
-    var drawingColor: Color = .white
-    var drawingWidth: CGFloat = 5
+    @Published var drawingData: Data?
+    @Published var drawingColor: Color = .white
+    @Published var drawingWidth: CGFloat = 5
     var isDrawingActive: Bool { activeTool == .drawing }
 
     // MARK: - Background
 
-    var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())"
+    @Published var backgroundColor: String = "#\(StoryBackgroundPalette.randomBackgroundColor())"
 
     // Per-slide background image transforms (persisted across slide changes)
     struct BackgroundTransform {
@@ -368,7 +367,7 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         var offsetY: CGFloat = 0
         var rotation: Double = 0
     }
-    var backgroundTransform: BackgroundTransform = BackgroundTransform()
+    @Published var backgroundTransform: BackgroundTransform = BackgroundTransform()
     /// Per-slide background transform cache, keyed by `slide.id` rather than its index.
     /// Index keying broke after slide reordering or removal: deleting slide 0 promoted
     /// slide 1's content to position 0 but `restoreBackgroundTransform()` would still
@@ -391,16 +390,16 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Media Storage (pre-publication)
 
-    var loadedImages: [String: UIImage] = [:]
-    var loadedVideoURLs: [String: URL] = [:]
-    var loadedAudioURLs: [String: URL] = [:]
+    @Published var loadedImages: [String: UIImage] = [:]
+    @Published var loadedVideoURLs: [String: URL] = [:]
+    @Published var loadedAudioURLs: [String: URL] = [:]
 
     // MARK: - Media Aspect Ratios (render-time only, not persisted)
 
     /// Natural aspect ratio (width/height) for each loaded media object, keyed by mediaObject.id.
     /// Computed from UIImage.size or AVAsset track size. Used to render media in its natural
     /// proportions instead of forcing a square frame. When unknown, `1.0` is used as fallback.
-    var mediaAspectRatios: [String: CGFloat] = [:]
+    @Published var mediaAspectRatios: [String: CGFloat] = [:]
 
     func setAspectRatio(_ ratio: CGFloat, for mediaId: String) {
         guard ratio.isFinite, ratio > 0 else { return }
@@ -418,7 +417,7 @@ public final class StoryComposerViewModel: StoryComposerProviding {
         var size: CGSize
     }
 
-    var activeDrag: ActiveDrag?
+    @Published var activeDrag: ActiveDrag?
 
     func beginDrag(elementId: String, position: CGPoint, size: CGSize) {
         activeDrag = ActiveDrag(elementId: elementId, position: position, size: size)
@@ -436,14 +435,14 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Timeline
 
-    var isTimelineVisible: Bool = false
-    var timelinePlaybackTime: Float = 0
-    var isTimelinePlaying: Bool = false
-    var timelineZoomScale: CGFloat = 1.0
-    var timelineScrollOffset: CGFloat = 0
-    var timelineAdvanced: Bool = false
-    var isMuted: Bool = false
-    var hasBackgroundImage: Bool = false
+    @Published var isTimelineVisible: Bool = false
+    @Published var timelinePlaybackTime: Float = 0
+    @Published var isTimelinePlaying: Bool = false
+    @Published var timelineZoomScale: CGFloat = 1.0
+    @Published var timelineScrollOffset: CGFloat = 0
+    @Published var timelineAdvanced: Bool = false
+    @Published var isMuted: Bool = false
+    @Published var hasBackgroundImage: Bool = false
 
     // MARK: - Timeline V2 wiring
 
@@ -612,10 +611,10 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Filter
 
-    var selectedFilter: String?
-    var filterIntensity: Double = 1.0
+    @Published var selectedFilter: String?
+    @Published var filterIntensity: Double = 1.0
     /// When true, filter applies to the entire slide (all layers). When false (default), only background.
-    var filterAppliesToEntireSlide: Bool = false
+    @Published var filterAppliesToEntireSlide: Bool = false
 
     func applyFilter(_ name: String?) {
         selectedFilter = name
@@ -663,9 +662,9 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - Canvas Viewport
 
-    var canvasScale: CGFloat = 1.0
-    var canvasOffset: CGSize = .zero
-    var canvasSize: CGSize = .zero
+    @Published var canvasScale: CGFloat = 1.0
+    @Published var canvasOffset: CGSize = .zero
+    @Published var canvasSize: CGSize = .zero
 
     var isCanvasZoomed: Bool { canvasScale != 1.0 }
 
@@ -690,12 +689,12 @@ public final class StoryComposerViewModel: StoryComposerProviding {
 
     // MARK: - UI State
 
-    var showPhotoPicker: Bool = false
-    var showVideoPicker: Bool = false
-    var showAudioPicker: Bool = false
-    var publishProgress: (current: Int, total: Int)?
-    var errorMessage: String?
-    var showDraftAlert: Bool = false
+    @Published var showPhotoPicker: Bool = false
+    @Published var showVideoPicker: Bool = false
+    @Published var showAudioPicker: Bool = false
+    @Published var publishProgress: (current: Int, total: Int)?
+    @Published var errorMessage: String?
+    @Published var showDraftAlert: Bool = false
 
     // MARK: - Limits
 

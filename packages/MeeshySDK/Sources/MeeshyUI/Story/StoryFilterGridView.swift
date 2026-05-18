@@ -4,7 +4,7 @@ import CoreImage.CIFilterBuiltins
 import MeeshySDK
 
 struct StoryFilterGridView: View {
-    @Bindable var viewModel: StoryComposerViewModel
+    @ObservedObject var viewModel: StoryComposerViewModel
     var previewImage: UIImage?
 
     @Environment(\.colorScheme) private var colorScheme

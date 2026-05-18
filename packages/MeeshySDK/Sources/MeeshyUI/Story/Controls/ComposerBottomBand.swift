@@ -5,7 +5,7 @@ import MeeshySDK
 
 struct ComposerBottomBand: View {
     let state: BandState
-    @Bindable var viewModel: StoryComposerViewModel
+    @ObservedObject var viewModel: StoryComposerViewModel
 
     @Binding var drawingCanvas: PKCanvasView
     @Binding var drawingTool: DrawingTool
@@ -46,7 +46,7 @@ struct ComposerBottomBand: View {
 
     /// Binding pour un `StoryTextObject` identifié, dérivée à la volée de
     /// `viewModel.currentEffects.textObjects`. Le setter remplace l'élément
-    /// dans le tableau, ce qui propage aux observateurs `@Bindable` du modèle
+    /// dans le tableau, ce qui propage aux observateurs `@ObservedObject` du modèle
     /// (canvas, slideStrip, badges) et déclenche la re-sérialisation slide
     /// via le pipeline `granularCanvasSync`.
     private func textObjectBinding(for id: String) -> Binding<StoryTextObject>? {

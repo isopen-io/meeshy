@@ -1,7 +1,6 @@
 // apps/ios/Meeshy/Features/Main/Stores/FeedStore.swift
 
 import Foundation
-import Observation
 import Combine
 // `@preconcurrency` relaxes Swift 6 strict concurrency interop checks for the
 // GRDB module. Without it, the runtime injects `_swift_task_checkIsolatedSwift`
@@ -38,10 +37,9 @@ private func fetchFeedPosts(reader: any DatabaseWriter, limit: Int) throws -> [P
     }
 }
 
-@Observable
 @MainActor
-public final class FeedStore {
-    private(set) var posts: [PostRecord] = []
+public final class FeedStore: ObservableObject {
+    @Published private(set) var posts: [PostRecord] = []
     private let persistence: FeedPersistenceActor
     private var regionCancellable: AnyDatabaseCancellable?
 

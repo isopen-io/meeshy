@@ -14,7 +14,8 @@ struct LocationPickerView: View {
     private var isDark: Bool { colorScheme == .dark }
     @StateObject private var viewModel = LocationPickerModel()
     @State private var searchText = ""
-    @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)
+    @State private var mapTarget: MapTarget?
+    @State private var didCenterOnUser = false
 
     var body: some View {
         NavigationStack {
@@ -39,29 +40,31 @@ struct LocationPickerView: View {
                 }
             }
             .onAppear { viewModel.requestPermission() }
+            .onReceive(viewModel.$userLocation.compactMap { $0 }) { loc in
+                // iOS 17 keeps `.userLocation(fallback:)` inside the adaptive
+                // map, so it self-centers. iOS 16 has no such mode — recenter
+                // explicitly on the first fix only.
+                guard !didCenterOnUser, !Platform.isIOS17OrLater else { return }
+                didCenterOnUser = true
+                mapTarget = MapTarget(center: loc, latitudinalMeters: 1000, longitudinalMeters: 1000)
+            }
         }
     }
 
     // MARK: - Map
 
     private var mapView: some View {
-        Map(position: $cameraPosition, interactionModes: .all) {
-            if let coord = viewModel.selectedCoordinate {
-                Annotation("", coordinate: coord) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 36))
-                        .foregroundStyle(Color(hex: accentColor), Color(hex: accentColor).opacity(0.3))
-                        .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 3)
-                }
+        AdaptiveInteractiveMap(
+            target: mapTarget,
+            annotationCoordinate: viewModel.selectedCoordinate,
+            onRegionChange: { center in
+                viewModel.updateSelectedLocation(center)
             }
-        }
-        .onMapCameraChange(frequency: .onEnd) { context in
-            let center = context.camera.centerCoordinate
-            viewModel.updateSelectedLocation(center)
-        }
-        .mapControls {
-            MapUserLocationButton()
-            MapCompass()
+        ) {
+            Image(systemName: "mappin.circle.fill")
+                .font(.system(size: 36))
+                .foregroundStyle(Color(hex: accentColor), Color(hex: accentColor).opacity(0.3))
+                .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 6, y: 3)
         }
         .ignoresSafeArea(edges: .bottom)
     }
@@ -117,11 +120,11 @@ struct LocationPickerView: View {
                     let coord = item.placemark.coordinate
                     viewModel.updateSelectedLocation(coord)
                     viewModel.reverseGeocode(coord)
-                    cameraPosition = .region(MKCoordinateRegion(
+                    mapTarget = MapTarget(
                         center: coord,
                         latitudinalMeters: 500,
                         longitudinalMeters: 500
-                    ))
+                    )
                     searchText = item.name ?? ""
                     viewModel.searchResults.removeAll()
                 } label: {
@@ -206,9 +209,9 @@ struct LocationPickerView: View {
                 Button {
                     viewModel.centerOnUser()
                     if let loc = viewModel.userLocation {
-                        cameraPosition = .region(MKCoordinateRegion(
+                        mapTarget = MapTarget(
                             center: loc, latitudinalMeters: 500, longitudinalMeters: 500
-                        ))
+                        )
                     }
                 } label: {
                     HStack(spacing: 4) {

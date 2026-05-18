@@ -5,7 +5,7 @@ import MeeshySDK
 
 struct ComposerToolPanelHost: View {
     let tool: StoryToolMode
-    @Bindable var viewModel: StoryComposerViewModel
+    @ObservedObject var viewModel: StoryComposerViewModel
     @Binding var drawingCanvas: PKCanvasView
     @Binding var drawingTool: DrawingTool
     @Binding var selectedFilter: StoryFilter?

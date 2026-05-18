@@ -74,7 +74,7 @@ public struct StoryComposerView: View {
 
     // MARK: - Single source of truth
 
-    @State private var viewModel = StoryComposerViewModel()
+    @StateObject private var viewModel = StoryComposerViewModel()
 
     // MARK: - System environment
 
@@ -257,7 +257,7 @@ public struct StoryComposerView: View {
         onPreview: @escaping ([StorySlide], [String: UIImage], [String: UIImage], [String: URL], [String: URL]) -> Void = { _, _, _, _, _ in },
         onDismiss: @escaping () -> Void
     ) {
-        self._viewModel = State(wrappedValue: viewModel)
+        self._viewModel = StateObject(wrappedValue: viewModel)
         self.onPublishSlide = onPublishSlide
         self.onPublishAllInBackground = onPublishAllInBackground
         self.onPreview = onPreview
@@ -964,7 +964,7 @@ public struct StoryComposerView: View {
                 // viewModel.addText() itself spawns a fresh text + sets
                 // selectedElementId + sets activeTool = .text, so calling
                 // selectTool(.text) before it would toggle activeTool off
-                // when addText then re-sets it back — and the @Observable
+                // when addText then re-sets it back — and the @Published
                 // re-render race could leave activeTool nil at the end.
                 // Adopt the simpler invariant : addText is the sole entry
                 // point for the .text tool when the slide has no text yet.

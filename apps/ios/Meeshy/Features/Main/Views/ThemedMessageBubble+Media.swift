@@ -440,30 +440,15 @@ struct BubbleCarouselView: View {
 
     var body: some View {
         ZStack(alignment: .top) {
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 0) {
-                    ForEach(items) { attachment in
-                        carouselPage(attachment)
-                            .containerRelativeFrame(.horizontal)
-                            .scrollTransition(.animated(
-                                .spring(response: 0.4, dampingFraction: 0.86)
-                            )) { content, phase in
-                                content
-                                    .scaleEffect(
-                                        x: phase.isIdentity ? 1 : 0.94,
-                                        y: phase.isIdentity ? 1 : 0.94
-                                    )
-                                    .opacity(phase.isIdentity ? 1 : 0.6)
-                                    .blur(radius: phase.isIdentity ? 0 : 1.5)
-                            }
-                    }
-                }
-                .scrollTargetLayout()
+            AdaptiveHorizontalPager(
+                items: items,
+                currentPageID: $currentPageID,
+                fillVertical: false,
+                carouselTransition: true
+            ) { _, attachment in
+                carouselPage(attachment)
             }
-            .scrollTargetBehavior(.paging)
-            .scrollPosition(id: $currentPageID)
             .frame(height: carouselHeight)
-            .scrollClipDisabled(false)
 
             carouselTopBar
         }

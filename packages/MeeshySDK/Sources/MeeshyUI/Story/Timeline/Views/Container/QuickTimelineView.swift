@@ -7,7 +7,7 @@ public struct QuickTimelineView: View {
 
     public static let compactMaxTracks: Int = 3
 
-    @Bindable private var viewModel: TimelineViewModel
+    @ObservedObject private var viewModel: TimelineViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
