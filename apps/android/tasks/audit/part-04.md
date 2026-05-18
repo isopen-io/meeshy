@@ -756,6 +756,38 @@ parameter ranges + constants verbatim.
 
 ---
 
+## `apps/ios/Meeshy/Features/Main/Services/ThermalStateMonitor.swift`
+
+Purpose: Observes device thermal state and recommends adaptive call-quality
+ceilings (fps / resolution / video-disable) to protect against overheating
+during 1:1 audio/video calls.
+
+Public API surface:
+- `protocol ThermalStateMonitorDelegate: AnyObject` — `thermalStateDidChange(to:)`.
+- `final class ThermalStateMonitor` — `weak var delegate`, `private(set) var
+  currentState: ProcessInfo.ThermalState`, `startMonitoring()`,
+  `stopMonitoring()`.
+- Computed advice: `recommendedMaxFps` (30/24/15/0 per nominal/fair/serious/
+  critical), `recommendedMaxResolution` (720p/540p/360p/0), `shouldDisableVideo`
+  (true on `.critical`).
+
+Key behaviors: Subscribes to `ProcessInfo.thermalStateDidChangeNotification`,
+de-dupes identical states, logs transitions via `os.Logger` (`calls` category),
+and notifies its delegate. Pure mapping tables from thermal tier → quality cap.
+
+External dependencies & couplings: `Foundation`/`ProcessInfo`, `os.Logger`;
+consumed by `CallManager` to throttle the WebRTC encoder.
+
+Android-port note: Map to `PowerManager.getCurrentThermalStatus()` +
+`PowerManager.OnThermalStatusChangedListener` (`THERMAL_STATUS_NONE` …
+`SHUTDOWN`). Keep the tier→fps/resolution tables verbatim as a Kotlin `enum`
+mapping; expose advice as a `StateFlow<ThermalAdvice>` consumed by the call
+encoder config. Small pure utility — trivial, high-value port.
+
+- [ ] Thermal-aware call-quality degradation (fps/resolution caps, video disable)
+
+---
+
 ## Architecture observations
 
 ### State management
