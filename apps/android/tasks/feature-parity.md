@@ -76,7 +76,9 @@ file-by-file audit — every one of the 673 iOS files was read in full.
       profile generation, Play tracks) — ADR-023
 
 ## Phase 3 — SDK foundation (`:sdk-core`)
-- [x] Models: `ApiResponse`, `MeeshyUser`/`UserRole`, auth, conversation, message
+- [x] Models: full iOS-model port — 31 `@Serializable` files (auth, conversation,
+      message, community, feed, post, story, notification, friend, location,
+      voice, presence, stats, links, transcription, preferences, participants…)
 - [x] `LanguageResolver` — Prisme Linguistique resolution
 - [x] `DynamicColorGenerator` — accent color (blend + hue shift + DJB2 palette)
 - [x] Networking: `MeeshyConfig`, `EncryptedTokenStore`, `AuthInterceptor`, `apiCall`, Retrofit
@@ -107,7 +109,10 @@ file-by-file audit — every one of the 673 iOS files was read in full.
 - [ ] **E2EE** — gated behind ADR-018..020: threat model, libsignal pairwise +
       Sender Keys groups, multi-device, fail-closed, call media (DTLS-SRTP + SFrame)
 - [ ] SQLCipher-encrypted Room + per-user namespacing + provably complete logout wipe
-- [ ] Remaining REST services (≈29) — see `audit/part-17.md`
+- [~] REST services: 13/37 ported as API + repository (auth, conversation,
+      message, reaction, post, user, friend, notification, community, story,
+      translation); ~24 remaining (attachment, block, account, session, stats,
+      location, voice profile, etc.) — see `audit/part-17.md`
 
 ## Phase 4 — Design system (`:sdk-ui`) — **CHARTE GRAPHIQUE (locked, see ARCHITECTURE.md §Design System)**
 - [x] `MeeshyPalette` Indigo scale + semantic colors
