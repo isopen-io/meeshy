@@ -20,6 +20,36 @@ final class StoryBackgroundLayerImageTests: XCTestCase {
         XCTAssertNotNil(imageLayer)
     }
 
+    func test_configure_image_withResolverButNoImageCache_loadsBitmap() async throws {
+        // Regression: the story reader always passes `imageCache: nil`. The
+        // background bitmap must still load from the resolver-supplied URL —
+        // otherwise published-story image backgrounds stay frozen on the
+        // ThumbHash placeholder and never render real content.
+        let tmpURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("story-bg-\(UUID().uuidString).png")
+        let bitmap = UIGraphicsImageRenderer(size: CGSize(width: 4, height: 4)).image { ctx in
+            UIColor.systemTeal.setFill()
+            ctx.fill(CGRect(x: 0, y: 0, width: 4, height: 4))
+        }
+        try XCTUnwrap(bitmap.pngData()).write(to: tmpURL)
+        defer { try? FileManager.default.removeItem(at: tmpURL) }
+
+        let layer = StoryBackgroundLayer()
+        let geom = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))
+        let resolver: (String) -> URL? = { _ in tmpURL }
+
+        layer.configure(kind: .image(postMediaId: "pm-remote", thumbHash: nil),
+                        transform: .identity, geometry: geom,
+                        resolver: resolver, imageCache: nil)
+
+        var loaded = false
+        for _ in 0..<50 where !loaded {
+            try await Task.sleep(nanoseconds: 20_000_000)
+            loaded = layer.sublayers?.contains { $0.contents != nil } ?? false
+        }
+        XCTAssertTrue(loaded, "image background must load via the resolver when imageCache is nil")
+    }
+
     func test_configure_image_withThumbHash_showsPlaceholderImmediately() throws {
         let layer = StoryBackgroundLayer()
         let geom = CanvasGeometry(renderSize: CGSize(width: 412, height: 732))

@@ -161,6 +161,7 @@ extension StoryBackgroundLayer {
                         img?.contents = uiImage.cgImage
                     }
                 }
+                break
             }
         case .video(let postMediaId, let looping, let mute):
             backgroundColor = UIColor.black.cgColor
