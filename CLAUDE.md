@@ -364,8 +364,8 @@ accent = hueShift(primary, −30°)
 - `binaryFrames[0]` is first binary (NOT index [1])
 
 ### Audio Pipeline
-- Audio translation ONLY via WebSocket `message:send-with-attachments`
-- REST does NOT trigger audio pipeline
+- Audio attachments go through REST `POST /messages` (primary) OR the `message:send-with-attachments` socket event (fallback when REST fails)
+- The pipeline fires on BOTH paths — `MessageProcessor.handleAttachments` triggers `processAudioAttachments` regardless of source (no `source` gate)
 - 3 stages: Transcription (Whisper) → Translation (NLLB) → TTS (Chatterbox)
 
 ### Async EventEmitter Hazard
