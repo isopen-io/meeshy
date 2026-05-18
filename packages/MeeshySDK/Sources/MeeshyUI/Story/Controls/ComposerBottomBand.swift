@@ -17,8 +17,6 @@ struct ComposerBottomBand: View {
     let onTapTile: (StoryToolMode) -> Void
     let onBackFromToolPanel: () -> Void
     let onCloseFormatPanel: () -> Void
-    let onOpenMediaCrop: (String) -> Void
-    let onOpenFilterForElement: (String) -> Void
     var onEditMedia: ((String) -> Void)? = nil
     var onEditText: ((String) -> Void)? = nil
     var onDeleteText: ((String) -> Void)? = nil
@@ -134,14 +132,11 @@ struct ComposerBottomBand: View {
                         Color.clear
                             .onAppear { onCloseFormatPanel() }
                     }
-                case .formatPanel(.media, let elementId):
-                    ComposerMediaFormatBand(
-                        elementId: elementId,
-                        viewModel: viewModel,
-                        onDone: onCloseFormatPanel,
-                        onOpenCropEditor: onOpenMediaCrop,
-                        onOpenFilterPicker: onOpenFilterForElement
-                    )
+                case .formatPanel(.media, _):
+                    // Panneau de contrôles média retiré : l'édition d'un média
+                    // passe par l'éditeur d'image plein écran (ouvert au tap
+                    // sur le média). Cet état n'est plus produit.
+                    EmptyView()
                 }
             }
             .id(stateKey)
