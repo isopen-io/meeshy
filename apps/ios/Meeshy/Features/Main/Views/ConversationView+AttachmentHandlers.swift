@@ -264,31 +264,15 @@ extension ConversationView {
 
                 progressCancellable?.cancel()
 
-                let hasAudio = audioURL != nil
                 var sendSuccess = false
                 let lang = composerState.selectedLanguage
 
-                if hasAudio && !uploadedIds.isEmpty {
-                    let ack = await MessageSocketManager.shared.sendWithAttachmentsAsync(
-                        conversationId: viewModel.conversationId,
-                        content: content.isEmpty ? nil : content,
-                        attachmentIds: uploadedIds,
-                        replyToId: replyId,
-                        storyReplyToId: storyReplyId,
-                        originalLanguage: lang
-                    )
-                    if let ack {
-                        // Optimistic GRDB row inserted earlier with tempId; map
-                        // it to the server id so the message:new broadcast (and
-                        // any future delete/edit/react ops) can resolve back to
-                        // the original optimistic row.
-                        viewModel.pendingServerIds[tempId] = ack.messageId
-                        sendSuccess = true
-                    } else {
-                        viewModel.error = "Echec de l'envoi du message vocal"
-                        ToastManager.shared.showError("Echec de l'envoi du message vocal")
-                    }
-                } else if !uploadedIds.isEmpty || !content.isEmpty {
+                // Audio, image, vidéo et fichier empruntent tous le même envoi
+                // REST `viewModel.sendMessage`. Le pipeline audio gateway
+                // (Whisper/NLLB/TTS) se déclenche aussi via REST. En cas
+                // d'échec REST, `sendMessage` bascule automatiquement sur le
+                // socket avec le même clientMessageId (dedup → pas de doublon).
+                if !uploadedIds.isEmpty || !content.isEmpty {
                     sendSuccess = await viewModel.sendMessage(
                         content: content,
                         replyToId: replyId,
