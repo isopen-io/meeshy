@@ -27,7 +27,7 @@ public struct ProTimelineView: View {
         case transition(TransitionInspector.TransitionSnapshot)
     }
 
-    @Bindable private var viewModel: TimelineViewModel
+    @ObservedObject private var viewModel: TimelineViewModel
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass

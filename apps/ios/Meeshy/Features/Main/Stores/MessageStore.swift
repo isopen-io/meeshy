@@ -1,7 +1,6 @@
 // apps/ios/Meeshy/Features/Main/Stores/MessageStore.swift
 
 import Foundation
-import Observation
 import Combine
 // `@preconcurrency` relaxes Swift 6 strict concurrency interop checks for the
 // GRDB module. Without it, the runtime injects `_swift_task_checkIsolatedSwift`
@@ -111,9 +110,8 @@ public enum WindowMode: Equatable, Sendable {
     case around(date: Date)
 }
 
-@Observable
 @MainActor
-public final class MessageStore {
+public final class MessageStore: ObservableObject {
     /// Number of messages fetched on initial load (no anchor). Once the user
     /// scrolls and an anchor is set, the window grows dynamically without cap.
     static let initialWindowSize = 200
@@ -121,9 +119,9 @@ public final class MessageStore {
 
     // MARK: - Public State
 
-    private(set) var messages: [MessageRecord] = []
-    private(set) var sections: [MessageSection] = []
-    private(set) var unreadBelowCount: Int = 0
+    @Published private(set) var messages: [MessageRecord] = []
+    @Published private(set) var sections: [MessageSection] = []
+    @Published private(set) var unreadBelowCount: Int = 0
     var currentVisibleMessageIds: Set<String> = []
     var isUserScrolling = false
 
@@ -236,10 +234,10 @@ public final class MessageStore {
         print("[DIAG] MessageStore.refreshFromDB conv=\(convId) fetched=\(count) current=\(messages.count)")
         guard let newRecords, newRecords != messages else { return }
 
-        // Yield to a fresh runloop iteration before publishing the @Observable
+        // Yield to a fresh runloop iteration before publishing the @Published
         // mutation. When refreshFromDB is invoked from a view's .task /
         // .onAppear hook (initial conversation load), we are still inside
-        // SwiftUI's view update cycle. Mutating the @Observable `messages`
+        // SwiftUI's view update cycle. Mutating the @Published `messages`
         // property here trips "Publishing changes from within view updates is
         // not allowed", which prevents the view from rendering the new state
         // and silently shows an empty bubble list. The dispatch hop forces
@@ -258,7 +256,7 @@ public final class MessageStore {
     }
 
     /// Awaits the next main runloop tick. Used to escape the synchronous view
-    /// update cycle before mutating @Observable state.
+    /// update cycle before mutating @Published state.
     private func yieldToRunLoop() async {
         await withCheckedContinuation { (cont: CheckedContinuation<Void, Never>) in
             DispatchQueue.main.async {

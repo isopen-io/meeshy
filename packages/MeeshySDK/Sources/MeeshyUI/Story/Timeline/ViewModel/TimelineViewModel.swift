@@ -1,6 +1,6 @@
 import Foundation
 import UIKit
-import Observation
+import Combine
 import MeeshySDK
 
 // MARK: - Engine abstraction (testable seam for StoryTimelineEngine)
@@ -34,34 +34,33 @@ public protocol TimelineEngineProviding: AnyObject {
 
 // MARK: - TimelineViewModel
 
-@Observable
 @MainActor
-public final class TimelineViewModel {
+public final class TimelineViewModel: ObservableObject {
 
     // MARK: - State observable by Views
 
-    public internal(set) var project: TimelineProject
-    public private(set) var currentTime: Float = 0
-    public private(set) var isPlaying: Bool = false
+    @Published public internal(set) var project: TimelineProject
+    @Published public private(set) var currentTime: Float = 0
+    @Published public private(set) var isPlaying: Bool = false
     /// Mirror of `engine.isMuted` so SwiftUI views (TransportBar mute button)
     /// re-render on toggle. The engine remains the audio-routing source of
-    /// truth — this stored property is the @Observable view-state seam that
+    /// truth — this stored property is the @Published view-state seam that
     /// tracks it. Keep them in lock-step inside `toggleMute()`.
-    public private(set) var isMuted: Bool = false
-    public private(set) var canUndo: Bool = false
-    public private(set) var canRedo: Bool = false
-    public internal(set) var isSnapEnabled: Bool = true
-    public var selection: ClipSelectionState = .init()
-    public var mode: TimelineMode = .quick
-    public var zoomScale: CGFloat = 1.0
-    public var errorMessage: String?
-    public internal(set) var showOfflineQueuedConfirmation: Bool = false
+    @Published public private(set) var isMuted: Bool = false
+    @Published public private(set) var canUndo: Bool = false
+    @Published public private(set) var canRedo: Bool = false
+    @Published public internal(set) var isSnapEnabled: Bool = true
+    @Published public var selection: ClipSelectionState = .init()
+    @Published public var mode: TimelineMode = .quick
+    @Published public var zoomScale: CGFloat = 1.0
+    @Published public var errorMessage: String?
+    @Published public internal(set) var showOfflineQueuedConfirmation: Bool = false
     /// True between `beginScrub()` and `endScrub()` — flipped by the playhead
     /// gesture so `scrub(to:)` can choose a sub-50ms tolerance during the drag
     /// and a frame-accurate seek on release. Mirrors `selection.activeDrag` for
     /// clip drags. Default `false` keeps every legacy `scrub(to:)` caller on a
     /// precise seek.
-    public private(set) var isScrubbing: Bool = false
+    @Published public private(set) var isScrubbing: Bool = false
 
     // MARK: - Dependencies
 
@@ -453,7 +452,7 @@ public final class TimelineViewModel {
         var muted = engine.isMuted
         muted.toggle()
         engine.isMuted = muted
-        // Mirror onto the @Observable view-state seam. Read the engine back
+        // Mirror onto the @Published view-state seam. Read the engine back
         // (instead of trusting `muted`) so any clamping or refusal applied by
         // the engine setter is reflected truthfully to the UI.
         isMuted = engine.isMuted

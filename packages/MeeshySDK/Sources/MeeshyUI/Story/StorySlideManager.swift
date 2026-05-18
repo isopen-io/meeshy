@@ -8,7 +8,7 @@ import MeeshySDK
 //
 // `StorySlideManager` is a legacy `ObservableObject` that duplicates slide
 // state (slides, currentSlideIndex, slideImages) already owned by the
-// `@Observable` `StoryComposerViewModel`. The real composer UI does NOT
+// `ObservableObject` `StoryComposerViewModel`. The real composer UI does NOT
 // reference this manager — only the in-file `StorySlideCarousel` view does.
 //
 // Use `StoryComposerViewModel` instead. It is the single source of truth

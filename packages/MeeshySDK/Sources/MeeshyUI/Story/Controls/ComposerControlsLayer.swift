@@ -6,7 +6,7 @@ import MeeshySDK
 
 public struct ComposerControlsLayer: View {
 
-    @Bindable var viewModel: StoryComposerViewModel
+    @ObservedObject var viewModel: StoryComposerViewModel
 
     @Binding var bandStateMachine: BandStateMachine
     @Binding var areFabsVisible: Bool
