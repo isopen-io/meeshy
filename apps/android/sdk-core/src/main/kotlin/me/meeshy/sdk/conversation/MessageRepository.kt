@@ -1,5 +1,13 @@
 package me.meeshy.sdk.conversation
 
+import kotlinx.coroutines.flow.Flow
+import me.meeshy.core.database.MeeshyDatabase
+import me.meeshy.core.database.dao.MessageDao
+import me.meeshy.core.database.dao.SyncMetaDao
+import me.meeshy.sdk.cache.CachePolicy
+import me.meeshy.sdk.cache.CacheResult
+import me.meeshy.sdk.cache.SystemCacheClock
+import me.meeshy.sdk.cache.cacheFirstFlow
 import me.meeshy.sdk.model.ApiMessage
 import me.meeshy.sdk.model.SendMessageRequest
 import me.meeshy.sdk.net.NetworkResult
@@ -12,14 +20,25 @@ import javax.inject.Singleton
 @Singleton
 class MessageRepository @Inject constructor(
     private val messageApi: MessageApi,
+    private val database: MeeshyDatabase,
+    private val messageDao: MessageDao,
+    private val syncMetaDao: SyncMetaDao,
 ) {
-
-    suspend fun list(
+    /**
+     * Cache-first message list for a conversation (ARCHITECTURE.md §4): the
+     * cached messages are served immediately and revalidated in the background.
+     */
+    fun messagesStream(
         conversationId: String,
-        offset: Int = 0,
-        limit: Int = 50,
-    ): NetworkResult<List<ApiMessage>> =
-        apiCall { messageApi.list(conversationId, offset, limit) }
+        policy: CachePolicy = CachePolicy.Default,
+        onSyncError: (Throwable) -> Unit = {},
+    ): Flow<CacheResult<List<ApiMessage>>> =
+        cacheFirstFlow(policy, cacheSource(conversationId), onRevalidateError = onSyncError)
+
+    /** Explicit refresh of a conversation's messages (pull / retry). Throws on failure. */
+    suspend fun refresh(conversationId: String) {
+        cacheSource(conversationId).revalidate()
+    }
 
     suspend fun send(
         conversationId: String,
@@ -38,4 +57,13 @@ class MessageRepository @Inject constructor(
                 ),
             )
         }
+
+    private fun cacheSource(conversationId: String) = MessageCacheSource(
+        conversationId = conversationId,
+        database = database,
+        messageDao = messageDao,
+        syncMetaDao = syncMetaDao,
+        messageApi = messageApi,
+        clock = SystemCacheClock,
+    )
 }

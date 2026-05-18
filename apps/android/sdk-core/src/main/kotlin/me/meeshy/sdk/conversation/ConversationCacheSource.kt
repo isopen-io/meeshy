@@ -17,8 +17,7 @@ import me.meeshy.sdk.net.MeeshyApi
 import me.meeshy.sdk.net.NetworkResult
 import me.meeshy.sdk.net.api.ConversationApi
 import me.meeshy.sdk.net.apiCall
-import java.time.Instant
-import java.time.OffsetDateTime
+import me.meeshy.sdk.util.isoToEpochMillis
 
 /** Thrown when a conversation revalidation fails; carries the API error message. */
 internal class ConversationSyncException(message: String) : Exception(message)
@@ -65,7 +64,7 @@ internal class ConversationCacheSource(
             ConversationEntity(
                 id = conversation.id,
                 payload = MeeshyApi.json.encodeToString(conversation),
-                updatedAt = isoToMillis(
+                updatedAt = isoToEpochMillis(
                     conversation.updatedAt
                         ?: conversation.lastMessage?.createdAt
                         ?: conversation.createdAt,
@@ -83,11 +82,4 @@ internal class ConversationCacheSource(
     internal companion object {
         const val RESOURCE_KEY: String = "conversations"
     }
-}
-
-private fun isoToMillis(value: String?): Long {
-    if (value.isNullOrBlank()) return 0L
-    return runCatching { Instant.parse(value).toEpochMilli() }
-        .recoverCatching { OffsetDateTime.parse(value).toInstant().toEpochMilli() }
-        .getOrDefault(0L)
 }
