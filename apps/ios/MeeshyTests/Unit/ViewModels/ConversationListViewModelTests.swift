@@ -2083,6 +2083,46 @@ final class ConversationListViewModelTests: XCTestCase {
         wait(for: [exp], timeout: 2)
         XCTAssertGreaterThan(syncEngine.syncSinceLastCheckpointCallCount, 0)
     }
+
+    // MARK: - conversationsAreInOrder comparator
+
+    func test_conversationsAreInOrder_pinnedBeforeUnpinned() {
+        let pinned = makeConversation(id: "p", isPinned: true, lastMessageAt: Date(timeIntervalSince1970: 1))
+        let normal = makeConversation(id: "n", isPinned: false, lastMessageAt: Date(timeIntervalSince1970: 999))
+        XCTAssertTrue(ConversationListViewModel.conversationsAreInOrder(pinned, normal, draftSummaries: [:]))
+        XCTAssertFalse(ConversationListViewModel.conversationsAreInOrder(normal, pinned, draftSummaries: [:]))
+    }
+
+    func test_conversationsAreInOrder_draftBeforeNonDraft_amongUnpinned() {
+        let withDraft = makeConversation(id: "d", isPinned: false, lastMessageAt: Date(timeIntervalSince1970: 1))
+        let noDraft = makeConversation(id: "x", isPinned: false, lastMessageAt: Date(timeIntervalSince1970: 999))
+        let drafts = ["d": DraftSummary(previewText: "wip", updatedAt: Date())]
+        XCTAssertTrue(ConversationListViewModel.conversationsAreInOrder(withDraft, noDraft, draftSummaries: drafts))
+        XCTAssertFalse(ConversationListViewModel.conversationsAreInOrder(noDraft, withDraft, draftSummaries: drafts))
+    }
+
+    func test_conversationsAreInOrder_draftsOrderedByUpdatedAtDescending() {
+        let older = makeConversation(id: "o", isPinned: false)
+        let newer = makeConversation(id: "n", isPinned: false)
+        let drafts = [
+            "o": DraftSummary(previewText: "a", updatedAt: Date(timeIntervalSince1970: 100)),
+            "n": DraftSummary(previewText: "b", updatedAt: Date(timeIntervalSince1970: 200))
+        ]
+        XCTAssertTrue(ConversationListViewModel.conversationsAreInOrder(newer, older, draftSummaries: drafts))
+    }
+
+    func test_conversationsAreInOrder_pinnedBeatsDraft() {
+        let pinnedNoDraft = makeConversation(id: "p", isPinned: true, lastMessageAt: Date(timeIntervalSince1970: 1))
+        let unpinnedWithDraft = makeConversation(id: "d", isPinned: false, lastMessageAt: Date(timeIntervalSince1970: 999))
+        let drafts = ["d": DraftSummary(previewText: "wip", updatedAt: Date())]
+        XCTAssertTrue(ConversationListViewModel.conversationsAreInOrder(pinnedNoDraft, unpinnedWithDraft, draftSummaries: drafts))
+    }
+
+    func test_conversationsAreInOrder_twoPinned_orderedByLastMessageAt() {
+        let pinnedOld = makeConversation(id: "po", isPinned: true, lastMessageAt: Date(timeIntervalSince1970: 1))
+        let pinnedRecent = makeConversation(id: "pr", isPinned: true, lastMessageAt: Date(timeIntervalSince1970: 999))
+        XCTAssertTrue(ConversationListViewModel.conversationsAreInOrder(pinnedRecent, pinnedOld, draftSummaries: [:]))
+    }
 }
 
 // MARK: - ConversationUpdatedEvent factory

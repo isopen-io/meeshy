@@ -460,6 +460,28 @@ class ConversationListViewModel: ObservableObject {
         return result
     }
 
+    /// Ordre total de la liste de conversations. Épinglées d'abord ; parmi les
+    /// non-épinglées, les conversations avec un brouillon actif flottent en
+    /// tête (brouillon le plus récemment édité d'abord) ; le reste retombe sur
+    /// `lastMessageAt` décroissant. Les épinglées conservent leur tri
+    /// `lastMessageAt` — la priorité brouillon ne s'applique qu'aux
+    /// non-épinglées.
+    nonisolated static func conversationsAreInOrder(
+        _ a: Conversation,
+        _ b: Conversation,
+        draftSummaries: [String: DraftSummary]
+    ) -> Bool {
+        if a.isPinned != b.isPinned { return a.isPinned }
+        if a.isPinned && b.isPinned { return a.lastMessageAt > b.lastMessageAt }
+        let aHasDraft = draftSummaries[a.id] != nil
+        let bHasDraft = draftSummaries[b.id] != nil
+        if aHasDraft != bHasDraft { return aHasDraft }
+        if let aDraft = draftSummaries[a.id], let bDraft = draftSummaries[b.id] {
+            return aDraft.updatedAt > bDraft.updatedAt
+        }
+        return a.lastMessageAt > b.lastMessageAt
+    }
+
     // MARK: - Sync Engine Observation
 
     func observeSync() {
