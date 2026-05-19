@@ -1,5 +1,7 @@
 import SwiftUI
-import AVFoundation
+// `@preconcurrency` lets the periodic time-observer closure stay main-actor
+// isolated (it touches @State) — consistent with AudioEditorController.
+@preconcurrency import AVFoundation
 import MeeshySDK
 
 // MARK: - Meeshy Audio Editor View
@@ -128,22 +130,26 @@ public struct MeeshyAudioEditorView: View {
 
             Spacer(minLength: 6)
 
-            VStack(spacing: 10) {
-                if let error = controller.lastError {
-                    errorBanner(error)
-                }
-                if let tool = controller.activeTool {
-                    toolPanel(for: tool)
-                        .transition(.move(edge: .bottom).combined(with: .opacity))
-                }
-                if controller.document.hasHistory {
-                    historyStrip
-                }
-                toolStrip
-                bottomBar
+            bottomDock
+                .padding(.horizontal, 16)
+                .padding(.bottom, 28)
+        }
+    }
+
+    private var bottomDock: some View {
+        VStack(spacing: 10) {
+            if let error = controller.lastError {
+                errorBanner(error)
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 28)
+            if let tool = controller.activeTool {
+                toolPanel(for: tool)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+            if controller.document.hasHistory {
+                historyStrip
+            }
+            toolStrip
+            bottomBar
         }
     }
 
@@ -858,13 +864,19 @@ public struct MeeshyAudioEditorView: View {
             player.pause()
             isPlaying = false
         } else {
-            if let lower = trimLowerBound, currentTime < lower || currentTime >= (trimUpperBound ?? .infinity) {
+            let lower = trimLowerBound ?? 0
+            let upper = trimUpperBound ?? controller.activeDuration
+            if currentTime < lower || currentTime >= upper - 0.05 {
                 seekPlayer(to: lower)
             }
-            applyPreviewRate()
-            player.play()
             isPlaying = true
+            // Setting a non-zero rate also starts playback.
+            player.rate = previewRate
         }
+    }
+
+    private var previewRate: Float {
+        controller.activeTool == .speed ? Float(controller.speed) : 1.0
     }
 
     private func handlePlaybackTick(_ time: Double) {
@@ -892,8 +904,7 @@ public struct MeeshyAudioEditorView: View {
 
     private func applyPreviewRate() {
         guard isPlaying, let player else { return }
-        let rate = controller.activeTool == .speed ? Float(controller.speed) : 1.0
-        player.rate = rate
+        player.rate = previewRate
     }
 
     /// Lower playback bound — the trim region's start while trimming.
@@ -1017,9 +1028,9 @@ private struct AudioEditorWaveform: View {
         let barWidth = max(1, (size.width - totalGap) / CGFloat(count))
 
         return HStack(alignment: .center, spacing: barGap) {
-            ForEach(0..<count, id: \.self) { index in
-                let fraction = count > 1 ? Double(index) / Double(count - 1) : 0
-                let height = max(3, CGFloat(values[index]) * size.height * 0.92)
+            ForEach(Array(values.enumerated()), id: \.offset) { item in
+                let fraction = count > 1 ? Double(item.offset) / Double(count - 1) : 0
+                let height = max(3, CGFloat(item.element) * size.height * 0.92)
                 RoundedRectangle(cornerRadius: 1.5)
                     .fill(barColor(fraction: fraction))
                     .frame(width: barWidth, height: height)
