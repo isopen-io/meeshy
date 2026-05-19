@@ -843,4 +843,63 @@ final class MessagePersistenceActorTests: XCTestCase {
             "a received encrypted row must still take server updates")
         XCTAssertTrue(rows[0].isEncrypted)
     }
+
+    // MARK: - Story-reply citation (A.2)
+
+    /// A.2 — un message qui répond à une story (payload serveur enrichi
+    /// `storyReplyTo`) est ingéré avec un `ReplyReference` riche dans `replyToJson`.
+    func test_upsertFromAPIMessages_storyReplyTo_buildsRichReplyReference() async throws {
+        let json = """
+        {
+          "id": "srv_sr_1", "conversationId": "conv_sr", "senderId": "sender_1",
+          "content": "réponse", "createdAt": "2026-05-19T10:00:00Z",
+          "updatedAt": "2026-05-19T10:00:00Z", "storyReplyToId": "story_42",
+          "storyReplyTo": {
+            "id": "story_42", "reactionCount": 12, "commentCount": 3,
+            "createdAt": "2026-05-18T08:00:00.000Z",
+            "thumbnailUrl": "https://cdn.example/s42.jpg", "previewText": "Ma story"
+          }
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let apiMsg = try decoder.decode(APIMessage.self, from: Data(json.utf8))
+
+        try await actor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try actor.messages(for: "conv_sr", limit: 10)
+        let replyJson = try XCTUnwrap(rows[0].replyToJson,
+            "un message répondant à une story doit porter un ReplyReference riche")
+        let ref = try JSONDecoder().decode(ReplyReference.self, from: replyJson)
+        XCTAssertTrue(ref.isStoryReply)
+        XCTAssertEqual(ref.storyReactionCount, 12)
+        XCTAssertEqual(ref.storyCommentCount, 3)
+        XCTAssertEqual(ref.storyThumbnailUrl, "https://cdn.example/s42.jpg")
+    }
+
+    /// A.2 — un refresh serveur sans `replyTo` ni `storyReplyTo` ne doit PAS
+    /// écraser un `ReplyReference` riche déjà persisté (filet de sécurité —
+    /// couvre la phase optimiste avant le 1er refresh enrichi).
+    func test_upsertFromAPIMessages_preservesRichReplyWhenServerCarriesNothing() async throws {
+        let storyReply = ReplyReference(
+            messageId: "story_42", authorName: "Andre", previewText: "Ma story",
+            isMe: false, isStoryReply: true,
+            storyPublishedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            storyReactionCount: 7, storyCommentCount: 1,
+            storyThumbnailUrl: "https://cdn.example/s42.jpg"
+        )
+        var record = MessageRecordFactory.make(localId: "srv_sr_2", conversationId: "conv_sr2")
+        record.replyToJson = try JSONEncoder().encode(storyReply)
+        try await actor.insertOptimistic(record)
+
+        let apiMsg = makeAPIMessage(id: "srv_sr_2", conversationId: "conv_sr2", content: "réponse")
+        try await actor.upsertFromAPIMessages([apiMsg])
+
+        let rows = try actor.messages(for: "conv_sr2", limit: 10)
+        let replyJson = try XCTUnwrap(rows[0].replyToJson,
+            "le ReplyReference riche local doit survivre à un refresh serveur vide")
+        let ref = try JSONDecoder().decode(ReplyReference.self, from: replyJson)
+        XCTAssertTrue(ref.isStoryReply)
+        XCTAssertEqual(ref.storyReactionCount, 7)
+    }
 }

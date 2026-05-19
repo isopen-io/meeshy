@@ -491,6 +491,7 @@ export function registerMessagesRoutes(
 
         // ===== REPLY / FORWARD =====
         replyToId: true,
+        storyReplyToId: true,
         forwardedFromId: true,
         forwardedFromConversationId: true,
 
@@ -1075,6 +1076,48 @@ export function registerMessagesRoutes(
       }
 
       timings.forwardedEnrichment = performance.now() - t0;
+
+      // ===== ENRICHIR LES RÉPONSES À UNE STORY =====
+      // Miroir de l'enrichissement forwardé : le client a besoin des détails
+      // de la story citée (compteurs, date, vignette, aperçu) pour rendre la
+      // bulle de citation. Le message ne porte que `storyReplyToId` en DB.
+      const storyReplyIds = mappedMessages
+        .filter((m: any) => m.storyReplyToId)
+        .map((m: any) => m.storyReplyToId as string);
+
+      if (storyReplyIds.length > 0) {
+        const uniqueStoryIds = [...new Set(storyReplyIds)];
+        const citedStories = await prisma.post.findMany({
+          where: { id: { in: uniqueStoryIds } },
+          select: {
+            id: true,
+            content: true,
+            reactionCount: true,
+            commentCount: true,
+            createdAt: true,
+            media: {
+              select: { thumbnailUrl: true },
+              orderBy: { order: 'asc' },
+              take: 1
+            }
+          }
+        });
+        const storyMap = new Map(citedStories.map((s) => [s.id, s]));
+        for (const m of mappedMessages) {
+          if (!m.storyReplyToId) continue;
+          const story = storyMap.get(m.storyReplyToId);
+          if (!story) continue; // story supprimée → storyReplyTo reste absent
+          const preview = (story.content ?? '').trim().slice(0, 80);
+          m.storyReplyTo = {
+            id: story.id,
+            reactionCount: story.reactionCount,
+            commentCount: story.commentCount,
+            createdAt: story.createdAt,
+            thumbnailUrl: story.media[0]?.thumbnailUrl ?? null,
+            previewText: preview
+          };
+        }
+      }
 
       // Marquer les messages comme lus (optimisé - ne marquer que les messages non lus)
       t0 = performance.now();
