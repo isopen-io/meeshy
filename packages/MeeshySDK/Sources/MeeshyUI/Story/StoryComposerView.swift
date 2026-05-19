@@ -383,10 +383,10 @@ public struct StoryComposerView: View {
                     addRecordingToBackground(url: url)
                     audioEditorItem = nil
                 },
-                onDismiss: { audioEditorItem = nil }
+                onCancel: { audioEditorItem = nil }
             )
         }
-        .sheet(item: $mediaAudioEditorItem) { item in
+        .fullScreenCover(item: $mediaAudioEditorItem) { item in
             MeeshyAudioEditorView(
                 url: item.url,
                 onConfirm: { url, _, _, _ in
@@ -394,7 +394,7 @@ public struct StoryComposerView: View {
                     mediaAudioEditorItem = nil
                     addVocalToForeground()
                 },
-                onDismiss: { mediaAudioEditorItem = nil }
+                onCancel: { mediaAudioEditorItem = nil }
             )
         }
         .sheet(isPresented: $showVoiceRecorderSheet) {

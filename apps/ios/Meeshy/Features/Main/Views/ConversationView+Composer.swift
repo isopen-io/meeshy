@@ -162,7 +162,7 @@ extension ConversationView {
             set: { if !$0 { scrollState.audioToEdit = nil } }
         )) {
             if let url = scrollState.audioToEdit {
-                MeeshyAudioPreviewView(url: url, context: .message, accentColor: accentColor, onAccept: { acceptedURL, _, trimStart, trimEnd in
+                MeeshyAudioEditorView(url: url, accentColor: accentColor, onConfirm: { acceptedURL, _, trimStart, trimEnd in
                     let durationMs = Int((trimEnd - trimStart) * 1000)
                     composerState.pendingAudioURL = acceptedURL
                     let audioAttachment = MessageAttachment.audio(durationMs: max(durationMs, 500), color: accentColor)
