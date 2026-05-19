@@ -417,6 +417,20 @@ extension APIMessage {
                     attachmentThumbnailUrl: firstAtt?.thumbnailUrl
                 )
             }
+            // Enriched story-reply target (thumbnail + reaction/comment
+            // counts + publish date) — lets the quoted-reply citation show
+            // the real story preview instead of a bare "Story" placeholder.
+            if let target = storyReplyTo {
+                return ReplyReference(
+                    messageId: target.id, authorName: "Story",
+                    previewText: target.previewText.isEmpty ? "\u{1F4F7} Story" : target.previewText,
+                    isStoryReply: true,
+                    storyPublishedAt: target.createdAt,
+                    storyReactionCount: target.reactionCount,
+                    storyCommentCount: target.commentCount,
+                    storyThumbnailUrl: target.thumbnailUrl
+                )
+            }
             if let storyId = storyReplyToId, !storyId.isEmpty {
                 return ReplyReference(
                     messageId: storyId, authorName: "Story",
