@@ -121,6 +121,7 @@ export class MessageHandler {
       }
 
       const { participantId, userId, isAnonymous } = userContext;
+      console.log(`[RT-DIAG] message:send received conv=${validated.conversationId} from=${userId ?? participantId} anon=${isAnonymous}`);
 
       const rateLimitAllowed = await this.rateLimiter.checkLimit(userId || participantId, SOCKET_RATE_LIMITS.MESSAGE_SEND);
       if (!rateLimitAllowed) {
@@ -563,6 +564,7 @@ export class MessageHandler {
         // reconcile via the REST / socket ACK path which carries the cid.
         this.io.to(room).emit(SERVER_EVENTS.MESSAGE_NEW, broadcastPayload);
       }
+      console.log(`[RT-DIAG] message:new emitted conv=${normalizedId} msg=${message.id} senderUserId=${senderUserId ?? 'anon'} room=${room}`);
 
       // Notify each participant's user room that the conversation has
       // been updated (lastMessageAt advanced) so their conversation
@@ -592,6 +594,7 @@ export class MessageHandler {
             updatePayload
           );
         }
+        console.log(`[RT-DIAG] conversation:updated emitted conv=${normalizedId} to ${participants.filter((p) => p.userId).length} user room(s)`);
       } catch (err) {
         console.warn('[BROADCAST] CONVERSATION_UPDATED emit failed:', err);
       }
@@ -636,6 +639,7 @@ export class MessageHandler {
     const onlineRecipients = participants.filter(
       (p) => p.userId && this.connectedUsers.has(p.userId)
     );
+    console.log(`[RT-DIAG] autoDeliver conv=${conversationId} msg=${message.id} participants=${participants.length} onlineRecipients=${onlineRecipients.length}`);
     if (onlineRecipients.length === 0) return;
 
     const { PrivacyPreferencesService } = await import('../../services/PrivacyPreferencesService.js');
@@ -661,7 +665,10 @@ export class MessageHandler {
       }
     }
 
-    if (!didMarkAny || !firstAcker) return;
+    if (!didMarkAny || !firstAcker) {
+      console.log(`[RT-DIAG] autoDeliver conv=${conversationId} SKIP read-status:updated emit (didMarkAny=${didMarkAny}) — recipients likely have read receipts disabled`);
+      return;
+    }
 
     const summary = await this.readStatusService.getLatestMessageSummary(conversationId);
 
@@ -690,6 +697,7 @@ export class MessageHandler {
       emitter = emitter.to(userRoom);
     }
     emitter.emit(SERVER_EVENTS.READ_STATUS_UPDATED, payload);
+    console.log(`[RT-DIAG] autoDeliver conv=${conversationId} read-status:updated EMITTED rooms=[${[...seen].join(', ')}] deliveredCount=${summary.deliveredCount}`);
   }
 
   /**
@@ -916,6 +924,7 @@ export class MessageHandler {
           conversationId,
           unreadCount
         });
+        console.log(`[RT-DIAG] conversation:unread-updated emitted conv=${conversationId} user=${roomTarget} unread=${unreadCount}`);
       }));
     } catch (error) {
       console.warn('⚠️ [UNREAD_COUNT] Erreur:', error);

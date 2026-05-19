@@ -142,7 +142,9 @@ public final class NotificationManager: ObservableObject {
     // MARK: - Event Handlers
 
     private func handleNewNotification(_ event: SocketNotificationEvent) {
+        Logger.socket.info("[RT-DIAG] in-app notification received via SOCKET notification:new conv=\(event.conversationId ?? "none", privacy: .public) type=\(String(describing: event.notificationType), privacy: .public)")
         if let convId = event.conversationId, convId == activeConversationId {
+            Logger.socket.info("[RT-DIAG] in-app notification suppressed (conversation is active) conv=\(convId, privacy: .public)")
             return
         }
 
@@ -163,7 +165,10 @@ public final class NotificationManager: ObservableObject {
             isDirectConversation: isDirect,
             focus: focus
         ) {
+            Logger.socket.info("[RT-DIAG] in-app toast SHOWN conv=\(event.conversationId ?? "none", privacy: .public)")
             showToast(event)
+        } else {
+            Logger.socket.info("[RT-DIAG] in-app toast SUPPRESSED by prefs/focus conv=\(event.conversationId ?? "none", privacy: .public)")
         }
     }
 

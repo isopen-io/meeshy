@@ -427,6 +427,7 @@ export class NotificationService {
       // Émettre via Socket.IO
       if (this.io) {
         this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, formatted);
+        console.log(`[RT-DIAG] notification:new emitted (socket) user=${params.userId} type=${params.type} conv=${params.context.conversationId ?? 'none'}`);
         // Update badge counters on client (fire-and-forget, non-blocking)
         this.emitCountsUpdate(params.userId).catch(() => {});
       }
@@ -454,6 +455,7 @@ export class NotificationService {
             || 'Meeshy';
           const pushBody = params.content.substring(0, 200);
 
+          console.log(`[RT-DIAG] push (APNs/FCM) sending user=${params.userId} type=${params.type} conv=${params.context.conversationId ?? 'none'}`);
           this.pushService.sendToUser({
             userId: params.userId,
             // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be

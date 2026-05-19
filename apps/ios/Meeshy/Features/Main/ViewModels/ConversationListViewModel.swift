@@ -500,6 +500,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
             .sink { [weak self] in
+                Logger.messages.info("[RT-DIAG] VM(list) conversationsDidChange -> reloadFromCache")
                 Task { @MainActor [weak self] in
                     await self?.reloadFromCache()
                 }
@@ -617,6 +618,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
+                Logger.messages.info("[RT-DIAG] VM(list) conversationUpdated conv=\(event.conversationId, privacy: .public) known=\(self.convIndex(for: event.conversationId) != nil, privacy: .public)")
                 guard let index = self.convIndex(for: event.conversationId) else {
                     // Conversation pas encore connue côté client : c'est le cas
                     // d'un DM tout neuf (ou d'un groupe qu'on vient d'ajouter
