@@ -8,10 +8,12 @@ public final class AttachmentService: @unchecked Sendable {
         self.api = api
     }
 
-    public func requestTranscription(attachmentId: String) async throws {
+    public func requestTranscription(attachmentId: String, force: Bool = false) async throws {
+        let bodyData = try JSONEncoder().encode(TranscribeRequest(force: force))
         let _: SimpleAPIResponse = try await api.request(
             endpoint: "/attachments/\(attachmentId)/transcribe",
-            method: "POST"
+            method: "POST",
+            body: bodyData
         )
     }
 

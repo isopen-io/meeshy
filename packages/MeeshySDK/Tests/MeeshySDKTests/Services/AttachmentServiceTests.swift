@@ -73,6 +73,24 @@ final class AttachmentServiceTests: XCTestCase {
         }
     }
 
+    func test_requestTranscription_withForce_sendsForceTrueInBody() async throws {
+        let response = SimpleAPIResponse(success: true, message: "ok", error: nil)
+        mock.stub("/attachments/att_1/transcribe", result: response)
+
+        try await service.requestTranscription(attachmentId: "att_1", force: true)
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["force"] as? Bool, true)
+    }
+
+    func test_requestTranscription_defaultForce_sendsForceFalse() async throws {
+        let response = SimpleAPIResponse(success: true, message: "ok", error: nil)
+        mock.stub("/attachments/att_1/transcribe", result: response)
+
+        try await service.requestTranscription(attachmentId: "att_1")
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["force"] as? Bool, false)
+    }
+
     // MARK: - getStatusDetails
 
     func test_getStatusDetails_callsCorrectEndpoint() async throws {

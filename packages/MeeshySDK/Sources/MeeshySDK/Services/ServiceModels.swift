@@ -258,6 +258,20 @@ public struct AttachmentStatusUser: Decodable, Identifiable {
     public var id: String { participantId }
 }
 
+// MARK: - Attachment Transcription
+
+public struct TranscribeRequest: Encodable {
+    public let force: Bool
+
+    public init(force: Bool) {
+        self.force = force
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case force
+    }
+}
+
 // MARK: - Generic empty success for fire-and-forget
 
 public struct EmptySuccess: Decodable {
