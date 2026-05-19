@@ -83,8 +83,9 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
     }
 
     /// Word count threshold: once the user has typed this many words,
-    /// lock the detected language and stop re-analyzing.
-    private let wordCountThreshold = 10
+    /// lock the detected language and stop re-analyzing. Until then the
+    /// detector keeps re-interpreting the language on every keystroke.
+    private let wordCountThreshold = 18
 
     public func analyze(text: String) {
         debounceTimer?.invalidate()
@@ -151,8 +152,10 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
             DispatchQueue.main.async {
                 self.language = DetectedLanguage.find(code: langCode)
                 self.languageConfidence = confidence
-                // Lock after 10 words (enough signal) or high confidence
-                if wordCount >= self.wordCountThreshold || confidence > 0.8 {
+                // Lock only once 18 words give a firm signal — keep
+                // re-interpreting before that, even at high confidence,
+                // so an early word in another language can still flip it.
+                if wordCount >= self.wordCountThreshold {
                     self.isLanguageLocked = true
                 }
             }

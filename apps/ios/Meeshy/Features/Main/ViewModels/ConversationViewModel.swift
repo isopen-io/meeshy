@@ -1290,12 +1290,11 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    private func detectKeyboardLanguage() -> String {
-        if let primaryLanguage = UITextInputMode.activeInputModes.first?.primaryLanguage {
-            return String(primaryLanguage.prefix(2))
-        }
-        return authManager.currentUser?.systemLanguage ?? "fr"
-    }
+    /// Send-time fallback for `originalLanguage` when the composer supplies
+    /// none. Forced to French — the keyboard layout must never drive content
+    /// language (Prisme Linguistique). The composer itself starts in `fr` and
+    /// `TextAnalyzer` re-detects from the typed text.
+    private func defaultComposeLanguage() -> String { "fr" }
 
     @discardableResult
     func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
@@ -1566,7 +1565,7 @@ class ConversationViewModel: ObservableObject {
 
             let body = SendMessageRequest(
                 content: finalContent,
-                originalLanguage: originalLanguage ?? detectKeyboardLanguage(),
+                originalLanguage: originalLanguage ?? defaultComposeLanguage(),
                 replyToId: replyToId,
                 storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
@@ -1783,7 +1782,7 @@ class ConversationViewModel: ObservableObject {
         let now = Date()
         let attachmentsJson = attachments.isEmpty ? nil : try? JSONEncoder().encode(attachments)
         let replyToJson = replyReference.flatMap { try? JSONEncoder().encode($0) }
-        let resolvedOriginalLanguage = originalLanguage ?? detectKeyboardLanguage()
+        let resolvedOriginalLanguage = originalLanguage ?? defaultComposeLanguage()
         let record = MessageRecord(
             localId: tempId, serverId: nil,
             conversationId: conversationId, senderId: currentUserId,
