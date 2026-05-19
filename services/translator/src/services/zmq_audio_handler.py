@@ -54,6 +54,35 @@ def _get_voice_similarity_score(seg) -> Optional[float]:
     return score if isinstance(score, (int, float)) else None
 
 
+def _segment_to_dict(seg) -> Dict:
+    """
+    Serialize a transcription segment to a camelCase dict, accepting either a
+    dataclass object OR a (camelCase or snake_case) dict.
+
+    Cache-hit transcriptions carry segments as dicts (Redis JSON), fresh ones
+    carry dataclasses. `getattr` silently returns the default on dicts, which
+    produced empty-text "segment stubs" — this helper reads both shapes.
+    """
+    def _read(obj_attr: str, *dict_keys: str, default=None):
+        if hasattr(seg, obj_attr):
+            return getattr(seg, obj_attr)
+        if isinstance(seg, dict):
+            for key in dict_keys:
+                if key in seg and seg[key] is not None:
+                    return seg[key]
+        return default
+
+    return {
+        'text': _read('text', 'text', default='') or '',
+        'startMs': _read('start_ms', 'startMs', 'start_ms', default=0) or 0,
+        'endMs': _read('end_ms', 'endMs', 'end_ms', default=0) or 0,
+        'confidence': _read('confidence', 'confidence', default=None),
+        'speakerId': _read('speaker_id', 'speakerId', 'speaker_id', default=None) or None,
+        'voiceSimilarityScore': _get_voice_similarity_score(seg),
+        'language': _read('language', 'language', default=None),
+    }
+
+
 class AudioHandler:
     """Handler pour les traitements audio via ZMQ"""
     
