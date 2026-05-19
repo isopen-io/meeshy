@@ -347,10 +347,16 @@ struct AudioMediaView: View, Equatable {
     var onShowTranslationDetail: ((String) -> Void)?
     var onRequestTranslation: ((String, String) -> Void)?
     var activeAudioLanguageOverride: String? = nil
+    /// Identity bar (avatar / name / flags / time / delivery) injected by
+    /// `BubbleStandardLayout` for audio-only messages. Rendered inside the
+    /// audio widget so the footer is never duplicated below the bubble.
+    var identityBar: AnyView? = nil
 
     static func == (lhs: AudioMediaView, rhs: AudioMediaView) -> Bool {
         lhs.attachment.id == rhs.attachment.id
             && lhs.message.id == rhs.message.id
+            && lhs.message.deliveryStatus == rhs.message.deliveryStatus
+            && lhs.message.updatedAt == rhs.message.updatedAt
             && lhs.isDark == rhs.isDark
             && lhs.accentColor == rhs.accentColor
             && lhs.contactColor == rhs.contactColor
@@ -363,12 +369,6 @@ struct AudioMediaView: View, Equatable {
     @State private var selectedAudioLangCode: String? = nil
     @StateObject private var downloader = AttachmentDownloader()
 
-    private var timeString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: message.createdAt)
-    }
-
     /// Local optimistic audio (a `file://` URL) is on disk already — the player
     /// is playable on the very first render, with no placeholder flash and no
     /// cache poll. Server audio falls back to the `isCached` poll. RC3.2.
@@ -380,23 +380,8 @@ struct AudioMediaView: View, Equatable {
         VStack(alignment: .leading, spacing: 4) {
             ZStack {
                 if isPlayable {
-                    AudioPlayerView(
-                        attachment: attachment,
-                        context: .messageBubble,
-                        accentColor: contactColor,
-                        transcription: transcription,
-                        translatedAudios: translatedAudios,
-                        onFullscreen: { showAudioFullscreen = true },
-                        onPlayingChange: { playing in
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isAudioPlaying = playing
-                            }
-                        },
-                        externalLanguage: $selectedAudioLangCode
-                    ) {
-                        audioMetaRow
-                    }
-                    .transition(.opacity)
+                    audioPlayer
+                        .transition(.opacity)
                 } else {
                     audioPlaceholder
                         .transition(.opacity)
@@ -461,13 +446,83 @@ struct AudioMediaView: View, Equatable {
         }
     }
 
-    private var audioMetaRow: some View {
-        let accent = Color(hex: contactColor)
-        let origCode = message.originalLanguage.lowercased()
-        let metaColor: Color = isDark ? .white.opacity(0.7) : .black.opacity(0.5)
+    /// The audio widget only carries a bottom slot when there is something to
+    /// show — the language switcher or the injected identity bar. Without this
+    /// gate `AudioPlayerView` would draw an empty divider strip under the
+    /// player for plain audio-with-caption messages.
+    private var hasPlayerBottomContent: Bool {
+        !translatedAudios.isEmpty || identityBar != nil
+    }
 
-        return HStack(spacing: 4) {
-            if !translatedAudios.isEmpty {
+    /// The playable audio widget. The bottom slot is only wired in when there
+    /// is content for it, so `AudioPlayerView` keeps `bottomSlot` nil and
+    /// skips the divider strip otherwise.
+    @ViewBuilder
+    private var audioPlayer: some View {
+        if hasPlayerBottomContent {
+            AudioPlayerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: contactColor,
+                transcription: transcription,
+                translatedAudios: translatedAudios,
+                onFullscreen: { showAudioFullscreen = true },
+                onPlayingChange: { playing in
+                    withAnimation(.easeInOut(duration: 0.2)) { isAudioPlaying = playing }
+                },
+                externalLanguage: $selectedAudioLangCode
+            ) {
+                playerBottomContent
+            }
+        } else {
+            AudioPlayerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: contactColor,
+                transcription: transcription,
+                translatedAudios: translatedAudios,
+                onFullscreen: { showAudioFullscreen = true },
+                onPlayingChange: { playing in
+                    withAnimation(.easeInOut(duration: 0.2)) { isAudioPlaying = playing }
+                },
+                externalLanguage: $selectedAudioLangCode
+            )
+        }
+    }
+
+    /// Footer rendered inside the audio widget (`AudioPlayerView.bottomContent`):
+    /// a single unified row — the audio-language switcher pinned leading, the
+    /// identity bar (timestamp + delivery, never its own flags) pinned
+    /// trailing. When there is no translated audio only the identity bar
+    /// shows. The footer is never duplicated below the bubble.
+    @ViewBuilder
+    private var playerBottomContent: some View {
+        if translatedAudios.isEmpty {
+            if let identityBar {
+                identityBar
+            }
+        } else {
+            HStack(spacing: 8) {
+                audioTranslationRow
+                Spacer(minLength: 8)
+                if let identityBar {
+                    identityBar
+                }
+            }
+        }
+    }
+
+    /// Per-language flag pills + translate button, content-sized and grouped
+    /// on the leading edge — `playerBottomContent` adds the trailing spacer
+    /// and identity bar. Lets the user switch the spoken language without
+    /// leaving the bubble: `AudioPlayerView`'s own `languageSelector` is
+    /// hidden in the compact `messageBubble` context.
+    @ViewBuilder
+    private var audioTranslationRow: some View {
+        if !translatedAudios.isEmpty {
+            let accent = Color(hex: contactColor)
+            let origCode = message.originalLanguage.lowercased()
+            HStack(spacing: 4) {
                 audioFlagPill(code: origCode, isOriginal: true, isDark: isDark, accent: accent)
 
                 ForEach(translatedAudios, id: \.id) { audio in
@@ -476,27 +531,18 @@ struct AudioMediaView: View, Equatable {
                         audioFlagPill(code: code, isOriginal: false, isDark: isDark, accent: accent)
                     }
                 }
-            }
 
-            Spacer(minLength: 0)
-
-            if !translatedAudios.isEmpty, onShowTranslationDetail != nil {
-                Button {
-                    onShowTranslationDetail?(message.id)
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "translate")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color(hex: "4ECDC4"))
+                if onShowTranslationDetail != nil {
+                    Button {
+                        onShowTranslationDetail?(message.id)
+                        HapticFeedback.light()
+                    } label: {
+                        Image(systemName: "translate")
+                            .font(.system(size: 10, weight: .medium))
+                            .foregroundColor(Color(hex: "4ECDC4"))
+                            .padding(.leading, 2)
+                    }
                 }
-            }
-
-            Text(timeString)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(metaColor)
-
-            if message.isMe {
-                audioDeliveryCheckmark(isDark: isDark)
             }
         }
     }
@@ -533,98 +579,57 @@ struct AudioMediaView: View, Equatable {
         .accessibilityLabel(display?.name ?? code)
     }
 
-    @ViewBuilder
-    private func audioDeliveryCheckmark(isDark: Bool) -> some View {
-        let metaColor: Color = isDark ? .white.opacity(0.7) : .black.opacity(0.5)
-        switch message.deliveryStatus {
-        case .sending:
-            Image(systemName: "clock")
-                .font(.system(size: 9))
-                .foregroundColor(metaColor)
-        case .invisible:
-            // Spec §6.2 — pre-200ms debounce, no glyph rendered to keep audio
-            // bubble timestamp row visually still during optimistic phase.
-            EmptyView()
-        case .clock:
-            Image(systemName: "clock")
-                .font(.system(size: 9))
-                .foregroundColor(metaColor.opacity(0.7))
-        case .slow:
-            Image(systemName: "clock.badge.exclamationmark")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(MeeshyColors.warning)
-        case .sent:
-            Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(metaColor)
-        case .delivered:
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .regular))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .regular))
-                    .offset(x: 3)
-            }
-            .foregroundColor(metaColor)
-            .frame(width: 14)
-        case .read:
-            // Bold double-check + brand indigo400 to clearly distinguish from
-            // `.delivered` (which uses `metaColor` — gray).
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .black))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .black))
-                    .offset(x: 3)
-            }
-            .foregroundColor(MeeshyColors.readReceipt)
-            .frame(width: 15)
-            .accessibilityLabel("Read")
-        case .failed:
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(MeeshyColors.error)
-        }
-    }
-
     private var audioPlaceholder: some View {
         let accent = Color(hex: contactColor)
 
-        return HStack(spacing: 8) {
-            // Play circle — triggers download
-            Button {
-                HapticFeedback.medium()
-                downloader.start(attachment: attachment, onShare: nil)
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(accent.opacity(downloader.isDownloading ? 0.5 : 0.3))
-                        .frame(width: 34, height: 34)
-                    if downloader.isDownloading {
-                        ProgressView().tint(.white).scaleEffect(0.7)
-                    } else {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white.opacity(0.6))
-                            .offset(x: 1)
+        return VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                // Play circle — triggers download
+                Button {
+                    HapticFeedback.medium()
+                    downloader.start(attachment: attachment, onShare: nil)
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(accent.opacity(downloader.isDownloading ? 0.5 : 0.3))
+                            .frame(width: 34, height: 34)
+                        if downloader.isDownloading {
+                            ProgressView().tint(.white).scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "play.fill")
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(.white.opacity(0.6))
+                                .offset(x: 1)
+                        }
                     }
                 }
+                .disabled(downloader.isDownloading)
+
+                // Static waveform placeholder (deterministic heights)
+                waveformPlaceholder(accent: accent)
+
+                // Surface the download weight (KB / MB) so the user knows the
+                // cost before tapping play to fetch the audio. See Sprint 3.
+                if attachment.fileSize > 0 {
+                    Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(accent.opacity(0.65))
+                }
             }
-            .disabled(downloader.isDownloading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
 
-            // Static waveform placeholder (deterministic heights)
-            waveformPlaceholder(accent: accent)
-
-            // Surface the download weight (KB / MB) so the user knows the
-            // cost before tapping play to fetch the audio. See Sprint 3.
-            if attachment.fileSize > 0 {
-                Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundColor(accent.opacity(0.65))
+            // Identity bar lives inside the placeholder card too, so an
+            // uncached (server) audio still shows its sender + timestamp +
+            // delivery state before the download completes.
+            if let identityBar {
+                Divider()
+                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+                identityBar
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
         .background(
             RoundedRectangle(cornerRadius: 20)
                 .fill(isDark ? accent.opacity(0.15) : accent.opacity(0.08))

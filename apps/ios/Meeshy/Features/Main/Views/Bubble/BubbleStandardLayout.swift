@@ -166,6 +166,17 @@ struct BubbleStandardLayout: View {
 
     private var isEmojiOnly: Bool { content.isEmojiOnly }
 
+    /// True when audio attachments are the message's only content — no text,
+    /// no non-media attachment, no reply, not emoji. In that case the bubble
+    /// has no text container to host the identity bar, so it is injected into
+    /// the audio widget instead (see `contentStack` / `mediaStandaloneView`).
+    private var audioIsSoleContent: Bool {
+        !isEmojiOnly
+            && !content.hasTextOrNonMediaContent
+            && content.reply == nil
+            && !audioAttachments.isEmpty
+    }
+
     private var emojiFontSize: CGFloat {
         content.text?.emojiFontSize ?? 15
     }
@@ -419,9 +430,16 @@ struct BubbleStandardLayout: View {
                 }
             }
 
-            // Audio standalone
+            // Audio standalone. For audio-only messages the identity bar is
+            // injected into the audio widget itself (last attachment) so the
+            // footer renders *inside* the bubble and is never duplicated below.
             ForEach(audioAttachments) { attachment in
-                mediaStandaloneView(attachment)
+                mediaStandaloneView(
+                    attachment,
+                    identityBar: (audioIsSoleContent && attachment.id == audioAttachments.last?.id)
+                        ? AnyView(identityBarSection(includesTranslationControls: false).fixedSize(horizontal: true, vertical: false))
+                        : nil
+                )
             }
 
             // Emoji-only: large emoji without bubble
@@ -429,14 +447,9 @@ struct BubbleStandardLayout: View {
                 emojiOnlyContent
             } else if content.hasTextOrNonMediaContent || content.reply != nil {
                 textBubbleContent
-            } else if !audioAttachments.isEmpty {
-                // Audio-only messages (no text, no reply) skip textBubbleContent
-                // and emojiOnlyContent — but still need the identityBarSection so
-                // the user can access translation flags and the translate button
-                // on every audio bubble, not just the last one in a group.
-                identityBarSection
-                    .fixedSize(horizontal: true, vertical: false)
             }
+            // Audio-only messages (no text, no reply) intentionally render no
+            // section here — their identity bar lives inside the audio widget.
         }
         .blur(radius: shouldBlur ? 20 : 0)
         .mask(
@@ -470,13 +483,28 @@ struct BubbleStandardLayout: View {
 
             secondaryContentView
 
-            identityBarSection
+            identityBarSection()
         }
     }
 
     // MARK: - Text bubble path (with non-media attachments + reply preview)
 
+    /// A message still in flight — queued, sending, on the slow path, or
+    /// failed — is *always* metadata-bearing. The user must see *when* an
+    /// unsent message was composed while it waits in the outbox, even when
+    /// later messages have already pushed it out of the last-in-group slot.
+    private var isPendingDelivery: Bool {
+        switch message.deliveryStatus {
+        case .sending, .invisible, .clock, .slow, .failed:
+            return true
+        case .sent, .delivered, .read:
+            return false
+        }
+    }
+
     /// Time visibility depends on conversation type:
+    ///
+    /// - **Pending messages**: always carry a timestamp (see `isPendingDelivery`).
     ///
     /// - **Group / Public / Channel**: every bubble carries a timestamp.
     ///
@@ -484,6 +512,9 @@ struct BubbleStandardLayout: View {
     ///   messages carry a timestamp — intermediate bubbles stay
     ///   metadata-free to keep the thread readable.
     private var shouldShowTime: Bool {
+        if isPendingDelivery {
+            return true
+        }
         if isDirect {
             return content.isMe ? isLastSentMessage : isLastReceivedMessage
         }
@@ -577,7 +608,7 @@ struct BubbleStandardLayout: View {
         // visually still hugs the right of compact bubbles.
         VStack(alignment: .leading, spacing: 4) {
             bubbleInnerContent
-            identityBarSection
+            identityBarSection()
                 .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.top, hasEdited ? 12 : 0)
@@ -599,10 +630,14 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Identity bar (top of bubble for received last-in-group, otherwise meta row)
 
+    /// - Parameter includesTranslationControls: when `false`, the language
+    ///   flags + translate button are omitted. Used for the audio widget,
+    ///   whose own `audioTranslationRow` already owns the per-language
+    ///   switcher — rendering both would stack two competing flag rows.
     @ViewBuilder
-    private var identityBarSection: some View {
+    private func identityBarSection(includesTranslationControls: Bool = true) -> some View {
         let isMe = content.isMe
-        let showTranslation = hasAnyTranslation && !isEmojiOnly
+        let showTranslation = includesTranslationControls && hasAnyTranslation && !isEmojiOnly
         // Time is gated to the last message of each side in direct convos;
         // delivery checkmark is always shown on outgoing messages so the
         // user sees real-time state machine transitions on every bubble.
@@ -831,7 +866,7 @@ struct BubbleStandardLayout: View {
     // MARK: - Audio standalone
 
     @ViewBuilder
-    private func mediaStandaloneView(_ attachment: MessageAttachment) -> some View {
+    private func mediaStandaloneView(_ attachment: MessageAttachment, identityBar: AnyView? = nil) -> some View {
         let isMe = content.isMe
         switch attachment.type {
         case .audio:
@@ -854,7 +889,8 @@ struct BubbleStandardLayout: View {
                 },
                 onShowTranslationDetail: onShowTranslationDetail,
                 onRequestTranslation: onRequestTranslation,
-                activeAudioLanguageOverride: activeAudioLanguage
+                activeAudioLanguageOverride: activeAudioLanguage,
+                identityBar: identityBar
             )
             .equatable()
 

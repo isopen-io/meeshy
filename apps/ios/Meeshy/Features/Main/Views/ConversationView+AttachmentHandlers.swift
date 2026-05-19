@@ -99,6 +99,15 @@ extension ConversationView {
                    let data = try? Data(contentsOf: fileURL),
                    let image = UIImage(data: data) {
                     DiskCacheStore.cacheImageForPreview(image, key: fileURL.absoluteString)
+                    // `cacheImageForPreview` only seeds the in-memory NSCache,
+                    // which is evicted as soon as the user leaves the
+                    // conversation. On return the optimistic bubble would then
+                    // fall back to its coloured placeholder square (a magenta
+                    // tile) until the server `message:new` reconciliation
+                    // lands. Persisting the bytes to the on-disk image cache
+                    // keeps the picture visible across navigation.
+                    let persistKey = fileURL.absoluteString
+                    Task { await CacheCoordinator.shared.images.save(data, for: persistKey) }
                 }
                 // A video's file:// URL points at an .mp4 — it cannot be
                 // decoded as a still image. Seed a ThumbHash from the generated
