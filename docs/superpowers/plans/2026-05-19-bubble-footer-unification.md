@@ -633,56 +633,18 @@ git commit -m "feat(ios): BubbleFooter — vue de footer unifiée (.row + .overl
 
 ---
 
-## Task 5: Wire BubbleFooterModel into BubbleContent
+## Task 5: ~~Wire BubbleFooterModel into BubbleContent~~ — FOLDED INTO TASK 6
 
-**Files:**
-- Modify: `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleContent.swift`
-- Modify: `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift`
+**Decision (2026-05-19, during execution):** dropped. `BubbleContent.footer` is *not* added.
+`BubbleStandardLayout` already holds every gating input (`isDirect`, `isLastSentMessage`,
+`isLastReceivedMessage`, `message`, `networkIsOnline`), so it builds the footer model
+itself in `resolvedFooter()` (Task 6 Step 1) via `BubbleFooterModel.make(...)`. This
+avoids threading `isDirect` / `isLast*` / network state through `BubbleContentBuilder`
+and `ThemedMessageBubble` — fewer files, less risk. `make()` is trivial (a switch + a few
+booleans) so building it at render time still satisfies "built fast, with the bubble"
+(the bubble cell is `.equatable()`-gated, so the body re-evaluates only on input change).
 
-This task adds `BubbleContent.footer` carrying the timestamp/delivery/sender data. Flags + translate stay context-resolved by the consumer (text vs audio differ) and default empty here.
-
-- [ ] **Step 1: Add the `footer` field to `BubbleContent`**
-
-In `BubbleContent.swift`, add a stored property to the `BubbleContent` struct:
-
-```swift
-    /// Pre-built footer descriptor (timestamp gating + delivery + sender).
-    /// Flags / translate are filled per-context by the rendering layer.
-    let footer: BubbleFooterModel
-```
-
-- [ ] **Step 2: Build the footer in `BubbleContentBuilder`**
-
-In `BubbleContentBuilder.swift`, where `BubbleContent` is constructed, compute the footer model just before the `BubbleContent(...)` initializer call and pass it. Use the existing inputs the builder already has (message delivery status, `isMe`, conversation type, last-of-side flags, network state). Example shape:
-
-```swift
-let footer = BubbleFooterModel.make(
-    timeString: meta.timeString,
-    deliveryStatus: message.deliveryStatus,
-    isMe: message.isMe,
-    isDirect: isDirect,
-    isLastSentMessage: isLastSentMessage,
-    isLastReceivedMessage: isLastReceivedMessage,
-    isOnline: NetworkMonitor.shared.isOnline,
-    sender: nil,            // resolved by BubbleStandardLayout (Task 6)
-    flags: [],              // resolved per-context
-    showsTranslate: false
-)
-```
-
-If `BubbleContentBuilder` does not already receive `isDirect` / `isLastSentMessage` / `isLastReceivedMessage`, add them as parameters to its init/factory and thread them from the call site (`ThemedMessageBubble`). Keep `sender`/`flags`/`showsTranslate` defaulted — `BubbleStandardLayout` overrides them at render time with a `copy`-style modification.
-
-- [ ] **Step 3: Build**
-
-Run: `./apps/ios/meeshy.sh build`
-Expected: `Build succeeded`. The footer is built but not yet rendered — behaviour unchanged.
-
-- [ ] **Step 4: Commit**
-
-```bash
-git add apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleContent.swift apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift
-git commit -m "feat(ios): BubbleContent porte un BubbleFooterModel pré-construit"
-```
+No `BubbleContent` / `BubbleContentBuilder` change. Skip straight to Task 6.
 
 ---
 
@@ -695,17 +657,13 @@ Replace `identityBarSection(includesTranslationControls:)` with a `BubbleFooter`
 
 - [ ] **Step 1: Add a footer-builder helper**
 
-Add to `BubbleStandardLayout` a method that produces the fully-resolved model + actions, reusing `content.footer` for the gated timestamp/delivery and filling flags/sender/translate:
+Add to `BubbleStandardLayout` a method that builds the fully-resolved model (via
+`BubbleFooterModel.make`) + actions:
 
 ```swift
 private func resolvedFooter(includesTranslationControls: Bool) -> (BubbleFooterModel, BubbleFooterActions) {
-    var model = content.footer
     let showTranslation = includesTranslationControls && hasAnyTranslation && !isEmojiOnly
-    model.flags = showTranslation
-        ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
-        : []
-    model.showsTranslate = showTranslation
-    model.sender = showIdentityBar ? SenderIdentity(
+    let sender: SenderIdentity? = showIdentityBar ? SenderIdentity(
         name: content.senderName ?? "?",
         username: message.senderUsername.map { "@\($0)" },
         role: nil,
@@ -715,6 +673,21 @@ private func resolvedFooter(includesTranslationControls: Bool) -> (BubbleFooterM
         presence: presenceState,
         storyRing: senderStoryRingState
     ) : nil
+
+    let model = BubbleFooterModel.make(
+        timeString: content.meta.timeString,
+        deliveryStatus: message.deliveryStatus,
+        isMe: content.isMe,
+        isDirect: isDirect,
+        isLastSentMessage: isLastSentMessage,
+        isLastReceivedMessage: isLastReceivedMessage,
+        isOnline: networkIsOnline,
+        sender: sender,
+        flags: showTranslation
+            ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
+            : [],
+        showsTranslate: showTranslation
+    )
 
     let actions = BubbleFooterActions(
         onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
