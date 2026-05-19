@@ -313,4 +313,36 @@ final class MessageModelsTests: XCTestCase {
         XCTAssertTrue(contact.phoneNumbers.isEmpty)
         XCTAssertTrue(contact.emails.isEmpty)
     }
+
+    // MARK: - APIMessage.storyReplyTo
+
+    func test_apiMessage_decodesStoryReplyTo() throws {
+        let json = """
+        {
+          "id": "msg_1",
+          "conversationId": "conv_1",
+          "senderId": "sender_1",
+          "createdAt": "2026-05-19T10:00:00Z",
+          "updatedAt": "2026-05-19T10:00:00Z",
+          "storyReplyToId": "story_42",
+          "storyReplyTo": {
+            "id": "story_42",
+            "reactionCount": 12,
+            "commentCount": 3,
+            "createdAt": "2026-05-18T08:00:00.000Z",
+            "thumbnailUrl": "https://cdn.example/s42.jpg",
+            "previewText": "Ma story du matin"
+          }
+        }
+        """
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let message = try decoder.decode(APIMessage.self, from: Data(json.utf8))
+        let story = try XCTUnwrap(message.storyReplyTo)
+        XCTAssertEqual(story.id, "story_42")
+        XCTAssertEqual(story.reactionCount, 12)
+        XCTAssertEqual(story.commentCount, 3)
+        XCTAssertEqual(story.thumbnailUrl, "https://cdn.example/s42.jpg")
+        XCTAssertEqual(story.previewText, "Ma story du matin")
+    }
 }

@@ -118,6 +118,48 @@ public struct APITextTranslation: Decodable, Identifiable, Sendable {
     public let sourceLanguage: String?
 }
 
+/// Métadonnées enrichies de la story citée — renvoyées par le gateway dans
+/// `GET /messages` quand le message répond à une story. `nil` si la story a
+/// été supprimée.
+public struct APIStoryReplyTarget: Decodable, Sendable {
+    public let id: String
+    public let reactionCount: Int
+    public let commentCount: Int
+    public let createdAt: Date
+    public let thumbnailUrl: String?
+    public let previewText: String
+
+    private enum CodingKeys: String, CodingKey {
+        case id, reactionCount, commentCount, createdAt, thumbnailUrl, previewText
+    }
+
+    nonisolated(unsafe) private static let isoFractional: ISO8601DateFormatter = {
+        let f = ISO8601DateFormatter()
+        f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return f
+    }()
+    nonisolated(unsafe) private static let isoPlain = ISO8601DateFormatter()
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        reactionCount = try c.decode(Int.self, forKey: .reactionCount)
+        commentCount = try c.decode(Int.self, forKey: .commentCount)
+        thumbnailUrl = try c.decodeIfPresent(String.self, forKey: .thumbnailUrl)
+        previewText = try c.decode(String.self, forKey: .previewText)
+        // `createdAt` est décodé depuis une String puis parsé ici — agnostique
+        // de la `dateDecodingStrategy` du JSONDecoder appelant (la prod utilise
+        // une stratégie `.custom`, les tests `.iso8601`). Tolère les
+        // millisecondes (`.000Z`) que le gateway émet via `Date.toISOString()`.
+        let raw = try c.decode(String.self, forKey: .createdAt)
+        guard let date = Self.isoFractional.date(from: raw) ?? Self.isoPlain.date(from: raw) else {
+            throw DecodingError.dataCorruptedError(forKey: .createdAt, in: c,
+                debugDescription: "Date ISO8601 invalide: \(raw)")
+        }
+        createdAt = date
+    }
+}
+
 public struct APIMessage: Sendable {
     public let id: String
     /// Stable end-to-end identifier (`cid_<uuid v4 lowercase>`) emitted by the
@@ -136,6 +178,7 @@ public struct APIMessage: Sendable {
     public var isDeleted: Bool { deletedAt != nil }
     public let replyToId: String?
     public let storyReplyToId: String?
+    public let storyReplyTo: APIStoryReplyTarget?
     public let forwardedFromId: String?
     public let forwardedFromConversationId: String?
     public let pinnedAt: String?
@@ -168,7 +211,7 @@ extension APIMessage: Decodable {
     private enum CodingKeys: String, CodingKey {
         case id, clientMessageId, conversationId, senderId, content, originalLanguage
         case messageType, messageSource, isEdited, deletedAt
-        case replyToId, storyReplyToId, forwardedFromId, forwardedFromConversationId
+        case replyToId, storyReplyToId, storyReplyTo, forwardedFromId, forwardedFromConversationId
         case pinnedAt, pinnedBy, isViewOnce, isBlurred, expiresAt
         case isEncrypted, encryptionMode, createdAt, updatedAt
         case sender, attachments, replyTo, forwardedFrom, forwardedFromConversation
@@ -198,6 +241,7 @@ extension APIMessage: Decodable {
         deletedAt = try c.decodeIfPresent(Date.self, forKey: .deletedAt)
         replyToId = try c.decodeIfPresent(String.self, forKey: .replyToId)
         storyReplyToId = try c.decodeIfPresent(String.self, forKey: .storyReplyToId)
+        storyReplyTo = try c.decodeIfPresent(APIStoryReplyTarget.self, forKey: .storyReplyTo)
         forwardedFromId = try c.decodeIfPresent(String.self, forKey: .forwardedFromId)
         forwardedFromConversationId = try c.decodeIfPresent(String.self, forKey: .forwardedFromConversationId)
         pinnedAt = try c.decodeIfPresent(String.self, forKey: .pinnedAt)
