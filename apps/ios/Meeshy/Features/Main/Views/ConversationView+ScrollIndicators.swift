@@ -90,56 +90,7 @@ extension ConversationView {
         }
     }
 
-    // MARK: - Inline Typing Indicator (shown after last message)
-
-    var inlineTypingIndicator: some View {
-        let accent = Color(hex: accentColor)
-
-        // Bulle alignée côté expéditeur (gauche), comme un message reçu :
-        // auteur + points animés dans une capsule discrète façon message
-        // système. Le `MessageListView` réserve `typingIndicatorReservedHeight`
-        // en bas quand quelqu'un tape, donc cette bulle occupe son propre
-        // espace et ne rogne plus le dernier message.
-        return HStack(spacing: 0) {
-            HStack(spacing: 6) {
-                Text(typingLabel)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
-                    .lineLimit(1)
-
-                HStack(spacing: 3) {
-                    ForEach(0..<3, id: \.self) { i in
-                        Circle()
-                            .fill(accent.opacity(headerState.inlineTypingDotPhase == i ? 1.0 : 0.35))
-                            .frame(width: 5, height: 5)
-                            .offset(y: headerState.inlineTypingDotPhase == i ? -3 : 0)
-                            .animation(
-                                .spring(response: 0.3, dampingFraction: 0.5)
-                                    .delay(Double(i) * 0.1),
-                                value: headerState.inlineTypingDotPhase
-                            )
-                    }
-                }
-                .onReceive(typingDotPublisher) { _ in
-                    guard !viewModel.typingUsernames.isEmpty else { return }
-                    headerState.inlineTypingDotPhase = (headerState.inlineTypingDotPhase + 1) % 3
-                }
-            }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill(isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.05))
-            )
-            .overlay(
-                Capsule()
-                    .strokeBorder(accent.opacity(isDark ? 0.25 : 0.18), lineWidth: 1)
-            )
-
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel(typingLabel)
-    }
+    // L'indicateur de frappe en fin de conversation n'est plus un overlay :
+    // c'est une vraie cellule du flux, gérée par `MessageListViewController`
+    // (`MessageListItem.typingIndicator` + `TypingIndicatorBubble`).
 }

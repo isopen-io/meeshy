@@ -4,7 +4,13 @@ import UIKit
 // Must be nonisolated + Sendable for UICollectionViewDiffableDataSource in Swift 6.
 
 nonisolated enum MessageListSection: Hashable, Sendable { case main }
-nonisolated enum MessageListItem: Hashable, Sendable { case message(localId: String) }
+nonisolated enum MessageListItem: Hashable, Sendable {
+    case message(localId: String)
+    /// Bulle « X écrit… » — vraie cellule, rendue en dernier (bas visuel du
+    /// flux inversé). Pas un overlay : un message reçu en direct s'insère
+    /// au-dessus d'elle et remonte la conversation naturellement.
+    case typingIndicator
+}
 
 nonisolated enum FeedListSection: Hashable, Sendable { case main }
 nonisolated enum FeedListItem: Hashable, Sendable {
