@@ -16,26 +16,27 @@ extension ConversationView {
         HapticFeedback.medium()
     }
 
-    func stopAndPreviewRecording() {
+    /// Stop the recorder and drop the audio into the composer's attachment
+    /// tray — editable before sending (tap the tray chip to trim/preview).
+    /// Nothing is sent. A recording shorter than 0.5 s is discarded instead.
+    /// Returns `true` when an attachment was placed.
+    @discardableResult
+    func stopRecordingToAttachment() -> Bool {
         guard audioRecorder.duration > 0.5 else {
             audioRecorder.cancelRecording()
-            return
-        }
-        let url = audioRecorder.stopRecording()
-        scrollState.audioToEdit = url
-        HapticFeedback.light()
-    }
-
-    func stopAndSendRecording() {
-        guard audioRecorder.duration > 0.5 else {
-            audioRecorder.cancelRecording()
-            return
+            return false
         }
         let durationMs = Int(audioRecorder.duration * 1000)
         let url = audioRecorder.stopRecording()
         composerState.pendingAudioURL = url
         let audioAttachment = MessageAttachment.audio(durationMs: durationMs, color: accentColor)
         composerState.pendingAttachments.append(audioAttachment)
+        return true
+    }
+
+    /// Stop the recorder and send the voice message immediately (raw).
+    func stopAndSendRecording() {
+        guard stopRecordingToAttachment() else { return }
         sendMessageWithAttachments()
     }
 

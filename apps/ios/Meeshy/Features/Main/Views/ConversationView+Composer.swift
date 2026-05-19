@@ -46,7 +46,8 @@ extension ConversationView {
             },
             onTextChange: { viewModel.onTextChanged($0) },
             onStartRecording: { startRecording() },
-            onStopRecording: { stopAndPreviewRecording() },
+            onStopRecordingToAttachment: { stopRecordingToAttachment() },
+            onSendRecording: { stopAndSendRecording() },
             onCancelRecording: {
                 audioRecorder.cancelRecording()
             },
