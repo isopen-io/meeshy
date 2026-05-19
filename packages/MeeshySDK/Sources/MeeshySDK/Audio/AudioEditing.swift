@@ -155,6 +155,20 @@ public struct AudioEditDocument: Sendable, Codable, Equatable {
         }
     }
 
+    /// Replaces the recorded duration of a version. Used once the original's
+    /// real duration becomes known after asynchronous loading.
+    public mutating func updateDuration(_ duration: TimeInterval, ofVersion versionID: UUID) {
+        guard let index = versions.firstIndex(where: { $0.id == versionID }) else { return }
+        let existing = versions[index]
+        versions[index] = AudioEditVersion(
+            id: existing.id,
+            fileName: existing.fileName,
+            duration: duration,
+            operation: existing.operation,
+            createdAt: existing.createdAt
+        )
+    }
+
     /// File names of every version except `keep` — used to clean up the
     /// session directory once the active audio is finalized.
     public func fileNames(excluding keep: AudioEditVersion) -> [String] {
