@@ -264,6 +264,8 @@ public struct AudioPlayerView: View {
     public var onPlayingChange: ((Bool) -> Void)? = nil
     private var externalLanguage: Binding<String?>?
     private var bottomSlot: AnyView?
+    private var availability: AudioAvailability
+    private var onDownload: (() -> Void)?
 
     @StateObject private var player = AudioPlaybackManager()
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
@@ -308,6 +310,8 @@ public struct AudioPlayerView: View {
                 onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
                 onPlayingChange: ((Bool) -> Void)? = nil,
                 externalLanguage: Binding<String?>? = nil,
+                availability: AudioAvailability = .ready,
+                onDownload: (() -> Void)? = nil,
                 @ViewBuilder bottomContent: () -> some View = { EmptyView() }) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
@@ -315,6 +319,8 @@ public struct AudioPlayerView: View {
         self.onDelete = onDelete; self.onEdit = onEdit
         self.onPlayingChange = onPlayingChange
         self.externalLanguage = externalLanguage
+        self.availability = availability
+        self.onDownload = onDownload
         let content = bottomContent()
         self.bottomSlot = content is EmptyView ? nil : AnyView(content)
     }
@@ -546,33 +552,58 @@ public struct AudioPlayerView: View {
     // MARK: - Play Button
     private var playButton: some View {
         Button {
-            if player.isPlaying || player.progress > 0 {
-                player.togglePlayPause()
-            } else if attachment.fileUrl.hasPrefix("file://"),
-                      let localURL = URL(string: attachment.fileUrl) {
-                // Optimistic local audio: AudioPlaybackManager.play(urlString:)
-                // routes through DiskCacheStore.data(for:), which rejects
-                // file:// schemes. Read the on-device file directly instead.
-                // See Sprint 3 RC3.2.
-                player.playLocal(url: localURL)
-            } else {
-                player.play(urlString: currentAudioUrl)
+            switch availability {
+            case .ready:
+                handlePlayTap()
+            case .needsDownload:
+                onDownload?()
+                HapticFeedback.light()
+            case .downloading:
+                break
             }
-            HapticFeedback.light()
         } label: {
-            let size: CGFloat = context.isCompact ? 34 : 40
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [accent, accent.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: size, height: size)
-                    .shadow(color: accent.opacity(0.3), radius: 6, y: 2)
+            playButtonLabel
+        }
+        .disabled(isDownloading)
+    }
 
+    private var isDownloading: Bool {
+        if case .downloading = availability { return true }
+        return false
+    }
+
+    private func handlePlayTap() {
+        if player.isPlaying || player.progress > 0 {
+            player.togglePlayPause()
+        } else if attachment.fileUrl.hasPrefix("file://"),
+                  let localURL = URL(string: attachment.fileUrl) {
+            // Optimistic local audio: AudioPlaybackManager.play(urlString:)
+            // routes through DiskCacheStore.data(for:), which rejects
+            // file:// schemes. Read the on-device file directly instead.
+            player.playLocal(url: localURL)
+        } else {
+            player.play(urlString: currentAudioUrl)
+        }
+        HapticFeedback.light()
+    }
+
+    @ViewBuilder
+    private var playButtonLabel: some View {
+        let size: CGFloat = context.isCompact ? 34 : 40
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [accent, accent.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size, height: size)
+                .shadow(color: accent.opacity(0.3), radius: 6, y: 2)
+
+            switch availability {
+            case .ready:
                 if player.isLoading {
                     ProgressView()
                         .tint(.white)
@@ -582,6 +613,23 @@ public struct AudioPlayerView: View {
                         .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
                         .foregroundColor(.white)
                         .offset(x: player.isPlaying ? 0 : 1)
+                }
+            case .needsDownload:
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
+                    .foregroundColor(.white)
+            case .downloading(let progress):
+                if progress > 0 {
+                    Circle()
+                        .trim(from: 0, to: progress)
+                        .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: size * 0.5, height: size * 0.5)
+                        .animation(.linear(duration: 0.2), value: progress)
+                } else {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(0.6)
                 }
             }
         }
@@ -619,6 +667,7 @@ public struct AudioPlayerView: View {
                         HapticFeedback.light()
                     }
             }
+            .allowsHitTesting(availability == .ready)
         )
     }
 
