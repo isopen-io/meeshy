@@ -117,7 +117,7 @@ PRODUCT_NAME = Meeshy
 PRODUCT_BUNDLE_IDENTIFIER = me.meeshy.app
 
 # Deployment
-IPHONEOS_DEPLOYMENT_TARGET = 17.0
+IPHONEOS_DEPLOYMENT_TARGET = 16.0
 TARGETED_DEVICE_FAMILY = 1,2 # iPhone et iPad
 SUPPORTS_MACCATALYST = NO # ou YES si vous voulez Mac
 
@@ -251,7 +251,7 @@ Avant de faire Archive, vérifiez :
 
 - [ ] Version et Build Number mis à jour
 - [ ] Bundle Identifier correct : `me.meeshy.app`
-- [ ] Deployment Target correct (iOS 17.0)
+- [ ] Deployment Target correct (iOS 16.0)
 - [ ] Certificats et profils de provisionnement valides
 - [ ] Info.plist complet avec toutes les descriptions de confidentialité
 - [ ] Entitlements configurés correctement
