@@ -205,7 +205,7 @@ struct StoryCardView: View {
     let storyCommentCount: Int
     let isStoryCommentsEmpty: Bool
     let currentStoryNeedsVideoExport: Bool
-    let storyHasAudioOrVideo: Bool
+    let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
@@ -454,7 +454,7 @@ struct StoryCardView: View {
                     storyCommentCount: storyCommentCount,
                     isStoryCommentsEmpty: isStoryCommentsEmpty,
                     currentStoryNeedsVideoExport: currentStoryNeedsVideoExport,
-                    storyHasAudioOrVideo: storyHasAudioOrVideo,
+                    storyHasAudibleSound: storyHasAudibleSound,
                     storyHasTranslatableContent: storyHasTranslatableContent,
                     isGlobalMuted: isGlobalMuted,
                     availableTranslationLanguages: availableTranslationLanguages,
