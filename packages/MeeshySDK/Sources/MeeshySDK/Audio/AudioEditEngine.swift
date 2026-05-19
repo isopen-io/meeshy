@@ -1,5 +1,7 @@
 import Foundation
-import AVFoundation
+// `@preconcurrency` suppresses Sendable diagnostics from the not-yet-audited
+// AVFoundation module — consistent with `WaveformCache` in this directory.
+@preconcurrency import AVFoundation
 
 // MARK: - Audio Edit Error
 

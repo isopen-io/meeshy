@@ -280,3 +280,120 @@ final class AudioEditEngineRenderPlanTests: XCTestCase {
         XCTAssertTrue(plan.fadeOut)
     }
 }
+
+// MARK: - Audio Edit Engine Render (integration, real AVFoundation pipeline)
+
+final class AudioEditEngineRenderTests: XCTestCase {
+
+    private var workingDirectory: URL!
+
+    override func setUpWithError() throws {
+        try super.setUpWithError()
+        workingDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("audio-edit-tests-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: workingDirectory,
+                                                withIntermediateDirectories: true)
+    }
+
+    override func tearDownWithError() throws {
+        if let workingDirectory {
+            try? FileManager.default.removeItem(at: workingDirectory)
+        }
+        try super.tearDownWithError()
+    }
+
+    /// Writes a real, silent AAC file so the engine can exercise the genuine
+    /// AVFoundation composition + export path (the area with reported crashes).
+    private func makeSilentAudioFile(duration: TimeInterval) throws -> URL {
+        let url = workingDirectory.appendingPathComponent("src_\(UUID().uuidString).m4a")
+        let settings: [String: Any] = [
+            AVFormatIDKey: kAudioFormatMPEG4AAC,
+            AVSampleRateKey: 44_100.0,
+            AVNumberOfChannelsKey: 1,
+            AVEncoderBitRateKey: 64_000
+        ]
+        let file = try AVAudioFile(forWriting: url, settings: settings)
+        let format = file.processingFormat
+        let frameCount = AVAudioFrameCount(duration * format.sampleRate)
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+            throw NSError(domain: "AudioEditEngineRenderTests", code: 1)
+        }
+        buffer.frameLength = frameCount
+        try file.write(from: buffer)
+        return url
+    }
+
+    private func duration(of url: URL) async throws -> TimeInterval {
+        let asset = AVURLAsset(url: url)
+        let cmDuration = try await asset.load(.duration)
+        return cmDuration.seconds
+    }
+
+    func test_apply_trim_producesShorterFile() async throws {
+        let source = try makeSilentAudioFile(duration: 6.0)
+        let result = try await AudioEditEngine.apply(
+            .trim(start: 1.0, end: 4.0),
+            to: source,
+            sourceDuration: 6.0,
+            into: workingDirectory
+        )
+        XCTAssertTrue(FileManager.default.fileExists(atPath: result.path))
+        let resultDuration = try await duration(of: result)
+        XCTAssertEqual(resultDuration, 3.0, accuracy: 0.3)
+    }
+
+    func test_apply_removeRange_concatenatesHeadAndTail() async throws {
+        let source = try makeSilentAudioFile(duration: 9.0)
+        let result = try await AudioEditEngine.apply(
+            .removeRange(start: 3.0, end: 6.0),
+            to: source,
+            sourceDuration: 9.0,
+            into: workingDirectory
+        )
+        let resultDuration = try await duration(of: result)
+        XCTAssertEqual(resultDuration, 6.0, accuracy: 0.4)
+    }
+
+    func test_apply_speed_halvesDuration() async throws {
+        let source = try makeSilentAudioFile(duration: 8.0)
+        let result = try await AudioEditEngine.apply(
+            .speed(rate: 2.0),
+            to: source,
+            sourceDuration: 8.0,
+            into: workingDirectory
+        )
+        let resultDuration = try await duration(of: result)
+        XCTAssertEqual(resultDuration, 4.0, accuracy: 0.5)
+    }
+
+    func test_apply_trim_tooShortSelection_throws() async throws {
+        let source = try makeSilentAudioFile(duration: 6.0)
+        do {
+            _ = try await AudioEditEngine.apply(
+                .trim(start: 2.0, end: 2.02),
+                to: source,
+                sourceDuration: 6.0,
+                into: workingDirectory
+            )
+            XCTFail("Expected resultTooShort")
+        } catch {
+            XCTAssertEqual(error as? AudioEditError, .resultTooShort)
+        }
+    }
+
+    func test_apply_corruptSource_throwsRatherThanCrashes() async throws {
+        let corrupt = workingDirectory.appendingPathComponent("corrupt.m4a")
+        try Data([0x00, 0x01, 0x02, 0x03]).write(to: corrupt)
+        do {
+            _ = try await AudioEditEngine.apply(
+                .trim(start: 0, end: 1),
+                to: corrupt,
+                sourceDuration: 5.0,
+                into: workingDirectory
+            )
+            XCTFail("Expected a thrown error for a corrupt source")
+        } catch {
+            XCTAssertTrue(error is AudioEditError, "Expected AudioEditError, got \(error)")
+        }
+    }
+}

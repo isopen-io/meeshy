@@ -86,6 +86,30 @@ public struct AudioEditDocument: Sendable, Codable, Equatable {
         self.cursor = 0
     }
 
+    private enum CodingKeys: String, CodingKey {
+        case sessionID, versions, cursor
+    }
+
+    /// Validating decoder for crash-recovery: a corrupt or hand-edited manifest
+    /// must never decode into an empty/out-of-bounds document that would then
+    /// trap on `active`/`original`.
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        sessionID = try container.decode(UUID.self, forKey: .sessionID)
+        let decodedVersions = try container.decode([AudioEditVersion].self, forKey: .versions)
+        guard !decodedVersions.isEmpty else {
+            throw DecodingError.dataCorrupted(
+                DecodingError.Context(
+                    codingPath: container.codingPath,
+                    debugDescription: "AudioEditDocument requires at least one version"
+                )
+            )
+        }
+        versions = decodedVersions
+        let decodedCursor = try container.decode(Int.self, forKey: .cursor)
+        cursor = min(max(0, decodedCursor), decodedVersions.count - 1)
+    }
+
     /// The version currently presented to the user.
     public var active: AudioEditVersion { versions[cursor] }
     /// The preserved, never-mutated source.
