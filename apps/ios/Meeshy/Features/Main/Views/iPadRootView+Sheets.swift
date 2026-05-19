@@ -37,7 +37,7 @@ extension iPadRootView {
                     .presentationDetents([.medium, .large])
                 }
             }
-            .onChange(of: router.pendingShareContent != nil) { _, hasContent in
+            .adaptiveOnChange(of: router.pendingShareContent != nil) { _, hasContent in
                 if hasContent { showSharePicker = true }
             }
             .sheet(isPresented: $showNewConversation) {

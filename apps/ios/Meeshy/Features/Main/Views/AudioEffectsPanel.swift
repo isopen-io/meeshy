@@ -106,7 +106,7 @@ struct AudioEffectsPanel: View {
                 effectSlider(icon: "dial.medium", label: "Force", value: $voiceCoderParams.strength, range: 0...100, format: "%.0f%%")
                 effectSlider(icon: "metronome", label: "Retune", value: $voiceCoderParams.retuneSpeed, range: 0...100, format: "%.0f%%")
             }
-            .onChange(of: voiceCoderParams) { _, params in
+            .adaptiveOnChange(of: voiceCoderParams) { _, params in
                 debouncedUpdate(.voiceCoder(params))
             }
 
@@ -116,7 +116,7 @@ struct AudioEffectsPanel: View {
                 effectSlider(icon: "waveform", label: "Formant", value: $babyVoiceParams.formant, range: 1.2...1.5, format: "%.2fx")
                 effectSlider(icon: "wind", label: "Souffle", value: $babyVoiceParams.breathiness, range: 0...100, format: "%.0f%%")
             }
-            .onChange(of: babyVoiceParams) { _, params in
+            .adaptiveOnChange(of: babyVoiceParams) { _, params in
                 debouncedUpdate(.babyVoice(params))
             }
 
@@ -126,7 +126,7 @@ struct AudioEffectsPanel: View {
                 effectSlider(icon: "bolt.fill", label: "Distorsion", value: $demonVoiceParams.distortion, range: 0...100, format: "%.0f%%")
                 effectSlider(icon: "drop.halffull", label: "Reverb", value: $demonVoiceParams.reverb, range: 0...100, format: "%.0f%%")
             }
-            .onChange(of: demonVoiceParams) { _, params in
+            .adaptiveOnChange(of: demonVoiceParams) { _, params in
                 debouncedUpdate(.demonVoice(params))
             }
 
@@ -135,7 +135,7 @@ struct AudioEffectsPanel: View {
                 soundSelector
                 effectSlider(icon: "speaker.wave.2", label: "Volume", value: $backSoundParams.volume, range: 0...100, format: "%.0f%%")
             }
-            .onChange(of: backSoundParams) { _, params in
+            .adaptiveOnChange(of: backSoundParams) { _, params in
                 debouncedUpdate(.backSound(params))
             }
 

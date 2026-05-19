@@ -23,7 +23,7 @@ struct VideoFiltersPanel: View {
         .onAppear {
             filterConfig = callManager.videoFilters.config
         }
-        .onChange(of: filterConfig) { _, newConfig in
+        .adaptiveOnChange(of: filterConfig) { _, newConfig in
             callManager.videoFilters.config = newConfig
         }
     }

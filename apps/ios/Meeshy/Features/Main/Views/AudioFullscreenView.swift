@@ -46,7 +46,7 @@ struct AudioFullscreenView: View {
                 .offset(y: dragOffset)
                 .gesture(verticalDismissGesture)
                 .opacity(isDismissing ? 0 : 1)
-                .onChange(of: currentPageID) { _, newID in
+                .adaptiveOnChange(of: currentPageID) { _, newID in
                     guard let newID,
                           let newIdx = allAudioItems.firstIndex(where: { $0.id == newID })
                     else { return }
@@ -256,7 +256,7 @@ private struct AudioFullscreenPage: View {
             Spacer(minLength: 0)
         }
         .onAppear { startPlayback() }
-        .onChange(of: isActive) { _, active in
+        .adaptiveOnChange(of: isActive) { _, active in
             if active {
                 startPlayback()
             } else {
@@ -457,7 +457,7 @@ private struct AudioFullscreenPage: View {
                         HapticFeedback.light()
                     }
                 }
-                .onChange(of: playheadBarIndex) { _, newIdx in
+                .adaptiveOnChange(of: playheadBarIndex) { _, newIdx in
                     guard needsScroll else { return }
                     withAnimation(.linear(duration: 0.2)) {
                         proxy.scrollTo("bar-\(newIdx)", anchor: .center)

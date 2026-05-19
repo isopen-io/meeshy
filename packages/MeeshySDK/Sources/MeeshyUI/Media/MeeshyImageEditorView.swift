@@ -109,13 +109,13 @@ public struct MeeshyImageEditorView: View {
         .task {
             await loadThumbnails()
         }
-        .onChange(of: engine.activeFilter) { _, _ in debouncedUpdatePreview() }
-        .onChange(of: engine.brightness) { _, _ in debouncedUpdatePreview() }
-        .onChange(of: engine.contrast) { _, _ in debouncedUpdatePreview() }
-        .onChange(of: engine.saturation) { _, _ in debouncedUpdatePreview() }
-        .onChange(of: engine.sharpness) { _, _ in debouncedUpdatePreview() }
-        .onChange(of: engine.vignetteIntensity) { _, _ in debouncedUpdatePreview() }
-        .onChange(of: engine.activeEffect) { _, _ in debouncedUpdatePreview() }
+        .adaptiveOnChange(of: engine.activeFilter) { _, _ in debouncedUpdatePreview() }
+        .adaptiveOnChange(of: engine.brightness) { _, _ in debouncedUpdatePreview() }
+        .adaptiveOnChange(of: engine.contrast) { _, _ in debouncedUpdatePreview() }
+        .adaptiveOnChange(of: engine.saturation) { _, _ in debouncedUpdatePreview() }
+        .adaptiveOnChange(of: engine.sharpness) { _, _ in debouncedUpdatePreview() }
+        .adaptiveOnChange(of: engine.vignetteIntensity) { _, _ in debouncedUpdatePreview() }
+        .adaptiveOnChange(of: engine.activeEffect) { _, _ in debouncedUpdatePreview() }
     }
 
     // MARK: - Header
@@ -213,7 +213,7 @@ public struct MeeshyImageEditorView: View {
             .onAppear {
                 initializeCropRect(displayRect: displayRect)
             }
-            .onChange(of: selectedCropRatio) { _, _ in
+            .adaptiveOnChange(of: selectedCropRatio) { _, _ in
                 adjustCropForRatio(selectedCropRatio.aspectRatio, displayRect: displayRect)
             }
         }

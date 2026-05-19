@@ -60,7 +60,7 @@ struct ConversationMediaGalleryView: View {
             galleryPage(attachment)
         }
         .ignoresSafeArea()
-        .onChange(of: currentPageID) { _, newID in
+        .adaptiveOnChange(of: currentPageID) { _, newID in
             guard let newID,
                   let newIdx = allAttachments.firstIndex(where: { $0.id == newID })
             else { return }

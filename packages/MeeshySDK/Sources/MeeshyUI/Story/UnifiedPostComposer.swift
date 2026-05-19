@@ -223,7 +223,7 @@ public struct UnifiedPostComposer: View {
                 onDismiss: { showStoryComposer = false }
             )
         }
-        .onChange(of: selectedPhotoItem) { _, newItem in
+        .adaptiveOnChange(of: selectedPhotoItem) { _, newItem in
             loadImage(from: newItem)
         }
         .fullScreenCover(isPresented: $showImagePreview) {

@@ -158,7 +158,7 @@ public struct ComposerControlsLayer: View {
         .ignoresSafeArea(edges: .bottom)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: bandStateMachine.state)
         .animation(.spring(response: 0.3, dampingFraction: 0.85), value: areFabsVisible)
-        .onChange(of: viewModel.currentSlideIndex) { _, _ in
+        .adaptiveOnChange(of: viewModel.currentSlideIndex) { _, _ in
             // Slide switch invalidates any open formatPanel (id from previous slide).
             bandStateMachine.reset()
             areFabsVisible = true

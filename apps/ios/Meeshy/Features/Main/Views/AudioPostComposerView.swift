@@ -70,7 +70,7 @@ struct AudioPostComposerView: View {
                 }
             }
         }
-        .onChange(of: colorScheme) { _, newScheme in
+        .adaptiveOnChange(of: colorScheme) { _, newScheme in
             theme.syncWithSystem(newScheme)
         }
     }

@@ -307,7 +307,7 @@ struct RootView: View {
         .environmentObject(statusViewModel)
         .environmentObject(conversationViewModel)
         .environmentObject(storyViewerCoordinator)
-        .onChange(of: router.sceneTitle) { _, title in
+        .adaptiveOnChange(of: router.sceneTitle) { _, title in
             UIApplication.shared.connectedScenes
                 .compactMap { $0 as? UIWindowScene }
                 .first?.title = "Meeshy — \(title)"
@@ -516,7 +516,7 @@ struct RootView: View {
                 .presentationDetents([.medium, .large])
             }
         }
-        .onChange(of: router.pendingShareContent != nil) { _, hasContent in
+        .adaptiveOnChange(of: router.pendingShareContent != nil) { _, hasContent in
             if hasContent {
                 showSharePicker = true
             }
@@ -527,7 +527,7 @@ struct RootView: View {
                 .presentationDetents([.large])
                 .presentationDragIndicator(.visible)
         }
-        .onChange(of: router.path) { _, newPath in
+        .adaptiveOnChange(of: router.path) { _, newPath in
             if !newPath.isEmpty && showFeed {
                 feedWasVisibleBeforeNav = true
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -548,7 +548,7 @@ struct RootView: View {
         // returns nil for the typical cold-launch (no pending link), so
         // firing on the initial value is a free no-op when there's nothing
         // to process.
-        .onChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
+        .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
             handleDeepLink(newValue)
         }
     }

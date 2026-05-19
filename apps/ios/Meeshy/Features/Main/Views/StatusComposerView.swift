@@ -178,7 +178,7 @@ struct StatusComposerView: View {
                             .stroke(theme.inputBorder, lineWidth: 1)
                     )
             )
-            .onChange(of: statusText) { _, newValue in
+            .adaptiveOnChange(of: statusText) { _, newValue in
                 if newValue.count > 122 {
                     statusText = String(newValue.prefix(122))
                 }

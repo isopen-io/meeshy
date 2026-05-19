@@ -72,7 +72,7 @@ public struct CachedAsyncImage<Placeholder: View>: View {
             }
         }
         .task(id: "\(urlString ?? "")_\(retryCount)") { await loadImage(for: urlString) }
-        .onChange(of: urlString) { _, newUrl in
+        .adaptiveOnChange(of: urlString) { _, newUrl in
             hasFailed = false
             guard let newUrl, !newUrl.isEmpty else {
                 image = nil
@@ -178,7 +178,7 @@ public struct CachedAvatarImage: View {
         }
         .frame(width: size, height: size).clipShape(Circle())
         .task(id: urlString) { await loadAvatar(for: urlString) }
-        .onChange(of: urlString) { _, newUrl in
+        .adaptiveOnChange(of: urlString) { _, newUrl in
             guard let newUrl, !newUrl.isEmpty else { image = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
             image = DiskCacheStore.cachedImage(for: resolved)
@@ -252,7 +252,7 @@ public struct CachedBannerImage: View {
         }
         .frame(height: height).clipped()
         .task(id: urlString) { await loadBanner(for: urlString) }
-        .onChange(of: urlString) { _, newUrl in
+        .adaptiveOnChange(of: urlString) { _, newUrl in
             guard let newUrl, !newUrl.isEmpty else {
                 image = nil
                 return
@@ -350,13 +350,13 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         .task(id: fullUrl) {
             await loadFullImage()
         }
-        .onChange(of: thumbnailUrl) { _, newUrl in
+        .adaptiveOnChange(of: thumbnailUrl) { _, newUrl in
             guard fullImage == nil else { return }
             guard let newUrl, !newUrl.isEmpty else { thumbnailImage = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
             thumbnailImage = DiskCacheStore.cachedImage(for: resolved)
         }
-        .onChange(of: fullUrl) { _, newUrl in
+        .adaptiveOnChange(of: fullUrl) { _, newUrl in
             guard let newUrl, !newUrl.isEmpty else { fullImage = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
             if let cached = DiskCacheStore.cachedImage(for: resolved) {

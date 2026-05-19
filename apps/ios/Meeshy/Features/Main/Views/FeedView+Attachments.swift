@@ -863,7 +863,7 @@ struct FeedComposerSheet: View {
                 }
             }
         }
-        .onChange(of: selectedPhotoItems) { _, items in
+        .adaptiveOnChange(of: selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
         }
         .onAppear {

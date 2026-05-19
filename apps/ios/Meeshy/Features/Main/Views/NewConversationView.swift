@@ -36,7 +36,7 @@ struct NewConversationView: View {
                 resultsList
             }
         }
-        .onChange(of: searchQuery) { _, newValue in
+        .adaptiveOnChange(of: searchQuery) { _, newValue in
             debounceSearch(query: newValue)
         }
         .withStatusBubble()

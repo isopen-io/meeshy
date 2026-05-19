@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 import AVFoundation
 import Combine
 
@@ -189,7 +190,7 @@ struct ComposerWaveformBar: View {
                     height = 4
                 }
             }
-            .onChange(of: isRecording) { _, rec in
+            .adaptiveOnChange(of: isRecording) { _, rec in
                 if rec { animate() } else { height = 4 }
             }
     }

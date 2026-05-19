@@ -36,7 +36,7 @@ struct MediaDownloadSettingsView: View {
                 scrollContent
             }
         }
-        .onChange(of: prefs) { _, newValue in
+        .adaptiveOnChange(of: prefs) { _, newValue in
             Self.savePrefs(newValue)
         }
     }

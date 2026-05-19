@@ -273,7 +273,7 @@ struct MessageDetailSheet: View {
         .background(actions != nil ? Color.clear : theme.backgroundPrimary)
         .presentationDetents([.medium, .large])
         .presentationDragIndicator(actions != nil ? .hidden : .visible)
-        .onChange(of: selectedTab) { _, newTab in
+        .adaptiveOnChange(of: selectedTab) { _, newTab in
             if newTab == .reactions { Task { await loadReactionDetails() } }
             if newTab == .forward { Task { await loadConversations() } }
             if newTab == .views { Task { await loadReadStatus(); await loadAttachmentStatuses() } }
@@ -288,7 +288,7 @@ struct MessageDetailSheet: View {
                 actionGridAppeared = true
             }
         }
-        .onChange(of: externalTabSelection?.wrappedValue) { _, newTab in
+        .adaptiveOnChange(of: externalTabSelection?.wrappedValue) { _, newTab in
             guard let newTab else { return }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 selectedTab = newTab

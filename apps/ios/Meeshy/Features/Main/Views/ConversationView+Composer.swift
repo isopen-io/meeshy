@@ -106,7 +106,7 @@ extension ConversationView {
                 onCancel: { composerState.showContactPicker = false }
             )
         }
-        .onChange(of: composerState.selectedPhotoItems) { _, items in
+        .adaptiveOnChange(of: composerState.selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
         }
         // C. Tap pending image → ImageEditView
