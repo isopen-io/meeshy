@@ -102,10 +102,16 @@ public final class AudioEditorController: ObservableObject {
 
     public let sessionDirectory: URL
     private let manifestURL: URL
+    private let sourceURL: URL
 
     // MARK: History
 
     @Published public private(set) var document: AudioEditDocument
+
+    /// `true` until `prepare()` has copied in the source and loaded its
+    /// duration. The view shows a placeholder rather than freezing.
+    @Published public private(set) var isPreparing = true
+    private var didPrepare = false
 
     // MARK: Mode & panels
 
@@ -145,9 +151,9 @@ public final class AudioEditorController: ObservableObject {
 
     // MARK: - Init
 
-    /// Creates an editing session for `sourceURL`. The source is copied into a
-    /// private session directory immediately, so the caller's file is never
-    /// mutated and the original can always be restored.
+    /// Creates an editing session for `sourceURL`. Only cheap work runs here —
+    /// the source file is copied into the private session directory off the
+    /// main actor by `prepare()`, so presenting the editor never blocks the UI.
     public init(sourceURL: URL, defaultLanguage: String = "fr") {
         let sessionID = UUID()
         let root = FileManager.default.temporaryDirectory
@@ -157,20 +163,11 @@ public final class AudioEditorController: ObservableObject {
 
         self.sessionDirectory = directory
         self.manifestURL = directory.appendingPathComponent("manifest.json")
+        self.sourceURL = sourceURL
         self.transcriptionLanguage = defaultLanguage
 
         let ext = sourceURL.pathExtension.isEmpty ? "m4a" : sourceURL.pathExtension
         let originalName = "original.\(ext)"
-        let originalURL = directory.appendingPathComponent(originalName)
-        do {
-            try FileManager.default.copyItem(at: sourceURL, to: originalURL)
-        } catch {
-            // Fall back to a direct read/write if copy fails (e.g. cross-volume).
-            if let data = try? Data(contentsOf: sourceURL) {
-                try? data.write(to: originalURL)
-            }
-        }
-
         let original = AudioEditVersion(fileName: originalName, duration: 0, operation: .original)
         self.document = AudioEditDocument(sessionID: sessionID, original: original)
 
@@ -179,12 +176,24 @@ public final class AudioEditorController: ObservableObject {
 
     // MARK: - Lifecycle
 
-    /// Loads the original's real duration and primes the staged parameters.
-    /// Call once when the editor appears.
+    /// Copies in the source (off the main actor), loads its real duration and
+    /// primes the staged parameters. Call once when the editor appears;
+    /// repeated calls are ignored so staged edits are never reset.
     public func prepare() async {
-        let duration = await Self.loadDuration(activeURL)
+        guard !didPrepare else { return }
+        didPrepare = true
+
+        let destination = activeURL
+        let materialized = await Self.materializeOriginal(from: sourceURL, to: destination)
+        if !materialized {
+            lastError = String(localized: "audio.editor.error.load",
+                               defaultValue: "Impossible de charger cet audio.", bundle: .module)
+        }
+
+        let duration = await Self.loadDuration(destination)
         document.updateDuration(duration, ofVersion: document.original.id)
         resetStaging(for: duration)
+        isPreparing = false
         persist()
     }
 
@@ -509,6 +518,24 @@ public final class AudioEditorController: ObservableObject {
         let asset = AVURLAsset(url: url)
         guard let duration = try? await asset.load(.duration), duration.isNumeric else { return 0 }
         return max(0, duration.seconds)
+    }
+
+    /// Copies the caller's source into the session directory. Runs off the
+    /// main actor so a multi-megabyte copy never freezes the UI. Idempotent.
+    nonisolated private static func materializeOriginal(from source: URL,
+                                                        to destination: URL) async -> Bool {
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: destination.path) { return true }
+        do {
+            try fileManager.copyItem(at: source, to: destination)
+            return true
+        } catch {
+            // Cross-volume or sandbox edge cases: fall back to a buffered copy.
+            if let data = try? Data(contentsOf: source) {
+                return (try? data.write(to: destination)) != nil
+            }
+            return false
+        }
     }
 
     /// Deletes session directories left behind by crashes (older than 24h).
