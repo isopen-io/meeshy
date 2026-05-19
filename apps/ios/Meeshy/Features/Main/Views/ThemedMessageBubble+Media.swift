@@ -111,8 +111,8 @@ extension BubbleStandardLayout {
             fullscreenAttachment: $fullscreenAttachment,
             contactColor: contactColor,
             messageDeliveryStatus: message.deliveryStatus,
-            time: content.meta.timeString,
-            isMe: content.isMe
+            footer: resolvedFooter().0,
+            isDark: isDark
         )
     }
 
@@ -441,8 +441,8 @@ struct BubbleCarouselView: View {
     @Binding var fullscreenAttachment: MessageAttachment?
     let contactColor: String
     let messageDeliveryStatus: Message.DeliveryStatus
-    var time: String = ""
-    var isMe: Bool = false
+    var footer: BubbleFooterModel = .empty
+    var isDark: Bool = false
 
     @State private var currentPageID: String?
 
@@ -462,18 +462,13 @@ struct BubbleCarouselView: View {
 
             carouselTopBar
         }
-        // Timestamp + delivery state — matches the static `visualMediaGrid`
-        // overlay so a carousel-mode message still surfaces its send time and
-        // pending clock instead of dropping the footer entirely.
+        // Timestamp + delivery state — same unified `.overlay` footer as the
+        // static `visualMediaGrid`, so a carousel-mode message still surfaces
+        // its send time and pending clock instead of dropping the footer.
         .overlay(alignment: .bottomTrailing) {
-            if !time.isEmpty {
-                BubbleMediaTimestampOverlay(
-                    time: time,
-                    isMe: isMe,
-                    deliveryStatus: messageDeliveryStatus
-                )
+            BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
+                .equatable()
                 .padding(8)
-            }
         }
         .onAppear {
             let startIndex = max(0, min(carouselIndex, items.count - 1))

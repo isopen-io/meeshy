@@ -417,11 +417,13 @@ struct BubbleStandardLayout: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(alignment: .bottomTrailing) {
                             if !content.hasTextOrNonMediaContent {
-                                BubbleMediaTimestampOverlay(
-                                    time: content.meta.timeString,
-                                    isMe: isMe,
-                                    deliveryStatus: content.meta.deliveryStatus
+                                BubbleFooter(
+                                    model: resolvedFooter().0,
+                                    actions: .none,
+                                    style: .overlay,
+                                    isDark: isDark
                                 )
+                                .equatable()
                                 .padding(8)
                                 .transition(.opacity)
                             }
@@ -594,7 +596,7 @@ struct BubbleStandardLayout: View {
     /// - Parameter includesTranslationControls: when `false`, language flags
     ///   and the translate button are omitted — the audio widget owns its own
     ///   per-language switcher, so rendering both would compete.
-    private func resolvedFooter(includesTranslationControls: Bool = true) -> (BubbleFooterModel, BubbleFooterActions) {
+    func resolvedFooter(includesTranslationControls: Bool = true) -> (BubbleFooterModel, BubbleFooterActions) {
         let showTranslation = includesTranslationControls && hasAnyTranslation && !isEmojiOnly
         let sender: SenderIdentity? = showIdentityBar ? SenderIdentity(
             name: content.senderName ?? "?",
