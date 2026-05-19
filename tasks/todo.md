@@ -1,69 +1,68 @@
-# Correctifs bulles de messages — méta + médias optimistes
+# Unified Video Editor — Redesign
 
-Branche : `feat/ios-bubble-meta-fixes`
+Branche : `claude/redesign-video-editor-DRpy9`
 
-## Contexte
-4 bugs UI sur les bulles de message iOS :
-1. Bulle audio : horodatage + horloge dupliqués (un dans la bulle, un répété en dessous).
-2. Attachement image : icône horloge « file d'attente » manquante.
-3. Image en attente d'envoi : carré magenta après avoir quitté/revenu dans la conversation.
-4. Tout message en attente d'envoi doit afficher son horodatage dans la bulle, même s'il
-   n'est pas le dernier du groupe (texte + emoji).
+Replaced the fragmented two-step (edit / use) video editing flow with a single
+immersive ThemeManager-driven editor for editing an existing video (loaded or
+freshly filmed). Simple / Pro switch + FAB + Controller pattern from the Story
+composer.
 
-## Plan
+## Engine (MeeshySDK core — no SwiftUI)
+- [x] `Video/VideoEditModels.swift` — non-destructive document model + errors
+- [x] `Video/VideoEditOperations.swift` — pure operations (trim/split/speed/rotate/crop/audio)
+- [x] `Video/VideoEditHistory.swift` — bounded undo/redo
+- [x] `Video/VideoRenderGeometry.swift` — rotation/crop transform math (pure, tested)
+- [x] `Video/VideoCompositionBuilder.swift` — AVMutableComposition + videoComposition + audioMix
+- [x] `Video/VideoExportPipeline.swift` — async, cancelable, progress, timeout-safe export
+- [x] `Video/VideoEditSessionStore.swift` — autosave + crash recovery
+- [x] `EdgeTranscriptionService` — timeout-safe + cancellation-safe transcription (crash fix)
 
-### Bug 1 — Footer audio dupliqué
-Décision UX validée : intégrer `identityBarSection` dans `AudioMediaView` (bottom slot du
-widget audio) pour remplacer `audioMetaRow`.
-- [ ] `AudioMediaView` : nouveau paramètre `@ViewBuilder identityBar`. `bottomContent` envoyé
-      à `AudioPlayerView` = pastilles de langue audio (conservées) + barre d'identité injectée.
-      Retirer horodatage + `audioDeliveryCheckmark` de `audioMetaRow`.
-- [ ] `AudioMediaView.==` : ajouter `message.deliveryStatus` + `message.updatedAt`.
-- [ ] `BubbleStandardLayout` : audio-only → ne plus rendre `identityBarSection` en dessous ;
-      passer le contenu de la barre dans `AudioMediaView`.
+## UI (MeeshyUI)
+- [x] `Media/VideoEditor/VideoEditorMode.swift` — Simple / Pro mode + tools + band state
+- [x] `Media/VideoEditor/VideoEditorViewModel.swift` — @MainActor view model
+- [x] `Media/VideoEditor/VideoEditorModeSwitcher.swift` — Simple/Pro toggle (timeline style)
+- [x] `Media/VideoEditor/VideoEditorTimeline.swift` — center-playhead scrub strip, zoom, snapping
+- [x] `Media/VideoEditor/VideoEditorFABColumn.swift` — FAB column (Story composer pattern)
+- [x] `Media/VideoEditor/VideoEditorToolPanels.swift` — band + 8 tool controllers
+- [x] `Media/VideoEditor/VideoEditorStage.swift` — AVPlayerLayer surface + captions overlay
+- [x] `Media/VideoEditor/VideoEditorCaptionsPanel.swift` — transcription + LanguageData picker
+- [x] `Media/MeeshyVideoEditorView.swift` — REWRITE: single unified fullscreen view
+- [x] Delete `Media/MeeshyVideoPreviewView.swift`
 
-### Bug 2 — Horloge « file d'attente » manquante sur l'image
-- [ ] `carouselView` : ajouter l'overlay `BubbleMediaTimestampOverlay` (absent aujourd'hui).
-- [ ] Vérifier `visualMediaGrid` + image avec légende.
-
-### Bug 3 — Carré magenta sur image optimiste
-- [ ] `ConversationView+AttachmentHandlers` : persister l'image optimiste dans le cache disque
-      (`DiskCacheStore.save`), pas seulement le NSCache.
-
-### Bug 4 — Horodatage des messages en attente
-- [ ] `BubbleStandardLayout.shouldShowTime` : toujours `true` si le message est en état
-      `.sending` / `.invisible` / `.clock` / `.slow` / `.failed`.
+## Call sites
+- [x] StoryComposerView, UnifiedPostComposer, FeedView+Attachments (x2), ConversationView+Composer
 
 ## Tests
-- [ ] `./apps/ios/meeshy.sh build` vert.
-- [ ] `./apps/ios/meeshy.sh test` vert.
+- [x] VideoEditDocument operations, history undo/redo, render geometry (Swift Testing)
 
 ## Review
 
-### Fichiers modifiés
-- `BubbleStandardLayout.swift` — `isPendingDelivery` + `shouldShowTime` (Bug 4) ;
-  `audioIsSoleContent` ; injection de la barre d'identité dans le widget audio +
-  suppression du footer dupliqué (Bug 1).
-- `ConversationMediaViews.swift` — `AudioMediaView` : paramètre `identityBar`,
-  `playerBottomContent` / `audioPlayer` / `audioTranslationRow`, placeholder avec
-  barre intégrée, `==` enrichi (`deliveryStatus` + `updatedAt`). Suppression de
-  `audioMetaRow`, `audioDeliveryCheckmark`, `timeString` (Bug 1).
-- `ThemedMessageBubble+Media.swift` — overlay horodatage/horloge sur le carrousel
-  (Bug 2).
-- `ConversationView+AttachmentHandlers.swift` — persistance disque de l'image
-  optimiste (Bug 3).
-- `ConversationSocketHandlerTests.swift` — fix pré-existant `self.conversationId`
-  (2 closures `db.read`) qui bloquait la compilation de tout le bundle de tests.
+### Architecture delivered
+- Single immersive `MeeshyVideoEditorView(url:context:accentColor:onComplete:onCancel:)`.
+- Strict module separation: timeline model / composition (render) / export pipeline /
+  transcription / effects all live in `MeeshySDK` core as pure types; UI in `MeeshyUI`.
+- Non-destructive: `VideoEditDocument` describes edits; source file untouched until
+  confirm. Undo/redo via `VideoEditHistory`. Autosave + crash recovery via
+  `VideoEditSessionStore`.
+- Same `AVComposition` plan drives both live preview and export → WYSIWYG.
+- Transcription crash fixed: bounded by timeout, cancellation-safe continuation,
+  single-resume guard (`RecognitionBox`). Routed through `EdgeTranscriptionService`.
+- Captions use `LanguageData.allLanguages` (canonical list — no parallel list).
 
-### Vérification
-- `./apps/ios/meeshy.sh build` : vert (77 s).
-- `./apps/ios/meeshy.sh test` : 1265 tests, 12 skipped, **0 échec inattendu**.
-  La « failure » `test_wholeArrayMessagesWrite_countIsExact` est pré-existante
-  (`ConversationViewModel.swift` a 2 écritures whole-array `messages = ...` —
-  fichier non touché par ce lot).
+### Feature set
+trim · split · merge (segment delete/re-merge) · per-segment & global speed ·
+rotate · crop (aspect presets) · filters (CIPhotoEffect presets) · color grading
+(brightness/contrast/saturation) · audio volume/mute/fade · transcription +
+multi-language captions · undo/redo · autosave/recovery.
 
-### Notes
-- Contamination worktree partagé : `StoryViewerView*` + `StoryAudioAvailability*`
-  sont du travail en cours d'un autre agent — NON inclus dans ce lot.
-- Reste : vérification visuelle (audio non dupliqué, horloge image, plus de carré
-  magenta, horodatages des messages en attente).
+### Notes / known limits
+- BUILD NOT VERIFIED: this environment is Linux (no Xcode). Needs a macOS build
+  pass (`./apps/ios/meeshy.sh build` + `xcodebuild test`).
+- FeedView "tap pending video" and ConversationView "edit pending video" call
+  sites keep prior behavior (edit result not re-threaded into the existing
+  pending attachment) — the attachment-replacement API was out of safe reach
+  without a build. The add-video / story / post paths DO apply the edited URL.
+- Deferred behind clean extension points: keyframes, green screen, multi-track
+  of distinct videos, LUT, motion blur, AI effects, transitions, stickers, PiP,
+  burned-in captions, free-form crop overlay, reverse.
+</content>
