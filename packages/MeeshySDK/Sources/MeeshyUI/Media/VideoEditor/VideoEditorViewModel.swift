@@ -166,10 +166,6 @@ public final class VideoEditorViewModel: ObservableObject {
         max(0.05, document.editedDuration)
     }
 
-    public var playheadFraction: Double {
-        min(1, max(0, playheadTime / editedDuration))
-    }
-
     public var selectedSegment: VideoSegment? {
         guard let id = selectedSegmentID else { return nil }
         return document.segments.first { $0.id == id }
@@ -259,6 +255,16 @@ public final class VideoEditorViewModel: ObservableObject {
 
     public func moveSegment(_ id: UUID, to index: Int) {
         apply(document.movingSegment(id: id, toIndex: index))
+        HapticFeedback.light()
+    }
+
+    /// Rejoins a segment with its predecessor without dropping any media
+    /// (the non-destructive "merge" — undo of a split).
+    public func mergeSegment(_ id: UUID) {
+        let merged = document.mergingSegment(id: id)
+        guard merged != document else { return }
+        apply(merged)
+        HapticFeedback.medium()
     }
 
     public func setFilter(_ filter: VideoFilterPreset) {
@@ -589,11 +595,14 @@ public final class VideoEditorViewModel: ObservableObject {
     private func installTimeObserver() {
         let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
-            MainActor.assumeIsolated {
-                guard let self, !self.isScrubbing else { return }
-                self.playheadTime = max(0, time.seconds)
-            }
+            let seconds = max(0, time.seconds)
+            Task { @MainActor in self?.handleTimeUpdate(seconds) }
         }
+    }
+
+    private func handleTimeUpdate(_ seconds: Double) {
+        guard !isScrubbing else { return }
+        playheadTime = seconds
     }
 
     private func attachLoopObserver(to item: AVPlayerItem) {
@@ -603,15 +612,16 @@ public final class VideoEditorViewModel: ObservableObject {
             object: item,
             queue: .main
         ) { [weak self] _ in
-            MainActor.assumeIsolated {
-                guard let self else { return }
-                self.player.seek(to: .zero)
-                if self.isPlaying && !self.isExporting {
-                    self.player.play()
-                } else {
-                    self.isPlaying = false
-                }
-            }
+            Task { @MainActor in self?.handlePlaybackEnded() }
+        }
+    }
+
+    private func handlePlaybackEnded() {
+        player.seek(to: .zero)
+        if isPlaying && !isExporting {
+            player.play()
+        } else {
+            isPlaying = false
         }
     }
 

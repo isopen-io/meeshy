@@ -442,22 +442,33 @@ struct SplitController: View {
 
     private func segmentCard(index: Int, segment: VideoSegment) -> some View {
         let isSelected = viewModel.selectedSegmentID == segment.id
-        return VStack(spacing: 4) {
+        let count = viewModel.document.segments.count
+        return VStack(spacing: 5) {
             Text("Segment \(index + 1)")
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
             Text(String(format: "%.1fs", segment.playbackDuration))
                 .font(.system(size: 10, design: .monospaced))
                 .foregroundStyle(theme.textMuted)
-            if viewModel.document.segments.count > 1 {
-                Button {
-                    viewModel.removeSegment(segment.id)
-                } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(theme.error)
+            HStack(spacing: 11) {
+                if index > 0 {
+                    cardButton("arrow.left", tint: theme.textSecondary) {
+                        viewModel.moveSegment(segment.id, to: index - 1)
+                    }
+                    cardButton("arrow.triangle.merge", tint: accent) {
+                        viewModel.mergeSegment(segment.id)
+                    }
                 }
-                .buttonStyle(.plain)
+                if index < count - 1 {
+                    cardButton("arrow.right", tint: theme.textSecondary) {
+                        viewModel.moveSegment(segment.id, to: index + 1)
+                    }
+                }
+                if count > 1 {
+                    cardButton("trash", tint: theme.error) {
+                        viewModel.removeSegment(segment.id)
+                    }
+                }
             }
         }
         .padding(.horizontal, 12)
@@ -474,6 +485,15 @@ struct SplitController: View {
             viewModel.selectedSegmentID = isSelected ? nil : segment.id
             HapticFeedback.light()
         }
+    }
+
+    private func cardButton(_ icon: String, tint: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(tint)
+        }
+        .buttonStyle(.plain)
     }
 }
 
