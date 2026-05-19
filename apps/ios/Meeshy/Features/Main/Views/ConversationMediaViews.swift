@@ -356,6 +356,7 @@ struct AudioMediaView: View, Equatable {
 
     static func == (lhs: AudioMediaView, rhs: AudioMediaView) -> Bool {
         lhs.attachment.id == rhs.attachment.id
+            && lhs.attachment.fileUrl == rhs.attachment.fileUrl
             && lhs.message.id == rhs.message.id
             && lhs.message.deliveryStatus == rhs.message.deliveryStatus
             && lhs.message.updatedAt == rhs.message.updatedAt
@@ -366,39 +367,48 @@ struct AudioMediaView: View, Equatable {
             && lhs.footerModel == rhs.footerModel
     }
 
-    @State private var isCached = false
+    @State private var resolvedAvailability: AudioAvailability = .needsDownload
     @State private var isAudioPlaying = false
     @State private var showAudioFullscreen = false
     @State private var selectedAudioLangCode: String? = nil
     @StateObject private var downloader = AttachmentDownloader()
 
-    /// Local optimistic audio (a `file://` URL) is on disk already — the player
-    /// is playable on the very first render, with no placeholder flash and no
-    /// cache poll. Server audio falls back to the `isCached` poll. RC3.2.
-    private var isPlayable: Bool {
-        isCached || attachment.fileUrl.hasPrefix("file://")
+    /// Disponibilité effective : un téléchargement actif prime, puis un
+    /// téléchargement terminé, sinon la résolution « au repos » du `.task`.
+    private var availability: AudioAvailability {
+        if downloader.isDownloading {
+            return .downloading(progress: downloader.progress)
+        }
+        if downloader.isCached {
+            return .ready
+        }
+        return resolvedAvailability
+    }
+
+    /// Résout `resolvedAvailability` depuis l'attachment courant. Appelé par
+    /// `.task(id: attachment.fileUrl)` : se ré-exécute quand l'URL bascule
+    /// optimiste (`file://`) → serveur (`https://`) à la réconciliation.
+    private func resolveAvailability() async {
+        let urlString = attachment.fileUrl
+        if urlString.hasPrefix("file://") {
+            let exists = FileManager.default.fileExists(
+                atPath: URL(string: urlString)?.path ?? ""
+            )
+            resolvedAvailability = AudioAvailability.resolve(
+                isLocalFile: true, localFileExists: exists, isServerCached: false
+            )
+            return
+        }
+        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+        let cached = await CacheCoordinator.shared.audio.isCached(resolved)
+        resolvedAvailability = AudioAvailability.resolve(
+            isLocalFile: false, localFileExists: false, isServerCached: cached
+        )
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ZStack {
-                if isPlayable {
-                    audioPlayer
-                        .transition(.opacity)
-                } else {
-                    audioPlaceholder
-                        .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.25), value: isPlayable)
-            .overlay(alignment: .topTrailing) {
-                if !isPlayable, let dur = attachment.duration, dur > 0 {
-                    audioDurationBadge(seconds: Double(dur) / 1000.0)
-                        .padding(.trailing, 8)
-                        .padding(.top, 6)
-                }
-            }
-            // Download handled by audioPlaceholder's integrated play button
+            audioPlayer
 
             if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && visualAttachments.isEmpty {
                 MessageTextRenderer.render(
@@ -430,22 +440,8 @@ struct AudioMediaView: View, Equatable {
                 selectedAudioLangCode = newLang
             }
         }
-        .task {
-            // Local optimistic audio (file:// URL) is already on disk — render
-            // the player straight away, no cache poll. See Sprint 3 RC3.2.
-            if attachment.fileUrl.hasPrefix("file://") {
-                isCached = true
-                return
-            }
-            let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
-            while !Task.isCancelled && !isCached {
-                let cached = await CacheCoordinator.shared.audio.isCached(resolved)
-                if cached {
-                    isCached = true
-                    break
-                }
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-            }
+        .task(id: attachment.fileUrl) {
+            await resolveAvailability()
         }
     }
 
@@ -502,7 +498,9 @@ struct AudioMediaView: View, Equatable {
                 onPlayingChange: { playing in
                     withAnimation(.easeInOut(duration: 0.2)) { isAudioPlaying = playing }
                 },
-                externalLanguage: $selectedAudioLangCode
+                externalLanguage: $selectedAudioLangCode,
+                availability: availability,
+                onDownload: { downloader.start(attachment: attachment, onShare: nil) }
             ) {
                 playerBottomContent
             }
@@ -517,7 +515,9 @@ struct AudioMediaView: View, Equatable {
                 onPlayingChange: { playing in
                     withAnimation(.easeInOut(duration: 0.2)) { isAudioPlaying = playing }
                 },
-                externalLanguage: $selectedAudioLangCode
+                externalLanguage: $selectedAudioLangCode,
+                availability: availability,
+                onDownload: { downloader.start(attachment: attachment, onShare: nil) }
             )
         }
     }
@@ -533,98 +533,6 @@ struct AudioMediaView: View, Equatable {
         }
     }
 
-    private var audioPlaceholder: some View {
-        let accent = Color(hex: contactColor)
-
-        return VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                // Play circle — triggers download
-                Button {
-                    HapticFeedback.medium()
-                    downloader.start(attachment: attachment, onShare: nil)
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(accent.opacity(downloader.isDownloading ? 0.5 : 0.3))
-                            .frame(width: 34, height: 34)
-                        if downloader.isDownloading {
-                            ProgressView().tint(.white).scaleEffect(0.7)
-                        } else {
-                            Image(systemName: "play.fill")
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(.white.opacity(0.6))
-                                .offset(x: 1)
-                        }
-                    }
-                }
-                .disabled(downloader.isDownloading)
-
-                // Static waveform placeholder (deterministic heights)
-                waveformPlaceholder(accent: accent)
-
-                // Surface the download weight (KB / MB) so the user knows the
-                // cost before tapping play to fetch the audio. See Sprint 3.
-                if attachment.fileSize > 0 {
-                    Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundColor(accent.opacity(0.65))
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-
-            // The footer lives inside the placeholder card too, so an
-            // uncached (server) audio still shows its sender + timestamp +
-            // delivery state before the download completes.
-            if let (model, actions) = audioFooter {
-                Divider()
-                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
-                BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
-                    .equatable()
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-            }
-        }
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(isDark ? accent.opacity(0.15) : accent.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 1)
-                )
-        )
-    }
-
-    private func waveformPlaceholder(accent: Color) -> some View {
-        HStack(spacing: 2) {
-            ForEach(0..<25, id: \.self) { i in
-                let seed = Double(i * 7 + 3)
-                let h = CGFloat(max(6, min(22, 8.0 + sin(seed) * 5 + cos(seed * 0.5) * 4)))
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(accent.opacity(0.2))
-                    .frame(width: 2, height: h)
-            }
-        }
-        .frame(height: 26)
-    }
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
-    }
-
-    private func audioDurationBadge(seconds: TimeInterval) -> some View {
-        return Text(formatDuration(seconds))
-            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-            .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.5))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6))
-            )
-    }
 }
 
 // MARK: - Animated Waveform Bar
