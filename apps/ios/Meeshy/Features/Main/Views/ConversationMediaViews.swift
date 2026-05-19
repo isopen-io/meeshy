@@ -347,10 +347,12 @@ struct AudioMediaView: View, Equatable {
     var onShowTranslationDetail: ((String) -> Void)?
     var onRequestTranslation: ((String, String) -> Void)?
     var activeAudioLanguageOverride: String? = nil
-    /// Identity bar (avatar / name / flags / time / delivery) injected by
-    /// `BubbleStandardLayout` for audio-only messages. Rendered inside the
-    /// audio widget so the footer is never duplicated below the bubble.
-    var identityBar: AnyView? = nil
+    /// Footer descriptor injected by `BubbleStandardLayout` for audio-only
+    /// messages — rendered inside the audio widget. `AudioMediaView` folds the
+    /// audio-language flags into it (see `audioFooter`), so the footer is a
+    /// single unified `BubbleFooter` and is never duplicated below the bubble.
+    var footerModel: BubbleFooterModel? = nil
+    var footerActions: BubbleFooterActions = .none
 
     static func == (lhs: AudioMediaView, rhs: AudioMediaView) -> Bool {
         lhs.attachment.id == rhs.attachment.id
@@ -361,6 +363,7 @@ struct AudioMediaView: View, Equatable {
             && lhs.accentColor == rhs.accentColor
             && lhs.contactColor == rhs.contactColor
             && lhs.activeAudioLanguageOverride == rhs.activeAudioLanguageOverride
+            && lhs.footerModel == rhs.footerModel
     }
 
     @State private var isCached = false
@@ -446,12 +449,41 @@ struct AudioMediaView: View, Equatable {
         }
     }
 
-    /// The audio widget only carries a bottom slot when there is something to
-    /// show — the language switcher or the injected identity bar. Without this
-    /// gate `AudioPlayerView` would draw an empty divider strip under the
-    /// player for plain audio-with-caption messages.
+    /// The audio widget carries a bottom slot only when a footer was injected
+    /// (audio-only messages). Without this gate `AudioPlayerView` would draw
+    /// an empty divider strip under the player for audio-with-caption.
     private var hasPlayerBottomContent: Bool {
-        !translatedAudios.isEmpty || identityBar != nil
+        footerModel != nil
+    }
+
+    /// The final footer for the audio widget: the injected base model with
+    /// the audio-language flags folded in, and `onFlagTap` wired to the audio
+    /// language switch. One unified `BubbleFooter` — no separate flag row.
+    private var audioFooter: (BubbleFooterModel, BubbleFooterActions)? {
+        guard var model = footerModel else { return nil }
+        var actions = footerActions
+        if !translatedAudios.isEmpty {
+            let origCode = message.originalLanguage.lowercased()
+            var codes = [origCode]
+            for audio in translatedAudios {
+                let code = audio.targetLanguage.lowercased()
+                if code != origCode, !codes.contains(code) { codes.append(code) }
+            }
+            let active = (selectedAudioLangCode ?? origCode).lowercased()
+            model.flags = codes.map { FooterFlag(code: $0, isActive: $0 == active) }
+            model.showsTranslate = onShowTranslationDetail != nil
+            actions.onFlagTap = { code in
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    selectedAudioLangCode = (code == origCode) ? nil : code
+                }
+                HapticFeedback.light()
+            }
+            if let detail = onShowTranslationDetail {
+                let messageId = message.id
+                actions.onTranslate = { detail(messageId) }
+            }
+        }
+        return (model, actions)
     }
 
     /// The playable audio widget. The bottom slot is only wired in when there
@@ -491,92 +523,14 @@ struct AudioMediaView: View, Equatable {
     }
 
     /// Footer rendered inside the audio widget (`AudioPlayerView.bottomContent`):
-    /// a single unified row — the audio-language switcher pinned leading, the
-    /// identity bar (timestamp + delivery, never its own flags) pinned
-    /// trailing. When there is no translated audio only the identity bar
-    /// shows. The footer is never duplicated below the bubble.
+    /// a single unified `BubbleFooter` — audio-language flags + translate on
+    /// the leading edge, timestamp + delivery pinned trailing.
     @ViewBuilder
     private var playerBottomContent: some View {
-        if translatedAudios.isEmpty {
-            if let identityBar {
-                identityBar
-            }
-        } else {
-            HStack(spacing: 8) {
-                audioTranslationRow
-                Spacer(minLength: 8)
-                if let identityBar {
-                    identityBar
-                }
-            }
+        if let (model, actions) = audioFooter {
+            BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
+                .equatable()
         }
-    }
-
-    /// Per-language flag pills + translate button, content-sized and grouped
-    /// on the leading edge — `playerBottomContent` adds the trailing spacer
-    /// and identity bar. Lets the user switch the spoken language without
-    /// leaving the bubble: `AudioPlayerView`'s own `languageSelector` is
-    /// hidden in the compact `messageBubble` context.
-    @ViewBuilder
-    private var audioTranslationRow: some View {
-        if !translatedAudios.isEmpty {
-            let accent = Color(hex: contactColor)
-            let origCode = message.originalLanguage.lowercased()
-            HStack(spacing: 4) {
-                audioFlagPill(code: origCode, isOriginal: true, isDark: isDark, accent: accent)
-
-                ForEach(translatedAudios, id: \.id) { audio in
-                    let code = audio.targetLanguage.lowercased()
-                    if code != origCode {
-                        audioFlagPill(code: code, isOriginal: false, isDark: isDark, accent: accent)
-                    }
-                }
-
-                if onShowTranslationDetail != nil {
-                    Button {
-                        onShowTranslationDetail?(message.id)
-                        HapticFeedback.light()
-                    } label: {
-                        Image(systemName: "translate")
-                            .font(.system(size: 10, weight: .medium))
-                            .foregroundColor(Color(hex: "4ECDC4"))
-                            .padding(.leading, 2)
-                    }
-                }
-            }
-        }
-    }
-
-    private func audioFlagPill(code: String, isOriginal: Bool, isDark: Bool, accent: Color) -> some View {
-        let display = LanguageDisplay.from(code: code)
-        let isSelected = selectedAudioLangCode?.lowercased() == code.lowercased()
-            || (selectedAudioLangCode == nil && isOriginal)
-        let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
-
-        return Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                selectedAudioLangCode = isOriginal ? nil : code
-            }
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: 2) {
-                Text(display?.flag ?? "🏳️")
-                    .font(.system(size: 10))
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 0.5)
-                        .fill(langColor)
-                        .frame(width: 8, height: 1.5)
-                }
-            }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-            .background(
-                Capsule().fill(isSelected
-                    ? langColor.opacity(isDark ? 0.2 : 0.12)
-                    : Color.clear)
-            )
-        }
-        .accessibilityLabel(display?.name ?? code)
     }
 
     private var audioPlaceholder: some View {
@@ -619,13 +573,14 @@ struct AudioMediaView: View, Equatable {
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
 
-            // Identity bar lives inside the placeholder card too, so an
+            // The footer lives inside the placeholder card too, so an
             // uncached (server) audio still shows its sender + timestamp +
             // delivery state before the download completes.
-            if let identityBar {
+            if let (model, actions) = audioFooter {
                 Divider()
                     .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
-                identityBar
+                BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
+                    .equatable()
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
             }

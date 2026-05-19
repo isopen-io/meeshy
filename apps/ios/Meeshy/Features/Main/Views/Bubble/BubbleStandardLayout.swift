@@ -432,15 +432,13 @@ struct BubbleStandardLayout: View {
                 }
             }
 
-            // Audio standalone. For audio-only messages the identity bar is
-            // injected into the audio widget itself (last attachment) so the
-            // footer renders *inside* the bubble and is never duplicated below.
+            // Audio standalone. For audio-only messages the footer is injected
+            // into the audio widget itself (last attachment) so it renders
+            // *inside* the bubble and is never duplicated below.
             ForEach(audioAttachments) { attachment in
                 mediaStandaloneView(
                     attachment,
-                    identityBar: (audioIsSoleContent && attachment.id == audioAttachments.last?.id)
-                        ? audioInjectedFooter
-                        : nil
+                    injectFooter: audioIsSoleContent && attachment.id == audioAttachments.last?.id
                 )
             }
 
@@ -644,17 +642,6 @@ struct BubbleStandardLayout: View {
             .padding(.bottom, 8)
     }
 
-    /// Footer injected into the audio widget for audio-only messages — its own
-    /// language switcher handles translation, so translation controls are off.
-    private var audioInjectedFooter: AnyView {
-        let (model, actions) = resolvedFooter(includesTranslationControls: false)
-        return AnyView(
-            BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
-                .equatable()
-                .fixedSize(horizontal: true, vertical: false)
-        )
-    }
-
     /// Live read of the global network monitor. Kept as a computed property
     /// so the bubble doesn't subscribe to its `@Published` and re-render on
     /// every offline/online edge — the parent (`ConversationViewModel`) is
@@ -802,8 +789,11 @@ struct BubbleStandardLayout: View {
     // MARK: - Audio standalone
 
     @ViewBuilder
-    private func mediaStandaloneView(_ attachment: MessageAttachment, identityBar: AnyView? = nil) -> some View {
+    private func mediaStandaloneView(_ attachment: MessageAttachment, injectFooter: Bool = false) -> some View {
         let isMe = content.isMe
+        // Audio-only messages host the bubble footer inside the audio widget;
+        // `AudioMediaView` folds the audio-language flags into this model.
+        let footer = injectFooter ? resolvedFooter(includesTranslationControls: false) : nil
         switch attachment.type {
         case .audio:
             AudioMediaView(
@@ -826,7 +816,8 @@ struct BubbleStandardLayout: View {
                 onShowTranslationDetail: onShowTranslationDetail,
                 onRequestTranslation: onRequestTranslation,
                 activeAudioLanguageOverride: activeAudioLanguage,
-                identityBar: identityBar
+                footerModel: footer?.0,
+                footerActions: footer?.1 ?? .none
             )
             .equatable()
 
