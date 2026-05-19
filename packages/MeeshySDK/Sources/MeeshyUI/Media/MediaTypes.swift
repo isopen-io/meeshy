@@ -184,7 +184,9 @@ public struct TranscriptionDisplaySegment: Identifiable {
     public static func buildFrom(segments: [MessageTranscriptionSegment]) -> [TranscriptionDisplaySegment] {
         var speakerMap: [String: Int] = [:]
         var nextIndex = 0
-        return segments.map { seg in
+        return segments
+            .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+            .map { seg in
             let sid = seg.speakerId ?? "default"
             if speakerMap[sid] == nil {
                 speakerMap[sid] = nextIndex
