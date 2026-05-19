@@ -386,7 +386,7 @@ public struct StoryComposerView: View {
                 onCancel: { audioEditorItem = nil }
             )
         }
-        .sheet(item: $mediaAudioEditorItem) { item in
+        .fullScreenCover(item: $mediaAudioEditorItem) { item in
             MeeshyAudioEditorView(
                 url: item.url,
                 onConfirm: { url, _, _, _ in
