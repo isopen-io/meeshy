@@ -1,0 +1,126 @@
+import Foundation
+import MeeshySDK
+
+/// Where a footer is rendered.
+enum BubbleFooterStyle: Equatable, Sendable {
+    case row      // below text / emoji / audio content, inside the bubble
+    case overlay  // dark capsule laid over image / video media
+}
+
+/// One language flag in the footer's language switcher.
+struct FooterFlag: Equatable, Sendable {
+    let code: String
+    let isActive: Bool
+}
+
+/// Identity shown on the leading edge of a `.row` footer. Populated for a
+/// received message that heads a group; nil for sent messages and for
+/// intermediate received messages.
+struct SenderIdentity: Equatable, Sendable {
+    let name: String
+    let username: String?
+    let role: MemberRole?
+    let avatarURL: String?
+    let accentColor: String
+    let moodEmoji: String?
+    let presence: PresenceState
+    let storyRing: StoryRingState
+}
+
+/// Pure, synchronously-built descriptor of a bubble footer. No I/O, no async.
+/// `Equatable` so `BubbleFooter` can be `.equatable()` and skip re-render.
+struct BubbleFooterModel: Equatable, Sendable {
+    var sender: SenderIdentity?
+    var flags: [FooterFlag]
+    var showsTranslate: Bool
+    var timestamp: String?
+    var delivery: MeeshyMessage.DeliveryStatus?
+    var isOffline: Bool
+    var isMe: Bool
+
+    /// A send still in flight — clock territory (excludes `.failed`).
+    var isPending: Bool {
+        switch delivery {
+        case .sending, .clock, .slow, .invisible: return true
+        default: return false
+        }
+    }
+
+    /// A send the outbox gave up on.
+    var isFailed: Bool { delivery == .failed }
+
+    static let empty = BubbleFooterModel(
+        sender: nil, flags: [], showsTranslate: false,
+        timestamp: nil, delivery: nil, isOffline: false, isMe: false
+    )
+}
+
+/// Per-element callbacks. Kept out of `BubbleFooterModel` so the model stays
+/// cleanly `Equatable`. Every callback is optional and independent — a
+/// consumer wires only the elements it wants to be interactive.
+struct BubbleFooterActions {
+    var onFlagTap: ((String) -> Void)?
+    var onTranslate: (() -> Void)?
+    var onRetry: (() -> Void)?
+    var onSenderTap: (() -> Void)?
+    var onViewStory: (() -> Void)?
+
+    init(
+        onFlagTap: ((String) -> Void)? = nil,
+        onTranslate: (() -> Void)? = nil,
+        onRetry: (() -> Void)? = nil,
+        onSenderTap: (() -> Void)? = nil,
+        onViewStory: (() -> Void)? = nil
+    ) {
+        self.onFlagTap = onFlagTap
+        self.onTranslate = onTranslate
+        self.onRetry = onRetry
+        self.onSenderTap = onSenderTap
+        self.onViewStory = onViewStory
+    }
+
+    static let none = BubbleFooterActions()
+}
+
+extension BubbleFooterModel {
+    /// Builds a footer model, applying timestamp-visibility gating.
+    ///
+    /// `timestamp` is non-nil only when the message should display its time:
+    /// always when the send status forces it (pending / failed), always in
+    /// group/public/channel conversations, and in direct conversations only
+    /// for the last sent and last received message. `delivery` is non-nil
+    /// only for outgoing (`isMe`) messages — the recipient side has no
+    /// delivery state of its own.
+    static func make(
+        timeString: String,
+        deliveryStatus: MeeshyMessage.DeliveryStatus,
+        isMe: Bool,
+        isDirect: Bool,
+        isLastSentMessage: Bool,
+        isLastReceivedMessage: Bool,
+        isOnline: Bool,
+        sender: SenderIdentity?,
+        flags: [FooterFlag],
+        showsTranslate: Bool
+    ) -> BubbleFooterModel {
+        let statusForcesTime: Bool = {
+            switch deliveryStatus {
+            case .sending, .clock, .slow, .invisible, .failed: return true
+            case .sent, .delivered, .read: return false
+            }
+        }()
+
+        let lastOfSide = isMe ? isLastSentMessage : isLastReceivedMessage
+        let showsTime = statusForcesTime || !isDirect || lastOfSide
+
+        return BubbleFooterModel(
+            sender: sender,
+            flags: flags,
+            showsTranslate: showsTranslate,
+            timestamp: showsTime ? timeString : nil,
+            delivery: isMe ? deliveryStatus : nil,
+            isOffline: !isOnline,
+            isMe: isMe
+        )
+    }
+}
