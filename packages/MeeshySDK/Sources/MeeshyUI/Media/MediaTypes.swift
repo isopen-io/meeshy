@@ -467,7 +467,7 @@ public enum CodeLanguage: String, CaseIterable, Sendable {
 
 // MARK: - Crop Ratio
 
-public enum CropRatio: Equatable {
+public enum CropRatio: Equatable, Hashable {
     case square
     case ratio4x3
     case ratio16x9

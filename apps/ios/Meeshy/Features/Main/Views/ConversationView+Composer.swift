@@ -151,9 +151,13 @@ extension ConversationView {
             set: { if !$0 { scrollState.videoToEdit = nil } }
         )) {
             if let url = scrollState.videoToEdit {
-                MeeshyVideoPreviewView(url: url, context: .message, accentColor: accentColor) {
-                    scrollState.videoToEdit = nil
-                }
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .message,
+                    accentColor: accentColor,
+                    onComplete: { _ in scrollState.videoToEdit = nil },
+                    onCancel: { scrollState.videoToEdit = nil }
+                )
             }
         }
         // E. Audio → MeeshyAudioEditorView
