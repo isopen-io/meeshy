@@ -1,7 +1,7 @@
-# Refonte du lecteur audio iOS — vue unifiée, lecture après envoi, plein écran adaptatif
+# Refonte du lecteur audio iOS — vue unifiée & lecture après envoi
 
 Date : 2026-05-19
-Statut : design validé, en attente de relecture utilisateur
+Statut : design validé par l'utilisateur
 
 ## 1. Contexte & problème
 
@@ -53,18 +53,15 @@ bascule de `file://` à `https://`.
   (télécharger / téléchargement / play).
 - **Lecture immédiate après envoi** : un audio qu'on vient d'enregistrer est local
   donc directement jouable, et le reste à travers la transition optimiste → confirmé.
-- **`AudioFullscreenView` adaptative** : la vue plein écran respecte le thème
-  (dark / light) au lieu d'un noir codé en dur, et gère proprement tous les états
-  (y compris la liste vide) sans bug.
 
 ### Non-objectifs
 
+- **`AudioFullscreenView`** (vue plein écran, noir codé en dur → adaptatif dark/light)
+  — traité **par un agent spécialisé séparé**, hors de ce périmètre.
 - L'alignement de la coche de livraison dans les bulles texte (`.fixedSize` qui
   écrase le `Spacer` dans `BubbleFooter`) — traité séparément comme bugfix rapide.
 - Le téléchargement automatique des audios reçus — comportement « tap pour
   télécharger » conservé.
-- L'unification du player bespoke du plein écran avec `AudioPlayerView` — hors
-  périmètre ; `AudioFullscreenView` garde son UI dédiée, rendue seulement adaptative.
 
 ## 3. Architecture cible
 
@@ -120,18 +117,8 @@ aucun changement de comportement pour l'audio en cours de composition.
   téléchargement → `.downloading(...)`, à la fin → `.ready`.
 - Rend **un seul** `AudioPlayerView`, en lui passant `availability` +
   `onDownload: { downloader.start(...) }`.
-
-### 3.4 `AudioFullscreenView` (modifié, app)
-
-- Remplacer `Color.black` et tous les `.white` codés en dur par des couleurs
-  pilotées par `ThemeManager` : dark → fond near-black indigo, light → fond clair
-  indigo-teinté ; contrôles et textes dérivés du thème.
-- Gérer `allAudioItems` vide : afficher un état vide explicite (pas un void noir),
-  et vérifier le wiring de `allAudioItems` en amont.
-- Corriger `saveAudio` pour les audios locaux `file://` (actuellement
-  `URLSession.download` est appelé sur une URL locale).
-- Cycle de vie du player robuste : pas de crash, `player.stop()` / désinscription
-  cohérents sur `onDisappear` et changement de page.
+- Le bouton plein écran (`onFullscreen` → `.fullScreenCover(AudioFullscreenView)`)
+  est conservé tel quel — `AudioFullscreenView` est retravaillée par l'agent dédié.
 
 ## 4. Flux de données — transition optimiste → confirmé
 
@@ -156,8 +143,6 @@ fichier après envoi) qu'une fois le cache serveur confirmé chaud.
 - Échec de téléchargement → retour à `.needsDownload`, haptique d'erreur, le bouton
   redevient « télécharger » (réessai possible).
 - Audio serveur introuvable / 404 → `.needsDownload` persistant ; pas de crash.
-- `AudioFullscreenView` : liste vide → état vide ; `saveAudio` en échec → état
-  `.failed` puis retour `.idle` (déjà en place, à fiabiliser pour les `file://`).
 
 ## 6. Stratégie de tests
 
@@ -165,9 +150,7 @@ fichier après envoi) qu'une fois le cache serveur confirmé chaud.
   + état de cache simulé ; sortie : `.ready` / `.needsDownload`). Logique testable.
 - **Smoke visuel** :
   - envoi d'un audio → lecteur jouable immédiatement, aucun flash de placeholder ;
-  - audio reçu non téléchargé → bouton télécharger → progression → play ;
-  - plein écran en thème dark **et** light ;
-  - plein écran avec liste audio vide → état vide propre.
+  - audio reçu non téléchargé → bouton télécharger → progression → play.
 - Build vert via `./apps/ios/meeshy.sh build`.
 
 ## 7. Risques
@@ -176,17 +159,21 @@ fichier après envoi) qu'une fois le cache serveur confirmé chaud.
   par défaut `.ready` → appelants existants inchangés.
 - `.task(id: attachment.fileUrl)` peut re-déclencher le chargement de la waveform.
   Mitigation : garde « waveform déjà chargée » conservée.
-- Thématiser `AudioFullscreenView` en light : contraste à vérifier (la vue était
-  pensée white-on-black). Mitigation : mapping couleur explicite + smoke light.
 - La re-création de la bulle à la réconciliation reste (identité de ligne du
   `ForEach`). La refonte rend la vue robuste à cette re-création (résolution rapide
   via `.task(id:)` + cache chaud) plutôt que de supprimer la re-création elle-même
   (qui relève du `ForEach` de la liste de messages — hors périmètre).
+- Coordination avec l'agent `AudioFullscreenView` : périmètres de fichiers
+  disjoints (`AudioMediaView` / `AudioPlayerView` ici, `AudioFullscreenView`
+  là-bas). Seul couplage : `AudioMediaView` présente `AudioFullscreenView` via
+  `.fullScreenCover` — interface inchangée par cette refonte.
 
 ## 8. Hors périmètre (suivi séparé)
 
-Coche de livraison dans les bulles texte : `textBubbleContent` applique
-`.fixedSize(horizontal: true)` au footer, ce qui écrase le `Spacer(minLength:)` de
-`BubbleFooter.rowFooter` → la coche se colle aux drapeaux de langue au lieu d'aller
-au bord droit (contrairement aux bulles média/grille en footer `.overlay`
-épinglé `.bottomTrailing`). Bugfix rapide traité après cette refonte.
+- **`AudioFullscreenView`** — vue plein écran noire à rendre adaptative dark/light :
+  prise en charge par un agent spécialisé dédié.
+- **Coche de livraison** dans les bulles texte : `textBubbleContent` applique
+  `.fixedSize(horizontal: true)` au footer, ce qui écrase le `Spacer(minLength:)` de
+  `BubbleFooter.rowFooter` → la coche se colle aux drapeaux de langue au lieu d'aller
+  au bord droit (contrairement aux bulles média/grille en footer `.overlay`
+  épinglé `.bottomTrailing`). Bugfix rapide traité après cette refonte.
