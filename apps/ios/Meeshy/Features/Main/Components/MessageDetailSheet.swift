@@ -147,6 +147,7 @@ struct MessageDetailSheet: View {
     var translatedAudios: [MessageTranslatedAudio] = []
     var onSelectTranslation: ((MessageTranslation?) -> Void)? = nil
     var onSelectAudioLanguage: ((String?) -> Void)? = nil
+    // Deprecated: no longer invoked (translate-blocking Case 1 persists+broadcasts).
     var onRequestTranslation: ((String, String) -> Void)? = nil
     var onDismissAction: (() -> Void)? = nil
 
@@ -188,6 +189,7 @@ struct MessageDetailSheet: View {
     @State private var translatingLanguages: Set<String> = []
     @State private var selectedLanguageCode: String? = nil
     @State private var isLoadingTranslations = false
+    @State private var translationError: String? = nil
 
     // Delete animation
     @State private var deleteIconScale: CGFloat = 0.5
@@ -537,6 +539,15 @@ struct MessageDetailSheet: View {
             ForEach(Self.supportedLanguages.filter { $0.code != originalLang }, id: \.code) { lang in
                 languageRow(lang, originalLang: originalLang)
             }
+
+            if let translationError {
+                Text(translationError)
+                    .font(.system(size: 11))
+                    .foregroundColor(MeeshyColors.error)
+                    .padding(.horizontal, 8)
+                    .padding(.top, 4)
+                    .transition(.opacity)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .animation(.spring(response: 0.35, dampingFraction: 0.8), value: selectedLanguageCode)
@@ -665,21 +676,24 @@ struct MessageDetailSheet: View {
     }
 
     private func translateTo(_ targetLang: String, from sourceLang: String) async {
+        // Audio messages have empty `content`; text translation only applies
+        // when there is text. (Audio messages are handled by the audio branch.)
         guard !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
         translatingLanguages.insert(targetLang)
+        translationError = nil
         defer { translatingLanguages.remove(targetLang) }
 
         do {
             let response = try await TranslationService.shared.translate(
                 text: message.content,
                 sourceLanguage: sourceLang,
-                targetLanguage: targetLang
+                targetLanguage: targetLang,
+                messageId: message.id
             )
             translations[targetLang] = response.translatedText
             withAnimation(.easeInOut(duration: 0.2)) {
                 selectedLanguageCode = targetLang
             }
-            // Notify parent to update bubble
             let mt = MessageTranslation(
                 id: "\(message.id)-\(targetLang)",
                 messageId: message.id,
@@ -690,10 +704,16 @@ struct MessageDetailSheet: View {
                 confidenceScore: nil
             )
             onSelectTranslation?(mt)
-            // Trigger socket-based translation for persistence
-            onRequestTranslation?(message.id, targetLang)
+            // No socket call: passing `messageId` routes /translate-blocking
+            // into the Case 1 "retranslation" branch, which persists AND
+            // broadcasts via `message:translation`. A second socket request
+            // would double-persist.
             HapticFeedback.success()
         } catch {
+            translationError = String(
+                localized: "translation.error",
+                defaultValue: "La traduction a échoué. Réessayez."
+            )
             HapticFeedback.error()
         }
     }
