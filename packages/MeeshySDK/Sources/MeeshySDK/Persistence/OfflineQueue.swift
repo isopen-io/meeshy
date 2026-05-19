@@ -524,10 +524,17 @@ public actor OfflineQueue {
             pendingCountSubject.send(items.count)
             return
         }
+        // Seules les opérations qui justifient l'indicateur « Synchronisation… »
+        // sont comptées — un accusé de lecture (`markAsRead`) coincé ne doit
+        // pas maintenir le bandeau alors que la conversation est synchronisée.
+        let excludedKinds = OutboxKind.allCases
+            .filter { !$0.countsTowardSyncIndicator }
+            .map(\.rawValue)
         let count: Int = (try? await pool.read { db in
             try OutboxRecord
                 .filter([OutboxStatus.pending.rawValue, OutboxStatus.inflight.rawValue]
                     .contains(Column("status")))
+                .filter(!excludedKinds.contains(Column("kind")))
                 .fetchCount(db)
         }) ?? items.count
         pendingCountSubject.send(count)

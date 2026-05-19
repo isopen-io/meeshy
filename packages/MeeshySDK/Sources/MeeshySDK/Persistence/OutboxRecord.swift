@@ -50,6 +50,25 @@ public enum OutboxKind: String, Codable, CaseIterable, Sendable {
     case toggleLikeComment
 }
 
+extension OutboxKind {
+    /// Whether a still-pending row of this kind should keep the app's
+    /// « Synchronisation… » indicator visible.
+    ///
+    /// `markAsRead` est un accusé de lecture purement informatif et
+    /// idempotent : s'il échoue ou reste coincé (session expirée, etc.) le
+    /// contenu de la conversation est malgré tout synchronisé. Le compter
+    /// ferait croire à l'utilisateur qu'une synchro est en cours alors que
+    /// tout est à jour — c'est précisément le bandeau « bloqué » observé.
+    public var countsTowardSyncIndicator: Bool {
+        switch self {
+        case .markAsRead:
+            return false
+        default:
+            return true
+        }
+    }
+}
+
 public enum OutboxStatus: String, Codable, Sendable {
     case pending
     case inflight
