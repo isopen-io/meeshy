@@ -144,6 +144,7 @@
 		BBLL0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLL0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift */; };
 		BBLO0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLO0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift */; };
 		MDLP0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift */; };
+		MDGP0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDGP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift */; };
 		BBLB0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLB0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift */; };
 		BBLC0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLC0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleContent.swift */; };
 		BBLD0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLD0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift */; };
@@ -156,6 +157,7 @@
 		BBLM0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLM0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift */; };
 		BFMT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFMT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift */; };
 		MDLT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift */; };
+		MDGT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDGT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift */; };
 		BBLN0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleSecondaryContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLN0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleSecondaryContent.swift */; };
 		BBLP0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleEphemeralLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleEphemeralLifecycle.swift */; };
 		BBLQ0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLQ0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift */; };
@@ -641,6 +643,7 @@
 		BBLL0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift; sourceTree = SOURCE_ROOT; };
 		BBLO0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift; sourceTree = SOURCE_ROOT; };
 		MDLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift; sourceTree = SOURCE_ROOT; };
+		MDGP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift; sourceTree = SOURCE_ROOT; };
 		BBLB0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift; sourceTree = SOURCE_ROOT; };
 		BBLC0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleContent.swift; sourceTree = SOURCE_ROOT; };
 		BBLD0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift; sourceTree = SOURCE_ROOT; };
@@ -653,6 +656,7 @@
 		BBLM0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift; sourceTree = SOURCE_ROOT; };
 		BFMT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift; sourceTree = SOURCE_ROOT; };
 		MDLT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift; sourceTree = SOURCE_ROOT; };
+		MDGT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift; sourceTree = SOURCE_ROOT; };
 		BBLN0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleSecondaryContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleSecondaryContent.swift; sourceTree = SOURCE_ROOT; };
 		BBLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleEphemeralLifecycle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleEphemeralLifecycle.swift; sourceTree = SOURCE_ROOT; };
 		BBLQ0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift; sourceTree = SOURCE_ROOT; };
@@ -1441,6 +1445,7 @@
 				BBLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleEphemeralLifecycle.swift */,
 				BBLU0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleBlurRevealLifecycle.swift */,
 				MDLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift */,
+				MDGP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift */,
 			);
 			path = Bubble;
 			sourceTree = "<group>";
@@ -1457,6 +1462,7 @@
 				BBLQ0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift */,
 				BBLH0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleBlurRevealLifecycleTests.swift */,
 				MDLT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift */,
+				MDGT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift */,
 			);
 			path = Bubble;
 			sourceTree = "<group>";
@@ -2185,6 +2191,7 @@
 				BBLL0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift in Sources */,
 				BBLO0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift in Sources */,
 				MDLP0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift in Sources */,
+				MDGP0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift in Sources */,
 				SKLN0001000100010001BLD /* Meeshy/Features/Main/Views/Skeletons/SkeletonVisibilityResolver.swift in Sources */,
 				SKLN0002000100010001BLD /* Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift in Sources */,
 				SKLN0003000100010001BLD /* Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift in Sources */,
@@ -2461,6 +2468,7 @@
 				BBLM0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift in Sources */,
 				BFMT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift in Sources */,
 				MDLT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift in Sources */,
+				MDGT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift in Sources */,
 				BBLE0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleEquatableTests.swift in Sources */,
 				BBLI0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/ThemedMessageBubbleEquatableTests.swift in Sources */,
 				BBLW0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleExpandableTextStateTests.swift in Sources */,
