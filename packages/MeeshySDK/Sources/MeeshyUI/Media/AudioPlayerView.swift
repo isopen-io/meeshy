@@ -259,6 +259,7 @@ public struct AudioPlayerView: View {
 
     public var onFullscreen: (() -> Void)? = nil
     public var onRequestTranscription: (() -> Void)? = nil
+    public var onRetranscribe: (() -> Void)? = nil
     public var onDelete: (() -> Void)? = nil
     public var onEdit: (() -> Void)? = nil
     public var onPlayingChange: ((Bool) -> Void)? = nil
@@ -272,6 +273,7 @@ public struct AudioPlayerView: View {
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isTranscriptionExpanded = false
     @State private var selectedAudioLanguage: String = "orig"
+    @State private var isRetranscribing = false
 
     private var isDark: Bool { theme.mode.isDark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
@@ -336,6 +338,7 @@ public struct AudioPlayerView: View {
                 translatedAudios: [MessageTranslatedAudio] = [],
                 onFullscreen: (() -> Void)? = nil,
                 onRequestTranscription: (() -> Void)? = nil,
+                onRetranscribe: (() -> Void)? = nil,
                 onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
                 onPlayingChange: ((Bool) -> Void)? = nil,
                 externalLanguage: Binding<String?>? = nil,
@@ -345,6 +348,7 @@ public struct AudioPlayerView: View {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
         self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
+        self.onRetranscribe = onRetranscribe
         self.onDelete = onDelete; self.onEdit = onEdit
         self.onPlayingChange = onPlayingChange
         self.externalLanguage = externalLanguage
@@ -473,6 +477,8 @@ public struct AudioPlayerView: View {
                     .padding(.vertical, 6)
                 }
 
+                retranscribeButton
+
                 if let slot = bottomSlot {
                     slot.padding(.horizontal, 10).padding(.bottom, 6)
                 }
@@ -507,8 +513,38 @@ public struct AudioPlayerView: View {
             if let slot = bottomSlot {
                 slot.padding(.horizontal, 10)
             }
+            retranscribeButton
         }
         .padding(.bottom, 6)
+    }
+
+    // MARK: - Re-transcribe Button
+    @ViewBuilder
+    private var retranscribeButton: some View {
+        if let onRetranscribe {
+            Button {
+                guard !isRetranscribing else { return }
+                isRetranscribing = true
+                onRetranscribe()
+                HapticFeedback.light()
+            } label: {
+                HStack(spacing: 4) {
+                    if isRetranscribing {
+                        ProgressView().scaleEffect(0.6)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    Text(String(localized: "media.audio.retranscribe",
+                                 defaultValue: "Re-transcrire", bundle: .module))
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+            .disabled(isRetranscribing)
+        }
     }
 
     private var truncatedSegments: [TranscriptionDisplaySegment] {
