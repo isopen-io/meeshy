@@ -277,14 +277,43 @@ public struct AudioPlayerView: View {
     private var accent: Color { Color(hex: accentColor) }
 
     private var displaySegments: [TranscriptionDisplaySegment] {
-        if selectedAudioLanguage != "orig",
-           let translated = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selectedAudioLanguage.lowercased() }),
-           !translated.segments.isEmpty {
-            return TranscriptionDisplaySegment.buildFrom(segments: translated.segments)
+        AudioPlayerView.resolveDisplaySegments(
+            selectedLanguage: selectedAudioLanguage,
+            transcription: transcription,
+            translatedAudios: translatedAudios
+        )
+    }
+
+    /// Pure resolution of the transcription strip segments. Falls back to a
+    /// single synthesized segment from the full text when the per-segment
+    /// list is empty — symmetrically for the original transcription AND for a
+    /// selected translated audio (otherwise stub-segment translated audios
+    /// would render a blank strip).
+    nonisolated public static func resolveDisplaySegments(
+        selectedLanguage: String,
+        transcription: MessageTranscription?,
+        translatedAudios: [MessageTranslatedAudio]
+    ) -> [TranscriptionDisplaySegment] {
+        if selectedLanguage != "orig",
+           let translated = translatedAudios.first(where: {
+               $0.targetLanguage.lowercased() == selectedLanguage.lowercased()
+           }) {
+            let builtTranslated = TranscriptionDisplaySegment.buildFrom(segments: translated.segments)
+            if builtTranslated.isEmpty,
+               !translated.transcription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return [TranscriptionDisplaySegment(
+                    text: translated.transcription,
+                    startTime: 0,
+                    endTime: Double(translated.durationMs) / 1000.0,
+                    speakerId: nil,
+                    speakerColor: TranscriptionDisplaySegment.speakerPalette[0]
+                )]
+            }
+            return builtTranslated
         }
         guard let t = transcription else { return [] }
         let built = TranscriptionDisplaySegment.buildFrom(t)
-        if built.isEmpty, !t.text.isEmpty {
+        if built.isEmpty, !t.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return [TranscriptionDisplaySegment(
                 text: t.text,
                 startTime: 0,
