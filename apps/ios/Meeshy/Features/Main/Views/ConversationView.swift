@@ -854,7 +854,8 @@ struct ConversationView: View {
                 accentColor: accentColor,
                 isDirect: isDirect,
                 bottomInset: composerHeight + 16
-                    + (viewModel.typingUsernames.isEmpty ? 0 : Self.typingIndicatorReservedHeight),
+                    + ((viewModel.typingUsernames.isEmpty || !scrollState.isNearBottom)
+                       ? 0 : Self.typingIndicatorReservedHeight),
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
@@ -991,12 +992,13 @@ struct ConversationView: View {
                 }
             )
 
-            // Typing bubble anchored above the composer. Visible only when a
-            // third party is typing. When the user is scrolled to the bottom
-            // this reads as a "typing bubble after the last message"; when
-            // scrolled up it stays anchored low and the scroll-to-bottom
-            // button (zIndex 60) carries the dominant indicator.
-            if !viewModel.typingUsernames.isEmpty {
+            // Typing bubble — visible UNIQUEMENT en bas de la conversation.
+            // Dès que l'utilisateur quitte le bas, elle disparaît : le bouton
+            // de retour au dernier message (zIndex 60) porte déjà l'indication
+            // de frappe, garder la bulle ancrée ne ferait que la dupliquer.
+            // Elle ne suit donc jamais le scroll.
+            let showsInlineTyping = !viewModel.typingUsernames.isEmpty && scrollState.isNearBottom
+            if showsInlineTyping {
                 VStack {
                     Spacer()
                     inlineTypingIndicator
@@ -1005,7 +1007,7 @@ struct ConversationView: View {
                 }
                 .zIndex(58)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.typingUsernames.isEmpty)
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showsInlineTyping)
                 .allowsHitTesting(false)
             }
 
