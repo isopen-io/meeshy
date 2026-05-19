@@ -495,6 +495,13 @@ struct AudioMediaView: View, Equatable {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 onFullscreen: { showAudioFullscreen = true },
+                onRetranscribe: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: true
+                        )
+                    }
+                },
                 onPlayingChange: { playing in
                     withAnimation(.easeInOut(duration: 0.2)) { isAudioPlaying = playing }
                 },
@@ -512,6 +519,13 @@ struct AudioMediaView: View, Equatable {
                 transcription: transcription,
                 translatedAudios: translatedAudios,
                 onFullscreen: { showAudioFullscreen = true },
+                onRetranscribe: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: true
+                        )
+                    }
+                },
                 onPlayingChange: { playing in
                     withAnimation(.easeInOut(duration: 0.2)) { isAudioPlaying = playing }
                 },

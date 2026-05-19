@@ -45,7 +45,14 @@ struct BubbleAttachmentView: View {
                 context: .messageBubble,
                 accentColor: accentHex,
                 transcription: transcription,
-                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id }
+                translatedAudios: translatedAudios.filter { $0.attachmentId == attachment.id },
+                onRetranscribe: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: true
+                        )
+                    }
+                }
             )
 
         case .file:
