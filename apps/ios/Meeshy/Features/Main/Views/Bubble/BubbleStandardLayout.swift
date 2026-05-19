@@ -177,6 +177,32 @@ struct BubbleStandardLayout: View {
             && !audioAttachments.isEmpty
     }
 
+    /// True when the message carries a single audio attachment AND quotes
+    /// another message. In that case the audio player must render *inside*
+    /// the bubble built around the quoted reply — not as a standalone widget
+    /// floating outside it. Scoped to the pure `.audio` case: `.mixed`
+    /// (audio alongside visual / non-media) keeps the legacy standalone
+    /// layout. See `bubbleInnerContent` (host) and `contentStack` (skip).
+    private var audioInQuoteBubble: Bool {
+        guard content.reply != nil, !isEmojiOnly else { return false }
+        if case .audio = content.attachments { return true }
+        return false
+    }
+
+    /// Whether the bubble's inner content stack (non-media attachments,
+    /// expandable text, link preview, inline translation panel) has anything
+    /// to render. Gates the padded VStack so a quote-only bubble — or an
+    /// audio-in-quote bubble — never draws an empty padded strip below its
+    /// content. Behavior-preserving: every branch mirrors a child of the
+    /// stack, so non-empty bubbles render exactly as before.
+    private var hasBubbleBodyContent: Bool {
+        if !nonMediaAttachments.isEmpty { return true }
+        if !(content.text?.raw.isEmpty ?? true) { return true }
+        if LinkPreviewFetcher.firstURL(in: effectiveContent) != nil { return true }
+        if secondaryContent != nil, secondaryLangCode != nil { return true }
+        return false
+    }
+
     private var emojiFontSize: CGFloat {
         content.text?.emojiFontSize ?? 15
     }
@@ -434,12 +460,17 @@ struct BubbleStandardLayout: View {
 
             // Audio standalone. For audio-only messages the footer is injected
             // into the audio widget itself (last attachment) so it renders
-            // *inside* the bubble and is never duplicated below.
-            ForEach(audioAttachments) { attachment in
-                mediaStandaloneView(
-                    attachment,
-                    injectFooter: audioIsSoleContent && attachment.id == audioAttachments.last?.id
-                )
+            // *inside* the bubble and is never duplicated below. When the
+            // audio message also quotes another message the player is hosted
+            // inside the quote bubble instead (see `bubbleInnerContent`) — so
+            // it is skipped here to avoid rendering it twice.
+            if !audioInQuoteBubble {
+                ForEach(audioAttachments) { attachment in
+                    mediaStandaloneView(
+                        attachment,
+                        injectFooter: audioIsSoleContent && attachment.id == audioAttachments.last?.id
+                    )
+                }
             }
 
             // Emoji-only: large emoji without bubble
@@ -509,67 +540,83 @@ struct BubbleStandardLayout: View {
                 }
         }
 
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(nonMediaAttachments) { attachment in
-                attachmentView(attachment)
+        // Audio player hosted *inside* the quote bubble. When a message both
+        // quotes another message and carries audio, the player belongs inside
+        // the bubble the quoted reply lives in — not floating outside it. The
+        // footer (sender + timestamp + delivery + audio-language flags) is
+        // injected into the audio widget, so `standardFooter` is suppressed
+        // for this layout (see `textBubbleContent`). The 6pt horizontal inset
+        // matches the quoted-reply card's own inset above it.
+        if audioInQuoteBubble {
+            ForEach(audioAttachments) { attachment in
+                mediaStandaloneView(attachment, injectFooter: true)
+                    .padding(.horizontal, 6)
+                    .padding(.bottom, 4)
             }
-
-            if let textRaw = content.text?.raw, !textRaw.isEmpty {
-                // No `.onLongPressGesture` — see comment in `emojiOnlyContent`.
-                // The container's long-press opens the options overlay; the
-                // translate icon in the identity bar opens translation detail.
-                expandableTextView
-            }
-
-            // Inline OpenGraph preview for the first URL in the
-            // effective (possibly translated) content. Self-loading.
-            if let url = LinkPreviewFetcher.firstURL(in: effectiveContent) {
-                LinkPreviewCard(
-                    urlString: url,
-                    accentColor: contactColor,
-                    isDark: isDark
-                )
-                .padding(.top, 4)
-            }
-
-            secondaryContentView
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, content.hasTextOrNonMediaContent ? 10 : 4)
+
+        if hasBubbleBodyContent {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(nonMediaAttachments) { attachment in
+                    attachmentView(attachment)
+                }
+
+                if let textRaw = content.text?.raw, !textRaw.isEmpty {
+                    // No `.onLongPressGesture` — see comment in `emojiOnlyContent`.
+                    // The container's long-press opens the options overlay; the
+                    // translate icon in the identity bar opens translation detail.
+                    expandableTextView
+                }
+
+                // Inline OpenGraph preview for the first URL in the
+                // effective (possibly translated) content. Self-loading.
+                if let url = LinkPreviewFetcher.firstURL(in: effectiveContent) {
+                    LinkPreviewCard(
+                        urlString: url,
+                        accentColor: contactColor,
+                        isDark: isDark
+                    )
+                    .padding(.top, 4)
+                }
+
+                secondaryContentView
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, content.hasTextOrNonMediaContent ? 10 : 4)
+        }
     }
 
     @ViewBuilder
     private var textBubbleContent: some View {
         let isMe = content.isMe
         let hasEdited = content.editedAt != nil
-        // Identity bar (avatar + name + flags ± time + delivery) always
-        // renders inside the bubble. The custom `BubbleContentLayout`
-        // measures the inner content (text, attachments, reply preview)
-        // and the identity bar separately, then places the bar on its
-        // own line at the trailing edge for sent messages, leading edge
-        // for received ones — matching iMessage. Without this layout the
-        // identity bar's HStack would either stretch the bubble to 70%
-        // (greedy Spacer) or sit awkwardly leading-aligned even on sent
-        // bubbles. Time + delivery icon visibility is gated separately
-        // through `identityBarSection` (only the last bubble of each side).
-        // Plain VStack with `.fixedSize(horizontal: true, vertical: false)`
-        // on the identity bar. The custom `BubbleContentLayout` we used
-        // before reported intrinsic content heights to the parent
-        // UICollectionView's `estimated(80)` row, but SwiftUI re-measures
-        // the rendered subviews at a slightly different size — the cell
-        // height gets stuck on the first measurement and consecutive
-        // bubbles end up overlapping vertically. Native SwiftUI VStack
-        // sizing rounds-trips through UIHostingConfiguration cleanly:
-        // each cell computes its real height and the layout flows
-        // without bleed-through. The trade-off is that identity bar
-        // sits at the bubble's leading edge instead of trailing — the
-        // metaRow's inner Spacer still pushes time/delivery to the
-        // right of its (collapsed via fixedSize) row, so the timestamp
-        // visually still hugs the right of compact bubbles.
-        VStack(alignment: .leading, spacing: 4) {
-            bubbleInnerContent
-            standardFooter
-                .fixedSize(horizontal: true, vertical: false)
+        // Body + footer are stacked by `BubbleBodyFooterLayout`, not a plain
+        // VStack. The footer carries a trailing Spacer — language flags on the
+        // leading edge, timestamp + delivery check on the trailing edge. In a
+        // plain VStack that Spacer is greedy and stretches the whole bubble to
+        // its 70% max width; `.fixedSize` collapses the Spacer instead, which
+        // pins the check right after the flags rather than on the bubble edge.
+        // The custom Layout measures the body once and hands that exact width
+        // to the footer: the text still wraps, the bubble stays sized to its
+        // content, and the check lands on the trailing edge — matching the
+        // corner-pinned footer of media bubbles. `sizeThatFits` and
+        // `placeSubviews` both derive every value from the same resolved
+        // width, so the reported height is self-consistent (no
+        // UICollectionView cell-height drift).
+        BubbleBodyFooterLayout(spacing: 4) {
+            // Wrapped in a VStack so the Layout sees the body as ONE opaque
+            // subview — a bare @ViewBuilder property would be flattened into
+            // its individual conditional branches.
+            VStack(alignment: .leading, spacing: 4) {
+                bubbleInnerContent
+            }
+            // For an audio-in-quote bubble the audio widget hosts the unified
+            // footer itself (sender + timestamp + delivery + audio-language
+            // flags), so the standard footer row is suppressed to avoid a
+            // duplicate meta row below the player.
+            if !audioInQuoteBubble {
+                standardFooter
+            }
         }
         .padding(.top, hasEdited ? 12 : 0)
         .overlay(alignment: .topLeading) {
@@ -911,6 +958,56 @@ struct BubbleStandardLayout: View {
                 isViewOnce: content.isViewOnce
             ),
             consumeViewOnce: onConsumeViewOnce
+        )
+    }
+}
+
+// MARK: - Bubble body + footer layout
+//
+// Stacks the bubble's inner content above its footer. Unlike a plain VStack,
+// the footer is handed *exactly* the inner content's resolved width — so the
+// footer's trailing meta (timestamp + delivery check) lands on the bubble's
+// trailing edge, matching the corner-pinned footer of media bubbles. The
+// footer never widens the bubble: its own intrinsic width acts only as a
+// floor so the meta is never clipped on very short messages.
+//
+// `sizeThatFits` and `placeSubviews` compute the body and footer heights at
+// the same resolved width, so the reported size is self-consistent and the
+// hosting UICollectionView cell never drifts. Accepts one subview (body only,
+// when the footer is suppressed for an audio-in-quote bubble) or two.
+struct BubbleBodyFooterLayout: Layout {
+    var spacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let body = subviews.first else { return .zero }
+        let bodyProbe = body.sizeThatFits(proposal)
+        guard subviews.count > 1 else { return bodyProbe }
+
+        let footer = subviews[1]
+        let footerFloor = footer.sizeThatFits(.unspecified).width
+        let width = max(bodyProbe.width, footerFloor)
+        let bodyHeight = body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        let footerHeight = footer.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        return CGSize(width: width, height: bodyHeight + spacing + footerHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let body = subviews.first else { return }
+        let width = bounds.width
+        let bodyHeight = body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        body.place(
+            at: CGPoint(x: bounds.minX, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: width, height: bodyHeight)
+        )
+
+        guard subviews.count > 1 else { return }
+        let footer = subviews[1]
+        let footerHeight = footer.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        footer.place(
+            at: CGPoint(x: bounds.minX, y: bounds.minY + bodyHeight + spacing),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: width, height: footerHeight)
         )
     }
 }
