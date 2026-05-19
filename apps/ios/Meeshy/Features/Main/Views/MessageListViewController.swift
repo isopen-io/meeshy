@@ -238,6 +238,27 @@ final class MessageListViewController: UIViewController {
                 return
             }
 
+            // Séparateur de jour — pill "Aujourd'hui / Hier / Lundi 9 mai"
+            // posée entre deux groupes de messages de jours distincts. Le
+            // label est recalculé à chaque rendu de cellule afin de suivre
+            // le passage de minuit sans avoir à reconstruire la datasource.
+            if case .dayHeader(let dayStart) = item {
+                let label = MessageDayLabel.label(
+                    for: dayStart,
+                    now: Date(),
+                    calendar: .current,
+                    locale: .current
+                )
+                let dark = self.isDark
+                cell.contentConfiguration = UIHostingConfiguration {
+                    MessageDaySeparator(label: label, isDark: dark)
+                        .scaleEffect(x: 1, y: -1)
+                }
+                .margins(.all, 0)
+                cell.backgroundColor = .clear
+                return
+            }
+
             guard case .message(let localId) = item,
                   let record = self.store.message(for: localId) else {
                 cell.contentConfiguration = nil
@@ -366,12 +387,33 @@ final class MessageListViewController: UIViewController {
     private func applySnapshot(animated: Bool = true) {
         var snapshot = NSDiffableDataSourceSnapshot<MessageListSection, MessageListItem>()
         snapshot.appendSections([.main])
-        let messageItems = store.messages.reversed().map { MessageListItem.message(localId: $0.localId) }
+
+        // Liste inversée : index 0 = visuel bas (message le plus récent).
+        let reversedMessages = Array(store.messages.reversed())
+        let messageItems = reversedMessages.map { MessageListItem.message(localId: $0.localId) }
+
+        // Pour chaque groupe de jour on aligne d'abord les messages dans
+        // l'ordre du flux puis on pousse le séparateur juste après — qui se
+        // retrouve visuellement AU-DESSUS de ses messages, à la WhatsApp.
+        // On part de `messageItems` (sans typing) pour pouvoir conserver le
+        // count "messages stricts" plus bas, intact des dayHeader insérés.
+        let groups = MessageDayGrouping.groupByDay(
+            dates: reversedMessages.map(\.createdAt),
+            calendar: .current
+        )
+        var bodyItems: [MessageListItem] = []
+        for group in groups {
+            for idx in group.indices {
+                bodyItems.append(messageItems[idx])
+            }
+            bodyItems.append(.dayHeader(dayStart: group.dayStart))
+        }
+
         // The typing indicator is a real cell at index 0 — the visual bottom of
         // the inverted layout, just below the newest message. A live message
         // then inserts at index 1 and pushes the conversation up naturally.
         let showTyping = !(conversationViewModel?.typingUsernames.isEmpty ?? true)
-        let items: [MessageListItem] = showTyping ? [.typingIndicator] + messageItems : messageItems
+        let items: [MessageListItem] = showTyping ? [.typingIndicator] + bodyItems : bodyItems
         snapshot.appendItems(items, toSection: .main)
         // The diffable datasource only re-runs the cell registration closure
         // when an item's IDENTIFIER changes — we key items by `localId` which
