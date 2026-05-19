@@ -32,7 +32,7 @@ from ..redis_service import (
     AudioCacheService,
     get_audio_cache_service
 )
-from ..zmq_audio_handler import _segment_to_dict
+from ..segment_serialization import _segment_to_dict
 
 # Configure logging
 logger = logging.getLogger(__name__)

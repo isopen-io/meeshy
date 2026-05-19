@@ -9,7 +9,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-from services.zmq_audio_handler import _segment_to_dict
+from services.segment_serialization import _segment_to_dict
 from services.transcription_service import TranscriptionSegment
 
 

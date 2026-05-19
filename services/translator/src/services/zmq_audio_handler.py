@@ -16,6 +16,8 @@ from typing import Dict, Optional, List
 
 logger = logging.getLogger(__name__)
 
+from .segment_serialization import _get_voice_similarity_score, _segment_to_dict
+
 # Import du pipeline audio
 AUDIO_PIPELINE_AVAILABLE = False
 try:
@@ -33,54 +35,6 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ [AUDIO-HANDLER] AudioFetcher non disponible: {e}")
     pass
-
-
-def _get_voice_similarity_score(seg) -> Optional[float]:
-    """
-    Extract voice_similarity_score from segment (dict or object).
-
-    Args:
-        seg: Segment as dict or dataclass object
-
-    Returns:
-        Voice similarity score as float, or None
-    """
-    if hasattr(seg, 'voice_similarity_score'):
-        score = seg.voice_similarity_score
-    elif isinstance(seg, dict):
-        score = seg.get('voiceSimilarityScore') or seg.get('voice_similarity_score')
-    else:
-        return None
-    return score if isinstance(score, (int, float)) else None
-
-
-def _segment_to_dict(seg) -> Dict:
-    """
-    Serialize a transcription segment to a camelCase dict, accepting either a
-    dataclass object OR a (camelCase or snake_case) dict.
-
-    Cache-hit transcriptions carry segments as dicts (Redis JSON), fresh ones
-    carry dataclasses. `getattr` silently returns the default on dicts, which
-    produced empty-text "segment stubs" — this helper reads both shapes.
-    """
-    def _read(obj_attr: str, *dict_keys: str, default=None):
-        if hasattr(seg, obj_attr):
-            return getattr(seg, obj_attr)
-        if isinstance(seg, dict):
-            for key in dict_keys:
-                if key in seg and seg[key] is not None:
-                    return seg[key]
-        return default
-
-    return {
-        'text': _read('text', 'text', default='') or '',
-        'startMs': _read('start_ms', 'startMs', 'start_ms', default=0) or 0,
-        'endMs': _read('end_ms', 'endMs', 'end_ms', default=0) or 0,
-        'confidence': _read('confidence', 'confidence', default=None),
-        'speakerId': _read('speaker_id', 'speakerId', 'speaker_id', default=None) or None,
-        'voiceSimilarityScore': _get_voice_similarity_score(seg),
-        'language': _read('language', 'language', default=None),
-    }
 
 
 class AudioHandler:
