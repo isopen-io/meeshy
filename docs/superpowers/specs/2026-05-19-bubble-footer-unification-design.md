@@ -136,7 +136,7 @@ Une seule vue de glyphe de livraison. **Énumération complète des états** (to
 | `.sending`/`.clock`/`.slow` **+ `isOffline`** | **sablier** | remplace l'horloge quand le réseau est hors-ligne |
 | `.sent` | coche simple | |
 | `.delivered` | double-coche | |
-| `.read` | double-coche grasse | blanc plein sur bulle teintée (`isMe`) ; sinon indigo **thème-adaptatif** — indigo400 en mode sombre, indigo600 en mode clair (contraste correct sur chaque fond) |
+| `.read` | double-coche (poids normal) | **indigo thème-adaptatif** — indigo400 en mode sombre, indigo600 en mode clair. Jamais blanc, jamais gras. Style `.overlay` : indigo400 (capsule toujours sombre) |
 | `.failed` | glyphe d'erreur | + bouton de relance si `onRetry` est câblé |
 
 Paramétrée par un `tint` (issu de `isMe` / du style) pour rester lisible sur une ligne claire **et** sur la capsule sombre. Remplace `BubbleMediaDeliveryCheckmark`, le glyphe interne de `UserIdentityBar`, et `BubbleDeliveryBadge` (sablier/relance) — les 3 implémentations dispersées fusionnent ici.
@@ -153,7 +153,7 @@ Entrées : `BubbleContent`, statut de livraison du message, `isDirect`, `isLastS
 
 1. **Gating de l'horodatage** — direct : dernier envoyé / dernier reçu uniquement ; groupe : toujours ; message en attente : toujours (`isPendingDelivery`). Décidé dans le builder.
 2. **Horodatage toujours à droite — abandon de `inlineTime`** — aujourd'hui les conversations de groupe affichent l'heure en ligne avec le nom (`Nom · 12:45`). Le footer unifié édge-pin **toujours** l'horodatage à droite (cohérence « horodatage à droite » demandée). `inlineTime` est supprimé — changement de comportement intentionnel et assumé pour les groupes.
-3. **Teinte `isMe`** — bulle sortante (fond coloré) : texte d'heure + glyphes en blanc atténué, `.read` en blanc plein. Bulle reçue : couleurs de thème. Style `.overlay` : toujours blanc sur la capsule sombre.
+3. **Teinte `isMe`** — bulle sortante (fond coloré) : texte d'heure + glyphes en blanc atténué. Bulle reçue : couleurs de thème. Style `.overlay` : blanc sur la capsule sombre. **Exception `.read`** : toujours indigo thème-adaptatif (jamais blanc, jamais gras), quel que soit le style.
 4. **Convention « méta vide »** — `timestamp == nil && delivery == nil` → le groupe de droite n'émet aucune vue (pas de `Spacer` glouton qui étirerait la ligne).
 5. **Debounce optimiste** — `.invisible` (0–200 ms après envoi) : aucun glyphe, layout stable ; puis transition vers `.clock`. Le footer reflète l'état, ne le pilote pas.
 6. **Footer-identité 2 lignes** — quand `sender != nil`, le style `.row` rend deux lignes : ligne 1 `[avatar · nom · rôle · drapeaux · translate] ··· [heure · coche]`, ligne 2 `[username]` (reprend l'actuel `messageBubble`). Sans `sender` : une seule ligne.

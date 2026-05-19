@@ -326,9 +326,9 @@ struct BubbleDeliveryCheck: View, Equatable {
     let isOffline: Bool
     /// Primary glyph colour (theme-aware on a `.row`, white on an `.overlay`).
     let tint: Color
-    /// `.read` must contrast against `.delivered`; on tinted (own-message)
-    /// bubbles pass `.white`, otherwise a theme-adaptive indigo (indigo400
-    /// in dark mode, indigo600 in light mode) — computed by the caller.
+    /// `.read` glyph colour — always a theme-adaptive indigo (never white,
+    /// never bold): indigo400 in dark mode / on the dark overlay capsule,
+    /// indigo600 in light mode. Computed by the caller.
     let readTint: Color
 
     private var isInFlight: Bool {
@@ -373,7 +373,7 @@ struct BubbleDeliveryCheck: View, Equatable {
         case .delivered:
             doubleCheck(weight: .regular, size: 10, color: tint, width: 16)
         case .read:
-            doubleCheck(weight: .black, size: 11, color: readTint, width: 17)
+            doubleCheck(weight: .regular, size: 11, color: readTint, width: 17)
                 .accessibilityLabel("Lu")
         case .failed:
             Image(systemName: "exclamationmark.circle.fill")
@@ -501,7 +501,7 @@ struct BubbleFooter: View {
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.white)
                 }
-                deliveryView(tint: .white.opacity(0.85), readTint: .white)
+                deliveryView(tint: .white.opacity(0.85), readTint: MeeshyColors.indigo400)
             }
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
@@ -610,10 +610,9 @@ struct BubbleFooter: View {
     }
 
     private var readColor: Color {
-        if model.isMe { return .white }
-        // Theme-adaptive read accent: a lighter indigo reads on dark
-        // surfaces, a deeper indigo on light ones.
-        return isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo600
+        // `.read` is always indigo — never white, never bold. A lighter
+        // indigo reads on dark surfaces, a deeper one on light surfaces.
+        isDark ? MeeshyColors.indigo400 : MeeshyColors.indigo600
     }
 }
 ```
