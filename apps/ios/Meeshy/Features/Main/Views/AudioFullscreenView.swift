@@ -850,25 +850,21 @@ private struct AudioFullscreenPage: View {
                 let tempFile = FileManager.default.temporaryDirectory
                     .appendingPathComponent("audio_\(UUID().uuidString).\(ext)")
                 try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                defer { try? FileManager.default.removeItem(at: tempFile) }
 
-                let fileURL = tempFile
-                let items: [Any] = [fileURL]
+                // One-tap save into the Files app (Documents) — no share sheet
+                // detour (the previous UIActivityViewController was presented
+                // without an iPad popover anchor and crashed there).
+                let preferred = attachment.originalName.isEmpty
+                    ? "Audio Meeshy.\(ext)"
+                    : attachment.originalName
+                _ = try MediaFileSaver.save(tempFile, preferredName: preferred)
+
                 await MainActor.run {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         saveState = .saved
                     }
                     HapticFeedback.success()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-                        let activityVC = UIActivityViewController(activityItems: items, applicationActivities: nil)
-                        if let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
-                           let root = windowScene.windows.first?.rootViewController {
-                            var topVC = root
-                            while let presented = topVC.presentedViewController {
-                                topVC = presented
-                            }
-                            topVC.present(activityVC, animated: true)
-                        }
-                    }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
                         withAnimation { saveState = .idle }
                     }
