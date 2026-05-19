@@ -219,6 +219,11 @@ struct ConversationView: View {
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
 
+    /// Espace réservé en bas de la liste de messages quand un indicateur de
+    /// frappe est visible : la bulle de frappe occupe alors son propre espace
+    /// sous le dernier message au lieu de le rogner.
+    static let typingIndicatorReservedHeight: CGFloat = 48
+
     // MARK: - Composer Height Measurement
 
     /// Persist the whole compose state (text, inline reply, selected language,
@@ -848,7 +853,8 @@ struct ConversationView: View {
                 currentUserId: viewModel.currentUserIdForView,
                 accentColor: accentColor,
                 isDirect: isDirect,
-                bottomInset: composerHeight + 16,
+                bottomInset: composerHeight + 16
+                    + (viewModel.typingUsernames.isEmpty ? 0 : Self.typingIndicatorReservedHeight),
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,

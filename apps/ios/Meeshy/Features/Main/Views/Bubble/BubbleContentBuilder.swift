@@ -49,15 +49,18 @@ extension BubbleContent {
             activeLangCode: activeLang
         )
         // Emoji-only detection MUST analyze the original `message.content`,
-        // not the post-translation `effective`, to mirror the legacy bubble
-        // (ThemedMessageBubble.emojiOnlyResult, lines 157-164). Translated
-        // text may add words for an emoji-only original (or vice-versa);
-        // the visual rendering decision tracks the source. We still display
-        // `effective` (post-translation) in `text.raw` below.
+        // not the post-translation `effective`. Translated text may add
+        // words for an emoji-only original (or vice-versa); the visual
+        // rendering decision tracks the source. We still display `effective`
+        // (post-translation) in `text.raw` below.
+        //
+        // Detection is reply-agnostic: an emoji sent as a reply stays
+        // emoji-only. `BubbleStandardLayout` branches on `content.reply` —
+        // no reply → free-floating large emoji (no bubble); reply → emoji
+        // hosted in the bubble above the quoted-reply card, large & centered.
         let emojiResult: EmojiDetector.EmojiOnlyResult = {
             guard !message.content.isEmpty,
-                  message.attachments.isEmpty,
-                  message.replyTo == nil else {
+                  message.attachments.isEmpty else {
                 return .notEmojiOnly
             }
             return EmojiDetector.analyze(message.content)
