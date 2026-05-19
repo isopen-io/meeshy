@@ -473,8 +473,12 @@ struct BubbleStandardLayout: View {
                 }
             }
 
-            // Emoji-only: large emoji without bubble
-            if isEmojiOnly {
+            // Emoji-only WITHOUT a reply: large emoji free-floating, no bubble.
+            // An emoji-only message that quotes another message keeps the
+            // bubble so the quoted-reply card renders — `textBubbleContent`
+            // hosts it and renders the emoji large & centered above the quote
+            // (see `bubbleInnerContent`).
+            if isEmojiOnly && content.reply == nil {
                 emojiOnlyContent
             } else if content.hasTextOrNonMediaContent || content.reply != nil {
                 textBubbleContent
@@ -561,11 +565,21 @@ struct BubbleStandardLayout: View {
                     attachmentView(attachment)
                 }
 
-                if let textRaw = content.text?.raw, !textRaw.isEmpty {
+                if let text = content.text, !text.raw.isEmpty {
                     // No `.onLongPressGesture` — see comment in `emojiOnlyContent`.
                     // The container's long-press opens the options overlay; the
                     // translate icon in the identity bar opens translation detail.
-                    expandableTextView
+                    if text.isEmojiOnly {
+                        // Emoji-only reply: emoji hosted inside the bubble, above
+                        // the quoted-reply card — large (same 90/60/45pt sizing as
+                        // the free-floating path) and centered within the bubble.
+                        Text(message.content)
+                            .font(.system(size: emojiFontSize))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    } else {
+                        expandableTextView
+                    }
                 }
 
                 // Inline OpenGraph preview for the first URL in the

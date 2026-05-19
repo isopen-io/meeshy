@@ -161,21 +161,24 @@ extension ConversationView {
             }
         }
         // E. Audio → MeeshyAudioEditorView
-        .fullScreenCover(isPresented: Binding(
-            get: { scrollState.audioToEdit != nil },
-            set: { if !$0 { scrollState.audioToEdit = nil } }
-        )) {
-            if let url = scrollState.audioToEdit {
-                MeeshyAudioEditorView(url: url, accentColor: accentColor, onConfirm: { acceptedURL, _, trimStart, trimEnd in
-                    let durationMs = Int((trimEnd - trimStart) * 1000)
-                    composerState.pendingAudioURL = acceptedURL
-                    let audioAttachment = MessageAttachment.audio(durationMs: max(durationMs, 500), color: accentColor)
-                    composerState.pendingAttachments.append(audioAttachment)
-                    scrollState.audioToEdit = nil
-                }, onCancel: {
-                    scrollState.audioToEdit = nil
-                })
-            }
+        .fullScreenCover(item: Binding(
+            get: { scrollState.audioToEdit },
+            set: { scrollState.audioToEdit = $0 }
+        )) { target in
+            MeeshyAudioEditorView(url: target.url, accentColor: accentColor, onConfirm: { acceptedURL, _, trimStart, trimEnd in
+                let durationMs = Int((trimEnd - trimStart) * 1000)
+                // Replace the edited audio chip in place — editing must never
+                // spawn a second tray chip (same contract as image editing).
+                let staleURL = composerState.applyEditedAudio(
+                    attachmentId: target.id, editedURL: acceptedURL, durationMs: durationMs
+                )
+                if let staleURL {
+                    try? FileManager.default.removeItem(at: staleURL)
+                }
+                scrollState.audioToEdit = nil
+            }, onCancel: {
+                scrollState.audioToEdit = nil
+            })
         }
     }
 
@@ -605,8 +608,9 @@ extension ConversationView {
                 scrollState.videoToEdit = url
             }
         case .audio:
-            let url = composerState.pendingMediaFiles[attachment.id] ?? composerState.pendingAudioURL
-            if let url { scrollState.audioToEdit = url }
+            if let url = composerState.pendingMediaFiles[attachment.id] ?? composerState.pendingAudioURL {
+                scrollState.audioToEdit = PendingAudioEdit(id: attachment.id, url: url)
+            }
         default:
             break
         }

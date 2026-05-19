@@ -74,13 +74,21 @@ struct ConversationScrollState {
     var videosToPreview: [URL] = []
     var editingPendingAttachmentId: String? = nil
     var videoToEdit: URL? = nil
-    var audioToEdit: URL? = nil
+    var audioToEdit: PendingAudioEdit? = nil
 }
 
 struct PreviewMedia: Identifiable {
     let id = UUID()
     let url: URL
     let type: String?
+}
+
+/// A pending audio attachment opened for editing — carries the attachment id
+/// so the editor can replace that exact tray chip on confirm (never append).
+struct PendingAudioEdit: Identifiable, Equatable {
+    /// The id of the `MessageAttachment` being edited.
+    let id: String
+    let url: URL
 }
 
 struct ConversationComposerState {
@@ -125,6 +133,35 @@ struct ConversationComposerState {
     var showContactPicker = false
     var showTextEmojiPicker = false
     var emojiToInject = ""
+}
+
+extension ConversationComposerState {
+    /// Replaces the audio attachment `attachmentId` in place with the freshly
+    /// edited recording. Editing a media attachment must never spawn a second
+    /// tray chip — this mirrors the image editor's replace-by-id contract
+    /// (`pendingAttachments[idx] = …`). Returns the now-stale audio file URL so
+    /// the caller can delete it from disk.
+    @discardableResult
+    mutating func applyEditedAudio(attachmentId: String, editedURL: URL, durationMs: Int) -> URL? {
+        let staleURL = pendingAudioURL
+        let duration = max(durationMs, 500)
+        pendingAudioURL = editedURL
+        pendingMediaFiles[attachmentId] = editedURL
+        if let index = pendingAttachments.firstIndex(where: { $0.id == attachmentId }) {
+            pendingAttachments[index] = MessageAttachment(
+                id: attachmentId,
+                mimeType: "audio/mp4",
+                duration: duration,
+                channels: 2,
+                thumbnailColor: pendingAttachments[index].thumbnailColor
+            )
+        } else {
+            pendingAttachments.append(
+                MessageAttachment(id: attachmentId, mimeType: "audio/mp4", duration: duration, channels: 2)
+            )
+        }
+        return staleURL == editedURL ? nil : staleURL
+    }
 }
 
 struct ConversationHeaderState {
@@ -181,6 +218,11 @@ struct ConversationView: View {
 
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
+
+    /// Espace réservé en bas de la liste de messages quand un indicateur de
+    /// frappe est visible : la bulle de frappe occupe alors son propre espace
+    /// sous le dernier message au lieu de le rogner.
+    static let typingIndicatorReservedHeight: CGFloat = 48
 
     // MARK: - Composer Height Measurement
 
@@ -811,7 +853,9 @@ struct ConversationView: View {
                 currentUserId: viewModel.currentUserIdForView,
                 accentColor: accentColor,
                 isDirect: isDirect,
-                bottomInset: composerHeight + 16,
+                bottomInset: composerHeight + 16
+                    + ((viewModel.typingUsernames.isEmpty || !scrollState.isNearBottom)
+                       ? 0 : Self.typingIndicatorReservedHeight),
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
@@ -948,12 +992,13 @@ struct ConversationView: View {
                 }
             )
 
-            // Typing bubble anchored above the composer. Visible only when a
-            // third party is typing. When the user is scrolled to the bottom
-            // this reads as a "typing bubble after the last message"; when
-            // scrolled up it stays anchored low and the scroll-to-bottom
-            // button (zIndex 60) carries the dominant indicator.
-            if !viewModel.typingUsernames.isEmpty {
+            // Typing bubble — visible UNIQUEMENT en bas de la conversation.
+            // Dès que l'utilisateur quitte le bas, elle disparaît : le bouton
+            // de retour au dernier message (zIndex 60) porte déjà l'indication
+            // de frappe, garder la bulle ancrée ne ferait que la dupliquer.
+            // Elle ne suit donc jamais le scroll.
+            let showsInlineTyping = !viewModel.typingUsernames.isEmpty && scrollState.isNearBottom
+            if showsInlineTyping {
                 VStack {
                     Spacer()
                     inlineTypingIndicator
@@ -962,7 +1007,7 @@ struct ConversationView: View {
                 }
                 .zIndex(58)
                 .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.typingUsernames.isEmpty)
+                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showsInlineTyping)
                 .allowsHitTesting(false)
             }
 
