@@ -810,7 +810,7 @@ struct FeedComposerSheet: View {
             },
             set: { editingAttachmentId = $0?.id }
         )) { item in
-            MeeshyImagePreviewView(image: item.image, context: .post) { editedImage in
+            MeeshyImageEditorView(image: item.image, context: .post) { editedImage in
                 pendingThumbnails[item.id] = editedImage
                 Task {
                     let result = await MediaCompressor.shared.compressImage(editedImage)
