@@ -190,6 +190,8 @@ struct MessageDetailSheet: View {
     @State private var selectedLanguageCode: String? = nil
     @State private var isLoadingTranslations = false
     @State private var translationError: String? = nil
+    @State private var mergedTranslatedAudios: [MessageTranslatedAudio] = []
+    @State private var translatingAudioLanguages: Set<String> = []
 
     // Delete animation
     @State private var deleteIconScale: CGFloat = 0.5
@@ -557,7 +559,7 @@ struct MessageDetailSheet: View {
     private func languageRow(_ lang: (code: String, flag: String, name: String), originalLang: String) -> some View {
         let langColor = Color(hex: LanguageDisplay.colorHex(for:lang.code))
         let hasTranslation = translations[lang.code] != nil
-        let isTranslating = translatingLanguages.contains(lang.code)
+        let isTranslating = translatingLanguages.contains(lang.code) || translatingAudioLanguages.contains(lang.code)
         let isSelected = selectedLanguageCode == lang.code
 
         return Button {
@@ -578,16 +580,16 @@ struct MessageDetailSheet: View {
                         confidenceScore: nil
                     )
                     onSelectTranslation?(mt)
-                    if !translatedAudios.isEmpty {
+                    if !mergedTranslatedAudios.isEmpty {
                         onSelectAudioLanguage?(lang.code)
                     }
                 } else if isSelected {
                     onSelectTranslation?(nil)
-                    if !translatedAudios.isEmpty {
+                    if !mergedTranslatedAudios.isEmpty {
                         onSelectAudioLanguage?(nil)
                     }
                 }
-            } else if translatedAudios.contains(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
+            } else if mergedTranslatedAudios.contains(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
                 // Audio-only translation available — toggle selection
                 withAnimation(.easeInOut(duration: 0.2)) {
                     selectedLanguageCode = isSelected ? nil : lang.code
@@ -598,7 +600,11 @@ struct MessageDetailSheet: View {
                     onSelectAudioLanguage?(nil)
                 }
             } else {
-                Task { await translateTo(lang.code, from: originalLang) }
+                if transcription != nil {
+                    Task { await translateAudioTo(lang.code) }
+                } else {
+                    Task { await translateTo(lang.code, from: originalLang) }
+                }
             }
         } label: {
             HStack(spacing: 10) {
@@ -639,7 +645,7 @@ struct MessageDetailSheet: View {
                     Image(systemName: isSelected ? "checkmark.circle.fill" : "chevron.right")
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
-                } else if let audioForLang = translatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
+                } else if let audioForLang = mergedTranslatedAudios.first(where: { $0.targetLanguage.lowercased() == lang.code.lowercased() }) {
                     HStack(spacing: 3) {
                         Image(systemName: "waveform")
                             .font(.system(size: 9, weight: .medium))
@@ -718,10 +724,68 @@ struct MessageDetailSheet: View {
         }
     }
 
+    private func translateAudioTo(_ targetLang: String) async {
+        guard let attachmentId = transcription?.attachmentId else { return }
+        translatingAudioLanguages.insert(targetLang)
+        translationError = nil
+        defer { translatingAudioLanguages.remove(targetLang) }
+        do {
+            let response = try await AttachmentService.shared.translate(
+                attachmentId: attachmentId,
+                targetLanguages: [targetLang],
+                sourceLanguage: message.originalLanguage,
+                generateVoiceClone: false
+            )
+            mergedTranslatedAudios = MessageDetailSheet.mergeAudioTranslations(
+                existing: mergedTranslatedAudios,
+                incoming: response.translations,
+                attachmentId: attachmentId
+            )
+            withAnimation(.easeInOut(duration: 0.2)) { selectedLanguageCode = targetLang }
+            onSelectAudioLanguage?(targetLang)
+            HapticFeedback.success()
+        } catch let consent as AttachmentConsentError {
+            translationError = consent.message
+            HapticFeedback.error()
+        } catch {
+            translationError = String(localized: "translation.audio.error",
+                defaultValue: "La traduction audio a échoué. Réessayez.")
+            HapticFeedback.error()
+        }
+    }
+
+    static func mergeAudioTranslations(
+        existing: [MessageTranslatedAudio],
+        incoming: [AttachmentTranslationResult],
+        attachmentId: String
+    ) -> [MessageTranslatedAudio] {
+        var byLang: [String: MessageTranslatedAudio] = Dictionary(
+            uniqueKeysWithValues: existing.map { ($0.targetLanguage.lowercased(), $0) }
+        )
+        for result in incoming {
+            let key = result.targetLanguage.lowercased()
+            byLang[key] = MessageTranslatedAudio(
+                id: result.id,
+                attachmentId: attachmentId,
+                targetLanguage: result.targetLanguage,
+                url: result.audioUrl ?? "",
+                transcription: result.translatedText ?? "",
+                durationMs: result.durationMs ?? 0,
+                format: "mp3",
+                cloned: result.voiceCloned ?? false,
+                quality: 0,
+                ttsModel: "chatterbox"
+            )
+        }
+        return Array(byLang.values)
+    }
+
     private func loadExistingTranslations() async {
         guard !isLoadingTranslations else { return }
         isLoadingTranslations = true
         defer { isLoadingTranslations = false }
+
+        if mergedTranslatedAudios.isEmpty { mergedTranslatedAudios = translatedAudios }
 
         // Pre-populate from ViewModel-provided translations
         for t in textTranslations {
@@ -1982,7 +2046,7 @@ struct MessageDetailSheet: View {
                 transcriptionEmptyContent(mediaAttachments: mediaAttachments, accent: accent)
             }
 
-            if !translatedAudios.isEmpty {
+            if !mergedTranslatedAudios.isEmpty {
                 translatedAudioTranscriptions(accent: accent)
             }
         }
@@ -2168,7 +2232,7 @@ struct MessageDetailSheet: View {
             }
             .padding(.horizontal, 4)
 
-            ForEach(translatedAudios, id: \.id) { audio in
+            ForEach(mergedTranslatedAudios, id: \.id) { audio in
                 let langColor = Color(hex: LanguageDisplay.colorHex(for: audio.targetLanguage))
                 let display = LanguageDisplay.from(code: audio.targetLanguage)
 
