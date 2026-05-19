@@ -166,9 +166,7 @@
 		BBLX0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLX0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift */; };
 		BBLY0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLY0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift */; };
 		BBLZ0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLZ0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift */; };
-		BC20CA996A5E2D0E46BB3F06 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 748FC5520967BD43D7FB9582 /* MessageStore.swift */; };
-		BDBG0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDBG0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift */; };
-		BGTM0001000100010001B001 /* BackgroundTaskManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BGTM0001000100010001F001 /* BackgroundTaskManagerTests.swift */; };
+		BC20CA996A5E2D0E46BB3F06 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 748FC5520967BD43D7FB9582 /* MessageStore.swift */; };		BGTM0001000100010001B001 /* BackgroundTaskManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BGTM0001000100010001F001 /* BackgroundTaskManagerTests.swift */; };
 		BKMK0001000100010001001 /* BookmarksViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BKMK0001000100010001000 /* BookmarksViewModelTests.swift */; };
 		BLKD0001000100010001001 /* BlockedViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BLKD0001000100010001000 /* BlockedViewModelTests.swift */; };
 		BLKU002A002A002A002A0002 /* BlockedUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BLKU001A001A001A001A0001 /* BlockedUsersView.swift */; };
@@ -662,9 +660,7 @@
 		BBLX0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift; sourceTree = SOURCE_ROOT; };
 		BBLY0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift; sourceTree = SOURCE_ROOT; };
 		BBLZ0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift; sourceTree = SOURCE_ROOT; };
-		BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyApp.swift; sourceTree = "<group>"; };
-		BDBG0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift; sourceTree = SOURCE_ROOT; };
-		BGTM0001000100010001F001 /* BackgroundTaskManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTaskManagerTests.swift; sourceTree = "<group>"; };
+		BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyApp.swift; sourceTree = "<group>"; };		BGTM0001000100010001F001 /* BackgroundTaskManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTaskManagerTests.swift; sourceTree = "<group>"; };
 		BKMK0001000100010001000 /* BookmarksViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksViewModelTests.swift; sourceTree = "<group>"; };
 		BLKD0001000100010001000 /* BlockedViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedViewModelTests.swift; sourceTree = "<group>"; };
 		BLKU001A001A001A001A0001 /* BlockedUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedUsersView.swift; sourceTree = "<group>"; };
@@ -1453,9 +1449,7 @@
 				BBLW0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleExpandableTextStateTests.swift */,
 				BBLT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleLanguageFlagControllerTests.swift */,
 				BBLQ0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift */,
-				BBLH0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleBlurRevealLifecycleTests.swift */,
-				BDBG0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift */,
-			);
+				BBLH0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleBlurRevealLifecycleTests.swift */,			);
 			path = Bubble;
 			sourceTree = "<group>";
 		};
@@ -2459,9 +2453,7 @@
 				BBLW0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleExpandableTextStateTests.swift in Sources */,
 				BBLT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleLanguageFlagControllerTests.swift in Sources */,
 				BBLQ0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift in Sources */,
-				BBLH0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleBlurRevealLifecycleTests.swift in Sources */,
-				BDBG0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift in Sources */,
-				320813BE4021B286D9F68C98 /* ConversationOptionsViewModelTests.swift in Sources */,
+				BBLH0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleBlurRevealLifecycleTests.swift in Sources */,				320813BE4021B286D9F68C98 /* ConversationOptionsViewModelTests.swift in Sources */,
 				ATUT00200000000001F00 /* AttachmentUploaderTests.swift in Sources */,
 				MATU00200000000001F00 /* MockAttachmentUploader.swift in Sources */,
 				MEPD00200000000001F00 /* MockEditProfileDoubles.swift in Sources */,
