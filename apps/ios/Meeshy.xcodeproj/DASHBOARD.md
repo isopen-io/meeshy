@@ -8,7 +8,7 @@
 
 Dernière mise à jour : 14 mars 2026
 Application : Meeshy v1.0.0
-Plateforme : iOS 17.0+
+Plateforme : iOS 16.0+
 ```
 
 ---
