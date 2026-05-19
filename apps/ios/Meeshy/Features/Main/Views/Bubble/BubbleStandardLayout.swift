@@ -437,7 +437,7 @@ struct BubbleStandardLayout: View {
                 mediaStandaloneView(
                     attachment,
                     identityBar: (audioIsSoleContent && attachment.id == audioAttachments.last?.id)
-                        ? AnyView(identityBarSection(includesTranslationControls: false).fixedSize(horizontal: true, vertical: false))
+                        ? audioInjectedFooter
                         : nil
                 )
             }
@@ -483,54 +483,14 @@ struct BubbleStandardLayout: View {
 
             secondaryContentView
 
-            identityBarSection()
+            standardFooter
         }
     }
 
     // MARK: - Text bubble path (with non-media attachments + reply preview)
-
-    /// A message still in flight — queued, sending, on the slow path, or
-    /// failed — is *always* metadata-bearing. The user must see *when* an
-    /// unsent message was composed while it waits in the outbox, even when
-    /// later messages have already pushed it out of the last-in-group slot.
-    private var isPendingDelivery: Bool {
-        switch message.deliveryStatus {
-        case .sending, .invisible, .clock, .slow, .failed:
-            return true
-        case .sent, .delivered, .read:
-            return false
-        }
-    }
-
-    /// Time visibility depends on conversation type:
-    ///
-    /// - **Pending messages**: always carry a timestamp (see `isPendingDelivery`).
-    ///
-    /// - **Group / Public / Channel**: every bubble carries a timestamp.
-    ///
-    /// - **Direct** (`isDirect`): only the last sent and last received
-    ///   messages carry a timestamp — intermediate bubbles stay
-    ///   metadata-free to keep the thread readable.
-    private var shouldShowTime: Bool {
-        if isPendingDelivery {
-            return true
-        }
-        if isDirect {
-            return content.isMe ? isLastSentMessage : isLastReceivedMessage
-        }
-        return true
-    }
-
-    /// Delivery checkmarks (🕐→✓→✓✓→✓✓ purple) are shown on **every**
-    /// outgoing message regardless of position. The user must see the
-    /// real-time state machine transitions instantly to feel confident
-    /// their message was queued, sent, delivered, and read. In group
-    /// conversations, every message shows delivery. In direct, only
-    /// outgoing messages show it (received messages have no delivery
-    /// indicator since *we* are the recipient).
-    private var shouldShowDelivery: Bool {
-        content.isMe
-    }
+    //
+    // Timestamp-visibility gating + delivery resolution now live in the pure
+    // `BubbleFooterModel.make(...)` builder — see `resolvedFooter`.
 
     @ViewBuilder
     private var bubbleInnerContent: some View {
@@ -608,7 +568,7 @@ struct BubbleStandardLayout: View {
         // visually still hugs the right of compact bubbles.
         VStack(alignment: .leading, spacing: 4) {
             bubbleInnerContent
-            identityBarSection()
+            standardFooter
                 .fixedSize(horizontal: true, vertical: false)
         }
         .padding(.top, hasEdited ? 12 : 0)
@@ -630,94 +590,67 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Identity bar (top of bubble for received last-in-group, otherwise meta row)
 
-    /// - Parameter includesTranslationControls: when `false`, the language
-    ///   flags + translate button are omitted. Used for the audio widget,
-    ///   whose own `audioTranslationRow` already owns the per-language
-    ///   switcher — rendering both would stack two competing flag rows.
-    @ViewBuilder
-    private func identityBarSection(includesTranslationControls: Bool = true) -> some View {
-        let isMe = content.isMe
+    /// Builds the footer model + actions for this bubble.
+    /// - Parameter includesTranslationControls: when `false`, language flags
+    ///   and the translate button are omitted — the audio widget owns its own
+    ///   per-language switcher, so rendering both would compete.
+    private func resolvedFooter(includesTranslationControls: Bool = true) -> (BubbleFooterModel, BubbleFooterActions) {
         let showTranslation = includesTranslationControls && hasAnyTranslation && !isEmojiOnly
-        // Time is gated to the last message of each side in direct convos;
-        // delivery checkmark is always shown on outgoing messages so the
-        // user sees real-time state machine transitions on every bubble.
-        let timeString = shouldShowTime ? content.meta.timeString : ""
-        let deliveryStatus: MeeshyMessage.DeliveryStatus? = shouldShowDelivery
-            ? content.meta.deliveryStatus
-            : nil
-        // Phase 4 Task 4.6: offline-pending hourglass + failed-retry button.
-        // Only surfaces on outgoing bubbles for `.sending`+offline or `.failed`;
-        // BubbleDeliveryBadge collapses to EmptyView otherwise so the layout
-        // stays untouched in the happy path.
-        let showDeliveryBadge: Bool = {
-            guard isMe else { return false }
-            let raw = message.deliveryStatus
-            if raw == .failed { return true }
-            if raw == .sending && !networkIsOnline { return true }
-            return false
-        }()
-        if showIdentityBar {
-            HStack(spacing: 6) {
-                UserIdentityBar.messageBubble(
-                    name: content.senderName ?? "?",
-                    username: message.senderUsername.map { "@\($0)" },
-                    avatarURL: message.senderAvatarURL,
-                    accentColor: message.senderColor ?? contactColor,
-                    role: nil,
-                    time: timeString,
-                    delivery: deliveryStatus,
-                    flags: showTranslation ? buildAvailableFlags() : [],
-                    activeFlag: showTranslation ? secondaryLangCode : nil,
-                    onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
-                    onTranslateTap: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
-                    presenceState: presenceState,
-                    moodEmoji: senderMoodEmoji,
-                    storyRingState: senderStoryRingState,
-                    onAvatarTap: { selectedProfileUser = .from(message: message) },
-                    onViewStory: onViewStory,
-                    // Group conversations show the timestamp inline with the
-                    // author (`Name · 12:45`); direct conversations keep the
-                    // edge-pinned variant for the rare bubble that displays
-                    // the trailing time/delivery group (last sent / last
-                    // received).
-                    inlineTime: !isDirect
-                )
-                if showDeliveryBadge {
-                    BubbleDeliveryBadge(
-                        status: message.deliveryStatus,
-                        isMe: true,
-                        isOnline: networkIsOnline,
-                        onRetry: { performManualRetry() }
-                    )
-                    .equatable()
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-        } else {
-            HStack(spacing: 6) {
-                UserIdentityBar.metaRow(
-                    time: timeString,
-                    delivery: deliveryStatus,
-                    flags: showTranslation ? buildAvailableFlags() : [],
-                    activeFlag: showTranslation ? secondaryLangCode : nil,
-                    onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
-                    onTranslateTap: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
-                    isMe: isMe
-                )
-                if showDeliveryBadge {
-                    BubbleDeliveryBadge(
-                        status: message.deliveryStatus,
-                        isMe: true,
-                        isOnline: networkIsOnline,
-                        onRetry: { performManualRetry() }
-                    )
-                    .equatable()
-                }
-            }
-            .padding(.horizontal, 14)
+        let sender: SenderIdentity? = showIdentityBar ? SenderIdentity(
+            name: content.senderName ?? "?",
+            username: message.senderUsername.map { "@\($0)" },
+            role: nil,
+            avatarURL: message.senderAvatarURL,
+            accentColor: message.senderColor ?? contactColor,
+            moodEmoji: senderMoodEmoji,
+            presence: presenceState,
+            storyRing: senderStoryRingState
+        ) : nil
+
+        let model = BubbleFooterModel.make(
+            timeString: content.meta.timeString,
+            deliveryStatus: message.deliveryStatus,
+            isMe: content.isMe,
+            isDirect: isDirect,
+            isLastSentMessage: isLastSentMessage,
+            isLastReceivedMessage: isLastReceivedMessage,
+            isOnline: networkIsOnline,
+            sender: sender,
+            flags: showTranslation
+                ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
+                : [],
+            showsTranslate: showTranslation
+        )
+
+        let actions = BubbleFooterActions(
+            onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
+            onTranslate: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
+            onRetry: { performManualRetry() },
+            onSenderTap: { selectedProfileUser = .from(message: message) },
+            onViewStory: onViewStory
+        )
+        return (model, actions)
+    }
+
+    /// The standard footer row rendered below text and emoji bubbles.
+    private var standardFooter: some View {
+        let (model, actions) = resolvedFooter()
+        return BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
+            .equatable()
+            .padding(.horizontal, showIdentityBar ? 10 : 14)
+            .padding(.top, showIdentityBar ? 8 : 0)
             .padding(.bottom, 8)
-        }
+    }
+
+    /// Footer injected into the audio widget for audio-only messages — its own
+    /// language switcher handles translation, so translation controls are off.
+    private var audioInjectedFooter: AnyView {
+        let (model, actions) = resolvedFooter(includesTranslationControls: false)
+        return AnyView(
+            BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
+                .equatable()
+                .fixedSize(horizontal: true, vertical: false)
+        )
     }
 
     /// Live read of the global network monitor. Kept as a computed property
