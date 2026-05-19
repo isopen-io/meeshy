@@ -83,41 +83,26 @@ struct BubbleFooterActions {
 }
 
 extension BubbleFooterModel {
-    /// Builds a footer model, applying timestamp-visibility gating.
+    /// Builds a footer model.
     ///
-    /// `timestamp` is non-nil only when the message should display its time:
-    /// always when the send status forces it (pending / failed), always in
-    /// group/public/channel conversations, and in direct conversations only
-    /// for the last sent and last received message. `delivery` is non-nil
-    /// only for outgoing (`isMe`) messages — the recipient side has no
-    /// delivery state of its own.
+    /// `timestamp` est toujours non-nil : l'heure s'affiche sur chaque bulle,
+    /// alignée à droite avec la coche de livraison. C'est une information de
+    /// premier rang, jamais un détail conditionnel.
+    /// `delivery` reste non-nil uniquement pour les messages sortants (`isMe`).
     static func make(
         timeString: String,
         deliveryStatus: MeeshyMessage.DeliveryStatus,
         isMe: Bool,
-        isDirect: Bool,
-        isLastSentMessage: Bool,
-        isLastReceivedMessage: Bool,
         isOnline: Bool,
         sender: SenderIdentity?,
         flags: [FooterFlag],
         showsTranslate: Bool
     ) -> BubbleFooterModel {
-        let statusForcesTime: Bool = {
-            switch deliveryStatus {
-            case .sending, .clock, .slow, .invisible, .failed: return true
-            case .sent, .delivered, .read: return false
-            }
-        }()
-
-        let lastOfSide = isMe ? isLastSentMessage : isLastReceivedMessage
-        let showsTime = statusForcesTime || !isDirect || lastOfSide
-
-        return BubbleFooterModel(
+        BubbleFooterModel(
             sender: sender,
             flags: flags,
             showsTranslate: showsTranslate,
-            timestamp: showsTime ? timeString : nil,
+            timestamp: timeString,
             delivery: isMe ? deliveryStatus : nil,
             isOffline: !isOnline,
             isMe: isMe

@@ -672,9 +672,6 @@ struct BubbleStandardLayout: View {
             timeString: content.meta.timeString,
             deliveryStatus: message.deliveryStatus,
             isMe: content.isMe,
-            isDirect: isDirect,
-            isLastSentMessage: isLastSentMessage,
-            isLastReceivedMessage: isLastReceivedMessage,
             isOnline: networkIsOnline,
             sender: sender,
             flags: showTranslation
