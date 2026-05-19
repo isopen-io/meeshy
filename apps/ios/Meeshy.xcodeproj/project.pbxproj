@@ -2490,7 +2490,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 437;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -2597,7 +2597,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 437;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev";
@@ -2694,7 +2694,7 @@
 				CODE_SIGN_ENTITLEMENTS = Meeshy/Meeshy.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 437;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Meeshy;
@@ -2726,7 +2726,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 437;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -2763,7 +2763,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 437;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -2802,7 +2802,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 437;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
