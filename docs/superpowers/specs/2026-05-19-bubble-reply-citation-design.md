@@ -42,20 +42,42 @@ n'envoie pas ces métadonnées).
 
 ## Design
 
-### Part A — Régression : ne plus clobberer `replyToJson`
+Part A se décompose en **A.1 (backend — enrichissement)** et **A.2 (iOS —
+préservation locale)**. Les deux sont nécessaires : A.1 fait apparaître les
+détails **cross-device** (l'autre participant, tout cold-load) ; A.2 garantit
+qu'un refresh serveur n'efface jamais la référence riche déjà résolue.
 
-`MessagePersistenceActor.upsertFromAPIMessages`, branche UPDATE :
+#### Part A.1 — Backend : enrichir `storyReplyTo`
 
-```swift
-existing.replyToJson = replyToJson ?? existing.replyToJson
-```
+Aujourd'hui le gateway `GET /conversations/:id/messages` ne renvoie que
+`storyReplyToId` (l'ID nu). Il doit **enrichir** un objet `storyReplyTo`, en
+miroir exact de l'enrichissement « messages forwardés » déjà présent dans le
+même handler :
 
-Même pattern de préservation que `attachmentsJson`. Quand le serveur ne porte
-aucune donnée de réponse (cas story-reply), on conserve le `ReplyReference`
-riche déjà persisté localement. Pour une réponse à un **message**, le serveur
-renvoie toujours `api.replyTo` → `replyToJson` non-nil → comportement inchangé.
+- Collecter les `storyReplyToId` non nuls des messages mappés.
+- Batch `prisma.post.findMany({ where: { id: { in } } })` → sélectionner
+  `id, content, reactionCount, commentCount, createdAt` + la 1ʳᵉ `PostMedia`
+  (`thumbnailUrl`).
+- Construire un objet `storyReplyTo { id, reactionCount, commentCount,
+  createdAt, thumbnailUrl, previewText }` (`previewText` = `content` tronqué)
+  et l'attacher à `mappedMessage`.
+- `shared/types/api-schemas.ts` `messageSchema` : déclarer `storyReplyTo`
+  (objet nullable) — sinon Fastify le strippe.
 
-Aucun changement gateway / shared / SDK models.
+#### Part A.2 — iOS : décoder + ne plus clobberer
+
+- **SDK** `APIMessage` : ajouter `storyReplyTo: APIStoryReplyTarget?`
+  (struct `Decodable`).
+- `MessagePersistenceActor.upsertFromAPIMessages` : quand `api.storyReplyTo`
+  est présent, construire le `replyToJson` à partir de lui — un `ReplyReference`
+  avec `isStoryReply: true` + `storyReactionCount` / `storyCommentCount` /
+  `storyPublishedAt` / `storyThumbnailUrl` / `previewText`. Le mapping
+  `api.replyTo` (réponse à un message) reste inchangé.
+- Branche UPDATE de `upsertFromAPIMessages` : `existing.replyToJson =
+  replyToJson ?? existing.replyToJson` — même garde que `attachmentsJson`.
+  Préserve la référence riche quand le serveur ne porte aucune donnée de
+  réponse (filet de sécurité ; couvre aussi tes propres réponses optimistes
+  avant le 1er refresh enrichi).
 
 ### Part B — Citation en en-tête dans les bulles média et audio
 
@@ -90,9 +112,10 @@ Vérifier le routage de bout en bout depuis les chemins média/audio (la citatio
 
 ## Hors périmètre
 
-- Enrichissement gateway des métadonnées de story citée (pour un affichage
-  **cross-device**). N'a jamais existé → ce serait une amélioration distincte,
-  pas une régression. Optionnelle, à traiter séparément si souhaité.
+- Affichage de la story citée pour une story **déjà supprimée** côté serveur
+  (le batch `prisma.post.findMany` ne la retrouve pas) : `storyReplyTo` est
+  alors `nil`, la citation retombe sur le rendu minimal `"📷 Story"`. Pas de
+  traitement spécial — comportement acceptable.
 
 ## Tests (TDD)
 
@@ -106,11 +129,17 @@ Vérifier le routage de bout en bout depuis les chemins média/audio (la citatio
 
 ## Fichiers touchés
 
-- `packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift` (Part A)
+- `services/gateway/src/routes/conversations/messages.ts` (Part A.1 — enrichissement + `select`)
+- `packages/shared/types/api-schemas.ts` (Part A.1 — `messageSchema.storyReplyTo`)
+- `packages/MeeshySDK/Sources/MeeshySDK/Models/MessageModels.swift` (Part A.2 — `APIMessage.storyReplyTo` + `APIStoryReplyTarget`)
+- `packages/MeeshySDK/Sources/MeeshySDK/Persistence/MessagePersistenceActor.swift` (Part A.2 — mapping + garde anti-clobber)
 - `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift` (Part B)
-- `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift` (éventuel variant d'en-tête)
-- Tests : `MessagePersistenceActorTests`, tests `BubbleContentBuilder`
+- `apps/ios/Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift` (Part B — éventuel variant d'en-tête)
+- Tests : `messageSchema` (vitest), `APIMessage` decoding + `MessagePersistenceActorTests` (SDK XCTest), `BubbleContentBuilder` (XCTest pur)
 
 ## Déploiement
 
-100 % iOS + SDK — aucun changement backend. Aucun déploiement gateway requis.
+Part A.1 = gateway + shared → **doit être déployée en production** pour que
+l'app (qui pointe prod) bénéficie de l'enrichissement cross-device. Part A.2
+et Part B = iOS / SDK. Aucune migration de schéma DB (les champs lus sur `Post`
+existent déjà).
