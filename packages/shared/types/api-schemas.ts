@@ -592,6 +592,19 @@ export const messageSchema = {
 
     // Reply & Forward
     replyToId: { type: 'string', nullable: true, description: 'ID of message being replied to' },
+    storyReplyTo: {
+      type: 'object',
+      nullable: true,
+      description: 'Métadonnées enrichies de la story citée quand le message répond à une story (null si la story est supprimée)',
+      properties: {
+        id: { type: 'string' },
+        reactionCount: { type: 'integer' },
+        commentCount: { type: 'integer' },
+        createdAt: { type: 'string', format: 'date-time' },
+        thumbnailUrl: { type: 'string', nullable: true },
+        previewText: { type: 'string' }
+      }
+    },
     replyTo: {
       type: 'object',
       nullable: true,

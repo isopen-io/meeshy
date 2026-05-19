@@ -22,3 +22,18 @@ describe('messageSchema — clientMessageId reconciliation key', () => {
     expect(prop.nullable).toBe(true)
   })
 })
+
+describe('messageSchema — storyReplyTo enriched cited-story object', () => {
+  it('declares storyReplyTo so Fastify does not strip the enriched story metadata', () => {
+    expect(messageSchema.properties).toHaveProperty('storyReplyTo')
+  })
+
+  it('exposes the cited-story detail fields', () => {
+    const prop = (messageSchema.properties as Record<string, { properties?: Record<string, unknown> }>)
+      .storyReplyTo
+    expect(prop.properties).toBeDefined()
+    for (const field of ['id', 'reactionCount', 'commentCount', 'createdAt', 'thumbnailUrl', 'previewText']) {
+      expect(prop.properties).toHaveProperty(field)
+    }
+  })
+})
