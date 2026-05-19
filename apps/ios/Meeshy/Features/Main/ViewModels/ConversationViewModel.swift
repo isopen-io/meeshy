@@ -1010,7 +1010,7 @@ class ConversationViewModel: ObservableObject {
             }
         } catch let error as MeeshyError {
             switch error {
-            case .forbidden(let reason):
+            case .forbidden(let reason, _):
                 // 403: still authenticated, but no longer authorised on
                 // THIS resource (kicked, group dissolved, blocked, etc.).
                 await handleAccessRevoked(reason: reason)
