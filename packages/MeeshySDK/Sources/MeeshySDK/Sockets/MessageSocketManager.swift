@@ -1129,7 +1129,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private func startHeartbeat() {
         heartbeatTimer?.invalidate()
         heartbeatTimer = Timer.scheduledTimer(withTimeInterval: 30.0, repeats: true) { [weak self] _ in
-            self?.socket?.emit("heartbeat")
+            guard let self else { return }
+            Logger.socket.info("[RT-DIAG] heartbeat emit socketStatus=\(String(describing: self.socket?.status), privacy: .public)")
+            self.socket?.emit("heartbeat")
         }
     }
 
@@ -1150,11 +1152,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             // Socket pas encore connecte : emettre ici serait perdu et
             // declencherait l'erreur `Tried emitting when not connected`.
             // Le re-join du handler `.connect` prendra le relais.
-            Logger.socket.info("Queued conversation join (socket not connected): \(conversationId)")
+            Logger.socket.info("[RT-DIAG] conversation:join QUEUED (socket not connected) conv=\(conversationId, privacy: .public)")
             return
         }
         socket?.emit("conversation:join", ["conversationId": conversationId])
-        Logger.socket.info("Joined conversation: \(conversationId)")
+        Logger.socket.info("[RT-DIAG] conversation:join EMITTED conv=\(conversationId, privacy: .public)")
     }
 
     public func leaveConversation(_ conversationId: String) {
@@ -1613,11 +1615,20 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private func setupEventHandlers() {
         guard let socket else { return }
 
+        // [RT-DIAG] Temporary real-time diagnostics (bugs A/B/C — delivery
+        // status & conversation-list live updates). Logs EVERY inbound socket
+        // event so a single reproduction reveals whether the channel is alive
+        // and which events actually reach the device. Remove once root-caused.
+        socket.onAny { event in
+            Logger.socket.info("[RT-DIAG] socket inbound event=\(event.event, privacy: .public)")
+        }
+
         socket.on(clientEvent: .connect) { [weak self] _, _ in
             guard let self else { return }
             let wasReconnect = self.hadPreviousConnection
             self.hadPreviousConnection = true
             self.reconnectAttempt = 0
+            Logger.socket.info("[RT-DIAG] socket CONNECT wasReconnect=\(wasReconnect, privacy: .public)")
 
             DispatchQueue.main.async {
                 self.isConnected = true
@@ -1643,9 +1654,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             }
         }
 
-        socket.on(clientEvent: .disconnect) { [weak self] _, _ in
+        socket.on(clientEvent: .disconnect) { [weak self] data, _ in
             guard let self else { return }
             self.stopHeartbeat()
+            Logger.socket.info("[RT-DIAG] socket DISCONNECT reason=\(String(describing: data), privacy: .public)")
             DispatchQueue.main.async {
                 self.isConnected = false
                 if self.hadPreviousConnection {
@@ -1837,6 +1849,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket.on("read-status:updated") { [weak self] data, _ in
             guard let self else { return }
             self.decode(ReadStatusUpdateEvent.self, from: data) { [weak self] event in
+                Logger.socket.info("[RT-DIAG] decoded read-status:updated conv=\(event.conversationId, privacy: .public) -> publisher")
                 self?.readStatusUpdated.send(event)
             }
         }
@@ -1890,6 +1903,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         socket.on("conversation:updated") { [weak self] data, _ in
             guard let self else { return }
             self.decode(ConversationUpdatedEvent.self, from: data) { [weak self] event in
+                Logger.socket.info("[RT-DIAG] decoded conversation:updated conv=\(event.conversationId, privacy: .public) -> publisher")
                 self?.conversationUpdated.send(event)
             }
         }
@@ -2146,7 +2160,10 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     // MARK: - Decode Helper
 
     private nonisolated func decode<T: Decodable & Sendable>(_ type: T.Type, from data: [Any], handler: @escaping @Sendable (T) -> Void) {
-        guard let first = data.first else { return }
+        guard let first = data.first else {
+            Logger.socket.error("[RT-DIAG] decode DROP type=\(String(describing: type), privacy: .public) reason=empty-payload")
+            return
+        }
 
         do {
             let jsonData: Data
@@ -2155,6 +2172,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             } else if let str = first as? String {
                 jsonData = Data(str.utf8)
             } else {
+                Logger.socket.error("[RT-DIAG] decode DROP type=\(String(describing: type), privacy: .public) reason=unexpected-payload-shape")
                 return
             }
 
@@ -2174,9 +2192,9 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             // Log raw JSON keys for debugging decode failures
             if let dict = first as? [String: Any] {
                 let keys = dict.keys.sorted().joined(separator: ", ")
-                Logger.socket.error("Decode error for \(String(describing: type)): \(error) — keys: [\(keys)]")
+                Logger.socket.error("[RT-DIAG] decode FAILED type=\(String(describing: type)): \(error) — keys: [\(keys)]")
             } else {
-                Logger.socket.error("Decode error for \(String(describing: type)): \(error)")
+                Logger.socket.error("[RT-DIAG] decode FAILED type=\(String(describing: type)): \(error)")
             }
         }
     }

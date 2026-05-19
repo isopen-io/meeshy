@@ -289,6 +289,11 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     @State private var thumbHashImage: UIImage?
     @State private var thumbnailImage: UIImage?
     @State private var fullImage: UIImage?
+    /// Temporise le placeholder : il ne s'affiche qu'après un court délai de
+    /// grâce. Une image présente sur l'appareil (cache disque) est chargée
+    /// avant ce délai, donc le placeholder — souvent un `ProgressView` — ne
+    /// flashe jamais pour un média déjà vu.
+    @State private var showPlaceholder = false
     public init(
         thumbHash: String? = nil,
         thumbnailUrl: String?,
@@ -337,8 +342,13 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
                     .resizable()
                     .interpolation(.low)
                     .transition(.opacity)
-            } else {
+            } else if showPlaceholder {
                 placeholder()
+            } else {
+                // Délai de grâce : pendant ~200 ms on n'affiche rien (transparent)
+                // plutôt que le placeholder. Une image en cache disque charge
+                // avant — aucun flash de loader pour un média déjà sur l'appareil.
+                Color.clear
             }
         }
         .animation(.easeInOut(duration: 0.25), value: fullImage != nil)
@@ -349,6 +359,11 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         }
         .task(id: fullUrl) {
             await loadFullImage()
+        }
+        .task(id: fullUrl) {
+            showPlaceholder = false
+            try? await Task.sleep(for: .milliseconds(200))
+            if !Task.isCancelled { showPlaceholder = true }
         }
         .onChange(of: thumbnailUrl) { _, newUrl in
             guard fullImage == nil else { return }

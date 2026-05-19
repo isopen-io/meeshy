@@ -1127,6 +1127,7 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] changedId in
                 guard changedId == targetId else { return }
+                Logger.messages.info("[RT-DIAG] VM(conv) messagesDidChange conv=\(targetId, privacy: .public) -> reconcile delivery badges")
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     let cached = await CacheCoordinator.shared.messages.load(for: targetId)

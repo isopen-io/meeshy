@@ -386,11 +386,23 @@ struct ConversationMediaGalleryView: View {
 
     private func cacheAttachment(_ attachment: MessageAttachment?) {
         guard let attachment else { return }
-        let urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+        // Préchauffe le cache image DÉCODÉ (`_imageCache`) : l'ouverture plein
+        // écran touche alors le fast-path synchrone de `ProgressiveCachedImage`
+        // (`DiskCacheStore.cachedImage`) → affichage instantané, sans placeholder.
+        // Pour une vidéo on préchauffe sa vignette (l'image montrée avant
+        // lecture) ; le fichier vidéo lui-même est mis en cache par
+        // `SharedAVPlayerManager` au tap lecture.
+        let urlStr: String
+        switch attachment.type {
+        case .video:
+            urlStr = attachment.thumbnailUrl ?? ""
+        default:
+            urlStr = attachment.fileUrl.isEmpty ? (attachment.thumbnailUrl ?? "") : attachment.fileUrl
+        }
         guard !urlStr.isEmpty,
               let resolved = MeeshyConfig.resolveMediaURL(urlStr)?.absoluteString
         else { return }
-        Task { _ = try? await CacheCoordinator.shared.images.data(for: resolved) }
+        Task { _ = await CacheCoordinator.shared.images.image(for: resolved) }
     }
 
     private func prefetchNeighbors(around index: Int) {
