@@ -344,7 +344,7 @@ struct MeeshyApp: App {
                         }
                     }
                 }
-                .onChange(of: scenePhase) { _, newPhase in
+                .adaptiveOnChange(of: scenePhase) { _, newPhase in
                     switch newPhase {
                     case .active:
                         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
@@ -375,7 +375,7 @@ struct MeeshyApp: App {
                         break
                     }
                 }
-                .onChange(of: authManager.isAuthenticated) { _, isAuth in
+                .adaptiveOnChange(of: authManager.isAuthenticated) { _, isAuth in
                     // Tag every subsequent crash report with the active user
                     // so we can filter the Crashlytics dashboard per account.
                     // Cleared on logout to prevent the next user inheriting
@@ -459,7 +459,7 @@ struct MeeshyApp: App {
                     guard let payload else { return }
                     handlePushNavigation(payload: payload)
                 }
-                .onChange(of: deepLinkRouter.pendingDeepLink) { _, link in
+                .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
                     handleGuestDeepLink(link)
                 }
             }
@@ -610,7 +610,7 @@ struct SystemThemeDetector<Content: View>: View {
 
     var body: some View {
         content()
-            .onChange(of: systemScheme) { _, newScheme in
+            .adaptiveOnChange(of: systemScheme) { _, newScheme in
                 ThemeManager.shared.syncWithSystem(newScheme)
             }
             .onAppear {

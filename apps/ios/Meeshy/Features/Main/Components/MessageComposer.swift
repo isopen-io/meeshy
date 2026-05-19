@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 import Combine
 
 struct MessageComposer: View {
@@ -27,7 +28,7 @@ struct MessageComposer: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 10)
         .background(composerBackground)
-        .onChange(of: text) { _, newText in
+        .adaptiveOnChange(of: text) { _, newText in
             textAnalyzer.analyze(text: newText)
         }
         .sheet(isPresented: $textAnalyzer.showLanguagePicker) {
@@ -41,7 +42,7 @@ struct MessageComposer: View {
                 onDismiss: { textAnalyzer.showLanguagePicker = false }
             )
         }
-        .onChange(of: isFocused) { _, newValue in
+        .adaptiveOnChange(of: isFocused) { _, newValue in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 focusBounce = newValue
             }

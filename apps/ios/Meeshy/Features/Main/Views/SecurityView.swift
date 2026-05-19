@@ -136,7 +136,7 @@ struct SecurityView: View {
             )
             .environmentObject(theme)
         }
-        .onChange(of: scenePhase) { _, newPhase in
+        .adaptiveOnChange(of: scenePhase) { _, newPhase in
             if newPhase == .active, emailSent {
                 Task { await authManager.checkExistingSession() }
             }
@@ -557,7 +557,7 @@ struct SecurityView: View {
                     .font(.system(size: 16, weight: .semibold, design: .monospaced))
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.numberPad)
-                    .onChange(of: phoneCode) { _, newValue in
+                    .adaptiveOnChange(of: phoneCode) { _, newValue in
                         phoneCode = String(newValue.prefix(6).filter(\.isNumber))
                     }
             }

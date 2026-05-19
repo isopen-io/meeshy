@@ -320,7 +320,7 @@ public struct StoryComposerView: View {
                 syncCurrentSlideEffects()
             }
         }
-        .onChange(of: viewModel.currentSlideIndex) { _, _ in
+        .adaptiveOnChange(of: viewModel.currentSlideIndex) { _, _ in
             viewModel.loadCurrentSlideIntoTimeline()
             bandStateMachine.reset()
             areFabsVisible = true
@@ -336,7 +336,7 @@ public struct StoryComposerView: View {
             // Do NOT cleanup temp files here — background upload may still need them.
             // Cleanup happens after upload completes in StoryViewModel.launchUploadTask.
         }
-        .onChange(of: fgMediaItem) { _, item in handleForegroundMediaSelection(from: item) }
+        .adaptiveOnChange(of: fgMediaItem) { _, item in handleForegroundMediaSelection(from: item) }
         // Real-time canvas sync — Task 2.18 migration. Toolbars + sheets
         // mutate composer-local @State (`selectedFilter`, `stickerObjects`,
         // `selectedImage`, …); the CALayer canvas reads from
@@ -356,7 +356,7 @@ public struct StoryComposerView: View {
             keyboardHeight = 0
             canvasEditShift = 0
         }
-        .onChange(of: viewModel.textEditingMode) { _, _ in recomputeCanvasShift() }
+        .adaptiveOnChange(of: viewModel.textEditingMode) { _, _ in recomputeCanvasShift() }
         .granularCanvasSync(
             filter: selectedFilter?.rawValue,
             hasImage: selectedImage != nil,
@@ -422,7 +422,7 @@ public struct StoryComposerView: View {
                 .presentationContentInteraction(.scrolls)
                 .presentationCornerRadius(28)
         }
-        .onChange(of: viewModel.isTimelineVisible) { _, isVisible in
+        .adaptiveOnChange(of: viewModel.isTimelineVisible) { _, isVisible in
             if isVisible { viewModel.loadCurrentSlideIntoTimeline() }
         }
         .sheet(isPresented: $showFilterSheet) {
@@ -1066,7 +1066,7 @@ public struct StoryComposerView: View {
                 GeometryReader { proxy in
                     Color.clear
                         .onAppear { canvasNaturalFrame = proxy.frame(in: .global) }
-                        .onChange(of: proxy.frame(in: .global)) { _, f in
+                        .adaptiveOnChange(of: proxy.frame(in: .global)) { _, f in
                             canvasNaturalFrame = f
                         }
                 }

@@ -84,7 +84,7 @@ struct StoryActionSidebarView: View {
                 // Bounce on every reaction sent — via the quick strip below
                 // OR the full-screen picker — since heartBouncePulse ticks
                 // inside triggerStoryReaction, the single reaction-sent seam.
-                .onChange(of: heartBouncePulse) { _, _ in
+                .adaptiveOnChange(of: heartBouncePulse) { _, _ in
                     bounceHeart()
                 }
                 .overlay(alignment: .trailing) {

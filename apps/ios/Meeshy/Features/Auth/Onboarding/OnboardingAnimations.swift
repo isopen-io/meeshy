@@ -31,7 +31,7 @@ struct AnimatedStepBackground: View {
         .ignoresSafeArea()
         .onAppear { startAnimations() }
         .onDisappear { stopAnimations() }
-        .onChange(of: step) { _, _ in restartAnimations() }
+        .adaptiveOnChange(of: step) { _, _ in restartAnimations() }
         .animation(.easeInOut(duration: 0.6), value: step)
     }
 

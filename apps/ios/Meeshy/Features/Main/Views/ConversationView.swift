@@ -764,25 +764,25 @@ struct ConversationView: View {
                 typingDotConnection?.cancel()
                 typingDotConnection = nil
             }
-            .onChange(of: messageText) { _, newValue in
+            .adaptiveOnChange(of: messageText) { _, newValue in
                 persistDraft(text: newValue)
             }
-            .onChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: messageText) }
-            .onChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: messageText) }
-            .onChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: messageText) }
-            .onChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: messageText) }
-            .onChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: messageText) }
-            .onChange(of: scrollState.isNearBottom) { _, _ in
+            .adaptiveOnChange(of: composerState.pendingReplyReference?.messageId) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: composerState.selectedLanguage) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: viewModel.pendingEffects.flags.rawValue) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: viewModel.isBlurEnabled) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: viewModel.ephemeralDuration?.rawValue) { _, _ in persistDraft(text: messageText) }
+            .adaptiveOnChange(of: scrollState.isNearBottom) { _, _ in
                 if composerState.showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
                 }
             }
-            .onChange(of: isTyping) { _, focused in
+            .adaptiveOnChange(of: isTyping) { _, focused in
                 if focused && composerState.showTextEmojiPicker {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { composerState.showTextEmojiPicker = false }
                 }
             }
-            .onChange(of: viewModel.accessRevoked) { _, revoked in
+            .adaptiveOnChange(of: viewModel.accessRevoked) { _, revoked in
                 // Server signalled the user no longer has access to this
                 // conversation (kicked, group deleted, blocked, etc.). The
                 // ViewModel has already wiped per-conversation cache and
@@ -1099,7 +1099,7 @@ struct ConversationView: View {
                     GeometryReader { geo in
                         Color.clear
                             .onAppear { updateComposerHeight(geo.size.height) }
-                            .onChange(of: geo.size.height) { _, h in updateComposerHeight(h) }
+                            .adaptiveOnChange(of: geo.size.height) { _, h in updateComposerHeight(h) }
                     }
                 )
             }

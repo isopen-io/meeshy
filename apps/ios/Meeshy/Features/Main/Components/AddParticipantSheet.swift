@@ -110,7 +110,7 @@ struct AddParticipantSheet: View {
                 .focused($isSearchFocused)
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
-                .onChange(of: searchQuery) { _, newValue in
+                .adaptiveOnChange(of: searchQuery) { _, newValue in
                     Task { await searchUsers(query: newValue) }
                 }
 

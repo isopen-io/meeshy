@@ -97,7 +97,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                 seenEmojis = Set(summaries.map(\.emoji))
             }
         }
-        .onChange(of: summaries.map(\.emoji)) { _, newEmojis in
+        .adaptiveOnChange(of: summaries.map(\.emoji)) { _, newEmojis in
             seenEmojis = Set(newEmojis)
         }
     }

@@ -338,7 +338,7 @@ extension ConversationView {
                     .textInputAutocapitalization(.never)
                     .submitLabel(.search)
                     .onSubmit { triggerBackendSearch() }
-                    .onChange(of: headerState.searchQuery) { _, _ in debounceSearch() }
+                    .adaptiveOnChange(of: headerState.searchQuery) { _, _ in debounceSearch() }
 
                 if !headerState.searchQuery.isEmpty {
                     Button {

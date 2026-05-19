@@ -221,7 +221,7 @@ struct ThemedMessageBubble: View {
             ephemeralController.stop()
             blurController.cancel()
         }
-        .onChange(of: selectedProfileUser) { _, newValue in
+        .adaptiveOnChange(of: selectedProfileUser) { _, newValue in
             if let user = newValue {
                 selectedProfileUser = nil
                 router.deepLinkProfileUser = user

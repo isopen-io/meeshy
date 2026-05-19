@@ -557,7 +557,7 @@ struct FeedView: View {
             }
             viewModel.subscribeToSocketEvents()
         }
-        .onChange(of: viewModel.posts) { _, newPosts in
+        .adaptiveOnChange(of: viewModel.posts) { _, newPosts in
             // Merge liked state when new pages arrive. Only seed posts not yet
             // tracked to avoid overwriting optimistic state from in-flight toggles.
             for post in newPosts where postLikeDelta[post.id] == nil && !postHeartInFlightIds.contains(post.id) {
@@ -733,7 +733,7 @@ struct FeedView: View {
                         .padding(.top, 4)
                 }
                 .scaleEffect(composerBounce ? 1.01 : 1.0)
-                .onChange(of: isComposerFocused) { _, newValue in
+                .adaptiveOnChange(of: isComposerFocused) { _, newValue in
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                         composerBounce = newValue
                     }
@@ -861,7 +861,7 @@ struct FeedView: View {
             }
             .presentationDetents([.medium, .large])
         }
-        .onChange(of: selectedPhotoItems) { _, items in
+        .adaptiveOnChange(of: selectedPhotoItems) { _, items in
             handleFeedPhotoSelection(items)
         }
         .fullScreenCover(item: $quoteTargetPost) { quoted in

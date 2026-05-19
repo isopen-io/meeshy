@@ -149,7 +149,7 @@ struct ReportUserView: View {
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(theme.border(tint: "3498DB"), lineWidth: 1)
                     )
-                    .onChange(of: details) { _, newValue in
+                    .adaptiveOnChange(of: details) { _, newValue in
                         if newValue.count > 500 {
                             details = String(newValue.prefix(500))
                         }

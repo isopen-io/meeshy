@@ -36,7 +36,7 @@ struct EditProfileView: View {
                 successOverlay
             }
         }
-        .onChange(of: selectedPhotoItem) { _, newItem in
+        .adaptiveOnChange(of: selectedPhotoItem) { _, newItem in
             Task { await viewModel.loadSelectedPhoto(newItem) }
         }
     }
@@ -197,7 +197,7 @@ struct EditProfileView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .lineLimit(3...6)
-                .onChange(of: viewModel.bio) { _, newValue in
+                .adaptiveOnChange(of: viewModel.bio) { _, newValue in
                     if newValue.count > viewModel.bioMaxLength {
                         viewModel.bio = String(newValue.prefix(viewModel.bioMaxLength))
                     }

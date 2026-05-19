@@ -358,7 +358,7 @@ struct BubbleStandardLayout: View {
                 ShareSheet(activityItems: [url])
             }
         }
-        .onChange(of: fullscreenAttachment?.id) { _, _ in
+        .adaptiveOnChange(of: fullscreenAttachment?.id) { _, _ in
             guard let attachment = fullscreenAttachment else { return }
             if let onMediaTap {
                 fullscreenAttachment = nil

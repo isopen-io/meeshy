@@ -73,7 +73,7 @@ public struct StoryAudioPlayerView: View {
                         startAutoPlay()
                     }
                 }
-                .onChange(of: externalPlayer != nil) { _, hasExternal in
+                .adaptiveOnChange(of: externalPlayer != nil) { _, hasExternal in
                     // Late-arriving external player (parent reached startTime
                     // after our onAppear) — attach the progress observer once
                     // it shows up so the UI tracks playback correctly.

@@ -494,7 +494,7 @@ struct ConversationListView: View {
 
     var body: some View {
         mainContent
-            .onChange(of: selectedProfileUser) { _, newValue in
+            .adaptiveOnChange(of: selectedProfileUser) { _, newValue in
                 if let user = newValue {
                     selectedProfileUser = nil
                     router.deepLinkProfileUser = user
@@ -534,7 +534,7 @@ struct ConversationListView: View {
         mainContentZStack
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: conversationViewModel.selectedFilter)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
-            .onChange(of: isScrollingDown) { wasHidden, isHidden in
+            .adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in
                 if !wasHidden && isHidden { showSearchOverlay = false }
             }
             .onAppear {
@@ -546,24 +546,24 @@ struct ConversationListView: View {
                 async let communities: Void = loadUserCommunities()
                 _ = await (conversations, communities)
             }
-            .onChange(of: scenePhase) { _, newPhase in
+            .adaptiveOnChange(of: scenePhase) { _, newPhase in
                 if newPhase == .active {
                     conversationViewModel.handleForegroundReturn()
                     conversationViewModel.handleForegroundReactivation()
                 }
             }
-            .onChange(of: conversationViewModel.userCategories) { _, categories in
+            .adaptiveOnChange(of: conversationViewModel.userCategories) { _, categories in
                 for cat in categories where cat.isExpanded { expandedSections.insert(cat.id) }
             }
-            .onChange(of: conversationViewModel.groupedConversations.isEmpty) { _, isEmpty in
+            .adaptiveOnChange(of: conversationViewModel.groupedConversations.isEmpty) { _, isEmpty in
                 if isEmpty && isScrollingDown {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
                 }
             }
-            .onChange(of: conversationViewModel.selectedFilter) { _, _ in
+            .adaptiveOnChange(of: conversationViewModel.selectedFilter) { _, _ in
                 withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
             }
-            .onChange(of: feedIsVisible) { wasVisible, isVisible in
+            .adaptiveOnChange(of: feedIsVisible) { wasVisible, isVisible in
                 if wasVisible && !isVisible {
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
                 }
@@ -733,7 +733,7 @@ struct ConversationListView: View {
                     ConversationPaginationFooter()
 
                     Color.clear.frame(height: 280)
-                        .onChange(of: draggingConversation) { oldValue, newValue in
+                        .adaptiveOnChange(of: draggingConversation) { oldValue, newValue in
                             if oldValue != nil && newValue == nil {
                                 withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
                                     dropTargetSection = nil

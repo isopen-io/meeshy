@@ -518,7 +518,7 @@ struct AudioMediaView: View, Equatable {
                 onDismissToMessage: onScrollToMessage
             )
         }
-        .onChange(of: activeAudioLanguageOverride) { _, newLang in
+        .adaptiveOnChange(of: activeAudioLanguageOverride) { _, newLang in
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 selectedAudioLangCode = newLang
             }
@@ -758,7 +758,7 @@ struct AnimatedWaveformBar: View {
                     barHeight = minHeight
                 }
             }
-            .onChange(of: isRecording) { _, recording in
+            .adaptiveOnChange(of: isRecording) { _, recording in
                 if recording {
                     startAnimating()
                 } else {

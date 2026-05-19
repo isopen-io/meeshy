@@ -111,7 +111,7 @@ struct OnboardingView: View {
                     .padding(.bottom, MeeshySpacing.xxxl + MeeshySpacing.lg)
             }
         }
-        .onChange(of: currentPage) { _, _ in
+        .adaptiveOnChange(of: currentPage) { _, _ in
             HapticFeedback.light()
             animateIcon = false
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {

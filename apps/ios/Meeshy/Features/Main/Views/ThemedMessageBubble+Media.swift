@@ -534,7 +534,7 @@ struct BubbleCarouselView: View {
             let startIndex = max(0, min(carouselIndex, items.count - 1))
             currentPageID = items[startIndex].id
         }
-        .onChange(of: currentPageID) { _, newID in
+        .adaptiveOnChange(of: currentPageID) { _, newID in
             guard let newID,
                   let newIndex = items.firstIndex(where: { $0.id == newID })
             else { return }

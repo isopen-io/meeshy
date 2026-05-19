@@ -144,7 +144,7 @@ struct LoginView: View {
                 glowPulse = false
             }
         }
-        .onChange(of: authManager.errorMessage) { _, newValue in
+        .adaptiveOnChange(of: authManager.errorMessage) { _, newValue in
             if newValue != nil {
                 withAnimation(MeeshyAnimation.springDefault) {
                     showError = true
