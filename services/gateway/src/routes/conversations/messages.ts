@@ -473,6 +473,10 @@ export function registerMessagesRoutes(
       const messageSelect: any = {
         // ===== CHAMPS DE BASE =====
         id: true,
+        // Idempotency key — exposed so clients reconcile optimistic rows by
+        // `clientMessageId` on a cold message-list load (avoids duplicate
+        // bubbles when the optimistic→server ack was missed offline).
+        clientMessageId: true,
         content: true,
         originalLanguage: true,
         conversationId: true,
@@ -878,6 +882,9 @@ export function registerMessagesRoutes(
         const mappedMessage: any = {
           // Identifiants
           id: message.id,
+          // Idempotency key — lets clients reconcile an optimistic send with
+          // its server record by `clientMessageId` on a cold list load.
+          clientMessageId: message.clientMessageId ?? null,
           conversationId: message.conversationId,
           // CORRECTION senderId: en DB, senderId = Participant.id (FK).
           // Les clients (iOS/Web) comparent senderId avec leur userId (User.id).

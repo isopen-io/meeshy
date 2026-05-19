@@ -563,6 +563,11 @@ export const messageSchema = {
   properties: {
     // Identifiers
     id: { type: 'string', description: 'Message unique identifier (MongoDB ObjectId)' },
+    clientMessageId: {
+      type: 'string',
+      nullable: true,
+      description: 'Client-generated idempotency key (cid_<uuid v4>) — optimistic-send reconciliation key. MUST be exposed so clients can match an optimistic row to its server record and avoid duplicate bubbles.'
+    },
     conversationId: { type: 'string', description: 'Parent conversation ID' },
     senderId: { type: 'string', description: 'Sender participant ID' },
 
