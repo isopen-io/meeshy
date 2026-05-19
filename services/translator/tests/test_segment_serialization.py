@@ -153,3 +153,14 @@ async def test_publish_transcription_result_serializes_dict_segments():
     assert published[1]['text'] == "le monde"
     assert published[1]['startMs'] == 800
     assert published[1]['endMs'] == 1600
+
+
+@pytest.mark.unit
+def test_segment_to_dict_used_for_cache_hardening_dict_input():
+    """A segment already in dict form (defensive case) must round-trip
+    through _segment_to_dict without losing text."""
+    seg = {"text": "cached text", "startMs": 5, "endMs": 50}
+    out = _segment_to_dict(seg)
+    assert out["text"] == "cached text"
+    assert out["startMs"] == 5
+    assert out["endMs"] == 50
