@@ -664,9 +664,10 @@ struct BubbleStandardLayout: View {
         NetworkMonitor.shared.isOnline
     }
 
-    /// Manual retry path triggered by `BubbleDeliveryBadge`. Resolves the
-    /// outbox row from the message's `clientMessageId` and resets the retry
-    /// budget so the flusher's next pass picks it up immediately. Errors are
+    /// Manual retry path triggered by `BubbleFooter`'s failed-delivery retry
+    /// button. Resolves the outbox row from the message's `clientMessageId`
+    /// and resets the retry budget so the flusher's next pass picks it up
+    /// immediately. Errors are
     /// swallowed (no-op if the row no longer exists — the optimistic message
     /// has already been reconciled or the user manually cleared the queue).
     private func performManualRetry() {
