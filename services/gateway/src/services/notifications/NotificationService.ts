@@ -97,7 +97,7 @@ function formatSingleAttachmentLabel(params: {
   type: NotificationAttachmentType;
   filename?: string | null;
   fileSize?: number | null;
-  /** Durée en secondes (champ `duration` de MessageAttachment). */
+  /** Durée en MILLISECONDES (champ `duration` de MessageAttachment, cf. schema.prisma). */
   duration?: number | null;
   width?: number | null;
   height?: number | null;
@@ -105,13 +105,13 @@ function formatSingleAttachmentLabel(params: {
   const details: string[] = [];
 
   if (params.type === 'audio') {
-    if (params.duration) details.push(formatDuration(params.duration * 1000));
+    if (params.duration) details.push(formatDuration(params.duration));
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
     return details.length > 0 ? `🎵 Audio · ${details.join(' · ')}` : '🎵 Audio';
   }
 
   if (params.type === 'video') {
-    if (params.duration) details.push(formatDuration(params.duration * 1000));
+    if (params.duration) details.push(formatDuration(params.duration));
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
     return details.length > 0 ? `🎬 Vidéo · ${details.join(' · ')}` : '🎬 Vidéo';
   }
