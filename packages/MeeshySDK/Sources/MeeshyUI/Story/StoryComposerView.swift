@@ -483,8 +483,10 @@ public struct StoryComposerView: View {
         .fullScreenCover(item: $editingElementVideo) { item in
             MeeshyVideoEditorView(
                 url: item.url,
-                onAccept: {
-                    let thumbnail = Self.generateVideoThumbnail(url: item.url)
+                context: .story,
+                onComplete: { result in
+                    viewModel.loadedVideoURLs[item.elementId] = result.url
+                    let thumbnail = Self.generateVideoThumbnail(url: result.url)
                     if let thumbnail { viewModel.loadedImages[item.elementId] = thumbnail }
                     editingElementVideo = nil
                 },

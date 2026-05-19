@@ -47,23 +47,68 @@ public final class EdgeTranscriptionService: ObservableObject {
 
     // MARK: - Transcribe Audio File
 
+    /// Transcribes an audio / video file on-device.
+    ///
+    /// Hardened against the historical "transcription crash": the work is
+    /// bounded by `timeout`, every code path resumes the continuation exactly
+    /// once, and cancellation (timeout, dismissal) reliably tears the
+    /// `SFSpeechRecognitionTask` down — so a hung or corrupt file can never
+    /// leak a continuation or wedge the UI.
     public func transcribe(audioURL: URL,
-                           locale: Locale = Locale(identifier: "fr-FR")) async throws -> OnDeviceTranscription {
+                           locale: Locale = Locale(identifier: "fr-FR"),
+                           timeout: TimeInterval = 45) async throws -> OnDeviceTranscription {
         if !isAuthorized {
             let granted = await requestAuthorization()
             if !granted { throw EdgeTranscriptionError.notAuthorized }
         }
 
-        let resolvedLocale = Self.normalizedLocale(for: locale)
+        guard FileManager.default.fileExists(atPath: audioURL.path) else {
+            throw EdgeTranscriptionError.fileMissing
+        }
 
-        guard let recognizer = SFSpeechRecognizer(locale: resolvedLocale) else {
+        let resolvedLocale = Self.normalizedLocale(for: locale)
+        guard SFSpeechRecognizer(locale: resolvedLocale) != nil else {
             throw EdgeTranscriptionError.unsupportedLocale(locale.identifier)
+        }
+
+        isTranscribing = true
+        defer {
+            currentTask = nil
+            isTranscribing = false
+        }
+
+        let identifier = resolvedLocale.identifier
+        do {
+            return try await withThrowingTaskGroup(of: OnDeviceTranscription.self) { group in
+                group.addTask {
+                    try await self.runRecognition(audioURL: audioURL, localeIdentifier: identifier)
+                }
+                group.addTask {
+                    let nanos = UInt64(max(1, timeout) * 1_000_000_000)
+                    try await Task.sleep(nanoseconds: nanos)
+                    throw EdgeTranscriptionError.timedOut
+                }
+                defer { group.cancelAll() }
+                guard let result = try await group.next() else {
+                    throw EdgeTranscriptionError.noResult
+                }
+                return result
+            }
+        } catch is CancellationError {
+            throw EdgeTranscriptionError.cancelled
+        }
+    }
+
+    /// Runs one recognition pass. Cancellation-safe: if the surrounding task
+    /// is cancelled the `SFSpeechRecognitionTask` is cancelled, its callback
+    /// fires, and the continuation is always resumed exactly once.
+    private func runRecognition(audioURL: URL,
+                                localeIdentifier: String) async throws -> OnDeviceTranscription {
+        guard let recognizer = SFSpeechRecognizer(locale: Locale(identifier: localeIdentifier)) else {
+            throw EdgeTranscriptionError.unsupportedLocale(localeIdentifier)
         }
         guard recognizer.isAvailable else {
             throw EdgeTranscriptionError.recognizerUnavailable
-        }
-        guard FileManager.default.fileExists(atPath: audioURL.path) else {
-            throw EdgeTranscriptionError.fileMissing
         }
 
         let request = SFSpeechURLRecognitionRequest(url: audioURL)
@@ -73,44 +118,44 @@ public final class EdgeTranscriptionService: ObservableObject {
             request.requiresOnDeviceRecognition = true
         }
 
-        isTranscribing = true
-        defer {
-            currentTask = nil
-            isTranscribing = false
-        }
-
-        let resolvedIdentifier = resolvedLocale.identifier
-        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<OnDeviceTranscription, Error>) in
-            var didResume = false
-            let task = recognizer.recognitionTask(with: request) { result, error in
-                if didResume { return }
-                if let error {
-                    didResume = true
-                    continuation.resume(throwing: EdgeTranscriptionError.transcriptionFailed(error.localizedDescription))
-                    return
+        let box = RecognitionBox()
+        return try await withTaskCancellationHandler {
+            try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<OnDeviceTranscription, Error>) in
+                let task = recognizer.recognitionTask(with: request) { result, error in
+                    if let error {
+                        if box.claimResume() {
+                            continuation.resume(
+                                throwing: EdgeTranscriptionError.transcriptionFailed(error.localizedDescription)
+                            )
+                        }
+                        return
+                    }
+                    guard let result, result.isFinal else { return }
+                    guard box.claimResume() else { return }
+                    let segments: [OnDeviceTranscriptionSegment] = result.bestTranscription.segments.map { segment in
+                        OnDeviceTranscriptionSegment(
+                            text: segment.substring,
+                            timestamp: segment.timestamp,
+                            duration: segment.duration,
+                            confidence: Double(segment.confidence)
+                        )
+                    }
+                    let overallConfidence = segments.isEmpty
+                        ? 0.0
+                        : segments.reduce(0.0) { $0 + $1.confidence } / Double(segments.count)
+                    continuation.resume(returning: OnDeviceTranscription(
+                        text: result.bestTranscription.formattedString,
+                        language: localeIdentifier,
+                        confidence: overallConfidence,
+                        segments: segments,
+                        speakingRate: result.bestTranscription.speakingRate
+                    ))
                 }
-                guard let result, result.isFinal else { return }
-                didResume = true
-                let segments: [OnDeviceTranscriptionSegment] = result.bestTranscription.segments.map { segment in
-                    OnDeviceTranscriptionSegment(
-                        text: segment.substring,
-                        timestamp: segment.timestamp,
-                        duration: segment.duration,
-                        confidence: Double(segment.confidence)
-                    )
-                }
-                let overallConfidence = segments.isEmpty
-                    ? 0.0
-                    : segments.reduce(0.0) { $0 + $1.confidence } / Double(segments.count)
-                continuation.resume(returning: OnDeviceTranscription(
-                    text: result.bestTranscription.formattedString,
-                    language: resolvedIdentifier,
-                    confidence: overallConfidence,
-                    segments: segments,
-                    speakingRate: result.bestTranscription.speakingRate
-                ))
+                box.attach(task)
+                self.currentTask = task
             }
-            self.currentTask = task
+        } onCancel: {
+            box.cancel()
         }
     }
 
@@ -222,6 +267,7 @@ public enum EdgeTranscriptionError: LocalizedError, Equatable {
     case fileMissing
     case transcriptionFailed(String)
     case cancelled
+    case timedOut
 
     public var errorDescription: String? {
         switch self {
@@ -239,6 +285,46 @@ public enum EdgeTranscriptionError: LocalizedError, Equatable {
             return "Transcription failed: \(msg)"
         case .cancelled:
             return "Transcription cancelled"
+        case .timedOut:
+            return "Transcription timed out"
         }
+    }
+}
+
+// MARK: - Recognition Box
+
+/// Thread-safe holder around the in-flight `SFSpeechRecognitionTask`.
+///
+/// The recognition callback fires on an arbitrary queue and the cancellation
+/// handler runs on yet another — `RecognitionBox` serializes the "resume the
+/// continuation once" and "cancel the task" decisions so neither races.
+private final class RecognitionBox: @unchecked Sendable {
+    private let lock = NSLock()
+    private var task: SFSpeechRecognitionTask?
+    private var cancelRequested = false
+    private var resumed = false
+
+    func attach(_ task: SFSpeechRecognitionTask) {
+        lock.lock()
+        defer { lock.unlock() }
+        self.task = task
+        if cancelRequested { task.cancel() }
+    }
+
+    func cancel() {
+        lock.lock()
+        defer { lock.unlock() }
+        cancelRequested = true
+        task?.cancel()
+    }
+
+    /// Returns `true` only the first time — guarantees a single
+    /// `continuation.resume`.
+    func claimResume() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        if resumed { return false }
+        resumed = true
+        return true
     }
 }

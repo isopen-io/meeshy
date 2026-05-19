@@ -846,21 +846,31 @@ struct FeedComposerSheet: View {
             set: { if !$0 { videosToPreview.removeAll() } }
         )) {
             if let url = videosToPreview.first {
-                MeeshyVideoPreviewView(url: url, context: .post) {
-                    handleCameraVideo(url)
-                    videosToPreview.removeFirst()
-                }
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .post,
+                    onComplete: { result in
+                        handleCameraVideo(result.url)
+                        videosToPreview.removeFirst()
+                    },
+                    onCancel: {
+                        videosToPreview.removeFirst()
+                    }
+                )
             }
         }
-        // Tap pending video → VideoPreviewView
+        // Tap pending video → unified video editor
         .fullScreenCover(isPresented: Binding(
             get: { editingVideoURL != nil },
             set: { if !$0 { editingVideoURL = nil } }
         )) {
             if let url = editingVideoURL {
-                MeeshyVideoPreviewView(url: url, context: .post) {
-                    editingVideoURL = nil
-                }
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .post,
+                    onComplete: { _ in editingVideoURL = nil },
+                    onCancel: { editingVideoURL = nil }
+                )
             }
         }
         .onChange(of: selectedPhotoItems) { _, items in
