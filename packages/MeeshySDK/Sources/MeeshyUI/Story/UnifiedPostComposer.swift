@@ -228,7 +228,7 @@ public struct UnifiedPostComposer: View {
         }
         .fullScreenCover(isPresented: $showImagePreview) {
             if let image = selectedImage {
-                MeeshyImagePreviewView(image: image, context: .post) { editedImage in
+                MeeshyImageEditorView(image: image, context: .post) { editedImage in
                     selectedImage = editedImage
                     showImagePreview = false
                 } onCancel: {

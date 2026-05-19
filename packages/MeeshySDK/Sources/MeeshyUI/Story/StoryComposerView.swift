@@ -459,7 +459,7 @@ public struct StoryComposerView: View {
         )) { wrapper in
             MeeshyImageEditorView(
                 image: wrapper.image,
-                initialCropRatio: .ratio9x16,
+                context: .story,
                 onAccept: { edited in
                     selectedImage = edited
                     viewModel.hasBackgroundImage = true
@@ -472,7 +472,7 @@ public struct StoryComposerView: View {
         .fullScreenCover(item: $editingElementImage) { item in
             MeeshyImageEditorView(
                 image: item.image,
-                initialCropRatio: .ratio9x16,
+                context: .story,
                 onAccept: { edited in
                     viewModel.loadedImages[item.elementId] = edited
                     editingElementImage = nil

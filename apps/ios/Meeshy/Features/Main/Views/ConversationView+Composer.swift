@@ -110,14 +110,14 @@ extension ConversationView {
         .onChange(of: composerState.selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
         }
-        // C. Tap pending image → ImageEditView
+        // C. Tap pending image → MeeshyImageEditorView
         .fullScreenCover(isPresented: Binding(
             get: { scrollState.editingPendingAttachmentId != nil },
             set: { if !$0 { scrollState.editingPendingAttachmentId = nil } }
         )) {
             if let id = scrollState.editingPendingAttachmentId,
                let thumb = composerState.pendingThumbnails[id] {
-                MeeshyImagePreviewView(image: thumb, context: .message, accentColor: accentColor) { editedImage in
+                MeeshyImageEditorView(image: thumb, context: .message, accentColor: accentColor) { editedImage in
                     composerState.pendingThumbnails[id] = editedImage
                     Task {
                         let result = await MediaCompressor.shared.compressImage(editedImage)
