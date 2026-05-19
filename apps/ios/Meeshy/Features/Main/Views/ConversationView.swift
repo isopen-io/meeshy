@@ -74,13 +74,21 @@ struct ConversationScrollState {
     var videosToPreview: [URL] = []
     var editingPendingAttachmentId: String? = nil
     var videoToEdit: URL? = nil
-    var audioToEdit: URL? = nil
+    var audioToEdit: PendingAudioEdit? = nil
 }
 
 struct PreviewMedia: Identifiable {
     let id = UUID()
     let url: URL
     let type: String?
+}
+
+/// A pending audio attachment opened for editing — carries the attachment id
+/// so the editor can replace that exact tray chip on confirm (never append).
+struct PendingAudioEdit: Identifiable, Equatable {
+    /// The id of the `MessageAttachment` being edited.
+    let id: String
+    let url: URL
 }
 
 struct ConversationComposerState {
@@ -125,6 +133,35 @@ struct ConversationComposerState {
     var showContactPicker = false
     var showTextEmojiPicker = false
     var emojiToInject = ""
+}
+
+extension ConversationComposerState {
+    /// Replaces the audio attachment `attachmentId` in place with the freshly
+    /// edited recording. Editing a media attachment must never spawn a second
+    /// tray chip — this mirrors the image editor's replace-by-id contract
+    /// (`pendingAttachments[idx] = …`). Returns the now-stale audio file URL so
+    /// the caller can delete it from disk.
+    @discardableResult
+    mutating func applyEditedAudio(attachmentId: String, editedURL: URL, durationMs: Int) -> URL? {
+        let staleURL = pendingAudioURL
+        let duration = max(durationMs, 500)
+        pendingAudioURL = editedURL
+        pendingMediaFiles[attachmentId] = editedURL
+        if let index = pendingAttachments.firstIndex(where: { $0.id == attachmentId }) {
+            pendingAttachments[index] = MessageAttachment(
+                id: attachmentId,
+                mimeType: "audio/mp4",
+                duration: duration,
+                channels: 2,
+                thumbnailColor: pendingAttachments[index].thumbnailColor
+            )
+        } else {
+            pendingAttachments.append(
+                MessageAttachment(id: attachmentId, mimeType: "audio/mp4", duration: duration, channels: 2)
+            )
+        }
+        return staleURL == editedURL ? nil : staleURL
+    }
 }
 
 struct ConversationHeaderState {
