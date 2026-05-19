@@ -254,7 +254,11 @@ public struct MeeshyAudioEditorView: View {
                 accent: accent,
                 isDark: isDark,
                 selection: waveformSelection,
-                onScrub: { fraction in scrub(to: fraction) },
+                onScrub: { fraction in
+                    isScrubbing = true
+                    scrub(to: fraction)
+                },
+                onScrubEnded: { isScrubbing = false },
                 onSelectionStart: { fraction in updateSelectionStart(fraction) },
                 onSelectionEnd: { fraction in updateSelectionEnd(fraction) }
             )
@@ -986,10 +990,12 @@ private struct AudioEditorWaveform: View {
     let isDark: Bool
     let selection: Selection?
     let onScrub: (Double) -> Void
+    let onScrubEnded: () -> Void
     let onSelectionStart: (Double) -> Void
     let onSelectionEnd: (Double) -> Void
 
     private let barGap: CGFloat = 2
+    private let spaceName = "audioEditorWaveform"
 
     var body: some View {
         GeometryReader { geo in
@@ -1001,6 +1007,7 @@ private struct AudioEditorWaveform: View {
                             .onChanged { value in
                                 onScrub(fraction(of: value.location.x, width: geo.size.width))
                             }
+                            .onEnded { _ in onScrubEnded() }
                     )
 
                 if let selection {
@@ -1016,6 +1023,7 @@ private struct AudioEditorWaveform: View {
 
                 playhead(in: geo.size)
             }
+            .coordinateSpace(name: spaceName)
         }
     }
 
@@ -1073,7 +1081,7 @@ private struct AudioEditorWaveform: View {
         .contentShape(Rectangle())
         .position(x: x, y: height / 2)
         .gesture(
-            DragGesture(minimumDistance: 0)
+            DragGesture(minimumDistance: 0, coordinateSpace: .named(spaceName))
                 .onChanged { value in onMove(value.location.x) }
         )
     }
