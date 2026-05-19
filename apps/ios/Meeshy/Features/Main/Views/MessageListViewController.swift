@@ -2,6 +2,7 @@
 import SwiftUI
 import Combine
 import MeeshySDK
+import MeeshyUI
 
 final class MessageListViewController: UIViewController {
 
@@ -33,6 +34,9 @@ final class MessageListViewController: UIViewController {
     /// Cached near-bottom state so applySnapshot can decide whether to bump
     /// the unread badge without querying contentOffset mid-layout.
     private var isCurrentlyNearBottom: Bool = true
+    /// Whether the previous snapshot included the typing-indicator cell — lets
+    /// the list scroll the indicator into view the moment it first appears.
+    private var previouslyShowedTyping: Bool = false
 
     // MARK: - Slow scroll for quoted message search
 
@@ -212,8 +216,29 @@ final class MessageListViewController: UIViewController {
         // in UIKit. The hosting configuration diff-updates on reuse, so scroll
         // performance is preserved.
         let registration = UICollectionView.CellRegistration<UICollectionViewCell, MessageListItem> { [weak self] cell, _, item in
-            guard let self,
-                  case .message(let localId) = item,
+            guard let self else {
+                cell.contentConfiguration = nil
+                return
+            }
+
+            // Typing indicator — vraie cellule (dernière du flux inversé,
+            // donc bas visuel). Pas un overlay : un message reçu en direct
+            // s'insère au-dessus et remonte la conversation. La bulle anime
+            // ses points en autonomie ; le contre-flip annule la transform.
+            if case .typingIndicator = item {
+                let typingNames = self.conversationViewModel?.typingUsernames ?? []
+                let typingAccent = self.accentColor
+                let typingDark = self.isDark
+                cell.contentConfiguration = UIHostingConfiguration {
+                    TypingIndicatorBubble(names: typingNames, accentHex: typingAccent, isDark: typingDark)
+                        .scaleEffect(x: 1, y: -1)
+                }
+                .margins(.all, 0)
+                cell.backgroundColor = .clear
+                return
+            }
+
+            guard case .message(let localId) = item,
                   let record = self.store.message(for: localId) else {
                 cell.contentConfiguration = nil
                 return
@@ -341,7 +366,12 @@ final class MessageListViewController: UIViewController {
     private func applySnapshot(animated: Bool = true) {
         var snapshot = NSDiffableDataSourceSnapshot<MessageListSection, MessageListItem>()
         snapshot.appendSections([.main])
-        let items = store.messages.reversed().map { MessageListItem.message(localId: $0.localId) }
+        let messageItems = store.messages.reversed().map { MessageListItem.message(localId: $0.localId) }
+        // The typing indicator is a real cell at index 0 — the visual bottom of
+        // the inverted layout, just below the newest message. A live message
+        // then inserts at index 1 and pushes the conversation up naturally.
+        let showTyping = !(conversationViewModel?.typingUsernames.isEmpty ?? true)
+        let items: [MessageListItem] = showTyping ? [.typingIndicator] + messageItems : messageItems
         snapshot.appendItems(items, toSection: .main)
         // The diffable datasource only re-runs the cell registration closure
         // when an item's IDENTIFIER changes — we key items by `localId` which
@@ -354,32 +384,35 @@ final class MessageListViewController: UIViewController {
         // without triggering the costly insert/move/delete diff animation.
         snapshot.reconfigureItems(items)
 
-        // Detect genuinely-new messages: the snapshot grew AND item 0 (the
-        // newest, in the inverted layout) changed. Older-message pagination
-        // prepends to the tail and leaves item 0 untouched, so it never
+        // Detect genuinely-new messages: the MESSAGE count grew AND the newest
+        // message changed. Tracking message items only (never the typing cell)
+        // means the typing indicator toggling on/off can never be mistaken for
+        // a new message nor bump the unread badge. Older-message pagination
+        // prepends to the tail and leaves the newest untouched, so it never
         // counts — including the ViewModel's anticipatory prefetch, which
         // loads older pages from an internal Task that bypasses the
         // `isLoadingOlder` flag entirely (the flag is therefore NOT a
         // reliable discriminator). The very first load
         // (previousSnapshotCount == 0) is excluded.
-        let newCount = items.count
+        let newCount = messageItems.count
         let delta = newCount - previousSnapshotCount
-        let newestItem = items.first
+        let newestItem = messageItems.first
         let hasGenuinelyNewMessages = delta > 0
             && previousSnapshotCount > 0
             && newestItem != previousNewestItem
         // RC2.1 — when the user is following the conversation (near bottom),
         // auto-scroll onto the new message; otherwise bump the unread badge.
-        // `ConversationViewModel.newMessageAppended` used to carry this signal
-        // but was observed by nobody — the auto-scroll now lives here, derived
-        // from the snapshot delta.
-        let shouldAutoScroll = hasGenuinelyNewMessages && isCurrentlyNearBottom
+        // The typing cell appearing also auto-scrolls (when near bottom) so it
+        // stays visible just below the last message.
+        let typingJustAppeared = showTyping && !previouslyShowedTyping
+        let shouldAutoScroll = (hasGenuinelyNewMessages || typingJustAppeared) && isCurrentlyNearBottom
         if hasGenuinelyNewMessages && !isCurrentlyNearBottom {
             pendingUnreadCount += delta
             onNewMessagesBadge?(pendingUnreadCount)
         }
         previousSnapshotCount = newCount
         previousNewestItem = newestItem
+        previouslyShowedTyping = showTyping
 
         // Scroll in the apply completion handler so the new item exists in the
         // layout before `scrollToItem` runs (apply is asynchronous for the
@@ -423,6 +456,16 @@ final class MessageListViewController: UIViewController {
             self?.applySnapshot(animated: false)
         }
         .store(in: &cancellables)
+
+        // Typing roster — re-snapshot (animated) so the in-flow typing cell
+        // inserts / updates / removes fluidly. Low-frequency signal, no debounce.
+        vm.$typingUsernames
+            .receive(on: DispatchQueue.main)
+            .dropFirst()
+            .sink { [weak self] _ in
+                self?.applySnapshot(animated: true)
+            }
+            .store(in: &cancellables)
     }
 
     // MARK: - Scroll to Bottom
@@ -629,5 +672,66 @@ extension MessageListViewController: UICollectionViewDelegate {
                 await onLoadOlder()
             }
         }
+    }
+}
+
+// MARK: - Typing Indicator Cell
+
+/// Bulle « X écrit… » rendue comme dernière cellule du flux de messages
+/// (bas visuel de la liste inversée). Alignée côté expéditeur ; les points
+/// s'animent en autonomie via `@State` (pas de timer externe).
+private struct TypingIndicatorBubble: View {
+    let names: [String]
+    let accentHex: String
+    let isDark: Bool
+
+    @State private var animating = false
+
+    private var label: String {
+        switch names.count {
+        case 0: return ""
+        case 1: return "\(names[0]) écrit"
+        case 2: return "\(names[0]) et \(names[1]) écrivent"
+        default: return "Plusieurs personnes écrivent"
+        }
+    }
+
+    var body: some View {
+        let accent = Color(hex: accentHex)
+        HStack(spacing: 0) {
+            HStack(spacing: 6) {
+                if !label.isEmpty {
+                    Text(label)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundColor(isDark ? accent.opacity(0.85) : accent.opacity(0.7))
+                        .lineLimit(1)
+                }
+                HStack(spacing: 3) {
+                    ForEach(0..<3, id: \.self) { i in
+                        Circle()
+                            .fill(accent)
+                            .frame(width: 5, height: 5)
+                            .scaleEffect(animating ? 1.0 : 0.5)
+                            .opacity(animating ? 1.0 : 0.4)
+                            .animation(
+                                .easeInOut(duration: 0.5)
+                                    .repeatForever(autoreverses: true)
+                                    .delay(Double(i) * 0.18),
+                                value: animating
+                            )
+                    }
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(Capsule().fill(isDark ? Color.white.opacity(0.07) : Color.black.opacity(0.05)))
+            .overlay(Capsule().strokeBorder(accent.opacity(isDark ? 0.25 : 0.18), lineWidth: 1))
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .onAppear { animating = true }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(label)
     }
 }

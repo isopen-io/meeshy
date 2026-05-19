@@ -38,6 +38,26 @@ final class OutboxKindCodableTests: XCTestCase {
         )
     }
 
+    // MARK: - Sync indicator gating
+
+    /// `markAsRead` est un accusé de lecture fire-and-forget : un row coincé
+    /// ne doit jamais maintenir le bandeau « Synchronisation… » affiché.
+    func test_markAsRead_doesNotCountTowardSyncIndicator() {
+        XCTAssertFalse(OutboxKind.markAsRead.countsTowardSyncIndicator)
+    }
+
+    /// Toute autre opération (envoi / édition / suppression de message,
+    /// réaction, mutations sociales…) représente une écriture utilisateur
+    /// qui justifie l'indicateur de synchronisation.
+    func test_allKindsExceptMarkAsRead_countTowardSyncIndicator() {
+        for kind in OutboxKind.allCases where kind != .markAsRead {
+            XCTAssertTrue(
+                kind.countsTowardSyncIndicator,
+                "\(kind) devrait compter pour l'indicateur de synchronisation"
+            )
+        }
+    }
+
     // MARK: - Payload round-trips
 
     /// Helper: encode + decode and re-encode, asserting byte-equality on the

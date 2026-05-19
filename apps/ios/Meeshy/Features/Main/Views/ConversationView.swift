@@ -170,7 +170,6 @@ struct ConversationHeaderState {
     var showSearch = false
     var searchQuery = ""
     var typingDotPhase: Int = 0
-    var inlineTypingDotPhase: Int = 0
 }
 
 struct ConversationView: View {
@@ -218,11 +217,6 @@ struct ConversationView: View {
 
 
     let defaultReactionEmojis = ["👍", "❤️", "😂", "😮", "😢", "🙏", "🔥", "🎉", "💯", "😍", "👀", "🤣", "💪", "✨", "🥺"]
-
-    /// Espace réservé en bas de la liste de messages quand un indicateur de
-    /// frappe est visible : la bulle de frappe occupe alors son propre espace
-    /// sous le dernier message au lieu de le rogner.
-    static let typingIndicatorReservedHeight: CGFloat = 48
 
     // MARK: - Composer Height Measurement
 
@@ -853,9 +847,7 @@ struct ConversationView: View {
                 currentUserId: viewModel.currentUserIdForView,
                 accentColor: accentColor,
                 isDirect: isDirect,
-                bottomInset: composerHeight + 16
-                    + ((viewModel.typingUsernames.isEmpty || !scrollState.isNearBottom)
-                       ? 0 : Self.typingIndicatorReservedHeight),
+                bottomInset: composerHeight + 16,
                 scrollToBottomTrigger: scrollState.scrollToBottomTrigger,
                 scrollToMessageId: scrollState.scrollToMessageId,
                 scrollToMessageTrigger: scrollState.scrollToMessageTrigger,
@@ -992,24 +984,9 @@ struct ConversationView: View {
                 }
             )
 
-            // Typing bubble — visible UNIQUEMENT en bas de la conversation.
-            // Dès que l'utilisateur quitte le bas, elle disparaît : le bouton
-            // de retour au dernier message (zIndex 60) porte déjà l'indication
-            // de frappe, garder la bulle ancrée ne ferait que la dupliquer.
-            // Elle ne suit donc jamais le scroll.
-            let showsInlineTyping = !viewModel.typingUsernames.isEmpty && scrollState.isNearBottom
-            if showsInlineTyping {
-                VStack {
-                    Spacer()
-                    inlineTypingIndicator
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, composerHeight + 8)
-                }
-                .zIndex(58)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showsInlineTyping)
-                .allowsHitTesting(false)
-            }
+            // L'indicateur de frappe n'est PAS un overlay : c'est une vraie
+            // cellule du flux de messages, rendue en dernier par
+            // `MessageListViewController` (voir `MessageListItem.typingIndicator`).
 
             floatingHeaderSection
 
