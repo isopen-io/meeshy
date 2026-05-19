@@ -65,17 +65,24 @@ final class SingleSourceOfTruthTests: XCTestCase {
         )
     }
 
-    /// Group B Phase 2 invariant (fully realised): whole-array `messages = ...` writes
-    /// must only exist in `subscribeToMessageStore` (the GRDB observation OUTPUT).
+    /// Group B Phase 2 invariant (fully realised): whole-array `messages = ...`
+    /// writes must only exist inside `subscribeToMessageStore` — the GRDB
+    /// observation OUTPUT and the single sanctioned site that reflects the
+    /// `MessageStore` snapshot into the `@Published messages` array.
     ///
-    /// All 3 jump-to-message sites have been migrated to window-switching via
-    /// `MessageStore.loadWindow(around:)` and `MessageStore.restoreLatestWindow()`.
+    /// `subscribeToMessageStore` legitimately assigns the whole array from two
+    /// branches, both fed by the same store snapshot:
+    ///   1. `self.messages = mapped`    — non-E2EE fast path
+    ///   2. `self.messages = decrypted` — E2EE DM path, after an in-memory
+    ///      decryption pass on that same snapshot
     ///
-    /// Exactly 1 whole-array write is allowed:
-    ///   `self.messages = mapped` — inside `subscribeToMessageStore`
-    ///
-    /// Any new addition triggers a failure that forces the author to justify it.
-    func test_wholeArrayMessagesWrite_countIsExact() throws {
+    /// All 3 jump-to-message sites route through `MessageStore.loadWindow(around:)`
+    /// and `MessageStore.restoreLatestWindow()`. Any whole-array write that lands
+    /// in another method is a single-source-of-truth violation — route it through
+    /// `MessageStore` instead. This check verifies the LOCATION of every write
+    /// rather than a count, so legitimate additions/removals inside the
+    /// sanctioned method never trip it while writes elsewhere always do.
+    func test_wholeArrayMessagesWrite_onlyInSubscribeToMessageStore() throws {
         let filePath = #filePath
         let projectRoot = filePath
             .components(separatedBy: "/MeeshyTests/")
@@ -85,33 +92,49 @@ final class SingleSourceOfTruthTests: XCTestCase {
         let content = try String(contentsOfFile: viewModelPath, encoding: .utf8)
         let lines = content.components(separatedBy: "\n")
 
+        // Attribute any line to its enclosing method by scanning upward for the
+        // nearest `func` declaration. Closures carry no `func` keyword, so a
+        // write inside `subscribeToMessageStore`'s `.sink`/`Task` closures still
+        // resolves to `subscribeToMessageStore`.
+        let funcDeclPattern = #"(^|\s)func\s+(\w+)\s*\("#
+        func enclosingFunction(ofLineAt index: Int) -> String? {
+            for i in stride(from: index, through: 0, by: -1) {
+                guard let match = lines[i].range(of: funcDeclPattern, options: .regularExpression)
+                else { continue }
+                return String(lines[i][match])
+                    .replacingOccurrences(of: "func", with: "")
+                    .replacingOccurrences(of: "(", with: "")
+                    .trimmingCharacters(in: .whitespaces)
+            }
+            return nil
+        }
+
         // Match lines that write the whole array: `messages = ...` or `self.messages = ...`
         // Excludes: comments, variable declarations containing "messages", subscript writes (messages[i]).
         let wholeArrayWritePattern = #"^\s+(self\.)?messages\s*="#
 
-        var matchingLines: [(Int, String)] = []
+        var violations: [(Int, String, String)] = []
         for (i, line) in lines.enumerated() {
             let trimmed = line.trimmingCharacters(in: .whitespaces)
             guard !trimmed.hasPrefix("//"),
                   !trimmed.hasPrefix("*"),
                   !trimmed.contains("messages[")
             else { continue }
-            if line.range(of: wholeArrayWritePattern, options: .regularExpression) != nil {
-                matchingLines.append((i + 1, trimmed))
+            guard line.range(of: wholeArrayWritePattern, options: .regularExpression) != nil
+            else { continue }
+            let owner = enclosingFunction(ofLineAt: i) ?? "<unknown>"
+            if owner != "subscribeToMessageStore" {
+                violations.append((i + 1, trimmed, owner))
             }
         }
 
-        // Expected: exactly 1 whole-array write (the subscribeToMessageStore GRDB output).
-        // All jump-to-message sites now route through MessageStore.loadWindow(around:)
-        // and MessageStore.restoreLatestWindow() — single source of truth fully realised.
-        let expectedCount = 1
-        XCTAssertEqual(
-            matchingLines.count, expectedCount,
-            "Expected exactly \(expectedCount) whole-array `messages = ...` write in ConversationViewModel.swift " +
-            "(the subscribeToMessageStore GRDB output). Single-source-of-truth is fully realised — " +
-            "any new whole-array write must go through MessageStore instead. " +
-            "Found \(matchingLines.count):\n" +
-            matchingLines.map { "Line \($0.0): \($0.1)" }.joined(separator: "\n")
+        XCTAssertTrue(
+            violations.isEmpty,
+            "Whole-array `messages = ...` writes must only exist inside " +
+            "`subscribeToMessageStore` (the GRDB observation output). " +
+            "Single-source-of-truth requires every other site to write through " +
+            "MessageStore instead. Found writes in other methods:\n" +
+            violations.map { "Line \($0.0) [in \($0.2)]: \($0.1)" }.joined(separator: "\n")
         )
     }
 }
