@@ -10,6 +10,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from services.zmq_audio_handler import _segment_to_dict
+from services.transcription_service import TranscriptionSegment
 
 
 @dataclass
@@ -64,3 +65,35 @@ def test_segment_to_dict_dict_and_dataclass_equal_for_same_data():
     obj = _FakeSegment(text="x", start_ms=10, end_ms=20, confidence=0.5)
     dct = {"text": "x", "startMs": 10, "endMs": 20, "confidence": 0.5}
     assert _segment_to_dict(obj) == _segment_to_dict(dct)
+
+
+@pytest.mark.unit
+def test_segment_to_dict_real_transcription_segment_camelcase_output():
+    """Real TranscriptionSegment (confidence defaults to 0.0) serialises correctly,
+    including voiceSimilarityScore with a concrete float value."""
+    seg = TranscriptionSegment(
+        text="salut le monde",
+        start_ms=0,
+        end_ms=1500,
+        confidence=0.95,
+        speaker_id="spk_0",
+        voice_similarity_score=0.85,
+        language="fr",
+    )
+    result = _segment_to_dict(seg)
+    assert result["text"] == "salut le monde"
+    assert result["startMs"] == 0
+    assert result["endMs"] == 1500
+    assert result["confidence"] == 0.95
+    assert result["speakerId"] == "spk_0"
+    assert result["voiceSimilarityScore"] == 0.85
+    assert result["language"] == "fr"
+
+
+@pytest.mark.unit
+def test_segment_to_dict_real_transcription_segment_confidence_default():
+    """TranscriptionSegment.confidence defaults to 0.0 (not None); _segment_to_dict
+    must propagate that default rather than masking it."""
+    seg = TranscriptionSegment(text="ok", start_ms=10, end_ms=200)
+    result = _segment_to_dict(seg)
+    assert result["confidence"] == 0.0
