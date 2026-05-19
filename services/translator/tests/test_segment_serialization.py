@@ -97,3 +97,62 @@ def test_segment_to_dict_real_transcription_segment_confidence_default():
     seg = TranscriptionSegment(text="ok", start_ms=10, end_ms=200)
     result = _segment_to_dict(seg)
     assert result["confidence"] == 0.0
+
+
+import asyncio
+from unittest.mock import AsyncMock
+
+
+@dataclass
+class _FakeTranscription:
+    text: str
+    language: str
+    confidence: float
+    source: str
+    segments: list
+    duration_ms: int
+    speaker_count: Optional[int] = None
+    primary_speaker_id: Optional[str] = None
+    sender_voice_identified: Optional[bool] = None
+    sender_speaker_id: Optional[str] = None
+    speaker_analysis: Optional[dict] = None
+
+
+@pytest.mark.unit
+async def test_publish_transcription_result_serializes_dict_segments():
+    """Cache-hit path: segments arrive as dicts; the published payload must
+    keep non-empty text/startMs/endMs (regression for the 4 stub audios)."""
+    from services.zmq_audio_handler import AudioHandler
+
+    captured = {}
+
+    class _FakePubSocket:
+        async def send_json(self, payload):
+            captured['payload'] = payload
+
+    handler = AudioHandler(pub_socket=_FakePubSocket())
+
+    dict_segments = [
+        {"text": "bonjour", "startMs": 0, "endMs": 800, "confidence": 0.9},
+        {"text": "le monde", "startMs": 800, "endMs": 1600, "confidence": 0.88},
+    ]
+    transcription = _FakeTranscription(
+        text="bonjour le monde", language="fr", confidence=0.89,
+        source="cache", segments=dict_segments, duration_ms=1600,
+    )
+    transcription_data = {
+        'transcription': transcription,
+        'message_id': 'msg_1',
+        'attachment_id': 'att_1',
+        'processing_time_ms': 12,
+    }
+
+    await handler._publish_transcription_result('task_1', transcription_data)
+
+    published = captured['payload']['transcription']['segments']
+    assert len(published) == 2
+    assert published[0]['text'] == "bonjour"
+    assert published[0]['startMs'] == 0
+    assert published[0]['endMs'] == 800
+    assert published[1]['text'] == "le monde"
+    assert published[1]['startMs'] == 800

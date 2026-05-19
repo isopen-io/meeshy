@@ -649,15 +649,7 @@ class AudioHandler:
                 'confidence': transcription.confidence,
                 'source': transcription.source,
                 'segments': [
-                    {
-                        'text': getattr(seg, 'text', ''),
-                        'startMs': getattr(seg, 'start_ms', getattr(seg, 'startMs', 0)),
-                        'endMs': getattr(seg, 'end_ms', getattr(seg, 'endMs', 0)),
-                        'confidence': getattr(seg, 'confidence', None),
-                        'speakerId': getattr(seg, 'speaker_id', getattr(seg, 'speakerId', None)),
-                        'voiceSimilarityScore': _get_voice_similarity_score(seg),
-                        'language': getattr(seg, 'language', None)
-                    }
+                    _segment_to_dict(seg)
                     for seg in (transcription.segments or [])
                 ] if transcription.segments else None,
                 'durationMs': transcription.duration_ms
