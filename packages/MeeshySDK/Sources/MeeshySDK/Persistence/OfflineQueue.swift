@@ -430,6 +430,14 @@ public actor OfflineQueue {
     /// `OutboxFlusher.onOutcome` callback (generic dispatch success /
     /// exhaustion), and from `retryItem(_:)` if the row is missing.
     public func publishOutcome(_ outcome: OutboxOutcome) {
+        // Le flusher vient de supprimer (.applied) ou d'épuiser (.exhausted)
+        // la ligne outbox de ce cmid — le nombre de writes en attente a changé.
+        // `refreshPendingCount` ne tourne sinon que sur enqueue / retry, jamais
+        // sur le chemin de drainage : sans ce rafraîchissement le compteur
+        // reste figé sur sa valeur du boot et le bandeau « Synchronisation… »
+        // ne se referme jamais une fois la file vidée.
+        Task { await self.refreshPendingCount() }
+
         guard let observers = outcomeContinuations.removeValue(forKey: outcome.cmid) else {
             return
         }
