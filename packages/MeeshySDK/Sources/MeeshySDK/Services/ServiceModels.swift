@@ -186,15 +186,18 @@ public struct TranslateRequest: Encodable {
     public let text: String
     public let sourceLanguage: String
     public let targetLanguage: String
+    public let messageId: String?
 
-    public init(text: String, sourceLanguage: String, targetLanguage: String) {
+    public init(text: String, sourceLanguage: String, targetLanguage: String, messageId: String? = nil) {
         self.text = text; self.sourceLanguage = sourceLanguage; self.targetLanguage = targetLanguage
+        self.messageId = messageId
     }
 
     enum CodingKeys: String, CodingKey {
         case text
         case sourceLanguage = "source_language"
         case targetLanguage = "target_language"
+        case messageId = "message_id"
     }
 }
 
