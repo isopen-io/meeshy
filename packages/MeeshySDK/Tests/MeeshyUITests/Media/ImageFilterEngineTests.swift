@@ -3,6 +3,7 @@ import UIKit
 @testable import MeeshyUI
 
 /// Unit tests for `ImageFilterEngine` — the stateless render pipeline.
+@MainActor
 final class ImageFilterEngineTests: XCTestCase {
 
     /// Builds a flat-colour test image at `scale = 1`, so `size` equals the

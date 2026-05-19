@@ -4,6 +4,7 @@ import CoreGraphics
 
 /// Unit tests for the pure model layer of the image editor: `ImageEditState`,
 /// `ImageAdjustments`, `AdjustmentKind` and `ImageEditorMode`.
+@MainActor
 final class ImageEditorModelTests: XCTestCase {
 
     // MARK: - ImageEditState
@@ -54,8 +55,8 @@ final class ImageEditorModelTests: XCTestCase {
 
     func test_flipRectHorizontal_mirrorsAcrossX() {
         let rect = CGRect(x: 0.1, y: 0.2, width: 0.3, height: 0.4)
-        XCTAssertEqual(ImageEditState.flipRectHorizontal(rect),
-                       CGRect(x: 0.6, y: 0.2, width: 0.3, height: 0.4))
+        assertRectEqual(ImageEditState.flipRectHorizontal(rect),
+                        CGRect(x: 0.6, y: 0.2, width: 0.3, height: 0.4))
     }
 
     func test_flipRectVertical_mirrorsAcrossY() {

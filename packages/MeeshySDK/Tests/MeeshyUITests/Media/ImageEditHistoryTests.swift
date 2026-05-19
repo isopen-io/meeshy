@@ -2,6 +2,7 @@ import XCTest
 @testable import MeeshyUI
 
 /// Unit tests for `ImageEditHistory` — the snapshot-based undo/redo stack.
+@MainActor
 final class ImageEditHistoryTests: XCTestCase {
 
     private func state(filter: ImageFilter) -> ImageEditState {
