@@ -99,10 +99,6 @@ def test_segment_to_dict_real_transcription_segment_confidence_default():
     assert result["confidence"] == 0.0
 
 
-import asyncio
-from unittest.mock import AsyncMock
-
-
 @dataclass
 class _FakeTranscription:
     text: str
@@ -156,3 +152,4 @@ async def test_publish_transcription_result_serializes_dict_segments():
     assert published[0]['endMs'] == 800
     assert published[1]['text'] == "le monde"
     assert published[1]['startMs'] == 800
+    assert published[1]['endMs'] == 1600
