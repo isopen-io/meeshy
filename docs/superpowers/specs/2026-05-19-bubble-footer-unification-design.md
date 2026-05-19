@@ -136,7 +136,7 @@ Une seule vue de glyphe de livraison. **Énumération complète des états** (to
 | `.sending`/`.clock`/`.slow` **+ `isOffline`** | **sablier** | remplace l'horloge quand le réseau est hors-ligne |
 | `.sent` | coche simple | |
 | `.delivered` | double-coche | |
-| `.read` | double-coche grasse | blanc plein sur bulle teintée (`isMe`), `indigo400` sinon |
+| `.read` | double-coche grasse | blanc plein sur bulle teintée (`isMe`) ; sinon indigo **thème-adaptatif** — indigo400 en mode sombre, indigo600 en mode clair (contraste correct sur chaque fond) |
 | `.failed` | glyphe d'erreur | + bouton de relance si `onRetry` est câblé |
 
 Paramétrée par un `tint` (issu de `isMe` / du style) pour rester lisible sur une ligne claire **et** sur la capsule sombre. Remplace `BubbleMediaDeliveryCheckmark`, le glyphe interne de `UserIdentityBar`, et `BubbleDeliveryBadge` (sablier/relance) — les 3 implémentations dispersées fusionnent ici.
