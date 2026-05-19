@@ -580,7 +580,7 @@ public final class VideoEditorViewModel: ObservableObject {
             attachLoopObserver(to: item)
             let resume = min(playheadTime, max(0, snapshot.editedDuration - 0.05))
             player.replaceCurrentItem(with: item)
-            player.seek(
+            await player.seek(
                 to: CMTime(seconds: resume, preferredTimescale: 600),
                 toleranceBefore: .zero,
                 toleranceAfter: .zero

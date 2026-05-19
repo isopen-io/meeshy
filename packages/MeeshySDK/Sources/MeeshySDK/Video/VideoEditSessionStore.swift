@@ -14,10 +14,11 @@ public actor VideoEditSessionStore {
     private let maxAge: TimeInterval = 7 * 24 * 3600
 
     private init() {
-        let base = fileManager.urls(for: .cachesDirectory, in: .userDomainMask).first
-            ?? fileManager.temporaryDirectory
+        let fm = fileManager
+        let base = fm.urls(for: .cachesDirectory, in: .userDomainMask).first
+            ?? fm.temporaryDirectory
         directory = base.appendingPathComponent("VideoEditorSessions", isDirectory: true)
-        try? fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+        try? fm.createDirectory(at: directory, withIntermediateDirectories: true)
         Task { await pruneExpired() }
     }
 

@@ -62,8 +62,8 @@ public struct VideoRenderGeometry: Sendable, Equatable {
 
         let minX = corners.map(\.x).min() ?? 0
         let minY = corners.map(\.y).min() ?? 0
-        let maxX = corners.map(\.x).max() ?? cropW
-        let maxY = corners.map(\.y).max() ?? cropH
+        let maxX = corners.map(\.x).max() ?? CGFloat(cropW)
+        let maxY = corners.map(\.y).max() ?? CGFloat(cropH)
 
         let normalize = CGAffineTransform(translationX: -minX, y: -minY)
         let total = cropTransform
