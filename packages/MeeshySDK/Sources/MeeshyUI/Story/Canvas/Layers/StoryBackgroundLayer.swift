@@ -44,7 +44,7 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
         case solidColor(UIColor)
         case gradient(colors: [UIColor], direction: GradientDirection)
         case image(postMediaId: String, thumbHash: String?)
-        case video(postMediaId: String, looping: Bool, mute: Bool)
+        case video(postMediaId: String, looping: Bool, mute: Bool, thumbHash: String?)
     }
 
     public enum GradientDirection: Sendable, Equatable {
@@ -109,7 +109,6 @@ extension StoryBackgroundLayer {
             addSublayer(g)
             contentLayer = g
         case .image(let postMediaId, let thumbHash):
-            backgroundColor = UIColor.black.cgColor
             let img = CALayer()
             img.frame = bounds
             img.contentsGravity = .resizeAspectFill
@@ -123,19 +122,27 @@ extension StoryBackgroundLayer {
             // bitmap réel quand on revisite une story.
             let directURLForWarm = Self.directURLIfAny(from: postMediaId)
             let warmURL: URL? = directURLForWarm ?? resolver?(postMediaId)
-            var skippedPlaceholder = false
+            var hasVisual = false
             if let warm = warmURL,
                let cached = CacheCoordinator.warmedImage(for: warm.absoluteString)?.cgImage {
                 img.contents = cached
-                skippedPlaceholder = true
+                hasVisual = true
             }
 
             // Synchronous thumbHash placeholder (si pas de hit cache chaud).
-            if !skippedPlaceholder,
+            if !hasVisual,
                let hash = thumbHash,
                let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
                 img.contents = placeholderImage.cgImage
+                hasVisual = true
             }
+
+            // backgroundColor noir UNIQUEMENT si aucun visuel placeholder n'est
+            // disponible — sinon le ThumbHash ou le bitmap chaud couvre déjà
+            // la totalité du frame, le noir serait une couche perdue (parfois
+            // visible 1-2 frames pendant un re-layout). Quand un placeholder
+            // existe on garde transparent ; sinon noir.
+            backgroundColor = hasVisual ? UIColor.clear.cgColor : UIColor.black.cgColor
 
             // Charge le bitmap réel par-dessus le placeholder thumbHash.
             // Trois sources, dans l'ordre : (1) cache image fourni par le
@@ -179,31 +186,50 @@ extension StoryBackgroundLayer {
                 }
                 break
             }
-        case .video(let postMediaId, let looping, let mute):
-            backgroundColor = UIColor.black.cgColor
+        case .video(let postMediaId, let looping, let mute, let thumbHash):
             // Édition composer : même fallback URL directe qu'en image.
             let resolvedURL: URL? = {
                 if let direct = Self.directURLIfAny(from: postMediaId) { return direct }
                 return resolver?(postMediaId)
             }()
-            guard let remoteURL = resolvedURL else { break }
-
-            // ThumbHash placeholder (déjà appliqué sur `contentLayer` ci-dessus
-            // pour le path image ; ici on s'appuie sur backgroundColor noir).
-
-            if remoteURL.isFileURL {
-                attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute)
+            guard let remoteURL = resolvedURL else {
+                // No URL at all → black floor (rien à afficher).
+                backgroundColor = UIColor.black.cgColor
                 break
             }
 
-            // Cache-first : si déjà en cache, joue tout de suite.
+            // Fast-path : URL locale immédiate ou cache disk hit → AVPlayer
+            // direct, sans placeholder noir ni ThumbHash (la première frame
+            // de la vidéo est rendue très vite).
+            if remoteURL.isFileURL {
+                backgroundColor = UIColor.clear.cgColor
+                attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute)
+                break
+            }
             if let local = CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
+                backgroundColor = UIColor.clear.cgColor
                 attachBackgroundPlayer(url: local, looping: looping, mute: mute)
                 break
             }
 
-            // Cache miss : précache puis play. Évite le double-fetch (network
-            // stream + cache populate) du chemin précédent.
+            // Cache miss : placeholder ThumbHash dans un sublayer si dispo,
+            // sinon backgroundColor noir (seulement ici, fallback strict).
+            var placeholderApplied = false
+            if let hash = thumbHash,
+               let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
+                let placeholder = CALayer()
+                placeholder.frame = bounds
+                placeholder.contents = placeholderImage.cgImage
+                placeholder.contentsGravity = .resizeAspectFill
+                placeholder.masksToBounds = true
+                addSublayer(placeholder)
+                contentLayer = placeholder
+                placeholderApplied = true
+            }
+            backgroundColor = placeholderApplied ? UIColor.clear.cgColor : UIColor.black.cgColor
+
+            // Précache async puis play. AVPlayerLayer s'ajoute par-dessus
+            // le placeholder, qui disparaît visuellement quand la vidéo joue.
             Task { @MainActor [weak self] in
                 let url = await CacheCoordinator.videoLocalFileURLAwait(for: remoteURL) ?? remoteURL
                 self?.attachBackgroundPlayer(url: url, looping: looping, mute: mute)

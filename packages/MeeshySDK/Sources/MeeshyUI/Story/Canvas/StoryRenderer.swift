@@ -352,7 +352,8 @@ extension StoryRenderer {
                 : (bgVideo.mediaURL ?? "")
             return .video(postMediaId: routingKey,
                           looping: bgVideo.loop ?? true,
-                          mute: true)
+                          mute: true,
+                          thumbHash: bgVideo.thumbHash)
         }
         // Image background object or slide.mediaURL
         if let bgImage = slide.effects.mediaObjects?.first(where: { $0.isBackground && $0.kind == .image }) {
