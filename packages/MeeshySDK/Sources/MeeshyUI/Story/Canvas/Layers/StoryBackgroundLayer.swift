@@ -77,9 +77,35 @@ extension StoryBackgroundLayer {
                           geometry: CanvasGeometry,
                           resolver: ((String) -> URL?)?,
                           imageCache: ImageCacheReader?) {
+        // FAST PATH ANTI-FLASH :
+        // `configure(...)` est appelé à CHAQUE `rebuildLayers()` du canvas
+        // (i.e. à chaque slide.didSet, drop d'un élément foreground, lancement
+        // preview / viewer, etc.). Le clear+rebuild systématique détachait
+        // `contentLayer` puis le recréait vide en attendant un `img.contents`
+        // async — visible 1-2 frames comme un FLASH NOIR / TRANSPARENT à
+        // travers `StoryCanvasUIView`.
+        //
+        // Quand l'IDENTITÉ du contenu n'a pas changé (même postMediaId pour
+        // image / video, même type pour color/gradient), on garde le
+        // `contentLayer` existant et on rafraîchit juste frame + transform.
+        // Le bitmap déjà affiché reste à l'écran sans interruption.
+        let previousIdentity = Self.contentIdentity(for: self.kind)
+        let nextIdentity = Self.contentIdentity(for: kind)
+        let canReuseContent = (previousIdentity == nextIdentity) && (contentLayer != nil)
+
         self.kind = kind
         self.transform3D = transform
         self.frame = CGRect(origin: .zero, size: geometry.renderSize)
+
+        if canReuseContent {
+            // Même contenu visuel : on garde le sublayer en place pour éviter
+            // un détachement transitoire. Resync frame (resize du canvas) +
+            // transform (pinch / pan utilisateur sur l'image bg).
+            contentLayer?.frame = bounds
+            avPlayerLayer?.frame = bounds
+            self.transform = transform.caTransform()
+            return
+        }
 
         // Clear existing content
         contentLayer?.removeFromSuperlayer()
@@ -237,6 +263,23 @@ extension StoryBackgroundLayer {
         }
 
         self.transform = transform.caTransform()
+    }
+
+    /// Identité visuelle du `Kind`, utilisée par le fast-path de `configure()`
+    /// pour décider si on peut garder le `contentLayer` actuel (même contenu)
+    /// ou s'il faut tout reconstruire (changement réel de slide bg).
+    ///
+    /// On ignore les paramètres dynamiques (mute, color associé) car leur
+    /// changement n'impose pas de recréer le layer (mute = property AVPlayer,
+    /// color = backgroundColor du layer). Seule l'IDENTITÉ du média compte.
+    nonisolated private static func contentIdentity(for kind: Kind) -> String {
+        switch kind {
+        case .solidColor:                       return "color"
+        case .gradient:                         return "gradient"
+        case .image(let postMediaId, _):        return "image:\(postMediaId)"
+        case .video(let postMediaId, let looping, _, _):
+            return "video:\(postMediaId):\(looping)"
+        }
     }
 }
 
