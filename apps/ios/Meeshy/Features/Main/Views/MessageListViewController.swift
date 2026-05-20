@@ -241,7 +241,10 @@ final class MessageListViewController: UIViewController {
             for: dayStart,
             now: now,
             calendar: calendar,
-            locale: .current
+            locale: .current,
+            today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+            yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+            dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
         )
         if stickyDayState.label != label {
             stickyDayState.label = label
@@ -321,12 +324,17 @@ final class MessageListViewController: UIViewController {
             // posée entre deux groupes de messages de jours distincts. Le
             // label est recalculé à chaque rendu de cellule afin de suivre
             // le passage de minuit sans avoir à reconstruire la datasource.
+            // Les libellés relatifs sont injectés depuis le catalogue de
+            // chaînes localisées pour suivre la langue d'interface de l'app.
             if case .dayHeader(let dayStart) = item {
                 let label = MessageDayLabel.label(
                     for: dayStart,
                     now: Date(),
                     calendar: .current,
-                    locale: .current
+                    locale: .current,
+                    today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+                    yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+                    dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
                 )
                 let dark = self.isDark
                 cell.contentConfiguration = UIHostingConfiguration {

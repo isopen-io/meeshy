@@ -107,4 +107,70 @@ final class MessageDayLabelTests: XCTestCase {
         let target = date(2026, 5, 20, 23, 30)
         XCTAssertEqual(MessageDayLabel.label(for: target, now: now, calendar: makeCalendar(), locale: locale), "Aujourd'hui")
     }
+
+    // MARK: - i18n — strings injectables (suivent la langue d'interface app)
+
+    func test_label_today_usesInjectedTodayString() {
+        let now = date(2026, 5, 20, 14, 30)
+        let target = date(2026, 5, 20, 9, 15)
+        XCTAssertEqual(
+            MessageDayLabel.label(
+                for: target, now: now, calendar: makeCalendar(),
+                locale: Locale(identifier: "en_US"),
+                today: "Today", yesterday: "Yesterday", dayBeforeYesterday: "Day before yesterday"
+            ),
+            "Today"
+        )
+    }
+
+    func test_label_yesterday_usesInjectedYesterdayString() {
+        let now = date(2026, 5, 20, 14, 30)
+        let target = date(2026, 5, 19, 9, 15)
+        XCTAssertEqual(
+            MessageDayLabel.label(
+                for: target, now: now, calendar: makeCalendar(),
+                locale: Locale(identifier: "en_US"),
+                today: "Today", yesterday: "Yesterday", dayBeforeYesterday: "Day before yesterday"
+            ),
+            "Yesterday"
+        )
+    }
+
+    func test_label_dayBeforeYesterday_usesInjectedDayBeforeYesterdayString() {
+        let now = date(2026, 5, 20, 14, 30)
+        let target = date(2026, 5, 18, 9, 15)
+        XCTAssertEqual(
+            MessageDayLabel.label(
+                for: target, now: now, calendar: makeCalendar(),
+                locale: Locale(identifier: "en_US"),
+                today: "Today", yesterday: "Yesterday", dayBeforeYesterday: "Day before yesterday"
+            ),
+            "Day before yesterday"
+        )
+    }
+
+    func test_label_weekday_followsInjectedLocale() {
+        // Locale en_US → DateFormatter sort "Sunday" (la fonction capitalise la 1re lettre)
+        let now = date(2026, 5, 20, 14, 30)
+        let target = date(2026, 5, 17, 10, 0)
+        XCTAssertEqual(
+            MessageDayLabel.label(
+                for: target, now: now, calendar: makeCalendar(),
+                locale: Locale(identifier: "en_US")
+            ),
+            "Sunday"
+        )
+    }
+
+    func test_label_fullDate_followsInjectedLocale() {
+        let now = date(2026, 5, 20, 14, 30)
+        let target = date(2026, 5, 13, 10, 0)
+        XCTAssertEqual(
+            MessageDayLabel.label(
+                for: target, now: now, calendar: makeCalendar(),
+                locale: Locale(identifier: "en_US")
+            ),
+            "Wednesday 13 May"
+        )
+    }
 }
