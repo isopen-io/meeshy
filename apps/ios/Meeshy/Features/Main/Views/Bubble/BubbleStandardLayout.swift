@@ -656,7 +656,17 @@ struct BubbleStandardLayout: View {
     ///   and the translate button are omitted — the audio widget owns its own
     ///   per-language switcher, so rendering both would compete.
     func resolvedFooter(includesTranslationControls: Bool = true) -> (BubbleFooterModel, BubbleFooterActions) {
-        let showTranslation = includesTranslationControls && hasAnyTranslation && !isEmojiOnly
+        // Le bouton translate s'affiche toujours pour les contenus traductibles
+        // — texte ou audio (la transcription est traductible) — même si aucune
+        // traduction n'existe encore : l'utilisateur peut alors la demander
+        // depuis le MessageDetailSheet. Image / vidéo seules et emoji-only
+        // restent exclus tant qu'on n'a pas de pipeline texte associé.
+        let isTranslatableContent = !isEmojiOnly
+            && (hasTextOrNonMediaContent || !audioAttachments.isEmpty)
+        let showTranslation = includesTranslationControls && isTranslatableContent
+        // Les drapeaux n'apparaissent que quand au moins une traduction est
+        // déjà disponible (sinon il n'y a rien à montrer côté flag strip).
+        let showFlags = showTranslation && hasAnyTranslation
         let sender: SenderIdentity? = showIdentityBar ? SenderIdentity(
             name: content.senderName ?? "?",
             username: message.senderUsername.map { "@\($0)" },
@@ -674,14 +684,14 @@ struct BubbleStandardLayout: View {
             isMe: content.isMe,
             isOnline: networkIsOnline,
             sender: sender,
-            flags: showTranslation
+            flags: showFlags
                 ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
                 : [],
             showsTranslate: showTranslation
         )
 
         let actions = BubbleFooterActions(
-            onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
+            onFlagTap: showFlags ? { code in handleFlagTap(code) } : nil,
             onTranslate: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
             onRetry: { performManualRetry() },
             onSenderTap: { selectedProfileUser = .from(message: message) },
