@@ -415,13 +415,18 @@ public struct AudioPlayerView: View {
     }
 
     private func switchToLanguage(_ code: String) {
+        // Bug §1.1 fix: stop playback immediately instead of calling
+        // player.play(urlString:) directly on the new language URL.
+        // The previous behavior bypassed the availability gate, silently
+        // streaming the translated audio when it wasn't cached. The parent
+        // (AudioMediaView via the externalLanguage binding) re-resolves
+        // availability for the new URL and triggers auto-DL (if policy
+        // permits) or shows the download button. The user re-taps play,
+        // which goes through handlePlayTap() — gated by availability.
+        player.stop()
+
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             selectedAudioLanguage = code
-        }
-        if code == "orig" {
-            player.play(urlString: attachment.fileUrl)
-        } else if let translated = translatedAudios.first(where: { $0.targetLanguage.lowercased() == code.lowercased() }) {
-            player.play(urlString: translated.url)
         }
     }
 

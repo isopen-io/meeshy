@@ -691,9 +691,12 @@ struct BubbleCarouselView: View {
 
     @ViewBuilder
     private func carouselVideoCell(_ attachment: MessageAttachment) -> some View {
-        InlineVideoPlayerView(
+        // Go through VideoMediaView so the inline carousel respects the
+        // download policy (auto-DL when allowed, download badge otherwise).
+        VideoMediaView(
             attachment: attachment,
             accentColor: contactColor,
+            isDark: isDark,
             onExpandFullscreen: {
                 fullscreenAttachment = attachment
             }

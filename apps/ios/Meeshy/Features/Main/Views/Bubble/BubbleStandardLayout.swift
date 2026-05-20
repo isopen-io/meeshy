@@ -383,10 +383,9 @@ struct BubbleStandardLayout: View {
             case .video:
                 if !attachment.fileUrl.isEmpty {
                     let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
-                    VideoFullscreenPlayerView(
-                        urlString: attachment.fileUrl,
+                    GatedVideoFullscreenPlayer(
+                        attachment: attachment,
                         accentColor: contactColor,
-                        fileName: attachment.originalName,
                         caption: caption,
                         mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
                     )

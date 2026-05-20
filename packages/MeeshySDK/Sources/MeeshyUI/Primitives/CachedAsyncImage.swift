@@ -116,6 +116,16 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         let resolved = MeeshyConfig.resolveMediaURL(currentUrlString)?.absoluteString ?? currentUrlString
         if image != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
 
+        // Policy gate: when the image isn't already on disk and the user's
+        // preference + current network condition disallow auto-download for
+        // images, leave the thumbHash / placeholder in place. A manual tap
+        // (e.g. fullscreen open) overrides this and forces a fetch — that's
+        // handled at the parent (spec §14.1). Cached avatars and banners
+        // bypass this check (they go through CachedAvatarImage /
+        // CachedBannerImage which intentionally remain ungated).
+        if DiskCacheStore.cachedImage(for: resolved) == nil,
+           !MediaDownloadPolicy.shouldAutoLoadImage() { return }
+
         isLoading = true; hasFailed = false
         let loaded: UIImage?
         if let targetSize {
@@ -132,6 +142,21 @@ public struct CachedAsyncImage<Placeholder: View>: View {
             }
         }
         if !Task.isCancelled { isLoading = false }
+    }
+}
+
+/// Internal helper that hides the singleton plumbing for the image policy
+/// gate. Both `CachedAsyncImage` and `ProgressiveCachedImage` call this
+/// before issuing a network fetch — when it returns `false`, the view stays
+/// on the thumbHash / thumbnail / placeholder and the bytes are saved.
+@MainActor
+enum MediaDownloadPolicy {
+    static func shouldAutoLoadImage() -> Bool {
+        MediaDownloadPolicyEngine.shouldAutoDownload(
+            kind: .image,
+            condition: NetworkConditionMonitor.shared.condition,
+            prefs: MediaDownloadPreferencesStore.shared.preferences
+        )
     }
 }
 
@@ -385,6 +410,15 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
     private func loadThumbnail() async {
         guard let thumbnailUrl, !thumbnailUrl.isEmpty, thumbnailImage == nil else { return }
         let resolved = MeeshyConfig.resolveMediaURL(thumbnailUrl)?.absoluteString ?? thumbnailUrl
+        // Policy gate: skip network fetch when auto-download is disallowed
+        // and the thumbnail isn't already on disk. The thumbHash + parent
+        // placeholder remain visible — no spinner, no missing media. A
+        // manual tap (fullscreen) bypasses this gate via the parent's own
+        // download trigger.
+        if DiskCacheStore.cachedImage(for: resolved) == nil,
+           !MediaDownloadPolicy.shouldAutoLoadImage() {
+            return
+        }
         if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
             if !Task.isCancelled, fullImage == nil {
                 withAnimation(.easeIn(duration: 0.15)) { thumbnailImage = loaded }
@@ -396,6 +430,14 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         guard let fullUrl, !fullUrl.isEmpty else { return }
         let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
         if fullImage != nil && DiskCacheStore.cachedImage(for: resolved) != nil { return }
+        // Policy gate (full image): skip network fetch when auto-download is
+        // disallowed. ThumbHash + thumbnail (if cached) keep the bubble
+        // visually filled; the user can tap to open fullscreen which will
+        // trigger an explicit download.
+        if DiskCacheStore.cachedImage(for: resolved) == nil,
+           !MediaDownloadPolicy.shouldAutoLoadImage() {
+            return
+        }
         if let loaded = await CacheCoordinator.shared.images.image(for: resolved) {
             if !Task.isCancelled {
                 withAnimation(.easeIn(duration: 0.25)) { fullImage = loaded }

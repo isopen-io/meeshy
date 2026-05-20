@@ -286,10 +286,26 @@ struct MeeshyApp: App {
                         // network, so the splash duration stays bounded.
                         _ = await CacheCoordinator.shared.conversations.load(for: "list")
 
-                        await requestPushPermissionIfNeeded()
-                        VoIPPushManager.shared.register()
-                        await NotificationManager.shared.refreshUnreadCount()
-                        await NotificationCoordinator.shared.syncNow()
+                        // Le splash NE DOIT PAS attendre les appels réseau
+                        // (push permission, VoIP register, unread count,
+                        // notif sync). Sur un réseau dégradé, chacun de ces
+                        // appels HTTP peut timeout 60s — un cold start
+                        // observé a déjà tenu le splash 86s parce que
+                        // `refreshUnreadCount` + `syncNow` ont chacun
+                        // timeouté avant retry. Détacher tout ce post-cache
+                        // work garantit que le splash dismiss dès que la
+                        // liste de conversations en cache est hydratée.
+                        // ConversationListView et ses dépendances font
+                        // leurs propres `.onAppear` sync — ce qu'on
+                        // détache ici n'est que le bootstrap (push token,
+                        // badge initial) qui peut tomber en background.
+                        Task { [authManager] in
+                            _ = authManager  // capture explicite (lint)
+                            await requestPushPermissionIfNeeded()
+                            VoIPPushManager.shared.register()
+                            await NotificationManager.shared.refreshUnreadCount()
+                            await NotificationCoordinator.shared.syncNow()
+                        }
                     } else {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }

@@ -216,53 +216,11 @@ struct ConversationMediaGalleryView: View {
 
     @ViewBuilder
     private func galleryVideoPage(_ attachment: MessageAttachment) -> some View {
-        let isActive = videoManager.activeURL == attachment.fileUrl && videoManager.isPlaying
-
-        ZStack {
-            if !isActive {
-                let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
-                if thumbUrl != nil || attachment.thumbHash != nil {
-                    ProgressiveCachedImage(
-                        thumbHash: attachment.thumbHash,
-                        thumbnailUrl: thumbUrl,
-                        fullUrl: thumbUrl
-                    ) {
-                        Color(hex: attachment.thumbnailColor)
-                    }
-                    .aspectRatio(contentMode: .fit)
-                }
-            }
-
-            if isActive || (videoManager.activeURL == attachment.fileUrl) {
-                if let player = videoManager.player {
-                    FullscreenAVPlayerLayerView(player: player, gravity: .resizeAspect)
-                        .ignoresSafeArea()
-                }
-            }
-
-            if !isActive {
-                Button {
-                    videoManager.load(urlString: attachment.fileUrl)
-                    videoManager.play()
-                    HapticFeedback.light()
-                    cacheAttachment(attachment)
-                } label: {
-                    ZStack {
-                        Circle()
-                            .fill(.ultraThinMaterial)
-                            .frame(width: 64, height: 64)
-                        Circle()
-                            .fill(Color(hex: accentColor).opacity(0.85))
-                            .frame(width: 56, height: 56)
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 22, weight: .bold))
-                            .foregroundColor(.white)
-                            .offset(x: 2)
-                    }
-                    .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
-                }
-            }
-        }
+        GalleryVideoPage(
+            attachment: attachment,
+            accentColor: accentColor,
+            onCacheActivation: { cacheAttachment(attachment) }
+        )
         .gesture(videoDismissGesture(attachment))
         .offset(y: offset.height)
     }
@@ -443,6 +401,176 @@ struct ConversationMediaGalleryView: View {
                 HapticFeedback.error()
                 try? await Task.sleep(nanoseconds: 2_000_000_000)
                 withAnimation { saveState = .idle }
+            }
+        }
+    }
+}
+
+// MARK: - Gallery Video Page (per-item availability gate)
+
+/// Per-page gating wrapper for the video viewer inside
+/// `ConversationMediaGalleryView`. Resolves `VideoAvailability` against
+/// `CacheCoordinator.shared.video`, triggers auto-DL via the policy engine,
+/// and only invokes `SharedAVPlayerManager.load()` once the video is on
+/// disk — coherent with the streaming-fallback removal in the manager.
+private struct GalleryVideoPage: View {
+    let attachment: MessageAttachment
+    let accentColor: String
+    var onCacheActivation: () -> Void
+
+    @ObservedObject private var videoManager = SharedAVPlayerManager.shared
+    @State private var resolvedAvailability: VideoAvailability = .needsDownload
+    @StateObject private var downloader = AttachmentDownloader()
+
+    private var availability: VideoAvailability {
+        if downloader.isDownloading {
+            return .downloading(progress: downloader.progress)
+        }
+        if downloader.isCached {
+            return .ready
+        }
+        return resolvedAvailability
+    }
+
+    private var isPlayerActive: Bool {
+        videoManager.activeURL == attachment.fileUrl && videoManager.isPlaying
+    }
+
+    private var isPlayerAttached: Bool {
+        videoManager.activeURL == attachment.fileUrl
+    }
+
+    private func resolveAvailability() async {
+        let urlString = attachment.fileUrl
+        if urlString.hasPrefix("file://") {
+            let exists = FileManager.default.fileExists(
+                atPath: URL(string: urlString)?.path ?? ""
+            )
+            resolvedAvailability = VideoAvailability.resolve(
+                isLocalFile: true, localFileExists: exists, isServerCached: false
+            )
+            return
+        }
+        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+        let cached = await CacheCoordinator.shared.video.isCached(resolved)
+        resolvedAvailability = VideoAvailability.resolve(
+            isLocalFile: false, localFileExists: false, isServerCached: cached
+        )
+    }
+
+    var body: some View {
+        ZStack {
+            if !isPlayerActive {
+                thumbnailLayer
+            }
+
+            if isPlayerActive || isPlayerAttached {
+                if let player = videoManager.player {
+                    FullscreenAVPlayerLayerView(player: player, gravity: .resizeAspect)
+                        .ignoresSafeArea()
+                }
+            }
+
+            if !isPlayerActive {
+                playOrDownloadButton
+            }
+        }
+        .task(id: attachment.fileUrl) {
+            if !downloader.isDownloading {
+                downloader.isCached = false
+            }
+            await resolveAvailability()
+            if case .needsDownload = resolvedAvailability, !downloader.isDownloading {
+                let condition = NetworkConditionMonitor.shared.condition
+                let prefs = MediaDownloadPreferencesStore.shared.preferences
+                if MediaDownloadPolicyEngine.shouldAutoDownload(
+                    kind: .video, condition: condition, prefs: prefs
+                ) {
+                    downloader.start(attachment: attachment, onShare: nil)
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var thumbnailLayer: some View {
+        let thumbUrl = attachment.thumbnailUrl?.isEmpty == false ? attachment.thumbnailUrl : nil
+        if thumbUrl != nil || attachment.thumbHash != nil {
+            ProgressiveCachedImage(
+                thumbHash: attachment.thumbHash,
+                thumbnailUrl: thumbUrl,
+                fullUrl: thumbUrl
+            ) {
+                Color(hex: attachment.thumbnailColor)
+            }
+            .aspectRatio(contentMode: .fit)
+        }
+    }
+
+    @ViewBuilder
+    private var playOrDownloadButton: some View {
+        Button {
+            switch availability {
+            case .ready:
+                videoManager.load(urlString: attachment.fileUrl)
+                videoManager.play()
+                onCacheActivation()
+                HapticFeedback.light()
+            case .needsDownload:
+                downloader.start(attachment: attachment, onShare: nil)
+                HapticFeedback.light()
+            case .downloading:
+                break
+            }
+        } label: {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 64, height: 64)
+                Circle()
+                    .fill(Color(hex: accentColor).opacity(0.85))
+                    .frame(width: 56, height: 56)
+                buttonContent
+            }
+            .shadow(color: .black.opacity(0.4), radius: 12, y: 6)
+        }
+        .disabled({
+            if case .downloading = availability { return true }
+            return false
+        }())
+    }
+
+    @ViewBuilder
+    private var buttonContent: some View {
+        switch availability {
+        case .ready:
+            Image(systemName: "play.fill")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.white)
+                .offset(x: 2)
+        case .needsDownload:
+            VStack(spacing: 2) {
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(.white)
+                if attachment.fileSize > 0 {
+                    Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
+                        .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+            }
+        case .downloading(let progress):
+            if progress > 0 {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Color.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 32, height: 32)
+                    .animation(.linear(duration: 0.2), value: progress)
+            } else {
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(0.9)
             }
         }
     }
