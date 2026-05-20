@@ -127,6 +127,29 @@ struct ComposerToolPanelHost: View {
                 Spacer()
             }
 
+            // Liste des audios attachés à la slide. Affiche cellule waveform +
+            // contrôles fg/bg/volume/delete. Liste séparée des médias visuels
+            // (image/vidéo) car les contraintes UX diffèrent (preview audio
+            // local indépendant du timeline engine).
+            if let audios = viewModel.currentEffects.audioPlayerObjects, !audios.isEmpty {
+                ScrollView(.vertical, showsIndicators: false) {
+                    VStack(spacing: 4) {
+                        ForEach(audios) { audio in
+                            StoryAudioCell(
+                                audio: audio,
+                                url: viewModel.loadedAudioURLs[audio.id],
+                                isBackground: viewModel.isBackground(id: audio.id),
+                                onToggleBackground: { viewModel.toggleBackground(id: audio.id) },
+                                onVolumeChanged: { viewModel.setAudioVolume(audioId: audio.id, volume: $0) },
+                                onDelete: { viewModel.deleteElement(id: audio.id) }
+                            )
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                }
+                .frame(maxHeight: 120)
+            }
+
             // Liste des médias avec drag-to-reorder via long-press natif
             // (`.draggable` + `.dropDestination`). Pas de hamburger `≡` comme
             // le faisait `List` en `editMode = .active` : l'utilisateur appuie

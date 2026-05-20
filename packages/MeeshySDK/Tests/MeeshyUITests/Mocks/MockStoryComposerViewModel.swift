@@ -319,6 +319,14 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
         return stubIsBackground[id] ?? false
     }
 
+    // MARK: - Audio
+    var _setAudioVolumeCalls: Int = 0
+    var _setAudioVolumeLastArgs: (id: String, volume: Float)?
+    func setAudioVolume(audioId: String, volume: Float) {
+        _setAudioVolumeCalls += 1
+        _setAudioVolumeLastArgs = (audioId, volume)
+    }
+
     // MARK: - Z-Order
     var stubZIndex: [String: Int] = [:]
     var _zIndexCalls: Int = 0

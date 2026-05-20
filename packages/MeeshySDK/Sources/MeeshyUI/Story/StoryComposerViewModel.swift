@@ -219,6 +219,9 @@ protocol StoryComposerProviding: AnyObject {
     func toggleBackground(id: String)
     func isBackground(id: String) -> Bool
 
+    // MARK: Audio
+    func setAudioVolume(audioId: String, volume: Float)
+
     // MARK: Z-Order
     func zIndex(for id: String) -> Int
     func bringToFront(id: String)
@@ -1175,6 +1178,16 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         if currentEffects.resolvedBackgroundMedia?.id == id { return true }
         if currentEffects.resolvedBackgroundAudio?.id == id { return true }
         return false
+    }
+
+    /// Volume d'un audio (clamp [0, 1]). No-op si l'id ne match aucun audio.
+    func setAudioVolume(audioId: String, volume: Float) {
+        var effects = currentEffects
+        guard var audios = effects.audioPlayerObjects,
+              let i = audios.firstIndex(where: { $0.id == audioId }) else { return }
+        audios[i].volume = max(0, min(1, volume))
+        effects.audioPlayerObjects = audios
+        currentEffects = effects
     }
 
     // MARK: - Media Reorder
