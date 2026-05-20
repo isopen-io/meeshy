@@ -26,6 +26,17 @@ public struct APIPostMedia: Codable, Sendable {
     public let order: Int?
     public let caption: String?
     public let alt: String?
+
+    // Prisme Linguistique foundation (R1 — gateway now selects these on
+    // every PostMedia response). `language` is the media's base ISO 639-1
+    // code; `variantOf` is the FK to the source media when this row is an
+    // auto-generated variant (e.g. a TTS clone in another language).
+    // Pre-R7 these fields existed on the wire but iOS dropped them
+    // silently because the model didn't declare them — blocking any
+    // language-aware fallback resolution on the iOS side.
+    public let language: String?
+    public let variantOf: String?
+
     public let transcription: APIAttachmentTranscription?
     public let translations: [String: APIAttachmentTranslation]?
 
