@@ -426,12 +426,21 @@ public struct AudioPlayerView: View {
     }
 
     // MARK: - Main Player
+    /// Empile, dans cet ordre strict :
+    /// 1. `topSlot` (reply) + son séparateur quand il existe
+    /// 2. Les contrôles du player (play / waveform / time)
+    /// 3. Le bloc de transcription (texte ou bouton "Transcrire") sans footer
+    /// 4. `bottomSlot` (footer) ancré tout en bas, séparé par un unique
+    ///    `Divider` quand quelque chose précède
+    ///
+    /// Cette structure garantit que `BubbleFooter` (timestamp + read receipts)
+    /// reste toujours sous le player, jamais incrusté entre la transcription
+    /// et le bouton "Re-transcrire" comme c'était le cas avant ce refactor.
     private var mainPlayer: some View {
         VStack(spacing: 0) {
             if let slot = topSlot {
                 slot
-                Divider()
-                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+                slotDivider
             }
 
             HStack(spacing: context.isCompact ? 8 : 10) {
@@ -446,18 +455,34 @@ public struct AudioPlayerView: View {
             .padding(.horizontal, context.isCompact ? 10 : 14)
             .padding(.vertical, context.isCompact ? 8 : 12)
 
-            inlineTranscription
+            transcriptionBlock
+
+            if let slot = bottomSlot {
+                slotDivider
+                slot
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+            }
         }
         .background(playerBackground)
     }
 
-    // MARK: - Inline Transcription (inside player)
+    /// Trait subtil utilisé entre les sections du player. Un seul style,
+    /// instancié là où il sépare effectivement deux contenus, jamais en
+    /// cascade.
+    private var slotDivider: some View {
+        Divider()
+            .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+    }
+
+    /// Bloc de transcription : texte développable ou bouton "Transcrire" si
+    /// aucune transcription n'est encore disponible. **Ne rend jamais le
+    /// `bottomSlot`** — il est ancré par `mainPlayer` directement.
     @ViewBuilder
-    private var inlineTranscription: some View {
+    private var transcriptionBlock: some View {
         if !displaySegments.isEmpty {
             VStack(spacing: 0) {
-                Divider()
-                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+                slotDivider
 
                 let segments = isLongTranscription && !isTranscriptionExpanded
                     ? truncatedSegments
@@ -467,12 +492,15 @@ public struct AudioPlayerView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
 
-                transcriptionFooterRow
+                if isLongTranscription {
+                    expandToggleButton
+                }
+                retranscribeButton
             }
+            .padding(.bottom, 6)
         } else if let onRequest = onRequestTranscription {
             VStack(spacing: 0) {
-                Divider()
-                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+                slotDivider
 
                 Button {
                     onRequest()
@@ -490,44 +518,25 @@ public struct AudioPlayerView: View {
                 }
 
                 retranscribeButton
-
-                if let slot = bottomSlot {
-                    slot.padding(.horizontal, 10).padding(.bottom, 6)
-                }
-            }
-        } else if let slot = bottomSlot {
-            VStack(spacing: 0) {
-                Divider()
-                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
-                slot.padding(.horizontal, 10).padding(.vertical, 6)
             }
         }
     }
 
-    // MARK: - Transcription Footer Row (chevron centered + bottomSlot below)
+    // MARK: - Long-transcription chevron toggle
     @ViewBuilder
-    private var transcriptionFooterRow: some View {
-        VStack(spacing: 2) {
-            if isLongTranscription {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        isTranscriptionExpanded.toggle()
-                    }
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: isTranscriptionExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(isDark ? .white.opacity(0.35) : .black.opacity(0.25))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 20)
-                }
+    private var expandToggleButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isTranscriptionExpanded.toggle()
             }
-            if let slot = bottomSlot {
-                slot.padding(.horizontal, 10)
-            }
-            retranscribeButton
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: isTranscriptionExpanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(isDark ? .white.opacity(0.35) : .black.opacity(0.25))
+                .frame(maxWidth: .infinity)
+                .frame(height: 20)
         }
-        .padding(.bottom, 6)
     }
 
     // MARK: - Re-transcribe Button
