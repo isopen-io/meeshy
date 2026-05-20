@@ -571,33 +571,49 @@ public struct AudioPlayerView: View {
         return result
     }
 
+    @ViewBuilder
     private func inlineFlowTranscription(segments: [TranscriptionDisplaySegment]) -> some View {
-        let activeIdx = segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
+        // Cas fallback synthesized : `resolveDisplaySegments` renvoie un
+        // unique segment qui porte tout le texte quand la transcription n'a
+        // pas de découpe par segment (audio sans segments structurés).
+        // `FlowLayout` propose `.unspecified` à chaque subview, qui retourne
+        // alors sa largeur native une-ligne — un seul Button énorme ne peut
+        // donc plus être wrappé et le texte est tronqué visuellement.
+        // On rend directement un Text qui wrap naturellement dans ce cas.
+        if segments.count == 1, let single = segments.first {
+            Text(single.text)
+                .font(.system(size: 13))
+                .foregroundColor(inlineSegmentColor(isActive: false, isPast: false))
+                .multilineTextAlignment(.leading)
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        } else {
+            let activeIdx = segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
+            FlowLayout(spacing: 0) {
+                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                    let isActive = index == activeIdx
+                    let isPast = activeIdx != nil && index < activeIdx!
 
-        return FlowLayout(spacing: 0) {
-            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
-                let isActive = index == activeIdx
-                let isPast = activeIdx != nil && index < activeIdx!
-
-                Button {
-                    player.seekToTime(segment.startTime)
-                    HapticFeedback.light()
-                } label: {
-                    Text(segment.text + " ")
-                        .font(.system(size: 13, weight: isActive ? .bold : .regular))
-                        .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
-                        .padding(.horizontal, isActive ? 2 : 0)
-                        .padding(.vertical, isActive ? 1 : 0)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
-                        )
+                    Button {
+                        player.seekToTime(segment.startTime)
+                        HapticFeedback.light()
+                    } label: {
+                        Text(segment.text + " ")
+                            .font(.system(size: 13, weight: isActive ? .bold : .regular))
+                            .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                            .padding(.horizontal, isActive ? 2 : 0)
+                            .padding(.vertical, isActive ? 1 : 0)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .animation(.easeInOut(duration: 0.15), value: isActive)
                 }
-                .buttonStyle(.plain)
-                .animation(.easeInOut(duration: 0.15), value: isActive)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func inlineSegmentColor(isActive: Bool, isPast: Bool) -> Color {
