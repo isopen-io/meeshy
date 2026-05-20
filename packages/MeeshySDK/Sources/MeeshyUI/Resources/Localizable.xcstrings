@@ -14099,6 +14099,16 @@
         "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Frente" } }
       }
     },
+    "story.reader.loading" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Story wird geladen…" } },
+        "en" : { "stringUnit" : { "state" : "needs_review", "value" : "Loading story…" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Cargando historia…" } },
+        "fr" : { "stringUnit" : { "state" : "new", "value" : "Chargement de la story…" } },
+        "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Carregando story…" } }
+      }
+    },
     "story.composer.addText" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {

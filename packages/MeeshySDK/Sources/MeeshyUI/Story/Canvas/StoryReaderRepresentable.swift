@@ -28,6 +28,12 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
     /// Used by the viewer to gate the slide progress timer and a loading spinner.
     let onContentReady: (() -> Void)?
 
+    /// Fraction `[0, 1]` du contenu de la slide disponible localement.
+    /// Émis à chaque transition d'état d'asset (background ready, KVO video
+    /// foreground, etc.). Permet de piloter un overlay loader granulaire
+    /// (`StoryReaderLoadingOverlay`) qui fade out au-delà du seuil 20 %.
+    let onContentProgress: ((Double) -> Void)?
+
     /// Locally-loaded assets handed in by the composer "Preview" path for a
     /// story whose media has not been uploaded yet. Keyed by media id.
     /// `preloadedImages` are in-memory bitmaps (e.g. from `PhotosPicker`);
@@ -50,7 +56,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
                 preloadedAudioURLs: [String: URL] = [:],
                 mute: Bool = false,
                 onCompletion: (@Sendable () -> Void)? = nil,
-                onContentReady: (() -> Void)? = nil) {
+                onContentReady: (() -> Void)? = nil,
+                onContentProgress: ((Double) -> Void)? = nil) {
         self.storyItem = story
         // `preferredContentLanguages` is the legacy label; it takes priority over
         // `preferredLanguages` when provided so existing call-sites compile unchanged.
@@ -62,6 +69,7 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
         self.mute = mute
         self.onCompletion = onCompletion
         self.onContentReady = onContentReady
+        self.onContentProgress = onContentProgress
         self.preloadedImages = preloadedImages
         self.preloadedVideoURLs = preloadedVideoURLs
         self.preloadedAudioURLs = preloadedAudioURLs
@@ -107,6 +115,8 @@ public struct StoryReaderRepresentable: UIViewRepresentable {
             : PreloadedImageCacheReader(fileURLs: imageURLs)
 
         view.onContentReady = { contentReady?() }
+        let progress = onContentProgress
+        view.onContentProgress = { value in progress?(value) }
         view.setReaderContext(StoryReaderContext(
             preferredLanguages: preferredLanguages,
             mute: mute,
@@ -165,7 +175,8 @@ extension StoryReaderRepresentable {
                   preferredLanguages: preferredContentLanguages ?? [],
                   mute: mute,
                   onCompletion: onCompletion,
-                  onContentReady: nil)
+                  onContentReady: nil,
+                  onContentProgress: nil)
     }
 
     /// Construct from an `APIPost` (used in feed contexts where stories arrive
@@ -205,7 +216,8 @@ extension StoryReaderRepresentable {
                   preferredLanguages: chain,
                   mute: mute,
                   onCompletion: onCompletion,
-                  onContentReady: nil)
+                  onContentReady: nil,
+                  onContentProgress: nil)
     }
 
     // MARK: - Private helpers

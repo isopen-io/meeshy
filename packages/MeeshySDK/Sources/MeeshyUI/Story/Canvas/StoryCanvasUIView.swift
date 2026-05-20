@@ -142,6 +142,13 @@ public final class StoryCanvasUIView: UIView {
     /// would silently strand the caller off the main actor on Swift 6.
     public var onContentReady: (@MainActor () -> Void)?
 
+    /// Fraction `[0, 1]` du contenu de la slide actuellement disponible
+    /// localement. Émis à chaque transition d'état d'asset (KVO video.status,
+    /// arrivée du bitmap image, etc.). `1.0` correspond au signal binaire
+    /// `onContentReady`. Permet de piloter un overlay loader granulaire
+    /// (cf. spec § 3.D.2).
+    public var onContentProgress: (@MainActor (Double) -> Void)?
+
     // MARK: - Internal layers
 
     private let rootLayer = CALayer()
@@ -999,6 +1006,9 @@ public final class StoryCanvasUIView: UIView {
         applyForegroundFrames()
         updateFilterLayer()
         scheduleContentReadyEvaluation(for: bgKind)
+        // Emit l'état initial de progression (généralement 0.0 hors color/gradient
+        // qui passent immédiatement à backgroundContentReady=true via le path sync).
+        recomputeContentProgress()
         reapplyInlineEditingIfNeeded()
     }
 
@@ -1310,6 +1320,7 @@ public final class StoryCanvasUIView: UIView {
     /// `fireContentReadyIfNeeded()`.
     private func backgroundDidBecomeReady() {
         backgroundContentReady = true
+        recomputeContentProgress()
         fireContentReadyIfNeeded()
     }
 
@@ -1328,6 +1339,42 @@ public final class StoryCanvasUIView: UIView {
         }
         contentReadyFired = true
         onContentReady?()
+        // Force `onContentProgress(1.0)` au moment où le signal binaire fire
+        // afin que les listeners SwiftUI puissent fermer leur overlay même
+        // si la slide n'a aucun foreground media (cas slide texte+bg).
+        recomputeContentProgress()
+    }
+
+    /// Recalcule la fraction `[0, 1]` de contenu disponible localement et
+    /// notifie via `onContentProgress`. Aggregé sur :
+    /// - 1 point : background ready
+    /// - N points : chaque foreground media (image=contents non nil, vidéo=AVPlayerItem.status != .unknown)
+    private func recomputeContentProgress() {
+        guard onContentProgress != nil else { return }
+        let bg: Double = backgroundContentReady ? 1.0 : 0.0
+        var fgReady: Double = 0
+        var fgTotal: Double = 0
+        for sub in itemsContainer.sublayers ?? [] {
+            guard let media = sub as? StoryMediaLayer,
+                  let model = media.media,
+                  model.isBackground == false else { continue }
+            fgTotal += 1
+            switch model.kind {
+            case .image:
+                if media.contents != nil { fgReady += 1 }
+            case .video:
+                if let status = media.avPlayer?.currentItem?.status,
+                   status != .unknown {
+                    fgReady += 1
+                }
+            case .none:
+                fgReady += 1  // unknown kind, ne bloque pas
+            }
+        }
+        let total = 1.0 + fgTotal
+        let ready = bg + fgReady
+        let progress = total > 0 ? min(1.0, max(0.0, ready / total)) : 1.0
+        onContentProgress?(progress)
     }
 
     /// `AVPlayerItem`s of every foreground video layer currently on the canvas.
@@ -1360,7 +1407,10 @@ public final class StoryCanvasUIView: UIView {
         for item in foregroundVideoItems() where item.status == .unknown {
             let token = item.observe(\.status, options: [.new]) { [weak self] observed, _ in
                 guard observed.status != .unknown else { return }
-                Task { @MainActor in self?.fireContentReadyIfNeeded() }
+                Task { @MainActor in
+                    self?.recomputeContentProgress()
+                    self?.fireContentReadyIfNeeded()
+                }
             }
             foregroundVideoStatusObservers.append(token)
         }

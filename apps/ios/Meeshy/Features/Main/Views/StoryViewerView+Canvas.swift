@@ -257,6 +257,12 @@ struct StoryCardView: View {
     /// revisiter une slide ne flashe jamais de loader.
     @State private var showSlowLoader = false
 
+    /// Fraction `[0, 1]` de contenu de la slide active disponible localement.
+    /// Pilote `StoryReaderLoadingOverlay` (ThumbHash bg + spinner + %) qui
+    /// remplace le binaire `isContentReady`/`showSlowLoader` pour un loader
+    /// progressif (cf. spec stories-video-layers-text-sprint § 3.D).
+    @State private var slideContentProgress: Double = 0
+
     // Closures — actions on the parent view
     let triggerStoryReaction: (String) -> Void
     let pauseTimer: () -> Void
@@ -307,7 +313,8 @@ struct StoryCardView: View {
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs,
-                                      onContentReady: { isContentReady = true })
+                                      onContentReady: { isContentReady = true },
+                                      onContentProgress: { p in slideContentProgress = p })
                     .id(story.id)
                     .opacity(contentOpacity)
                     .offset(y: textSlideOffset)
@@ -315,6 +322,19 @@ struct StoryCardView: View {
                     .clipShape(
                         RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
                     )
+
+                // Overlay loader granulaire — ThumbHash bg flouté + spinner + %.
+                // Reste au-dessus du canvas tant que `slideContentProgress < 0.20`,
+                // fade out automatique au-delà. Pas de hit-testing pour ne pas
+                // intercepter les taps gauche/droite de navigation.
+                StoryReaderLoadingOverlay(
+                    slide: story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain),
+                    progress: slideContentProgress,
+                    threshold: 0.20
+                )
+                .id("loader-\(story.id)")
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
             }
 
             // === Loading spinner — shown only for genuinely slow loads ===
@@ -616,6 +636,10 @@ struct StoryCardView: View {
         // spinner n'est jamais affiché — la slide apparaît instantanément.
         .task(id: currentStory?.id) {
             showSlowLoader = false
+            // Reset le loader granulaire à 0 à chaque changement de slide.
+            // Le canvas émettra la progression réelle dès que ses assets
+            // commenceront à se résoudre.
+            slideContentProgress = 0
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
             withAnimation(.easeIn(duration: 0.2)) { showSlowLoader = true }
