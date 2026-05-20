@@ -94,6 +94,8 @@ public struct VideoFullscreenPlayerView: View {
     public let fileName: String
     public var caption: String? = nil
     public var mentionDisplayNames: [String: String]? = nil
+    public var availability: VideoAvailability = .ready
+    public var onDownload: (() -> Void)? = nil
 
     @ObservedObject private var manager = SharedAVPlayerManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -124,13 +126,17 @@ public struct VideoFullscreenPlayerView: View {
         accentColor: String = "08D9D6",
         fileName: String = "",
         caption: String? = nil,
-        mentionDisplayNames: [String: String]? = nil
+        mentionDisplayNames: [String: String]? = nil,
+        availability: VideoAvailability = .ready,
+        onDownload: (() -> Void)? = nil
     ) {
         self.urlString = urlString
         self.accentColor = accentColor
         self.fileName = fileName
         self.caption = caption
         self.mentionDisplayNames = mentionDisplayNames
+        self.availability = availability
+        self.onDownload = onDownload
     }
 
     // MARK: - Body
@@ -139,10 +145,15 @@ public struct VideoFullscreenPlayerView: View {
         ZStack {
             Color.black.ignoresSafeArea()
 
-            if manager.player != nil && manager.activeURL == urlString {
-                playerContent
-            } else {
-                loadingState
+            switch availability {
+            case .ready:
+                if manager.player != nil && manager.activeURL == urlString {
+                    playerContent
+                } else {
+                    loadingState
+                }
+            case .needsDownload, .downloading:
+                downloadOverlay
             }
         }
         .offset(y: dismissOffset)
@@ -154,6 +165,93 @@ public struct VideoFullscreenPlayerView: View {
             OrientationManager.shared.lockPortrait()
         }
         .statusBarHidden(true)
+    }
+
+    // MARK: - Download Overlay
+
+    @ViewBuilder
+    private var downloadOverlay: some View {
+        VStack(spacing: 16) {
+            Button {
+                onDownload?()
+                HapticFeedback.light()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(.ultraThinMaterial)
+                        .frame(width: 88, height: 88)
+                    Circle()
+                        .fill(accent.opacity(0.9))
+                        .frame(width: 72, height: 72)
+                    downloadOverlayIcon
+                }
+                .shadow(color: .black.opacity(0.5), radius: 12, y: 4)
+            }
+            .disabled({
+                if case .downloading = availability { return true }
+                return false
+            }())
+            .accessibilityLabel(downloadOverlayLabel)
+
+            Text(downloadOverlayMessage)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundColor(.white.opacity(0.85))
+                .multilineTextAlignment(.center)
+
+            Button {
+                dismiss()
+                HapticFeedback.light()
+            } label: {
+                Text(String(localized: "media.video.close", defaultValue: "Fermer", bundle: .module))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.7))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 8)
+                    .background(Capsule().fill(Color.white.opacity(0.12)))
+            }
+            .padding(.top, 8)
+        }
+    }
+
+    @ViewBuilder
+    private var downloadOverlayIcon: some View {
+        switch availability {
+        case .ready:
+            EmptyView()
+        case .needsDownload:
+            Image(systemName: "arrow.down.to.line")
+                .font(.system(size: 30, weight: .bold))
+                .foregroundColor(.white)
+        case .downloading(let progress):
+            if progress > 0 {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Color.white, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 44, height: 44)
+                    .animation(.linear(duration: 0.2), value: progress)
+            } else {
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(1.2)
+            }
+        }
+    }
+
+    private var downloadOverlayLabel: String {
+        switch availability {
+        case .ready:         return ""
+        case .needsDownload: return String(localized: "media.video.download", defaultValue: "Telecharger la video", bundle: .module)
+        case .downloading:   return String(localized: "media.video.downloading", defaultValue: "Telechargement en cours", bundle: .module)
+        }
+    }
+
+    private var downloadOverlayMessage: String {
+        switch availability {
+        case .ready:         return ""
+        case .needsDownload: return String(localized: "media.video.downloadToPlay", defaultValue: "Telechargez pour lire la video", bundle: .module)
+        case .downloading:   return String(localized: "media.video.downloadingHint", defaultValue: "La lecture demarrera apres le telechargement", bundle: .module)
+        }
     }
 
     // MARK: - Player Content

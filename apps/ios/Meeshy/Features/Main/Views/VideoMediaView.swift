@@ -75,3 +75,64 @@ struct VideoMediaView: View, Equatable {
         }
     }
 }
+
+/// Policy-aware wrapper around `VideoFullscreenPlayerView` that resolves
+/// availability from the typed cache + owns an `AttachmentDownloader`.
+/// Used by callers that present a fullscreen video sheet (e.g.
+/// `BubbleStandardLayout.fullscreenAttachment`). Mirrors `VideoMediaView`'s
+/// gating logic but renders the fullscreen player instead of the inline one.
+struct GatedVideoFullscreenPlayer: View {
+    let attachment: MessageAttachment
+    let accentColor: String
+    var caption: String? = nil
+    var mentionDisplayNames: [String: String]? = nil
+
+    @State private var resolvedAvailability: VideoAvailability = .needsDownload
+    @StateObject private var downloader = AttachmentDownloader()
+
+    private var availability: VideoAvailability {
+        if downloader.isDownloading {
+            return .downloading(progress: downloader.progress)
+        }
+        if downloader.isCached {
+            return .ready
+        }
+        return resolvedAvailability
+    }
+
+    private func resolveAvailability() async {
+        let urlString = attachment.fileUrl
+        if urlString.hasPrefix("file://") {
+            let exists = FileManager.default.fileExists(
+                atPath: URL(string: urlString)?.path ?? ""
+            )
+            resolvedAvailability = VideoAvailability.resolve(
+                isLocalFile: true, localFileExists: exists, isServerCached: false
+            )
+            return
+        }
+        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+        let cached = await CacheCoordinator.shared.video.isCached(resolved)
+        resolvedAvailability = VideoAvailability.resolve(
+            isLocalFile: false, localFileExists: false, isServerCached: cached
+        )
+    }
+
+    var body: some View {
+        VideoFullscreenPlayerView(
+            urlString: attachment.fileUrl,
+            accentColor: accentColor,
+            fileName: attachment.originalName,
+            caption: caption,
+            mentionDisplayNames: mentionDisplayNames,
+            availability: availability,
+            onDownload: { downloader.start(attachment: attachment, onShare: nil) }
+        )
+        .task(id: attachment.fileUrl) {
+            if !downloader.isDownloading {
+                downloader.isCached = false
+            }
+            await resolveAvailability()
+        }
+    }
+}
