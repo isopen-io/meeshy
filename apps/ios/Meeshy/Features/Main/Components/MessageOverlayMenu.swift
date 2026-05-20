@@ -33,6 +33,7 @@ struct MessageOverlayMenu: View {
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     private var isDark: Bool { colorScheme == .dark }
     @State private var isVisible = false
     @State private var dragOffset: CGFloat = 0
@@ -282,7 +283,7 @@ struct MessageOverlayMenu: View {
         // bubble's native edge inside the frame, working in tandem
         // with the parent HStack's Spacer(minLength: 44).
         .frame(
-            maxWidth: UIScreen.main.bounds.width * 0.70,
+            maxWidth: DeviceLayout.bubbleMaxWidth(containerWidth: UIScreen.main.bounds.width, sizeClass: horizontalSizeClass),
             alignment: message.isMe ? .trailing : .leading
         )
         .padding(.horizontal, 8)

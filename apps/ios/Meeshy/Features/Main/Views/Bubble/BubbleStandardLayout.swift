@@ -93,6 +93,10 @@ struct BubbleStandardLayout: View {
     @ObservedObject var blurController: BubbleBlurRevealController
     @ObservedObject var ephemeralController: BubbleEphemeralController
 
+    // MARK: - Adaptive sizing (iPad regular size class needs a tighter cap)
+
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
     // MARK: - Layout constants
 
     let gridMaxWidth: CGFloat = 300
@@ -363,7 +367,7 @@ struct BubbleStandardLayout: View {
             // (UserIdentityBar's greedy Spacer is collapsed via
             // `.fixedSize(horizontal: true, vertical: false)` on the bar
             // inside `textBubbleContent`).
-            .frame(maxWidth: UIScreen.main.bounds.width * 0.70, alignment: isMe ? .trailing : .leading)
+            .frame(maxWidth: DeviceLayout.bubbleMaxWidth(containerWidth: UIScreen.main.bounds.width, sizeClass: horizontalSizeClass), alignment: isMe ? .trailing : .leading)
 
             if !isMe { Spacer(minLength: 50) }
         }
