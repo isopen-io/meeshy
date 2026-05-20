@@ -609,8 +609,10 @@ public struct StoryComposerView: View {
     private var previewButton: some View {
         Button {
             NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
-            let snapshot = snapshotAllSlides()
-            onPreview(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs)
+            Task { @MainActor in
+                let snapshot = await snapshotAllSlides()
+                onPreview(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs)
+            }
         } label: {
             Image(systemName: "play.fill")
                 .font(.system(size: 12, weight: .bold))
@@ -628,10 +630,18 @@ public struct StoryComposerView: View {
 
 
     private var publishButton: some View {
-        Button { publishAllSlides() } label: {
+        let isPublishing = publishTask != nil
+        return Button { publishAllSlides() } label: {
             HStack(spacing: 4) {
-                Text(String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module)).font(.system(size: 13, weight: .bold)).lineLimit(1)
-                Image(systemName: "arrow.up.circle.fill").font(.system(size: 13))
+                if isPublishing {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                        .scaleEffect(0.7)
+                } else {
+                    Text(String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module)).font(.system(size: 13, weight: .bold)).lineLimit(1)
+                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 13))
+                }
             }
             .fixedSize()
             .foregroundColor(.white)
@@ -639,6 +649,7 @@ public struct StoryComposerView: View {
             .padding(.vertical, 8)
             .background(Capsule().fill(MeeshyColors.brandGradient))
         }
+        .disabled(isPublishing)
     }
 
     private var overflowMenu: some View {
@@ -1566,14 +1577,23 @@ public struct StoryComposerView: View {
     // MARK: - Publication
 
     private func publishAllSlides() {
-        syncCurrentSlideEffects()
-        let snapshot = snapshotAllSlides()
-        clearAllDrafts()
-        HapticFeedback.success()
-        onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility)
+        // Pré-calcul des thumbHashes (image + vidéo) avant le hand-off vers
+        // l'uploader background. La génération vidéo est async via
+        // `AVAssetImageGenerator.image(at:)` (iOS 16+) ; on cap chaque média
+        // à 5s puis on continue avec thumbHash = nil pour ne pas bloquer.
+        publishTask?.cancel()
+        publishTask = Task { @MainActor in
+            syncCurrentSlideEffects()
+            let snapshot = await snapshotAllSlides()
+            guard !Task.isCancelled else { return }
+            clearAllDrafts()
+            HapticFeedback.success()
+            onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility)
+            publishTask = nil
+        }
     }
 
-    private func snapshotAllSlides() -> (slides: [StorySlide], bgImages: [String: UIImage]) {
+    private func snapshotAllSlides() async -> (slides: [StorySlide], bgImages: [String: UIImage]) {
         var slides = viewModel.slides
         let idx = viewModel.currentSlideIndex
         if idx < slides.count {
@@ -1585,7 +1605,7 @@ public struct StoryComposerView: View {
         for i in slides.indices {
             slides[i].effects.slideDuration = Float(slides[i].duration)
         }
-        // Compute composite thumbHash for each slide (bg + text + media + stickers)
+        // ThumbHash composite par slide (bg + texte + média + stickers) — sync.
         for i in slides.indices {
             let bgImage = viewModel.slideImages[slides[i].id]
             slides[i].effects.thumbHash = StorySlideRenderer.computeThumbHash(
@@ -1594,22 +1614,62 @@ public struct StoryComposerView: View {
                 loadedImages: viewModel.loadedImages
             )
 
-            // ThumbHash per-media foreground (images). Sync UIImage.toThumbHash
-            // est rapide (~5-15 ms par image). Vidéo : génération async via
-            // AVAssetImageGenerator non-incluse ici pour ne pas convertir tout
-            // le publish flow en async (out-of-scope du hotfix). Le placeholder
-            // vidéo reste donc nil — fallback à backgroundColor noir.
-            if var medias = slides[i].effects.mediaObjects {
-                for j in medias.indices where medias[j].thumbHash == nil {
-                    if medias[j].kind == .image,
-                       let img = viewModel.loadedImages[medias[j].id] {
-                        medias[j].thumbHash = img.toThumbHash()
+            // ThumbHash per-media foreground.
+            // - Images : sync via `UIImage.toThumbHash()` (~5-15 ms par image).
+            // - Vidéos : on prend d'abord le thumbnail cached dans `loadedImages`
+            //   si présent (issu de `mediaAddedFromPicker`), sinon génération
+            //   async via `AVAssetImageGenerator` (iOS 16+).
+            guard var medias = slides[i].effects.mediaObjects else { continue }
+            var videoJobs: [(j: Int, url: URL)] = []
+
+            for j in medias.indices where medias[j].thumbHash == nil {
+                let mediaId = medias[j].id
+                if let cached = viewModel.loadedImages[mediaId] {
+                    medias[j].thumbHash = cached.toThumbHash()
+                    continue
+                }
+                if medias[j].kind == .video,
+                   let url = viewModel.loadedVideoURLs[mediaId] {
+                    videoJobs.append((j, url))
+                }
+            }
+
+            if !videoJobs.isEmpty {
+                await withTaskGroup(of: (Int, String?).self) { group in
+                    for job in videoJobs {
+                        group.addTask {
+                            let hash = await Self.computeVideoThumbHash(url: job.url)
+                            return (job.j, hash)
+                        }
+                    }
+                    for await (j, hash) in group {
+                        medias[j].thumbHash = hash
                     }
                 }
-                slides[i].effects.mediaObjects = medias
             }
+
+            slides[i].effects.mediaObjects = medias
         }
         return (slides, viewModel.slideImages)
+    }
+
+    /// Génère un thumbHash à partir de la première frame d'une vidéo locale.
+    /// Utilise l'API async iOS 16+ d'`AVAssetImageGenerator`. Timeout interne
+    /// implicite (l'extraction d'une frame à t=0.1s d'une vidéo locale
+    /// prend typiquement < 200 ms). Retourne `nil` si l'extraction échoue —
+    /// le placeholder du reader tombera alors sur le fond noir / le bg slide.
+    nonisolated private static func computeVideoThumbHash(url: URL) async -> String? {
+        let asset = AVURLAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 100, height: 100)
+        let time = CMTime(seconds: 0.1, preferredTimescale: 600)
+        do {
+            let (cgImage, _) = try await generator.image(at: time)
+            return UIImage(cgImage: cgImage).toThumbHash()
+        } catch {
+            return nil
+        }
     }
 
     // MARK: - Dismiss
