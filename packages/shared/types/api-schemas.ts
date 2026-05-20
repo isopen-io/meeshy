@@ -804,7 +804,20 @@ export const messageMinimalSchema = {
         }
       },
       nullable: true,
-      description: 'Message attachments for preview'
+      description: 'Message attachments for preview (typically truncated to first item; total count lives in `_count.attachments`)'
+    },
+    // Prisma exposes a `_count` relation for nested counts. The gateway
+    // returns `_count: { attachments: N }` so the client can render the
+    // "+N" badge in conversation rows even when `attachments` above is
+    // truncated to a single preview item. Without this field declared,
+    // Fastify's response serializer silently strips it from the payload.
+    _count: {
+      type: 'object',
+      nullable: true,
+      description: 'Nested Prisma counts',
+      properties: {
+        attachments: { type: 'number', description: 'Total attachments on the message' }
+      }
     }
   }
 } as const;

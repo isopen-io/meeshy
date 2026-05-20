@@ -525,8 +525,68 @@ struct ThemedConversationRow: View {
         if mimeType.hasPrefix("image/") { return ("camera.fill", .blue) }
         if mimeType.hasPrefix("video/") { return ("video.fill", .red) }
         if mimeType.hasPrefix("audio/") { return ("waveform", .purple) }
-        if mimeType == "application/pdf" { return ("doc.fill", .orange) }
+
+        // Documents — granular SF Symbols per family so the row hints at the
+        // actual file type (Excel vs Word vs PDF), not a generic paperclip.
+        switch mimeType {
+        case "application/pdf":
+            return ("doc.fill", .orange)
+        case "application/vnd.ms-excel",
+             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+             "text/csv":
+            return ("tablecells.fill", Color(red: 0.13, green: 0.55, blue: 0.13))
+        case "application/msword",
+             "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+             "application/rtf":
+            return ("doc.text.fill", Color(red: 0.16, green: 0.34, blue: 0.71))
+        case "application/vnd.ms-powerpoint",
+             "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+            return ("chart.bar.doc.horizontal.fill", Color(red: 0.85, green: 0.41, blue: 0.13))
+        case "application/zip",
+             "application/x-zip-compressed",
+             "application/x-tar",
+             "application/x-7z-compressed",
+             "application/gzip",
+             "application/x-rar-compressed":
+            return ("doc.zipper", .gray)
+        case "application/json",
+             "application/xml",
+             "text/xml":
+            return ("curlybraces", .indigo)
+        default:
+            break
+        }
+        if mimeType.hasPrefix("text/") { return ("doc.plaintext.fill", .gray) }
         return ("paperclip", .gray)
+    }
+
+    /// Short human-readable label per document family. Used when no
+    /// dimensions / duration are available for the attachment.
+    private func documentLabel(for mimeType: String, fallback: String) -> String {
+        switch mimeType {
+        case "application/pdf": return "PDF"
+        case "application/vnd.ms-excel",
+             "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":
+            return "Excel"
+        case "text/csv": return "CSV"
+        case "application/msword",
+             "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+            return "Word"
+        case "application/rtf": return "RTF"
+        case "application/vnd.ms-powerpoint",
+             "application/vnd.openxmlformats-officedocument.presentationml.presentation":
+            return "PowerPoint"
+        case "application/zip", "application/x-zip-compressed": return "ZIP"
+        case "application/x-tar": return "TAR"
+        case "application/x-7z-compressed": return "7z"
+        case "application/gzip": return "GZ"
+        case "application/x-rar-compressed": return "RAR"
+        case "application/json": return "JSON"
+        case "application/xml", "text/xml": return "XML"
+        default:
+            if mimeType.hasPrefix("text/") { return "Texte" }
+            return fallback
+        }
     }
 
     private func attachmentMeta(for attachment: MessageAttachment) -> some View {
@@ -545,10 +605,13 @@ struct ThemedConversationRow: View {
             if let d = attachment.duration {
                 meta = formatDurationMs(d)
             } else { meta = "Audio" }
-        } else if mimeType == "application/pdf" {
-            meta = "PDF"
         } else {
-            meta = attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
+            // Prefer the original file name (e.g. "rapport.xlsx") since the
+            // user picked it deliberately; fall back to a family-specific
+            // label ("Excel", "Word") so unnamed payloads still convey
+            // something more useful than "Fichier".
+            let fallback = documentLabel(for: mimeType, fallback: "Fichier")
+            meta = attachment.originalName.isEmpty ? fallback : attachment.originalName
         }
 
         return Text(meta)
