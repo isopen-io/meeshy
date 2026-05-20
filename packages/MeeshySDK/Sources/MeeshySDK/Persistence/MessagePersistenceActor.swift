@@ -867,20 +867,40 @@ public actor MessagePersistenceActor {
                 }
                 let reactionsJson: Data? = uiReactions.isEmpty ? nil : try? encoder.encode(uiReactions)
 
-                let replyToJson: Data? = api.replyTo.flatMap { reply in
-                    let isMe = reply.senderId == nil
-                    let authorName = reply.sender?.name ?? "?"
-                    let firstAtt = reply.attachments?.first
-                    let ref = ReplyReference(
-                        messageId: reply.id,
-                        authorName: authorName,
-                        previewText: reply.content ?? "",
-                        isMe: isMe,
-                        attachmentType: firstAtt?.mimeType,
-                        attachmentThumbnailUrl: firstAtt?.thumbnailUrl
-                    )
-                    return try? encoder.encode(ref)
-                }
+                let replyToJson: Data? = {
+                    // Réponse à une story : le gateway enrichit `storyReplyTo`.
+                    // On construit un ReplyReference riche pour BubbleStoryReplyPreview.
+                    if let story = api.storyReplyTo {
+                        let trimmed = story.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let ref = ReplyReference(
+                            messageId: story.id,
+                            authorName: "",
+                            previewText: trimmed.isEmpty ? "\u{1F4F7} Story" : trimmed,
+                            isMe: false,
+                            isStoryReply: true,
+                            storyPublishedAt: story.createdAt,
+                            storyReactionCount: story.reactionCount,
+                            storyCommentCount: story.commentCount,
+                            storyThumbnailUrl: story.thumbnailUrl
+                        )
+                        return try? encoder.encode(ref)
+                    }
+                    // Réponse à un message : chemin historique inchangé.
+                    return api.replyTo.flatMap { reply in
+                        let isMe = reply.senderId == nil
+                        let authorName = reply.sender?.name ?? "?"
+                        let firstAtt = reply.attachments?.first
+                        let ref = ReplyReference(
+                            messageId: reply.id,
+                            authorName: authorName,
+                            previewText: reply.content ?? "",
+                            isMe: isMe,
+                            attachmentType: firstAtt?.mimeType,
+                            attachmentThumbnailUrl: firstAtt?.thumbnailUrl
+                        )
+                        return try? encoder.encode(ref)
+                    }
+                }()
 
                 let forwardedFromJson: Data? = api.forwardedFrom.flatMap { fwd in
                     let fwdSenderName = fwd.sender?.name ?? "?"
@@ -1030,7 +1050,11 @@ public actor MessagePersistenceActor {
                     existing.senderName = senderName
                     existing.senderUsername = senderUsername
                     existing.senderAvatarURL = senderAvatarURL
-                    existing.replyToJson = replyToJson
+                    // Préserve le ReplyReference riche déjà persisté quand le
+                    // payload serveur ne porte aucune réponse — même garde que
+                    // `attachmentsJson`. Couvre la phase optimiste avant le 1er
+                    // refresh enrichi.
+                    existing.replyToJson = replyToJson ?? existing.replyToJson
                     existing.forwardedFromJson = forwardedFromJson
                     existing.mentionedUsersJson = mentionedUsersJson
                     existing.effectFlags = effectFlags

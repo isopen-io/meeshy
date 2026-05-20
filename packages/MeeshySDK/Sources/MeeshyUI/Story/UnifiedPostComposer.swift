@@ -228,7 +228,7 @@ public struct UnifiedPostComposer: View {
         }
         .fullScreenCover(isPresented: $showImagePreview) {
             if let image = selectedImage {
-                MeeshyImagePreviewView(image: image, context: .post) { editedImage in
+                MeeshyImageEditorView(image: image, context: .post) { editedImage in
                     selectedImage = editedImage
                     showImagePreview = false
                 } onCancel: {
@@ -238,11 +238,17 @@ public struct UnifiedPostComposer: View {
         }
         .fullScreenCover(isPresented: $showVideoPreview) {
             if let url = selectedVideoURL {
-                MeeshyVideoPreviewView(url: url, context: .post) {
-                    showVideoPreview = false
-                } onCancel: {
-                    showVideoPreview = false
-                }
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .post,
+                    onComplete: { result in
+                        selectedVideoURL = result.url
+                        showVideoPreview = false
+                    },
+                    onCancel: {
+                        showVideoPreview = false
+                    }
+                )
             }
         }
     }

@@ -16,6 +16,8 @@ from typing import Dict, Optional, List
 
 logger = logging.getLogger(__name__)
 
+from .segment_serialization import _get_voice_similarity_score, _segment_to_dict
+
 # Import du pipeline audio
 AUDIO_PIPELINE_AVAILABLE = False
 try:
@@ -33,25 +35,6 @@ try:
 except ImportError as e:
     logger.warning(f"⚠️ [AUDIO-HANDLER] AudioFetcher non disponible: {e}")
     pass
-
-
-def _get_voice_similarity_score(seg) -> Optional[float]:
-    """
-    Extract voice_similarity_score from segment (dict or object).
-
-    Args:
-        seg: Segment as dict or dataclass object
-
-    Returns:
-        Voice similarity score as float, or None
-    """
-    if hasattr(seg, 'voice_similarity_score'):
-        score = seg.voice_similarity_score
-    elif isinstance(seg, dict):
-        score = seg.get('voiceSimilarityScore') or seg.get('voice_similarity_score')
-    else:
-        return None
-    return score if isinstance(score, (int, float)) else None
 
 
 class AudioHandler:
@@ -620,15 +603,7 @@ class AudioHandler:
                 'confidence': transcription.confidence,
                 'source': transcription.source,
                 'segments': [
-                    {
-                        'text': getattr(seg, 'text', ''),
-                        'startMs': getattr(seg, 'start_ms', getattr(seg, 'startMs', 0)),
-                        'endMs': getattr(seg, 'end_ms', getattr(seg, 'endMs', 0)),
-                        'confidence': getattr(seg, 'confidence', None),
-                        'speakerId': getattr(seg, 'speaker_id', getattr(seg, 'speakerId', None)),
-                        'voiceSimilarityScore': _get_voice_similarity_score(seg),
-                        'language': getattr(seg, 'language', None)
-                    }
+                    _segment_to_dict(seg)
                     for seg in (transcription.segments or [])
                 ] if transcription.segments else None,
                 'durationMs': transcription.duration_ms

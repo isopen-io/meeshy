@@ -1,0 +1,78 @@
+import XCTest
+import MeeshySDK
+@testable import Meeshy
+
+final class BubbleFooterModelTests: XCTestCase {
+
+    private func makeModel(
+        deliveryStatus: MeeshyMessage.DeliveryStatus = .sent,
+        isMe: Bool = true,
+        isOnline: Bool = true
+    ) -> BubbleFooterModel {
+        BubbleFooterModel.make(
+            timeString: "09:41",
+            deliveryStatus: deliveryStatus,
+            isMe: isMe,
+            isOnline: isOnline,
+            sender: nil,
+            flags: [],
+            showsTranslate: false
+        )
+    }
+
+    // MARK: - Timestamp toujours visible
+
+    func test_make_directNonLastSent_showsTimestamp() {
+        // Nouveau contrat : l'heure s'affiche sur TOUTES les bulles, y compris
+        // une bulle envoyée intermédiaire en conversation directe.
+        XCTAssertEqual(makeModel(deliveryStatus: .sent).timestamp, "09:41")
+    }
+
+    func test_make_directNonLastReceived_showsTimestamp() {
+        XCTAssertEqual(makeModel(deliveryStatus: .read, isMe: false).timestamp, "09:41")
+    }
+
+    func test_make_directLastSent_showsTimestamp() {
+        XCTAssertEqual(makeModel(deliveryStatus: .sent).timestamp, "09:41")
+    }
+
+    func test_make_directSending_showsTimestamp() {
+        XCTAssertEqual(makeModel(deliveryStatus: .sending).timestamp, "09:41")
+    }
+
+    func test_make_directFailed_showsTimestamp() {
+        XCTAssertEqual(makeModel(deliveryStatus: .failed).timestamp, "09:41")
+    }
+
+    func test_make_groupNonLast_showsTimestamp() {
+        XCTAssertEqual(makeModel(deliveryStatus: .sent).timestamp, "09:41")
+    }
+
+    // MARK: - Delivery côté sortant uniquement
+
+    func test_make_received_hidesDelivery() {
+        XCTAssertNil(makeModel(deliveryStatus: .read, isMe: false).delivery)
+    }
+
+    func test_make_sent_carriesDelivery() {
+        XCTAssertEqual(makeModel(deliveryStatus: .delivered).delivery, .delivered)
+    }
+
+    // MARK: - États dérivés
+
+    func test_make_offline_setsIsOffline() {
+        XCTAssertTrue(makeModel(isOnline: false).isOffline)
+    }
+
+    func test_isPending_trueForSendingNotFailed() {
+        XCTAssertTrue(makeModel(deliveryStatus: .sending).isPending)
+        XCTAssertTrue(makeModel(deliveryStatus: .clock).isPending)
+        XCTAssertFalse(makeModel(deliveryStatus: .sent).isPending)
+        XCTAssertFalse(makeModel(deliveryStatus: .failed).isPending)
+    }
+
+    func test_isFailed_onlyForFailed() {
+        XCTAssertTrue(makeModel(deliveryStatus: .failed).isFailed)
+        XCTAssertFalse(makeModel(deliveryStatus: .sending).isFailed)
+    }
+}

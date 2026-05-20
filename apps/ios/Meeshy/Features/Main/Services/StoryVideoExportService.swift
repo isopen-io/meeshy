@@ -38,19 +38,23 @@ enum StoryVideoExportServiceError: Error, LocalizedError {
 // MARK: - Protocol
 
 /// Orchestrator for the **author-only** Story export flow. Wraps
-/// `StoryExporter.export` with three responsibilities :
+/// `StoryExporter.export` with two responsibilities :
 ///
-///   1. **Routing** — inspects `slide.needsVideoExport` and returns `nil`
-///      for static slides so the share UI can hint "rien à exporter".
-///   2. **Fallback** — when the underlying export throws, swallows the
+///   1. **Fallback** — when the underlying export throws, swallows the
 ///      error (logged) and returns `nil` so the share UI can surface a
 ///      friendly toast rather than AVFoundation noise.
-///   3. **Tmp-file lifecycle** — generates a unique temp MP4 URL per
+///   2. **Tmp-file lifecycle** — generates a unique temp MP4 URL per
 ///      invocation, cleans it on internal failure, and exposes
 ///      `cleanupExport(at:)` for the caller to invoke after the
 ///      `UIActivityViewController` flow either completes (delete) or is
 ///      cancelled (delete). The caller is responsible for keeping the
 ///      file alive while the share sheet holds the URL.
+///
+/// **Universal export** — every slide can be exported (static OR
+/// animated). The compositor synthesises a transparent video track
+/// when no background video exists (see `StoryExporter` B1 + the
+/// `StoryExporterStaticOnlyTests` covering text/sticker/image-only
+/// slides). The service no longer routes on `needsVideoExport`.
 ///
 /// The service is NOT wired into the publish path : stories publish RAW
 /// (assets + JSON effects) so the Prisme Linguistique can retranslate
@@ -59,12 +63,12 @@ enum StoryVideoExportServiceError: Error, LocalizedError {
 /// WhatsApp, AirDrop). See `docs/superpowers/plans/2026-05-14-story-export-realignment-plan.md`.
 @MainActor
 protocol StoryVideoExportServiceProviding {
-    /// Drives `StoryExporter.export` for an author-triggered share. If
-    /// `slide.needsVideoExport == false`, returns `nil` IMMEDIATELY
-    /// without touching disk so the caller can hint "rien à exporter".
+    /// Drives `StoryExporter.export` for an author-triggered share. Every
+    /// slide is eligible — static slides bake via the synthetic
+    /// transparent track substrate.
     ///
     /// - Parameters:
-    ///   - slide: Slide to inspect + export. Read-only.
+    ///   - slide: Slide to export. Read-only.
     ///   - languages: Preferred languages threaded to `StoryRenderer.render`
     ///     so the baked MP4 reflects the author's chosen export language
     ///     (Prisme Linguistique). Empty array bakes the original source
@@ -74,10 +78,10 @@ protocol StoryVideoExportServiceProviding {
     ///     on the `@MainActor` so consumers can mutate `@Published`
     ///     properties directly without a hop.
     ///   - onPhaseChange: Optional callback signalling phase transitions
-    ///     (currently only `.exporting` once at the start of an actual
-    ///     export). Invoked on the `@MainActor`.
-    /// - Returns: Local file URL to the baked MP4, or `nil` if the slide
-    ///   doesn't need an export OR the export failed.
+    ///     (currently only `.exporting` once at the start of the export).
+    ///     Invoked on the `@MainActor`.
+    /// - Returns: Local file URL to the baked MP4, or `nil` if the
+    ///   underlying export threw (caller surfaces a friendly toast).
     func prepareExport(
         slide: StorySlide,
         languages: [String],
@@ -96,8 +100,8 @@ protocol StoryVideoExportServiceProviding {
 
 /// Production singleton driving the author-only "Export to share" flow.
 /// Routes through `StoryExporter` for the real bake, with the
-/// routing/fallback/cleanup responsibilities above. Never invoked from
-/// the publish path — see CLAUDE.md "Story Architecture".
+/// fallback/cleanup responsibilities above. Never invoked from the
+/// publish path — see CLAUDE.md "Story Architecture".
 ///
 /// Concurrency : `@MainActor` matches the surrounding Service pattern.
 /// The actual heavy lifting (`AVAssetExportSession`) runs inside
@@ -128,11 +132,9 @@ final class StoryVideoExportService: StoryVideoExportServiceProviding {
         onProgress: ((Double) -> Void)? = nil,
         onPhaseChange: ((StoryExportPhase) -> Void)? = nil
     ) async -> URL? {
-        guard slide.needsVideoExport else {
-            logger.debug("StoryVideoExportService : slide \(slide.id, privacy: .public) does not need video export — skipping")
-            return nil
-        }
-
+        // Universal export — every slide goes through. Static slides
+        // (texte/sticker/image sans animation) bake via the synthetic
+        // transparent track in `StoryExporter`.
         let outputURL: URL
         do {
             outputURL = try makeTempExportURL(for: slide)

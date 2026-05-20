@@ -110,7 +110,9 @@ extension BubbleStandardLayout {
             showCarousel: $showCarousel,
             fullscreenAttachment: $fullscreenAttachment,
             contactColor: contactColor,
-            messageDeliveryStatus: message.deliveryStatus
+            messageDeliveryStatus: message.deliveryStatus,
+            footer: resolvedFooter().0,
+            isDark: isDark
         )
     }
 
@@ -126,6 +128,66 @@ extension BubbleStandardLayout {
                 showShareSheet = true
             }
         )
+    }
+
+    // MARK: - Media + Reply unified container (visual-only reply)
+
+    /// Conteneur unifié pour un message reply visual-only : citation (inline)
+    /// au-dessus + grille visuelle, partageant une bordure RR16 et un fond
+    /// neutre. Aucune chat bubble parasite. Footer style `.overlay` épinglé
+    /// bottom-trailing sur la grille, identique au visual standalone.
+    /// Spec : `docs/superpowers/specs/2026-05-20-ios-reply-no-bubble-around-media-design.md` §4.5
+    @ViewBuilder
+    func mediaWithReplyContainer(reply: BubbleContent.Reply) -> some View {
+        let neutralBg = isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)
+        let strokeColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
+        let dividerColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
+
+        VStack(spacing: 0) {
+            BubbleQuotedReply(
+                style: .inline,
+                reply: reply.reference,
+                parentIsMe: false,
+                accentHex: contactColor,
+                isDark: isDark,
+                mentionDisplayNames: mentionDisplayNames
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(neutralBg)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !reply.reference.messageId.isEmpty else { return }
+                HapticFeedback.light()
+                if reply.isStory {
+                    onStoryReplyTap?(reply.reference.messageId)
+                } else {
+                    onReplyTap?(reply.reference.messageId)
+                }
+            }
+
+            Divider().background(dividerColor)
+
+            visualMediaGrid
+                .background(Color.black)
+                .overlay(alignment: .bottomTrailing) {
+                    BubbleFooter(
+                        model: resolvedFooter().0,
+                        actions: .none,
+                        style: .overlay,
+                        isDark: isDark
+                    )
+                    .equatable()
+                    .padding(8)
+                    .transition(.opacity)
+                }
+        }
+        .compositingGroup()
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(strokeColor, lineWidth: 0.5)
+        )
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
     }
 }
 
@@ -439,6 +501,8 @@ struct BubbleCarouselView: View {
     @Binding var fullscreenAttachment: MessageAttachment?
     let contactColor: String
     let messageDeliveryStatus: Message.DeliveryStatus
+    var footer: BubbleFooterModel = .empty
+    var isDark: Bool = false
 
     @State private var currentPageID: String?
 
@@ -457,6 +521,14 @@ struct BubbleCarouselView: View {
             .frame(height: carouselHeight)
 
             carouselTopBar
+        }
+        // Timestamp + delivery state — same unified `.overlay` footer as the
+        // static `visualMediaGrid`, so a carousel-mode message still surfaces
+        // its send time and pending clock instead of dropping the footer.
+        .overlay(alignment: .bottomTrailing) {
+            BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
+                .equatable()
+                .padding(8)
         }
         .onAppear {
             let startIndex = max(0, min(carouselIndex, items.count - 1))

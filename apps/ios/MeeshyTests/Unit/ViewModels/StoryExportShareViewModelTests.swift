@@ -33,8 +33,10 @@ final class StoryExportShareViewModelTests: XCTestCase {
                          translations: translations)
     }
 
-    /// Builds a story whose `effects` are empty — text-only static, never
-    /// needs export.
+    /// Builds a story whose `effects` are empty — text-only static. The
+    /// universal export contract means this case must still bake an MP4
+    /// just like the animated path (the compositor synthesises a
+    /// transparent video track for the static substrate).
     private func makeStaticStory() -> StoryItem {
         StoryItem(id: "story-\(UUID().uuidString)",
                   content: "Hello",
@@ -82,19 +84,25 @@ final class StoryExportShareViewModelTests: XCTestCase {
         sut.finishSharing(success: true)
     }
 
-    func test_startExport_staticStory_doesNotCallExporter_failsWithMessage() async {
+    func test_startExport_staticStory_callsExporterAndStoresURL() async {
+        // Universal export contract : static stories (texte/sticker/image
+        // sans animation) doivent aussi être bakables. Le compositor
+        // synthétise un substrat vidéo transparent pour le rendu (voir
+        // StoryExporterStaticOnlyTests dans MeeshyUI). Le bouton "Exporter"
+        // s'affiche donc pour TOUTES les stories de l'auteur, et le VM
+        // route systématiquement vers le service.
         let (sut, exporter) = makeSUT(behavior: .success)
         let story = makeStaticStory()
 
         await sut.startExport(story: story)
 
-        XCTAssertEqual(exporter.prepareCallCount, 0)
-        XCTAssertNotNil(sut.errorMessage)
-        if case .failed = sut.phase {
-            // ok
-        } else {
-            XCTFail("Expected phase .failed for a static story")
-        }
+        XCTAssertEqual(exporter.prepareCallCount, 1)
+        XCTAssertNotNil(sut.sharedURL)
+        XCTAssertEqual(sut.phase, .ready)
+        XCTAssertNil(sut.errorMessage)
+
+        // Clean up so the temp file isn't left behind.
+        sut.finishSharing(success: true)
     }
 
     func test_startExport_failure_setsErrorMessage_andPhaseFailed() async {

@@ -377,7 +377,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                         // as a logout signal. Callers handle access loss
                         // per-feature (e.g. purge a stale conversation
                         // and dismiss its view).
-                        throw MeeshyError.forbidden(reason: errorMsg)
+                        // The raw body is forwarded so callers that need
+                        // structured 403 payloads (e.g. consent-required
+                        // errors) can decode them without a second request.
+                        throw MeeshyError.forbidden(reason: errorMsg, body: data)
                     }
 
                     if statusCode == 429 {

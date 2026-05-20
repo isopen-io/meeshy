@@ -8,8 +8,16 @@ public final class TranslationService: @unchecked Sendable {
         self.api = api
     }
 
-    public func translate(text: String, sourceLanguage: String, targetLanguage: String) async throws -> TranslateResponse {
-        let body = TranslateRequest(text: text, sourceLanguage: sourceLanguage, targetLanguage: targetLanguage)
+    public func translate(
+        text: String,
+        sourceLanguage: String,
+        targetLanguage: String,
+        messageId: String? = nil
+    ) async throws -> TranslateResponse {
+        let body = TranslateRequest(
+            text: text, sourceLanguage: sourceLanguage,
+            targetLanguage: targetLanguage, messageId: messageId
+        )
         let response: APIResponse<TranslateResponse> = try await api.post(endpoint: "/translate-blocking", body: body)
         return response.data
     }

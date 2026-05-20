@@ -27,8 +27,7 @@ struct StoryActionSidebarView: View {
     let currentGroup: StoryGroup?
     let storyCommentCount: Int
     let isStoryCommentsEmpty: Bool
-    let currentStoryNeedsVideoExport: Bool
-    let storyHasAudioOrVideo: Bool
+    let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
@@ -184,10 +183,12 @@ struct StoryActionSidebarView: View {
             }
 
             // Author-only export — bakes a fidèle-au-preview MP4 the user
-            // can share to Photos / Messages / WhatsApp. NEVER uploads to
-            // the Meeshy backend (stories publish RAW, see CLAUDE.md
-            // "Story Architecture").
-            if isOwnStory, currentStoryNeedsVideoExport {
+            // can share to Photos / Messages / WhatsApp. Available pour
+            // TOUTES les stories de l'auteur (static OU animée — le
+            // compositor synthétise un substrat pour les statiques).
+            // NEVER uploads to the Meeshy backend (stories publish RAW,
+            // see CLAUDE.md "Story Architecture").
+            if isOwnStory {
                 StoryActionButton(
                     icon: "square.and.arrow.up.fill",
                     label: "Exporter"
@@ -198,8 +199,10 @@ struct StoryActionSidebarView: View {
                 }
             }
 
-            // 4. Mute/Unmute — only shown if story has audio or video content
-            if storyHasAudioOrVideo {
+            // 4. Mute/Unmute — only shown when the story has genuinely audible
+            // sound (voice note, background audio, or a video carrying a real
+            // audio track). Silent videos keep the button hidden.
+            if storyHasAudibleSound {
                 StoryActionButton(
                     icon: isGlobalMuted ? "speaker.slash.fill" : "speaker.wave.2.fill",
                     label: isGlobalMuted ? "Mute" : "Son",

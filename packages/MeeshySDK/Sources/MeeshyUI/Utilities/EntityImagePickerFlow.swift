@@ -25,7 +25,7 @@ struct EntityImagePickerFlow: ViewModifier {
                 }
             }
             .fullScreenCover(item: $imageForEditor) { image in
-                MeeshyImagePreviewView(
+                MeeshyImageEditorView(
                     image: image,
                     context: context,
                     accentColor: accentColor,

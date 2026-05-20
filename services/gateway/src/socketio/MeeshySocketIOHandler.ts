@@ -128,13 +128,17 @@ export class MeeshySocketIOHandler {
   }
 
   /**
-   * Méthode pour broadcaster un message à tous les utilisateurs connectés
+   * Diffuse un nouveau message aux participants de la conversation.
+   *
+   * Délègue au broadcast par-conversation du manager, qui émet `message:new`
+   * vers `ROOMS.conversation(id)`. Les clients (iOS, web) n'écoutent que
+   * `message:new` : émettre `system:message` globalement (ancien comportement)
+   * ne mettait jamais à jour la conversation ouverte en temps réel.
    */
-  public async broadcastMessage(message: any): Promise<void> {
+  public async broadcastMessage(message: any, conversationId: string): Promise<void> {
     try {
       if (this.socketIOManager) {
-        this.socketIOManager.broadcast(SERVER_EVENTS.SYSTEM_MESSAGE, message);
-        logger.info('📢 Broadcast message à tous les utilisateurs', message);
+        await this.socketIOManager.broadcastMessage(message, conversationId);
       }
     } catch (error) {
       logger.error('Erreur broadcast message:', error);

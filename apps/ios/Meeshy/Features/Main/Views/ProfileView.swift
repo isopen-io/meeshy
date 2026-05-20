@@ -114,7 +114,7 @@ struct ProfileView: View {
             }
         }
         .fullScreenCover(item: $avatarImageForEditor) { image in
-            MeeshyImagePreviewView(
+            MeeshyImageEditorView(
                 image: image,
                 context: .avatar,
                 onAccept: { edited in
@@ -128,7 +128,7 @@ struct ProfileView: View {
             )
         }
         .fullScreenCover(item: $bannerImageForEditor) { image in
-            MeeshyImagePreviewView(
+            MeeshyImageEditorView(
                 image: image,
                 context: .banner,
                 onAccept: { edited in

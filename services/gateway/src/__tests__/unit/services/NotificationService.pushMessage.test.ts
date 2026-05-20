@@ -344,7 +344,9 @@ describe('NotificationService — message push title/body', () => {
       await sendWith({
         messagePreview: '',
         attachments: [{ type: 'audio', filename: 'voice.m4a' }],
-        firstAttachmentDuration: 34,
+        // `duration` est en MILLISECONDES (cf. schema.prisma) — 34000 ms = 0:34.
+        // Régression corrigée : un `* 1000` parasite affichait 566:40 pour 34 s.
+        firstAttachmentDuration: 34000,
       });
 
       expect(lastPushPayload().body).toBe('🎵 Audio · 0:34');

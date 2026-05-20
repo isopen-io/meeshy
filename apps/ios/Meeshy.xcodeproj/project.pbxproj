@@ -128,6 +128,7 @@
 		AEFX000100010001000100B0 /* AudioEffectTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = AEFX000100010001000100F0 /* AudioEffectTypes.swift */; };
 		AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */; };
 		ATDLT0001000100010001001 /* AttachmentDownloaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */; };
+		CMPAU0001000100010001001 /* ConversationComposerStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CMPAU0001000100010001000 /* ConversationComposerStateTests.swift */; };
 		ANA00100010001000100B001 /* AnalyticsManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANA00100010001000100F001 /* AnalyticsManager.swift */; };
 		ANONSC00000000002001 /* AnonymousSessionContext.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANONSC00000000001001 /* AnonymousSessionContext.swift */; };
 		ANYCD00000000002001 /* AnyCodable.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANYCD00000000001001 /* AnyCodable.swift */; };
@@ -138,8 +139,14 @@
 		AURC0001000100010001001 /* AudioRecorderManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AURC0001000100010001002 /* AudioRecorderManagerTests.swift */; };
 		B19F8FBBC6C564834DAC55E7 /* RequestsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 65259648A7CB9FA1618B613E /* RequestsViewModel.swift */; };
 		BB22CC33DD44EE55FF660058 /* StoryViewerView+Content.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */; };
-		BB7000000000002FB7 /* ImageEditView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB7000000000001FB7 /* ImageEditView.swift */; };
 		BBLA0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLA0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift */; };
+		BBLJ0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleFooterModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLJ0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleFooterModel.swift */; };
+		BBLL0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLL0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift */; };
+		BBLO0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLO0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift */; };
+		MDLP0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift */; };
+		MDGP0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDGP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift */; };
+		MDSV0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDaySeparator.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDSV0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDaySeparator.swift */; };
+		MDSO0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDayStickyOverlay.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDSO0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayStickyOverlay.swift */; };
 		BBLB0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLB0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift */; };
 		BBLC0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLC0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleContent.swift */; };
 		BBLD0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLD0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift */; };
@@ -150,6 +157,9 @@
 		BBLI0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/ThemedMessageBubbleEquatableTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLI0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/ThemedMessageBubbleEquatableTests.swift */; };
 		BBLK0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleCallbacks.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLK0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleCallbacks.swift */; };
 		BBLM0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLM0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift */; };
+		BFMT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BFMT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift */; };
+		MDLT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDLT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift */; };
+		MDGT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = MDGT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift */; };
 		BBLN0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleSecondaryContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLN0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleSecondaryContent.swift */; };
 		BBLP0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleEphemeralLifecycle.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleEphemeralLifecycle.swift */; };
 		BBLQ0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLQ0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift */; };
@@ -162,9 +172,7 @@
 		BBLX0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLX0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift */; };
 		BBLY0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLY0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift */; };
 		BBLZ0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BBLZ0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift */; };
-		BC20CA996A5E2D0E46BB3F06 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 748FC5520967BD43D7FB9582 /* MessageStore.swift */; };
-		BDBG0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDBG0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift */; };
-		BGTM0001000100010001B001 /* BackgroundTaskManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BGTM0001000100010001F001 /* BackgroundTaskManagerTests.swift */; };
+		BC20CA996A5E2D0E46BB3F06 /* MessageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 748FC5520967BD43D7FB9582 /* MessageStore.swift */; };		BGTM0001000100010001B001 /* BackgroundTaskManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BGTM0001000100010001F001 /* BackgroundTaskManagerTests.swift */; };
 		BKMK0001000100010001001 /* BookmarksViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BKMK0001000100010001000 /* BookmarksViewModelTests.swift */; };
 		BLKD0001000100010001001 /* BlockedViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BLKD0001000100010001000 /* BlockedViewModelTests.swift */; };
 		BLKU002A002A002A002A0002 /* BlockedUsersView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BLKU001A001A001A001A0001 /* BlockedUsersView.swift */; };
@@ -293,6 +301,7 @@
 		HLPR0002000200020002001 /* TestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPR0002000200020002000 /* TestHelpers.swift */; };
 		HLPR0003000300030003001 /* FriendRequestTestHelpers.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPR0003000300030003000 /* FriendRequestTestHelpers.swift */; };
 		HLPR0004000400040004001 /* MessageStoreObservationHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPR0004000400040004000 /* MessageStoreObservationHelper.swift */; };
+		HLPR0005000500050005001 /* AudioTranslationMergeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = HLPR0005000500050005000 /* AudioTranslationMergeTests.swift */; };
 		HPSU00200000000001F00 /* HapticSurfacing.swift in Sources */ = {isa = PBXBuildFile; fileRef = HPSU00100000000001F00 /* HapticSurfacing.swift */; };
 		IC3900000000002F39 /* IncomingCallView.swift in Sources */ = {isa = PBXBuildFile; fileRef = IC3900000000001F39 /* IncomingCallView.swift */; };
 		IDSC0001000100010001BLD1 /* ImageDownsamplingConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = IDSC0001000100010001REF1 /* ImageDownsamplingConfig.swift */; };
@@ -398,6 +407,7 @@
 		SP3400000000002F34 /* SharePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SP3400000000001F34 /* SharePickerView.swift */; };
 		SPS2800000000002F28 /* StoryPublishService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPS2800000000001F28 /* StoryPublishService.swift */; };
 		SPST0001000100010001B001 /* StoryPublishServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPST0001000100010001F001 /* StoryPublishServiceTests.swift */; };
+		SVET0001000100010001B001 /* StoryVideoExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVET0001000100010001F001 /* StoryVideoExportServiceTests.swift */; };
 		SREMB001A001A001A001A0001 /* StoryRepostEmbedCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = SREMB001A001A001A001A0002 /* StoryRepostEmbedCell.swift */; };
 		SRFT001A001A001A001A0002 /* StoryRepostFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRFT001A001A001A001A0001 /* StoryRepostFlowTests.swift */; };
 		SRPT02002002002002001 /* SearchPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRPT01001001001001001 /* SearchPerformanceTests.swift */; };
@@ -609,6 +619,7 @@
 		AEFX000100010001000100F0 /* AudioEffectTypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioEffectTypes.swift; sourceTree = "<group>"; };
 		AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioMediaViewRenderTests.swift; sourceTree = "<group>"; };
 		ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDownloaderTests.swift; sourceTree = "<group>"; };
+		CMPAU0001000100010001000 /* ConversationComposerStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationComposerStateTests.swift; sourceTree = "<group>"; };
 		ANA00100010001000100F001 /* AnalyticsManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnalyticsManager.swift; sourceTree = "<group>"; };
 		ANONSC00000000001001 /* AnonymousSessionContext.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnonymousSessionContext.swift; sourceTree = "<group>"; };
 		ANYCD00000000001001 /* AnyCodable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyCodable.swift; sourceTree = "<group>"; };
@@ -630,8 +641,14 @@
 		BB22CC33DD44EE55FF660057 /* StoryViewerView+Content.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Content.swift"; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660066 /* StatusBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusBarView.swift; sourceTree = "<group>"; };
 		BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatusComposerView.swift; sourceTree = "<group>"; };
-		BB7000000000001FB7 /* ImageEditView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ImageEditView.swift; sourceTree = "<group>"; };
 		BBLA0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift; sourceTree = SOURCE_ROOT; };
+		BBLJ0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleFooterModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleFooterModel.swift; sourceTree = SOURCE_ROOT; };
+		BBLL0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift; sourceTree = SOURCE_ROOT; };
+		BBLO0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift; sourceTree = SOURCE_ROOT; };
+		MDLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift; sourceTree = SOURCE_ROOT; };
+		MDGP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift; sourceTree = SOURCE_ROOT; };
+		MDSV0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDaySeparator.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/MessageDaySeparator.swift; sourceTree = SOURCE_ROOT; };
+		MDSO0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayStickyOverlay.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/MessageDayStickyOverlay.swift; sourceTree = SOURCE_ROOT; };
 		BBLB0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleContentBuilder.swift; sourceTree = SOURCE_ROOT; };
 		BBLC0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleContent.swift; sourceTree = SOURCE_ROOT; };
 		BBLD0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleStandardLayout.swift; sourceTree = SOURCE_ROOT; };
@@ -642,6 +659,9 @@
 		BBLI0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/ThemedMessageBubbleEquatableTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/ThemedMessageBubbleEquatableTests.swift; sourceTree = SOURCE_ROOT; };
 		BBLK0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleCallbacks.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleCallbacks.swift; sourceTree = SOURCE_ROOT; };
 		BBLM0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift; sourceTree = SOURCE_ROOT; };
+		BFMT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift; sourceTree = SOURCE_ROOT; };
+		MDLT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift; sourceTree = SOURCE_ROOT; };
+		MDGT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift; sourceTree = SOURCE_ROOT; };
 		BBLN0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleSecondaryContent.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleSecondaryContent.swift; sourceTree = SOURCE_ROOT; };
 		BBLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleEphemeralLifecycle.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleEphemeralLifecycle.swift; sourceTree = SOURCE_ROOT; };
 		BBLQ0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift; sourceTree = SOURCE_ROOT; };
@@ -654,9 +674,7 @@
 		BBLX0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleExpandableText.swift; sourceTree = SOURCE_ROOT; };
 		BBLY0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift; sourceTree = SOURCE_ROOT; };
 		BBLZ0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift; sourceTree = SOURCE_ROOT; };
-		BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyApp.swift; sourceTree = "<group>"; };
-		BDBG0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift; sourceTree = SOURCE_ROOT; };
-		BGTM0001000100010001F001 /* BackgroundTaskManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTaskManagerTests.swift; sourceTree = "<group>"; };
+		BC091A1BD89E4244D04EAED9 /* MeeshyApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MeeshyApp.swift; sourceTree = "<group>"; };		BGTM0001000100010001F001 /* BackgroundTaskManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundTaskManagerTests.swift; sourceTree = "<group>"; };
 		BKMK0001000100010001000 /* BookmarksViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BookmarksViewModelTests.swift; sourceTree = "<group>"; };
 		BLKD0001000100010001000 /* BlockedViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedViewModelTests.swift; sourceTree = "<group>"; };
 		BLKU001A001A001A001A0001 /* BlockedUsersView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BlockedUsersView.swift; sourceTree = "<group>"; };
@@ -781,6 +799,7 @@
 		HLPR0002000200020002000 /* TestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TestHelpers.swift; sourceTree = "<group>"; };
 		HLPR0003000300030003000 /* FriendRequestTestHelpers.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendRequestTestHelpers.swift; sourceTree = "<group>"; };
 		HLPR0004000400040004000 /* MessageStoreObservationHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageStoreObservationHelper.swift; sourceTree = "<group>"; };
+		HLPR0005000500050005000 /* AudioTranslationMergeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioTranslationMergeTests.swift; sourceTree = "<group>"; };
 		HPSU00100000000001F00 /* HapticSurfacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticSurfacing.swift; sourceTree = "<group>"; };
 		IC3900000000001F39 /* IncomingCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallView.swift; sourceTree = "<group>"; };
 		IDSC0001000100010001REF1 /* ImageDownsamplingConfig.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageDownsamplingConfig.swift; sourceTree = "<group>"; };
@@ -885,6 +904,7 @@
 		SP3400000000001F34 /* SharePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePickerView.swift; sourceTree = "<group>"; };
 		SPS2800000000001F28 /* StoryPublishService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishService.swift; sourceTree = "<group>"; };
 		SPST0001000100010001F001 /* StoryPublishServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishServiceTests.swift; sourceTree = "<group>"; };
+		SVET0001000100010001F001 /* StoryVideoExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryVideoExportServiceTests.swift; sourceTree = "<group>"; };
 		SREMB001A001A001A001A0002 /* StoryRepostEmbedCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryRepostEmbedCell.swift; sourceTree = "<group>"; };
 		SRFT001A001A001A001A0001 /* StoryRepostFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryRepostFlowTests.swift; sourceTree = "<group>"; };
 		SRPT01001001001001001 /* SearchPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPerformanceTests.swift; sourceTree = "<group>"; };
@@ -1014,7 +1034,6 @@
 				CC2000000000001F20 /* CameraView.swift */,
 				AA1000000000001FA1 /* UploadProgressBar.swift */,
 				AA2000000000001FA2 /* LocationPickerView.swift */,
-				BB7000000000001FB7 /* ImageEditView.swift */,
 				AA5000000000001FA5 /* VideoPreviewView.swift */,
 				67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */,
 				CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */,
@@ -1418,6 +1437,9 @@
 				BBLK0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleCallbacks.swift */,
 				BBLG0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleBackground.swift */,
 				BBLA0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift */,
+				BBLJ0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleFooterModel.swift */,
+				BBLL0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift */,
+				BBLO0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift */,
 				BBLR0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleReactionsOverlay.swift */,
 				BBLY0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleQuotedReply.swift */,
 				BBLZ0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleAttachmentView.swift */,
@@ -1428,6 +1450,10 @@
 				BBLN0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleSecondaryContent.swift */,
 				BBLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleEphemeralLifecycle.swift */,
 				BBLU0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/BubbleBlurRevealLifecycle.swift */,
+				MDLP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift */,
+				MDGP0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift */,
+				MDSV0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDaySeparator.swift */,
+				MDSO0001000100010001REF /* Meeshy/Features/Main/Views/Bubble/MessageDayStickyOverlay.swift */,
 			);
 			path = Bubble;
 			sourceTree = "<group>";
@@ -1436,13 +1462,15 @@
 			isa = PBXGroup;
 			children = (
 				BBLM0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift */,
+				BFMT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift */,
 				BBLE0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleEquatableTests.swift */,
 				BBLI0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/ThemedMessageBubbleEquatableTests.swift */,
 				BBLW0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleExpandableTextStateTests.swift */,
 				BBLT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleLanguageFlagControllerTests.swift */,
 				BBLQ0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift */,
 				BBLH0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleBlurRevealLifecycleTests.swift */,
-				BDBG0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift */,
+				MDLT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift */,
+				MDGT0001000100010001REF /* MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift */,
 			);
 			path = Bubble;
 			sourceTree = "<group>";
@@ -1558,6 +1586,7 @@
 				CVRC0001000100010001000 /* ConversationReplyContextTests.swift */,
 				AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */,
 				ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */,
+				CMPAU0001000100010001000 /* ConversationComposerStateTests.swift */,
 				TSTVWHLPR000G000G000001 /* Helpers */,
 				BBLM0001000100010001GRP /* Bubble */,
 				SKLN0002000100010001GRP /* Skeletons */,
@@ -1572,6 +1601,7 @@
 				HLPR0002000200020002000 /* TestHelpers.swift */,
 				HLPR0003000300030003000 /* FriendRequestTestHelpers.swift */,
 				HLPR0004000400040004000 /* MessageStoreObservationHelper.swift */,
+				HLPR0005000500050005000 /* AudioTranslationMergeTests.swift */,
 			);
 			path = Helpers;
 			sourceTree = "<group>";
@@ -1799,6 +1829,7 @@
 				SBCT0001000100010001F001 /* StatusBubbleControllerTests.swift */,
 				TSTM0001000100010001F001 /* ToastManagerTests.swift */,
 				SPST0001000100010001F001 /* StoryPublishServiceTests.swift */,
+				SVET0001000100010001F001 /* StoryVideoExportServiceTests.swift */,
 				WDGM0001000100010001F001 /* WidgetDataManagerTests.swift */,
 				VOIP0001000100010001F001 /* VoIPPushManagerTests.swift */,
 				BGTM0001000100010001F001 /* BackgroundTaskManagerTests.swift */,
@@ -2113,7 +2144,6 @@
 				AA1000000000002FA1 /* UploadProgressBar.swift in Sources */,
 				AA2000000000002FA2 /* LocationPickerView.swift in Sources */,
 				AA3000000000002FA3 /* MediaCompressor.swift in Sources */,
-				BB7000000000002FB7 /* ImageEditView.swift in Sources */,
 				AA5000000000002FA5 /* VideoPreviewView.swift in Sources */,
 				AA6000000000002FA6 /* AttachmentSendService.swift in Sources */,
 				PQ7000000000002FPQ /* PendingStatusQueue.swift in Sources */,
@@ -2166,6 +2196,13 @@
 				BBLK0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleCallbacks.swift in Sources */,
 				BBLG0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleBackground.swift in Sources */,
 				BBLA0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleMetaBadges.swift in Sources */,
+				BBLJ0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleFooterModel.swift in Sources */,
+				BBLL0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleDeliveryCheck.swift in Sources */,
+				BBLO0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/BubbleFooter.swift in Sources */,
+				MDLP0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDayLabel.swift in Sources */,
+				MDGP0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDayGrouping.swift in Sources */,
+				MDSV0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDaySeparator.swift in Sources */,
+				MDSO0001000100010001BLD /* Meeshy/Features/Main/Views/Bubble/MessageDayStickyOverlay.swift in Sources */,
 				SKLN0001000100010001BLD /* Meeshy/Features/Main/Views/Skeletons/SkeletonVisibilityResolver.swift in Sources */,
 				SKLN0002000100010001BLD /* Meeshy/Features/Main/Views/Skeletons/SkeletonProfileHeader.swift in Sources */,
 				SKLN0003000100010001BLD /* Meeshy/Features/Main/Views/Skeletons/SkeletonStoryThumb.swift in Sources */,
@@ -2346,6 +2383,7 @@
 				HLPR0002000200020002001 /* TestHelpers.swift in Sources */,
 				HLPR0003000300030003001 /* FriendRequestTestHelpers.swift in Sources */,
 				HLPR0004000400040004001 /* MessageStoreObservationHelper.swift in Sources */,
+				HLPR0005000500050005001 /* AudioTranslationMergeTests.swift in Sources */,
 				MOCK0007000700070007001 /* MockStoryService.swift in Sources */,
 				MOCK0008000800080008001 /* MockPostService.swift in Sources */,
 				MOCK000C000C000C000C001 /* MockLanguageProvider.swift in Sources */,
@@ -2372,6 +2410,7 @@
 				CVRC0001000100010001001 /* ConversationReplyContextTests.swift in Sources */,
 				AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */,
 				ATDLT0001000100010001001 /* AttachmentDownloaderTests.swift in Sources */,
+				CMPAU0001000100010001001 /* ConversationComposerStateTests.swift in Sources */,
 				SKLN0005000100010001BLD /* MeeshyTests/Unit/Views/Skeletons/SkeletonVisibilityResolverTests.swift in Sources */,
 				TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */,
 				NTFY0001000100010001001 /* NotificationTests.swift in Sources */,
@@ -2408,6 +2447,7 @@
 				SBCT0001000100010001B001 /* StatusBubbleControllerTests.swift in Sources */,
 				TSTM0001000100010001B001 /* ToastManagerTests.swift in Sources */,
 				SPST0001000100010001B001 /* StoryPublishServiceTests.swift in Sources */,
+				SVET0001000100010001B001 /* StoryVideoExportServiceTests.swift in Sources */,
 				WDGM0001000100010001B001 /* WidgetDataManagerTests.swift in Sources */,
 				VOIP0001000100010001B001 /* VoIPPushManagerTests.swift in Sources */,
 				BGTM0001000100010001B001 /* BackgroundTaskManagerTests.swift in Sources */,
@@ -2438,14 +2478,15 @@
 				STAB0001000100010001002 /* StoryActiveBridgeTests.swift in Sources */,
 				STNF0001000100010001002 /* StoryNotificationFlowTests.swift in Sources */,
 				BBLM0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift in Sources */,
+				BFMT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift in Sources */,
+				MDLT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/MessageDayLabelTests.swift in Sources */,
+				MDGT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/MessageDayGroupingTests.swift in Sources */,
 				BBLE0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleEquatableTests.swift in Sources */,
 				BBLI0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/ThemedMessageBubbleEquatableTests.swift in Sources */,
 				BBLW0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleExpandableTextStateTests.swift in Sources */,
 				BBLT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleLanguageFlagControllerTests.swift in Sources */,
 				BBLQ0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleEphemeralLifecycleTests.swift in Sources */,
-				BBLH0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleBlurRevealLifecycleTests.swift in Sources */,
-				BDBG0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleDeliveryBadgeTests.swift in Sources */,
-				320813BE4021B286D9F68C98 /* ConversationOptionsViewModelTests.swift in Sources */,
+				BBLH0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleBlurRevealLifecycleTests.swift in Sources */,				320813BE4021B286D9F68C98 /* ConversationOptionsViewModelTests.swift in Sources */,
 				ATUT00200000000001F00 /* AttachmentUploaderTests.swift in Sources */,
 				MATU00200000000001F00 /* MockAttachmentUploader.swift in Sources */,
 				MEPD00200000000001F00 /* MockEditProfileDoubles.swift in Sources */,
@@ -2490,7 +2531,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 439;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -2597,7 +2638,7 @@
 				CODE_SIGN_IDENTITY = "Apple Development";
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 439;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "Meeshy Dev";
@@ -2694,7 +2735,7 @@
 				CODE_SIGN_ENTITLEMENTS = Meeshy/Meeshy.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 439;
 				ENABLE_PREVIEWS = YES;
 				INFOPLIST_FILE = Meeshy/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Meeshy;
@@ -2726,7 +2767,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 439;
 				DEBUG_INFORMATION_FORMAT = dwarf;
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -2763,7 +2804,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyNotificationExtension/MeeshyNotificationExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 439;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -2802,7 +2843,7 @@
 				CODE_SIGN_ENTITLEMENTS = MeeshyWidgets/MeeshyWidgets.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 436;
+				CURRENT_PROJECT_VERSION = 439;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
 				DEVELOPMENT_TEAM = D72UK7R5RE;
 				GENERATE_INFOPLIST_FILE = NO;

@@ -74,13 +74,21 @@ struct ConversationScrollState {
     var videosToPreview: [URL] = []
     var editingPendingAttachmentId: String? = nil
     var videoToEdit: URL? = nil
-    var audioToEdit: URL? = nil
+    var audioToEdit: PendingAudioEdit? = nil
 }
 
 struct PreviewMedia: Identifiable {
     let id = UUID()
     let url: URL
     let type: String?
+}
+
+/// A pending audio attachment opened for editing — carries the attachment id
+/// so the editor can replace that exact tray chip on confirm (never append).
+struct PendingAudioEdit: Identifiable, Equatable {
+    /// The id of the `MessageAttachment` being edited.
+    let id: String
+    let url: URL
 }
 
 struct ConversationComposerState {
@@ -127,13 +135,41 @@ struct ConversationComposerState {
     var emojiToInject = ""
 }
 
+extension ConversationComposerState {
+    /// Replaces the audio attachment `attachmentId` in place with the freshly
+    /// edited recording. Editing a media attachment must never spawn a second
+    /// tray chip — this mirrors the image editor's replace-by-id contract
+    /// (`pendingAttachments[idx] = …`). Returns the now-stale audio file URL so
+    /// the caller can delete it from disk.
+    @discardableResult
+    mutating func applyEditedAudio(attachmentId: String, editedURL: URL, durationMs: Int) -> URL? {
+        let staleURL = pendingAudioURL
+        let duration = max(durationMs, 500)
+        pendingAudioURL = editedURL
+        pendingMediaFiles[attachmentId] = editedURL
+        if let index = pendingAttachments.firstIndex(where: { $0.id == attachmentId }) {
+            pendingAttachments[index] = MessageAttachment(
+                id: attachmentId,
+                mimeType: "audio/mp4",
+                duration: duration,
+                channels: 2,
+                thumbnailColor: pendingAttachments[index].thumbnailColor
+            )
+        } else {
+            pendingAttachments.append(
+                MessageAttachment(id: attachmentId, mimeType: "audio/mp4", duration: duration, channels: 2)
+            )
+        }
+        return staleURL == editedURL ? nil : staleURL
+    }
+}
+
 struct ConversationHeaderState {
     var showStoryViewerFromHeader = false
     var storyUserIdForHeader: String?
     var showSearch = false
     var searchQuery = ""
     var typingDotPhase: Int = 0
-    var inlineTypingDotPhase: Int = 0
 }
 
 struct ConversationView: View {
@@ -948,23 +984,9 @@ struct ConversationView: View {
                 }
             )
 
-            // Typing bubble anchored above the composer. Visible only when a
-            // third party is typing. When the user is scrolled to the bottom
-            // this reads as a "typing bubble after the last message"; when
-            // scrolled up it stays anchored low and the scroll-to-bottom
-            // button (zIndex 60) carries the dominant indicator.
-            if !viewModel.typingUsernames.isEmpty {
-                VStack {
-                    Spacer()
-                    inlineTypingIndicator
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, composerHeight + 8)
-                }
-                .zIndex(58)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: viewModel.typingUsernames.isEmpty)
-                .allowsHitTesting(false)
-            }
+            // L'indicateur de frappe n'est PAS un overlay : c'est une vraie
+            // cellule du flux de messages, rendue en dernier par
+            // `MessageListViewController` (voir `MessageListItem.typingIndicator`).
 
             floatingHeaderSection
 

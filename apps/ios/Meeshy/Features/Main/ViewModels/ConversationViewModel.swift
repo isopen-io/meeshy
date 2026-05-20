@@ -897,8 +897,13 @@ class ConversationViewModel: ObservableObject {
             // s'affichent dès le premier rendu avec le Prisme Linguistique.
             await hydratePersistedTranslations()
             await messageStore.loadInitial()
-            await hydrateTranslationsFromCache()
+            // `hydrateMetadataFromGRDB` AVANT tout `await` suivant : peuple
+            // `messageTranscriptions` de façon atomique avec la pose des
+            // messages. Sinon le MainActor cède pendant l'await et SwiftUI
+            // rend les bulles audio SANS transcription, puis re-rend — la
+            // transcription « pop » en second temps.
             hydrateMetadataFromGRDB()
+            await hydrateTranslationsFromCache()
             // Always revalidate from API in background — the GRDB local store may only
             // contain messages WE sent (optimistic inserts) while messages received from
             // other participants while the conversation was closed are absent because
@@ -923,8 +928,10 @@ class ConversationViewModel: ObservableObject {
                 await refreshMessagesFromAPI()
                 await hydrateTranslationsFromCache()
             } else {
-                await hydrateTranslationsFromCache()
+                // `hydrateMetadataFromGRDB` AVANT l'`await` : transcriptions
+                // atomiques avec les messages, pas de flash (cf. cas .fresh).
                 hydrateMetadataFromGRDB()
+                await hydrateTranslationsFromCache()
                 isRevalidating = true
                 Task { [weak self] in
                     guard let self else { return }
@@ -982,13 +989,18 @@ class ConversationViewModel: ObservableObject {
             // Upsert authoritative server data into GRDB; the MessageStore observation
             // surfaces new/updated rows to `messages` automatically — no direct assignment.
             try? await messagePersistence.upsertFromAPIMessages(response.data)
+            // Extrait transcriptions/traductions AVANT que `loadInitial` ne
+            // fasse surface les messages : `messageTranscriptions` est prêt au
+            // premier rendu, la transcription audio ne « pop » plus en second
+            // temps. `extractAttachmentTranscriptions` lit `response.data`
+            // directement, il n'a pas besoin du store.
+            extractAttachmentTranscriptions(from: response.data)
+            extractTextTranslations(from: response.data)
             await messageStore.loadInitial()
 
             // Keep legacy CacheCoordinator in sync so other parts of the app
             // (ConversationList preview, unread badge) that still read from it remain correct.
             let freshMessages = await processAPIMessages(response.data)
-            extractAttachmentTranscriptions(from: response.data)
-            extractTextTranslations(from: response.data)
             scheduleTranscriptionRetry(for: response.data)
             let snapshot = freshMessages
             await CacheCoordinator.shared.messages.mergeUpdate(for: conversationId) { cached in
@@ -998,7 +1010,7 @@ class ConversationViewModel: ObservableObject {
             }
         } catch let error as MeeshyError {
             switch error {
-            case .forbidden(let reason):
+            case .forbidden(let reason, _):
                 // 403: still authenticated, but no longer authorised on
                 // THIS resource (kicked, group dissolved, blocked, etc.).
                 await handleAccessRevoked(reason: reason)
@@ -1127,6 +1139,7 @@ class ConversationViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] changedId in
                 guard changedId == targetId else { return }
+                Logger.messages.info("[RT-DIAG] VM(conv) messagesDidChange conv=\(targetId, privacy: .public) -> reconcile delivery badges")
                 Task { @MainActor [weak self] in
                     guard let self else { return }
                     let cached = await CacheCoordinator.shared.messages.load(for: targetId)
@@ -1289,12 +1302,11 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Send Message
 
-    private func detectKeyboardLanguage() -> String {
-        if let primaryLanguage = UITextInputMode.activeInputModes.first?.primaryLanguage {
-            return String(primaryLanguage.prefix(2))
-        }
-        return authManager.currentUser?.systemLanguage ?? "fr"
-    }
+    /// Send-time fallback for `originalLanguage` when the composer supplies
+    /// none. Forced to French — the keyboard layout must never drive content
+    /// language (Prisme Linguistique). The composer itself starts in `fr` and
+    /// `TextAnalyzer` re-detects from the typed text.
+    private func defaultComposeLanguage() -> String { "fr" }
 
     @discardableResult
     func sendMessage(content: String, replyToId: String? = nil, storyReplyToId: String? = nil, storyReplyReference: ReplyReference? = nil, forwardedFromId: String? = nil, forwardedFromConversationId: String? = nil, attachmentIds: [String]? = nil, localAttachments: [MeeshyMessageAttachment]? = nil, expiresAt: Date? = nil, isViewOnce: Bool? = nil, maxViewOnceCount: Int? = nil, isBlurred: Bool? = nil, originalLanguage: String? = nil, existingTempId: String? = nil) async -> Bool {
@@ -1565,7 +1577,7 @@ class ConversationViewModel: ObservableObject {
 
             let body = SendMessageRequest(
                 content: finalContent,
-                originalLanguage: originalLanguage ?? detectKeyboardLanguage(),
+                originalLanguage: originalLanguage ?? defaultComposeLanguage(),
                 replyToId: replyToId,
                 storyReplyToId: storyReplyToId,
                 forwardedFromId: forwardedFromId,
@@ -1782,7 +1794,7 @@ class ConversationViewModel: ObservableObject {
         let now = Date()
         let attachmentsJson = attachments.isEmpty ? nil : try? JSONEncoder().encode(attachments)
         let replyToJson = replyReference.flatMap { try? JSONEncoder().encode($0) }
-        let resolvedOriginalLanguage = originalLanguage ?? detectKeyboardLanguage()
+        let resolvedOriginalLanguage = originalLanguage ?? defaultComposeLanguage()
         let record = MessageRecord(
             localId: tempId, serverId: nil,
             conversationId: conversationId, senderId: currentUserId,

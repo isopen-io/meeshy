@@ -13,6 +13,16 @@ import MeeshyUI
 /// (Codable & Sendable seulement), donc on projette les champs
 /// rendus dans `ReplySlice` pour comparer manuellement.
 struct BubbleQuotedReply: View, Equatable {
+    /// Style d'enveloppe de la citation.
+    /// - `.card` : variante historique — RR12 + bgColor teinté + paddings extérieurs (top 6, horizontal 6). Hôte = bulle chat colorée.
+    /// - `.inline` : sans RR12 ni paddings extérieurs — la surface vient du parent (widget audio `playerBackground` ou conteneur unifié média+reply).
+    /// Spec : `docs/superpowers/specs/2026-05-20-ios-reply-no-bubble-around-media-design.md` §4.2
+    enum Style: Equatable {
+        case card
+        case inline
+    }
+
+    var style: Style = .card
     let reply: ReplyReference
     let parentIsMe: Bool
     let accentHex: String
@@ -20,6 +30,7 @@ struct BubbleQuotedReply: View, Equatable {
     let mentionDisplayNames: [String: String]
 
     static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.style == rhs.style &&
         lhs.parentIsMe == rhs.parentIsMe &&
         lhs.accentHex == rhs.accentHex &&
         lhs.isDark == rhs.isDark &&
@@ -79,7 +90,7 @@ struct BubbleQuotedReply: View, Equatable {
             ? Color.white.opacity(0.15)
             : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
 
-        HStack(spacing: 0) {
+        let contentBody = HStack(spacing: 0) {
             // Left accent bar
             RoundedRectangle(cornerRadius: 2)
                 .fill(parentIsMe ? Color.white.opacity(0.7) : accentBarColor)
@@ -130,13 +141,20 @@ struct BubbleQuotedReply: View, Equatable {
             .padding(.trailing, 10)
         }
         .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(bgColor)
-        )
-        .padding(.horizontal, 6)
-        .padding(.top, 6)
         .contentShape(Rectangle())
+
+        switch style {
+        case .card:
+            contentBody
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(bgColor)
+                )
+                .padding(.horizontal, 6)
+                .padding(.top, 6)
+        case .inline:
+            contentBody
+        }
     }
 
     // MARK: - Attachment icon helper (was: replyAttachmentIcon)

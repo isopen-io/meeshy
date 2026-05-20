@@ -64,11 +64,22 @@ public struct ConversationScrollControlsView: View {
     }
     
     private var typingLabel: String {
-        switch typingUsernames.count {
+        Self.typingLabel(for: typingUsernames)
+    }
+
+    /// Libellé de frappe du bouton de retour au bas : auteur(s) seul(s),
+    /// SANS suffixe « écrit »/« écrivent » — l'animation de points indique
+    /// déjà la frappe. Les noms sont dédupliqués (en préservant l'ordre) pour
+    /// qu'un même auteur n'apparaisse jamais deux fois, et la liste est
+    /// compactée pour tenir dans la largeur réduite du composant.
+    public nonisolated static func typingLabel(for usernames: [String]) -> String {
+        var seen = Set<String>()
+        let unique = usernames.filter { seen.insert($0).inserted }
+        switch unique.count {
         case 0: return ""
-        case 1: return "\(typingUsernames[0]) écrit"
-        case 2: return "\(typingUsernames[0]) et \(typingUsernames[1]) écrivent"
-        default: return "\(typingUsernames.count) personnes écrivent"
+        case 1: return unique[0]
+        case 2: return "\(unique[0]), \(unique[1])"
+        default: return "\(unique[0]) +\(unique.count - 1)"
         }
     }
     

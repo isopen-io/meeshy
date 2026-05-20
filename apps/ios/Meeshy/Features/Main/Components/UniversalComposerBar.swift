@@ -93,7 +93,12 @@ struct UniversalComposerBar: View {
     // MARK: - Recording delegation (parent manages real AVAudioRecorder)
 
     var onStartRecording: (() -> Void)? = nil
-    var onStopRecording: (() -> Void)? = nil
+    /// Stop the recording and place the audio in the attachment tray (editable
+    /// before sending) — the `[stop]` control of the recording bar.
+    var onStopRecordingToAttachment: (() -> Void)? = nil
+    /// Stop the recording and send the voice message immediately (raw) — the
+    /// `[↑]` control of the recording bar.
+    var onSendRecording: (() -> Void)? = nil
     var onCancelRecording: (() -> Void)? = nil
     var externalIsRecording: Bool? = nil
     var externalRecordingDuration: TimeInterval? = nil

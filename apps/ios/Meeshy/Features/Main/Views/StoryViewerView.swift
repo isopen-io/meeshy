@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import AVFoundation
 import Combine
 import os
 import MeeshySDK
@@ -100,6 +101,10 @@ struct StoryViewerView: View {
     @State var isContentReady: Bool = false // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
     @State var isGlobalMuted = false // internal for cross-file extension access
+    /// Audio-track presence for the current slide's foreground videos, keyed by
+    /// `StoryMediaObject.id`. Populated by `refreshVideoAudioTrackPresence()` —
+    /// a video only counts toward `storyHasAudibleSound` once probed `true`.
+    @State private var videoAudioTrackPresence: [String: Bool] = [:]
     /// True when user is actively engaging with the composer (focused, recording, emoji panel, etc.)
     @State var isComposerEngaged = false // internal for cross-file extension access
     /// True when composer has pending content (text, attachments, or recording)
@@ -294,6 +299,9 @@ struct StoryViewerView: View {
             if let story = currentStory {
                 SocialSocketManager.shared.joinPostRoom(postId: story.id)
             }
+        }
+        .task(id: currentStory?.id) {
+            await refreshVideoAudioTrackPresence()
         }
         .onDisappear {
             timerCancellable?.cancel()
@@ -547,11 +555,30 @@ struct StoryViewerView: View {
             return
         }
         let chain = preferredContentLanguagesForReader
+        // Build a postMediaId → URL resolver across the whole prefetch window.
+        // The audio mixer needs this to map `StoryAudioPlayerObject.postMediaId`
+        // to a streamable URL — without it, `reconfigureAudioForPlayback`
+        // skips every clip silently (logged via `Logger.storyAudio`).
+        // Images bypass the resolver via `CachedAsyncImage`, but audio has no
+        // equivalent prefetch path, so we MUST provide a resolver here.
+        let windowItems = stories
+        let mediaIndex: [String: URL] = Dictionary(
+            windowItems
+                .flatMap { $0.media }
+                .compactMap { m -> (String, URL)? in
+                    guard let raw = m.url, let url = URL(string: raw) else { return nil }
+                    return (m.id, url)
+                },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let resolver: @Sendable (String) -> URL? = { postMediaId in
+            mediaIndex[postMediaId]
+        }
         let context = StoryReaderContext(
             preferredLanguages: chain,
             mute: isGlobalMuted,
             onCompletion: nil,
-            postMediaURLResolver: nil,
+            postMediaURLResolver: resolver,
             imageCache: nil
         )
         p.updateWindow(items: stories,
@@ -560,6 +587,11 @@ struct StoryViewerView: View {
                        preferredLanguages: chain)
 
         let current = stories[currentStoryIndex]
+        // Promote the current slide to `.play` and demote neighbours to
+        // `.edit`. Without this, all three prefetched canvases run in
+        // `.play` simultaneously, pre-caching + starting their audio at
+        // window mount time (NOT when the user actually arrives on the slide).
+        p.activate(currentId: current.id)
         t.setCurrentSlide(id: current.id, duration: currentSlideDuration)
 
         // Re-wire `onContentReady` on the prefetched canvas of the
@@ -572,6 +604,16 @@ struct StoryViewerView: View {
             let slideId = current.id
             canvas.onContentReady = { [weak t = t] in
                 t?.markContentReady(slideId: slideId)
+            }
+            // The prefetcher bootstrapped this canvas before we could attach
+            // the callback — its `scheduleContentReadyEvaluation` may have
+            // already fired (solidColor backgrounds fire on the next runloop
+            // tick). When that happens `contentReadyFired == true` and our
+            // newly-attached callback would never be invoked. Fast-forward
+            // the timer here so the loader doesn't stick on already-settled
+            // backgrounds.
+            if canvas.contentReadyFired {
+                t.markContentReady(slideId: slideId)
             }
         }
     }
@@ -705,8 +747,7 @@ struct StoryViewerView: View {
             storyReactionCount: storyReactionCount,
             storyCommentCount: storyCommentCount,
             isStoryCommentsEmpty: storyComments.isEmpty,
-            currentStoryNeedsVideoExport: currentStoryNeedsVideoExport,
-            storyHasAudioOrVideo: storyHasAudioOrVideo,
+            storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
             isGlobalMuted: isGlobalMuted,
             availableTranslationLanguages: availableTranslationLanguages,
@@ -774,16 +815,6 @@ struct StoryViewerView: View {
 
     private var isOwnStory: Bool {
         currentGroup?.id == AuthManager.shared.currentUser?.id
-    }
-
-    /// Whether the currently shown story has time-evolving content worth
-    /// baking into an MP4 (animated text, background video, voice
-    /// attachment, opening transition, etc.). Reconstructs the
-    /// renderable slide via the same path the live canvas consumes so the
-    /// gate matches the export's own routing in `prepareExport`.
-    private var currentStoryNeedsVideoExport: Bool {
-        guard let story = currentStory else { return false }
-        return story.toRenderableSlide(preferredLanguages: preferredContentLanguagesForReader).needsVideoExport
     }
 
     // MARK: - Available Translation Languages
@@ -873,16 +904,56 @@ struct StoryViewerView: View {
         AuthManager.shared.currentUser?.preferredContentLanguages ?? []
     }
 
-    var storyHasAudioOrVideo: Bool {
-        guard let story = currentStory else { return false }
-        guard let effects = story.storyEffects else { return false }
-        if effects.voiceAttachmentId != nil { return true }
-        if effects.backgroundAudioId != nil { return true }
-        if let audioObjs = effects.audioPlayerObjects, !audioObjs.isEmpty { return true }
-        if let mediaObjs = effects.mediaObjects {
-            if mediaObjs.contains(where: { $0.kind == .video }) { return true }
+    /// Drives the sidebar sound/mute button. A silent video (muted by the author
+    /// or shot without an audio track) keeps the button hidden — the video-track
+    /// presence is resolved asynchronously by `refreshVideoAudioTrackPresence()`.
+    var storyHasAudibleSound: Bool { // internal for cross-file extension access
+        StoryAudioAvailability.hasAudibleSound(
+            effects: currentStory?.storyEffects,
+            videoAudioTracks: videoAudioTrackPresence
+        )
+    }
+
+    /// Probes each foreground video of the current slide for a real audio track.
+    /// Until a video is confirmed to carry audio it does NOT count toward
+    /// `storyHasAudibleSound`, so the sound button never appears for a clip that
+    /// turns out silent. A probe failure (unreachable URL, decode error) is
+    /// treated as "no audio" — conservative, matching the no-false-button intent.
+    @MainActor
+    private func refreshVideoAudioTrackPresence() async {
+        let videos = StoryAudioAvailability.videosNeedingAudioProbe(effects: currentStory?.storyEffects)
+        guard let story = currentStory, !videos.isEmpty else {
+            videoAudioTrackPresence = [:]
+            return
         }
-        return false
+        var presence: [String: Bool] = [:]
+        for video in videos {
+            guard let url = resolveVideoURL(for: video, in: story) else {
+                presence[video.id] = false
+                continue
+            }
+            let tracks = try? await AVURLAsset(url: url).loadTracks(withMediaType: .audio)
+            presence[video.id] = (tracks?.isEmpty == false)
+        }
+        guard !Task.isCancelled else { return }
+        videoAudioTrackPresence = presence
+    }
+
+    /// Resolves the playable URL for a foreground video — mirrors the order used
+    /// by `StoryMediaLayer.resolvedMediaURL`: preloaded composer asset, then the
+    /// published `StoryItem.media` remote URL, then the embedded `mediaURL`.
+    private func resolveVideoURL(for media: StoryMediaObject, in story: StoryItem) -> URL? {
+        if !media.postMediaId.isEmpty {
+            if let preloaded = preloadedVideoURLs[media.postMediaId] { return preloaded }
+            if let feed = story.media.first(where: { $0.id == media.postMediaId }),
+               let urlString = feed.url, let url = URL(string: urlString) {
+                return url
+            }
+        }
+        if let urlString = media.mediaURL, let url = URL(string: urlString) {
+            return url
+        }
+        return nil
     }
 
     var storyHasTranslatableContent: Bool { // internal for cross-file extension access

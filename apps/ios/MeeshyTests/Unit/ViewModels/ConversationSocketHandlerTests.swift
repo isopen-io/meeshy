@@ -1198,7 +1198,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         let rows = try await db.read { db in
             try MessageRecord
-                .filter(Column("conversationId") == conversationId)
+                .filter(Column("conversationId") == self.conversationId)
                 .fetchAll(db)
         }
         XCTAssertEqual(rows.count, 1,
@@ -1268,7 +1268,7 @@ final class ConversationSocketHandlerTests: XCTestCase {
 
         let rows = try await db.read { db in
             try MessageRecord
-                .filter(Column("conversationId") == conversationId)
+                .filter(Column("conversationId") == self.conversationId)
                 .fetchAll(db)
         }
         XCTAssertEqual(rows.count, 1,

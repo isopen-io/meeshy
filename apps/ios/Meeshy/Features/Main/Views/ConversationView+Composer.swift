@@ -46,7 +46,8 @@ extension ConversationView {
             },
             onTextChange: { viewModel.onTextChanged($0) },
             onStartRecording: { startRecording() },
-            onStopRecording: { stopAndPreviewRecording() },
+            onStopRecordingToAttachment: { stopRecordingToAttachment() },
+            onSendRecording: { stopAndSendRecording() },
             onCancelRecording: {
                 audioRecorder.cancelRecording()
             },
@@ -109,14 +110,14 @@ extension ConversationView {
         .adaptiveOnChange(of: composerState.selectedPhotoItems) { _, items in
             handlePhotoSelection(items)
         }
-        // C. Tap pending image → ImageEditView
+        // C. Tap pending image → MeeshyImageEditorView
         .fullScreenCover(isPresented: Binding(
             get: { scrollState.editingPendingAttachmentId != nil },
             set: { if !$0 { scrollState.editingPendingAttachmentId = nil } }
         )) {
             if let id = scrollState.editingPendingAttachmentId,
                let thumb = composerState.pendingThumbnails[id] {
-                MeeshyImagePreviewView(image: thumb, context: .message, accentColor: accentColor) { editedImage in
+                MeeshyImageEditorView(image: thumb, context: .message, accentColor: accentColor) { editedImage in
                     composerState.pendingThumbnails[id] = editedImage
                     Task {
                         let result = await MediaCompressor.shared.compressImage(editedImage)
@@ -150,27 +151,34 @@ extension ConversationView {
             set: { if !$0 { scrollState.videoToEdit = nil } }
         )) {
             if let url = scrollState.videoToEdit {
-                MeeshyVideoPreviewView(url: url, context: .message, accentColor: accentColor) {
-                    scrollState.videoToEdit = nil
-                }
+                MeeshyVideoEditorView(
+                    url: url,
+                    context: .message,
+                    accentColor: accentColor,
+                    onComplete: { _ in scrollState.videoToEdit = nil },
+                    onCancel: { scrollState.videoToEdit = nil }
+                )
             }
         }
         // E. Audio → MeeshyAudioEditorView
-        .fullScreenCover(isPresented: Binding(
-            get: { scrollState.audioToEdit != nil },
-            set: { if !$0 { scrollState.audioToEdit = nil } }
-        )) {
-            if let url = scrollState.audioToEdit {
-                MeeshyAudioPreviewView(url: url, context: .message, accentColor: accentColor, onAccept: { acceptedURL, _, trimStart, trimEnd in
-                    let durationMs = Int((trimEnd - trimStart) * 1000)
-                    composerState.pendingAudioURL = acceptedURL
-                    let audioAttachment = MessageAttachment.audio(durationMs: max(durationMs, 500), color: accentColor)
-                    composerState.pendingAttachments.append(audioAttachment)
-                    scrollState.audioToEdit = nil
-                }, onCancel: {
-                    scrollState.audioToEdit = nil
-                })
-            }
+        .fullScreenCover(item: Binding(
+            get: { scrollState.audioToEdit },
+            set: { scrollState.audioToEdit = $0 }
+        )) { target in
+            MeeshyAudioEditorView(url: target.url, accentColor: accentColor, onConfirm: { acceptedURL, _, trimStart, trimEnd in
+                let durationMs = Int((trimEnd - trimStart) * 1000)
+                // Replace the edited audio chip in place — editing must never
+                // spawn a second tray chip (same contract as image editing).
+                let staleURL = composerState.applyEditedAudio(
+                    attachmentId: target.id, editedURL: acceptedURL, durationMs: durationMs
+                )
+                if let staleURL {
+                    try? FileManager.default.removeItem(at: staleURL)
+                }
+                scrollState.audioToEdit = nil
+            }, onCancel: {
+                scrollState.audioToEdit = nil
+            })
         }
     }
 
@@ -600,8 +608,9 @@ extension ConversationView {
                 scrollState.videoToEdit = url
             }
         case .audio:
-            let url = composerState.pendingMediaFiles[attachment.id] ?? composerState.pendingAudioURL
-            if let url { scrollState.audioToEdit = url }
+            if let url = composerState.pendingMediaFiles[attachment.id] ?? composerState.pendingAudioURL {
+                scrollState.audioToEdit = PendingAudioEdit(id: attachment.id, url: url)
+            }
         default:
             break
         }

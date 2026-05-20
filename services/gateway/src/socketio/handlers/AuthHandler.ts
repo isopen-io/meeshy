@@ -298,6 +298,7 @@ export class AuthHandler {
   async handleDisconnection(socket: Socket): Promise<void> {
     const userIdOrToken = this.socketToUser.get(socket.id);
     if (!userIdOrToken) return;
+    console.log(`[RT-DIAG] socket disconnected id=${socket.id} user=${userIdOrToken}`);
 
     const user = this.connectedUsers.get(userIdOrToken);
     const isAnonymous = user?.isAnonymous || false;
@@ -402,6 +403,7 @@ export class AuthHandler {
       for (const conv of conversations) {
         socket.join(ROOMS.conversation(conv.conversationId));
       }
+      console.log(`[RT-DIAG] auth: user=${userId} joined ${conversations.length} conversation room(s) — NO delivery marking happens on connect (bug A)`);
     } catch (error) {
       console.error(`[AUTH] Error joining conversations for ${userId}:`, error);
     }

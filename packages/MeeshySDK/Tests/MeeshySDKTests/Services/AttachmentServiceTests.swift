@@ -73,6 +73,24 @@ final class AttachmentServiceTests: XCTestCase {
         }
     }
 
+    func test_requestTranscription_withForce_sendsForceTrueInBody() async throws {
+        let response = SimpleAPIResponse(success: true, message: "ok", error: nil)
+        mock.stub("/attachments/att_1/transcribe", result: response)
+
+        try await service.requestTranscription(attachmentId: "att_1", force: true)
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["force"] as? Bool, true)
+    }
+
+    func test_requestTranscription_defaultForce_sendsForceFalse() async throws {
+        let response = SimpleAPIResponse(success: true, message: "ok", error: nil)
+        mock.stub("/attachments/att_1/transcribe", result: response)
+
+        try await service.requestTranscription(attachmentId: "att_1")
+
+        XCTAssertEqual(mock.lastRequest?.bodyJSON?["force"] as? Bool, false)
+    }
+
     // MARK: - getStatusDetails
 
     func test_getStatusDetails_callsCorrectEndpoint() async throws {
@@ -100,11 +118,53 @@ final class AttachmentServiceTests: XCTestCase {
         }
     }
 
-    // Regression: the gateway keys attachment status rows by `participantId`,
-    // not `userId`. A prior version of `AttachmentStatusUser` required
-    // `userId`, which caused JSONDecoder to throw `keyNotFound` against the
-    // real payload — surfacing as silently empty "Écouté" / "Vu" tabs in the
-    // long-press detail sheet even when stats existed in MongoDB.
+    // MARK: - translate
+
+    func test_translate_postsToTranslateEndpoint_withTargetLanguages() async throws {
+        let translationResult = AttachmentTranslationResult(
+            id: "ta_1", targetLanguage: "en", translatedText: "hello",
+            audioUrl: "https://x/en.mp3", durationMs: 1800, voiceCloned: false
+        )
+        let responseData = AttachmentTranslateResponse(
+            status: "completed", jobId: nil, translations: [translationResult]
+        )
+        mock.stub("/attachments/att_1/translate", result: APIResponse<AttachmentTranslateResponse>(
+            success: true, data: responseData, error: nil
+        ))
+
+        let result = try await service.translate(
+            attachmentId: "att_1", targetLanguages: ["en"],
+            sourceLanguage: "fr", generateVoiceClone: false
+        )
+
+        XCTAssertEqual(result.translations.count, 1)
+        XCTAssertEqual(result.translations.first?.targetLanguage, "en")
+        let json = try XCTUnwrap(mock.lastRequest?.bodyJSON)
+        XCTAssertEqual(json["targetLanguages"] as? [String], ["en"])
+        XCTAssertEqual(json["sourceLanguage"] as? String, "fr")
+        XCTAssertEqual(json["generateVoiceClone"] as? Bool, false)
+    }
+
+    func test_translate_decodes403ConsentError_withRequiredConsents() async throws {
+        let body403 = """
+        {"success":false,"error":"AUDIO_TRANSLATION_NOT_ENABLED",
+         "message":"You must enable audio translation consent to translate audio",
+         "requiredConsents":["audioTranslationEnabledAt","audioTranscriptionEnabledAt"]}
+        """.data(using: .utf8)!
+        mock.stubError(
+            "/attachments/att_1/translate",
+            error: MeeshyError.forbidden(reason: "You must enable audio translation consent to translate audio", body: body403)
+        )
+
+        do {
+            _ = try await service.translate(attachmentId: "att_1", targetLanguages: ["en"])
+            XCTFail("Expected a consent error to be thrown")
+        } catch let error as AttachmentConsentError {
+            XCTAssertEqual(error.code, "AUDIO_TRANSLATION_NOT_ENABLED")
+            XCTAssertEqual(error.requiredConsents, ["audioTranslationEnabledAt", "audioTranscriptionEnabledAt"])
+        }
+    }
+
     func test_attachmentStatusUser_decodesGatewayPayload() throws {
         let json = """
         {

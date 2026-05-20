@@ -1,647 +1,1104 @@
+import MeeshySDK
 import SwiftUI
-import Combine
+
+// MARK: - Editor Tool
+
+/// One tool reachable from the floating FAB cluster. `CaseIterable` drives the
+/// FAB column and the in-controller tool switcher.
+enum EditorTool: String, CaseIterable, Identifiable {
+    case crop, filters, adjust, effects
+
+    var id: String { rawValue }
+
+    var icon: String {
+        switch self {
+        case .crop: return "crop"
+        case .filters: return "camera.filters"
+        case .adjust: return "slider.horizontal.3"
+        case .effects: return "sparkles"
+        }
+    }
+
+    var label: String {
+        switch self {
+        case .crop: return String(localized: "media.editor.tool.crop", defaultValue: "Recadrer", bundle: .module)
+        case .filters: return String(localized: "media.editor.tool.filters", defaultValue: "Filtres", bundle: .module)
+        case .adjust: return String(localized: "media.editor.tool.adjust", defaultValue: "Ajuster", bundle: .module)
+        case .effects: return String(localized: "media.editor.tool.effects", defaultValue: "Effets", bundle: .module)
+        }
+    }
+
+    /// Tools available in Simple mode. Pro mode exposes every tool.
+    var isEssential: Bool { self != .effects }
+
+    static func rail(for mode: ImageEditorMode) -> [EditorTool] {
+        mode.isPro ? allCases : allCases.filter(\.isEssential)
+    }
+}
 
 // MARK: - Meeshy Image Editor View
 
+/// The single, immersive, full-screen image editor used everywhere in the app
+/// (profile, posts, stories, messages, communities…). It merges what used to
+/// be two separate screens — a context "preview/use" step and a fragmented
+/// tabbed editor — into one fluid surface.
+///
+/// Chrome follows the Story composer's modern pattern: a full-bleed canvas
+/// with floating controls — a glass top bar, a corner FAB cluster, and a
+/// contextual "controller" panel that slides up only for the active tool.
+/// Nothing is a fixed panel; options appear only when needed.
+///
+/// Architecture: this type is presentation-only. All mutable state, history
+/// and the render loop live in `ImageEditorViewModel`; pixel work lives in the
+/// stateless `ImageFilterEngine`. The edit pipeline is fully non-destructive —
+/// the original image is never mutated and the final render is produced once,
+/// on `Terminé`.
 public struct MeeshyImageEditorView: View {
-    let image: UIImage
-    let initialCropRatio: CropRatio?
-    let accentColor: String
-    let onAccept: (UIImage) -> Void
-    let onCancel: (() -> Void)?
 
+    @StateObject private var viewModel: ImageEditorViewModel
+    @ObservedObject private var theme = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
-    @StateObject private var engine = ImageFilterEngine()
+    private let accentColor: String
+    private let onAccept: (UIImage) -> Void
+    private let onCancel: (() -> Void)?
 
-    @State private var croppedImage: UIImage
-    @State private var scale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
-    @State private var rotation: Angle = .zero
-    @State private var activeTab: EditTab = .crop
-    @State private var filterThumbnails: [ImageFilter: UIImage] = [:]
-    @State private var previewImage: UIImage?
-    @State private var debounceTask: Task<Void, Never>?
+    // Tool / panel state
+    @State private var activeTool: EditorTool?
+    @State private var showHistory = false
+    @State private var controllerDrag: CGFloat = 0
 
-    // Crop state
+    // Canvas inspection transform (view-only — never baked into the image)
+    @State private var zoom: CGFloat = 1
+    @State private var zoomAnchor: CGFloat = 1
+    @State private var pan: CGSize = .zero
+    @State private var panAnchor: CGSize = .zero
+
+    // Before/after comparison
+    @State private var isComparing = false
+    @State private var beforeImage: UIImage?
+
+    // Crop interaction
+    @State private var cropRatio: CropRatio
     @State private var cropRect: CGRect = .zero
-    @State private var imageDisplayRect: CGRect = .zero
-    @State private var isCropInitialized = false
-    @State private var selectedCropRatio: CropRatio = .free
-
-    private var accentGradient: LinearGradient {
-        LinearGradient(
-            colors: [Color(hex: accentColor), Color(hex: accentColor).opacity(0.85)],
-            startPoint: .leading, endPoint: .trailing
-        )
-    }
+    @State private var cropDisplayRect: CGRect = .zero
+    @State private var cropBackdrop: UIImage?
+    @State private var cropInitialized = false
+    @State private var cropGeneration = 0
+    /// Whether the user has actually engaged the crop frame this session — a
+    /// crop is only baked into the edit state when this is set (or a crop
+    /// already exists), so opening and closing the tool is a true no-op.
+    @State private var cropDirty = false
 
     public init(
         image: UIImage,
-        initialCropRatio: CropRatio? = nil,
+        context: MediaPreviewContext,
         accentColor: String = MeeshyColors.brandPrimaryHex,
         onAccept: @escaping (UIImage) -> Void,
         onCancel: (() -> Void)? = nil
     ) {
-        self.image = image
-        self.initialCropRatio = initialCropRatio
         self.accentColor = accentColor
         self.onAccept = onAccept
         self.onCancel = onCancel
-        self._croppedImage = State(initialValue: image)
-        self._selectedCropRatio = State(initialValue: initialCropRatio ?? .free)
+        _viewModel = StateObject(wrappedValue: ImageEditorViewModel(image: image, context: context))
+        _cropRatio = State(initialValue: context.preferredCropRatio ?? .free)
     }
 
-    private enum EditTab: String, CaseIterable {
-        case crop, filters, adjustments, effects
+    private var isDark: Bool { theme.mode.isDark }
+    private var accent: Color { Color(hex: accentColor) }
 
-        var label: String {
-            switch self {
-            case .crop: return String(localized: "media.editor.tab.crop", defaultValue: "Crop", bundle: .module)
-            case .filters: return String(localized: "media.editor.tab.filters", defaultValue: "Filtres", bundle: .module)
-            case .adjustments: return String(localized: "media.editor.tab.adjustments", defaultValue: "Ajust.", bundle: .module)
-            case .effects: return String(localized: "media.editor.tab.effects", defaultValue: "FX", bundle: .module)
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .crop: return "crop"
-            case .filters: return "camera.filters"
-            case .adjustments: return "slider.horizontal.3"
-            case .effects: return "sparkles"
-            }
-        }
-    }
+    // MARK: - Body
 
     public var body: some View {
-        GeometryReader { geometry in
-            ZStack {
-                Color.black.ignoresSafeArea()
+        ZStack {
+            theme.backgroundPrimary.ignoresSafeArea()
 
+            GeometryReader { geo in
+                canvasContent(in: geo.size)
+            }
+
+            VStack(spacing: 0) {
+                topBar
+                Spacer(minLength: 0)
+            }
+
+            if activeTool == nil {
+                toolFABColumn
+                sideFABColumn
+            }
+
+            if let tool = activeTool {
                 VStack(spacing: 0) {
-                    headerBar
-                        .padding(.horizontal, 16)
-                        .padding(.top, 12)
-
-                    Spacer()
-
-                    if activeTab == .crop {
-                        cropImagePreview(geometry: geometry)
-                    } else {
-                        imagePreview
-                    }
-
-                    Spacer()
-
-                    tabBar
-
-                    toolPanel
-                        .frame(minHeight: 140, maxHeight: 200)
-
-                    acceptButton
-                        .padding(.horizontal, 20)
-                        .padding(.bottom, 30)
-                        .padding(.top, 8)
+                    Spacer(minLength: 0)
+                    controllerPanel(for: tool)
                 }
-            }
-        }
-        .task {
-            await loadThumbnails()
-        }
-        .adaptiveOnChange(of: engine.activeFilter) { _, _ in debouncedUpdatePreview() }
-        .adaptiveOnChange(of: engine.brightness) { _, _ in debouncedUpdatePreview() }
-        .adaptiveOnChange(of: engine.contrast) { _, _ in debouncedUpdatePreview() }
-        .adaptiveOnChange(of: engine.saturation) { _, _ in debouncedUpdatePreview() }
-        .adaptiveOnChange(of: engine.sharpness) { _, _ in debouncedUpdatePreview() }
-        .adaptiveOnChange(of: engine.vignetteIntensity) { _, _ in debouncedUpdatePreview() }
-        .adaptiveOnChange(of: engine.activeEffect) { _, _ in debouncedUpdatePreview() }
-    }
-
-    // MARK: - Header
-
-    private var headerBar: some View {
-        HStack {
-            Button {
-                onCancel?()
-                dismiss()
-            } label: {
-                Text(String(localized: "media.editor.cancel", defaultValue: "Annuler", bundle: .module))
-                    .font(.system(size: 15, weight: .medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 8)
-                    .background(Capsule().fill(.white.opacity(0.2)))
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
 
-            Spacer()
-
-            Button {
-                withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
-                    rotation += .degrees(90)
-                }
-                debouncedUpdatePreview()
-            } label: {
-                Image(systemName: "rotate.right")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.white)
-                    .frame(width: 40, height: 40)
-                    .background(Circle().fill(.white.opacity(0.2)))
+            if showHistory {
+                historyOverlay
+                    .transition(.opacity)
             }
         }
+        .statusBarHidden(true)
+        .task { viewModel.loadFilterThumbnails() }
     }
 
-    // MARK: - Image Preview (non-crop tabs)
+    // MARK: - Canvas
 
-    private var imagePreview: some View {
-        Image(uiImage: previewImage ?? croppedImage)
-            .resizable()
-            .aspectRatio(contentMode: .fit)
-            .scaleEffect(scale)
-            .offset(offset)
-            .rotationEffect(rotation)
-            .simultaneousGesture(
-                MagnifyGesture()
-                    .onChanged { value in scale = value.magnification }
-                    .onEnded { _ in
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            scale = max(min(scale, 4), 1)
-                        }
-                    }
-            )
-            .simultaneousGesture(
-                DragGesture()
-                    .onChanged { value in offset = value.translation }
-                    .onEnded { value in
-                        if scale <= 1.05 && abs(value.translation.height) > 200 {
-                            onCancel?()
-                            dismiss()
-                        } else {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                offset = .zero
-                            }
-                        }
-                    }
-            )
-            .padding(.horizontal, 16)
-    }
-
-    // MARK: - Crop Image Preview
-
-    private func cropImagePreview(geometry: GeometryProxy) -> some View {
-        let availableHeight = geometry.size.height - 340
-        let width = max(geometry.size.width - 32, 100)
-        let height = max(availableHeight, 200)
-        let size = CGSize(width: width, height: height)
-        let displayRect = calculateDisplayRect(for: croppedImage, in: size)
+    private func canvasContent(in size: CGSize) -> some View {
+        let topInset: CGFloat = 60
+        let bottomInset: CGFloat = activeTool == nil ? 92 : min(size.height * 0.52, 320)
+        let areaHeight = max(size.height - topInset - bottomInset, 140)
+        let area = CGSize(width: size.width, height: areaHeight)
 
         return ZStack {
-            Image(uiImage: croppedImage)
+            if activeTool == .crop {
+                cropCanvas(in: area)
+            } else {
+                imageCanvas
+            }
+        }
+        .frame(width: area.width, height: area.height)
+        .position(x: size.width / 2, y: topInset + areaHeight / 2)
+        .animation(.spring(response: 0.36, dampingFraction: 0.86), value: activeTool)
+    }
+
+    private var imageCanvas: some View {
+        Image(uiImage: displayedImage)
+            .resizable()
+            .scaledToFit()
+            .scaleEffect(zoom)
+            .offset(pan)
+            .padding(.horizontal, 14)
+            .overlay(alignment: .top) { compareBadge }
+            .contentShape(Rectangle())
+            .simultaneousGesture(magnifyGesture)
+            .simultaneousGesture(panGesture)
+            .onTapGesture(count: 2) { toggleZoom() }
+            .onLongPressGesture(
+                minimumDuration: 0.25,
+                maximumDistance: 30,
+                perform: { beginComparing() },
+                onPressingChanged: { pressing in if !pressing { endComparing() } }
+            )
+            .animation(.easeOut(duration: 0.16), value: isComparing)
+    }
+
+    private var displayedImage: UIImage {
+        if isComparing, let beforeImage { return beforeImage }
+        return viewModel.previewImage
+    }
+
+    @ViewBuilder
+    private var compareBadge: some View {
+        if isComparing {
+            Text(String(localized: "media.editor.before", defaultValue: "Original", bundle: .module))
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(.black.opacity(0.55)))
+                .transition(.opacity)
+        }
+    }
+
+    // MARK: - Crop Canvas
+
+    private func cropCanvas(in size: CGSize) -> some View {
+        let backdrop = cropBackdrop ?? viewModel.working
+        let area = CGSize(width: max(size.width - 32, 80), height: max(size.height - 32, 80))
+        let displayRect = Self.fittedRect(for: backdrop.size, in: area)
+
+        return ZStack {
+            Image(uiImage: backdrop)
                 .resizable()
                 .scaledToFit()
                 .frame(width: displayRect.width, height: displayRect.height)
-                .position(x: size.width / 2, y: size.height / 2)
-                .opacity(0.3)
+                .position(x: area.width / 2, y: area.height / 2)
+                .opacity(0.32)
 
             CropOverlayView(
                 cropRect: $cropRect,
                 imageDisplayRect: displayRect,
-                aspectRatio: selectedCropRatio.aspectRatio,
-                image: croppedImage
+                aspectRatio: cropRatio.aspectRatio,
+                image: backdrop,
+                onInteraction: { cropDirty = true }
             )
-            .frame(width: size.width, height: size.height)
-            .onAppear {
-                initializeCropRect(displayRect: displayRect)
-            }
-            .adaptiveOnChange(of: selectedCropRatio) { _, _ in
-                adjustCropForRatio(selectedCropRatio.aspectRatio, displayRect: displayRect)
-            }
+            .frame(width: area.width, height: area.height)
         }
-        .frame(width: max(size.width, 1), height: max(size.height, 1))
-        .padding(.horizontal, 16)
+        .frame(width: area.width, height: area.height)
+        .id(cropGeneration)
+        .onAppear {
+            cropDisplayRect = displayRect
+            ensureCropInitialized(displayRect)
+        }
+        .onChange(of: cropRatio) { _, ratio in
+            adjustCrop(toRatio: ratio.aspectRatio, in: displayRect)
+        }
+        .onChange(of: area) { _, _ in
+            cropInitialized = false
+            cropGeneration += 1
+        }
     }
 
-    private func calculateDisplayRect(for img: UIImage, in size: CGSize) -> CGRect {
-        guard img.size.width > 0, img.size.height > 0, size.width > 0, size.height > 0 else {
-            // Return a minimal valid rect if dimensions are invalid
-            return CGRect(x: 0, y: 0, width: 100, height: 100)
-        }
-        
-        let imageAspect = img.size.width / img.size.height
-        let containerAspect = size.width / size.height
+    // MARK: - Top Bar
 
-        let displaySize: CGSize
-        if imageAspect > containerAspect {
-            displaySize = CGSize(width: size.width, height: size.width / imageAspect)
-        } else {
-            displaySize = CGSize(width: size.height * imageAspect, height: size.height)
-        }
-
-        // Ensure displaySize is valid
-        guard displaySize.width > 0, displaySize.height > 0, 
-              displaySize.width.isFinite, displaySize.height.isFinite else {
-            return CGRect(x: 0, y: 0, width: 100, height: 100)
-        }
-
-        return CGRect(
-            x: (size.width - displaySize.width) / 2,
-            y: (size.height - displaySize.height) / 2,
-            width: displaySize.width,
-            height: displaySize.height
-        )
-    }
-
-    // MARK: - Crop Initialization
-
-    private func initializeCropRect(displayRect: CGRect) {
-        guard !isCropInitialized || cropRect == .zero else { return }
-
-        if let ratio = selectedCropRatio.aspectRatio {
-            let maxWidth = displayRect.width * 0.9
-            let maxHeight = displayRect.height * 0.9
-            let cropWidth: CGFloat
-            let cropHeight: CGFloat
-
-            if maxWidth / ratio <= maxHeight {
-                cropWidth = maxWidth
-                cropHeight = maxWidth / ratio
-            } else {
-                cropHeight = maxHeight
-                cropWidth = maxHeight * ratio
+    private var topBar: some View {
+        HStack(spacing: 12) {
+            glassCircleButton(
+                icon: "xmark",
+                label: String(localized: "media.editor.cancel", defaultValue: "Annuler", bundle: .module)
+            ) {
+                cancelEditing()
             }
 
-            cropRect = CGRect(
-                x: displayRect.midX - cropWidth / 2,
-                y: displayRect.midY - cropHeight / 2,
-                width: cropWidth,
-                height: cropHeight
+            Spacer(minLength: 0)
+
+            ImageEditorModeSwitcher(mode: viewModel.mode, isDark: isDark) { newMode in
+                viewModel.setMode(newMode)
+                if newMode == .simple, activeTool == .effects {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.85)) {
+                        activeTool = nil
+                    }
+                }
+            }
+
+            Spacer(minLength: 0)
+
+            doneButton
+        }
+        .padding(.horizontal, 14)
+        .padding(.top, 8)
+    }
+
+    private var doneButton: some View {
+        Button(action: finish) {
+            HStack(spacing: 5) {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .bold))
+                Text(String(localized: "media.editor.done", defaultValue: "Termin\u{00E9}", bundle: .module))
+                    .font(.system(size: 15, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(
+                Capsule()
+                    .fill(theme.buttonGradient(color: accentColor))
+                    .shadow(color: theme.buttonShadow(color: accentColor), radius: 8, y: 3)
             )
-        } else {
-            cropRect = displayRect.insetBy(dx: displayRect.width * 0.05, dy: displayRect.height * 0.05)
         }
-
-        imageDisplayRect = displayRect
-        isCropInitialized = true
+        .accessibilityLabel(Text(String(localized: "media.editor.done", defaultValue: "Termin\u{00E9}", bundle: .module)))
     }
 
-    private func adjustCropForRatio(_ ratio: Double?, displayRect: CGRect) {
-        guard let ratio else {
-            if cropRect.width < 50 || cropRect.height < 50 {
-                cropRect = displayRect.insetBy(dx: displayRect.width * 0.05, dy: displayRect.height * 0.05)
-            }
-            return
-        }
+    // MARK: - Floating FAB clusters
 
-        let centerX = cropRect.midX
-        let centerY = cropRect.midY
-        let maxWidth = min(cropRect.width, displayRect.width * 0.9)
-        let maxHeight = min(cropRect.height, displayRect.height * 0.9)
-
-        let cropWidth: CGFloat
-        let cropHeight: CGFloat
-
-        if maxWidth / ratio <= maxHeight {
-            cropWidth = maxWidth
-            cropHeight = maxWidth / ratio
-        } else {
-            cropHeight = maxHeight
-            cropWidth = maxHeight * ratio
-        }
-
-        cropRect = CGRect(
-            x: centerX - cropWidth / 2,
-            y: centerY - cropHeight / 2,
-            width: cropWidth,
-            height: cropHeight
-        ).intersection(displayRect)
-    }
-
-    // MARK: - Tab Bar
-
-    private var tabBar: some View {
-        HStack(spacing: 0) {
-            ForEach(EditTab.allCases, id: \.rawValue) { tab in
-                Button {
-                    if activeTab == .crop && tab != .crop {
-                        applyCrop()
-                    }
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        activeTab = tab
-                    }
-                    if tab == .crop {
-                        resetCropState()
-                    }
-                } label: {
-                    VStack(spacing: 4) {
-                        Image(systemName: tab.icon)
-                            .font(.system(size: 14))
-                        Text(tab.label)
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundColor(activeTab == tab ? Color(hex: accentColor) : .white.opacity(0.6))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
+    /// Tool FABs — bottom-leading. Hidden while a controller is open.
+    private var toolFABColumn: some View {
+        VStack(spacing: 12) {
+            ForEach(EditorTool.rail(for: viewModel.mode)) { tool in
+                fab(icon: tool.icon, size: 54, accessibilityLabel: tool.label) {
+                    selectTool(tool)
                 }
             }
         }
-        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .padding(.leading, 16)
+        .padding(.bottom, 22)
+        .transition(.move(edge: .leading).combined(with: .opacity))
+        .animation(.spring(response: 0.34, dampingFraction: 0.82), value: viewModel.mode)
     }
 
-    // MARK: - Tool Panel
-
-    @ViewBuilder
-    private var toolPanel: some View {
-        switch activeTab {
-        case .crop:
-            cropPanel
-        case .filters:
-            filtersPanel
-        case .adjustments:
-            adjustmentsPanel
-        case .effects:
-            effectsPanel
+    /// History FABs — bottom-trailing. Hidden while a controller is open.
+    private var sideFABColumn: some View {
+        VStack(spacing: 10) {
+            if viewModel.hasEdits {
+                fab(icon: "clock.arrow.circlepath", size: 46,
+                    accessibilityLabel: String(localized: "media.editor.history", defaultValue: "Historique", bundle: .module)) {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { showHistory = true }
+                }
+            }
+            fab(icon: "arrow.uturn.forward", size: 46, enabled: viewModel.canRedo,
+                accessibilityLabel: String(localized: "media.editor.redo", defaultValue: "R\u{00E9}tablir", bundle: .module)) {
+                viewModel.redo()
+            }
+            fab(icon: "arrow.uturn.backward", size: 46, enabled: viewModel.canUndo,
+                accessibilityLabel: String(localized: "media.editor.undo", defaultValue: "Annuler la modification", bundle: .module)) {
+                viewModel.undo()
+            }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+        .padding(.trailing, 16)
+        .padding(.bottom, 22)
+        .transition(.move(edge: .trailing).combined(with: .opacity))
+        .animation(.easeInOut(duration: 0.2), value: viewModel.hasEdits)
     }
 
-    // MARK: - Crop Panel
+    private func fab(
+        icon: String,
+        size: CGFloat,
+        active: Bool = false,
+        enabled: Bool = true,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            guard enabled else { return }
+            HapticFeedback.medium()
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: size * 0.36, weight: .semibold))
+                .foregroundColor(active ? .white : (enabled ? theme.textPrimary : theme.textMuted))
+                .frame(width: size, height: size)
+                .background(
+                    Circle().fill(active
+                                  ? AnyShapeStyle(theme.buttonGradient(color: accentColor))
+                                  : AnyShapeStyle(.ultraThinMaterial))
+                )
+                .overlay(
+                    Circle().strokeBorder(active ? Color.clear : accent.opacity(0.35), lineWidth: 1)
+                )
+                .shadow(color: .black.opacity(0.18), radius: 6, y: 3)
+                .opacity(enabled ? 1 : 0.5)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .accessibilityLabel(Text(accessibilityLabel))
+    }
 
-    private var cropPanel: some View {
-        VStack(spacing: 16) {
-            Text(String(localized: "media.editor.cropHint", defaultValue: "Faites glisser les poignees pour recadrer", bundle: .module))
-                .font(.system(size: 13))
-                .foregroundColor(.white.opacity(0.5))
+    // MARK: - Controller Panel
 
-            HStack(spacing: 12) {
-                ForEach([CropRatio.free, .square, .ratio4x3, .ratio16x9, .ratio9x16], id: \.label) { ratio in
-                    CropRatioButton(
-                        title: ratio.label,
-                        isSelected: selectedCropRatio == ratio,
-                        accentHex: accentColor
-                    ) {
-                        HapticFeedback.light()
-                        withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                            selectedCropRatio = ratio
+    private func controllerPanel(for tool: EditorTool) -> some View {
+        VStack(spacing: 12) {
+            controllerHandle
+            controllerHeader(for: tool)
+            toolContent(for: tool)
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 14)
+        .frame(maxWidth: .infinity)
+        .background(
+            RoundedRectangle(cornerRadius: 26, style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 26, style: .continuous)
+                        .strokeBorder(accent.opacity(0.18), lineWidth: 0.5)
+                )
+                .shadow(color: .black.opacity(isDark ? 0.45 : 0.16), radius: 16, y: -4)
+        )
+        .padding(.horizontal, 8)
+        .padding(.bottom, 8)
+        .frame(maxWidth: 620)
+        .frame(maxWidth: .infinity)
+        .offset(y: max(controllerDrag, 0))
+    }
+
+    private var controllerHandle: some View {
+        Capsule()
+            .fill(theme.textMuted.opacity(0.6))
+            .frame(width: 40, height: 5)
+            .frame(maxWidth: .infinity)
+            .frame(height: 18)
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture()
+                    .onChanged { controllerDrag = $0.translation.height }
+                    .onEnded { value in
+                        if value.translation.height > 70 {
+                            closeController()
+                        }
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+                            controllerDrag = 0
                         }
                     }
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+            )
     }
 
-    // MARK: - Filters Panel
+    private func controllerHeader(for tool: EditorTool) -> some View {
+        HStack(spacing: 8) {
+            ForEach(EditorTool.rail(for: viewModel.mode)) { candidate in
+                toolChip(candidate, isActive: candidate == tool)
+            }
+
+            Spacer(minLength: 4)
+
+            headerIcon("arrow.uturn.backward", enabled: viewModel.canUndo) { viewModel.undo() }
+            headerIcon("arrow.uturn.forward", enabled: viewModel.canRedo) { viewModel.redo() }
+            headerIcon("xmark", enabled: true) { closeController() }
+        }
+    }
+
+    private func toolChip(_ tool: EditorTool, isActive: Bool) -> some View {
+        Button {
+            if !isActive { selectTool(tool) }
+        } label: {
+            Image(systemName: tool.icon)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(isActive ? .white : theme.textSecondary)
+                .frame(width: 38, height: 34)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(isActive
+                              ? AnyShapeStyle(theme.buttonGradient(color: accentColor))
+                              : AnyShapeStyle(theme.inputBackground))
+                )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(tool.label))
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+
+    private func headerIcon(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            guard enabled else { return }
+            HapticFeedback.light()
+            action()
+        } label: {
+            Image(systemName: icon)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(enabled ? theme.textPrimary : theme.textMuted)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(theme.inputBackground.opacity(enabled ? 1 : 0.5)))
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    @ViewBuilder
+    private func toolContent(for tool: EditorTool) -> some View {
+        switch tool {
+        case .crop: cropPanel
+        case .filters: filtersPanel
+        case .adjust: adjustPanel
+        case .effects: effectsPanel
+        }
+    }
+
+    // MARK: Crop Panel
+
+    private var cropPanel: some View {
+        VStack(spacing: 14) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 10) {
+                    ForEach(cropRatios, id: \.label) { ratio in
+                        ratioChip(ratio)
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+
+            HStack(spacing: 10) {
+                geometryButton("rotate.left",
+                               label: String(localized: "media.editor.rotateLeft", defaultValue: "Pivoter \u{00E0} gauche", bundle: .module)) {
+                    rotate(clockwise: false)
+                }
+                geometryButton("rotate.right",
+                               label: String(localized: "media.editor.rotateRight", defaultValue: "Pivoter \u{00E0} droite", bundle: .module)) {
+                    rotate(clockwise: true)
+                }
+                if viewModel.mode.isPro {
+                    geometryButton("arrow.left.arrow.right",
+                                   label: String(localized: "media.editor.flipH", defaultValue: "Miroir horizontal", bundle: .module)) {
+                        flip(horizontal: true)
+                    }
+                    geometryButton("arrow.up.arrow.down",
+                                   label: String(localized: "media.editor.flipV", defaultValue: "Miroir vertical", bundle: .module)) {
+                        flip(horizontal: false)
+                    }
+                }
+            }
+
+            Text(String(localized: "media.editor.cropHint",
+                         defaultValue: "Faites glisser les poign\u{00E9}es pour recadrer",
+                         bundle: .module))
+                .font(.system(size: 11))
+                .foregroundColor(theme.textMuted)
+        }
+    }
+
+    private var cropRatios: [CropRatio] {
+        viewModel.mode.isPro
+            ? [.free, .square, .ratio4x3, .ratio16x9, .ratio9x16]
+            : [.free, .square, .ratio4x3, .ratio16x9]
+    }
+
+    private func ratioChip(_ ratio: CropRatio) -> some View {
+        let isSelected = cropRatio == ratio
+        return Button {
+            HapticFeedback.light()
+            cropDirty = true
+            withAnimation(.spring(response: 0.26, dampingFraction: 0.82)) {
+                cropRatio = ratio
+            }
+        } label: {
+            Text(ratio.label)
+                .font(.system(size: 13, weight: isSelected ? .bold : .medium))
+                .foregroundColor(isSelected ? .white : theme.textSecondary)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(
+                    Capsule().fill(isSelected
+                                   ? AnyShapeStyle(theme.buttonGradient(color: accentColor))
+                                   : AnyShapeStyle(theme.inputBackground))
+                )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func geometryButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundColor(theme.textPrimary)
+                .frame(maxWidth: .infinity)
+                .frame(height: 42)
+                .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(theme.inputBackground))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
+    }
+
+    // MARK: Filters Panel
 
     private var filtersPanel: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
-                ForEach(ImageFilter.allCases) { filter in
-                    filterThumbnailCell(filter)
+                ForEach(visibleFilters) { filter in
+                    filterCell(filter)
                 }
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 2)
+            .padding(.bottom, 4)
         }
-        .frame(maxHeight: .infinity)
     }
 
-    private func filterThumbnailCell(_ filter: ImageFilter) -> some View {
-        let isSelected = engine.activeFilter == filter
+    private var visibleFilters: [ImageFilter] {
+        viewModel.mode.isPro ? ImageFilter.allCases : ImageFilter.allCases.filter(\.isEssential)
+    }
+
+    private func filterCell(_ filter: ImageFilter) -> some View {
+        let isSelected = viewModel.state.filter == filter
         return Button {
-            engine.activeFilter = filter
             HapticFeedback.light()
+            viewModel.perform(filter.displayName) { $0.filter = filter }
         } label: {
-            VStack(spacing: 4) {
+            VStack(spacing: 5) {
                 Group {
-                    if let thumb = filterThumbnails[filter] {
+                    if let thumb = viewModel.filterThumbnails[filter] {
                         Image(uiImage: thumb)
                             .resizable()
                             .aspectRatio(contentMode: .fill)
                     } else {
                         Rectangle()
-                            .fill(.white.opacity(0.1))
-                            .overlay(ProgressView().tint(.white))
+                            .fill(theme.inputBackground)
+                            .overlay(ProgressView().controlSize(.small))
                     }
                 }
-                .frame(width: 68, height: 68)
-                .clipShape(RoundedRectangle(cornerRadius: 8))
+                .frame(width: 64, height: 64)
+                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 8)
-                        .stroke(isSelected ? Color(hex: accentColor) : .clear, lineWidth: 2)
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .strokeBorder(isSelected ? accent : .clear, lineWidth: 2.5)
                 )
 
                 Text(filter.displayName)
-                    .font(.system(size: 10))
-                    .foregroundColor(isSelected ? Color(hex: accentColor) : .white.opacity(0.7))
+                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                    .foregroundColor(isSelected ? accent : theme.textSecondary)
             }
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - Adjustments Panel
+    // MARK: Adjust Panel
 
-    private var adjustmentsPanel: some View {
+    private var adjustPanel: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 10) {
-                adjustmentRow(icon: "sun.max.fill", label: String(localized: "media.editor.brightness", defaultValue: "Luminosite", bundle: .module), value: $engine.brightness, range: -0.5...0.5)
-                adjustmentRow(icon: "circle.lefthalf.filled", label: String(localized: "media.editor.contrast", defaultValue: "Contraste", bundle: .module), value: $engine.contrast, range: 0.5...2.0)
-                adjustmentRow(icon: "drop.fill", label: String(localized: "media.editor.saturation", defaultValue: "Saturation", bundle: .module), value: $engine.saturation, range: 0...2.0)
-                adjustmentRow(icon: "sparkle", label: String(localized: "media.editor.sharpness", defaultValue: "Nettete", bundle: .module), value: $engine.sharpness, range: 0...1.0)
-                adjustmentRow(icon: "camera.filters", label: String(localized: "media.editor.vignette", defaultValue: "Vignette", bundle: .module), value: $engine.vignetteIntensity, range: 0...2.0)
-
-                Button {
-                    withAnimation(.easeInOut(duration: 0.2)) {
-                        engine.brightness = 0
-                        engine.contrast = 1
-                        engine.saturation = 1
-                        engine.sharpness = 0
-                        engine.vignetteIntensity = 0
-                    }
-                } label: {
-                    Text(String(localized: "media.editor.reset", defaultValue: "Reinitialiser", bundle: .module))
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Color(hex: accentColor))
+            VStack(spacing: 12) {
+                ForEach(visibleAdjustments) { kind in
+                    adjustmentRow(kind)
                 }
-                .padding(.top, 4)
+                if viewModel.state.adjustments.activeCount > 0 {
+                    Button {
+                        viewModel.perform(String(localized: "media.editor.resetAdjust", defaultValue: "Ajustements r\u{00E9}initialis\u{00E9}s", bundle: .module)) {
+                            $0.adjustments = .neutral
+                        }
+                        HapticFeedback.light()
+                    } label: {
+                        Text(String(localized: "media.editor.reset", defaultValue: "R\u{00E9}initialiser", bundle: .module))
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(accent)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.top, 2)
+                }
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 4)
+            .padding(.bottom, 6)
+        }
+        .frame(maxHeight: 230)
+    }
+
+    private var visibleAdjustments: [AdjustmentKind] {
+        viewModel.mode.isPro ? AdjustmentKind.allCases : AdjustmentKind.allCases.filter(\.isEssential)
+    }
+
+    private func adjustmentRow(_ kind: AdjustmentKind) -> some View {
+        let value = viewModel.state.adjustments[kind]
+        let isActive = abs(value - kind.neutralValue) > 0.0001
+        return HStack(spacing: 10) {
+            Image(systemName: kind.icon)
+                .font(.system(size: 12))
+                .foregroundColor(isActive ? accent : theme.textMuted)
+                .frame(width: 18)
+
+            Text(kind.label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundColor(theme.textSecondary)
+                .frame(width: 78, alignment: .leading)
+
+            Slider(
+                value: adjustmentBinding(kind),
+                in: kind.range,
+                onEditingChanged: { editing in
+                    if !editing { viewModel.commit(kind.label) }
+                }
+            )
+            .tint(accent)
+
+            Text(formatAdjustment(value, kind: kind))
+                .font(.system(size: 10, weight: .semibold).monospacedDigit())
+                .foregroundColor(theme.textMuted)
+                .frame(width: 34, alignment: .trailing)
         }
     }
 
-    private func adjustmentRow(icon: String, label: String, value: Binding<Float>, range: ClosedRange<Float>) -> some View {
-        HStack(spacing: 8) {
-            Image(systemName: icon)
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.6))
-                .frame(width: 20)
-
-            Text(label)
-                .font(.system(size: 12))
-                .foregroundColor(.white.opacity(0.8))
-                .frame(width: 65, alignment: .leading)
-
-            Slider(value: value, in: range)
-                .tint(Color(hex: accentColor))
-
-            Text(String(format: "%.1f", value.wrappedValue))
-                .font(.system(size: 11).monospacedDigit())
-                .foregroundColor(.white.opacity(0.5))
-                .frame(width: 32)
-        }
+    private func adjustmentBinding(_ kind: AdjustmentKind) -> Binding<Float> {
+        Binding(
+            get: { viewModel.state.adjustments[kind] },
+            set: { newValue in viewModel.update { $0.adjustments[kind] = newValue } }
+        )
     }
 
-    // MARK: - Effects Panel
+    private func formatAdjustment(_ value: Float, kind: AdjustmentKind) -> String {
+        String(format: "%+.1f", value - kind.neutralValue)
+    }
+
+    // MARK: Effects Panel
 
     private var effectsPanel: some View {
         let columns = [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
-        return LazyVGrid(columns: columns, spacing: 10) {
-            ForEach(ImageEffect.allCases) { effect in
-                effectCell(effect)
+        return ScrollView(.vertical, showsIndicators: false) {
+            LazyVGrid(columns: columns, spacing: 10) {
+                ForEach(ImageEffect.allCases) { effect in
+                    effectCell(effect)
+                }
             }
+            .padding(.bottom, 6)
         }
-        .padding(.horizontal, 16)
-        .frame(maxHeight: .infinity)
+        .frame(maxHeight: 200)
     }
 
     private func effectCell(_ effect: ImageEffect) -> some View {
-        let isSelected = engine.activeEffect == effect
+        let isSelected = viewModel.state.effect == effect
         return Button {
-            engine.activeEffect = engine.activeEffect == effect ? .none : effect
             HapticFeedback.light()
+            viewModel.perform(effect.displayName) {
+                $0.effect = ($0.effect == effect ? .none : effect)
+            }
         } label: {
             VStack(spacing: 6) {
                 Image(systemName: effect.iconName)
-                    .font(.system(size: 18))
+                    .font(.system(size: 17))
                 Text(effect.displayName)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 10, weight: .semibold))
             }
-            .foregroundColor(isSelected ? Color(hex: accentColor) : .white.opacity(0.7))
+            .foregroundColor(isSelected ? accent : theme.textSecondary)
             .frame(maxWidth: .infinity)
-            .frame(height: 54)
+            .frame(height: 56)
             .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(.white.opacity(isSelected ? 0.12 : 0.06))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isSelected ? accent.opacity(isDark ? 0.16 : 0.1) : theme.inputBackground)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(isSelected ? Color(hex: accentColor) : .clear, lineWidth: 1.5)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(isSelected ? accent : .clear, lineWidth: 1.5)
             )
         }
+        .buttonStyle(.plain)
     }
 
-    // MARK: - Accept Button
+    // MARK: - History Overlay
 
-    private var acceptButton: some View {
-        Button {
-            if activeTab == .crop {
-                applyCrop()
-            }
-            let finalImage = renderFinalImage()
-            onAccept(finalImage)
-            HapticFeedback.success()
-            dismiss()
-        } label: {
-            HStack(spacing: 6) {
-                    Image(systemName: "eye")
-                        .font(.system(size: 13, weight: .bold))
-                    Text(String(localized: "media.editor.preview", defaultValue: "Aper\u{00E7}u", bundle: .module))
-                        .font(.system(size: 16, weight: .bold))
+    private var historyOverlay: some View {
+        ZStack(alignment: .bottom) {
+            Color.black.opacity(0.4)
+                .ignoresSafeArea()
+                .onTapGesture {
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { showHistory = false }
                 }
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(accentGradient)
-                        .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 4)
+
+            VStack(spacing: 0) {
+                HStack {
+                    Text(String(localized: "media.editor.history", defaultValue: "Historique", bundle: .module))
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(theme.textPrimary)
+                    Spacer()
+                    Button {
+                        withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) { showHistory = false }
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(theme.textSecondary)
+                            .frame(width: 30, height: 30)
+                            .background(Circle().fill(theme.inputBackground))
+                    }
+                    .buttonStyle(.plain)
+                }
+                .padding(16)
+
+                ScrollView {
+                    VStack(spacing: 6) {
+                        ForEach(viewModel.historySteps.indices.reversed(), id: \.self) { index in
+                            historyRow(index: index, step: viewModel.historySteps[index])
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 20)
+                }
+                .frame(maxHeight: 320)
+            }
+            .background(
+                UnevenRoundedRectangle(topLeadingRadius: 24, topTrailingRadius: 24)
+                    .fill(theme.backgroundSecondary)
+                    .ignoresSafeArea(edges: .bottom)
+            )
+            .transition(.move(edge: .bottom))
+        }
+    }
+
+    private func historyRow(index: Int, step: ImageEditHistoryStep) -> some View {
+        let isCurrent = step.id == viewModel.currentHistoryStepID
+        return Button {
+            viewModel.jump(to: step.id)
+            resetInspection()
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(isCurrent ? AnyShapeStyle(theme.buttonGradient(color: accentColor)) : AnyShapeStyle(theme.inputBackground))
+                        .frame(width: 30, height: 30)
+                    Text("\(index)")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(isCurrent ? .white : theme.textSecondary)
+                }
+                Text(step.label)
+                    .font(.system(size: 13, weight: isCurrent ? .semibold : .regular))
+                    .foregroundColor(isCurrent ? theme.textPrimary : theme.textSecondary)
+                Spacer()
+                if isCurrent {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(accent)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(isCurrent ? accent.opacity(isDark ? 0.12 : 0.07) : .clear)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - Shared Controls
+
+    private func glassCircleButton(icon: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(theme.textPrimary)
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(.ultraThinMaterial))
+                .overlay(Circle().strokeBorder(accent.opacity(0.3), lineWidth: 1))
+                .shadow(color: .black.opacity(0.16), radius: 5, y: 2)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text(label))
+    }
+
+    // MARK: - Gestures
+
+    private var magnifyGesture: some Gesture {
+        MagnifyGesture()
+            .onChanged { value in
+                zoom = min(max(zoomAnchor * value.magnification, 1), 6)
+            }
+            .onEnded { _ in
+                zoomAnchor = zoom
+                if zoom <= 1.01 {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.82)) {
+                        resetInspection()
+                    }
+                }
+            }
+    }
+
+    private var panGesture: some Gesture {
+        DragGesture()
+            .onChanged { value in
+                guard zoom > 1 else { return }
+                pan = CGSize(
+                    width: panAnchor.width + value.translation.width,
+                    height: panAnchor.height + value.translation.height
                 )
+            }
+            .onEnded { _ in panAnchor = pan }
+    }
+
+    private func toggleZoom() {
+        withAnimation(.spring(response: 0.32, dampingFraction: 0.82)) {
+            if zoom > 1 {
+                resetInspection()
+            } else {
+                zoom = 2.4
+                zoomAnchor = 2.4
+            }
         }
     }
 
-    // MARK: - Crop Logic
+    private func resetInspection() {
+        zoom = 1
+        zoomAnchor = 1
+        pan = .zero
+        panAnchor = .zero
+    }
 
-    private func applyCrop() {
-        guard cropRect.width > 0, cropRect.height > 0, imageDisplayRect.width > 0 else { return }
+    private func beginComparing() {
+        guard viewModel.hasEdits else { return }
+        beforeImage = viewModel.comparisonImage()
+        isComparing = true
+        HapticFeedback.light()
+    }
 
-        let scaleX = croppedImage.size.width / imageDisplayRect.width
-        let scaleY = croppedImage.size.height / imageDisplayRect.height
+    private func endComparing() {
+        isComparing = false
+    }
 
-        let imageCropRect = CGRect(
-            x: (cropRect.minX - imageDisplayRect.minX) * scaleX,
-            y: (cropRect.minY - imageDisplayRect.minY) * scaleY,
-            width: cropRect.width * scaleX,
-            height: cropRect.height * scaleY
+    // MARK: - Tool selection
+
+    private func selectTool(_ tool: EditorTool) {
+        let wasCrop = (activeTool == .crop)
+        let willClose = (activeTool == tool)
+        let nextTool: EditorTool? = willClose ? nil : tool
+
+        if wasCrop, nextTool != .crop { bakeCrop() }
+
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
+            activeTool = nextTool
+            controllerDrag = 0
+        }
+
+        if nextTool == .crop { enterCrop() }
+        if nextTool == .filters { viewModel.loadFilterThumbnails() }
+        HapticFeedback.light()
+    }
+
+    private func closeController() {
+        if activeTool == .crop { bakeCrop() }
+        withAnimation(.spring(response: 0.36, dampingFraction: 0.84)) {
+            activeTool = nil
+            controllerDrag = 0
+        }
+        HapticFeedback.light()
+    }
+
+    private func enterCrop() {
+        cropBackdrop = viewModel.cropBackdrop()
+        cropInitialized = false
+        cropDirty = false
+        cropGeneration += 1
+    }
+
+    // MARK: - Crop helpers
+
+    private func ensureCropInitialized(_ displayRect: CGRect) {
+        guard !cropInitialized, displayRect.width > 1, displayRect.height > 1 else { return }
+        if let norm = viewModel.state.cropNormalized {
+            cropRect = CGRect(
+                x: displayRect.minX + norm.minX * displayRect.width,
+                y: displayRect.minY + norm.minY * displayRect.height,
+                width: norm.width * displayRect.width,
+                height: norm.height * displayRect.height
+            )
+        } else if let ratio = cropRatio.aspectRatio {
+            cropRect = Self.centeredRect(aspect: ratio, in: displayRect, fill: 0.92)
+        } else {
+            cropRect = displayRect
+        }
+        cropDisplayRect = displayRect
+        cropInitialized = true
+    }
+
+    private func adjustCrop(toRatio ratio: Double?, in displayRect: CGRect) {
+        guard displayRect.width > 1, displayRect.height > 1 else { return }
+        guard let ratio else {
+            if cropRect.width < 40 || cropRect.height < 40 {
+                cropRect = displayRect
+            }
+            return
+        }
+        let centerX = cropRect.midX
+        let centerY = cropRect.midY
+        let maxWidth = min(cropRect.width, displayRect.width * 0.95)
+        let maxHeight = min(cropRect.height, displayRect.height * 0.95)
+        let width: CGFloat
+        let height: CGFloat
+        if maxWidth / ratio <= maxHeight {
+            width = maxWidth
+            height = maxWidth / ratio
+        } else {
+            height = maxHeight
+            width = maxHeight * ratio
+        }
+        let proposed = CGRect(
+            x: centerX - width / 2,
+            y: centerY - height / 2,
+            width: width,
+            height: height
         )
-
-        let clampedRect = imageCropRect.intersection(CGRect(origin: .zero, size: croppedImage.size))
-        guard clampedRect.width > 0, clampedRect.height > 0,
-              let cgImage = croppedImage.cgImage?.cropping(to: clampedRect) else { return }
-
-        croppedImage = UIImage(cgImage: cgImage, scale: croppedImage.scale, orientation: croppedImage.imageOrientation)
-        resetCropState()
-        debouncedUpdatePreview()
-    }
-
-    private func resetCropState() {
-        cropRect = .zero
-        imageDisplayRect = .zero
-        isCropInitialized = false
-    }
-
-    // MARK: - Render Logic
-
-    private func loadThumbnails() async {
-        let src = croppedImage
-        let engine = ImageFilterEngine()
-        let thumbs = await engine.generateThumbnails(from: src)
-        filterThumbnails = thumbs
-    }
-
-    private func debouncedUpdatePreview() {
-        debounceTask?.cancel()
-        debounceTask = Task {
-            try? await Task.sleep(nanoseconds: 100_000_000)
-            guard !Task.isCancelled else { return }
-            let src = croppedImage
-            let rotated = applyRotation(to: src, angle: rotation)
-            let edited = engine.applyEdits(to: rotated)
-            previewImage = edited
+        withAnimation(.spring(response: 0.26, dampingFraction: 0.85)) {
+            cropRect = proposed.intersection(displayRect)
         }
     }
 
-    private func renderFinalImage() -> UIImage {
-        let rotated = applyRotation(to: croppedImage, angle: rotation)
-        return engine.applyEdits(to: rotated)
+    private func bakeCrop() {
+        guard cropDirty || viewModel.state.cropNormalized != nil else { return }
+        let displayRect = cropDisplayRect
+        guard displayRect.width > 1, displayRect.height > 1,
+              cropRect.width > 1, cropRect.height > 1 else { return }
+
+        let raw = CGRect(
+            x: (cropRect.minX - displayRect.minX) / displayRect.width,
+            y: (cropRect.minY - displayRect.minY) / displayRect.height,
+            width: cropRect.width / displayRect.width,
+            height: cropRect.height / displayRect.height
+        )
+        let normalized = raw.intersection(CGRect(x: 0, y: 0, width: 1, height: 1))
+        guard normalized.width > 0.02, normalized.height > 0.02 else { return }
+
+        let isFullFrame = normalized.minX < 0.006 && normalized.minY < 0.006
+            && normalized.width > 0.988 && normalized.height > 0.988
+        let target: CGRect? = isFullFrame ? nil : normalized
+
+        viewModel.perform(String(localized: "media.editor.crop.applied", defaultValue: "Recadrage", bundle: .module)) {
+            $0.cropNormalized = target
+        }
     }
 
-    private func applyRotation(to source: UIImage, angle: Angle) -> UIImage {
-        let degrees = angle.degrees.truncatingRemainder(dividingBy: 360)
-        guard abs(degrees) > 0.01 else { return source }
-
-        let radians = CGFloat(degrees * .pi / 180)
-        let size = source.size
-        let rotatedRect = CGRect(origin: .zero, size: size)
-            .applying(CGAffineTransform(rotationAngle: radians))
-        let newSize = CGSize(width: abs(rotatedRect.width), height: abs(rotatedRect.height))
-
-        let renderer = UIGraphicsImageRenderer(size: newSize)
-        return renderer.image { ctx in
-            ctx.cgContext.translateBy(x: newSize.width / 2, y: newSize.height / 2)
-            ctx.cgContext.rotate(by: radians)
-            source.draw(in: CGRect(x: -size.width / 2, y: -size.height / 2, width: size.width, height: size.height))
+    private func rotate(clockwise: Bool) {
+        bakeCrop()
+        viewModel.perform(String(localized: "media.editor.rotation", defaultValue: "Rotation", bundle: .module)) {
+            clockwise ? $0.rotateClockwise() : $0.rotateCounterClockwise()
         }
+        cropBackdrop = viewModel.cropBackdrop()
+        cropInitialized = false
+        cropDirty = false
+        cropGeneration += 1
+        HapticFeedback.light()
+    }
+
+    private func flip(horizontal: Bool) {
+        bakeCrop()
+        viewModel.perform(String(localized: "media.editor.flip", defaultValue: "Miroir", bundle: .module)) {
+            horizontal ? $0.toggleFlipHorizontal() : $0.toggleFlipVertical()
+        }
+        cropBackdrop = viewModel.cropBackdrop()
+        cropInitialized = false
+        cropDirty = false
+        cropGeneration += 1
+        HapticFeedback.light()
+    }
+
+    // MARK: - Lifecycle actions
+
+    private func finish() {
+        if activeTool == .crop { bakeCrop() }
+        let result = viewModel.export()
+        HapticFeedback.success()
+        onAccept(result)
+        dismiss()
+    }
+
+    private func cancelEditing() {
+        onCancel?()
+        dismiss()
+    }
+
+    // MARK: - Geometry helpers
+
+    static func fittedRect(for imageSize: CGSize, in container: CGSize) -> CGRect {
+        guard imageSize.width > 0, imageSize.height > 0,
+              container.width > 0, container.height > 0 else {
+            return CGRect(x: 0, y: 0, width: max(container.width, 1), height: max(container.height, 1))
+        }
+        let imageAspect = imageSize.width / imageSize.height
+        let containerAspect = container.width / container.height
+        let size: CGSize
+        if imageAspect > containerAspect {
+            size = CGSize(width: container.width, height: container.width / imageAspect)
+        } else {
+            size = CGSize(width: container.height * imageAspect, height: container.height)
+        }
+        return CGRect(
+            x: (container.width - size.width) / 2,
+            y: (container.height - size.height) / 2,
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    static func centeredRect(aspect ratio: Double, in bounds: CGRect, fill: CGFloat) -> CGRect {
+        let maxWidth = bounds.width * fill
+        let maxHeight = bounds.height * fill
+        let width: CGFloat
+        let height: CGFloat
+        if maxWidth / ratio <= maxHeight {
+            width = maxWidth
+            height = maxWidth / ratio
+        } else {
+            height = maxHeight
+            width = maxHeight * ratio
+        }
+        return CGRect(
+            x: bounds.midX - width / 2,
+            y: bounds.midY - height / 2,
+            width: width,
+            height: height
+        )
     }
 }
 
 // MARK: - Crop Overlay View
 
+/// Interactive crop frame with corner + edge handles. Aspect-ratio aware:
+/// when `aspectRatio` is set, edge handles are hidden and corners resize
+/// proportionally.
 struct CropOverlayView: View {
     @Binding var cropRect: CGRect
     let imageDisplayRect: CGRect
     let aspectRatio: Double?
     let image: UIImage
+    /// Fired once when the user first grabs a handle — lets the host know the
+    /// crop frame was deliberately engaged.
+    var onInteraction: () -> Void = {}
 
     private let handleSize: CGFloat = 24
     private let handleHitArea: CGFloat = 44
-    private let minCropSize: CGFloat = 60
+    private let minCropSize: CGFloat = 56
 
     @State private var isDragging = false
     @State private var activeHandle: CropHandle = .none
@@ -687,6 +1144,7 @@ struct CropOverlayView: View {
                         activeHandle = detectHandle(at: value.startLocation)
                         isDragging = true
                         lastTranslation = .zero
+                        if activeHandle != .none { onInteraction() }
                     }
                     let delta = CGSize(
                         width: value.translation.width - lastTranslation.width,
@@ -943,30 +1401,5 @@ private struct CornerHandleShape: Shape {
         }
 
         return path
-    }
-}
-
-// MARK: - Crop Ratio Button
-
-private struct CropRatioButton: View {
-    let title: String
-    let isSelected: Bool
-    let accentHex: String
-    let action: () -> Void
-
-    var body: some View {
-        Button(action: action) {
-            Text(title)
-                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
-                .foregroundColor(isSelected ? .black : .white.opacity(0.8))
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
-                .background(
-                    Capsule()
-                        .fill(isSelected ? Color(hex: accentHex) : Color.white.opacity(0.1))
-                )
-        }
-        .scaleEffect(isSelected ? 1.05 : 1.0)
-        .animation(.spring(response: 0.25, dampingFraction: 0.8), value: isSelected)
     }
 }

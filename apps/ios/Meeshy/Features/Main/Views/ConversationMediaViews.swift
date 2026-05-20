@@ -347,70 +347,82 @@ struct AudioMediaView: View, Equatable {
     var onShowTranslationDetail: ((String) -> Void)?
     var onRequestTranslation: ((String, String) -> Void)?
     var activeAudioLanguageOverride: String? = nil
+    /// Footer descriptor injected by `BubbleStandardLayout` for audio-only
+    /// messages — rendered inside the audio widget. `AudioMediaView` folds the
+    /// audio-language flags into it (see `audioFooter`), so the footer is a
+    /// single unified `BubbleFooter` and is never duplicated below the bubble.
+    var footerModel: BubbleFooterModel? = nil
+    var footerActions: BubbleFooterActions = .none
+
+    /// Quand non-nil, la citation est rendue dans le topSlot d'AudioPlayerView
+    /// (au-dessus de la ligne lecteur, à l'intérieur du même playerBackground).
+    /// Activé par `BubbleStandardLayout.audioHostsReply` — voir spec §4.3.
+    var replyReference: ReplyReference? = nil
+    var replyIsStory: Bool = false
+    var parentIsMe: Bool = false
+    var onReplyTap: ((String) -> Void)? = nil
+    var onStoryReplyTap: ((String) -> Void)? = nil
 
     static func == (lhs: AudioMediaView, rhs: AudioMediaView) -> Bool {
         lhs.attachment.id == rhs.attachment.id
+            && lhs.attachment.fileUrl == rhs.attachment.fileUrl
             && lhs.message.id == rhs.message.id
+            && lhs.message.deliveryStatus == rhs.message.deliveryStatus
+            && lhs.message.updatedAt == rhs.message.updatedAt
             && lhs.isDark == rhs.isDark
             && lhs.accentColor == rhs.accentColor
             && lhs.contactColor == rhs.contactColor
             && lhs.activeAudioLanguageOverride == rhs.activeAudioLanguageOverride
+            && lhs.footerModel == rhs.footerModel
+            && lhs.replyReference?.messageId == rhs.replyReference?.messageId
+            && lhs.replyReference?.previewText == rhs.replyReference?.previewText
+            && lhs.replyReference?.attachmentThumbnailUrl == rhs.replyReference?.attachmentThumbnailUrl
+            && lhs.replyIsStory == rhs.replyIsStory
+            && lhs.parentIsMe == rhs.parentIsMe
     }
 
-    @State private var isCached = false
+    @State private var resolvedAvailability: AudioAvailability = .needsDownload
     @State private var isAudioPlaying = false
     @State private var showAudioFullscreen = false
     @State private var selectedAudioLangCode: String? = nil
     @StateObject private var downloader = AttachmentDownloader()
 
-    private var timeString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: message.createdAt)
+    /// Disponibilité effective : un téléchargement actif prime, puis un
+    /// téléchargement terminé, sinon la résolution « au repos » du `.task`.
+    private var availability: AudioAvailability {
+        if downloader.isDownloading {
+            return .downloading(progress: downloader.progress)
+        }
+        if downloader.isCached {
+            return .ready
+        }
+        return resolvedAvailability
     }
 
-    /// Local optimistic audio (a `file://` URL) is on disk already — the player
-    /// is playable on the very first render, with no placeholder flash and no
-    /// cache poll. Server audio falls back to the `isCached` poll. RC3.2.
-    private var isPlayable: Bool {
-        isCached || attachment.fileUrl.hasPrefix("file://")
+    /// Résout `resolvedAvailability` depuis l'attachment courant. Appelé par
+    /// `.task(id: attachment.fileUrl)` : se ré-exécute quand l'URL bascule
+    /// optimiste (`file://`) → serveur (`https://`) à la réconciliation.
+    private func resolveAvailability() async {
+        let urlString = attachment.fileUrl
+        if urlString.hasPrefix("file://") {
+            let exists = FileManager.default.fileExists(
+                atPath: URL(string: urlString)?.path ?? ""
+            )
+            resolvedAvailability = AudioAvailability.resolve(
+                isLocalFile: true, localFileExists: exists, isServerCached: false
+            )
+            return
+        }
+        let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+        let cached = await CacheCoordinator.shared.audio.isCached(resolved)
+        resolvedAvailability = AudioAvailability.resolve(
+            isLocalFile: false, localFileExists: false, isServerCached: cached
+        )
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
-            ZStack {
-                if isPlayable {
-                    AudioPlayerView(
-                        attachment: attachment,
-                        context: .messageBubble,
-                        accentColor: contactColor,
-                        transcription: transcription,
-                        translatedAudios: translatedAudios,
-                        onFullscreen: { showAudioFullscreen = true },
-                        onPlayingChange: { playing in
-                            withAnimation(.easeInOut(duration: 0.2)) {
-                                isAudioPlaying = playing
-                            }
-                        },
-                        externalLanguage: $selectedAudioLangCode
-                    ) {
-                        audioMetaRow
-                    }
-                    .transition(.opacity)
-                } else {
-                    audioPlaceholder
-                        .transition(.opacity)
-                }
-            }
-            .animation(.easeInOut(duration: 0.25), value: isPlayable)
-            .overlay(alignment: .topTrailing) {
-                if !isPlayable, let dur = attachment.duration, dur > 0 {
-                    audioDurationBadge(seconds: Double(dur) / 1000.0)
-                        .padding(.trailing, 8)
-                        .padding(.top, 6)
-                }
-            }
-            // Download handled by audioPlaceholder's integrated play button
+            audioPlayer
 
             if !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && visualAttachments.isEmpty {
                 MessageTextRenderer.render(
@@ -442,229 +454,160 @@ struct AudioMediaView: View, Equatable {
                 selectedAudioLangCode = newLang
             }
         }
-        .task {
-            // Local optimistic audio (file:// URL) is already on disk — render
-            // the player straight away, no cache poll. See Sprint 3 RC3.2.
-            if attachment.fileUrl.hasPrefix("file://") {
-                isCached = true
-                return
-            }
-            let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString ?? attachment.fileUrl
-            while !Task.isCancelled && !isCached {
-                let cached = await CacheCoordinator.shared.audio.isCached(resolved)
-                if cached {
-                    isCached = true
-                    break
-                }
-                try? await Task.sleep(nanoseconds: 1_000_000_000)
-            }
+        .task(id: attachment.fileUrl) {
+            await resolveAvailability()
         }
     }
 
-    private var audioMetaRow: some View {
-        let accent = Color(hex: contactColor)
-        let origCode = message.originalLanguage.lowercased()
-        let metaColor: Color = isDark ? .white.opacity(0.7) : .black.opacity(0.5)
-
-        return HStack(spacing: 4) {
-            if !translatedAudios.isEmpty {
-                audioFlagPill(code: origCode, isOriginal: true, isDark: isDark, accent: accent)
-
-                ForEach(translatedAudios, id: \.id) { audio in
-                    let code = audio.targetLanguage.lowercased()
-                    if code != origCode {
-                        audioFlagPill(code: code, isOriginal: false, isDark: isDark, accent: accent)
-                    }
-                }
+    /// The final footer for the audio widget: the injected base model with
+    /// the audio-language flags folded in, and `onFlagTap` wired to the audio
+    /// language switch. One unified `BubbleFooter` — no separate flag row.
+    private var audioFooter: (BubbleFooterModel, BubbleFooterActions)? {
+        guard var model = footerModel else { return nil }
+        var actions = footerActions
+        if !translatedAudios.isEmpty {
+            let origCode = message.originalLanguage.lowercased()
+            var codes = [origCode]
+            for audio in translatedAudios {
+                let code = audio.targetLanguage.lowercased()
+                if code != origCode, !codes.contains(code) { codes.append(code) }
             }
-
-            Spacer(minLength: 0)
-
-            if !translatedAudios.isEmpty, onShowTranslationDetail != nil {
-                Button {
-                    onShowTranslationDetail?(message.id)
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: "translate")
-                        .font(.system(size: 10, weight: .medium))
-                        .foregroundColor(Color(hex: "4ECDC4"))
+            let active = (selectedAudioLangCode ?? origCode).lowercased()
+            model.flags = codes.map { FooterFlag(code: $0, isActive: $0 == active) }
+            model.showsTranslate = onShowTranslationDetail != nil
+            actions.onFlagTap = { code in
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
+                    selectedAudioLangCode = (code == origCode) ? nil : code
                 }
+                HapticFeedback.light()
             }
-
-            Text(timeString)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(metaColor)
-
-            if message.isMe {
-                audioDeliveryCheckmark(isDark: isDark)
+            if let detail = onShowTranslationDetail {
+                let messageId = message.id
+                actions.onTranslate = { detail(messageId) }
             }
         }
+        return (model, actions)
     }
 
-    private func audioFlagPill(code: String, isOriginal: Bool, isDark: Bool, accent: Color) -> some View {
-        let display = LanguageDisplay.from(code: code)
-        let isSelected = selectedAudioLangCode?.lowercased() == code.lowercased()
-            || (selectedAudioLangCode == nil && isOriginal)
-        let langColor = Color(hex: LanguageDisplay.colorHex(for: code))
-
-        return Button {
-            withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
-                selectedAudioLangCode = isOriginal ? nil : code
-            }
-            HapticFeedback.light()
-        } label: {
-            HStack(spacing: 2) {
-                Text(display?.flag ?? "🏳️")
-                    .font(.system(size: 10))
-                if isSelected {
-                    RoundedRectangle(cornerRadius: 0.5)
-                        .fill(langColor)
-                        .frame(width: 8, height: 1.5)
-                }
-            }
-            .padding(.horizontal, 4)
-            .padding(.vertical, 2)
-            .background(
-                Capsule().fill(isSelected
-                    ? langColor.opacity(isDark ? 0.2 : 0.12)
-                    : Color.clear)
-            )
-        }
-        .accessibilityLabel(display?.name ?? code)
-    }
-
+    /// Citation rendue dans le topSlot d'`AudioPlayerView` quand le message
+    /// est une réponse hébergée par l'audio (`audioHostsReply`).
     @ViewBuilder
-    private func audioDeliveryCheckmark(isDark: Bool) -> some View {
-        let metaColor: Color = isDark ? .white.opacity(0.7) : .black.opacity(0.5)
-        switch message.deliveryStatus {
-        case .sending:
-            Image(systemName: "clock")
-                .font(.system(size: 9))
-                .foregroundColor(metaColor)
-        case .invisible:
-            // Spec §6.2 — pre-200ms debounce, no glyph rendered to keep audio
-            // bubble timestamp row visually still during optimistic phase.
-            EmptyView()
-        case .clock:
-            Image(systemName: "clock")
-                .font(.system(size: 9))
-                .foregroundColor(metaColor.opacity(0.7))
-        case .slow:
-            Image(systemName: "clock.badge.exclamationmark")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(MeeshyColors.warning)
-        case .sent:
-            Image(systemName: "checkmark")
-                .font(.system(size: 9, weight: .semibold))
-                .foregroundColor(metaColor)
-        case .delivered:
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .regular))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 9, weight: .regular))
-                    .offset(x: 3)
-            }
-            .foregroundColor(metaColor)
-            .frame(width: 14)
-        case .read:
-            // Bold double-check + brand indigo400 to clearly distinguish from
-            // `.delivered` (which uses `metaColor` — gray).
-            ZStack(alignment: .leading) {
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .black))
-                Image(systemName: "checkmark")
-                    .font(.system(size: 10, weight: .black))
-                    .offset(x: 3)
-            }
-            .foregroundColor(MeeshyColors.readReceipt)
-            .frame(width: 15)
-            .accessibilityLabel("Read")
-        case .failed:
-            Image(systemName: "exclamationmark.circle.fill")
-                .font(.system(size: 10, weight: .bold))
-                .foregroundColor(MeeshyColors.error)
-        }
-    }
-
-    private var audioPlaceholder: some View {
-        let accent = Color(hex: contactColor)
-
-        return HStack(spacing: 8) {
-            // Play circle — triggers download
-            Button {
-                HapticFeedback.medium()
-                downloader.start(attachment: attachment, onShare: nil)
-            } label: {
-                ZStack {
-                    Circle()
-                        .fill(accent.opacity(downloader.isDownloading ? 0.5 : 0.3))
-                        .frame(width: 34, height: 34)
-                    if downloader.isDownloading {
-                        ProgressView().tint(.white).scaleEffect(0.7)
-                    } else {
-                        Image(systemName: "play.fill")
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white.opacity(0.6))
-                            .offset(x: 1)
-                    }
+    private var replyTopSlot: some View {
+        if let ref = replyReference {
+            BubbleQuotedReply(
+                style: .inline,
+                reply: ref,
+                parentIsMe: false,
+                accentHex: accentColor,
+                isDark: isDark,
+                mentionDisplayNames: mentionDisplayNames
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !ref.messageId.isEmpty else { return }
+                HapticFeedback.light()
+                if replyIsStory {
+                    onStoryReplyTap?(ref.messageId)
+                } else {
+                    onReplyTap?(ref.messageId)
                 }
             }
-            .disabled(downloader.isDownloading)
-
-            // Static waveform placeholder (deterministic heights)
-            waveformPlaceholder(accent: accent)
-
-            // Surface the download weight (KB / MB) so the user knows the
-            // cost before tapping play to fetch the audio. See Sprint 3.
-            if attachment.fileSize > 0 {
-                Text(AttachmentDownloader.fmt(Int64(attachment.fileSize)))
-                    .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                    .foregroundColor(accent.opacity(0.65))
-            }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(isDark ? accent.opacity(0.15) : accent.opacity(0.08))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(accent.opacity(isDark ? 0.25 : 0.15), lineWidth: 1)
-                )
-        )
     }
 
-    private func waveformPlaceholder(accent: Color) -> some View {
-        HStack(spacing: 2) {
-            ForEach(0..<25, id: \.self) { i in
-                let seed = Double(i * 7 + 3)
-                let h = CGFloat(max(6, min(22, 8.0 + sin(seed) * 5 + cos(seed * 0.5) * 4)))
-                RoundedRectangle(cornerRadius: 2)
-                    .fill(accent.opacity(0.2))
-                    .frame(width: 2, height: h)
-            }
-        }
-        .frame(height: 26)
-    }
-
-    private func formatDuration(_ seconds: TimeInterval) -> String {
-        let mins = Int(seconds) / 60
-        let secs = Int(seconds) % 60
-        return String(format: "%d:%02d", mins, secs)
-    }
-
-    private func audioDurationBadge(seconds: TimeInterval) -> some View {
-        return Text(formatDuration(seconds))
-            .font(.system(size: 9, weight: .semibold, design: .monospaced))
-            .foregroundColor(isDark ? .white.opacity(0.7) : .black.opacity(0.5))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(
-                Capsule()
-                    .fill(isDark ? Color.black.opacity(0.3) : Color.white.opacity(0.6))
+    /// The playable audio widget. Trois variantes pour préserver la détection
+    /// EmptyView du SDK (qui n'opère que sur le défaut littéral, pas sur un
+    /// `_ConditionalContent<..., EmptyView>` issu d'un @ViewBuilder interne) :
+    /// - reply présent → top (citation) + bottom (footer toujours injecté pour
+    ///   `audioHostsReply`, garanti par la matrice du spec §4.4) ;
+    /// - reply absent, footer présent → bottom seul (variant A historique) ;
+    /// - reply absent, footer absent → aucun slot (variant B historique).
+    @ViewBuilder
+    private var audioPlayer: some View {
+        if replyReference != nil {
+            AudioPlayerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: contactColor,
+                transcription: transcription,
+                translatedAudios: translatedAudios,
+                onFullscreen: { showAudioFullscreen = true },
+                onRetranscribe: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: true
+                        )
+                    }
+                },
+                onPlayingChange: { playing in
+                    withAnimation(.easeInOut(duration: 0.2)) { isAudioPlaying = playing }
+                },
+                externalLanguage: $selectedAudioLangCode,
+                availability: availability,
+                onDownload: { downloader.start(attachment: attachment, onShare: nil) },
+                topContent: { replyTopSlot },
+                bottomContent: { playerBottomContent }
             )
+        } else if footerModel != nil {
+            AudioPlayerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: contactColor,
+                transcription: transcription,
+                translatedAudios: translatedAudios,
+                onFullscreen: { showAudioFullscreen = true },
+                onRetranscribe: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: true
+                        )
+                    }
+                },
+                onPlayingChange: { playing in
+                    withAnimation(.easeInOut(duration: 0.2)) { isAudioPlaying = playing }
+                },
+                externalLanguage: $selectedAudioLangCode,
+                availability: availability,
+                onDownload: { downloader.start(attachment: attachment, onShare: nil) }
+            ) {
+                playerBottomContent
+            }
+        } else {
+            AudioPlayerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: contactColor,
+                transcription: transcription,
+                translatedAudios: translatedAudios,
+                onFullscreen: { showAudioFullscreen = true },
+                onRetranscribe: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: true
+                        )
+                    }
+                },
+                onPlayingChange: { playing in
+                    withAnimation(.easeInOut(duration: 0.2)) { isAudioPlaying = playing }
+                },
+                externalLanguage: $selectedAudioLangCode,
+                availability: availability,
+                onDownload: { downloader.start(attachment: attachment, onShare: nil) }
+            )
+        }
     }
+
+    /// Footer rendered inside the audio widget (`AudioPlayerView.bottomContent`):
+    /// a single unified `BubbleFooter` — audio-language flags + translate on
+    /// the leading edge, timestamp + delivery pinned trailing.
+    @ViewBuilder
+    private var playerBottomContent: some View {
+        if let (model, actions) = audioFooter {
+            BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
+                .equatable()
+        }
+    }
+
 }
 
 // MARK: - Animated Waveform Bar

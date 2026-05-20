@@ -24,6 +24,42 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertTrue(content.isEmojiOnly)
     }
 
+    /// Un emoji envoyé EN RÉPONSE à un message doit rester détecté comme
+    /// emoji-only — la bulle l'affiche alors agrandi & centré au-dessus du
+    /// quote, au lieu de le rendre comme du texte normal 15pt. La détection
+    /// ne doit donc PAS dépendre de l'absence de `replyTo`.
+    func test_emojiOnly_withReply_isStillFlagged() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let msg = makeMessage(content: "🔥🔥🔥", replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.isEmojiOnly)
+        XCTAssertNotNil(content.reply)
+        XCTAssertEqual(content.text?.emojiFontSize, 45)
+    }
+
+    /// Un emoji-réponse possède bien un quote ET le flag emoji — l'orchestrateur
+    /// route ce cas vers la bulle (avec quote) et non vers le rendu libre.
+    func test_emojiOnly_withReply_keepsTextPayload() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let msg = makeMessage(content: "😍", replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.isEmojiOnly)
+        XCTAssertEqual(content.text?.raw, "😍")
+        XCTAssertEqual(content.text?.emojiFontSize, 90)
+    }
+
+    /// Non-régression : un emoji SANS réponse reste emoji-only (rendu libre,
+    /// hors bulle) — comportement à conserver.
+    func test_emojiOnly_withoutReply_remainsFlaggedAndUnquoted() {
+        let msg = makeMessage(content: "👍")
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.isEmojiOnly)
+        XCTAssertNil(content.reply)
+    }
+
     func test_messageWithImages_hasVisualGrid() {
         let img1 = makeAttachment(type: .image)
         let img2 = makeAttachment(type: .image)
@@ -174,6 +210,78 @@ final class BubbleContentMatrixTests: XCTestCase {
             activeLangCode: "fr"
         )
         XCTAssertEqual(resolved, "Bonjour")
+    }
+
+    // MARK: - Reply routing (audioHostsReply / visualHostsReply)
+
+    /// Un audio seul en reply doit héberger la citation dans son widget — pas
+    /// de chat bubble parasite autour.
+    func test_audioHostsReply_pureAudioWithReply_isTrue() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let audio = makeAttachment(type: .audio)
+        let msg = makeMessage(content: "", attachments: [audio], replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.audioHostsReply)
+        XCTAssertFalse(content.visualHostsReply)
+    }
+
+    /// Audio avec caption courte + reply : `isAudioOnlyWithText` force
+    /// `hasTextOrNonMediaContent == false` → l'audio reste l'unique hôte de
+    /// la citation (caption rendue par `AudioMediaView.body`, transcription par
+    /// `inlineTranscription`, footer par bottomSlot).
+    func test_audioHostsReply_audioWithCaptionAndReply_isTrue() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let audio = makeAttachment(type: .audio)
+        let msg = makeMessage(content: "ma caption", attachments: [audio], replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.audioHostsReply)
+    }
+
+    /// Visual seul en reply doit basculer vers le conteneur unifié — pas de
+    /// chat bubble séparée sous la grille.
+    func test_visualHostsReply_pureVisualWithReply_isTrue() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let img = makeAttachment(type: .image)
+        let msg = makeMessage(content: "", attachments: [img], replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.visualHostsReply)
+        XCTAssertFalse(content.audioHostsReply)
+    }
+
+    /// Texte + reply : la bulle texte reste légitime — ni audioHostsReply ni
+    /// visualHostsReply ne doivent s'activer.
+    func test_neitherHostsReply_textWithReply_isFalse() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let msg = makeMessage(content: "ma reponse", replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertFalse(content.audioHostsReply)
+        XCTAssertFalse(content.visualHostsReply)
+    }
+
+    /// Pas de reply du tout : aucun host actif (le widget audio/visual rend
+    /// son footer standalone, comportement non touché par la refonte).
+    func test_neitherHostsReply_noReply_isFalse() {
+        let audio = makeAttachment(type: .audio)
+        let msg = makeMessage(content: "", attachments: [audio])
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertFalse(content.audioHostsReply)
+        XCTAssertFalse(content.visualHostsReply)
+    }
+
+    /// Emoji-only + reply : l'emoji est rendu agrandi dans la bulle texte ;
+    /// ni audio ni visual ne hostent — comportement préservé.
+    func test_neitherHostsReply_emojiOnlyWithReply_isFalse() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let msg = makeMessage(content: "🔥", replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertFalse(content.audioHostsReply)
+        XCTAssertFalse(content.visualHostsReply)
     }
 
     // MARK: - Helpers

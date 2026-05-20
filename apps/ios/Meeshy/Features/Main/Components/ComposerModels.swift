@@ -113,15 +113,12 @@ struct LanguageOption: Identifiable {
 /// `TextAnalyzer` overrides this value once the user types enough characters
 /// for reliable on-device detection.
 enum DefaultComposerLanguage {
-    static func resolve() -> String {
-        if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
-            let code = String(kbd.prefix(2))
-            if LanguageOption.defaults.contains(where: { $0.code == code }) {
-                return code
-            }
-        }
-        return "fr"
-    }
+    /// The composer always starts in French. `TextAnalyzer` re-detects the
+    /// language as the user types (up to 18 words), so a French start point
+    /// is corrected in-flight when the user writes in another language.
+    /// The keyboard layout intentionally does NOT drive this — see the
+    /// Prisme Linguistique section in the root `CLAUDE.md`.
+    static func resolve() -> String { "fr" }
 }
 
 // ============================================================================

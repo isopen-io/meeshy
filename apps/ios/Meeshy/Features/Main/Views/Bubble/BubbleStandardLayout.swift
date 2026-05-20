@@ -166,6 +166,31 @@ struct BubbleStandardLayout: View {
 
     private var isEmojiOnly: Bool { content.isEmojiOnly }
 
+    /// True when audio attachments are the message's only content — no text,
+    /// no non-media attachment, no reply, not emoji. In that case the bubble
+    /// has no text container to host the identity bar, so it is injected into
+    /// the audio widget instead (see `contentStack` / `mediaStandaloneView`).
+    private var audioIsSoleContent: Bool {
+        !isEmojiOnly
+            && !content.hasTextOrNonMediaContent
+            && content.reply == nil
+            && !audioAttachments.isEmpty
+    }
+
+    /// Whether the bubble's inner content stack (non-media attachments,
+    /// expandable text, link preview, inline translation panel) has anything
+    /// to render. Gates the padded VStack so a quote-only bubble never draws
+    /// an empty padded strip below its content. Behavior-preserving: every
+    /// branch mirrors a child of the stack, so non-empty bubbles render
+    /// exactly as before.
+    private var hasBubbleBodyContent: Bool {
+        if !nonMediaAttachments.isEmpty { return true }
+        if !(content.text?.raw.isEmpty ?? true) { return true }
+        if LinkPreviewFetcher.firstURL(in: effectiveContent) != nil { return true }
+        if secondaryContent != nil, secondaryLangCode != nil { return true }
+        return false
+    }
+
     private var emojiFontSize: CGFloat {
         content.text?.emojiFontSize ?? 15
     }
@@ -399,6 +424,10 @@ struct BubbleStandardLayout: View {
                         .compositingGroup()
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                } else if content.visualHostsReply, let reply = content.reply {
+                    // Visual-only reply : conteneur unifié citation + grille,
+                    // bordure commune RR16 — aucune chat bubble parasite.
+                    mediaWithReplyContainer(reply: reply)
                 } else {
                     visualMediaGrid
                         .background(Color.black)
@@ -406,11 +435,13 @@ struct BubbleStandardLayout: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(alignment: .bottomTrailing) {
                             if !content.hasTextOrNonMediaContent {
-                                BubbleMediaTimestampOverlay(
-                                    time: content.meta.timeString,
-                                    isMe: isMe,
-                                    deliveryStatus: content.meta.deliveryStatus
+                                BubbleFooter(
+                                    model: resolvedFooter().0,
+                                    actions: .none,
+                                    style: .overlay,
+                                    isDark: isDark
                                 )
+                                .equatable()
                                 .padding(8)
                                 .transition(.opacity)
                             }
@@ -419,24 +450,36 @@ struct BubbleStandardLayout: View {
                 }
             }
 
-            // Audio standalone
+            // Audio standalone. Si `audioHostsReply`, la citation est rendue
+            // dans le topSlot du widget audio (pas de chat bubble englobante).
+            // Si `audioIsSoleContent` OU `audioHostsReply`, le footer est
+            // injecté en bottomSlot — un unique BubbleFooter intégré, jamais
+            // de meta-row dupliquée sous le widget.
             ForEach(audioAttachments) { attachment in
-                mediaStandaloneView(attachment)
+                let isLastAudio = attachment.id == audioAttachments.last?.id
+                let shouldInjectFooter = (audioIsSoleContent && isLastAudio) || content.audioHostsReply
+                mediaStandaloneView(
+                    attachment,
+                    injectFooter: shouldInjectFooter,
+                    replyReference: content.audioHostsReply ? content.reply?.reference : nil,
+                    replyIsStory: content.audioHostsReply ? (content.reply?.isStory ?? false) : false
+                )
             }
 
-            // Emoji-only: large emoji without bubble
-            if isEmojiOnly {
+            // Emoji-only WITHOUT a reply: large emoji free-floating, no bubble.
+            // An emoji-only message that quotes another message keeps the
+            // bubble so the quoted-reply card renders — `textBubbleContent`
+            // hosts it and renders the emoji large & centered above the quote
+            // (see `bubbleInnerContent`).
+            if isEmojiOnly && content.reply == nil {
                 emojiOnlyContent
-            } else if content.hasTextOrNonMediaContent || content.reply != nil {
+            } else if content.hasTextOrNonMediaContent
+                || (content.reply != nil && !content.audioHostsReply && !content.visualHostsReply) {
                 textBubbleContent
-            } else if !audioAttachments.isEmpty {
-                // Audio-only messages (no text, no reply) skip textBubbleContent
-                // and emojiOnlyContent — but still need the identityBarSection so
-                // the user can access translation flags and the translate button
-                // on every audio bubble, not just the last one in a group.
-                identityBarSection
-                    .fixedSize(horizontal: true, vertical: false)
             }
+            // Audio-only / visual-only reply : leur citation est hébergée par
+            // le widget média lui-même — `textBubbleContent` est intentionnellement
+            // suppressed pour eviter la chat bubble parasite.
         }
         .blur(radius: shouldBlur ? 20 : 0)
         .mask(
@@ -470,36 +513,14 @@ struct BubbleStandardLayout: View {
 
             secondaryContentView
 
-            identityBarSection
+            standardFooter
         }
     }
 
     // MARK: - Text bubble path (with non-media attachments + reply preview)
-
-    /// Time visibility depends on conversation type:
-    ///
-    /// - **Group / Public / Channel**: every bubble carries a timestamp.
-    ///
-    /// - **Direct** (`isDirect`): only the last sent and last received
-    ///   messages carry a timestamp — intermediate bubbles stay
-    ///   metadata-free to keep the thread readable.
-    private var shouldShowTime: Bool {
-        if isDirect {
-            return content.isMe ? isLastSentMessage : isLastReceivedMessage
-        }
-        return true
-    }
-
-    /// Delivery checkmarks (🕐→✓→✓✓→✓✓ purple) are shown on **every**
-    /// outgoing message regardless of position. The user must see the
-    /// real-time state machine transitions instantly to feel confident
-    /// their message was queued, sent, delivered, and read. In group
-    /// conversations, every message shows delivery. In direct, only
-    /// outgoing messages show it (received messages have no delivery
-    /// indicator since *we* are the recipient).
-    private var shouldShowDelivery: Bool {
-        content.isMe
-    }
+    //
+    // Timestamp-visibility gating + delivery resolution now live in the pure
+    // `BubbleFooterModel.make(...)` builder — see `resolvedFooter`.
 
     @ViewBuilder
     private var bubbleInnerContent: some View {
@@ -518,67 +539,76 @@ struct BubbleStandardLayout: View {
                 }
         }
 
-        VStack(alignment: .leading, spacing: 8) {
-            ForEach(nonMediaAttachments) { attachment in
-                attachmentView(attachment)
-            }
+        if hasBubbleBodyContent {
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(nonMediaAttachments) { attachment in
+                    attachmentView(attachment)
+                }
 
-            if let textRaw = content.text?.raw, !textRaw.isEmpty {
-                // No `.onLongPressGesture` — see comment in `emojiOnlyContent`.
-                // The container's long-press opens the options overlay; the
-                // translate icon in the identity bar opens translation detail.
-                expandableTextView
-            }
+                if let text = content.text, !text.raw.isEmpty {
+                    // No `.onLongPressGesture` — see comment in `emojiOnlyContent`.
+                    // The container's long-press opens the options overlay; the
+                    // translate icon in the identity bar opens translation detail.
+                    if text.isEmojiOnly {
+                        // Emoji-only reply: emoji hosted inside the bubble, above
+                        // the quoted-reply card — large (same 90/60/45pt sizing as
+                        // the free-floating path) and centered within the bubble.
+                        Text(message.content)
+                            .font(.system(size: emojiFontSize))
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .center)
+                    } else {
+                        expandableTextView
+                    }
+                }
 
-            // Inline OpenGraph preview for the first URL in the
-            // effective (possibly translated) content. Self-loading.
-            if let url = LinkPreviewFetcher.firstURL(in: effectiveContent) {
-                LinkPreviewCard(
-                    urlString: url,
-                    accentColor: contactColor,
-                    isDark: isDark
-                )
-                .padding(.top, 4)
-            }
+                // Inline OpenGraph preview for the first URL in the
+                // effective (possibly translated) content. Self-loading.
+                if let url = LinkPreviewFetcher.firstURL(in: effectiveContent) {
+                    LinkPreviewCard(
+                        urlString: url,
+                        accentColor: contactColor,
+                        isDark: isDark
+                    )
+                    .padding(.top, 4)
+                }
 
-            secondaryContentView
+                secondaryContentView
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, content.hasTextOrNonMediaContent ? 10 : 4)
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, content.hasTextOrNonMediaContent ? 10 : 4)
     }
 
     @ViewBuilder
     private var textBubbleContent: some View {
         let isMe = content.isMe
         let hasEdited = content.editedAt != nil
-        // Identity bar (avatar + name + flags ± time + delivery) always
-        // renders inside the bubble. The custom `BubbleContentLayout`
-        // measures the inner content (text, attachments, reply preview)
-        // and the identity bar separately, then places the bar on its
-        // own line at the trailing edge for sent messages, leading edge
-        // for received ones — matching iMessage. Without this layout the
-        // identity bar's HStack would either stretch the bubble to 70%
-        // (greedy Spacer) or sit awkwardly leading-aligned even on sent
-        // bubbles. Time + delivery icon visibility is gated separately
-        // through `identityBarSection` (only the last bubble of each side).
-        // Plain VStack with `.fixedSize(horizontal: true, vertical: false)`
-        // on the identity bar. The custom `BubbleContentLayout` we used
-        // before reported intrinsic content heights to the parent
-        // UICollectionView's `estimated(80)` row, but SwiftUI re-measures
-        // the rendered subviews at a slightly different size — the cell
-        // height gets stuck on the first measurement and consecutive
-        // bubbles end up overlapping vertically. Native SwiftUI VStack
-        // sizing rounds-trips through UIHostingConfiguration cleanly:
-        // each cell computes its real height and the layout flows
-        // without bleed-through. The trade-off is that identity bar
-        // sits at the bubble's leading edge instead of trailing — the
-        // metaRow's inner Spacer still pushes time/delivery to the
-        // right of its (collapsed via fixedSize) row, so the timestamp
-        // visually still hugs the right of compact bubbles.
-        VStack(alignment: .leading, spacing: 4) {
-            bubbleInnerContent
-            identityBarSection
-                .fixedSize(horizontal: true, vertical: false)
+        // Body + footer are stacked by `BubbleBodyFooterLayout`, not a plain
+        // VStack. The footer carries a trailing Spacer — language flags on the
+        // leading edge, timestamp + delivery check on the trailing edge. In a
+        // plain VStack that Spacer is greedy and stretches the whole bubble to
+        // its 70% max width; `.fixedSize` collapses the Spacer instead, which
+        // pins the check right after the flags rather than on the bubble edge.
+        // The custom Layout measures the body once and hands that exact width
+        // to the footer: the text still wraps, the bubble stays sized to its
+        // content, and the check lands on the trailing edge — matching the
+        // corner-pinned footer of media bubbles. `sizeThatFits` and
+        // `placeSubviews` both derive every value from the same resolved
+        // width, so the reported height is self-consistent (no
+        // UICollectionView cell-height drift).
+        BubbleBodyFooterLayout(spacing: 4) {
+            // Wrapped in a VStack so the Layout sees the body as ONE opaque
+            // subview — a bare @ViewBuilder property would be flattened into
+            // its individual conditional branches.
+            VStack(alignment: .leading, spacing: 4) {
+                bubbleInnerContent
+            }
+            // `textBubbleContent` n'est plus rendu pour `audioHostsReply` /
+            // `visualHostsReply` (voir `contentStack`), donc le footer standard
+            // est toujours adapté ici — le widget média qui héberge sa propre
+            // citation gère son footer en interne (bottomSlot ou overlay).
+            standardFooter
         }
         .padding(.top, hasEdited ? 12 : 0)
         .overlay(alignment: .topLeading) {
@@ -599,90 +629,63 @@ struct BubbleStandardLayout: View {
 
     // MARK: - Identity bar (top of bubble for received last-in-group, otherwise meta row)
 
-    @ViewBuilder
-    private var identityBarSection: some View {
-        let isMe = content.isMe
-        let showTranslation = hasAnyTranslation && !isEmojiOnly
-        // Time is gated to the last message of each side in direct convos;
-        // delivery checkmark is always shown on outgoing messages so the
-        // user sees real-time state machine transitions on every bubble.
-        let timeString = shouldShowTime ? content.meta.timeString : ""
-        let deliveryStatus: MeeshyMessage.DeliveryStatus? = shouldShowDelivery
-            ? content.meta.deliveryStatus
-            : nil
-        // Phase 4 Task 4.6: offline-pending hourglass + failed-retry button.
-        // Only surfaces on outgoing bubbles for `.sending`+offline or `.failed`;
-        // BubbleDeliveryBadge collapses to EmptyView otherwise so the layout
-        // stays untouched in the happy path.
-        let showDeliveryBadge: Bool = {
-            guard isMe else { return false }
-            let raw = message.deliveryStatus
-            if raw == .failed { return true }
-            if raw == .sending && !networkIsOnline { return true }
-            return false
-        }()
-        if showIdentityBar {
-            HStack(spacing: 6) {
-                UserIdentityBar.messageBubble(
-                    name: content.senderName ?? "?",
-                    username: message.senderUsername.map { "@\($0)" },
-                    avatarURL: message.senderAvatarURL,
-                    accentColor: message.senderColor ?? contactColor,
-                    role: nil,
-                    time: timeString,
-                    delivery: deliveryStatus,
-                    flags: showTranslation ? buildAvailableFlags() : [],
-                    activeFlag: showTranslation ? secondaryLangCode : nil,
-                    onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
-                    onTranslateTap: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
-                    presenceState: presenceState,
-                    moodEmoji: senderMoodEmoji,
-                    storyRingState: senderStoryRingState,
-                    onAvatarTap: { selectedProfileUser = .from(message: message) },
-                    onViewStory: onViewStory,
-                    // Group conversations show the timestamp inline with the
-                    // author (`Name · 12:45`); direct conversations keep the
-                    // edge-pinned variant for the rare bubble that displays
-                    // the trailing time/delivery group (last sent / last
-                    // received).
-                    inlineTime: !isDirect
-                )
-                if showDeliveryBadge {
-                    BubbleDeliveryBadge(
-                        status: message.deliveryStatus,
-                        isMe: true,
-                        isOnline: networkIsOnline,
-                        onRetry: { performManualRetry() }
-                    )
-                    .equatable()
-                }
-            }
-            .padding(.horizontal, 10)
-            .padding(.vertical, 8)
-        } else {
-            HStack(spacing: 6) {
-                UserIdentityBar.metaRow(
-                    time: timeString,
-                    delivery: deliveryStatus,
-                    flags: showTranslation ? buildAvailableFlags() : [],
-                    activeFlag: showTranslation ? secondaryLangCode : nil,
-                    onFlagTap: showTranslation ? { code in handleFlagTap(code) } : nil,
-                    onTranslateTap: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
-                    isMe: isMe
-                )
-                if showDeliveryBadge {
-                    BubbleDeliveryBadge(
-                        status: message.deliveryStatus,
-                        isMe: true,
-                        isOnline: networkIsOnline,
-                        onRetry: { performManualRetry() }
-                    )
-                    .equatable()
-                }
-            }
-            .padding(.horizontal, 14)
+    /// Builds the footer model + actions for this bubble.
+    /// - Parameter includesTranslationControls: when `false`, language flags
+    ///   and the translate button are omitted — the audio widget owns its own
+    ///   per-language switcher, so rendering both would compete.
+    func resolvedFooter(includesTranslationControls: Bool = true) -> (BubbleFooterModel, BubbleFooterActions) {
+        // Le bouton translate s'affiche toujours pour les contenus traductibles
+        // — texte ou audio (la transcription est traductible) — même si aucune
+        // traduction n'existe encore : l'utilisateur peut alors la demander
+        // depuis le MessageDetailSheet. Image / vidéo seules et emoji-only
+        // restent exclus tant qu'on n'a pas de pipeline texte associé.
+        let isTranslatableContent = !isEmojiOnly
+            && (hasTextOrNonMediaContent || !audioAttachments.isEmpty)
+        let showTranslation = includesTranslationControls && isTranslatableContent
+        // Les drapeaux n'apparaissent que quand au moins une traduction est
+        // déjà disponible (sinon il n'y a rien à montrer côté flag strip).
+        let showFlags = showTranslation && hasAnyTranslation
+        let sender: SenderIdentity? = showIdentityBar ? SenderIdentity(
+            name: content.senderName ?? "?",
+            username: message.senderUsername.map { "@\($0)" },
+            role: nil,
+            avatarURL: message.senderAvatarURL,
+            accentColor: message.senderColor ?? contactColor,
+            moodEmoji: senderMoodEmoji,
+            presence: presenceState,
+            storyRing: senderStoryRingState
+        ) : nil
+
+        let model = BubbleFooterModel.make(
+            timeString: content.meta.timeString,
+            deliveryStatus: message.deliveryStatus,
+            isMe: content.isMe,
+            isOnline: networkIsOnline,
+            sender: sender,
+            flags: showFlags
+                ? buildAvailableFlags().map { FooterFlag(code: $0, isActive: $0 == secondaryLangCode) }
+                : [],
+            showsTranslate: showTranslation
+        )
+
+        let actions = BubbleFooterActions(
+            onFlagTap: showFlags ? { code in handleFlagTap(code) } : nil,
+            onTranslate: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
+            onRetry: { performManualRetry() },
+            onSenderTap: { selectedProfileUser = .from(message: message) },
+            onViewStory: onViewStory
+        )
+        return (model, actions)
+    }
+
+    /// The standard footer row rendered below text and emoji bubbles.
+    private var standardFooter: some View {
+        let (model, actions) = resolvedFooter()
+        return BubbleFooter(model: model, actions: actions, style: .row, isDark: isDark)
+            .equatable()
+            .padding(.horizontal, showIdentityBar ? 10 : 14)
+            .padding(.top, showIdentityBar ? 8 : 0)
             .padding(.bottom, 8)
-        }
     }
 
     /// Live read of the global network monitor. Kept as a computed property
@@ -694,9 +697,10 @@ struct BubbleStandardLayout: View {
         NetworkMonitor.shared.isOnline
     }
 
-    /// Manual retry path triggered by `BubbleDeliveryBadge`. Resolves the
-    /// outbox row from the message's `clientMessageId` and resets the retry
-    /// budget so the flusher's next pass picks it up immediately. Errors are
+    /// Manual retry path triggered by `BubbleFooter`'s failed-delivery retry
+    /// button. Resolves the outbox row from the message's `clientMessageId`
+    /// and resets the retry budget so the flusher's next pass picks it up
+    /// immediately. Errors are
     /// swallowed (no-op if the row no longer exists — the optimistic message
     /// has already been reconciled or the user manually cleared the queue).
     private func performManualRetry() {
@@ -831,8 +835,18 @@ struct BubbleStandardLayout: View {
     // MARK: - Audio standalone
 
     @ViewBuilder
-    private func mediaStandaloneView(_ attachment: MessageAttachment) -> some View {
+    private func mediaStandaloneView(
+        _ attachment: MessageAttachment,
+        injectFooter: Bool = false,
+        replyReference: ReplyReference? = nil,
+        replyIsStory: Bool = false
+    ) -> some View {
         let isMe = content.isMe
+        // Audio-only messages host the bubble footer inside the audio widget;
+        // `AudioMediaView` folds the audio-language flags into this model.
+        // When `replyReference` is non-nil, the citation is also hosted inside
+        // the audio widget (topSlot) — no chat bubble around the player.
+        let footer = injectFooter ? resolvedFooter(includesTranslationControls: false) : nil
         switch attachment.type {
         case .audio:
             AudioMediaView(
@@ -854,7 +868,14 @@ struct BubbleStandardLayout: View {
                 },
                 onShowTranslationDetail: onShowTranslationDetail,
                 onRequestTranslation: onRequestTranslation,
-                activeAudioLanguageOverride: activeAudioLanguage
+                activeAudioLanguageOverride: activeAudioLanguage,
+                footerModel: footer?.0,
+                footerActions: footer?.1 ?? .none,
+                replyReference: replyReference,
+                replyIsStory: replyIsStory,
+                parentIsMe: isMe,
+                onReplyTap: onReplyTap,
+                onStoryReplyTap: onStoryReplyTap
             )
             .equatable()
 
@@ -948,6 +969,56 @@ struct BubbleStandardLayout: View {
                 isViewOnce: content.isViewOnce
             ),
             consumeViewOnce: onConsumeViewOnce
+        )
+    }
+}
+
+// MARK: - Bubble body + footer layout
+//
+// Stacks the bubble's inner content above its footer. Unlike a plain VStack,
+// the footer is handed *exactly* the inner content's resolved width — so the
+// footer's trailing meta (timestamp + delivery check) lands on the bubble's
+// trailing edge, matching the corner-pinned footer of media bubbles. The
+// footer never widens the bubble: its own intrinsic width acts only as a
+// floor so the meta is never clipped on very short messages.
+//
+// `sizeThatFits` and `placeSubviews` compute the body and footer heights at
+// the same resolved width, so the reported size is self-consistent and the
+// hosting UICollectionView cell never drifts. Accepts one subview (body only,
+// when the footer is suppressed for an audio-in-quote bubble) or two.
+struct BubbleBodyFooterLayout: Layout {
+    var spacing: CGFloat = 4
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        guard let body = subviews.first else { return .zero }
+        let bodyProbe = body.sizeThatFits(proposal)
+        guard subviews.count > 1 else { return bodyProbe }
+
+        let footer = subviews[1]
+        let footerFloor = footer.sizeThatFits(.unspecified).width
+        let width = max(bodyProbe.width, footerFloor)
+        let bodyHeight = body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        let footerHeight = footer.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        return CGSize(width: width, height: bodyHeight + spacing + footerHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        guard let body = subviews.first else { return }
+        let width = bounds.width
+        let bodyHeight = body.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        body.place(
+            at: CGPoint(x: bounds.minX, y: bounds.minY),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: width, height: bodyHeight)
+        )
+
+        guard subviews.count > 1 else { return }
+        let footer = subviews[1]
+        let footerHeight = footer.sizeThatFits(ProposedViewSize(width: width, height: nil)).height
+        footer.place(
+            at: CGPoint(x: bounds.minX, y: bounds.minY + bodyHeight + spacing),
+            anchor: .topLeading,
+            proposal: ProposedViewSize(width: width, height: footerHeight)
         )
     }
 }

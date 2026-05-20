@@ -84,15 +84,11 @@ final class StoryExportShareViewModel: ObservableObject {
         let langs: [String] = selectedLanguage.map { [$0] } ?? []
         let slide = story.toRenderableSlide(preferredLanguages: langs)
 
-        guard slide.needsVideoExport else {
-            errorMessage = String(
-                localized: "story.export.share.nothingToExport",
-                defaultValue: "Cette story n'a pas de contenu animé à exporter."
-            )
-            phase = .failed("nothingToExport")
-            return
-        }
-
+        // Universal export — toutes les stories peuvent être bakées en
+        // MP4 (texte/sticker/image static OU vidéo/audio/keyframes
+        // animés). Le compositor synthétise un substrat transparent
+        // pour les slides sans background vidéo (cf. StoryExporter B1
+        // + StoryExporterStaticOnlyTests).
         phase = .exporting
         progress = 0
         errorMessage = nil
