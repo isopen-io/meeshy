@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Combine
+import os
 import MeeshySDK
 
 // MARK: - Audio Playback Manager
@@ -49,6 +50,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
                 guard !Task.isCancelled else { return }
                 playData(data)
             } catch {
+                Self.log.error("play(urlString) cache fetch echec (\(resolved, privacy: .public)): \(error.localizedDescription, privacy: .public)")
                 isLoading = false
             }
         }
@@ -59,13 +61,31 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         PlaybackCoordinator.shared.willStartPlaying(audio: self)
         resetState()
         currentUrl = url.absoluteString
+        // Pre-flight : vérifie l'existence du fichier AVANT d'ouvrir une
+        // audio session. Sans ce check, `Data(contentsOf:)` jetait, le
+        // `catch {}` historique avalait l'erreur, et le preview composer
+        // restait silencieusement muet ("le bouton play ne joue rien").
+        let fm = FileManager.default
+        if url.isFileURL, !fm.fileExists(atPath: url.path) {
+            Self.log.error("playLocal: fichier introuvable -> \(url.path, privacy: .public)")
+            isLoading = false
+            return
+        }
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
             try AVAudioSession.sharedInstance().setActive(true)
             let data = try Data(contentsOf: url)
             playData(data)
-        } catch { }
+        } catch {
+            Self.log.error("playLocal echec (\(url.lastPathComponent, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+            isLoading = false
+        }
     }
+
+    /// Logger dédié — `os.Logger` subsystem `me.meeshy.app`, catégorie
+    /// `audio-playback`. Permet de filtrer rapidement dans Console.app
+    /// quand un preview ne déclenche aucune lecture audible.
+    private static let log = os.Logger(subsystem: "me.meeshy.app", category: "audio-playback")
 
     private func playData(_ data: Data) {
         do {
@@ -81,6 +101,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             listenStartTime = Date()
             startProgressTimer()
         } catch {
+            Self.log.error("playData AVAudioPlayer init echec (\(data.count, privacy: .public)o): \(error.localizedDescription, privacy: .public)")
             isLoading = false
         }
     }
