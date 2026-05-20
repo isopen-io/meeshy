@@ -1593,6 +1593,21 @@ public struct StoryComposerView: View {
                 bgImage: bgImage,
                 loadedImages: viewModel.loadedImages
             )
+
+            // ThumbHash per-media foreground (images). Sync UIImage.toThumbHash
+            // est rapide (~5-15 ms par image). Vidéo : génération async via
+            // AVAssetImageGenerator non-incluse ici pour ne pas convertir tout
+            // le publish flow en async (out-of-scope du hotfix). Le placeholder
+            // vidéo reste donc nil — fallback à backgroundColor noir.
+            if var medias = slides[i].effects.mediaObjects {
+                for j in medias.indices where medias[j].thumbHash == nil {
+                    if medias[j].kind == .image,
+                       let img = viewModel.loadedImages[medias[j].id] {
+                        medias[j].thumbHash = img.toThumbHash()
+                    }
+                }
+                slides[i].effects.mediaObjects = medias
+            }
         }
         return (slides, viewModel.slideImages)
     }

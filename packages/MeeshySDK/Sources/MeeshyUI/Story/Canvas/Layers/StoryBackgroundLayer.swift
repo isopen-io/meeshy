@@ -172,36 +172,28 @@ extension StoryBackgroundLayer {
                 if let direct = Self.directURLIfAny(from: postMediaId) { return direct }
                 return resolver?(postMediaId)
             }()
-            guard let url = resolvedURL else { break }
-            // Préfère le fichier local en cache (`CacheCoordinator.video`, TTL
-            // 6 mois) : une slide revisitée joue instantanément sans re-streamer.
-            // Sinon on lit l'URL distante ET on peuple le cache disque en tâche
-            // de fond pour la prochaine visite. Les `file://` (édition composer)
-            // sont déjà locaux — joués tels quels.
-            let playbackURL: URL = {
-                if url.isFileURL { return url }
-                if let local = CacheCoordinator.videoLocalFileURL(for: url.absoluteString) {
-                    return local
-                }
-                let remote = url.absoluteString
-                Task { _ = try? await CacheCoordinator.shared.video.data(for: remote) }
-                return url
-            }()
-            let item = AVPlayerItem(url: playbackURL)
-            if looping {
-                let queuePlayer = AVQueuePlayer()
-                self.avPlayerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
-                self.avPlayer = queuePlayer
-            } else {
-                self.avPlayer = AVPlayer(playerItem: item)
+            guard let remoteURL = resolvedURL else { break }
+
+            // ThumbHash placeholder (déjà appliqué sur `contentLayer` ci-dessus
+            // pour le path image ; ici on s'appuie sur backgroundColor noir).
+
+            if remoteURL.isFileURL {
+                attachBackgroundPlayer(url: remoteURL, looping: looping, mute: mute)
+                break
             }
-            self.avPlayer?.isMuted = mute
-            let pl = AVPlayerLayer(player: avPlayer)
-            pl.frame = bounds
-            pl.videoGravity = .resizeAspectFill
-            addSublayer(pl)
-            self.avPlayerLayer = pl
-            self.avPlayer?.play()
+
+            // Cache-first : si déjà en cache, joue tout de suite.
+            if let local = CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString) {
+                attachBackgroundPlayer(url: local, looping: looping, mute: mute)
+                break
+            }
+
+            // Cache miss : précache puis play. Évite le double-fetch (network
+            // stream + cache populate) du chemin précédent.
+            Task { @MainActor [weak self] in
+                let url = await CacheCoordinator.videoLocalFileURLAwait(for: remoteURL) ?? remoteURL
+                self?.attachBackgroundPlayer(url: url, looping: looping, mute: mute)
+            }
         }
 
         self.transform = transform.caTransform()
@@ -211,6 +203,31 @@ extension StoryBackgroundLayer {
 // MARK: - App Lifecycle
 
 extension StoryBackgroundLayer {
+
+    /// Attache un AVPlayer pour une URL `file://` locale. Factorisé pour les
+    /// deux chemins (cache chaud immédiat / cache froid après fetch async).
+    /// Garantit que l'URL passée est un fichier local — les URLs HTTPS doivent
+    /// être pré-cachées en amont via `videoLocalFileURLAwait`.
+    @MainActor
+    func attachBackgroundPlayer(url: URL, looping: Bool, mute: Bool) {
+        let item = AVPlayerItem(url: url)
+        item.preferredForwardBufferDuration = 2.0
+        if looping {
+            let queuePlayer = AVQueuePlayer()
+            self.avPlayerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)
+            self.avPlayer = queuePlayer
+        } else {
+            self.avPlayer = AVPlayer(playerItem: item)
+        }
+        self.avPlayer?.isMuted = mute
+        let pl = AVPlayerLayer(player: avPlayer)
+        pl.frame = bounds
+        pl.videoGravity = .resizeAspectFill
+        addSublayer(pl)
+        self.avPlayerLayer = pl
+        self.avPlayer?.play()
+    }
+
     @MainActor
     public func handleAppLifecycle(active: Bool) {
         guard let player = avPlayer else { return }

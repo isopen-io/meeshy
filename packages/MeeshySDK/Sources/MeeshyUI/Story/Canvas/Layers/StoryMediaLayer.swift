@@ -63,6 +63,15 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     /// swallows all errors — it either sets `contents` or no-ops.
     private nonisolated(unsafe) var currentLoadTask: Task<Void, Never>?
 
+    /// In-flight video load (pré-cache + AVPlayer setup). Annulé à chaque
+    /// `configureVideo` pour éviter qu'une URL obsolète stamp la layer après
+    /// une re-configure (live composer, scrub).
+    private nonisolated(unsafe) var currentVideoLoadTask: Task<Void, Never>?
+
+    /// Placeholder CALayer affichant le ThumbHash décodé pendant le fetch
+    /// vidéo. Retiré avec un fade out 200 ms quand l'AVPlayer est prêt.
+    private nonisolated(unsafe) var placeholderLayer: CALayer?
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -271,29 +280,66 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     private func configureVideo(_ media: StoryMediaObject,
                                 mode: RenderMode,
                                 resolver: (@Sendable (String) -> URL?)?) {
-        guard let url = resolvedMediaURL(for: media, resolver: resolver) else { return }
-        let player = AVPlayer(url: url)
-        let playerLayer = AVPlayerLayer(player: player)
-        playerLayer.frame = bounds
-        playerLayer.videoGravity = .resizeAspectFill
-        addSublayer(playerLayer)
-        avPlayer = player
-        avPlayerLayer = playerLayer
+        guard let remoteURL = resolvedMediaURL(for: media, resolver: resolver) else { return }
+
+        // ThumbHash placeholder visible immédiatement pendant que la vidéo
+        // est résolue / téléchargée / préparée.
+        applyThumbHashPlaceholder(media.thumbHash)
+
+        // Annule le load précédent : un layer recyclé pour un autre média
+        // ne doit pas stamp l'ancienne URL une fois résolue.
+        currentVideoLoadTask?.cancel()
+
+        currentVideoLoadTask = Task { @MainActor [weak self] in
+            // Garantit une URL file:// avant de toucher AVURLAsset — sinon
+            // certaines surfaces (export, AVAudioFile) rejettent le HTTPS
+            // direct. Le helper retourne `nil` si le fetch échoue.
+            let localURL = await CacheCoordinator.videoLocalFileURLAwait(for: remoteURL) ?? remoteURL
+            if Task.isCancelled { return }
+            guard let self else { return }
+            self.attachPlayer(url: localURL, mode: mode, loop: media.loop)
+        }
+    }
+
+    /// Attache (ou réutilise) le `AVPlayer` du layer pour l'URL fournie. Si
+    /// un player existe déjà (cas du cache live qui réutilise la layer entre
+    /// deux ticks), `replaceCurrentItem(with:)` swap l'asset sans recréer
+    /// l'AVPlayer — évite le cold-restart 60 fois par seconde décrit dans
+    /// la spec § 2.2 (A.1).
+    @MainActor
+    private func attachPlayer(url: URL, mode: RenderMode, loop: Bool) {
+        let item = AVPlayerItem(url: url)
+        // Buffer modéré : 2 s suffit pour la plupart des vidéos courtes sans
+        // gaspiller la RAM. Sur 3G/4G lent, peut être ajusté à 4 s.
+        item.preferredForwardBufferDuration = 2.0
+
+        if let existing = avPlayerLayer?.player {
+            existing.replaceCurrentItem(with: item)
+        } else {
+            let player = AVPlayer(playerItem: item)
+            let playerLayer = AVPlayerLayer(player: player)
+            playerLayer.frame = bounds
+            playerLayer.videoGravity = .resizeAspectFill
+            addSublayer(playerLayer)
+            avPlayer = player
+            avPlayerLayer = playerLayer
+        }
+
+        guard let player = avPlayerLayer?.player else { return }
 
         switch mode {
         case .play:
-            // Start playback immediately — `play()` is safe regardless of
-            // AVPlayer status (it queues until ready). `preroll(atRate:)`,
-            // by contrast, requires `.readyToPlay` and throws
-            // NSInvalidArgumentException when the player has just been
-            // initialised — bug discovered by ExportEquivalenceTests.
             player.play()
         case .edit:
             player.seek(to: .zero)
         }
 
-        if media.loop {
+        if loop {
             player.actionAtItemEnd = .none
+            // Retire l'éventuel observer précédent (changement d'item).
+            if let token = loopObserver {
+                NotificationCenter.default.removeObserver(token)
+            }
             loopObserver = NotificationCenter.default.addObserver(
                 forName: .AVPlayerItemDidPlayToEndTime,
                 object: player.currentItem,
@@ -303,5 +349,70 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
                 player?.play()
             }
         }
+
+        // Fade out du placeholder une fois la lecture lancée. Best-effort —
+        // la vidéo peut encore buffer mais l'utilisateur perçoit la transition.
+        fadeOutPlaceholder(duration: 0.2)
+    }
+
+    // MARK: - ThumbHash placeholder
+
+    @MainActor
+    private func applyThumbHashPlaceholder(_ hash: String?) {
+        placeholderLayer?.removeFromSuperlayer()
+        placeholderLayer = nil
+        guard let hash, let img = ThumbHashDecoder.decodeIfAvailable(hash) else { return }
+        let placeholder = CALayer()
+        placeholder.frame = bounds
+        placeholder.contents = img.cgImage
+        placeholder.contentsGravity = .resizeAspectFill
+        placeholder.masksToBounds = true
+        // Insert sous l'AVPlayerLayer (placeholderLayer = z minimum). Si
+        // l'AVPlayerLayer existe déjà, on insert juste en-dessous.
+        if let pl = avPlayerLayer {
+            insertSublayer(placeholder, below: pl)
+        } else {
+            addSublayer(placeholder)
+        }
+        placeholderLayer = placeholder
+    }
+
+    @MainActor
+    private func fadeOutPlaceholder(duration: TimeInterval) {
+        guard let layer = placeholderLayer else { return }
+        CATransaction.begin()
+        CATransaction.setAnimationDuration(duration)
+        CATransaction.setCompletionBlock { [weak self] in
+            self?.placeholderLayer?.removeFromSuperlayer()
+            self?.placeholderLayer = nil
+        }
+        layer.opacity = 0
+        CATransaction.commit()
+    }
+
+    // MARK: - Teardown
+
+    /// Libère les ressources AVFoundation du layer (player + item + observer)
+    /// sans démonter le layer lui-même. Appelé par `StoryRendererCache.prune`
+    /// quand le layer est évincé du cache mais aussi sécuritaire à appeler
+    /// avant de relâcher la dernière référence forte.
+    @MainActor
+    public func tearDownPlayback() {
+        currentVideoLoadTask?.cancel()
+        currentVideoLoadTask = nil
+        currentLoadTask?.cancel()
+        currentLoadTask = nil
+        if let token = loopObserver {
+            NotificationCenter.default.removeObserver(token)
+            loopObserver = nil
+        }
+        if let player = avPlayerLayer?.player {
+            player.pause()
+            player.replaceCurrentItem(with: nil)
+        }
+        avPlayerLayer?.player = nil
+        avPlayer = nil
+        placeholderLayer?.removeFromSuperlayer()
+        placeholderLayer = nil
     }
 }

@@ -75,6 +75,29 @@ public actor CacheCoordinator {
         shared.audio.cachedFileURL(for: urlString)
     }
 
+    /// Variante async de `videoLocalFileURL` qui garantit un retour `file://`.
+    /// 1) Retourne immédiatement si l'URL est déjà file:// ou si le cache disk est chaud.
+    /// 2) Sinon, déclenche un fetch via `video.data(for:)` puis retourne l'URL locale produite.
+    /// 3) Retourne `nil` si tout échoue (réseau down, fichier corrompu, etc.).
+    ///
+    /// Garantit que le caller peut passer le résultat à `AVPlayer(url:)` /
+    /// `AVAudioFile(forReading:)` sans risque de rejet HTTPS.
+    nonisolated public static func videoLocalFileURLAwait(for remote: URL) async -> URL? {
+        if remote.isFileURL { return remote }
+        if let cached = videoLocalFileURL(for: remote.absoluteString) { return cached }
+        _ = try? await shared.video.data(for: remote.absoluteString)
+        return videoLocalFileURL(for: remote.absoluteString)
+    }
+
+    /// Idem pour l'audio. Utilisé par le hotfix audio reader (cf. spec
+    /// `2026-05-20-stories-audio-hotfix-design.md` § 5.7).
+    nonisolated public static func audioLocalFileURLAwait(for remote: URL) async -> URL? {
+        if remote.isFileURL { return remote }
+        if let cached = audioLocalFileURL(for: remote.absoluteString) { return cached }
+        _ = try? await shared.audio.data(for: remote.absoluteString)
+        return audioLocalFileURL(for: remote.absoluteString)
+    }
+
     /// Check image disk cache synchronously. Returns cached UIImage if available.
     nonisolated public static func cachedImage(for urlString: String) -> UIImage? {
         DiskCacheStore.cachedImage(for: urlString)

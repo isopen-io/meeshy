@@ -174,6 +174,13 @@ public final class StoryCanvasUIView: UIView {
     /// See `docs/superpowers/specs/2026-05-12-story-glass-backdrop-snapshot-design.md`.
     private let backdropCapture = StoryBackdropCapture()
 
+    /// Cache CALayer partagé entre tous les ticks de `rebuildLayers()` (.play
+    /// 60 Hz + .edit). Évite de recréer un `AVPlayer` 60 fois par seconde
+    /// pendant la lecture (cf. spec § 2.2 A.1). L'extension content fingerprint
+    /// de `ItemSignature` détecte les mutations de modèle à id constant pour
+    /// invalider correctement le cache d'une frame à l'autre.
+    private let rendererCache = StoryRendererCache()
+
     // MARK: - Content readiness tracking
 
     /// `true` after `onContentReady` has fired for the current background
@@ -654,6 +661,11 @@ public final class StoryCanvasUIView: UIView {
         if newMode == .play {
             completionFired = false
         }
+        // Flush du cache CALayer à chaque transition de mode : en `.edit`
+        // les mutations modèle ne sont pas toutes capturées par le fingerprint
+        // signature ; en repartant en `.play` on doit reconstruire from scratch
+        // pour ne pas servir un layer obsolète.
+        if didChange { rendererCache.invalidate() }
         rebuildLayers()
         // Apply slide opening animation when transitioning edit→play at t=0.
         // Runs after rebuildLayers() so the layer tree is fresh.
@@ -927,7 +939,10 @@ public final class StoryCanvasUIView: UIView {
             imageCache: readerContext.imageCache
         )
 
-        // Items
+        // Items — détache les sublayers existants AVANT de les ré-attacher.
+        // Les layers cachés (StoryRendererCache) restent retenus côté cache
+        // et seront ré-attachés via `addSublayer` à la prochaine itération,
+        // ce qui détache automatiquement du parent précédent (O(1)).
         itemsContainer.sublayers?.forEach { $0.removeFromSuperlayer() }
 
         // Drop the stale canvas backdrop captured during the previous tick,
@@ -941,6 +956,21 @@ public final class StoryCanvasUIView: UIView {
                                                   mode: mode,
                                                   languages: readerContext.preferredLanguages)
 
+        // Cache CALayer : utilisé uniquement en `.play` où `displayLinkTick`
+        // rebuild à 60 Hz sans mutation du modèle (seul `currentTime` avance).
+        // En `.edit`, `rebuildLayers()` ne se déclenche que sur `slide.didSet`
+        // — i.e. après mutation du modèle — et le fingerprint actuel
+        // (position/scale/rotation/opacity/visible/languages/postMediaId/text/emoji)
+        // ne capture pas toutes les mutations possibles (fontSize, textColor,
+        // backgroundStyle, etc.). Passer `cache: nil` en `.edit` garantit
+        // une frame correcte après n'importe quelle mutation.
+        let cacheForRender: StoryRendererCache? = (mode == .play) ? rendererCache : nil
+        if let cacheForRender {
+            cacheForRender.invalidateIfNeeded(slideId: slide.id,
+                                              languages: readerContext.preferredLanguages,
+                                              mode: mode)
+        }
+
         let rendered = StoryRenderer.render(slide: slide,
                                             into: geometry,
                                             at: currentTime,
@@ -948,11 +978,22 @@ public final class StoryCanvasUIView: UIView {
                                             languages: readerContext.preferredLanguages,
                                             resolver: readerContext.postMediaURLResolver,
                                             imageCache: readerContext.imageCache,
+                                            cache: cacheForRender,
                                             backdropProvider: { [weak backdropCapture] frame in
                                                 backdropCapture?.cropRegion(frame)
                                             })
         for sub in rendered.sublayers ?? [] {
             itemsContainer.addSublayer(sub)
+        }
+
+        // Prune le cache des layers dont l'id n'est plus présent dans la
+        // slide (élément supprimé) — libère les AVPlayer associés.
+        if let cacheForRender {
+            var keepIds = Set<String>()
+            slide.effects.textObjects.forEach { keepIds.insert($0.id) }
+            (slide.effects.mediaObjects ?? []).forEach { keepIds.insert($0.id) }
+            (slide.effects.stickerObjects ?? []).forEach { keepIds.insert($0.id) }
+            cacheForRender.prune(keepIds: keepIds)
         }
 
         applyForegroundFrames()

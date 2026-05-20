@@ -473,6 +473,11 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var sourceLanguage: String?
     // Timeline V2 — animation keyframes (position/scale/opacity)
     public var keyframes: [StoryKeyframe]?
+    /// ThumbHash du contenu (première frame pour vidéo, image décompressée
+    /// pour image). Généré au publish (cf. spec § 2.4). Sert de placeholder
+    /// pendant le fetch via `applyThumbHashPlaceholder`. `nil` autorisé
+    /// (back-compat stories antérieures, médias sans génération).
+    public var thumbHash: String?
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaURL, mediaType, placement
@@ -480,7 +485,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         case aspectRatio, anchor, intrinsicDuration
         case isBackground, loop, zIndex
         case startTime, duration, fadeIn, fadeOut
-        case sourceLanguage, keyframes
+        case sourceLanguage, keyframes, thumbHash
     }
 
     public init(id: String = UUID().uuidString,
@@ -502,7 +507,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 fadeIn: Double? = nil,
                 fadeOut: Double? = nil,
                 sourceLanguage: String? = nil,
-                keyframes: [StoryKeyframe]? = nil) {
+                keyframes: [StoryKeyframe]? = nil,
+                thumbHash: String? = nil) {
         self.id = id
         self.postMediaId = postMediaId
         self.mediaURL = mediaURL
@@ -521,6 +527,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
         self.keyframes = keyframes
+        self.thumbHash = thumbHash
     }
 
     // Custom init(from decoder:) for legacy backward compat
@@ -555,6 +562,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
         sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
         keyframes = try c.decodeIfPresent([StoryKeyframe].self, forKey: .keyframes)
+        thumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -581,6 +589,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(fadeOut, forKey: .fadeOut)
         try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
+        try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }
@@ -611,7 +620,8 @@ extension StoryMediaObject {
                 fadeIn: Double? = nil,
                 fadeOut: Double? = nil,
                 sourceLanguage: String? = nil,
-                keyframes: [StoryKeyframe]? = nil) {
+                keyframes: [StoryKeyframe]? = nil,
+                thumbHash: String? = nil) {
         self.init(id: id,
                   postMediaId: postMediaId,
                   mediaURL: mediaURL,
@@ -629,7 +639,8 @@ extension StoryMediaObject {
                   duration: duration,
                   fadeIn: fadeIn, fadeOut: fadeOut,
                   sourceLanguage: sourceLanguage,
-                  keyframes: keyframes)
+                  keyframes: keyframes,
+                  thumbHash: thumbHash)
     }
 }
 
