@@ -64,9 +64,14 @@ struct StoryAudioCell: View {
             didStartWaveform = false
             startWaveformIfNeeded()
         }
-        .adaptiveOnChange(of: localVolume) { _, newValue in
-            onVolumeChanged(newValue)
-        }
+        // ⚠ Ne JAMAIS publier `localVolume` à chaque tick du drag (~60 Hz).
+        // Le commit final est délégué au callback `onEditingChanged` du
+        // `Slider` (cf. `volumeSlider`). Pendant le drag l'UI reste fluide
+        // via le `@State` local, et le ViewModel ne reçoit qu'UN
+        // `setAudioVolume` quand l'utilisateur lâche le pouce — sans ça
+        // chaque tick mutait `@Published slides`, ce qui re-publiait l'arbre
+        // entier du composer et faisait scintiller toutes les vues
+        // observant le VM (canvas, miniatures, timeline tracks).
     }
 
     // MARK: - Subviews
@@ -129,11 +134,23 @@ struct StoryAudioCell: View {
 
     private var volumeSlider: some View {
         // Slider compact — fixe à 60pt, glissière de volume locale.
-        Slider(value: $localVolume, in: 0...1, step: 0.05)
-            .tint(MeeshyColors.indigo400)
-            .frame(width: 60)
-            .accessibilityLabel("Volume")
-            .accessibilityValue("\(Int(localVolume * 100))%")
+        // `onEditingChanged` commit le volume au VM UNIQUEMENT quand l'user
+        // lâche le pouce (`editing == false`) — pas pendant le drag.
+        // L'UI du slider reste fluide via le `@State localVolume`.
+        Slider(
+            value: $localVolume,
+            in: 0...1,
+            step: 0.05,
+            onEditingChanged: { editing in
+                if !editing {
+                    onVolumeChanged(localVolume)
+                }
+            }
+        )
+        .tint(MeeshyColors.indigo400)
+        .frame(width: 60)
+        .accessibilityLabel("Volume")
+        .accessibilityValue("\(Int(localVolume * 100))%")
     }
 
     private var deleteButton: some View {
