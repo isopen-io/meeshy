@@ -137,6 +137,7 @@ final class MessageListViewController: UIViewController {
         if self.isDark != isDark { self.isDark = isDark; changed = true }
         if self.accentColor != accentColor { self.accentColor = accentColor; changed = true }
         if changed {
+            stickyDayState.isDark = isDark
             applySnapshot(animated: false)
         }
     }
@@ -154,9 +155,16 @@ final class MessageListViewController: UIViewController {
         }
     }
 
+    /// État réactif de la pill flottante « Aujourd'hui / Hier / … » posée au
+    /// top du collectionView. Mis à jour à chaque `scrollViewDidScroll` et
+    /// après `applySnapshot` pour que le label suive le message en haut visible.
+    private let stickyDayState = MessageDayStickyState()
+    private var stickyDayHost: UIHostingController<MessageDayStickyOverlay>?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         configureCollectionView()
+        configureStickyDayOverlay()
         configureDataSource()
         observeStore()
         // Apply the initial snapshot from whatever the store already holds.
@@ -167,6 +175,77 @@ final class MessageListViewController: UIViewController {
         // emission is missed and the list would render empty even though
         // `store.messages` is non-empty.
         applySnapshot(animated: false)
+    }
+
+    private func configureStickyDayOverlay() {
+        stickyDayState.isDark = isDark
+        let host = UIHostingController(
+            rootView: MessageDayStickyOverlay(state: stickyDayState)
+        )
+        host.view.backgroundColor = .clear
+        host.view.isUserInteractionEnabled = false
+        addChild(host)
+        view.addSubview(host.view)
+        host.didMove(toParent: self)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            host.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+        stickyDayHost = host
+    }
+
+    /// Recalcule le label de la pill sticky à partir de la cellule la plus
+    /// haute visuellement. Liste inversée : « plus haute » = plus grand index
+    /// dans le snapshot diffable. Si le séparateur natif de ce même jour est
+    /// déjà visible, on cache la sticky pour éviter le doublon visuel.
+    private func updateStickyDayLabel() {
+        guard let dataSource else { return }
+        let visibleIndices = collectionView.indexPathsForVisibleItems.map(\.item)
+        guard let topIndex = visibleIndices.max() else {
+            stickyDayState.label = nil
+            return
+        }
+        let items = dataSource.snapshot().itemIdentifiers
+        guard topIndex < items.count else {
+            stickyDayState.label = nil
+            return
+        }
+
+        let calendar = Calendar.current
+        let now = Date()
+        let topItem = items[topIndex]
+        let topDayStart: Date?
+        switch topItem {
+        case .dayHeader:
+            // Le séparateur natif est l'item du haut — la sticky doublonnerait,
+            // on la masque le temps qu'il défile hors écran.
+            stickyDayState.label = nil
+            return
+        case .message(let localId):
+            if let record = store.message(for: localId) {
+                let msg = record.toMessage(currentUserId: currentUserId)
+                topDayStart = calendar.startOfDay(for: msg.createdAt)
+            } else {
+                topDayStart = nil
+            }
+        case .typingIndicator:
+            topDayStart = nil
+        }
+        guard let dayStart = topDayStart else {
+            stickyDayState.label = nil
+            return
+        }
+        let label = MessageDayLabel.label(
+            for: dayStart,
+            now: now,
+            calendar: calendar,
+            locale: .current
+        )
+        if stickyDayState.label != label {
+            stickyDayState.label = label
+        }
     }
 
     // MARK: - CollectionView Setup
@@ -460,8 +539,13 @@ final class MessageListViewController: UIViewController {
         // layout before `scrollToItem` runs (apply is asynchronous for the
         // animated diff path).
         dataSource.apply(snapshot, animatingDifferences: animated) { [weak self] in
-            guard let self, shouldAutoScroll else { return }
-            self.scrollToBottom(animated: animated)
+            guard let self else { return }
+            // La pill flottante doit refléter le nouveau top du flux dès que
+            // les cellules sont en place (insertion d'un nouveau message, etc.).
+            self.updateStickyDayLabel()
+            if shouldAutoScroll {
+                self.scrollToBottom(animated: animated)
+            }
         }
     }
 
@@ -681,6 +765,11 @@ extension MessageListViewController: UICollectionViewDelegate {
         let frameHeight = scrollView.frame.height
 
         store.isUserScrolling = scrollView.isDragging || scrollView.isDecelerating
+
+        // Met à jour le label de la pill flottante en fonction du message
+        // en haut visible. Léger : un lookup de l'item à l'index max + une
+        // string formatée. Aucune allocation inutile si le label ne change pas.
+        updateStickyDayLabel()
 
         // Near-bottom detection for the floating "scroll to latest" button.
         // In the inverted layout, contentOffset.y ≈ 0 means the user is at
