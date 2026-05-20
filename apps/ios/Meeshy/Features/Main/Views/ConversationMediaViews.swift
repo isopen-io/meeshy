@@ -462,30 +462,42 @@ struct AudioMediaView: View, Equatable {
     /// The final footer for the audio widget: the injected base model with
     /// the audio-language flags folded in, and `onFlagTap` wired to the audio
     /// language switch. One unified `BubbleFooter` — no separate flag row.
+    ///
+    /// **Règle** : le contrôleur translate (🌐) est câblé dès qu'un
+    /// `onShowTranslationDetail` callback existe — même si aucune traduction
+    /// audio n'est encore chargée. L'utilisateur doit pouvoir DEMANDER une
+    /// autre langue à tout moment. Les drapeaux affichés à droite reflètent
+    /// les variantes effectivement disponibles : la langue originale est
+    /// toujours montrée (info), les langues traduites sont ajoutées au fur et
+    /// à mesure qu'elles arrivent. La position du 🌐 ne dépend PAS du nombre
+    /// de drapeaux (cf. `BubbleFooter.metaLeading`).
     private var audioFooter: (BubbleFooterModel, BubbleFooterActions)? {
         guard var model = footerModel else { return nil }
         var actions = footerActions
+
+        let origCode = message.originalLanguage.lowercased()
+        var codes = [origCode]
+        for audio in translatedAudios {
+            let code = audio.targetLanguage.lowercased()
+            if code != origCode, !codes.contains(code) { codes.append(code) }
+        }
+        let active = (selectedAudioLangCode ?? origCode).lowercased()
+        model.flags = codes.map { FooterFlag(code: $0, isActive: $0 == active) }
+        model.showsTranslate = !translatedAudios.isEmpty && onShowTranslationDetail != nil
+
         if !translatedAudios.isEmpty {
-            let origCode = message.originalLanguage.lowercased()
-            var codes = [origCode]
-            for audio in translatedAudios {
-                let code = audio.targetLanguage.lowercased()
-                if code != origCode, !codes.contains(code) { codes.append(code) }
-            }
-            let active = (selectedAudioLangCode ?? origCode).lowercased()
-            model.flags = codes.map { FooterFlag(code: $0, isActive: $0 == active) }
-            model.showsTranslate = onShowTranslationDetail != nil
             actions.onFlagTap = { code in
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     selectedAudioLangCode = (code == origCode) ? nil : code
                 }
                 HapticFeedback.light()
             }
-            if let detail = onShowTranslationDetail {
-                let messageId = message.id
-                actions.onTranslate = { detail(messageId) }
-            }
         }
+        if let detail = onShowTranslationDetail {
+            let messageId = message.id
+            actions.onTranslate = { detail(messageId) }
+        }
+
         return (model, actions)
     }
 
