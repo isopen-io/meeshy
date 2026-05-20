@@ -38,10 +38,6 @@ struct MessageOverlayMenu: View {
     @State private var dragOffset: CGFloat = 0
     @State private var forceTab: DetailTab? = nil
     @State private var isEmojiPickerOpen = false
-    // Pilote la cascade gauche→droite de la barre d'emojis : largeur du
-    // masque qui se deroule. 0 = strip masquee, 1 = entierement revelee.
-    // Anime apres `isVisible` avec un leger delai pour staggerer l'entree.
-    @State private var emojiReveal: CGFloat = 0
 
     private let previewCharLimit = 500
     // Expanded emoji set — far more than fits in the viewport, so the
@@ -175,10 +171,9 @@ struct MessageOverlayMenu: View {
                     )
 
                     // Barre d'emojis rapides — meme alignement horizontal
-                    // que la bulle. L'entree est decalee (stagger) : le
-                    // conteneur apparait apres le preview, puis la cascade
-                    // gauche→droite des emojis se joue via le masque
-                    // `emojiReveal` (cf. `emojiQuickBar`).
+                    // que la bulle. Le composant partage `EmojiReactionPicker`
+                    // embarque sa propre cascade gauche→droite via
+                    // `WaveTileModifier` (cf. `emojiQuickBar`).
                     HStack(spacing: 0) {
                         if message.isMe { Spacer(minLength: 0) }
                         emojiQuickBar
@@ -204,18 +199,10 @@ struct MessageOverlayMenu: View {
             // Entree spring — courbe de reponse de qualite iMessage. Le
             // panneau demarre REPLIE (`dragOffset = 0`) pour laisser le
             // preview de bulle occuper la scene. La cascade d'emojis est
-            // declenchee juste apres via un Task differe.
+            // jouee par `EmojiReactionPicker` lui-meme via `WaveTileModifier`.
             withAnimation(.spring(response: 0.42, dampingFraction: 0.74)) {
                 isVisible = true
                 dragOffset = 0
-            }
-            // Stagger : la cascade gauche→droite des emojis demarre une
-            // fois la bulle posee, pour une entree sequencee et lisible.
-            Task { @MainActor in
-                try? await Task.sleep(nanoseconds: 130_000_000)
-                withAnimation(.easeOut(duration: 0.34)) {
-                    emojiReveal = 1
-                }
             }
         }
     }
@@ -223,13 +210,12 @@ struct MessageOverlayMenu: View {
     // MARK: - Emoji Quick Bar (EmojiReactionPicker — shared component)
 
     private var emojiQuickBar: some View {
-        // Shared `EmojiReactionPicker` (MeeshyUI) — the same strip the
-        // in-conversation long-press inline picker uses, so the two surfaces
-        // stay identical. Capped at 280pt to hold the pill silhouette. The
-        // left→right reveal is a gradient mask driven by `emojiReveal`: the
-        // soft fringe sweeps the strip emoji by emoji without touching the
-        // shared component. The chrome (glass capsule + accent glow) stays
-        // fixed — only the emojis reveal.
+        // Shared `EmojiReactionPicker` (MeeshyUI) — meme call-site que le
+        // strip inline du long-press (`ConversationView+MessageRow`) pour
+        // garder les deux surfaces visuellement identiques. Le composant
+        // embarque deja son chrome (capsule glass + shadow), son padding
+        // interne et la cascade d'entree gauche→droite (`WaveTileModifier`),
+        // donc aucun wrapper supplementaire ici.
         let topEmojis = EmojiUsageTracker.topEmojis(count: 20, defaults: defaultEmojis)
         return EmojiReactionPicker(
             quickEmojis: topEmojis,
@@ -247,39 +233,6 @@ struct MessageOverlayMenu: View {
             }
         )
         .frame(maxWidth: 280)
-        .padding(.horizontal, 6)
-        .padding(.vertical, 5)
-        .background(
-            Capsule(style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay(
-                    Capsule(style: .continuous)
-                        .fill(isDark ? Color.black.opacity(0.22) : Color.white.opacity(0.55))
-                )
-                .overlay(
-                    Capsule(style: .continuous)
-                        .stroke(overlayAccent.opacity(isDark ? 0.32 : 0.20), lineWidth: 0.75)
-                )
-        )
-        .shadow(color: overlayAccent.opacity(isVisible ? 0.22 : 0), radius: 16, y: 6)
-        .shadow(color: .black.opacity(isVisible ? 0.16 : 0), radius: 10, y: 3)
-        // Masque-cascade : un gradient horizontal dont le bord nuance
-        // balaye la barre. La frange douce de 0.12 donne l'illusion que
-        // les emojis se materialisent un a un, gauche→droite.
-        .mask(
-            GeometryReader { proxy in
-                LinearGradient(
-                    stops: [
-                        .init(color: .black, location: 0),
-                        .init(color: .black, location: max(0, emojiReveal - 0.12)),
-                        .init(color: .clear, location: min(1, emojiReveal))
-                    ],
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(width: proxy.size.width, height: proxy.size.height)
-            }
-        )
     }
 
     // MARK: - Dismiss Background (light blur — silhouettes stay readable)
@@ -807,12 +760,9 @@ struct MessageOverlayMenu: View {
 
     private func dismiss() {
         HapticFeedback.light()
-        // Sortie symetrique de l'entree : la cascade emoji se replie
-        // d'abord (droite→gauche via le masque), puis tout l'overlay se
-        // retracte vers le coin natif de la bulle.
-        withAnimation(.easeIn(duration: 0.16)) {
-            emojiReveal = 0
-        }
+        // Sortie : l'overlay se retracte vers le coin natif de la bulle.
+        // La cascade d'entree des emojis n'a pas de symetrique a la sortie
+        // (le composant partage gere son propre cycle de vie).
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             isVisible = false
         }
@@ -823,9 +773,6 @@ struct MessageOverlayMenu: View {
 
     private func dismissThen(_ action: @escaping () -> Void) {
         HapticFeedback.light()
-        withAnimation(.easeIn(duration: 0.16)) {
-            emojiReveal = 0
-        }
         withAnimation(.spring(response: 0.32, dampingFraction: 0.86)) {
             isVisible = false
         }
