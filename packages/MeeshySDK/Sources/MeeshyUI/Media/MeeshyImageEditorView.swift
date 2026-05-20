@@ -233,10 +233,10 @@ public struct MeeshyImageEditorView: View {
             cropDisplayRect = displayRect
             ensureCropInitialized(displayRect)
         }
-        .onChange(of: cropRatio) { _, ratio in
+        .adaptiveOnChange(of: cropRatio) { _, ratio in
             adjustCrop(toRatio: ratio.aspectRatio, in: displayRect)
         }
-        .onChange(of: area) { _, _ in
+        .adaptiveOnChange(of: area) { _, _ in
             cropInitialized = false
             cropGeneration += 1
         }
@@ -833,9 +833,11 @@ public struct MeeshyImageEditorView: View {
     // MARK: - Gestures
 
     private var magnifyGesture: some Gesture {
-        MagnifyGesture()
+        // MagnificationGesture (iOS 13+) au lieu de MagnifyGesture (iOS 17+).
+        // `value` est directement le CGFloat de magnification (pas via .magnification).
+        MagnificationGesture()
             .onChanged { value in
-                zoom = min(max(zoomAnchor * value.magnification, 1), 6)
+                zoom = min(max(zoomAnchor * value, 1), 6)
             }
             .onEnded { _ in
                 zoomAnchor = zoom

@@ -570,7 +570,7 @@ struct ConversationListBottomBar: View {
         )
         .scaleEffect(searchBounce ? 1.02 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: conversationViewModel.searchText.isEmpty)
-        .onChange(of: isSearching.wrappedValue) { _, newValue in
+        .adaptiveOnChange(of: isSearching.wrappedValue) { _, newValue in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 searchBounce = newValue
             }

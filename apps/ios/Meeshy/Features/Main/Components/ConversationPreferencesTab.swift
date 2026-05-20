@@ -123,8 +123,8 @@ struct ConversationPreferencesTab: View {
             customNameLocal = viewModel.prefs.customName ?? ""
         }
         .onAppear { setupMemberSearchDebounce() }
-        .onChange(of: viewModel.didDelete) { _, deleted in if deleted { dismiss() } }
-        .onChange(of: viewModel.didLeave) { _, left in if left { dismiss() } }
+        .adaptiveOnChange(of: viewModel.didDelete) { _, deleted in if deleted { dismiss() } }
+        .adaptiveOnChange(of: viewModel.didLeave) { _, left in if left { dismiss() } }
         .confirmationDialog(
             (viewModel.prefs.isArchived ?? false) ? "Désarchiver la conversation ?" : "Archiver la conversation ?",
             isPresented: $showArchiveConfirm,
@@ -175,7 +175,7 @@ struct ConversationPreferencesTab: View {
                         .textFieldStyle(.plain)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(theme.textPrimary)
-                        .onChange(of: customNameLocal) { _, newValue in
+                        .adaptiveOnChange(of: customNameLocal) { _, newValue in
                             viewModel.setCustomName(newValue)
                         }
                     if !customNameLocal.isEmpty {

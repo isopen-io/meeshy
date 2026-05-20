@@ -59,30 +59,27 @@ struct BubbleReactionsOverlay: View, Equatable {
         let accent = Color(hex: accentHex)
         let visible = Array(summaries.prefix(Self.maxVisible))
         let overflowCount = summaries.count - visible.count
-        let hasReactions = !summaries.isEmpty
+        let showsAddButton = !isMe && isLastReceivedMessage
+        let hasContent = !visible.isEmpty || showsAddButton
 
         Group {
-            if isMe {
-                if hasReactions {
-                    HStack(spacing: 3) {
-                        ForEach(visible, id: \.emoji) { reaction in
-                            pill(reaction: reaction, accent: accent)
-                        }
-                        if overflowCount > 0 {
-                            overflowPill(count: overflowCount, accent: accent)
-                        }
-                    }
-                }
-            } else {
+            if hasContent {
+                // Layout unifie : pills en ordre chronologique stable (gauche
+                // -> droite), puis overflow pill (+N), puis le bouton "+"
+                // d'ajout de reaction (uniquement sur le dernier message
+                // recu). Le HStack lit toujours gauche -> droite ; c'est
+                // l'alignement de l'overlay externe (BubbleStandardLayout)
+                // qui decide de quel cote le strip flotte par rapport a
+                // la bulle.
                 HStack(spacing: 3) {
-                    if overflowCount > 0 {
-                        overflowPill(count: overflowCount, accent: accent)
-                    } else if isLastReceivedMessage {
-                        addButton(accent: accent)
-                    }
-
                     ForEach(visible, id: \.emoji) { reaction in
                         pill(reaction: reaction, accent: accent)
+                    }
+                    if overflowCount > 0 {
+                        overflowPill(count: overflowCount, accent: accent)
+                    }
+                    if showsAddButton {
+                        addButton(accent: accent)
                     }
                 }
             }
@@ -97,7 +94,7 @@ struct BubbleReactionsOverlay: View, Equatable {
                 seenEmojis = Set(summaries.map(\.emoji))
             }
         }
-        .onChange(of: summaries.map(\.emoji)) { _, newEmojis in
+        .adaptiveOnChange(of: summaries.map(\.emoji)) { _, newEmojis in
             seenEmojis = Set(newEmojis)
         }
     }

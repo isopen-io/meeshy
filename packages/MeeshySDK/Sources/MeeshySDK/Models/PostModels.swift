@@ -30,11 +30,16 @@ public struct APIPostMedia: Codable, Sendable {
     public let translations: [String: APIAttachmentTranslation]?
 
     public var mediaType: FeedMediaType {
-        guard let mime = mimeType else { return .image }
-        if mime.hasPrefix("video/") { return .video }
-        if mime.hasPrefix("audio/") { return .audio }
-        if mime.hasPrefix("application/") { return .document }
-        return .image
+        // Single source of truth for the mime → family dispatch.
+        // See `AttachmentKind` in MeeshySDK/Models.
+        switch AttachmentKind(mimeType: mimeType ?? "") {
+        case .video:        return .video
+        case .audio:        return .audio
+        case .image:        return .image
+        case .pdf, .spreadsheet, .document, .presentation,
+             .archive, .code, .text, .other:
+            return .document
+        }
     }
 }
 
@@ -135,11 +140,9 @@ public struct PostViewersPagination: Decodable, Sendable {
 // MARK: - Conversion helpers
 
 private func thumbnailColorForMime(_ mimeType: String?) -> String {
-    guard let mime = mimeType else { return "4ECDC4" }
-    if mime.hasPrefix("video/") { return "FF6B6B" }
-    if mime.hasPrefix("audio/") { return "9B59B6" }
-    if mime.hasPrefix("application/") { return "F8B500" }
-    return "4ECDC4"
+    // Defers to `AttachmentKind.hexTintColor` — the single source of truth
+    // for attachment palette. Used by the feed thumbnail generator.
+    AttachmentKind(mimeType: mimeType ?? "").hexTintColor
 }
 
 private func formatFileSize(_ bytes: Int) -> String {

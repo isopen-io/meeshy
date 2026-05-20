@@ -12,7 +12,7 @@ import SwiftUI
 /// MUST resync to the new snapshot, otherwise the UI shows stale values.
 ///
 /// SwiftUI does NOT re-run `init` when only `clip` changes (the view's
-/// identity is preserved), so the resync is implemented via `.onChange(of:)`
+/// identity is preserved), so the resync is implemented via `.adaptiveOnChange(of:)`
 /// inside `body`. See `test_inspector_clipChanges_stateResyncs`.
 public struct ClipInspector: View {
 
@@ -93,7 +93,7 @@ public struct ClipInspector: View {
     }
 
     /// Test-only read of the current local `@State` values. Used by
-    /// `ClipInspector_StateSyncTests` to verify that `.onChange(of: clip)`
+    /// `ClipInspector_StateSyncTests` to verify that `.adaptiveOnChange(of: clip)`
     /// successfully resyncs after an external snapshot change (e.g. undo).
     public struct _StateProbe: Sendable, Equatable {
         public let volume: Float
@@ -168,7 +168,7 @@ public struct ClipInspector: View {
         .frame(maxWidth: presentation == .popover ? 360 : .infinity, alignment: .leading)
         .accessibilityElement(children: .contain)
         .accessibilityLabel(Self.accessibilityLabel(for: clip.kind))
-        .onChange(of: clip) { _, newClip in
+        .adaptiveOnChange(of: clip) { _, newClip in
             volume = newClip.volume
             fadeIn = newClip.fadeInDuration
             fadeOut = newClip.fadeOutDuration

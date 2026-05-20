@@ -185,7 +185,7 @@ struct TwoFactorSetupView: View {
                                 .stroke(tfaColor.opacity(0.2), lineWidth: 1)
                         )
                 )
-                .onChange(of: verificationCode) { _, newValue in
+                .adaptiveOnChange(of: verificationCode) { _, newValue in
                     verificationCode = String(newValue.prefix(6).filter(\.isNumber))
                 }
 
@@ -432,7 +432,7 @@ struct TwoFactorDisableView: View {
                                 )
                         )
                         .padding(.horizontal, 16)
-                        .onChange(of: disableCode) { _, newValue in
+                        .adaptiveOnChange(of: disableCode) { _, newValue in
                             disableCode = String(newValue.prefix(6).filter(\.isNumber))
                         }
 
@@ -645,7 +645,7 @@ struct TwoFactorBackupCodesView: View {
                                 .stroke(tfaColor.opacity(0.2), lineWidth: 1)
                         )
                 )
-                .onChange(of: verificationCode) { _, newValue in
+                .adaptiveOnChange(of: verificationCode) { _, newValue in
                     verificationCode = String(newValue.prefix(6).filter(\.isNumber))
                 }
 

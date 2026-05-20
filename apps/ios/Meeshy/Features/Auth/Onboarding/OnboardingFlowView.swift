@@ -75,7 +75,7 @@ struct OnboardingFlowView: View {
         }
         .ignoresSafeArea(.keyboard, edges: .bottom)
         .onAppear { setupKeyboardObserver() }
-        .onChange(of: authManager.isAuthenticated) { _, authenticated in
+        .adaptiveOnChange(of: authManager.isAuthenticated) { _, authenticated in
             if authenticated {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     onComplete?()

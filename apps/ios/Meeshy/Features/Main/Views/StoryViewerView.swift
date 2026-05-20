@@ -317,7 +317,7 @@ struct StoryViewerView: View {
                 SocialSocketManager.shared.leavePostRoom(postId: story.id)
             }
         }
-        .onChange(of: scenePhase) { _, newPhase in
+        .adaptiveOnChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
                 timerCancellable?.cancel()
                 slideTimer.reset()
@@ -328,7 +328,7 @@ struct StoryViewerView: View {
                 isPresented = false
             }
         }
-        .onChange(of: currentStoryIndex) { oldValue, _ in
+        .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory = currentGroup.flatMap { group in
@@ -336,7 +336,7 @@ struct StoryViewerView: View {
             }
             transitionPostRoom(from: previousStory, to: currentStory)
         }
-        .onChange(of: currentGroupIndex) { oldValue, _ in
+        .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory: StoryItem? = (oldValue >= 0 && oldValue < groups.count &&

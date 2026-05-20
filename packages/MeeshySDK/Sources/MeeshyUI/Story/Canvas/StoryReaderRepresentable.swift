@@ -211,11 +211,10 @@ extension StoryReaderRepresentable {
     // MARK: - Private helpers
 
     private static func thumbnailColor(for mimeType: String?) -> String {
-        guard let mime = mimeType else { return "4ECDC4" }
-        if mime.hasPrefix("video/") { return "FF6B6B" }
-        if mime.hasPrefix("audio/") { return "9B59B6" }
-        if mime.hasPrefix("application/") { return "F8B500" }
-        return "4ECDC4"
+        // Defers to `AttachmentKind.hexTintColor` (MeeshySDK) — the single
+        // source of truth for the attachment palette. Same call used by
+        // `PostModels.thumbnailColorForMime`.
+        AttachmentKind(mimeType: mimeType ?? "").hexTintColor
     }
 }
 

@@ -1455,34 +1455,14 @@ class ConversationViewModel: ObservableObject {
         guard !isSending else { return false }
         isSending = true
 
-        // Build ReplyReference from quoted message or story
-        var replyRef: ReplyReference?
-        if let storyRef = storyReplyReference {
-            replyRef = storyRef
-        } else if let replyId = replyToId, let quoted = messages.first(where: { $0.id == replyId }) {
-            let previewText: String = {
-                if !quoted.content.isEmpty { return quoted.content }
-                if let first = quoted.attachments.first {
-                    switch first.type {
-                    case .image: return "\u{1F4F7} Photo"
-                    case .video: return "\u{1F3AC} Video"
-                    case .audio: return "\u{1F3B5} Message vocal"
-                    case .file: return "\u{1F4CE} Fichier"
-                    default: return "\u{1F4CE} Piece jointe"
-                    }
-                }
-                return ""
-            }()
-            replyRef = ReplyReference(
-                messageId: replyId,
-                authorName: quoted.senderName ?? "Utilisateur",
-                previewText: previewText,
-                isMe: quoted.isMe,
-                authorColor: quoted.senderColor,
-                attachmentType: quoted.attachments.first?.type.rawValue,
-                attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl
-            )
-        }
+        // Build ReplyReference from quoted message or story via la helper
+        // unifiee — meme logique que `insertOptimisticMediaMessage` pour
+        // garantir que la quoted-reply card apparait identiquement quel que
+        // soit le chemin d'envoi (texte-seul vs media).
+        let replyRef = makeReplyReference(
+            storyReplyReference: storyReplyReference,
+            replyToId: replyToId
+        )
 
         // Optimistic insert.
         // Phase 4 §6.1 — local id is the canonical `cid_<uuid v4 lowercase>`
@@ -1781,6 +1761,50 @@ class ConversationViewModel: ObservableObject {
     /// Linguistique pour les utilisateurs non-francophones — l'affichage
     /// optimiste afficherait le mauvais drapeau de langue jusqu'à la
     /// réconciliation serveur.
+    /// Construit le `ReplyReference` riche destine a la bulle optimiste a
+    /// partir d'un `replyToId` (message normal) ou d'un `storyReplyReference`
+    /// pre-fourni (story reply). Single source of truth pour les deux chemins
+    /// d'envoi : texte-seul (sendMessage) et avec attachements
+    /// (insertOptimisticMediaMessage).
+    ///
+    /// L'absence de cette helper laissait `replyToJson` a nil dans le chemin
+    /// avec attachements, ce qui faisait que la quoted-reply card n'apparaissait
+    /// jamais dans la bulle optimiste pour les replies audio/video/image/galerie.
+    private func makeReplyReference(
+        storyReplyReference: ReplyReference?,
+        replyToId: String?
+    ) -> ReplyReference? {
+        if let storyRef = storyReplyReference {
+            return storyRef
+        }
+        guard let rid = replyToId,
+              let quoted = messages.first(where: { $0.id == rid }) else {
+            return nil
+        }
+        let previewText: String = {
+            if !quoted.content.isEmpty { return quoted.content }
+            if let first = quoted.attachments.first {
+                switch first.type {
+                case .image: return "\u{1F4F7} Photo"
+                case .video: return "\u{1F3AC} Video"
+                case .audio: return "\u{1F3B5} Message vocal"
+                case .file: return "\u{1F4CE} Fichier"
+                default: return "\u{1F4CE} Piece jointe"
+                }
+            }
+            return ""
+        }()
+        return ReplyReference(
+            messageId: rid,
+            authorName: quoted.senderName ?? "Utilisateur",
+            previewText: previewText,
+            isMe: quoted.isMe,
+            authorColor: quoted.senderColor,
+            attachmentType: quoted.attachments.first?.type.rawValue,
+            attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl
+        )
+    }
+
     func insertOptimisticMediaMessage(
         tempId: String,
         content: String,
@@ -1793,7 +1817,15 @@ class ConversationViewModel: ObservableObject {
     ) {
         let now = Date()
         let attachmentsJson = attachments.isEmpty ? nil : try? JSONEncoder().encode(attachments)
-        let replyToJson = replyReference.flatMap { try? JSONEncoder().encode($0) }
+        // Construit le ReplyReference riche AVANT l'insert : si `replyReference`
+        // est fourni (story reply), on l'utilise ; sinon on resout via
+        // `replyToId` depuis `self.messages`. Garantit que `replyToJson` est
+        // non-nil des que `replyToId` ou `replyReference` n'est pas nil.
+        let resolvedReplyRef = makeReplyReference(
+            storyReplyReference: replyReference,
+            replyToId: replyToId
+        )
+        let replyToJson = resolvedReplyRef.flatMap { try? JSONEncoder().encode($0) }
         let resolvedOriginalLanguage = originalLanguage ?? defaultComposeLanguage()
         let record = MessageRecord(
             localId: tempId, serverId: nil,

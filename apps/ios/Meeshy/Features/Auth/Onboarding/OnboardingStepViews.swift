@@ -610,7 +610,7 @@ struct StepPasswordView: View {
         .onAppear {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { focusedField = .password }
         }
-        .onChange(of: viewModel.password) { _, newValue in
+        .adaptiveOnChange(of: viewModel.password) { _, newValue in
             if newValue.count >= 8 {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { focusedField = .confirm }
             }
@@ -1011,7 +1011,7 @@ struct StepProfileView: View {
             .padding(.bottom, 100)
         }
         .photosPicker(isPresented: $showPhotoPicker, selection: $selectedPhotoItem, matching: .images)
-        .onChange(of: selectedPhotoItem) { _, item in
+        .adaptiveOnChange(of: selectedPhotoItem) { _, item in
             Task {
                 if let data = try? await item?.loadTransferable(type: Data.self),
                    let image = UIImage(data: data) {

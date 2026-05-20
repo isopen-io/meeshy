@@ -229,10 +229,12 @@ extension FeedPostCard {
         // policy too. SharedAVPlayerManager.load() no longer has a streaming
         // fallback — an unwrapped InlineVideoPlayerView with default
         // availability would silently fail on a cache miss.
+        // `theme` du main FeedPostCard est `private`, inaccessible depuis cette
+        // extension. Lire directement le singleton (équivalent à `theme`).
         return VideoMediaView(
             attachment: attachment,
             accentColor: accentColor,
-            isDark: theme.mode.isDark
+            isDark: ThemeManager.shared.mode.isDark
         )
         .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 280)
         .clipShape(RoundedRectangle(cornerRadius: 12))

@@ -70,13 +70,13 @@ public struct MeeshyAudioEditorView: View {
         .animation(.spring(response: 0.34, dampingFraction: 0.86), value: controller.mode)
         .animation(.easeInOut(duration: 0.2), value: controller.isProcessing)
         .task { await controller.prepare() }
-        .onChange(of: controller.isPreparing) { _, preparing in
+        .adaptiveOnChange(of: controller.isPreparing) { _, preparing in
             if !preparing { loadActiveAudio() }
         }
-        .onChange(of: controller.document.cursor) { _, _ in
+        .adaptiveOnChange(of: controller.document.cursor) { _, _ in
             loadActiveAudio()
         }
-        .onChange(of: currentTime) { _, time in handlePlaybackTick(time) }
+        .adaptiveOnChange(of: currentTime) { _, time in handlePlaybackTick(time) }
         .onDisappear {
             teardownPlayer()
             deactivateAudioSession()

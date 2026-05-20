@@ -555,18 +555,32 @@ public actor MessagePersistenceActor {
         deliveredToAllAt: Date?,
         readByAllAt: Date?,
         updatedAt: Date
-    ) throws {
-        var affectedConversationId: String?
+    ) async throws {
         // Snapshot the optimistic attachments BEFORE the UPDATE overwrites
-        // them — adoption logic below needs to pair each new attachment with
-        // the optimistic file:// URL we just replaced.
-        var optimisticAttachmentsJson: Data?
-        try dbWriter.write { db in
+        // them — adoption pairs each new attachment with the optimistic
+        // file:// URL we just replaced. A pre-write read is safe: adoption
+        // is idempotent and the worst race (row gone) yields a no-op.
+        // Return values from the read block so the closure stays @Sendable —
+        // Swift 6 picks the async overload of `dbWriter.write` in async actor
+        // context, which forbids `inout`-style captures.
+        let snapshot: (json: Data?, convId: String?) = try await dbWriter.write { db -> (Data?, String?) in
             let existing = try MessageRecord
                 .filter(Column("localId") == localId)
                 .fetchOne(db)
-            affectedConversationId = existing?.conversationId
-            optimisticAttachmentsJson = existing?.attachmentsJson
+            return (existing?.attachmentsJson, existing?.conversationId)
+        }
+        let optimisticAttachmentsJson = snapshot.json
+        let affectedConversationId = snapshot.convId
+        // PR B+: adopt the local bytes into the canonical typed cache
+        // BEFORE the UPDATE + store refresh so the very first re-render
+        // that observes `fileUrl = https://...` finds the bytes already
+        // sitting under `SHA256(https://...)`. The `file://` URL never
+        // outlives the optimistic phase — the HTTPS URL becomes the
+        // canonical cache key the moment the server hands it back.
+        if let newAtts = attachmentsJson, let oldAtts = optimisticAttachmentsJson {
+            await Self.adoptChangedAttachments(oldJson: oldAtts, newJson: newAtts)
+        }
+        try await dbWriter.write { db in
             // `COALESCE(?, col)` keeps the existing blob when the caller passes
             // `nil`. A server ACK echo never *removes* a message's attachments
             // or reactions; a media echo that races server-side processing can
@@ -594,15 +608,6 @@ public actor MessagePersistenceActor {
                     updatedAt, localId
                 ]
             )
-        }
-        // PR B: adopt any optimistic local attachments into the canonical
-        // typed cache so the very next read of the new HTTPS URL is an
-        // instant disk hit. Fire-and-forget — adoption is purely additive
-        // and must not block the ACK path.
-        if let newAtts = attachmentsJson, let oldAtts = optimisticAttachmentsJson {
-            Task.detached(priority: .utility) {
-                await Self.adoptChangedAttachments(oldJson: oldAtts, newJson: newAtts)
-            }
         }
         if let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
