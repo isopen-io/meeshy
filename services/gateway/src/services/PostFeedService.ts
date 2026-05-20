@@ -1,38 +1,11 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-
-const authorSelect = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatar: true,
-};
-
-const mediaSelect = {
-  id: true,
-  fileName: true,
-  originalName: true,
-  mimeType: true,
-  fileSize: true,
-  fileUrl: true,
-  width: true,
-  height: true,
-  thumbnailUrl: true,
-  thumbHash: true,
-  duration: true,
-  order: true,
-  caption: true,
-  alt: true,
-  language: true,
-  variantOf: true,
-  transcription: true,
-  translations: true,
-};
+import { authorSelect, mediaInclude } from './posts/postIncludes';
 
 const feedPostInclude = {
   author: { select: authorSelect },
-  media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
+  media: mediaInclude,
   comments: {
     where: { isDeleted: false, OR: [{ parentId: null }, { parentId: { isSet: false } }] },
     select: {
@@ -59,7 +32,7 @@ const feedPostInclude = {
       audioUrl: true,
       originalRepostOfId: true,
       author: { select: authorSelect },
-      media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
+      media: mediaInclude,
       createdAt: true,
       likeCount: true,
       commentCount: true,

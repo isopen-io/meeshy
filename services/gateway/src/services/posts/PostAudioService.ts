@@ -14,42 +14,15 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ZMQSingleton } from '../ZmqSingleton';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { getLanguagesWithTranslation } from '../../utils/languages';
+import { authorSelect, mediaInclude } from './postIncludes';
 
 const log = enhancedLogger.child({ module: 'PostAudioService' });
 
 // Select used when fetching a post after updating PostMedia transcription,
 // mirrors PostService.postInclude to produce a consistent Post shape.
-const authorSelect = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatar: true,
-} as const;
-
-const mediaSelect = {
-  id: true,
-  fileName: true,
-  originalName: true,
-  mimeType: true,
-  fileSize: true,
-  fileUrl: true,
-  width: true,
-  height: true,
-  thumbnailUrl: true,
-  thumbHash: true,
-  duration: true,
-  order: true,
-  caption: true,
-  alt: true,
-  language: true,
-  variantOf: true,
-  transcription: true,
-  translations: true,
-} as const;
-
 const postInclude = {
   author: { select: authorSelect },
-  media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
+  media: mediaInclude,
   comments: {
     where: { isDeleted: false, parentId: null },
     select: {
@@ -74,7 +47,7 @@ const postInclude = {
       audioUrl: true,
       originalRepostOfId: true,
       author: { select: authorSelect },
-      media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
+      media: mediaInclude,
       createdAt: true,
       likeCount: true,
       commentCount: true,

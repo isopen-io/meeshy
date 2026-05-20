@@ -1,12 +1,6 @@
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-
-const authorSelect = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatar: true,
-};
+import { authorSelect } from './posts/postIncludes';
 
 export class PostCommentService {
   constructor(private readonly prisma: PrismaClient) {}

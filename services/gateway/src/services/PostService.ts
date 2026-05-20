@@ -9,6 +9,7 @@ import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage'
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
+import { authorSelect, mediaSelect, mediaInclude } from './posts/postIncludes';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -49,40 +50,10 @@ function detectLanguage(text: string): string {
   return 'en';
 }
 
-// Select fields for author
-const authorSelect = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatar: true,
-};
-
-// Select fields for media
-const mediaSelect = {
-  id: true,
-  fileName: true,
-  originalName: true,
-  mimeType: true,
-  fileSize: true,
-  fileUrl: true,
-  width: true,
-  height: true,
-  thumbnailUrl: true,
-  thumbHash: true,
-  duration: true,
-  order: true,
-  caption: true,
-  alt: true,
-  language: true,
-  variantOf: true,
-  transcription: true,
-  translations: true,
-};
-
-// Base post include
+// Base post include — authorSelect / mediaSelect are shared (./posts/postIncludes)
 const postInclude = {
   author: { select: authorSelect },
-  media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
+  media: mediaInclude,
   comments: {
     where: { isDeleted: false, OR: [{ parentId: null }, { parentId: { isSet: false } }] },
     select: {
@@ -109,7 +80,7 @@ const postInclude = {
       audioUrl: true,
       originalRepostOfId: true,
       author: { select: authorSelect },
-      media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
+      media: mediaInclude,
       createdAt: true,
       likeCount: true,
       commentCount: true,
@@ -842,7 +813,7 @@ export class PostService {
   ) {
     const original = await this.prisma.post.findFirst({
       where: { id: postId, isDeleted: false },
-      include: { media: { select: mediaSelect, orderBy: { order: 'asc' as const } } },
+      include: { media: mediaInclude },
     });
     if (!original) return null;
 
