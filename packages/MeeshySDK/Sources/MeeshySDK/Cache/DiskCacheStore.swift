@@ -118,6 +118,52 @@ public actor DiskCacheStore: ReadableCacheStore {
         fileTimestamps[fileKey] = Date()
     }
 
+    // MARK: - Adoption (PR B — optimistic local file → canonical cache key)
+
+    /// Adopts an existing local file as the cached entry for `canonicalKey`.
+    /// Move-if-same-volume (atomic), fallback copy + remove. Idempotent: if the
+    /// key already exists on disk, the source is left alone (cached version wins).
+    /// No memory-cache seeding: avoids blocking `Data(contentsOf:)` in the actor;
+    /// audio/video will populate the NSCache on first `data(for:)` (disk hit).
+    public func adopt(localFile localURL: URL, for canonicalKey: String) async {
+        guard fileManager.fileExists(atPath: localURL.path) else { return }
+
+        let key = Self.fileKey(for: canonicalKey)
+        let destination = diskFilePath(for: key)
+
+        if fileManager.fileExists(atPath: destination.path) {
+            return
+        }
+
+        do {
+            try fileManager.moveItem(at: localURL, to: destination)
+        } catch {
+            do {
+                try fileManager.copyItem(at: localURL, to: destination)
+                try? fileManager.removeItem(at: localURL)
+            } catch {
+                logger.error("adopt failed for key \(key): \(error.localizedDescription)")
+                return
+            }
+        }
+        try? fileManager.setAttributes([.modificationDate: Date()], ofItemAtPath: destination.path)
+        fileTimestamps[key] = Date()
+    }
+
+    /// Image variant of `adopt`: also seeds the static UIImage cache via
+    /// `cacheImageForPreview` so `ProgressiveCachedImage` renders instantly on
+    /// the next display without round-tripping through downsampling.
+    public func adoptImage(localFile localURL: URL, for canonicalKey: String) async {
+        let alreadyCached = fileManager.fileExists(atPath: diskFilePath(for: Self.fileKey(for: canonicalKey)).path)
+        await adopt(localFile: localURL, for: canonicalKey)
+        guard !alreadyCached else { return }
+
+        let key = Self.fileKey(for: canonicalKey)
+        let destination = diskFilePath(for: key)
+        guard let image = UIImage(contentsOfFile: destination.path) else { return }
+        DiskCacheStore.cacheImageForPreview(image, key: canonicalKey)
+    }
+
     // MARK: - Queries
 
     public func localFileURL(for key: String) -> URL? {
