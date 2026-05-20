@@ -63,7 +63,7 @@ public struct MeeshyVideoEditorView: View {
         .animation(.easeInOut(duration: 0.25), value: viewModel.banner)
         .task { await viewModel.load() }
         .onDisappear { viewModel.teardown() }
-        .onChange(of: scenePhase) { _, phase in viewModel.handleScenePhase(phase) }
+        .adaptiveOnChange(of: scenePhase) { _, phase in viewModel.handleScenePhase(phase) }
         .alert(
             "Reprendre l'édition ?",
             isPresented: Binding(

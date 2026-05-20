@@ -151,12 +151,14 @@ public struct StoryComposerView: View {
     }
 
     private var viewportPinchGesture: some Gesture {
-        MagnifyGesture()
+        // MagnificationGesture (iOS 13+) au lieu de MagnifyGesture (iOS 17+).
+        // `value` est directement le CGFloat (pas via .magnification).
+        MagnificationGesture()
             .updating($viewportPinchDelta) { value, state, _ in
-                state = value.magnification
+                state = value
             }
             .onEnded { value in
-                let newScale = min(4.0, max(0.5, viewModel.canvasScale * value.magnification))
+                let newScale = min(4.0, max(0.5, viewModel.canvasScale * value))
                 withAnimation(.spring(response: 0.2)) {
                     viewModel.canvasScale = newScale
                     if newScale <= 1.0 { viewModel.canvasOffset = .zero }
@@ -418,9 +420,7 @@ public struct StoryComposerView: View {
             TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
                 .presentationDetents([.fraction(0.45), .large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
-                .presentationContentInteraction(.scrolls)
-                .presentationCornerRadius(28)
+                .modifier(StoryTimelinePresentationStyle())
         }
         .adaptiveOnChange(of: viewModel.isTimelineVisible) { _, isVisible in
             if isVisible { viewModel.loadCurrentSlideIntoTimeline() }
