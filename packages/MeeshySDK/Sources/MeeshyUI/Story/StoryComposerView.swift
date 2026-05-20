@@ -1455,6 +1455,19 @@ public struct StoryComposerView: View {
                         let secs = CMTimeGetSeconds(cmDur)
                         if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
                     }
+                    // Mesure de l'aspectRatio natural de la vidéo via le
+                    // track vidéo (naturalSize × preferredTransform). Sans
+                    // ça, la layer rend la vidéo en carré 540×540 (cf. fix
+                    // B1 review Opus 2026-05-20).
+                    var videoAspectRatio: Double?
+                    if let track = try? await asset.loadTracks(withMediaType: .video).first,
+                       let natural = try? await track.load(.naturalSize),
+                       let transform = try? await track.load(.preferredTransform) {
+                        let effective = natural.applying(transform)
+                        let w = abs(effective.width)
+                        let h = abs(effective.height)
+                        if w > 0, h > 0 { videoAspectRatio = Double(w / h) }
+                    }
                     mediaLoadProgress = 1.0
                     await MainActor.run {
                         viewModel.loadedVideoURLs[objectId] = tempURL
@@ -1466,6 +1479,9 @@ public struct StoryComposerView: View {
                             // the file. Same bridge as the image path — without this,
                             // media.mediaURL is nil and the video layer has no source.
                             viewModel.setMediaURL(id: obj.id, url: tempURL.absoluteString, slideId: targetSlideId)
+                            if let ratio = videoAspectRatio {
+                                viewModel.setMediaAspectRatio(id: obj.id, aspectRatio: ratio, slideId: targetSlideId)
+                            }
                             if obj.id != objectId {
                                 viewModel.loadedVideoURLs.removeValue(forKey: objectId)
                                 viewModel.loadedImages.removeValue(forKey: objectId)
@@ -1509,6 +1525,13 @@ public struct StoryComposerView: View {
                         // between the in-memory UIImage and the CALayer pipeline.
                         if let fileURL = imageFileURL {
                             viewModel.setMediaURL(id: obj.id, url: fileURL.absoluteString, slideId: targetSlideId)
+                        }
+                        // AspectRatio natural depuis l'UIImage.size — sans
+                        // ça la layer rend l'image en carré 540×540 (fix B1).
+                        let imgSize = image.size
+                        if imgSize.width > 0, imgSize.height > 0 {
+                            let ratio = Double(imgSize.width / imgSize.height)
+                            viewModel.setMediaAspectRatio(id: obj.id, aspectRatio: ratio, slideId: targetSlideId)
                         }
                     }
                 }

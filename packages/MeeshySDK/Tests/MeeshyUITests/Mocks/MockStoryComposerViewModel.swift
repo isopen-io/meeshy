@@ -275,6 +275,13 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
         _setMediaURLLastArgs = (id, url, slideId)
     }
 
+    var _setMediaAspectRatioCalls: Int = 0
+    var _setMediaAspectRatioLastArgs: (id: String, aspectRatio: Double, slideId: String?)?
+    func setMediaAspectRatio(id: String, aspectRatio: Double, slideId: String?) {
+        _setMediaAspectRatioCalls += 1
+        _setMediaAspectRatioLastArgs = (id, aspectRatio, slideId)
+    }
+
     var _addAudioObjectCalls: Int = 0
     var stubAddAudioObject: StoryAudioPlayerObject?
     @discardableResult

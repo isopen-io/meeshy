@@ -209,6 +209,7 @@ protocol StoryComposerProviding: AnyObject {
     func addMediaObject(kind: StoryMediaKind, toSlideId: String?) -> StoryMediaObject?
     func setMediaDuration(id: String, duration: Float, slideId: String?)
     func setMediaURL(id: String, url: String, slideId: String?)
+    func setMediaAspectRatio(id: String, aspectRatio: Double, slideId: String?)
     @discardableResult
     func addAudioObject() -> StoryAudioPlayerObject?
     func deleteElement(id: String)
@@ -479,17 +480,26 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     /// `slideImages[id]` image but no real background media object. Returns
     /// `nil` when the slide either has no bg image, or already has a real
     /// background media object (in which case the real one wins).
+    ///
+    /// `bgImageSize` est la taille naturelle de l'image bg (typiquement via
+    /// `slideImages[slide.id]?.size`) — utilisée pour calculer l'aspectRatio
+    /// réel au lieu de forcer 1.0 (qui rendait l'image en carré 540×540).
     public static func makeSyntheticBgImageClip(for slide: StorySlide,
                                                 hasBgImage: Bool,
-                                                existingMediaObjects: [StoryMediaObject]) -> StoryMediaObject? {
+                                                existingMediaObjects: [StoryMediaObject],
+                                                bgImageSize: CGSize? = nil) -> StoryMediaObject? {
         guard hasBgImage else { return nil }
         guard !existingMediaObjects.contains(where: { $0.isBackground == true }) else { return nil }
+        let aspect: Double = {
+            guard let size = bgImageSize, size.width > 0, size.height > 0 else { return 1.0 }
+            return Double(size.width / size.height)
+        }()
         return StoryMediaObject(
             id: "\(syntheticTimelineClipIdPrefix)\(slide.id)",
             postMediaId: "_bg_image_\(slide.id)",
             mediaType: StoryMediaKind.image.rawValue,
             placement: "media",
-            aspectRatio: 1.0, // TODO Phase 2/3: compute real aspectRatio from asset
+            aspectRatio: aspect,
             x: 0.5, y: 0.5,
             scale: 1.0,
             rotation: 0,
@@ -515,7 +525,8 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         if let synthetic = Self.makeSyntheticBgImageClip(
             for: slide,
             hasBgImage: slideImages[slide.id] != nil,
-            existingMediaObjects: project.mediaObjects
+            existingMediaObjects: project.mediaObjects,
+            bgImageSize: slideImages[slide.id]?.size
         ) {
             var medias = project.mediaObjects
             medias.insert(synthetic, at: 0)
@@ -1014,6 +1025,30 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         medias[mediaIdx].mediaURL = url
         effects.mediaObjects = medias
         slides[targetIndex].effects = effects
+    }
+
+    /// Met à jour l'aspectRatio (width/height) d'un media. Appelé après le
+    /// pick PhotosPicker / record une fois que l'asset natural size est
+    /// mesurée via `UIImage.size` (image) ou `AVAssetTrack.naturalSize` +
+    /// `preferredTransform` (vidéo). Sans ça, l'aspectRatio reste à 1.0 et
+    /// la layer est rendue en carré 540x540 (cf. `baseMediaDesignSize`).
+    func setMediaAspectRatio(id: String, aspectRatio: Double, slideId: String? = nil) {
+        guard aspectRatio.isFinite, aspectRatio > 0 else { return }
+        let targetIndex: Int = {
+            if let slideId, let idx = slides.firstIndex(where: { $0.id == slideId }) {
+                return idx
+            }
+            return currentSlideIndex
+        }()
+        guard slides.indices.contains(targetIndex) else { return }
+        var effects = slides[targetIndex].effects
+        guard var medias = effects.mediaObjects,
+              let mediaIdx = medias.firstIndex(where: { $0.id == id }) else { return }
+        medias[mediaIdx].aspectRatio = aspectRatio
+        effects.mediaObjects = medias
+        slides[targetIndex].effects = effects
+        // Miroir dans le side-cache si d'autres surfaces le lisent.
+        mediaAspectRatios[id] = CGFloat(aspectRatio)
     }
 
     @discardableResult
