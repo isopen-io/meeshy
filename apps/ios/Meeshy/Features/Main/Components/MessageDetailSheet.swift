@@ -2474,10 +2474,33 @@ struct MessageDetailSheet: View {
     }
 
     private func relativeDate(_ date: Date) -> String {
-        let formatter = RelativeDateTimeFormatter()
-        formatter.locale = Locale(identifier: "fr_FR")
-        formatter.unitsStyle = .abbreviated
-        return formatter.localizedString(for: date, relativeTo: Date())
+        // RelativeDateTimeFormatter en `.abbreviated` produit "-21 h" sur
+        // iOS 26 (un préfixe "-" pour signaler le passé), ce qui se lit
+        // comme un timestamp négatif et n'a pas de sens en français. On
+        // formate à la main pour garder un rendu naturel "il y a 21 h".
+        let interval = Date().timeIntervalSince(date)
+        if interval < 0 {
+            // Date dans le futur (clock drift serveur) : fallback à la date locale.
+            let absolute = DateFormatter()
+            absolute.locale = Locale(identifier: "fr_FR")
+            absolute.dateStyle = .short
+            absolute.timeStyle = .short
+            return absolute.string(from: date)
+        }
+        if interval < 60 { return "à l'instant" }
+        if interval < 3_600 {
+            return "il y a \(Int(interval / 60)) min"
+        }
+        if interval < 86_400 {
+            return "il y a \(Int(interval / 3_600)) h"
+        }
+        if interval < 86_400 * 7 {
+            return "il y a \(Int(interval / 86_400)) j"
+        }
+        let absolute = DateFormatter()
+        absolute.locale = Locale(identifier: "fr_FR")
+        absolute.dateStyle = .short
+        return absolute.string(from: date)
     }
 }
 

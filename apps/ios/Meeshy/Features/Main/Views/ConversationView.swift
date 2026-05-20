@@ -955,6 +955,14 @@ struct ConversationView: View {
                     overlayState.detailSheetMessage = msg
                     overlayState.detailSheetInitialTab = .views
                 },
+                onShowReadStatus: { messageId in
+                    // Tap sur les coches (✓ / ✓✓ / ✓✓ bleu) d'un message envoyé.
+                    // Ouvre la sheet detail sur l'onglet "Vues" pour consulter
+                    // qui a reçu / qui a lu — sans passer par le long-press.
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .views
+                },
                 onShowReactions: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.detailSheetMessage = msg

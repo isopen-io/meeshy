@@ -35,6 +35,7 @@ public struct ImageEditorModeSwitcher: View, Equatable {
             segment(for: .pro, label: "Pro", systemImage: "slider.horizontal.3")
         }
         .padding(4)
+        .fixedSize(horizontal: true, vertical: false)
         .background(
             Capsule()
                 .fill(isDark
@@ -64,7 +65,7 @@ public struct ImageEditorModeSwitcher: View, Equatable {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .frame(minWidth: 76)
+            .frame(minWidth: 72)
             .foregroundStyle(activeForeground(isActive: isActive))
             .background(
                 Capsule()

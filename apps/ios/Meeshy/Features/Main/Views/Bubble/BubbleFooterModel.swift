@@ -68,7 +68,8 @@ struct BubbleFooterActions {
     /// Tap sur les coches de livraison (✓ / ✓✓ / ✓✓ bleu). Quand fourni, le
     /// `BubbleDeliveryCheck` devient un bouton qui ouvre le sheet detail sur
     /// l'onglet "Vues" pour consulter le statut de reception/lecture detail.
-    /// Wirage : `ConversationView+MessageRow` -> `overlayState.detailSheetMessage`
+    /// Wirage UIKit-bridged : `MessageListViewController` -> `MessageListView`
+    /// -> `ConversationView` (onShowReadStatus) -> `overlayState.detailSheetMessage`
     /// + `.detailSheetInitialTab = .views`.
     var onShowReadStatus: (() -> Void)?
 

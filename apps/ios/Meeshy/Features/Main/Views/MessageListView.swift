@@ -355,6 +355,10 @@ struct MessageListView: UIViewControllerRepresentable {
     var onOpenReactPicker: ((String) -> Void)?
     /// Open the message detail sheet on the "info / views" tab.
     var onShowMessageInfo: ((String) -> Void)?
+    /// Tap on the delivery checkmarks (✓ / ✓✓ / ✓✓ bleu) of a sent message —
+    /// opens the detail sheet directly on the "vues" tab so the author can
+    /// inspect read receipts without going through the long-press menu.
+    var onShowReadStatus: ((String) -> Void)?
     /// Open the message detail sheet on the "reactions" tab.
     var onShowReactions: ((String) -> Void)?
     /// Open the message detail sheet on the "language / translation" tab.
@@ -404,6 +408,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onToggleReaction = onToggleReaction
         vc.onOpenReactPicker = onOpenReactPicker
         vc.onShowMessageInfo = onShowMessageInfo
+        vc.onShowReadStatus = onShowReadStatus
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
         vc.onMediaTap = onMediaTap
@@ -449,6 +454,7 @@ struct MessageListView: UIViewControllerRepresentable {
         vc.onToggleReaction = onToggleReaction
         vc.onOpenReactPicker = onOpenReactPicker
         vc.onShowMessageInfo = onShowMessageInfo
+        vc.onShowReadStatus = onShowReadStatus
         vc.onShowReactions = onShowReactions
         vc.onShowTranslationDetail = onShowTranslationDetail
         vc.onMediaTap = onMediaTap
