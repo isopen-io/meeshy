@@ -36,7 +36,15 @@
  *                                      preview an attachment when it is
  *                                      embedded inside a forwarded message
  *                                      (id + mime + thumbnail + url).
+ *
+ * Every select is wrapped in `Prisma.validator<Prisma.MessageAttachmentSelect>()`
+ * so a typo or a stale field name fails the TypeScript build instead of
+ * failing at runtime. The `AttachmentMediaPayload` / `AttachmentFullPayload`
+ * / `AttachmentForwardPreviewPayload` type exports give every consumer a
+ * fully-typed Prisma result — no `as any` cast.
  */
+
+import { Prisma } from '@meeshy/shared/prisma/client';
 
 /**
  * Render-ready attachment shape.
@@ -58,7 +66,7 @@
  * multilingual audio/video without re-fetching the attachment from another
  * endpoint.
  */
-export const attachmentMediaSelect = {
+export const attachmentMediaSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
   id: true,
   messageId: true,
   fileName: true,
@@ -85,7 +93,7 @@ export const attachmentMediaSelect = {
   createdAt: true,
   transcription: true,
   translations: true,
-} as const;
+});
 
 /**
  * Render-ready + consumption-tracking + security envelope.
@@ -104,7 +112,7 @@ export const attachmentMediaSelect = {
  *   Encryption:    isEncrypted, encryptionMode, encryptionIv,
  *                  encryptionAuthTag
  */
-export const attachmentFullSelect = {
+export const attachmentFullSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
   ...attachmentMediaSelect,
   forwardedFromAttachmentId: true,
   isForwarded: true,
@@ -125,7 +133,7 @@ export const attachmentFullSelect = {
   encryptionMode: true,
   encryptionIv: true,
   encryptionAuthTag: true,
-} as const;
+});
 
 /**
  * Bare attachment shape for the "this message was forwarded" preview.
@@ -138,9 +146,28 @@ export const attachmentFullSelect = {
  * Do NOT add transcription/translations here — forward chips don't render
  * playable media; the user taps through to the full message for playback.
  */
-export const attachmentForwardPreviewSelect = {
+export const attachmentForwardPreviewSelect = Prisma.validator<Prisma.MessageAttachmentSelect>()({
   id: true,
   mimeType: true,
   thumbnailUrl: true,
   fileUrl: true,
-} as const;
+});
+
+// ============================================================================
+// Derived payload types — consumers get fully-typed Prisma results, no casts.
+// ============================================================================
+
+/** Render-ready attachment payload (file + codecs + Prisme). */
+export type AttachmentMediaPayload = Prisma.MessageAttachmentGetPayload<{
+  select: typeof attachmentMediaSelect;
+}>;
+
+/** Full attachment payload (= media + counters + view-once + encryption). */
+export type AttachmentFullPayload = Prisma.MessageAttachmentGetPayload<{
+  select: typeof attachmentFullSelect;
+}>;
+
+/** Forward chip preview payload — just enough to render the chip. */
+export type AttachmentForwardPreviewPayload = Prisma.MessageAttachmentGetPayload<{
+  select: typeof attachmentForwardPreviewSelect;
+}>;

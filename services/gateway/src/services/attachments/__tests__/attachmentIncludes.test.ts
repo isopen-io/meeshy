@@ -3,8 +3,58 @@ import {
   attachmentFullSelect,
   attachmentForwardPreviewSelect,
 } from '../attachmentIncludes';
+import { messageAttachmentSchema } from '@meeshy/shared/types/api-schemas';
 
 describe('attachments/attachmentIncludes — canonical shared selects', () => {
+  describe('Fastify schema alignment (R5)', () => {
+    // Fastify silently strips response fields not declared in the response
+    // schema. Pre-R5, attachmentFullSelect requested 7 fields that the schema
+    // didn't declare (consumedCount, effectFlags, listenedByAllAt,
+    // watchedByAllAt, encryptionMode, encryptionIv, encryptionAuthTag) —
+    // gateway burnt DB I/O for fields that never reached the wire, and E2EE
+    // clients couldn't decrypt attachments served by routes that applied
+    // messageAttachmentSchema as their response shape. This test guards
+    // against future omissions.
+    const schemaKeys = new Set(Object.keys(messageAttachmentSchema.properties));
+
+    it('attachmentMediaSelect ⊆ messageAttachmentSchema.properties', () => {
+      const missing = Object.keys(attachmentMediaSelect).filter((k) => !schemaKeys.has(k));
+      expect(missing).toEqual([]);
+    });
+
+    it('attachmentFullSelect ⊆ messageAttachmentSchema.properties (no stripped fields)', () => {
+      const missing = Object.keys(attachmentFullSelect).filter((k) => !schemaKeys.has(k));
+      expect(missing).toEqual([]);
+    });
+
+    it('attachmentForwardPreviewSelect ⊆ messageAttachmentSchema.properties', () => {
+      const missing = Object.keys(attachmentForwardPreviewSelect).filter(
+        (k) => !schemaKeys.has(k),
+      );
+      expect(missing).toEqual([]);
+    });
+
+    it('messageAttachmentSchema explicitly declares the E2EE envelope', () => {
+      // These fields are mandatory for any E2EE-capable client. Removing
+      // them from the schema would silently break attachment decryption.
+      for (const f of ['encryptionMode', 'encryptionIv', 'encryptionAuthTag', 'isEncrypted']) {
+        expect(messageAttachmentSchema.properties).toHaveProperty(f);
+      }
+    });
+
+    it('messageAttachmentSchema explicitly declares the denormalized counters', () => {
+      for (const f of [
+        'viewedCount',
+        'downloadedCount',
+        'consumedCount',
+        'listenedByAllAt',
+        'watchedByAllAt',
+      ]) {
+        expect(messageAttachmentSchema.properties).toHaveProperty(f);
+      }
+    });
+  });
+
   describe('attachmentMediaSelect — Prisme Linguistique guarantees', () => {
     it('includes transcription + translations (the two Prisme JSON fields)', () => {
       // R4 closed five concurrent drifts where these were silently dropped

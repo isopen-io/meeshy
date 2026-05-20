@@ -323,15 +323,25 @@ export const messageAttachmentSchema = {
     },
     moderationReason: { type: 'string', nullable: true, description: 'Moderation reason' },
 
-    // Delivery status
+    // Delivery status (whole-conversation timestamps + counters)
     deliveredToAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Delivered to all timestamp' },
     viewedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Viewed by all timestamp' },
     downloadedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Downloaded by all timestamp' },
+    listenedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Listened by all timestamp (audio only)' },
+    watchedByAllAt: { type: 'string', format: 'date-time', nullable: true, description: 'Watched by all timestamp (video only)' },
     viewedCount: { type: 'number', description: 'Number of viewers' },
     downloadedCount: { type: 'number', description: 'Number of downloads' },
+    consumedCount: { type: 'number', description: 'Number of users who listened (audio) or watched (video)' },
 
-    // Encryption (encryptionMode is only on Conversation, not Attachment)
+    // Effects bitfield (lifecycle / appearance / persistent flags)
+    // @see packages/shared/types/message-effect-flags.ts
+    effectFlags: { type: 'number', description: 'Bitfield for attachment effects' },
+
+    // Encryption (E2EE envelope — required for clients to decrypt the file)
     isEncrypted: { type: 'boolean', description: 'Whether encrypted' },
+    encryptionMode: { type: 'string', nullable: true, description: 'Encryption mode: e2ee, server, hybrid' },
+    encryptionIv: { type: 'string', nullable: true, description: 'Base64-encoded AES-GCM initialization vector (12 bytes)' },
+    encryptionAuthTag: { type: 'string', nullable: true, description: 'Base64-encoded AES-GCM authentication tag (16 bytes)' },
 
     // Timestamps
     createdAt: { type: 'string', format: 'date-time', description: 'Creation timestamp' },
