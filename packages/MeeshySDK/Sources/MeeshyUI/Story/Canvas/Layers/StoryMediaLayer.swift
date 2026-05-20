@@ -68,6 +68,13 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     /// une re-configure (live composer, scrub).
     private nonisolated(unsafe) var currentVideoLoadTask: Task<Void, Never>?
 
+    /// Génération token incrémenté à chaque `configureVideo` (et à chaque
+    /// `tearDownPlayback`). Une `Task` lancée avec la valeur `N` ne touche
+    /// plus la layer si le token a depuis incrémenté — protection race entre
+    /// `await videoLocalFileURLAwait` et `prune(keepIds:)` → `tearDownPlayback`
+    /// → re-`configure(...)` rapide sur le même layer.
+    private nonisolated(unsafe) var videoLoadGeneration: UInt64 = 0
+
     /// Placeholder CALayer affichant le ThumbHash décodé pendant le fetch
     /// vidéo. Retiré avec un fade out 200 ms quand l'AVPlayer est prêt.
     private nonisolated(unsafe) var placeholderLayer: CALayer?
@@ -289,6 +296,8 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // Annule le load précédent : un layer recyclé pour un autre média
         // ne doit pas stamp l'ancienne URL une fois résolue.
         currentVideoLoadTask?.cancel()
+        videoLoadGeneration &+= 1
+        let generation = videoLoadGeneration
 
         currentVideoLoadTask = Task { @MainActor [weak self] in
             // Garantit une URL file:// avant de toucher AVURLAsset — sinon
@@ -297,6 +306,10 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             let localURL = await CacheCoordinator.videoLocalFileURLAwait(for: remoteURL) ?? remoteURL
             if Task.isCancelled { return }
             guard let self else { return }
+            // Race guard : entre l'await et ici, `tearDownPlayback` ou un
+            // autre `configureVideo` peuvent avoir incrémenté la génération.
+            // Touch la layer SEULEMENT si le token correspond toujours.
+            guard self.videoLoadGeneration == generation else { return }
             self.attachPlayer(url: localURL, mode: mode, loop: media.loop)
         }
     }
@@ -398,6 +411,11 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     /// avant de relâcher la dernière référence forte.
     @MainActor
     public func tearDownPlayback() {
+        // Incrémente le token avant cancel : si une Task post-await arrive
+        // entre le cancel et le check `videoLoadGeneration == generation`,
+        // elle voit un token différent et s'auto-écarte. Verrou solide vs
+        // race entre `await videoLocalFileURLAwait` et tearDown.
+        videoLoadGeneration &+= 1
         currentVideoLoadTask?.cancel()
         currentVideoLoadTask = nil
         currentLoadTask?.cancel()

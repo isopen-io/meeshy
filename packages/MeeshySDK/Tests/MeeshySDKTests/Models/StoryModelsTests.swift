@@ -496,4 +496,51 @@ final class StoryModelsTests: XCTestCase {
         XCTAssertFalse(privateStory.isPublic)
         XCTAssertFalse(unknownStory.isPublic, "Unknown visibility must default to non-public to be safe")
     }
+
+    // MARK: - StoryTextObject defaults
+
+    func test_StoryTextObject_init_defaultFontSizeIs96() {
+        let text = StoryTextObject(text: "hello")
+        XCTAssertEqual(text.fontSize, 96.0,
+                       "New texts must default to fontSize 96 (~35pt rendu) for legibility")
+    }
+
+    func test_StoryTextObject_decoder_legacyWithoutFontSize_fallsBackTo64() throws {
+        let json = #"{"id":"t1","text":"legacy"}"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(StoryTextObject.self, from: json)
+        XCTAssertEqual(decoded.fontSize, 64.0,
+                       "Legacy stories without fontSize must keep the legacy 64 default for back-compat")
+    }
+
+    // MARK: - StoryMediaObject thumbHash
+
+    func test_StoryMediaObject_setThumbHash_clampsOverLimit() {
+        var media = StoryMediaObject(aspectRatio: 1.0)
+        let huge = String(repeating: "A", count: StoryMediaObject.maxThumbHashLength + 1)
+        media.thumbHash = huge
+        XCTAssertNil(media.thumbHash,
+                     "thumbHash > maxThumbHashLength must be rejected via didSet (defense-in-depth)")
+    }
+
+    func test_StoryMediaObject_setThumbHash_acceptsValidLength() {
+        var media = StoryMediaObject(aspectRatio: 1.0)
+        let valid = "ABCDEFGH"  // 8 chars — typical thumbHash size
+        media.thumbHash = valid
+        XCTAssertEqual(media.thumbHash, valid)
+    }
+
+    func test_StoryMediaObject_decoder_rejectsHugeThumbHash() throws {
+        let huge = String(repeating: "A", count: StoryMediaObject.maxThumbHashLength + 1)
+        let payload = #"{"id":"m1","mediaType":"image","aspectRatio":1.0,"thumbHash":"\#(huge)"}"#
+        let json = payload.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(StoryMediaObject.self, from: json)
+        XCTAssertNil(decoded.thumbHash,
+                     "Decoder must clamp oversized thumbHash to nil — guard against malicious payloads")
+    }
+
+    func test_StoryMediaObject_decoder_acceptsValidThumbHash() throws {
+        let json = #"{"id":"m1","mediaType":"image","aspectRatio":1.0,"thumbHash":"ABC123"}"#.data(using: .utf8)!
+        let decoded = try JSONDecoder().decode(StoryMediaObject.self, from: json)
+        XCTAssertEqual(decoded.thumbHash, "ABC123")
+    }
 }

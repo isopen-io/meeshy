@@ -477,7 +477,23 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     /// pour image). Généré au publish (cf. spec § 2.4). Sert de placeholder
     /// pendant le fetch via `applyThumbHashPlaceholder`. `nil` autorisé
     /// (back-compat stories antérieures, médias sans génération).
-    public var thumbHash: String?
+    ///
+    /// Format attendu : base64 d'un hash ThumbHash (~28-33 chars). Le setter
+    /// clamp à `maxThumbHashLength` (100 chars) — defense-in-depth contre un
+    /// payload malformé qui pourrait passer un blob de plusieurs MB dans la
+    /// slide effects JSON. Si > limite, le field est mis à `nil` (placeholder
+    /// noir au render — dégradation visuelle acceptable vs DB blow up).
+    public var thumbHash: String? {
+        didSet {
+            if let hash = thumbHash, hash.count > Self.maxThumbHashLength {
+                thumbHash = nil
+            }
+        }
+    }
+
+    /// Longueur max acceptée pour un thumbHash base64. ThumbHash spec produit
+    /// 5-25 bytes binaires ≈ 8-36 chars base64. Marge x3 pour tolérance future.
+    public static let maxThumbHashLength: Int = 100
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaURL, mediaType, placement
@@ -562,7 +578,11 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
         sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
         keyframes = try c.decodeIfPresent([StoryKeyframe].self, forKey: .keyframes)
-        thumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
+        // Decoder clamp : `didSet` ne se déclenche pas pendant init, donc on
+        // applique la limite explicitement pour protéger contre un payload
+        // malformé / malveillant (slide effects JSON externe → cache disque).
+        let rawThumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
+        thumbHash = (rawThumbHash?.count ?? 0) > Self.maxThumbHashLength ? nil : rawThumbHash
     }
 
     public func encode(to encoder: Encoder) throws {

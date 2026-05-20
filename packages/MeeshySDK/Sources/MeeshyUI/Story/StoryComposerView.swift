@@ -1583,13 +1583,17 @@ public struct StoryComposerView: View {
         // à 5s puis on continue avec thumbHash = nil pour ne pas bloquer.
         publishTask?.cancel()
         publishTask = Task { @MainActor in
+            // `defer` garantit le reset de @publishTask même si la Task est
+            // annulée mid-flight (handleDismiss / quit pendant le compute des
+            // thumbHashes). Sans ça, `publishTask != nil` reste true et le
+            // bouton publier reste disabled si l'utilisateur réessaye.
+            defer { publishTask = nil }
             syncCurrentSlideEffects()
             let snapshot = await snapshotAllSlides()
             guard !Task.isCancelled else { return }
             clearAllDrafts()
             HapticFeedback.success()
             onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility)
-            publishTask = nil
         }
     }
 
