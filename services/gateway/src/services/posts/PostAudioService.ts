@@ -10,6 +10,7 @@
 
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
+import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ZMQSingleton } from '../ZmqSingleton';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
@@ -171,6 +172,11 @@ export class PostAudioService {
       log.info('Post transcription ready — persisting', { postId, postMediaId, lang: transcription.language });
 
       const transcriptionPayload: Prisma.InputJsonValue = {
+        // `type` discriminator aligns persistence with the Fastify response
+        // schema (api-schemas.ts:343 declares enum ['audio','video',
+        // 'document','image']). Was missing pre-R6, leaving the
+        // discriminator implicit (clients inferred from mimeType).
+        type: 'audio',
         text: transcription.text,
         language: transcription.language,
         confidence: transcription.confidence ?? 0,
@@ -183,6 +189,21 @@ export class PostAudioService {
         senderVoiceIdentified: transcription.senderVoiceIdentified,
         senderSpeakerId: transcription.senderSpeakerId,
       };
+
+      // Defense-in-depth: validate the payload against the shared Zod
+      // schema before persisting. We TRUST the translator service (this
+      // path is server-server, not user-facing) so a validation failure
+      // doesn't block the write — but it surfaces a structured warning
+      // so any contract drift on the translator side is caught instantly.
+      const validation = parseAttachmentTranscription(transcriptionPayload);
+      if (validation.ok === false) {
+        log.warn('Transcription payload failed Zod validation — persisting anyway', {
+          postId,
+          postMediaId,
+          code: validation.code,
+          issues: validation.issues,
+        });
+      }
 
       await this.prisma.postMedia.update({
         where: { id: postMediaId },
