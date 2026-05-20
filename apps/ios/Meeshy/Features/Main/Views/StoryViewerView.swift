@@ -317,7 +317,7 @@ struct StoryViewerView: View {
                 SocialSocketManager.shared.leavePostRoom(postId: story.id)
             }
         }
-        .onChange(of: scenePhase) { _, newPhase in
+        .adaptiveOnChange(of: scenePhase) { _, newPhase in
             if newPhase == .background {
                 timerCancellable?.cancel()
                 slideTimer.reset()
@@ -328,7 +328,7 @@ struct StoryViewerView: View {
                 isPresented = false
             }
         }
-        .onChange(of: currentStoryIndex) { oldValue, _ in
+        .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory = currentGroup.flatMap { group in
@@ -336,7 +336,7 @@ struct StoryViewerView: View {
             }
             transitionPostRoom(from: previousStory, to: currentStory)
         }
-        .onChange(of: currentGroupIndex) { oldValue, _ in
+        .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory: StoryItem? = (oldValue >= 0 && oldValue < groups.count &&
@@ -555,11 +555,30 @@ struct StoryViewerView: View {
             return
         }
         let chain = preferredContentLanguagesForReader
+        // Build a postMediaId → URL resolver across the whole prefetch window.
+        // The audio mixer needs this to map `StoryAudioPlayerObject.postMediaId`
+        // to a streamable URL — without it, `reconfigureAudioForPlayback`
+        // skips every clip silently (logged via `Logger.storyAudio`).
+        // Images bypass the resolver via `CachedAsyncImage`, but audio has no
+        // equivalent prefetch path, so we MUST provide a resolver here.
+        let windowItems = stories
+        let mediaIndex: [String: URL] = Dictionary(
+            windowItems
+                .flatMap { $0.media }
+                .compactMap { m -> (String, URL)? in
+                    guard let raw = m.url, let url = URL(string: raw) else { return nil }
+                    return (m.id, url)
+                },
+            uniquingKeysWith: { first, _ in first }
+        )
+        let resolver: @Sendable (String) -> URL? = { postMediaId in
+            mediaIndex[postMediaId]
+        }
         let context = StoryReaderContext(
             preferredLanguages: chain,
             mute: isGlobalMuted,
             onCompletion: nil,
-            postMediaURLResolver: nil,
+            postMediaURLResolver: resolver,
             imageCache: nil
         )
         p.updateWindow(items: stories,
@@ -568,6 +587,11 @@ struct StoryViewerView: View {
                        preferredLanguages: chain)
 
         let current = stories[currentStoryIndex]
+        // Promote the current slide to `.play` and demote neighbours to
+        // `.edit`. Without this, all three prefetched canvases run in
+        // `.play` simultaneously, pre-caching + starting their audio at
+        // window mount time (NOT when the user actually arrives on the slide).
+        p.activate(currentId: current.id)
         t.setCurrentSlide(id: current.id, duration: currentSlideDuration)
 
         // Re-wire `onContentReady` on the prefetched canvas of the
@@ -580,6 +604,16 @@ struct StoryViewerView: View {
             let slideId = current.id
             canvas.onContentReady = { [weak t = t] in
                 t?.markContentReady(slideId: slideId)
+            }
+            // The prefetcher bootstrapped this canvas before we could attach
+            // the callback — its `scheduleContentReadyEvaluation` may have
+            // already fired (solidColor backgrounds fire on the next runloop
+            // tick). When that happens `contentReadyFired == true` and our
+            // newly-attached callback would never be invoked. Fast-forward
+            // the timer here so the loader doesn't stick on already-settled
+            // backgrounds.
+            if canvas.contentReadyFired {
+                t.markContentReady(slideId: slideId)
             }
         }
     }
@@ -713,7 +747,6 @@ struct StoryViewerView: View {
             storyReactionCount: storyReactionCount,
             storyCommentCount: storyCommentCount,
             isStoryCommentsEmpty: storyComments.isEmpty,
-            currentStoryNeedsVideoExport: currentStoryNeedsVideoExport,
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
             isGlobalMuted: isGlobalMuted,
@@ -782,16 +815,6 @@ struct StoryViewerView: View {
 
     private var isOwnStory: Bool {
         currentGroup?.id == AuthManager.shared.currentUser?.id
-    }
-
-    /// Whether the currently shown story has time-evolving content worth
-    /// baking into an MP4 (animated text, background video, voice
-    /// attachment, opening transition, etc.). Reconstructs the
-    /// renderable slide via the same path the live canvas consumes so the
-    /// gate matches the export's own routing in `prepareExport`.
-    private var currentStoryNeedsVideoExport: Bool {
-        guard let story = currentStory else { return false }
-        return story.toRenderableSlide(preferredLanguages: preferredContentLanguagesForReader).needsVideoExport
     }
 
     // MARK: - Available Translation Languages

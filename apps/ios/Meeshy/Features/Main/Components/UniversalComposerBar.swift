@@ -1,4 +1,5 @@
 import SwiftUI
+import MeeshyUI
 import AVFoundation
 import Combine
 import MeeshySDK
@@ -501,8 +502,8 @@ struct UniversalComposerBar: View {
                 : .spring(response: 0.35, dampingFraction: 0.8),
             value: effectiveIsRecording
         )
-        .onChange(of: attachments.count) { _, _ in notifyContentChange() }
-        .onChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
+        .adaptiveOnChange(of: attachments.count) { _, _ in notifyContentChange() }
+        .adaptiveOnChange(of: effectiveIsRecording) { _, _ in notifyContentChange() }
         .onAppear {
             currentLanguage = selectedLanguage
             // Load initial draft if available
@@ -511,10 +512,10 @@ struct UniversalComposerBar: View {
                 attachments = draft.attachments
             }
         }
-        .onChange(of: selectedLanguage) { _, newValue in
+        .adaptiveOnChange(of: selectedLanguage) { _, newValue in
             currentLanguage = newValue
         }
-        .onChange(of: storyId) { oldId, newId in
+        .adaptiveOnChange(of: storyId) { oldId, newId in
             if let oldId {
                 if isRecording { forceStopRecording() }
                 onSaveDraft?(oldId, text, attachments)
@@ -531,13 +532,13 @@ struct UniversalComposerBar: View {
             textAnalyzer.reset()
             notifyContentChange()
         }
-        .onChange(of: focusTrigger.wrappedValue) { _, shouldFocus in
+        .adaptiveOnChange(of: focusTrigger.wrappedValue) { _, shouldFocus in
             if shouldFocus {
                 isFocused = true
                 focusTrigger.wrappedValue = false
             }
         }
-        .onChange(of: isFocused) { _, focused in
+        .adaptiveOnChange(of: isFocused) { _, focused in
             withAnimation(.spring(response: 0.35, dampingFraction: 0.55)) {
                 focusBounce = focused
             }
@@ -551,12 +552,12 @@ struct UniversalComposerBar: View {
             }
             onFocusChange?(focused)
         }
-        .onChange(of: textAnalyzer.isLanguageLocked) { _, locked in
+        .adaptiveOnChange(of: textAnalyzer.isLanguageLocked) { _, locked in
             guard locked, let detected = textAnalyzer.language else { return }
             currentLanguage = detected.code
             onLanguageChange?(detected.code)
         }
-        .onChange(of: text) { _, newValue in
+        .adaptiveOnChange(of: text) { _, newValue in
             onAnyInteraction?()
             notifyContentChange()
             textAnalyzer.analyze(text: newValue)
@@ -581,7 +582,7 @@ struct UniversalComposerBar: View {
             // Clipboard content: auto-create when pasting 2000+ chars
             handleClipboardCheck(newValue)
         }
-        .onChange(of: textBinding?.wrappedValue) { _, newValue in
+        .adaptiveOnChange(of: textBinding?.wrappedValue) { _, newValue in
             guard let newValue, newValue != text else { return }
             text = newValue
         }
@@ -598,7 +599,7 @@ struct UniversalComposerBar: View {
                 onDismiss: { textAnalyzer.showLanguagePicker = false }
             )
         }
-        .onChange(of: injectedEmoji.wrappedValue) { _, emoji in
+        .adaptiveOnChange(of: injectedEmoji.wrappedValue) { _, emoji in
             if !emoji.isEmpty {
                 text += emoji
                 DispatchQueue.main.async {

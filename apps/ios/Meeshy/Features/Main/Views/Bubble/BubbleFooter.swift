@@ -91,24 +91,38 @@ struct BubbleFooter: View, Equatable {
 
     // MARK: - Shared element groups
 
-    /// Leading affordances: language flags + translate button.
+    /// Leading affordances: translate controller + language flags.
+    ///
+    /// **Ordre voulu** : le bouton translate `🌐` vient TOUJOURS EN PREMIER
+    /// (position stable), suivi des drapeaux disponibles à sa droite. Cette
+    /// disposition garantit qu'un utilisateur retrouve le contrôleur exactement
+    /// au même endroit, qu'une traduction existe déjà ou non — il peut donc
+    /// systématiquement demander une autre langue sans devoir repérer un
+    /// bouton qui se déplace selon le nombre de drapeaux. Avant ce changement
+    /// les drapeaux occupaient le leading et poussaient le translate, ce qui
+    /// rendait l'affordance instable.
     @ViewBuilder
     private var metaLeading: some View {
-        if !model.flags.isEmpty {
-            HStack(spacing: 2) {
-                ForEach(model.flags, id: \.code) { flag in
-                    footerFlagPill(flag)
-                }
-            }
-        }
-        if model.showsTranslate, let onTranslate = actions.onTranslate {
+        // Toujours afficher le contrôleur translate quand un callback est
+        // fourni, même si aucune langue alternative n'est encore disponible :
+        // c'est l'entrée vers la demande de traduction (sheet langue / ajout).
+        if let onTranslate = actions.onTranslate {
             Button(action: { onTranslate(); HapticFeedback.light() }) {
                 Image(systemName: "translate")
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(Color(hex: "4ECDC4"))
             }
             .buttonStyle(.plain)
-            .accessibilityLabel("Traduction disponible")
+            .accessibilityLabel(model.showsTranslate
+                                ? "Traduction disponible"
+                                : "Demander une traduction")
+        }
+        if !model.flags.isEmpty {
+            HStack(spacing: 2) {
+                ForEach(model.flags, id: \.code) { flag in
+                    footerFlagPill(flag)
+                }
+            }
         }
     }
 

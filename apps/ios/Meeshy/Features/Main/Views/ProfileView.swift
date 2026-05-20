@@ -101,13 +101,13 @@ struct ProfileView: View {
             }
             pendingRequestCount = FriendshipCache.shared.pendingReceivedCount
         }
-        .onChange(of: avatarItem) { _, newItem in
+        .adaptiveOnChange(of: avatarItem) { _, newItem in
             guard let newItem else { return }
             loadImageForEditor(from: newItem) { image in
                 avatarImageForEditor = image
             }
         }
-        .onChange(of: bannerItem) { _, newItem in
+        .adaptiveOnChange(of: bannerItem) { _, newItem in
             guard let newItem else { return }
             loadImageForEditor(from: newItem) { image in
                 bannerImageForEditor = image

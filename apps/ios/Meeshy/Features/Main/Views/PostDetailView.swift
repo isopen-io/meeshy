@@ -302,7 +302,7 @@ struct PostDetailView: View {
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: postId)
         }
-        .onChange(of: viewModel.post) { _, updatedPost in
+        .adaptiveOnChange(of: viewModel.post) { _, updatedPost in
             // Re-seed when post loads from network (stale → fresh). Preserve
             // optimistic state: only update if no in-flight toggle is active.
             guard let updatedPost, !postHeartInFlightIds.contains(postId) else { return }
@@ -920,9 +920,14 @@ struct PostDetailView: View {
             .onTapGesture { openMediaFullscreen(media) }
 
         case .video:
-            InlineVideoPlayerView(
+            // Route through VideoMediaView so post-detail videos respect the
+            // download policy. SharedAVPlayerManager.load() no longer streams
+            // on cache miss — an unwrapped InlineVideoPlayerView would
+            // silently render an empty player.
+            VideoMediaView(
                 attachment: media.toMessageAttachment(),
                 accentColor: accentColor,
+                isDark: theme.mode.isDark,
                 onExpandFullscreen: { openMediaFullscreen(media) }
             )
             .frame(maxWidth: .infinity)

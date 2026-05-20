@@ -366,7 +366,7 @@ struct ThemedFeedOverlay: View {
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()
         }
-        .onChange(of: viewModel.posts) { _, newPosts in
+        .adaptiveOnChange(of: viewModel.posts) { _, newPosts in
             for post in newPosts where postLikeDelta[post.id] == nil && !postHeartInFlightIds.contains(post.id) {
                 if post.isLiked {
                     postLikedIds.insert(post.id)
@@ -640,7 +640,7 @@ struct ThemedFeedComposer: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isFocused)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: text.isEmpty)
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showAttachmentMenu)
-        .onChange(of: isFocused) { _, focused in
+        .adaptiveOnChange(of: isFocused) { _, focused in
             if focused && showAttachmentMenu {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     showAttachmentMenu = false

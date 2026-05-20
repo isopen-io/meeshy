@@ -137,6 +137,7 @@ final class MessageListViewController: UIViewController {
         if self.isDark != isDark { self.isDark = isDark; changed = true }
         if self.accentColor != accentColor { self.accentColor = accentColor; changed = true }
         if changed {
+            stickyDayState.isDark = isDark
             applySnapshot(animated: false)
         }
     }
@@ -154,9 +155,16 @@ final class MessageListViewController: UIViewController {
         }
     }
 
+    /// État réactif de la pill flottante « Aujourd'hui / Hier / … » posée au
+    /// top du collectionView. Mis à jour à chaque `scrollViewDidScroll` et
+    /// après `applySnapshot` pour que le label suive le message en haut visible.
+    private let stickyDayState = MessageDayStickyState()
+    private var stickyDayHost: UIHostingController<MessageDayStickyOverlay>?
+
     override func viewDidLoad() {
         super.viewDidLoad()
         configureCollectionView()
+        configureStickyDayOverlay()
         configureDataSource()
         observeStore()
         // Apply the initial snapshot from whatever the store already holds.
@@ -167,6 +175,80 @@ final class MessageListViewController: UIViewController {
         // emission is missed and the list would render empty even though
         // `store.messages` is non-empty.
         applySnapshot(animated: false)
+    }
+
+    private func configureStickyDayOverlay() {
+        stickyDayState.isDark = isDark
+        let host = UIHostingController(
+            rootView: MessageDayStickyOverlay(state: stickyDayState)
+        )
+        host.view.backgroundColor = .clear
+        host.view.isUserInteractionEnabled = false
+        addChild(host)
+        view.addSubview(host.view)
+        host.didMove(toParent: self)
+        host.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            host.view.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 4),
+            host.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            host.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+        ])
+        stickyDayHost = host
+    }
+
+    /// Recalcule le label de la pill sticky à partir de la cellule la plus
+    /// haute visuellement. Liste inversée : « plus haute » = plus grand index
+    /// dans le snapshot diffable. Si le séparateur natif de ce même jour est
+    /// déjà visible, on cache la sticky pour éviter le doublon visuel.
+    private func updateStickyDayLabel() {
+        guard let dataSource else { return }
+        let visibleIndices = collectionView.indexPathsForVisibleItems.map(\.item)
+        guard let topIndex = visibleIndices.max() else {
+            stickyDayState.label = nil
+            return
+        }
+        let items = dataSource.snapshot().itemIdentifiers
+        guard topIndex < items.count else {
+            stickyDayState.label = nil
+            return
+        }
+
+        let calendar = Calendar.current
+        let now = Date()
+        let topItem = items[topIndex]
+        let topDayStart: Date?
+        switch topItem {
+        case .dayHeader:
+            // Le séparateur natif est l'item du haut — la sticky doublonnerait,
+            // on la masque le temps qu'il défile hors écran.
+            stickyDayState.label = nil
+            return
+        case .message(let localId):
+            if let record = store.message(for: localId) {
+                let msg = record.toMessage(currentUserId: currentUserId)
+                topDayStart = calendar.startOfDay(for: msg.createdAt)
+            } else {
+                topDayStart = nil
+            }
+        case .typingIndicator:
+            topDayStart = nil
+        }
+        guard let dayStart = topDayStart else {
+            stickyDayState.label = nil
+            return
+        }
+        let label = MessageDayLabel.label(
+            for: dayStart,
+            now: now,
+            calendar: calendar,
+            locale: .current,
+            today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+            yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+            dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
+        )
+        if stickyDayState.label != label {
+            stickyDayState.label = label
+        }
     }
 
     // MARK: - CollectionView Setup
@@ -231,6 +313,32 @@ final class MessageListViewController: UIViewController {
                 let typingDark = self.isDark
                 cell.contentConfiguration = UIHostingConfiguration {
                     TypingIndicatorBubble(names: typingNames, accentHex: typingAccent, isDark: typingDark)
+                        .scaleEffect(x: 1, y: -1)
+                }
+                .margins(.all, 0)
+                cell.backgroundColor = .clear
+                return
+            }
+
+            // Séparateur de jour — pill "Aujourd'hui / Hier / Lundi 9 mai"
+            // posée entre deux groupes de messages de jours distincts. Le
+            // label est recalculé à chaque rendu de cellule afin de suivre
+            // le passage de minuit sans avoir à reconstruire la datasource.
+            // Les libellés relatifs sont injectés depuis le catalogue de
+            // chaînes localisées pour suivre la langue d'interface de l'app.
+            if case .dayHeader(let dayStart) = item {
+                let label = MessageDayLabel.label(
+                    for: dayStart,
+                    now: Date(),
+                    calendar: .current,
+                    locale: .current,
+                    today: String(localized: "date.today", defaultValue: "Aujourd'hui"),
+                    yesterday: String(localized: "date.yesterday", defaultValue: "Hier"),
+                    dayBeforeYesterday: String(localized: "date.dayBeforeYesterday", defaultValue: "Avant-hier")
+                )
+                let dark = self.isDark
+                cell.contentConfiguration = UIHostingConfiguration {
+                    MessageDaySeparator(label: label, isDark: dark)
                         .scaleEffect(x: 1, y: -1)
                 }
                 .margins(.all, 0)
@@ -366,12 +474,33 @@ final class MessageListViewController: UIViewController {
     private func applySnapshot(animated: Bool = true) {
         var snapshot = NSDiffableDataSourceSnapshot<MessageListSection, MessageListItem>()
         snapshot.appendSections([.main])
-        let messageItems = store.messages.reversed().map { MessageListItem.message(localId: $0.localId) }
+
+        // Liste inversée : index 0 = visuel bas (message le plus récent).
+        let reversedMessages = Array(store.messages.reversed())
+        let messageItems = reversedMessages.map { MessageListItem.message(localId: $0.localId) }
+
+        // Pour chaque groupe de jour on aligne d'abord les messages dans
+        // l'ordre du flux puis on pousse le séparateur juste après — qui se
+        // retrouve visuellement AU-DESSUS de ses messages, à la WhatsApp.
+        // On part de `messageItems` (sans typing) pour pouvoir conserver le
+        // count "messages stricts" plus bas, intact des dayHeader insérés.
+        let groups = MessageDayGrouping.groupByDay(
+            dates: reversedMessages.map(\.createdAt),
+            calendar: .current
+        )
+        var bodyItems: [MessageListItem] = []
+        for group in groups {
+            for idx in group.indices {
+                bodyItems.append(messageItems[idx])
+            }
+            bodyItems.append(.dayHeader(dayStart: group.dayStart))
+        }
+
         // The typing indicator is a real cell at index 0 — the visual bottom of
         // the inverted layout, just below the newest message. A live message
         // then inserts at index 1 and pushes the conversation up naturally.
         let showTyping = !(conversationViewModel?.typingUsernames.isEmpty ?? true)
-        let items: [MessageListItem] = showTyping ? [.typingIndicator] + messageItems : messageItems
+        let items: [MessageListItem] = showTyping ? [.typingIndicator] + bodyItems : bodyItems
         snapshot.appendItems(items, toSection: .main)
         // The diffable datasource only re-runs the cell registration closure
         // when an item's IDENTIFIER changes — we key items by `localId` which
@@ -418,8 +547,13 @@ final class MessageListViewController: UIViewController {
         // layout before `scrollToItem` runs (apply is asynchronous for the
         // animated diff path).
         dataSource.apply(snapshot, animatingDifferences: animated) { [weak self] in
-            guard let self, shouldAutoScroll else { return }
-            self.scrollToBottom(animated: animated)
+            guard let self else { return }
+            // La pill flottante doit refléter le nouveau top du flux dès que
+            // les cellules sont en place (insertion d'un nouveau message, etc.).
+            self.updateStickyDayLabel()
+            if shouldAutoScroll {
+                self.scrollToBottom(animated: animated)
+            }
         }
     }
 
@@ -639,6 +773,11 @@ extension MessageListViewController: UICollectionViewDelegate {
         let frameHeight = scrollView.frame.height
 
         store.isUserScrolling = scrollView.isDragging || scrollView.isDecelerating
+
+        // Met à jour le label de la pill flottante en fonction du message
+        // en haut visible. Léger : un lookup de l'item à l'index max + une
+        // string formatée. Aucune allocation inutile si le label ne change pas.
+        updateStickyDayLabel()
 
         // Near-bottom detection for the floating "scroll to latest" button.
         // In the inverted layout, contentOffset.y ≈ 0 means the user is at

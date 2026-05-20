@@ -246,7 +246,7 @@ private struct WaveTileModifier: ViewModifier {
             .opacity(Double(t))
             .scaleEffect(entranceScale)
             .offset(y: riseOffset)
-            .onChange(of: hasEntered) { _, entered in
+            .adaptiveOnChange(of: hasEntered) { _, entered in
                 guard entered else { return }
                 animateIn()
             }

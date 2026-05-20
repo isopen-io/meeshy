@@ -173,7 +173,7 @@ struct iPadRootView: View {
             // returns nil for the typical cold-launch (no pending link), so
             // firing on the initial value is a free no-op when nothing
             // is queued.
-            .onChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
+            .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink, initial: true) { _, newValue in
                 handleDeepLink(newValue)
             }
         )

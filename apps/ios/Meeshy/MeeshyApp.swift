@@ -286,10 +286,26 @@ struct MeeshyApp: App {
                         // network, so the splash duration stays bounded.
                         _ = await CacheCoordinator.shared.conversations.load(for: "list")
 
-                        await requestPushPermissionIfNeeded()
-                        VoIPPushManager.shared.register()
-                        await NotificationManager.shared.refreshUnreadCount()
-                        await NotificationCoordinator.shared.syncNow()
+                        // Le splash NE DOIT PAS attendre les appels réseau
+                        // (push permission, VoIP register, unread count,
+                        // notif sync). Sur un réseau dégradé, chacun de ces
+                        // appels HTTP peut timeout 60s — un cold start
+                        // observé a déjà tenu le splash 86s parce que
+                        // `refreshUnreadCount` + `syncNow` ont chacun
+                        // timeouté avant retry. Détacher tout ce post-cache
+                        // work garantit que le splash dismiss dès que la
+                        // liste de conversations en cache est hydratée.
+                        // ConversationListView et ses dépendances font
+                        // leurs propres `.onAppear` sync — ce qu'on
+                        // détache ici n'est que le bootstrap (push token,
+                        // badge initial) qui peut tomber en background.
+                        Task { [authManager] in
+                            _ = authManager  // capture explicite (lint)
+                            await requestPushPermissionIfNeeded()
+                            VoIPPushManager.shared.register()
+                            await NotificationManager.shared.refreshUnreadCount()
+                            await NotificationCoordinator.shared.syncNow()
+                        }
                     } else {
                         handleGuestDeepLink(deepLinkRouter.pendingDeepLink)
                     }
@@ -328,7 +344,7 @@ struct MeeshyApp: App {
                         }
                     }
                 }
-                .onChange(of: scenePhase) { _, newPhase in
+                .adaptiveOnChange(of: scenePhase) { _, newPhase in
                     switch newPhase {
                     case .active:
                         UNUserNotificationCenter.current().removeAllDeliveredNotifications()
@@ -359,7 +375,7 @@ struct MeeshyApp: App {
                         break
                     }
                 }
-                .onChange(of: authManager.isAuthenticated) { _, isAuth in
+                .adaptiveOnChange(of: authManager.isAuthenticated) { _, isAuth in
                     // Tag every subsequent crash report with the active user
                     // so we can filter the Crashlytics dashboard per account.
                     // Cleared on logout to prevent the next user inheriting
@@ -443,7 +459,7 @@ struct MeeshyApp: App {
                     guard let payload else { return }
                     handlePushNavigation(payload: payload)
                 }
-                .onChange(of: deepLinkRouter.pendingDeepLink) { _, link in
+                .adaptiveOnChange(of: deepLinkRouter.pendingDeepLink) { _, link in
                     handleGuestDeepLink(link)
                 }
             }
@@ -594,7 +610,7 @@ struct SystemThemeDetector<Content: View>: View {
 
     var body: some View {
         content()
-            .onChange(of: systemScheme) { _, newScheme in
+            .adaptiveOnChange(of: systemScheme) { _, newScheme in
                 ThemeManager.shared.syncWithSystem(newScheme)
             }
             .onAppear {

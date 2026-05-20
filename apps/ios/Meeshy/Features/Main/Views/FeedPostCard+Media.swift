@@ -225,9 +225,14 @@ extension FeedPostCard {
 
     func videoMediaView(_ media: FeedMedia) -> some View {
         let attachment = media.toMessageAttachment()
-        return InlineVideoPlayerView(
+        // Route through VideoMediaView so feed videos respect the download
+        // policy too. SharedAVPlayerManager.load() no longer has a streaming
+        // fallback — an unwrapped InlineVideoPlayerView with default
+        // availability would silently fail on a cache miss.
+        return VideoMediaView(
             attachment: attachment,
-            accentColor: accentColor
+            accentColor: accentColor,
+            isDark: theme.mode.isDark
         )
         .frame(maxWidth: .infinity, minHeight: 180, maxHeight: 280)
         .clipShape(RoundedRectangle(cornerRadius: 12))

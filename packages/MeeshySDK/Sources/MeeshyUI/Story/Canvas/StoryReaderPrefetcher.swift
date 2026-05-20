@@ -148,7 +148,13 @@ public final class StoryReaderPrefetcher {
                            context: StoryReaderContext,
                            preferredLanguages: [String]) {
         let slide = item.toRenderableSlide(preferredLanguages: preferredLanguages)
-        let canvas = StoryCanvasUIView(slide: slide, mode: .play)
+        // Bootstrap in `.edit` so prefetched neighbour slides DO NOT auto-start
+        // their audio + video at mount time. Only the slide currently visible
+        // to the user should be in `.play`; `activate(currentId:)` flips it
+        // — the previous architecture left every prefetched canvas in `.play`
+        // simultaneously, which made all three audios in the window pre-cache
+        // and start at once and stalled the per-slide `onContentReady` timer.
+        let canvas = StoryCanvasUIView(slide: slide, mode: .edit)
         canvas.translatesAutoresizingMaskIntoConstraints = true
         // Sized to the host (1×1) so `layoutSubviews` fires and the layer
         // tree is built; the actual visible frame is set when the parent
@@ -159,6 +165,19 @@ public final class StoryReaderPrefetcher {
         canvas.setReaderContext(context)
         hostView.addSubview(canvas)
         bootstrapped[item.id] = canvas
+    }
+
+    /// Switches the canvas of `currentId` to `.play` and every other
+    /// bootstrapped canvas back to `.edit`. Idempotent — safe to call on
+    /// every `currentStoryIndex` change without checking the previous state.
+    public func activate(currentId: String) {
+        for (id, canvas) in bootstrapped {
+            if id == currentId {
+                if canvas.mode != .play { canvas.setMode(.play) }
+            } else {
+                if canvas.mode != .edit { canvas.setMode(.edit) }
+            }
+        }
     }
 
     private func evict(keeping desired: Set<String>) {

@@ -264,6 +264,7 @@ public struct AudioPlayerView: View {
     public var onEdit: (() -> Void)? = nil
     public var onPlayingChange: ((Bool) -> Void)? = nil
     private var externalLanguage: Binding<String?>?
+    private var topSlot: AnyView?
     private var bottomSlot: AnyView?
     private var availability: AudioAvailability
     private var onDownload: (() -> Void)?
@@ -333,18 +334,21 @@ public struct AudioPlayerView: View {
         return player.duration
     }
 
-    public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
-                accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
-                translatedAudios: [MessageTranslatedAudio] = [],
-                onFullscreen: (() -> Void)? = nil,
-                onRequestTranscription: (() -> Void)? = nil,
-                onRetranscribe: (() -> Void)? = nil,
-                onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
-                onPlayingChange: ((Bool) -> Void)? = nil,
-                externalLanguage: Binding<String?>? = nil,
-                availability: AudioAvailability = .ready,
-                onDownload: (() -> Void)? = nil,
-                @ViewBuilder bottomContent: () -> some View = { EmptyView() }) {
+    public init<TopContent: View, BottomContent: View>(
+        attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
+        accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
+        translatedAudios: [MessageTranslatedAudio] = [],
+        onFullscreen: (() -> Void)? = nil,
+        onRequestTranscription: (() -> Void)? = nil,
+        onRetranscribe: (() -> Void)? = nil,
+        onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
+        onPlayingChange: ((Bool) -> Void)? = nil,
+        externalLanguage: Binding<String?>? = nil,
+        availability: AudioAvailability = .ready,
+        onDownload: (() -> Void)? = nil,
+        @ViewBuilder topContent: () -> TopContent = { EmptyView() },
+        @ViewBuilder bottomContent: () -> BottomContent = { EmptyView() }
+    ) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
         self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
@@ -354,8 +358,10 @@ public struct AudioPlayerView: View {
         self.externalLanguage = externalLanguage
         self.availability = availability
         self.onDownload = onDownload
-        let content = bottomContent()
-        self.bottomSlot = content is EmptyView ? nil : AnyView(content)
+        let top = topContent()
+        self.topSlot = top is EmptyView ? nil : AnyView(top)
+        let bottom = bottomContent()
+        self.bottomSlot = bottom is EmptyView ? nil : AnyView(bottom)
     }
 
     private var fullTranscriptionText: String {
@@ -409,19 +415,39 @@ public struct AudioPlayerView: View {
     }
 
     private func switchToLanguage(_ code: String) {
+        // Bug §1.1 fix: stop playback immediately instead of calling
+        // player.play(urlString:) directly on the new language URL.
+        // The previous behavior bypassed the availability gate, silently
+        // streaming the translated audio when it wasn't cached. The parent
+        // (AudioMediaView via the externalLanguage binding) re-resolves
+        // availability for the new URL and triggers auto-DL (if policy
+        // permits) or shows the download button. The user re-taps play,
+        // which goes through handlePlayTap() — gated by availability.
+        player.stop()
+
         withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
             selectedAudioLanguage = code
-        }
-        if code == "orig" {
-            player.play(urlString: attachment.fileUrl)
-        } else if let translated = translatedAudios.first(where: { $0.targetLanguage.lowercased() == code.lowercased() }) {
-            player.play(urlString: translated.url)
         }
     }
 
     // MARK: - Main Player
+    /// Empile, dans cet ordre strict :
+    /// 1. `topSlot` (reply) + son séparateur quand il existe
+    /// 2. Les contrôles du player (play / waveform / time)
+    /// 3. Le bloc de transcription (texte ou bouton "Transcrire") sans footer
+    /// 4. `bottomSlot` (footer) ancré tout en bas, séparé par un unique
+    ///    `Divider` quand quelque chose précède
+    ///
+    /// Cette structure garantit que `BubbleFooter` (timestamp + read receipts)
+    /// reste toujours sous le player, jamais incrusté entre la transcription
+    /// et le bouton "Re-transcrire" comme c'était le cas avant ce refactor.
     private var mainPlayer: some View {
         VStack(spacing: 0) {
+            if let slot = topSlot {
+                slot
+                slotDivider
+            }
+
             HStack(spacing: context.isCompact ? 8 : 10) {
                 playButton
                 VStack(alignment: .leading, spacing: context.isCompact ? 3 : 4) {
@@ -434,18 +460,34 @@ public struct AudioPlayerView: View {
             .padding(.horizontal, context.isCompact ? 10 : 14)
             .padding(.vertical, context.isCompact ? 8 : 12)
 
-            inlineTranscription
+            transcriptionBlock
+
+            if let slot = bottomSlot {
+                slotDivider
+                slot
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+            }
         }
         .background(playerBackground)
     }
 
-    // MARK: - Inline Transcription (inside player)
+    /// Trait subtil utilisé entre les sections du player. Un seul style,
+    /// instancié là où il sépare effectivement deux contenus, jamais en
+    /// cascade.
+    private var slotDivider: some View {
+        Divider()
+            .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+    }
+
+    /// Bloc de transcription : texte développable ou bouton "Transcrire" si
+    /// aucune transcription n'est encore disponible. **Ne rend jamais le
+    /// `bottomSlot`** — il est ancré par `mainPlayer` directement.
     @ViewBuilder
-    private var inlineTranscription: some View {
+    private var transcriptionBlock: some View {
         if !displaySegments.isEmpty {
             VStack(spacing: 0) {
-                Divider()
-                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+                slotDivider
 
                 let segments = isLongTranscription && !isTranscriptionExpanded
                     ? truncatedSegments
@@ -455,12 +497,15 @@ public struct AudioPlayerView: View {
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
 
-                transcriptionFooterRow
+                if isLongTranscription {
+                    expandToggleButton
+                }
+                retranscribeButton
             }
+            .padding(.bottom, 6)
         } else if let onRequest = onRequestTranscription {
             VStack(spacing: 0) {
-                Divider()
-                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+                slotDivider
 
                 Button {
                     onRequest()
@@ -478,44 +523,25 @@ public struct AudioPlayerView: View {
                 }
 
                 retranscribeButton
-
-                if let slot = bottomSlot {
-                    slot.padding(.horizontal, 10).padding(.bottom, 6)
-                }
-            }
-        } else if let slot = bottomSlot {
-            VStack(spacing: 0) {
-                Divider()
-                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
-                slot.padding(.horizontal, 10).padding(.vertical, 6)
             }
         }
     }
 
-    // MARK: - Transcription Footer Row (chevron centered + bottomSlot below)
+    // MARK: - Long-transcription chevron toggle
     @ViewBuilder
-    private var transcriptionFooterRow: some View {
-        VStack(spacing: 2) {
-            if isLongTranscription {
-                Button {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        isTranscriptionExpanded.toggle()
-                    }
-                    HapticFeedback.light()
-                } label: {
-                    Image(systemName: isTranscriptionExpanded ? "chevron.up" : "chevron.down")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(isDark ? .white.opacity(0.35) : .black.opacity(0.25))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 20)
-                }
+    private var expandToggleButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isTranscriptionExpanded.toggle()
             }
-            if let slot = bottomSlot {
-                slot.padding(.horizontal, 10)
-            }
-            retranscribeButton
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: isTranscriptionExpanded ? "chevron.up" : "chevron.down")
+                .font(.system(size: 9, weight: .bold))
+                .foregroundColor(isDark ? .white.opacity(0.35) : .black.opacity(0.25))
+                .frame(maxWidth: .infinity)
+                .frame(height: 20)
         }
-        .padding(.bottom, 6)
     }
 
     // MARK: - Re-transcribe Button
@@ -571,33 +597,70 @@ public struct AudioPlayerView: View {
         return result
     }
 
+    @ViewBuilder
     private func inlineFlowTranscription(segments: [TranscriptionDisplaySegment]) -> some View {
-        let activeIdx = segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
-
-        return FlowLayout(spacing: 0) {
-            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
-                let isActive = index == activeIdx
-                let isPast = activeIdx != nil && index < activeIdx!
-
-                Button {
-                    player.seekToTime(segment.startTime)
-                    HapticFeedback.light()
-                } label: {
-                    Text(segment.text + " ")
-                        .font(.system(size: 13, weight: isActive ? .bold : .regular))
-                        .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
-                        .padding(.horizontal, isActive ? 2 : 0)
-                        .padding(.vertical, isActive ? 1 : 0)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
-                        )
-                }
-                .buttonStyle(.plain)
-                .animation(.easeInOut(duration: 0.15), value: isActive)
+        // Cas fallback synthesized : `resolveDisplaySegments` renvoie un
+        // unique segment qui porte tout le texte quand la transcription n'a
+        // pas de découpe par segment (audio sans segments structurés).
+        // `FlowLayout` propose `.unspecified` à chaque subview, qui retourne
+        // alors sa largeur native une-ligne — un seul Button énorme ne peut
+        // donc plus être wrappé et le texte est tronqué visuellement.
+        // On rend directement un Text qui wrap naturellement dans ce cas.
+        // La couleur suit le même contrat que les segments multiples :
+        // idle (avant), actif (pendant lecture), past (après) — pour qu'un
+        // audio sans segments soit aussi lisible pendant la lecture.
+        if segments.count == 1, let single = segments.first {
+            let isActive = player.isPlaying
+                && player.currentTime >= single.startTime
+                && player.currentTime < single.endTime
+            let isPast = !isActive && player.currentTime >= single.endTime
+            Button {
+                player.seekToTime(single.startTime)
+                HapticFeedback.light()
+            } label: {
+                Text(single.text)
+                    .font(.system(size: 13, weight: isActive ? .bold : .regular))
+                    .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, isActive ? 2 : 0)
+                    .padding(.vertical, isActive ? 1 : 0)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
+                    )
             }
+            .buttonStyle(.plain)
+            .animation(.easeInOut(duration: 0.15), value: isActive)
+            .animation(.easeInOut(duration: 0.15), value: isPast)
+        } else {
+            let activeIdx = segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
+            FlowLayout(spacing: 0) {
+                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                    let isActive = index == activeIdx
+                    let isPast = activeIdx != nil && index < activeIdx!
+
+                    Button {
+                        player.seekToTime(segment.startTime)
+                        HapticFeedback.light()
+                    } label: {
+                        Text(segment.text + " ")
+                            .font(.system(size: 13, weight: isActive ? .bold : .regular))
+                            .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                            .padding(.horizontal, isActive ? 2 : 0)
+                            .padding(.vertical, isActive ? 1 : 0)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .animation(.easeInOut(duration: 0.15), value: isActive)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func inlineSegmentColor(isActive: Bool, isPast: Bool) -> Color {

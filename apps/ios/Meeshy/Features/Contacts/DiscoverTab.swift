@@ -191,7 +191,7 @@ struct DiscoverTab: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .onSubmit { Task { await viewModel.performSearch() } }
-                .onChange(of: viewModel.searchQuery) { _, newValue in
+                .adaptiveOnChange(of: viewModel.searchQuery) { _, newValue in
                     if newValue.count >= 2 {
                         Task { await viewModel.performSearch() }
                     } else {

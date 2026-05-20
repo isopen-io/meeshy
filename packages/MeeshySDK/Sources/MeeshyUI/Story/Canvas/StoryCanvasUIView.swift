@@ -158,7 +158,7 @@ public final class StoryCanvasUIView: UIView {
     /// `true` after `onContentReady` has fired for the current background
     /// state. Reset on every slide change (via `slide.didSet` → `rebuildLayers`)
     /// and on every `setReaderContext` so re-keying replays the wait.
-    private var contentReadyFired: Bool = false
+    private(set) public var contentReadyFired: Bool = false
 
     /// `true` once the slide background (color / gradient / image / video) is
     /// visually settled. The combined `onContentReady` signal additionally
@@ -744,30 +744,114 @@ public final class StoryCanvasUIView: UIView {
         let languages = readerContext.preferredLanguages
         let resolver = readerContext.postMediaURLResolver
 
-        // Foreground clips.
         let foreground = effects.resolvedForegroundAudioPlayers
-        var urls: [String: URL] = [:]
-        for audio in foreground {
-            let mediaId = audio.resolvedPostMediaId(preferredLanguages: languages)
-            if let url = resolver?(mediaId) {
-                urls[audio.id] = url
-            }
-        }
-        try? audioMixer.configure(audios: foreground, urls: urls)
+        let background = effects.resolvedBackgroundAudio
+        let rawAudioCount = effects.audioPlayerObjects?.count ?? 0
+        let legacyBgId = effects.backgroundAudioId ?? "nil"
+        os.Logger.storyAudio.info(
+            "reconfigureAudioForPlayback slide=\(self.slide.id, privacy: .public) rawAudios=\(rawAudioCount) resolvedFg=\(foreground.count) resolvedBg=\(background == nil ? 0 : 1) legacyBgId=\(legacyBgId, privacy: .public) langs=\(languages.joined(separator: ","), privacy: .public) resolverPresent=\(resolver != nil)"
+        )
 
-        // Background clip (at most one per slide).
-        if let background = effects.resolvedBackgroundAudio {
-            let mediaId = background.resolvedPostMediaId(preferredLanguages: languages)
-            if let url = resolver?(mediaId) {
-                try? audioMixer.configureBackground(
-                    audio: background,
-                    url: url,
-                    looping: background.loop ?? true
+        // `AVAudioFile(forReading:)` only accepts `file://` URLs. The viewer
+        // resolver typically hands us HTTPS URLs from `StoryItem.media` — we
+        // must pre-cache them to disk before passing to the mixer or every
+        // `configure` call fails with OSStatus 2003334207 ("not a file").
+        // The pre-cache is async; we therefore fire-and-forget a Task and
+        // call `startAudioPlayback()` from inside it once the configure has
+        // populated `entries`. Direct callers of `reconfigureAudioForPlayback`
+        // that also call `startAudioPlayback()` synchronously become no-ops
+        // (entries=0 at that moment) — the in-Task call is what actually
+        // schedules the buffers once the cache is warm.
+        let slideId = slide.id
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            var fgURLs: [String: URL] = [:]
+            for audio in foreground {
+                let mediaId = audio.resolvedPostMediaId(preferredLanguages: languages)
+                guard let remoteURL = resolver?(mediaId) else {
+                    os.Logger.storyAudio.error(
+                        "FG audio URL not resolved audioId=\(audio.id, privacy: .public) postMediaId=\(mediaId, privacy: .public)"
+                    )
+                    continue
+                }
+                if let localURL = await Self.cachedAudioFileURL(remote: remoteURL) {
+                    fgURLs[audio.id] = localURL
+                    os.Logger.storyAudio.debug(
+                        "FG audio cached audioId=\(audio.id, privacy: .public) localFile=\(localURL.lastPathComponent, privacy: .public)"
+                    )
+                } else {
+                    os.Logger.storyAudio.error(
+                        "FG audio cache failed audioId=\(audio.id, privacy: .public) remote=\(remoteURL.absoluteString, privacy: .public)"
+                    )
+                }
+            }
+
+            // Slide may have changed during await (user swiped). Bail if so —
+            // a fresh `reconfigureAudioForPlayback` will run for the new slide.
+            guard self.slide.id == slideId else { return }
+
+            do {
+                try self.audioMixer.configure(audios: foreground, urls: fgURLs)
+            } catch {
+                os.Logger.storyAudio.error(
+                    "ReaderAudioMixer.configure failed: \(error.localizedDescription, privacy: .public)"
                 )
             }
-        }
 
-        audioMixer.setMute(readerContext.mute)
+            // Background clip (at most one per slide).
+            if let background {
+                let mediaId = background.resolvedPostMediaId(preferredLanguages: languages)
+                if let remoteURL = resolver?(mediaId) {
+                    if let localURL = await Self.cachedAudioFileURL(remote: remoteURL) {
+                        guard self.slide.id == slideId else { return }
+                        os.Logger.storyAudio.debug(
+                            "BG audio cached audioId=\(background.id, privacy: .public) localFile=\(localURL.lastPathComponent, privacy: .public)"
+                        )
+                        do {
+                            try self.audioMixer.configureBackground(
+                                audio: background,
+                                url: localURL,
+                                looping: background.loop ?? true
+                            )
+                        } catch {
+                            os.Logger.storyAudio.error(
+                                "ReaderAudioMixer.configureBackground failed audioId=\(background.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                            )
+                        }
+                    } else {
+                        os.Logger.storyAudio.error(
+                            "BG audio cache failed audioId=\(background.id, privacy: .public) remote=\(remoteURL.absoluteString, privacy: .public)"
+                        )
+                    }
+                } else {
+                    os.Logger.storyAudio.error(
+                        "BG audio URL not resolved audioId=\(background.id, privacy: .public) postMediaId=\(mediaId, privacy: .public)"
+                    )
+                }
+            }
+
+            self.audioMixer.setMute(self.readerContext.mute)
+
+            // The synchronous `startAudioPlayback()` call that follows
+            // `reconfigureAudioForPlayback()` in `setMode(.play)` /
+            // `setReaderContext` / `slide.didSet` hit the mixer when
+            // `entries.count == 0`. Re-run it now that buffers are loaded.
+            if self.mode == .play, self.slide.id == slideId {
+                self.startAudioPlayback()
+            }
+        }
+    }
+
+    /// Returns a `file://` URL for `remote`, downloading and caching the bytes
+    /// when the disk cache misses. Returns `nil` if every path fails — the
+    /// caller logs the failure context.
+    private nonisolated static func cachedAudioFileURL(remote: URL) async -> URL? {
+        if remote.isFileURL { return remote }
+        if let cached = CacheCoordinator.audioLocalFileURL(for: remote.absoluteString) {
+            return cached
+        }
+        _ = try? await CacheCoordinator.shared.audio.data(for: remote.absoluteString)
+        return CacheCoordinator.audioLocalFileURL(for: remote.absoluteString)
     }
 
     // MARK: - Rendering

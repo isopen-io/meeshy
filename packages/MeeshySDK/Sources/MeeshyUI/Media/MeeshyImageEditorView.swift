@@ -233,10 +233,10 @@ public struct MeeshyImageEditorView: View {
             cropDisplayRect = displayRect
             ensureCropInitialized(displayRect)
         }
-        .onChange(of: cropRatio) { _, ratio in
+        .adaptiveOnChange(of: cropRatio) { _, ratio in
             adjustCrop(toRatio: ratio.aspectRatio, in: displayRect)
         }
-        .onChange(of: area) { _, _ in
+        .adaptiveOnChange(of: area) { _, _ in
             cropInitialized = false
             cropGeneration += 1
         }

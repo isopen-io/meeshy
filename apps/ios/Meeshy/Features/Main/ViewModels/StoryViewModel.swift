@@ -839,25 +839,47 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             }
 
             if var audioObjects = updatedEffects.audioPlayerObjects {
+                os.Logger.storyAudio.info(
+                    "publish slide=\(slide.id, privacy: .public) preUpload audioCount=\(audioObjects.count) loadedAudioKeys=\(upload.loadedAudioURLs.keys.joined(separator: ","), privacy: .public)"
+                )
                 for i in audioObjects.indices where audioObjects[i].postMediaId.isEmpty {
                     guard !Task.isCancelled else { return newPostIds }
                     let obj = audioObjects[i]
-                    if let audioURL = upload.loadedAudioURLs[obj.id] ?? upload.loadedVideoURLs[obj.id] {
-                        let result = try await uploader.uploadFile(
-                            fileURL: audioURL, mimeType: "audio/mp4",
-                            token: token, uploadContext: "story"
+                    guard let audioURL = upload.loadedAudioURLs[obj.id] ?? upload.loadedVideoURLs[obj.id] else {
+                        os.Logger.storyAudio.error(
+                            "publish audio URL missing audioId=\(obj.id, privacy: .public) — clip will be uploaded but unplayable (postMediaId stays empty)"
                         )
-                        audioObjects[i].postMediaId = result.id
-                        foregroundMediaIds.append(result.id)
+                        continue
                     }
+                    let result = try await uploader.uploadFile(
+                        fileURL: audioURL, mimeType: "audio/mp4",
+                        token: token, uploadContext: "story"
+                    )
+                    audioObjects[i].postMediaId = result.id
+                    foregroundMediaIds.append(result.id)
+                    os.Logger.storyAudio.info(
+                        "publish audio uploaded audioId=\(obj.id, privacy: .public) postMediaId=\(result.id, privacy: .public)"
+                    )
                 }
                 updatedEffects.audioPlayerObjects = audioObjects
+            } else {
+                os.Logger.storyAudio.info(
+                    "publish slide=\(slide.id, privacy: .public) audioPlayerObjects is nil — no audio attached to this slide"
+                )
             }
 
             onPhase(.publishing)
             var allMediaIds: [String] = []
             if let id = uploadResult?.id { allMediaIds.append(id) }
             allMediaIds.append(contentsOf: foregroundMediaIds)
+
+            let postAudioCount = updatedEffects.audioPlayerObjects?.count ?? 0
+            let postAudioIds = (updatedEffects.audioPlayerObjects ?? [])
+                .map { "\($0.id)→postMediaId=\($0.postMediaId.isEmpty ? "EMPTY" : $0.postMediaId)" }
+                .joined(separator: " ")
+            os.Logger.storyAudio.info(
+                "publish createStory slide=\(slide.id, privacy: .public) audioInPayload=\(postAudioCount) details=[\(postAudioIds, privacy: .public)]"
+            )
 
             let post = try await postService.createStory(
                 content: slide.content,

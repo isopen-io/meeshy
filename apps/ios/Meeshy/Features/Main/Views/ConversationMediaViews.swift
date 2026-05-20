@@ -201,16 +201,58 @@ final class AttachmentDownloader: ObservableObject {
     func start(attachment: MessageAttachment, onShare: ((URL) -> Void)?) {
         let fileUrl = attachment.fileUrl
         guard !fileUrl.isEmpty else { return }
-        let isAudio = attachment.type == .audio
-        let isImage = attachment.type == .image
+        let store: CacheStoreKind
+        switch attachment.type {
+        case .audio: store = .audio
+        case .image: store = .image
+        case .video: store = .video
+        case .file, .location:
+            // No typed cache for file/location — manual download paths handle these.
+            return
+        }
+        startDownloadFlow(
+            urlString: fileUrl,
+            expectedSize: Int64(attachment.fileSize),
+            cacheStore: store
+        )
+    }
+
+    /// Download a translated audio (HTTPS URL distinct from the original
+    /// attachment). The translated audio's file size is not yet exposed by
+    /// the backend (spec §7 follow-up) — `fileSize == 0` is tolerated and
+    /// the response's Content-Length header is used as the total during DL.
+    /// Note: if the network shifts wifi -> cellular while downloading, the
+    /// download continues. The policy gates triggering, not continuation
+    /// (spec §14.2, consistent with WhatsApp / Telegram).
+    func startTranslatedAudio(url: String, fileSize: Int64) {
+        guard !url.isEmpty else { return }
+        startDownloadFlow(
+            urlString: url,
+            expectedSize: fileSize,
+            cacheStore: .audio
+        )
+    }
+
+    enum CacheStoreKind {
+        case audio, image, video
+    }
+
+    /// Shared download flow: streams URLSession.bytes, publishes progress,
+    /// persists into the typed cache under the resolved canonical key.
+    private func startDownloadFlow(
+        urlString: String,
+        expectedSize: Int64,
+        cacheStore: CacheStoreKind
+    ) {
+        guard !isDownloading, !isCached else { return }
         isDownloading = true
         downloadedBytes = 0
-        totalBytes = Int64(attachment.fileSize)
+        totalBytes = expectedSize
         HapticFeedback.light()
 
         downloadTask = Task.detached { [weak self] in
             do {
-                guard let url = MeeshyConfig.resolveMediaURL(fileUrl) else { throw URLError(.badURL) }
+                guard let url = MeeshyConfig.resolveMediaURL(urlString) else { throw URLError(.badURL) }
 
                 let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
 
@@ -253,15 +295,16 @@ final class AttachmentDownloader: ObservableObject {
                 // Seed under the exact key the renderer resolves to, in the
                 // store that matches the media type — a download triggered by
                 // the badge must never need to re-fetch on the next render.
-                let resolvedKey = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
-                if isAudio {
+                let resolvedKey = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+                switch cacheStore {
+                case .audio:
                     await CacheCoordinator.shared.audio.store(data, for: resolvedKey)
-                } else if isImage {
+                case .image:
                     await CacheCoordinator.shared.images.store(data, for: resolvedKey)
                     if let image = UIImage(data: data) {
                         DiskCacheStore.cacheImageForPreview(image, key: resolvedKey)
                     }
-                } else {
+                case .video:
                     await CacheCoordinator.shared.video.store(data, for: resolvedKey)
                 }
 
@@ -354,6 +397,15 @@ struct AudioMediaView: View, Equatable {
     var footerModel: BubbleFooterModel? = nil
     var footerActions: BubbleFooterActions = .none
 
+    /// Quand non-nil, la citation est rendue dans le topSlot d'AudioPlayerView
+    /// (au-dessus de la ligne lecteur, à l'intérieur du même playerBackground).
+    /// Activé par `BubbleStandardLayout.audioHostsReply` — voir spec §4.3.
+    var replyReference: ReplyReference? = nil
+    var replyIsStory: Bool = false
+    var parentIsMe: Bool = false
+    var onReplyTap: ((String) -> Void)? = nil
+    var onStoryReplyTap: ((String) -> Void)? = nil
+
     static func == (lhs: AudioMediaView, rhs: AudioMediaView) -> Bool {
         lhs.attachment.id == rhs.attachment.id
             && lhs.attachment.fileUrl == rhs.attachment.fileUrl
@@ -365,6 +417,11 @@ struct AudioMediaView: View, Equatable {
             && lhs.contactColor == rhs.contactColor
             && lhs.activeAudioLanguageOverride == rhs.activeAudioLanguageOverride
             && lhs.footerModel == rhs.footerModel
+            && lhs.replyReference?.messageId == rhs.replyReference?.messageId
+            && lhs.replyReference?.previewText == rhs.replyReference?.previewText
+            && lhs.replyReference?.attachmentThumbnailUrl == rhs.replyReference?.attachmentThumbnailUrl
+            && lhs.replyIsStory == rhs.replyIsStory
+            && lhs.parentIsMe == rhs.parentIsMe
     }
 
     @State private var resolvedAvailability: AudioAvailability = .needsDownload
@@ -385,11 +442,37 @@ struct AudioMediaView: View, Equatable {
         return resolvedAvailability
     }
 
-    /// Résout `resolvedAvailability` depuis l'attachment courant. Appelé par
-    /// `.task(id: attachment.fileUrl)` : se ré-exécute quand l'URL bascule
-    /// optimiste (`file://`) → serveur (`https://`) à la réconciliation.
+    /// URL de la langue actuellement sélectionnée (orig ou traduite).
+    /// Drives `resolveAvailability` and the auto-DL trigger. Used as the
+    /// `.task(id:)` identifier so switching language re-runs availability
+    /// resolution and the policy check.
+    private var currentAudioUrl: String {
+        if let lang = selectedAudioLangCode,
+           let translated = translatedAudios.first(where: {
+               $0.targetLanguage.lowercased() == lang.lowercased()
+           }) {
+            return translated.url
+        }
+        return attachment.fileUrl
+    }
+
+    /// MediaKind for the current URL: original = `.audio`, translated =
+    /// `.audioTranslation`. Discrimination based on presence in
+    /// `translatedAudios` rather than `message.originalLanguage`, which may
+    /// differ from the `nil` sentinel used by `selectedAudioLangCode`.
+    private var currentMediaKind: MediaKind {
+        guard let lang = selectedAudioLangCode,
+              translatedAudios.contains(where: { $0.targetLanguage.lowercased() == lang.lowercased() })
+        else { return .audio }
+        return .audioTranslation
+    }
+
+    /// Résout `resolvedAvailability` depuis l'URL courante (langue active).
+    /// Ré-exécuté par `.task(id: currentAudioUrl)` quand l'URL bascule
+    /// (file:// -> https:// à la réconciliation, ou changement de langue
+    /// via `selectedAudioLangCode`).
     private func resolveAvailability() async {
-        let urlString = attachment.fileUrl
+        let urlString = currentAudioUrl
         if urlString.hasPrefix("file://") {
             let exists = FileManager.default.fileExists(
                 atPath: URL(string: urlString)?.path ?? ""
@@ -435,59 +518,126 @@ struct AudioMediaView: View, Equatable {
                 onDismissToMessage: onScrollToMessage
             )
         }
-        .onChange(of: activeAudioLanguageOverride) { _, newLang in
+        .adaptiveOnChange(of: activeAudioLanguageOverride) { _, newLang in
             withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                 selectedAudioLangCode = newLang
             }
         }
-        .task(id: attachment.fileUrl) {
+        .task(id: currentAudioUrl) {
+            // Reset stale "cached" flag from a previous URL (e.g. previous
+            // language) so resolveAvailability drives the truth for the new URL.
+            // We never reset mid-download — a running DL belongs to the URL
+            // that initiated it and must complete or be cancelled.
+            if !downloader.isDownloading {
+                downloader.isCached = false
+            }
             await resolveAvailability()
+
+            // Auto-DL when policy permits, the new URL isn't cached and no
+            // DL is already running. The network condition + preferences are
+            // both `@MainActor` singletons, safe to read from this `.task`
+            // which inherits the view's MainActor isolation.
+            if case .needsDownload = resolvedAvailability, !downloader.isDownloading {
+                let condition = NetworkConditionMonitor.shared.condition
+                let prefs = MediaDownloadPreferencesStore.shared.preferences
+                if MediaDownloadPolicyEngine.shouldAutoDownload(
+                    kind: currentMediaKind, condition: condition, prefs: prefs
+                ) {
+                    triggerCurrentLanguageDownload()
+                }
+            }
         }
     }
 
-    /// The audio widget carries a bottom slot only when a footer was injected
-    /// (audio-only messages). Without this gate `AudioPlayerView` would draw
-    /// an empty divider strip under the player for audio-with-caption.
-    private var hasPlayerBottomContent: Bool {
-        footerModel != nil
+    /// Triggers the download for the currently selected language's URL.
+    /// Routes to `startTranslatedAudio` when the URL points to a translated
+    /// audio, otherwise the standard attachment download.
+    private func triggerCurrentLanguageDownload() {
+        if currentMediaKind == .audioTranslation {
+            downloader.startTranslatedAudio(url: currentAudioUrl, fileSize: 0)
+        } else {
+            downloader.start(attachment: attachment, onShare: nil)
+        }
     }
 
     /// The final footer for the audio widget: the injected base model with
     /// the audio-language flags folded in, and `onFlagTap` wired to the audio
     /// language switch. One unified `BubbleFooter` — no separate flag row.
+    ///
+    /// **Règle** : le contrôleur translate (🌐) est câblé dès qu'un
+    /// `onShowTranslationDetail` callback existe — même si aucune traduction
+    /// audio n'est encore chargée. L'utilisateur doit pouvoir DEMANDER une
+    /// autre langue à tout moment. Les drapeaux affichés à droite reflètent
+    /// les variantes effectivement disponibles : la langue originale est
+    /// toujours montrée (info), les langues traduites sont ajoutées au fur et
+    /// à mesure qu'elles arrivent. La position du 🌐 ne dépend PAS du nombre
+    /// de drapeaux (cf. `BubbleFooter.metaLeading`).
     private var audioFooter: (BubbleFooterModel, BubbleFooterActions)? {
         guard var model = footerModel else { return nil }
         var actions = footerActions
+
+        let origCode = message.originalLanguage.lowercased()
+        var codes = [origCode]
+        for audio in translatedAudios {
+            let code = audio.targetLanguage.lowercased()
+            if code != origCode, !codes.contains(code) { codes.append(code) }
+        }
+        let active = (selectedAudioLangCode ?? origCode).lowercased()
+        model.flags = codes.map { FooterFlag(code: $0, isActive: $0 == active) }
+        model.showsTranslate = !translatedAudios.isEmpty && onShowTranslationDetail != nil
+
         if !translatedAudios.isEmpty {
-            let origCode = message.originalLanguage.lowercased()
-            var codes = [origCode]
-            for audio in translatedAudios {
-                let code = audio.targetLanguage.lowercased()
-                if code != origCode, !codes.contains(code) { codes.append(code) }
-            }
-            let active = (selectedAudioLangCode ?? origCode).lowercased()
-            model.flags = codes.map { FooterFlag(code: $0, isActive: $0 == active) }
-            model.showsTranslate = onShowTranslationDetail != nil
             actions.onFlagTap = { code in
                 withAnimation(.spring(response: 0.25, dampingFraction: 0.8)) {
                     selectedAudioLangCode = (code == origCode) ? nil : code
                 }
                 HapticFeedback.light()
             }
-            if let detail = onShowTranslationDetail {
-                let messageId = message.id
-                actions.onTranslate = { detail(messageId) }
-            }
         }
+        if let detail = onShowTranslationDetail {
+            let messageId = message.id
+            actions.onTranslate = { detail(messageId) }
+        }
+
         return (model, actions)
     }
 
-    /// The playable audio widget. The bottom slot is only wired in when there
-    /// is content for it, so `AudioPlayerView` keeps `bottomSlot` nil and
-    /// skips the divider strip otherwise.
+    /// Citation rendue dans le topSlot d'`AudioPlayerView` quand le message
+    /// est une réponse hébergée par l'audio (`audioHostsReply`).
+    @ViewBuilder
+    private var replyTopSlot: some View {
+        if let ref = replyReference {
+            BubbleQuotedReply(
+                style: .inline,
+                reply: ref,
+                parentIsMe: false,
+                accentHex: accentColor,
+                isDark: isDark,
+                mentionDisplayNames: mentionDisplayNames
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !ref.messageId.isEmpty else { return }
+                HapticFeedback.light()
+                if replyIsStory {
+                    onStoryReplyTap?(ref.messageId)
+                } else {
+                    onReplyTap?(ref.messageId)
+                }
+            }
+        }
+    }
+
+    /// The playable audio widget. Trois variantes pour préserver la détection
+    /// EmptyView du SDK (qui n'opère que sur le défaut littéral, pas sur un
+    /// `_ConditionalContent<..., EmptyView>` issu d'un @ViewBuilder interne) :
+    /// - reply présent → top (citation) + bottom (footer toujours injecté pour
+    ///   `audioHostsReply`, garanti par la matrice du spec §4.4) ;
+    /// - reply absent, footer présent → bottom seul (variant A historique) ;
+    /// - reply absent, footer absent → aucun slot (variant B historique).
     @ViewBuilder
     private var audioPlayer: some View {
-        if hasPlayerBottomContent {
+        if replyReference != nil {
             AudioPlayerView(
                 attachment: attachment,
                 context: .messageBubble,
@@ -507,10 +657,41 @@ struct AudioMediaView: View, Equatable {
                 },
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
-                onDownload: { downloader.start(attachment: attachment, onShare: nil) }
-            ) {
-                playerBottomContent
-            }
+                onDownload: { triggerCurrentLanguageDownload() },
+                topContent: { replyTopSlot },
+                bottomContent: { playerBottomContent }
+            )
+        } else if footerModel != nil {
+            // ⚠ NE PAS utiliser de trailing closure ici. `AudioPlayerView` a
+            // DEUX `@ViewBuilder` closure params (topContent + bottomContent)
+            // tous deux avec une default value `{ EmptyView() }`. Avec un
+            // trailing closure unique non labellisé, Swift le mappe au PREMIER
+            // closure param (topContent), pas au dernier — résultat observé :
+            // le `BubbleFooter` rendu via `playerBottomContent` apparaissait
+            // EN HAUT du player au lieu d'en bas. Passer `bottomContent:` de
+            // façon explicite force le routing correct vers `bottomSlot`.
+            AudioPlayerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: contactColor,
+                transcription: transcription,
+                translatedAudios: translatedAudios,
+                onFullscreen: { showAudioFullscreen = true },
+                onRetranscribe: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: true
+                        )
+                    }
+                },
+                onPlayingChange: { playing in
+                    withAnimation(.easeInOut(duration: 0.2)) { isAudioPlaying = playing }
+                },
+                externalLanguage: $selectedAudioLangCode,
+                availability: availability,
+                onDownload: { triggerCurrentLanguageDownload() },
+                bottomContent: { playerBottomContent }
+            )
         } else {
             AudioPlayerView(
                 attachment: attachment,
@@ -531,7 +712,7 @@ struct AudioMediaView: View, Equatable {
                 },
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
-                onDownload: { downloader.start(attachment: attachment, onShare: nil) }
+                onDownload: { triggerCurrentLanguageDownload() }
             )
         }
     }
@@ -577,7 +758,7 @@ struct AnimatedWaveformBar: View {
                     barHeight = minHeight
                 }
             }
-            .onChange(of: isRecording) { _, recording in
+            .adaptiveOnChange(of: isRecording) { _, recording in
                 if recording {
                     startAnimating()
                 } else {

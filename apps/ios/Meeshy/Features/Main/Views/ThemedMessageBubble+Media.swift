@@ -129,6 +129,66 @@ extension BubbleStandardLayout {
             }
         )
     }
+
+    // MARK: - Media + Reply unified container (visual-only reply)
+
+    /// Conteneur unifié pour un message reply visual-only : citation (inline)
+    /// au-dessus + grille visuelle, partageant une bordure RR16 et un fond
+    /// neutre. Aucune chat bubble parasite. Footer style `.overlay` épinglé
+    /// bottom-trailing sur la grille, identique au visual standalone.
+    /// Spec : `docs/superpowers/specs/2026-05-20-ios-reply-no-bubble-around-media-design.md` §4.5
+    @ViewBuilder
+    func mediaWithReplyContainer(reply: BubbleContent.Reply) -> some View {
+        let neutralBg = isDark ? Color.white.opacity(0.05) : Color.black.opacity(0.03)
+        let strokeColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
+        let dividerColor = isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06)
+
+        VStack(spacing: 0) {
+            BubbleQuotedReply(
+                style: .inline,
+                reply: reply.reference,
+                parentIsMe: false,
+                accentHex: contactColor,
+                isDark: isDark,
+                mentionDisplayNames: mentionDisplayNames
+            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(neutralBg)
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !reply.reference.messageId.isEmpty else { return }
+                HapticFeedback.light()
+                if reply.isStory {
+                    onStoryReplyTap?(reply.reference.messageId)
+                } else {
+                    onReplyTap?(reply.reference.messageId)
+                }
+            }
+
+            Divider().background(dividerColor)
+
+            visualMediaGrid
+                .background(Color.black)
+                .overlay(alignment: .bottomTrailing) {
+                    BubbleFooter(
+                        model: resolvedFooter().0,
+                        actions: .none,
+                        style: .overlay,
+                        isDark: isDark
+                    )
+                    .equatable()
+                    .padding(8)
+                    .transition(.opacity)
+                }
+        }
+        .compositingGroup()
+        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(strokeColor, lineWidth: 0.5)
+        )
+        .transition(.opacity.combined(with: .scale(scale: 0.98)))
+    }
 }
 
 // MARK: - BubbleGridCell (concrete struct, replaces former @ViewBuilder gridCell)
@@ -474,7 +534,7 @@ struct BubbleCarouselView: View {
             let startIndex = max(0, min(carouselIndex, items.count - 1))
             currentPageID = items[startIndex].id
         }
-        .onChange(of: currentPageID) { _, newID in
+        .adaptiveOnChange(of: currentPageID) { _, newID in
             guard let newID,
                   let newIndex = items.firstIndex(where: { $0.id == newID })
             else { return }
@@ -631,9 +691,12 @@ struct BubbleCarouselView: View {
 
     @ViewBuilder
     private func carouselVideoCell(_ attachment: MessageAttachment) -> some View {
-        InlineVideoPlayerView(
+        // Go through VideoMediaView so the inline carousel respects the
+        // download policy (auto-DL when allowed, download badge otherwise).
+        VideoMediaView(
             attachment: attachment,
             accentColor: contactColor,
+            isDark: isDark,
             onExpandFullscreen: {
                 fullscreenAttachment = attachment
             }

@@ -1304,14 +1304,14 @@ struct StoryCommentsOverlayView: View {
                         .padding(.top, 8)
                         .padding(.bottom, 12)
                     }
-                    .onChange(of: storyComments.count) { _, _ in
+                    .adaptiveOnChange(of: storyComments.count) { _, _ in
                         if let last = storyComments.last {
                             withAnimation(.easeOut(duration: 0.3)) {
                                 proxy.scrollTo(last.id, anchor: .bottom)
                             }
                         }
                     }
-                    .onChange(of: replyingToStoryComment?.id) { _, newId in
+                    .adaptiveOnChange(of: replyingToStoryComment?.id) { _, newId in
                         // Bring the target into view so the user sees what they're
                         // replying to even if it was off-screen.
                         guard let id = newId else { return }

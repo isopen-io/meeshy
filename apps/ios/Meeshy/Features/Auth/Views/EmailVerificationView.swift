@@ -108,7 +108,7 @@ struct EmailVerificationView: View {
                 .stroke(isCodeComplete ? MeeshyColors.indigo500 : theme.inputBorder, lineWidth: 1.5)
         )
         .padding(.horizontal, 32)
-        .onChange(of: code) { _, newValue in
+        .adaptiveOnChange(of: code) { _, newValue in
             let filtered = newValue.filter(\.isNumber)
             let limited = String(filtered.prefix(6))
             if limited != newValue {
