@@ -205,7 +205,7 @@ struct StoryCardView: View {
     let storyCommentCount: Int
     let isStoryCommentsEmpty: Bool
     let currentStoryNeedsVideoExport: Bool
-    let storyHasAudioOrVideo: Bool
+    let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
     let isGlobalMuted: Bool
     let availableTranslationLanguages: [TranslationLanguage]
@@ -250,6 +250,13 @@ struct StoryCardView: View {
     @Binding var storyDrafts: [String: StoryDraft]
 
     @ObservedObject var keyboard: KeyboardObserver
+
+    /// Temporise l'apparition du spinner de chargement. Il ne s'affiche que si
+    /// le média de la slide n'est toujours pas prêt après un court délai de
+    /// grâce (voir le `.task` en bas du `body`). Une slide déjà vue — ou
+    /// préchauffée par le prefetcher — devient prête avant ce délai, donc
+    /// revisiter une slide ne flashe jamais de loader.
+    @State private var showSlowLoader = false
 
     // Closures — actions on the parent view
     let triggerStoryReaction: (String) -> Void
@@ -311,10 +318,13 @@ struct StoryCardView: View {
                     )
             }
 
-            // === Loading spinner — shown until the slide's media is ready ===
-            // Gates with the same `isContentReady` flag that drives the progress
-            // timer. `.allowsHitTesting(false)` keeps tap-to-advance working.
-            if currentStory != nil && !isContentReady {
+            // === Loading spinner — shown only for genuinely slow loads ===
+            // Gated par `isContentReady` ET `showSlowLoader` : le loader
+            // n'apparaît que si le média n'est pas prêt après le délai de grâce
+            // (voir le `.task` en bas du `body`). Un hit cache devient prêt
+            // avant — donc revisiter une slide ne flashe jamais de spinner.
+            // `.allowsHitTesting(false)` keeps tap-to-advance working.
+            if currentStory != nil && !isContentReady && showSlowLoader {
                 ProgressView()
                     .progressViewStyle(.circular)
                     .tint(.white)
@@ -327,6 +337,7 @@ struct StoryCardView: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .allowsHitTesting(false)
                     .accessibilityHidden(true)
+                    .transition(.opacity)
             }
 
             // === Voice caption overlay (transcription voix) ===
@@ -454,7 +465,7 @@ struct StoryCardView: View {
                     storyCommentCount: storyCommentCount,
                     isStoryCommentsEmpty: isStoryCommentsEmpty,
                     currentStoryNeedsVideoExport: currentStoryNeedsVideoExport,
-                    storyHasAudioOrVideo: storyHasAudioOrVideo,
+                    storyHasAudibleSound: storyHasAudibleSound,
                     storyHasTranslatableContent: storyHasTranslatableContent,
                     isGlobalMuted: isGlobalMuted,
                     availableTranslationLanguages: availableTranslationLanguages,
@@ -600,6 +611,16 @@ struct StoryCardView: View {
                 .transition(.move(edge: .bottom).combined(with: .opacity))
                 .zIndex(150)
             }
+        }
+        // Délai de grâce du spinner : à chaque changement de slide on remet
+        // `showSlowLoader` à false, puis on ne l'arme qu'après 200 ms. Si le
+        // média devient prêt avant (cache disque / préchauffe prefetcher), le
+        // spinner n'est jamais affiché — la slide apparaît instantanément.
+        .task(id: currentStory?.id) {
+            showSlowLoader = false
+            try? await Task.sleep(for: .milliseconds(200))
+            guard !Task.isCancelled else { return }
+            withAnimation(.easeIn(duration: 0.2)) { showSlowLoader = true }
         }
     }
 

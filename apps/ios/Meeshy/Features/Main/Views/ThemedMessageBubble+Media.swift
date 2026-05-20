@@ -89,6 +89,7 @@ extension BubbleStandardLayout {
             contactColor: contactColor,
             allVisualAttachments: visualAttachments,
             messageId: message.id,
+            messageDeliveryStatus: message.deliveryStatus,
             revealedAttachmentIds: $revealedAttachmentIds,
             carouselIndex: $carouselIndex,
             showCarousel: $showCarousel,
@@ -108,7 +109,10 @@ extension BubbleStandardLayout {
             carouselIndex: $carouselIndex,
             showCarousel: $showCarousel,
             fullscreenAttachment: $fullscreenAttachment,
-            contactColor: contactColor
+            contactColor: contactColor,
+            messageDeliveryStatus: message.deliveryStatus,
+            footer: resolvedFooter().0,
+            isDark: isDark
         )
     }
 
@@ -118,6 +122,7 @@ extension BubbleStandardLayout {
         DownloadBadgeView(
             attachment: attachment,
             accentColor: contactColor,
+            messageDeliveryStatus: message.deliveryStatus,
             onShareFile: { url in
                 shareURL = url
                 showShareSheet = true
@@ -148,6 +153,7 @@ fileprivate struct BubbleGridCell: View {
     let contactColor: String
     let allVisualAttachments: [MessageAttachment]
     let messageId: String
+    let messageDeliveryStatus: Message.DeliveryStatus
 
     @Binding var revealedAttachmentIds: Set<String>
     @Binding var carouselIndex: Int
@@ -245,6 +251,7 @@ fileprivate struct BubbleGridCell: View {
             DownloadBadgeView(
                 attachment: attachment,
                 accentColor: contactColor,
+                messageDeliveryStatus: messageDeliveryStatus,
                 onShareFile: { url in
                     shareURL = url
                     showShareSheet = true
@@ -433,6 +440,9 @@ struct BubbleCarouselView: View {
     @Binding var showCarousel: Bool
     @Binding var fullscreenAttachment: MessageAttachment?
     let contactColor: String
+    let messageDeliveryStatus: Message.DeliveryStatus
+    var footer: BubbleFooterModel = .empty
+    var isDark: Bool = false
 
     @State private var currentPageID: String?
 
@@ -451,6 +461,14 @@ struct BubbleCarouselView: View {
             .frame(height: carouselHeight)
 
             carouselTopBar
+        }
+        // Timestamp + delivery state — same unified `.overlay` footer as the
+        // static `visualMediaGrid`, so a carousel-mode message still surfaces
+        // its send time and pending clock instead of dropping the footer.
+        .overlay(alignment: .bottomTrailing) {
+            BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
+                .equatable()
+                .padding(8)
         }
         .onAppear {
             let startIndex = max(0, min(carouselIndex, items.count - 1))
@@ -576,6 +594,7 @@ struct BubbleCarouselView: View {
             DownloadBadgeView(
                 attachment: attachment,
                 accentColor: contactColor,
+                messageDeliveryStatus: messageDeliveryStatus,
                 onShareFile: { _ in }
             )
             .padding(.bottom, 8)

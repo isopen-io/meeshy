@@ -97,7 +97,7 @@ function formatSingleAttachmentLabel(params: {
   type: NotificationAttachmentType;
   filename?: string | null;
   fileSize?: number | null;
-  /** Durée en secondes (champ `duration` de MessageAttachment). */
+  /** Durée en MILLISECONDES (champ `duration` de MessageAttachment, cf. schema.prisma). */
   duration?: number | null;
   width?: number | null;
   height?: number | null;
@@ -105,13 +105,13 @@ function formatSingleAttachmentLabel(params: {
   const details: string[] = [];
 
   if (params.type === 'audio') {
-    if (params.duration) details.push(formatDuration(params.duration * 1000));
+    if (params.duration) details.push(formatDuration(params.duration));
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
     return details.length > 0 ? `🎵 Audio · ${details.join(' · ')}` : '🎵 Audio';
   }
 
   if (params.type === 'video') {
-    if (params.duration) details.push(formatDuration(params.duration * 1000));
+    if (params.duration) details.push(formatDuration(params.duration));
     if (params.fileSize) details.push(formatFileSize(params.fileSize));
     return details.length > 0 ? `🎬 Vidéo · ${details.join(' · ')}` : '🎬 Vidéo';
   }
@@ -427,6 +427,7 @@ export class NotificationService {
       // Émettre via Socket.IO
       if (this.io) {
         this.io.to(params.userId).emit(SERVER_EVENTS.NOTIFICATION_NEW, formatted);
+        console.log(`[RT-DIAG] notification:new emitted (socket) user=${params.userId} type=${params.type} conv=${params.context.conversationId ?? 'none'}`);
         // Update badge counters on client (fire-and-forget, non-blocking)
         this.emitCountsUpdate(params.userId).catch(() => {});
       }
@@ -454,6 +455,7 @@ export class NotificationService {
             || 'Meeshy';
           const pushBody = params.content.substring(0, 200);
 
+          console.log(`[RT-DIAG] push (APNs/FCM) sending user=${params.userId} type=${params.type} conv=${params.context.conversationId ?? 'none'}`);
           this.pushService.sendToUser({
             userId: params.userId,
             // CRITICAL: exclude 'voip' tokens — regular notifications must NEVER be

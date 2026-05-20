@@ -81,13 +81,25 @@ final class MessageSocketEventTests: XCTestCase {
 
     func testTypingEventDecoding() throws {
         let json = """
-        {"userId": "u1", "username": "alice", "conversationId": "c1"}
+        {"userId": "u1", "username": "alice_handle", "displayName": "Alice Martin", "conversationId": "c1"}
         """.data(using: .utf8)!
 
         let event = try decoder.decode(TypingEvent.self, from: json)
         XCTAssertEqual(event.userId, "u1")
-        XCTAssertEqual(event.username, "alice")
+        XCTAssertEqual(event.username, "alice_handle")
+        XCTAssertEqual(event.displayName, "Alice Martin")
+        XCTAssertEqual(event.preferredDisplayName, "Alice Martin")
         XCTAssertEqual(event.conversationId, "c1")
+    }
+
+    func testTypingEventDecoding_missingDisplayName_preferredFallsBackToUsername() throws {
+        let json = """
+        {"userId": "u1", "username": "alice", "conversationId": "c1"}
+        """.data(using: .utf8)!
+
+        let event = try decoder.decode(TypingEvent.self, from: json)
+        XCTAssertNil(event.displayName)
+        XCTAssertEqual(event.preferredDisplayName, "alice")
     }
 
     // MARK: - UnreadUpdateEvent

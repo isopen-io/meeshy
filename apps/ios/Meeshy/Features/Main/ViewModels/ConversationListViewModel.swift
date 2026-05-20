@@ -57,10 +57,11 @@ class ConversationListViewModel: ObservableObject {
     /// « Brouillon » de la ligne et la priorité de tri. Concept client-local
     /// — jamais stocké dans le modèle SDK `Conversation`.
     @Published private(set) var draftSummaries: [String: DraftSummary] = [:]
-    /// Typing usernames indexed by conversationId. NOT @Published to avoid triggering
-    /// a full list re-render on every typing event from any conversation.
-    /// Rows read this during natural re-renders (scroll, message arrival).
-    var typingUsernames: [String: String] = [:]  // conversationId → displayName
+    /// Typing usernames indexed by conversationId. @Published — ConversationRowItem
+    /// + ThemedConversationRow are Equatable with .equatable() applied
+    /// (ConversationListView+Rows.swift:70), so only the row whose typingUsername
+    /// changed re-evaluates its body. The full list does NOT re-render.
+    @Published var typingUsernames: [String: String] = [:]  // conversationId → displayName
     var previewMessages: [String: [Message]] = [:]  // conversationId → recent messages (non-Published — only used in context menu preview)
     private var previewLoadingInFlight: Set<String> = []
     private var typingTimers: [String: Timer] = [:]
@@ -499,6 +500,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .debounce(for: .milliseconds(200), scheduler: DispatchQueue.main)
             .sink { [weak self] in
+                Logger.messages.info("[RT-DIAG] VM(list) conversationsDidChange -> reloadFromCache")
                 Task { @MainActor [weak self] in
                     await self?.reloadFromCache()
                 }
@@ -576,7 +578,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                typingUsernames[event.conversationId] = event.username
+                typingUsernames[event.conversationId] = event.preferredDisplayName
                 scheduleTypingCleanup(for: event.conversationId)
             }
             .store(in: &cancellables)
@@ -616,6 +618,7 @@ class ConversationListViewModel: ObservableObject {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
+                Logger.messages.info("[RT-DIAG] VM(list) conversationUpdated conv=\(event.conversationId, privacy: .public) known=\(self.convIndex(for: event.conversationId) != nil, privacy: .public)")
                 guard let index = self.convIndex(for: event.conversationId) else {
                     // Conversation pas encore connue côté client : c'est le cas
                     // d'un DM tout neuf (ou d'un groupe qu'on vient d'ajouter

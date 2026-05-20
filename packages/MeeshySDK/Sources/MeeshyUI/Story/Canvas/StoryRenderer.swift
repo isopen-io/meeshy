@@ -107,6 +107,8 @@ public enum StoryRenderer {
                               at time: CMTime,
                               mode: RenderMode,
                               languages: [String] = [],
+                              resolver: (@Sendable (String) -> URL?)? = nil,
+                              imageCache: ImageCacheReader? = nil,
                               cache: StoryRendererCache? = nil,
                               backdropProvider: BackdropProvider? = nil,
                               contentsScale: CGFloat = UIScreen.main.scale) -> CALayer {
@@ -130,10 +132,18 @@ public enum StoryRenderer {
                                into: geometry,
                                at: time,
                                mode: mode,
-                               languages: languages)
+                               languages: languages,
+                               resolver: resolver,
+                               imageCache: imageCache)
                 }
             } else {
-                layer = renderItem(item, into: geometry, at: time, mode: mode, languages: languages)
+                layer = renderItem(item,
+                                   into: geometry,
+                                   at: time,
+                                   mode: mode,
+                                   languages: languages,
+                                   resolver: resolver,
+                                   imageCache: imageCache)
             }
 
             // Feed glass-style text layers with a backdrop snapshot when the
@@ -213,10 +223,16 @@ public enum StoryRenderer {
                                    into geometry: CanvasGeometry,
                                    at time: CMTime,
                                    mode: RenderMode,
-                                   languages: [String] = []) -> CALayer {
+                                   languages: [String] = [],
+                                   resolver: (@Sendable (String) -> URL?)? = nil,
+                                   imageCache: ImageCacheReader? = nil) -> CALayer {
         if let media = item as? StoryMediaObject {
             let layer = StoryMediaLayer()
-            layer.configure(with: media, geometry: geometry, mode: mode)
+            layer.configure(with: media,
+                            geometry: geometry,
+                            mode: mode,
+                            resolver: resolver,
+                            imageCache: imageCache)
             // Keyframe overrides for media objects (position, scale, opacity)
             if mode == .play, let kfs = media.keyframes, !kfs.isEmpty {
                 applyKeyframeOverrides(kfs,

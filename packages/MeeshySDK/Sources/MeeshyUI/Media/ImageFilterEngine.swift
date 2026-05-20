@@ -1,11 +1,11 @@
 import UIKit
-import Combine
 import CoreImage
 import CoreImage.CIFilterBuiltins
 
 // MARK: - Image Filter
 
-public enum ImageFilter: String, CaseIterable, Identifiable, Sendable {
+/// Look-preset applied as the first stage of the render pipeline.
+public enum ImageFilter: String, CaseIterable, Identifiable, Codable, Sendable {
     case original, vivid, dramatic, mono, noir, sepia
     case warm, cool, fade, chrome, process, instant
 
@@ -27,11 +27,21 @@ public enum ImageFilter: String, CaseIterable, Identifiable, Sendable {
         case .instant: return "Instant"
         }
     }
+
+    /// Filters surfaced in Simple mode. Pro mode shows every case.
+    public var isEssential: Bool {
+        switch self {
+        case .original, .vivid, .dramatic, .mono, .warm, .cool: return true
+        default: return false
+        }
+    }
 }
 
 // MARK: - Image Effect
 
-public enum ImageEffect: String, CaseIterable, Identifiable, Sendable {
+/// One-tap creative effect applied as the final pipeline stage. Distinct from
+/// the fine-grained `ImageAdjustments` sliders — effects are bold presets.
+public enum ImageEffect: String, CaseIterable, Identifiable, Codable, Sendable {
     case none, blur, vignette, sharpen, bloom, grain
 
     public var id: String { rawValue }
@@ -49,7 +59,7 @@ public enum ImageEffect: String, CaseIterable, Identifiable, Sendable {
 
     public var iconName: String {
         switch self {
-        case .none: return "sparkles"
+        case .none: return "circle.slash"
         case .blur: return "aqi.medium"
         case .vignette: return "camera.filters"
         case .sharpen: return "sparkle"
@@ -61,204 +71,308 @@ public enum ImageEffect: String, CaseIterable, Identifiable, Sendable {
 
 // MARK: - Image Filter Engine
 
-@MainActor
-public final class ImageFilterEngine: ObservableObject {
-    @Published public var activeFilter: ImageFilter = .original
-    @Published public var brightness: Float = 0
-    @Published public var contrast: Float = 1
-    @Published public var saturation: Float = 1
-    @Published public var sharpness: Float = 0
-    @Published public var vignetteIntensity: Float = 0
-    @Published public var activeEffect: ImageEffect = .none
+/// Stateless GPU-backed renderer. It owns nothing but an immutable `CIContext`
+/// and turns an `(image, ImageEditState)` pair into a rendered `UIImage`.
+///
+/// Keeping the renderer free of edit state enforces the strict UI / rendering /
+/// processing separation: `ImageEditorViewModel` holds the state, the view
+/// holds presentation concerns, and this type only knows how to draw pixels.
+/// The same `render` runs on a small working copy for live preview and on the
+/// full-resolution original for export, so previews are always faithful.
+public final class ImageFilterEngine {
 
-    private let ciContext = CIContext(options: [.useSoftwareRenderer: false])
+    private let context: CIContext
 
-    public init() {}
-
-    public func applyEdits(to image: UIImage) -> UIImage {
-        guard let cgImage = image.cgImage else { return image }
-        var ciImage = CIImage(cgImage: cgImage)
-
-        ciImage = applyFilter(ciImage)
-        ciImage = applyAdjustments(ciImage)
-        ciImage = applyEffect(ciImage, extent: ciImage.extent)
-
-        guard let outputCG = ciContext.createCGImage(ciImage, from: ciImage.extent) else { return image }
-        return UIImage(cgImage: outputCG, scale: image.scale, orientation: image.imageOrientation)
+    public init() {
+        // Metal-backed: CoreImage filters run on the GPU.
+        self.context = CIContext(options: [.useSoftwareRenderer: false])
     }
 
-    public func generateThumbnails(from image: UIImage, size: CGFloat = 68) -> [ImageFilter: UIImage] {
-        let thumbSize = CGSize(width: size * UIScreen.main.scale, height: size * UIScreen.main.scale)
-        let renderer = UIGraphicsImageRenderer(size: thumbSize)
-        let resized = renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: thumbSize))
-        }
+    // MARK: - Full render
 
-        guard let cgImage = resized.cgImage else { return [:] }
-        let baseCI = CIImage(cgImage: cgImage)
+    /// Full non-destructive pipeline: orientation → crop → filter → adjustments
+    /// → effect. Geometry is baked first so colour stages always operate on the
+    /// final framing.
+    public func render(_ source: UIImage, state: ImageEditState) -> UIImage {
+        let base = renderGeometryOnly(source, state: state, applyCrop: true)
+        guard let cg = base.cgImage else { return base }
 
-        var results: [ImageFilter: UIImage] = [:]
+        let input = CIImage(cgImage: cg)
+        let extent = input.extent
+        guard extent.width >= 1, extent.height >= 1 else { return base }
+
+        var ci = applyFilter(input, filter: state.filter)
+        ci = applyAdjustments(ci, state.adjustments, extent: extent)
+        ci = applyEffect(ci, effect: state.effect, extent: extent)
+
+        guard let output = context.createCGImage(ci, from: extent) else { return base }
+        return UIImage(cgImage: output, scale: source.scale, orientation: .up)
+    }
+
+    /// Geometry-only render — orientation, flips and (optionally) crop, with no
+    /// colour stages. Used for the crop tool backdrop (`applyCrop: false`) and
+    /// the before/after comparison image (`applyCrop: true`).
+    public func renderGeometryOnly(_ source: UIImage, state: ImageEditState, applyCrop: Bool) -> UIImage {
+        let oriented = orient(
+            source,
+            turns: state.orientationTurns,
+            flipH: state.flipHorizontal,
+            flipV: state.flipVertical
+        )
+        guard applyCrop else { return oriented }
+        return crop(oriented, normalized: state.cropNormalized)
+    }
+
+    // MARK: - Thumbnails
+
+    /// Renders one preview thumbnail per filter from a downscaled copy of the
+    /// source. The source should already be geometry-resolved (oriented +
+    /// cropped) so thumbnails match the live canvas framing.
+    public func filterThumbnails(for source: UIImage, maxPixel: CGFloat = 240) -> [ImageFilter: UIImage] {
+        guard let resized = downscaled(source, maxPixel: maxPixel),
+              let cg = resized.cgImage else { return [:] }
+
+        let base = CIImage(cgImage: cg)
+        let extent = base.extent
+        var output: [ImageFilter: UIImage] = [:]
         for filter in ImageFilter.allCases {
-            let filtered = applyFilterPreset(baseCI, filter: filter)
-            if let cg = ciContext.createCGImage(filtered, from: filtered.extent) {
-                results[filter] = UIImage(cgImage: cg)
+            let filtered = applyFilter(base, filter: filter)
+            if let result = context.createCGImage(filtered, from: extent) {
+                output[filter] = UIImage(cgImage: result)
             }
         }
-        return results
+        return output
     }
 
-    public func reset() {
-        activeFilter = .original
-        brightness = 0
-        contrast = 1
-        saturation = 1
-        sharpness = 0
-        vignetteIntensity = 0
-        activeEffect = .none
+    /// Returns a copy of `image` whose longest side is at most `maxPixel`
+    /// pixels. Returns the original when it is already small enough. Used to
+    /// build the lightweight working copy that backs live preview so even a
+    /// 48-megapixel import never stalls the render loop.
+    public func downscaled(_ image: UIImage, maxPixel: CGFloat) -> UIImage? {
+        let pixelSize = CGSize(
+            width: image.size.width * image.scale,
+            height: image.size.height * image.scale
+        )
+        let longest = max(pixelSize.width, pixelSize.height)
+        guard longest > maxPixel, longest > 0 else { return image }
+
+        let ratio = maxPixel / longest
+        let target = CGSize(width: pixelSize.width * ratio, height: pixelSize.height * ratio)
+        guard target.width >= 1, target.height >= 1 else { return image }
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = 1
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: target, format: format)
+        return renderer.image { _ in
+            image.draw(in: CGRect(origin: .zero, size: target))
+        }
     }
 
-    // MARK: - Pipeline
+    // MARK: - Geometry
 
-    private func applyFilter(_ input: CIImage) -> CIImage {
-        applyFilterPreset(input, filter: activeFilter)
+    private func orient(_ image: UIImage, turns: Int, flipH: Bool, flipV: Bool) -> UIImage {
+        let t = ((turns % 4) + 4) % 4
+        if t == 0, !flipH, !flipV, image.imageOrientation == .up {
+            return image
+        }
+
+        let size = image.size
+        guard size.width > 0, size.height > 0 else { return image }
+        let swap = (t == 1 || t == 3)
+        let canvas = swap ? CGSize(width: size.height, height: size.width) : size
+
+        let format = UIGraphicsImageRendererFormat.default()
+        format.scale = image.scale
+        format.opaque = false
+        let renderer = UIGraphicsImageRenderer(size: canvas, format: format)
+        return renderer.image { ctx in
+            let cg = ctx.cgContext
+            cg.translateBy(x: canvas.width / 2, y: canvas.height / 2)
+            if t != 0 { cg.rotate(by: CGFloat(t) * .pi / 2) }
+            if flipH || flipV { cg.scaleBy(x: flipH ? -1 : 1, y: flipV ? -1 : 1) }
+            image.draw(in: CGRect(
+                x: -size.width / 2, y: -size.height / 2,
+                width: size.width, height: size.height
+            ))
+        }
     }
 
-    private func applyFilterPreset(_ input: CIImage, filter: ImageFilter) -> CIImage {
+    private func crop(_ image: UIImage, normalized: CGRect?) -> UIImage {
+        guard let normalized, let cg = image.cgImage else { return image }
+        let pxWidth = CGFloat(cg.width)
+        let pxHeight = CGFloat(cg.height)
+        guard pxWidth >= 1, pxHeight >= 1 else { return image }
+
+        let pixelRect = CGRect(
+            x: normalized.minX * pxWidth,
+            y: normalized.minY * pxHeight,
+            width: normalized.width * pxWidth,
+            height: normalized.height * pxHeight
+        ).integral
+
+        let bounds = CGRect(x: 0, y: 0, width: pxWidth, height: pxHeight)
+        let clamped = pixelRect.intersection(bounds)
+        guard clamped.width >= 1, clamped.height >= 1,
+              let cropped = cg.cropping(to: clamped) else { return image }
+        return UIImage(cgImage: cropped, scale: image.scale, orientation: .up)
+    }
+
+    // MARK: - Filter stage
+
+    private func applyFilter(_ input: CIImage, filter: ImageFilter) -> CIImage {
         switch filter {
         case .original:
             return input
         case .vivid:
-            return applyColorControls(input, saturation: 1.5, contrast: 1.15)
+            return colorControls(input, saturation: 1.5, contrast: 1.15)
         case .dramatic:
-            let adjusted = applyColorControls(input, contrast: 1.4)
-            return applyVignetteFilter(adjusted, intensity: 1.5, radius: 1)
+            let adjusted = colorControls(input, contrast: 1.4)
+            return vignette(adjusted, intensity: 1.5, radius: 1)
         case .mono:
-            return applyCIFilter("CIPhotoEffectMono", to: input)
+            return named("CIPhotoEffectMono", input)
         case .noir:
-            return applyCIFilter("CIPhotoEffectNoir", to: input)
+            return named("CIPhotoEffectNoir", input)
         case .sepia:
-            guard let filter = CIFilter(name: "CISepiaTone") else { return input }
-            filter.setValue(input, forKey: kCIInputImageKey)
-            filter.setValue(0.7, forKey: kCIInputIntensityKey)
-            return filter.outputImage ?? input
+            return ciFilter("CISepiaTone", on: input, [kCIInputIntensityKey: 0.7])
         case .warm:
-            return applyTemperature(input, neutral: CIVector(x: 6500, y: 0), target: CIVector(x: 7500, y: 0))
+            return temperature(input, target: 7800)
         case .cool:
-            return applyTemperature(input, neutral: CIVector(x: 6500, y: 0), target: CIVector(x: 5500, y: 0))
+            return temperature(input, target: 5200)
         case .fade:
-            return applyCIFilter("CIPhotoEffectFade", to: input)
+            return named("CIPhotoEffectFade", input)
         case .chrome:
-            return applyCIFilter("CIPhotoEffectChrome", to: input)
+            return named("CIPhotoEffectChrome", input)
         case .process:
-            return applyCIFilter("CIPhotoEffectProcess", to: input)
+            return named("CIPhotoEffectProcess", input)
         case .instant:
-            return applyCIFilter("CIPhotoEffectInstant", to: input)
+            return named("CIPhotoEffectInstant", input)
         }
     }
 
-    private func applyAdjustments(_ input: CIImage) -> CIImage {
-        let needsColorControls = brightness != 0 || contrast != 1 || saturation != 1
-        let needsSharpness = sharpness > 0
-        let needsVignette = vignetteIntensity > 0
+    // MARK: - Adjustment stage
 
-        guard needsColorControls || needsSharpness || needsVignette else { return input }
-
+    private func applyAdjustments(_ input: CIImage, _ adjustments: ImageAdjustments, extent: CGRect) -> CIImage {
+        guard !adjustments.isNeutral else { return input }
         var result = input
 
-        if needsColorControls {
-            guard let filter = CIFilter(name: "CIColorControls") else { return result }
-            filter.setValue(result, forKey: kCIInputImageKey)
-            filter.setValue(brightness, forKey: kCIInputBrightnessKey)
-            filter.setValue(contrast, forKey: kCIInputContrastKey)
-            filter.setValue(saturation, forKey: kCIInputSaturationKey)
-            result = filter.outputImage ?? result
+        if abs(adjustments.exposure) > 0.001 {
+            result = ciFilter("CIExposureAdjust", on: result, [kCIInputEVKey: adjustments.exposure])
         }
 
-        if needsSharpness {
-            guard let filter = CIFilter(name: "CISharpenLuminance") else { return result }
-            filter.setValue(result, forKey: kCIInputImageKey)
-            filter.setValue(sharpness, forKey: kCIInputSharpnessKey)
-            result = filter.outputImage ?? result
+        if abs(adjustments.brightness) > 0.001
+            || abs(adjustments.contrast - 1) > 0.001
+            || abs(adjustments.saturation - 1) > 0.001 {
+            result = colorControls(
+                result,
+                saturation: adjustments.saturation,
+                contrast: adjustments.contrast,
+                brightness: adjustments.brightness
+            )
         }
 
-        if needsVignette {
-            result = applyVignetteFilter(result, intensity: vignetteIntensity, radius: 1)
+        if abs(adjustments.vibrance) > 0.001 {
+            result = ciFilter("CIVibrance", on: result, ["inputAmount": adjustments.vibrance])
+        }
+
+        if abs(adjustments.temperature) > 0.001 {
+            result = temperature(result, target: 6500 + adjustments.temperature * 1800)
+        }
+
+        if adjustments.sharpness > 0.001 {
+            result = ciFilter("CISharpenLuminance", on: result, [kCIInputSharpnessKey: adjustments.sharpness])
+        }
+
+        if adjustments.blur > 0.001 {
+            let radius = adjustments.blur * 16
+            let blurred = ciFilter("CIGaussianBlur", on: result.clampedToExtent(), [kCIInputRadiusKey: radius])
+            result = blurred.cropped(to: extent)
+        }
+
+        if adjustments.vignette > 0.001 {
+            result = vignette(result, intensity: adjustments.vignette, radius: 1)
         }
 
         return result
     }
 
-    private func applyEffect(_ input: CIImage, extent: CGRect) -> CIImage {
-        switch activeEffect {
+    // MARK: - Effect stage
+
+    private func applyEffect(_ input: CIImage, effect: ImageEffect, extent: CGRect) -> CIImage {
+        switch effect {
         case .none:
             return input
         case .blur:
-            guard let filter = CIFilter(name: "CIGaussianBlur") else { return input }
-            filter.setValue(input, forKey: kCIInputImageKey)
-            filter.setValue(8.0, forKey: kCIInputRadiusKey)
-            return filter.outputImage?.cropped(to: extent) ?? input
+            let blurred = ciFilter("CIGaussianBlur", on: input.clampedToExtent(), [kCIInputRadiusKey: 8.0])
+            return blurred.cropped(to: extent)
         case .vignette:
-            return applyVignetteFilter(input, intensity: 2, radius: 1)
+            return vignette(input, intensity: 2, radius: 1)
         case .sharpen:
-            guard let filter = CIFilter(name: "CISharpenLuminance") else { return input }
-            filter.setValue(input, forKey: kCIInputImageKey)
-            filter.setValue(0.8, forKey: kCIInputSharpnessKey)
-            return filter.outputImage ?? input
+            return ciFilter("CISharpenLuminance", on: input, [kCIInputSharpnessKey: 0.8])
         case .bloom:
-            guard let filter = CIFilter(name: "CIBloom") else { return input }
-            filter.setValue(input, forKey: kCIInputImageKey)
-            filter.setValue(10.0, forKey: kCIInputRadiusKey)
-            filter.setValue(0.5, forKey: kCIInputIntensityKey)
-            return filter.outputImage?.cropped(to: extent) ?? input
+            let bloomed = ciFilter("CIBloom", on: input, [
+                kCIInputRadiusKey: 10.0,
+                kCIInputIntensityKey: 0.5
+            ])
+            return bloomed.cropped(to: extent)
         case .grain:
-            return applyGrain(input, extent: extent)
+            return grain(input, extent: extent)
         }
     }
 
-    // MARK: - Helpers
+    // MARK: - Filter helpers
 
-    private func applyCIFilter(_ name: String, to input: CIImage) -> CIImage {
+    private func named(_ name: String, _ input: CIImage) -> CIImage {
+        ciFilter(name, on: input, [:])
+    }
+
+    private func ciFilter(_ name: String, on input: CIImage, _ parameters: [String: Any]) -> CIImage {
         guard let filter = CIFilter(name: name) else { return input }
         filter.setValue(input, forKey: kCIInputImageKey)
+        for (key, value) in parameters {
+            filter.setValue(value, forKey: key)
+        }
         return filter.outputImage ?? input
     }
 
-    private func applyColorControls(_ input: CIImage, saturation: Float = 1, contrast: Float = 1, brightness: Float = 0) -> CIImage {
-        guard let filter = CIFilter(name: "CIColorControls") else { return input }
-        filter.setValue(input, forKey: kCIInputImageKey)
-        filter.setValue(brightness, forKey: kCIInputBrightnessKey)
-        filter.setValue(contrast, forKey: kCIInputContrastKey)
-        filter.setValue(saturation, forKey: kCIInputSaturationKey)
-        return filter.outputImage ?? input
+    private func colorControls(
+        _ input: CIImage,
+        saturation: Float = 1,
+        contrast: Float = 1,
+        brightness: Float = 0
+    ) -> CIImage {
+        ciFilter("CIColorControls", on: input, [
+            kCIInputBrightnessKey: brightness,
+            kCIInputContrastKey: contrast,
+            kCIInputSaturationKey: saturation
+        ])
     }
 
-    private func applyTemperature(_ input: CIImage, neutral: CIVector, target: CIVector) -> CIImage {
+    private func temperature(_ input: CIImage, target: Float) -> CIImage {
         guard let filter = CIFilter(name: "CITemperatureAndTint") else { return input }
         filter.setValue(input, forKey: kCIInputImageKey)
-        filter.setValue(neutral, forKey: "inputNeutral")
-        filter.setValue(target, forKey: "inputTargetNeutral")
+        filter.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
+        filter.setValue(CIVector(x: CGFloat(target), y: 0), forKey: "inputTargetNeutral")
         return filter.outputImage ?? input
     }
 
-    private func applyVignetteFilter(_ input: CIImage, intensity: Float, radius: Float) -> CIImage {
-        guard let filter = CIFilter(name: "CIVignette") else { return input }
-        filter.setValue(input, forKey: kCIInputImageKey)
-        filter.setValue(intensity, forKey: kCIInputIntensityKey)
-        filter.setValue(radius, forKey: kCIInputRadiusKey)
-        return filter.outputImage ?? input
+    private func vignette(_ input: CIImage, intensity: Float, radius: Float) -> CIImage {
+        ciFilter("CIVignette", on: input, [
+            kCIInputIntensityKey: intensity,
+            kCIInputRadiusKey: radius
+        ])
     }
 
-    private func applyGrain(_ input: CIImage, extent: CGRect) -> CIImage {
+    private func grain(_ input: CIImage, extent: CGRect) -> CIImage {
         guard let noise = CIFilter(name: "CIRandomGenerator")?.outputImage else { return input }
         let cropped = noise.cropped(to: extent)
 
-        guard let whiten = CIFilter(name: "CIColorMatrix") else { return input }
-        whiten.setValue(cropped, forKey: kCIInputImageKey)
-        whiten.setValue(CIVector(x: 0, y: 0, z: 0, w: 0), forKey: "inputRVector")
-        whiten.setValue(CIVector(x: 0, y: 0, z: 0, w: 0), forKey: "inputGVector")
-        whiten.setValue(CIVector(x: 0, y: 0, z: 0, w: 0), forKey: "inputBVector")
-        whiten.setValue(CIVector(x: 0, y: 0, z: 0, w: 0.05), forKey: "inputAVector")
-        guard let grainLayer = whiten.outputImage else { return input }
+        let grainLayer = ciFilter("CIColorMatrix", on: cropped, [
+            "inputRVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputGVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputBVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+            "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0.05)
+        ])
 
         guard let composite = CIFilter(name: "CISourceOverCompositing") else { return input }
         composite.setValue(grainLayer, forKey: kCIInputImageKey)

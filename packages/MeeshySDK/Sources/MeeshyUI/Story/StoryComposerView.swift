@@ -383,10 +383,10 @@ public struct StoryComposerView: View {
                     addRecordingToBackground(url: url)
                     audioEditorItem = nil
                 },
-                onDismiss: { audioEditorItem = nil }
+                onCancel: { audioEditorItem = nil }
             )
         }
-        .sheet(item: $mediaAudioEditorItem) { item in
+        .fullScreenCover(item: $mediaAudioEditorItem) { item in
             MeeshyAudioEditorView(
                 url: item.url,
                 onConfirm: { url, _, _, _ in
@@ -394,7 +394,7 @@ public struct StoryComposerView: View {
                     mediaAudioEditorItem = nil
                     addVocalToForeground()
                 },
-                onDismiss: { mediaAudioEditorItem = nil }
+                onCancel: { mediaAudioEditorItem = nil }
             )
         }
         .sheet(isPresented: $showVoiceRecorderSheet) {
@@ -459,7 +459,7 @@ public struct StoryComposerView: View {
         )) { wrapper in
             MeeshyImageEditorView(
                 image: wrapper.image,
-                initialCropRatio: .ratio9x16,
+                context: .story,
                 onAccept: { edited in
                     selectedImage = edited
                     viewModel.hasBackgroundImage = true
@@ -472,7 +472,7 @@ public struct StoryComposerView: View {
         .fullScreenCover(item: $editingElementImage) { item in
             MeeshyImageEditorView(
                 image: item.image,
-                initialCropRatio: .ratio9x16,
+                context: .story,
                 onAccept: { edited in
                     viewModel.loadedImages[item.elementId] = edited
                     editingElementImage = nil
@@ -483,8 +483,10 @@ public struct StoryComposerView: View {
         .fullScreenCover(item: $editingElementVideo) { item in
             MeeshyVideoEditorView(
                 url: item.url,
-                onAccept: {
-                    let thumbnail = Self.generateVideoThumbnail(url: item.url)
+                context: .story,
+                onComplete: { result in
+                    viewModel.loadedVideoURLs[item.elementId] = result.url
+                    let thumbnail = Self.generateVideoThumbnail(url: result.url)
                     if let thumbnail { viewModel.loadedImages[item.elementId] = thumbnail }
                     editingElementVideo = nil
                 },

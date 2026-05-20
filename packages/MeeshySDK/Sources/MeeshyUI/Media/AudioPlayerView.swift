@@ -259,30 +259,63 @@ public struct AudioPlayerView: View {
 
     public var onFullscreen: (() -> Void)? = nil
     public var onRequestTranscription: (() -> Void)? = nil
+    public var onRetranscribe: (() -> Void)? = nil
     public var onDelete: (() -> Void)? = nil
     public var onEdit: (() -> Void)? = nil
     public var onPlayingChange: ((Bool) -> Void)? = nil
     private var externalLanguage: Binding<String?>?
     private var bottomSlot: AnyView?
+    private var availability: AudioAvailability
+    private var onDownload: (() -> Void)?
 
     @StateObject private var player = AudioPlaybackManager()
     @StateObject private var waveformAnalyzer = AudioWaveformAnalyzer()
     @ObservedObject private var theme = ThemeManager.shared
     @State private var isTranscriptionExpanded = false
     @State private var selectedAudioLanguage: String = "orig"
+    @State private var isRetranscribing = false
 
     private var isDark: Bool { theme.mode.isDark || context.isImmersive }
     private var accent: Color { Color(hex: accentColor) }
 
     private var displaySegments: [TranscriptionDisplaySegment] {
-        if selectedAudioLanguage != "orig",
-           let translated = translatedAudios.first(where: { $0.targetLanguage.lowercased() == selectedAudioLanguage.lowercased() }),
-           !translated.segments.isEmpty {
-            return TranscriptionDisplaySegment.buildFrom(segments: translated.segments)
+        AudioPlayerView.resolveDisplaySegments(
+            selectedLanguage: selectedAudioLanguage,
+            transcription: transcription,
+            translatedAudios: translatedAudios
+        )
+    }
+
+    /// Pure resolution of the transcription strip segments. Falls back to a
+    /// single synthesized segment from the full text when the per-segment
+    /// list is empty — symmetrically for the original transcription AND for a
+    /// selected translated audio (otherwise stub-segment translated audios
+    /// would render a blank strip).
+    nonisolated public static func resolveDisplaySegments(
+        selectedLanguage: String,
+        transcription: MessageTranscription?,
+        translatedAudios: [MessageTranslatedAudio]
+    ) -> [TranscriptionDisplaySegment] {
+        if selectedLanguage != "orig",
+           let translated = translatedAudios.first(where: {
+               $0.targetLanguage.lowercased() == selectedLanguage.lowercased()
+           }) {
+            let builtTranslated = TranscriptionDisplaySegment.buildFrom(segments: translated.segments)
+            if builtTranslated.isEmpty,
+               !translated.transcription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return [TranscriptionDisplaySegment(
+                    text: translated.transcription,
+                    startTime: 0,
+                    endTime: Double(translated.durationMs) / 1000.0,
+                    speakerId: nil,
+                    speakerColor: TranscriptionDisplaySegment.speakerPalette[0]
+                )]
+            }
+            return builtTranslated
         }
         guard let t = transcription else { return [] }
         let built = TranscriptionDisplaySegment.buildFrom(t)
-        if built.isEmpty, !t.text.isEmpty {
+        if built.isEmpty, !t.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return [TranscriptionDisplaySegment(
                 text: t.text,
                 startTime: 0,
@@ -305,16 +338,22 @@ public struct AudioPlayerView: View {
                 translatedAudios: [MessageTranslatedAudio] = [],
                 onFullscreen: (() -> Void)? = nil,
                 onRequestTranscription: (() -> Void)? = nil,
+                onRetranscribe: (() -> Void)? = nil,
                 onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
                 onPlayingChange: ((Bool) -> Void)? = nil,
                 externalLanguage: Binding<String?>? = nil,
+                availability: AudioAvailability = .ready,
+                onDownload: (() -> Void)? = nil,
                 @ViewBuilder bottomContent: () -> some View = { EmptyView() }) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
         self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
+        self.onRetranscribe = onRetranscribe
         self.onDelete = onDelete; self.onEdit = onEdit
         self.onPlayingChange = onPlayingChange
         self.externalLanguage = externalLanguage
+        self.availability = availability
+        self.onDownload = onDownload
         let content = bottomContent()
         self.bottomSlot = content is EmptyView ? nil : AnyView(content)
     }
@@ -341,8 +380,16 @@ public struct AudioPlayerView: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isTranscriptionExpanded)
         .onAppear {
             player.attachmentId = attachment.id
-            AudioPlaybackManager.registerAutoplay(url: attachment.fileUrl) { [player] in
-                player.play(urlString: attachment.fileUrl)
+            let autoplayUrl = attachment.fileUrl
+            AudioPlaybackManager.registerAutoplay(url: autoplayUrl) { [player] in
+                // Optimistic local audio can never load through the cache
+                // (DiskCacheStore.data(for:) rejects file://) — autoplay it
+                // straight from disk. See Sprint 3 RC3.2.
+                if autoplayUrl.hasPrefix("file://"), let localURL = URL(string: autoplayUrl) {
+                    player.playLocal(url: localURL)
+                } else {
+                    player.play(urlString: autoplayUrl)
+                }
             }
             loadWaveformSamples()
         }
@@ -430,6 +477,8 @@ public struct AudioPlayerView: View {
                     .padding(.vertical, 6)
                 }
 
+                retranscribeButton
+
                 if let slot = bottomSlot {
                     slot.padding(.horizontal, 10).padding(.bottom, 6)
                 }
@@ -464,8 +513,38 @@ public struct AudioPlayerView: View {
             if let slot = bottomSlot {
                 slot.padding(.horizontal, 10)
             }
+            retranscribeButton
         }
         .padding(.bottom, 6)
+    }
+
+    // MARK: - Re-transcribe Button
+    @ViewBuilder
+    private var retranscribeButton: some View {
+        if let onRetranscribe {
+            Button {
+                guard !isRetranscribing else { return }
+                isRetranscribing = true
+                onRetranscribe()
+                HapticFeedback.light()
+            } label: {
+                HStack(spacing: 4) {
+                    if isRetranscribing {
+                        ProgressView().scaleEffect(0.6)
+                    } else {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    Text(String(localized: "media.audio.retranscribe",
+                                 defaultValue: "Re-transcrire", bundle: .module))
+                        .font(.system(size: 10, weight: .medium))
+                }
+                .foregroundColor(isDark ? .white.opacity(0.45) : .black.opacity(0.35))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 6)
+            }
+            .disabled(isRetranscribing)
+        }
     }
 
     private var truncatedSegments: [TranscriptionDisplaySegment] {
@@ -538,26 +617,58 @@ public struct AudioPlayerView: View {
     // MARK: - Play Button
     private var playButton: some View {
         Button {
-            if player.isPlaying || player.progress > 0 {
-                player.togglePlayPause()
-            } else {
-                player.play(urlString: currentAudioUrl)
+            switch availability {
+            case .ready:
+                handlePlayTap()
+            case .needsDownload:
+                onDownload?()
+                HapticFeedback.light()
+            case .downloading:
+                break
             }
-            HapticFeedback.light()
         } label: {
-            let size: CGFloat = context.isCompact ? 34 : 40
-            ZStack {
-                Circle()
-                    .fill(
-                        LinearGradient(
-                            colors: [accent, accent.opacity(0.7)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: size, height: size)
-                    .shadow(color: accent.opacity(0.3), radius: 6, y: 2)
+            playButtonLabel
+        }
+        .disabled(isDownloading)
+    }
 
+    private var isDownloading: Bool {
+        if case .downloading = availability { return true }
+        return false
+    }
+
+    private func handlePlayTap() {
+        if player.isPlaying || player.progress > 0 {
+            player.togglePlayPause()
+        } else if attachment.fileUrl.hasPrefix("file://"),
+                  let localURL = URL(string: attachment.fileUrl) {
+            // Optimistic local audio: AudioPlaybackManager.play(urlString:)
+            // routes through DiskCacheStore.data(for:), which rejects
+            // file:// schemes. Read the on-device file directly instead.
+            player.playLocal(url: localURL)
+        } else {
+            player.play(urlString: currentAudioUrl)
+        }
+        HapticFeedback.light()
+    }
+
+    @ViewBuilder
+    private var playButtonLabel: some View {
+        let size: CGFloat = context.isCompact ? 34 : 40
+        ZStack {
+            Circle()
+                .fill(
+                    LinearGradient(
+                        colors: [accent, accent.opacity(0.7)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .frame(width: size, height: size)
+                .shadow(color: accent.opacity(0.3), radius: 6, y: 2)
+
+            switch availability {
+            case .ready:
                 if player.isLoading {
                     ProgressView()
                         .tint(.white)
@@ -567,6 +678,23 @@ public struct AudioPlayerView: View {
                         .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
                         .foregroundColor(.white)
                         .offset(x: player.isPlaying ? 0 : 1)
+                }
+            case .needsDownload:
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: context.isCompact ? 13 : 15, weight: .bold))
+                    .foregroundColor(.white)
+            case .downloading(let progress):
+                if progress > 0 {
+                    Circle()
+                        .trim(from: 0, to: progress)
+                        .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: size * 0.5, height: size * 0.5)
+                        .animation(.linear(duration: 0.2), value: progress)
+                } else {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(0.6)
                 }
             }
         }
@@ -604,6 +732,7 @@ public struct AudioPlayerView: View {
                         HapticFeedback.light()
                     }
             }
+            .allowsHitTesting(availability == .ready)
         )
     }
 

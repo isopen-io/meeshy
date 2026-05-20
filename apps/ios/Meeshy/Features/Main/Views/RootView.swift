@@ -597,7 +597,7 @@ struct RootView: View {
                     message = msg.isEmpty
                         ? String(localized: "Ce lien n'est plus actif", defaultValue: "Ce lien n'est plus actif")
                         : msg
-                case .forbidden(let reason):
+                case .forbidden(let reason, _):
                     message = reason ?? String(localized: "Acces refuse a cette conversation", defaultValue: "Acces refuse a cette conversation")
                 default:
                     message = error.errorDescription ?? String(localized: "Impossible d'ouvrir le lien", defaultValue: "Impossible d'ouvrir le lien")

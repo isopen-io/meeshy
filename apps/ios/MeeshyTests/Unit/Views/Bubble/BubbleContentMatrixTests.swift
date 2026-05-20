@@ -24,6 +24,42 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertTrue(content.isEmojiOnly)
     }
 
+    /// Un emoji envoyé EN RÉPONSE à un message doit rester détecté comme
+    /// emoji-only — la bulle l'affiche alors agrandi & centré au-dessus du
+    /// quote, au lieu de le rendre comme du texte normal 15pt. La détection
+    /// ne doit donc PAS dépendre de l'absence de `replyTo`.
+    func test_emojiOnly_withReply_isStillFlagged() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let msg = makeMessage(content: "🔥🔥🔥", replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.isEmojiOnly)
+        XCTAssertNotNil(content.reply)
+        XCTAssertEqual(content.text?.emojiFontSize, 45)
+    }
+
+    /// Un emoji-réponse possède bien un quote ET le flag emoji — l'orchestrateur
+    /// route ce cas vers la bulle (avec quote) et non vers le rendu libre.
+    func test_emojiOnly_withReply_keepsTextPayload() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let msg = makeMessage(content: "😍", replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.isEmojiOnly)
+        XCTAssertEqual(content.text?.raw, "😍")
+        XCTAssertEqual(content.text?.emojiFontSize, 90)
+    }
+
+    /// Non-régression : un emoji SANS réponse reste emoji-only (rendu libre,
+    /// hors bulle) — comportement à conserver.
+    func test_emojiOnly_withoutReply_remainsFlaggedAndUnquoted() {
+        let msg = makeMessage(content: "👍")
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.isEmojiOnly)
+        XCTAssertNil(content.reply)
+    }
+
     func test_messageWithImages_hasVisualGrid() {
         let img1 = makeAttachment(type: .image)
         let img2 = makeAttachment(type: .image)

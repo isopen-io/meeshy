@@ -7,8 +7,19 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { AttachmentTranslateService } from '../../services/AttachmentTranslateService';
 import { ConsentValidationService } from '../../services/ConsentValidationService';
 import { messageAttachmentSchema, errorResponseSchema } from '@meeshy/shared/types/api-schemas';
-import type { AttachmentParams, TranslateBody } from './types';
+import type { AttachmentParams, TranslateBody, TranscribeBody } from './types';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+
+/**
+ * Whether the transcribe endpoint should short-circuit and return the
+ * already-persisted transcription. `force: true` always re-runs a fresh
+ * `transcription_only` ZMQ request (cache-free path).
+ */
+export function shouldReturnExistingTranscription(
+  input: { hasTranscription: boolean; force: boolean }
+): boolean {
+  return input.hasTranscription && !input.force;
+}
 
 export async function registerTranslationRoutes(
   fastify: FastifyInstance,
@@ -273,6 +284,16 @@ export async function registerTranslationRoutes(
             }
           }
         },
+        body: {
+          type: 'object',
+          properties: {
+            force: {
+              type: 'boolean',
+              description: 'Re-run a fresh transcription even if one already exists',
+              default: false
+            }
+          }
+        },
         response: {
           200: {
             description: 'Transcription completed or processing started',
@@ -365,6 +386,8 @@ export async function registerTranslationRoutes(
         }
 
         const { attachmentId } = request.params as AttachmentParams;
+        const transcribeBody = (request.body ?? {}) as TranscribeBody;
+        const force = transcribeBody.force === true;
         const userId = authContext.userId;
 
         const attachment = await prisma.messageAttachment.findUnique({
@@ -415,7 +438,10 @@ export async function registerTranslationRoutes(
           });
         }
 
-        if (existingData.transcription) {
+        if (shouldReturnExistingTranscription({
+          hasTranscription: !!existingData.transcription,
+          force
+        })) {
           return reply.send({
             success: true,
             data: {

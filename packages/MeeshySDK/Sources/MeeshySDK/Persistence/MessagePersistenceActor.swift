@@ -46,9 +46,23 @@ public actor MessagePersistenceActor {
 
     enum WriteOperation: Sendable {
         case reconcileBatch([IncomingMessageData])
+        /// Buffered ingestion of fully-decoded `APIMessage` payloads. Routes
+        /// through `upsertFromAPIMessages` — the same path REST uses — so
+        /// attachments, reactions, reply/forward refs, encryption flags and
+        /// mentions are all persisted. The 6-field `IncomingMessageData` path
+        /// below drops every one of them (a media-only or encrypted message
+        /// ingested that way renders as an empty bubble — Sprint 2 RC2.2).
+        case upsertAPIMessages([APIMessage])
         case batchDeliveryUpdate(conversationId: String, event: MessageEvent)
     }
 
+    /// Minimal-data ingestion payload. Use ONLY when the caller genuinely has
+    /// nothing richer than these six fields (e.g. a NotificationServiceExtension
+    /// pre-persist). Any caller holding a decoded `APIMessage` MUST go through
+    /// `bufferIncomingAPIMessages` instead — `reconcileBatchSync` hard-codes
+    /// `attachmentsJson/reactionsJson/replyToJson = nil`, `messageType = "text"`
+    /// and `isEncrypted = false`, so media / encrypted / reply messages lose
+    /// their payload here.
     public struct IncomingMessageData: Sendable {
         public let id: String
         public let conversationId: String
@@ -96,6 +110,11 @@ public actor MessagePersistenceActor {
                     // a manual reload.
                     let convIds = Set(messages.map(\.conversationId))
                     postMessageStoreRefresh(conversationIds: convIds)
+                case .upsertAPIMessages(let messages):
+                    guard !messages.isEmpty else { continue }
+                    // `upsertFromAPIMessages` posts its own scoped refresh via
+                    // a `defer` — do NOT re-post here or observers refresh twice.
+                    try? await self.upsertFromAPIMessages(messages)
                 case .batchDeliveryUpdate(let convId, let event):
                     try? await self.batchDeliverySync(conversationId: convId, event: event)
                     postMessageStoreRefresh(conversationIds: [convId])
@@ -162,10 +181,15 @@ public actor MessagePersistenceActor {
             if case .serverAck(let serverId, let at) = event {
                 record.serverId = serverId
                 record.sentAt = at
+                // `save` (upsert) not `insert`: the socket ingestion path may
+                // have already reconciled this optimistic row and written its
+                // PendingIdRecord (echo racing ahead of the REST ACK). A raw
+                // `insert` would hit the PK and roll back the whole state
+                // transition with it.
                 try PendingIdRecord(
                     localId: localId, serverId: serverId,
                     conversationId: record.conversationId, reconciledAt: nil
-                ).insert(db)
+                ).save(db)
             }
 
             try record.update(db)
@@ -221,6 +245,17 @@ public actor MessagePersistenceActor {
         // (see `start()`). Posting here would race the async write — observers
         // would refresh against an empty database and never see the new row.
         writeContinuation.yield(.reconcileBatch(messages))
+    }
+
+    /// Buffered ingestion of fully-decoded `APIMessage` payloads — the socket
+    /// `message:new` path. Routes through `upsertFromAPIMessages` (the REST
+    /// path) on the serial write stream, so attachments, reactions, reply /
+    /// forward refs, encryption flags and mentions all land in GRDB. The
+    /// upsert reconciles an optimistic row by `clientMessageId`, server id or
+    /// `PendingIdRecord`, so a same-user echo never duplicates a pending send.
+    /// The refresh notification is posted by `upsertFromAPIMessages` itself.
+    public func bufferIncomingAPIMessages(_ messages: [APIMessage]) {
+        writeContinuation.yield(.upsertAPIMessages(messages))
     }
 
     public func bufferBatchDelivery(conversationId: String, event: MessageEvent) {
@@ -323,18 +358,33 @@ public actor MessagePersistenceActor {
 
     // MARK: - Edit / Delete / Reactions / ViewOnce
 
+    // The socket-driven mutators below (`markEdited` / `markDeleted` /
+    // `appendReaction` / `removeReaction` / `updateViewOnceCount` /
+    // `touchUpdatedAt`) are fed by `message:edited` / `message:deleted` /
+    // `reaction:*` / attachment-status events, which all carry the SERVER
+    // message id. A received message's row is keyed by that id
+    // (`localId == serverId`), but an OWN message's row keeps its optimistic
+    // `localId` (the `cid_*`); its server id lives only in the `serverId`
+    // column. Resolving by `localId == ? OR serverId == ?` lets a
+    // server-id-keyed event reach an own optimistic row — without it, an
+    // edit / delete / reaction on one of the user's own messages (e.g. made
+    // from another device) silently no-ops. `localId` (`cid_*` or an
+    // ObjectId) and `serverId` (an ObjectId) never collide, so the OR
+    // resolves at most one row.
+
     public func markEdited(localId: String, newContent: String, editedAt: Date) throws {
         var affectedConversationId: String?
         try dbWriter.write { db in
             affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
+                .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET content = ?, isEdited = 1, editedAt = ?,
-                    updatedAt = ?, changeVersion = changeVersion + 1 WHERE localId = ?
+                    updatedAt = ?, changeVersion = changeVersion + 1
+                    WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [newContent, editedAt, Date(), localId]
+                arguments: [newContent, editedAt, Date(), localId, localId]
             )
         }
         if let convId = affectedConversationId {
@@ -346,14 +396,15 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         try dbWriter.write { db in
             affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
+                .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET deletedAt = ?, content = NULL,
-                    updatedAt = ?, changeVersion = changeVersion + 1 WHERE localId = ?
+                    updatedAt = ?, changeVersion = changeVersion + 1
+                    WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [deletedAt, Date(), localId]
+                arguments: [deletedAt, Date(), localId, localId]
             )
         }
         if let convId = affectedConversationId {
@@ -469,14 +520,15 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         try dbWriter.write { db in
             affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
+                .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET viewOnceCount = ?, updatedAt = ?,
-                    changeVersion = changeVersion + 1 WHERE localId = ?
+                    changeVersion = changeVersion + 1
+                    WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [count, Date(), localId]
+                arguments: [count, Date(), localId, localId]
             )
         }
         if let convId = affectedConversationId {
@@ -509,10 +561,17 @@ public actor MessagePersistenceActor {
             affectedConversationId = try MessageRecord
                 .filter(Column("localId") == localId)
                 .fetchOne(db)?.conversationId
+            // `COALESCE(?, col)` keeps the existing blob when the caller passes
+            // `nil`. A server ACK echo never *removes* a message's attachments
+            // or reactions; a media echo that races server-side processing can
+            // legitimately arrive attachment-less, and a hard overwrite would
+            // blank the optimistic file:// preview into an empty bubble.
             try db.execute(
                 sql: """
                     UPDATE messages
-                    SET content = ?, attachmentsJson = ?, reactionsJson = ?,
+                    SET content = ?,
+                    attachmentsJson = COALESCE(?, attachmentsJson),
+                    reactionsJson = COALESCE(?, reactionsJson),
                     pinnedAt = ?, pinnedBy = ?,
                     isEdited = ?, editedAt = ?, deletedAt = ?,
                     deliveredCount = ?, readCount = ?,
@@ -566,7 +625,9 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         var didMutate = false
         try dbWriter.write { db in
-            guard var record = try MessageRecord.filter(Column("localId") == localId).fetchOne(db) else { return }
+            guard var record = try MessageRecord
+                .filter(Column("localId") == localId || Column("serverId") == localId)
+                .fetchOne(db) else { return }
             affectedConversationId = record.conversationId
             var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
                                 from: record.reactionsJson ?? Data())) ?? []
@@ -595,7 +656,9 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         var didMutate = false
         try dbWriter.write { db in
-            guard var record = try MessageRecord.filter(Column("localId") == localId).fetchOne(db) else { return }
+            guard var record = try MessageRecord
+                .filter(Column("localId") == localId || Column("serverId") == localId)
+                .fetchOne(db) else { return }
             affectedConversationId = record.conversationId
             var reactions = (try? JSONDecoder().decode([MeeshyReaction].self,
                                 from: record.reactionsJson ?? Data())) ?? []
@@ -621,14 +684,15 @@ public actor MessagePersistenceActor {
         var affectedConversationId: String?
         try dbWriter.write { db in
             affectedConversationId = try MessageRecord
-                .filter(Column("localId") == localId)
+                .filter(Column("localId") == localId || Column("serverId") == localId)
                 .fetchOne(db)?.conversationId
             try db.execute(
                 sql: """
                     UPDATE messages SET updatedAt = ?,
-                    changeVersion = changeVersion + 1 WHERE localId = ?
+                    changeVersion = changeVersion + 1
+                    WHERE localId = ? OR serverId = ?
                     """,
-                arguments: [Date(), localId]
+                arguments: [Date(), localId, localId]
             )
         }
         if let convId = affectedConversationId {
@@ -803,20 +867,40 @@ public actor MessagePersistenceActor {
                 }
                 let reactionsJson: Data? = uiReactions.isEmpty ? nil : try? encoder.encode(uiReactions)
 
-                let replyToJson: Data? = api.replyTo.flatMap { reply in
-                    let isMe = reply.senderId == nil
-                    let authorName = reply.sender?.name ?? "?"
-                    let firstAtt = reply.attachments?.first
-                    let ref = ReplyReference(
-                        messageId: reply.id,
-                        authorName: authorName,
-                        previewText: reply.content ?? "",
-                        isMe: isMe,
-                        attachmentType: firstAtt?.mimeType,
-                        attachmentThumbnailUrl: firstAtt?.thumbnailUrl
-                    )
-                    return try? encoder.encode(ref)
-                }
+                let replyToJson: Data? = {
+                    // Réponse à une story : le gateway enrichit `storyReplyTo`.
+                    // On construit un ReplyReference riche pour BubbleStoryReplyPreview.
+                    if let story = api.storyReplyTo {
+                        let trimmed = story.previewText.trimmingCharacters(in: .whitespacesAndNewlines)
+                        let ref = ReplyReference(
+                            messageId: story.id,
+                            authorName: "",
+                            previewText: trimmed.isEmpty ? "\u{1F4F7} Story" : trimmed,
+                            isMe: false,
+                            isStoryReply: true,
+                            storyPublishedAt: story.createdAt,
+                            storyReactionCount: story.reactionCount,
+                            storyCommentCount: story.commentCount,
+                            storyThumbnailUrl: story.thumbnailUrl
+                        )
+                        return try? encoder.encode(ref)
+                    }
+                    // Réponse à un message : chemin historique inchangé.
+                    return api.replyTo.flatMap { reply in
+                        let isMe = reply.senderId == nil
+                        let authorName = reply.sender?.name ?? "?"
+                        let firstAtt = reply.attachments?.first
+                        let ref = ReplyReference(
+                            messageId: reply.id,
+                            authorName: authorName,
+                            previewText: reply.content ?? "",
+                            isMe: isMe,
+                            attachmentType: firstAtt?.mimeType,
+                            attachmentThumbnailUrl: firstAtt?.thumbnailUrl
+                        )
+                        return try? encoder.encode(ref)
+                    }
+                }()
 
                 let forwardedFromJson: Data? = api.forwardedFrom.flatMap { fwd in
                     let fwdSenderName = fwd.sender?.name ?? "?"
@@ -852,7 +936,15 @@ public actor MessagePersistenceActor {
                 let computedState: MessageState = {
                     if readCount > 0 || api.readByAllAt != nil { return .delivered }
                     if deliveredCount > 0 || api.deliveredToAllAt != nil { return .delivered }
-                    return .delivered
+                    // No delivery signal yet → `.sent`, NOT `.delivered`. The
+                    // old unconditional `.delivered` flipped a just-reconciled
+                    // optimistic row straight to ✓✓ via
+                    // `state = max(.sending, computedState)` before any
+                    // recipient had actually received it. `MessageRecord.toMessage`
+                    // derives the checkmark from the delivery counters first
+                    // and only falls back to `state`, so this is the correct
+                    // floor for a sent-but-unconfirmed message.
+                    return .sent
                 }()
 
                 let timeString = MessageRecord.computeTimeString(for: api.createdAt)
@@ -876,11 +968,25 @@ public actor MessagePersistenceActor {
                 // 3. serverId column scan — final safety net for rows that
                 //    ran serverAck on a build that didn't yet insert
                 //    PendingIdRecord (legacy GRDB rows).
+                // 0. clientMessageId — the optimistic row's primary key IS the
+                //    `cid_*` (Phase 4). This catches an echo that races ahead
+                //    of `applyEvent(.serverAck)` (which is what populates
+                //    PendingIdRecord). Without it, an echo arriving before the
+                //    REST ACK falls through to the insert branch and produces a
+                //    duplicate `cid` / server-id pair (Sprint 2 RC2.3b).
+                let cidMatch: MessageRecord?
+                if let cid = api.clientMessageId, !cid.isEmpty {
+                    cidMatch = try MessageRecord.fetchOne(db, key: cid)
+                } else {
+                    cidMatch = nil
+                }
                 let pendingMatch = try PendingIdRecord
                     .filter(Column("serverId") == api.id)
                     .fetchOne(db)
                 let existingRecord: MessageRecord?
-                if let pendingMatch,
+                if let cidMatch {
+                    existingRecord = cidMatch
+                } else if let pendingMatch,
                    let optimistic = try MessageRecord.fetchOne(db, key: pendingMatch.localId) {
                     existingRecord = optimistic
                 } else if let direct = try MessageRecord.fetchOne(db, key: api.id) {
@@ -891,8 +997,25 @@ public actor MessagePersistenceActor {
                         .fetchOne(db)
                 }
                 if var existing = existingRecord {
-                    // Update mutable fields; preserve layout cache
-                    existing.content = api.content
+                    // E2EE: when the local row already holds readable content
+                    // (`isEncrypted == false`, non-empty) and the server now
+                    // reports the message encrypted, the local copy is an own
+                    // message we authored — we hold the plaintext while the
+                    // server only has ciphertext we cannot decrypt (E2EE
+                    // sessions are keyed by the peer, never self), or it is a
+                    // legacy row decrypted on ingest. Keep the local readable
+                    // content and do NOT flip `isEncrypted`, or the display
+                    // pipeline would try (and fail) to decrypt readable text.
+                    // A received encrypted message already has
+                    // `isEncrypted == true` (set on insert), so this never
+                    // blocks the normal decrypt path.
+                    let keepLocalPlaintext = api.isEncrypted == true
+                        && !existing.isEncrypted
+                        && !(existing.content ?? "").isEmpty
+                    // Update mutable fields; preserve layout cache.
+                    if !keepLocalPlaintext {
+                        existing.content = api.content
+                    }
                     // Backfill the server id so future reconciliations can find
                     // the row via the serverId column or PendingIdRecord even
                     // if applyEvent(.serverAck) didn't run for some reason.
@@ -900,8 +1023,19 @@ public actor MessagePersistenceActor {
                     existing.isEdited = api.isEdited ?? false
                     existing.editedAt = nil
                     existing.deletedAt = api.deletedAt
-                    existing.attachmentsJson = attachmentsJson
+                    // Preserve existing attachments when the payload carries
+                    // none: a media echo that races server-side processing can
+                    // arrive attachment-less, and a hard overwrite would blank
+                    // the optimistic file:// preview into an empty bubble.
+                    existing.attachmentsJson = attachmentsJson ?? existing.attachmentsJson
                     existing.reactionsJson = reactionsJson
+                    if !keepLocalPlaintext {
+                        // Keep the encryption flags coherent so the display
+                        // pipeline knows to decrypt — a row first inserted via
+                        // the legacy socket path may have had them cleared.
+                        existing.isEncrypted = api.isEncrypted ?? existing.isEncrypted
+                        existing.encryptionMode = api.encryptionMode ?? existing.encryptionMode
+                    }
                     existing.reactionCount = uiReactions.count
                     existing.deliveredCount = deliveredCount
                     existing.readCount = readCount
@@ -916,13 +1050,28 @@ public actor MessagePersistenceActor {
                     existing.senderName = senderName
                     existing.senderUsername = senderUsername
                     existing.senderAvatarURL = senderAvatarURL
-                    existing.replyToJson = replyToJson
+                    // Préserve le ReplyReference riche déjà persisté quand le
+                    // payload serveur ne porte aucune réponse — même garde que
+                    // `attachmentsJson`. Couvre la phase optimiste avant le 1er
+                    // refresh enrichi.
+                    existing.replyToJson = replyToJson ?? existing.replyToJson
                     existing.forwardedFromJson = forwardedFromJson
                     existing.mentionedUsersJson = mentionedUsersJson
                     existing.effectFlags = effectFlags
                     existing.updatedAt = api.updatedAt ?? Date()
                     existing.changeVersion += 1
                     try existing.update(db)
+                    // When this upsert reconciled an optimistic row (its PK is
+                    // the `cid`, not the server id), keep PendingIdRecord
+                    // coherent so `resolveServerId` / future reconciliations
+                    // resolve the server id even when the row landed purely via
+                    // the socket path (no `applyEvent(.serverAck)` ran).
+                    if existing.localId != api.id {
+                        try PendingIdRecord(
+                            localId: existing.localId, serverId: api.id,
+                            conversationId: api.conversationId, reconciledAt: Date()
+                        ).save(db)
+                    }
                 } else {
                     let record = MessageRecord(
                         localId: api.id, serverId: api.id,
@@ -979,11 +1128,14 @@ public actor MessagePersistenceActor {
                         changeVersion: 0
                     )
                     try record.insert(db)
+                    // `save` (upsert): a dangling PendingIdRecord from a
+                    // previously purged message row must not roll back this
+                    // fresh insert on a PK clash.
                     try PendingIdRecord(
                         localId: api.id, serverId: api.id,
                         conversationId: api.conversationId,
                         reconciledAt: Date()
-                    ).insert(db)
+                    ).save(db)
                 }
 
                 // Persist text translations from REST into GRDB so they

@@ -72,11 +72,10 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
         }
         .fullScreenCover(isPresented: $showPreview) {
             if let url = recordedURL {
-                MeeshyAudioPreviewView(
+                MeeshyAudioEditorView(
                     url: url,
-                    context: context,
                     accentColor: accentColor,
-                    onAccept: { editedURL, transcriptions, trimStart, trimEnd in
+                    onConfirm: { editedURL, transcriptions, trimStart, trimEnd in
                         showPreview = false
                         onComplete(editedURL, transcriptions, trimStart, trimEnd)
                     },

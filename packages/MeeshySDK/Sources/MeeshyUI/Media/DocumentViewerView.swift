@@ -167,6 +167,9 @@ public struct DocumentFullSheet: View {
 
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var theme = ThemeManager.shared
+    @State private var saveState: SaveState = .idle
+
+    private enum SaveState { case idle, saving, saved, failed }
 
     public init(attachment: MeeshyMessageAttachment, docType: DocumentMediaType, accentColor: String) {
         self.attachment = attachment; self.docType = docType; self.accentColor = accentColor
@@ -193,12 +196,71 @@ public struct DocumentFullSheet: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
+                    if !attachment.fileUrl.isEmpty {
+                        Button { saveDocument() } label: {
+                            Group {
+                                switch saveState {
+                                case .idle:   Image(systemName: "arrow.down.to.line")
+                                case .saving: ProgressView()
+                                case .saved:  Image(systemName: "checkmark")
+                                case .failed: Image(systemName: "xmark")
+                                }
+                            }
+                            .foregroundColor(Color(hex: accentColor))
+                        }
+                        .disabled(saveState == .saving || saveState == .saved)
+                    }
+                }
+
+                ToolbarItem(placement: .navigationBarTrailing) {
                     if let urlStr = attachment.fileUrl.isEmpty ? nil : attachment.fileUrl,
                        let url = MeeshyConfig.resolveMediaURL(urlStr) {
                         ShareLink(item: url) {
                             Image(systemName: "square.and.arrow.up")
                                 .foregroundColor(Color(hex: accentColor))
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Saves the document into the Files app (Documents) in one tap.
+    private func saveDocument() {
+        guard !attachment.fileUrl.isEmpty,
+              let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl) else { return }
+        saveState = .saving
+        HapticFeedback.light()
+        Task {
+            do {
+                let (tempURL, _) = try await URLSession.shared.download(from: resolved)
+                let ext = resolved.pathExtension.isEmpty
+                    ? (attachment.originalName as NSString).pathExtension
+                    : resolved.pathExtension
+                let suffix = ext.isEmpty ? "" : ".\(ext)"
+                let tempFile = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("doc_\(UUID().uuidString)\(suffix)")
+                try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                defer { try? FileManager.default.removeItem(at: tempFile) }
+
+                let preferred = attachment.originalName.isEmpty ? nil : attachment.originalName
+                _ = try MediaFileSaver.save(tempFile, preferredName: preferred)
+
+                await MainActor.run {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        saveState = .saved
+                    }
+                    HapticFeedback.success()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { saveState = .idle }
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    withAnimation { saveState = .failed }
+                    HapticFeedback.error()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { saveState = .idle }
                     }
                 }
             }

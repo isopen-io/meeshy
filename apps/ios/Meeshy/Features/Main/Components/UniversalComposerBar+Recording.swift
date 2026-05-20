@@ -159,23 +159,45 @@ extension UniversalComposerBar {
             .accessibilityElement(children: .combine)
             .accessibilityLabel("Enregistrement en cours, \(formatDuration(effectiveDuration))")
 
-            // Send button — stops recording and sends.
-            // For delegated recording (ConversationView), handleSend() dispatches
-            // to onCustomSend which stops the recorder and sends. For internal
-            // recording (stories, comments), we must materialize the voice
-            // attachment ourselves by calling stopRecording() first.
-            // Disabled below the minimum duration to prevent accidental
-            // unusably-short voice messages.
+            // Stop → attachments button — stops recording and drops the audio
+            // into the composer's attachment tray, editable before sending.
+            // Disabled below the minimum duration like the send button.
             Button {
                 guard canSend else {
                     HapticFeedback.error()
                     return
                 }
                 HapticFeedback.medium()
-                if onCustomSend == nil && isRecording {
-                    stopRecording()
+                stopRecordingToAttachment()
+            } label: {
+                ZStack {
+                    Circle()
+                        .fill(isDark
+                            ? Color.white.opacity(0.14)
+                            : Color(hex: accentColor).opacity(0.12))
+                        .frame(width: 32, height: 32)
+                    Image(systemName: "stop.fill")
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(isDark ? .white : Color(hex: accentColor))
                 }
-                handleSend()
+                .opacity(canSend ? 1 : 0.4)
+                .frame(width: 44, height: 44)
+                .contentShape(Rectangle())
+            }
+            .animation(.easeInOut(duration: 0.2), value: canSend)
+            .accessibilityLabel("Arreter et ajouter aux pieces jointes")
+            .accessibilityHint("Place le message vocal dans les pieces jointes pour l'editer avant l'envoi")
+
+            // Send button — stops recording and sends the message immediately
+            // (raw, no preview). Disabled below the minimum duration to prevent
+            // accidental unusably-short voice messages.
+            Button {
+                guard canSend else {
+                    HapticFeedback.error()
+                    return
+                }
+                HapticFeedback.medium()
+                sendRecording()
             } label: {
                 ZStack {
                     Circle()
@@ -289,11 +311,15 @@ extension UniversalComposerBar {
         HapticFeedback.medium()
     }
 
-    func stopRecording() {
+    /// Stop the recording and place the audio in the attachment tray — the
+    /// `[stop]` control. The audio becomes an editable attachment; nothing is
+    /// sent. Delegated to the parent for the message context; for internal
+    /// recording (stories, comments) it materializes a `ComposerAttachment`.
+    func stopRecordingToAttachment() {
         onAnyInteraction?()
-        // Delegated recording: parent handles stop
-        if let onStopRecording {
-            onStopRecording()
+        // Delegated recording: parent stops the recorder + appends to its tray
+        if let onStopRecordingToAttachment {
+            onStopRecordingToAttachment()
             isRecording = false
             onRecordingChange?(false)
             HapticFeedback.light()
@@ -330,6 +356,26 @@ extension UniversalComposerBar {
         recordingDuration = 0
         onRecordingChange?(false)
         HapticFeedback.light()
+    }
+
+    /// Stop the recording and send the voice message immediately — the `[↑]`
+    /// control. No preview, no editor. Delegated to the parent for the message
+    /// context; for internal recording it materializes the voice attachment
+    /// and runs the normal send.
+    func sendRecording() {
+        onAnyInteraction?()
+        // Delegated recording: parent stops the recorder + sends right away
+        if let onSendRecording {
+            onSendRecording()
+            isRecording = false
+            onRecordingChange?(false)
+            HapticFeedback.medium()
+            return
+        }
+        // Internal recording (stories, comments) — materialize the voice
+        // attachment, then run the normal send.
+        stopRecordingToAttachment()
+        handleSend()
     }
 
     /// Cancel recording — discard audio without creating an attachment.

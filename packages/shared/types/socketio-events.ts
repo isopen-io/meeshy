@@ -1225,7 +1225,14 @@ export interface TranslationData {
 
 export interface TypingEvent {
   readonly userId: string;
+  /** Identifiant (handle) de l'utilisateur. Pour un participant anonyme — qui n'a pas
+   *  de handle — retombe sur le nom d'affichage. */
   readonly username: string;
+  /** Nom d'affichage : `displayName` explicite saisi par l'utilisateur, sinon la
+   *  concaténation « Prénom Nom ». Le gateway le transmet systématiquement ; il reste
+   *  optionnel pour tolérer un client/serveur antérieur. Le front-end décide quoi
+   *  afficher — `displayName` en priorité, `username` en repli. */
+  readonly displayName?: string;
   readonly conversationId: string;
   readonly isTyping?: boolean; // Ajouté côté service pour distinguer start/stop
 }

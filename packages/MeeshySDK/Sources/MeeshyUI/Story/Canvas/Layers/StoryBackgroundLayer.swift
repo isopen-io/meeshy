@@ -128,7 +128,7 @@ extension StoryBackgroundLayer {
             // reader (preview composer via `PreloadedImageCacheReader`, ou un
             // cache disque), (2) URL directe embarquée dans `postMediaId`
             // (file:// du composer après PhotosPicker, ou URL distante),
-            // (3) resolver `postMediaId` distant → URL → téléchargement réseau.
+            // (3) resolver `postMediaId` distant → URL → cache global.
             //
             // BUGFIX : le chemin (3) était auparavant imbriqué dans un
             // `if let imageCache` — or le viewer en ligne passe `imageCache: nil`
@@ -136,8 +136,10 @@ extension StoryBackgroundLayer {
             // dont le background référence un `postMediaId` distant ne chargeait
             // jamais son image (rectangle noir + loader infini, le timer ne
             // démarrant jamais car `onContentReady` ne se déclenchait pas). Le
-            // téléchargement réseau est désormais gardé par le `resolver` seul ;
-            // le cache image n'est qu'un fast-path optionnel.
+            // chemin (3) est désormais gardé par le `resolver` seul, et passe
+            // par `CacheCoordinator.shared.images` (NSCache → disque TTL 1 an →
+            // réseau, requêtes dédupliquées) : une slide déjà vue — ou
+            // préchauffée par le prefetcher — s'affiche sans re-télécharger.
             let directURL = Self.directURLIfAny(from: postMediaId)
             let imageCacheReader = imageCache
             let urlResolver = resolver
@@ -156,7 +158,7 @@ extension StoryBackgroundLayer {
                            let uiImage = UIImage(data: data) {
                             img?.contents = uiImage.cgImage
                         }
-                    } else if let (data, _) = try? await URLSession.shared.data(from: url),
+                    } else if let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString),
                               let uiImage = UIImage(data: data) {
                         img?.contents = uiImage.cgImage
                     }
@@ -171,7 +173,21 @@ extension StoryBackgroundLayer {
                 return resolver?(postMediaId)
             }()
             guard let url = resolvedURL else { break }
-            let item = AVPlayerItem(url: url)
+            // Préfère le fichier local en cache (`CacheCoordinator.video`, TTL
+            // 6 mois) : une slide revisitée joue instantanément sans re-streamer.
+            // Sinon on lit l'URL distante ET on peuple le cache disque en tâche
+            // de fond pour la prochaine visite. Les `file://` (édition composer)
+            // sont déjà locaux — joués tels quels.
+            let playbackURL: URL = {
+                if url.isFileURL { return url }
+                if let local = CacheCoordinator.videoLocalFileURL(for: url.absoluteString) {
+                    return local
+                }
+                let remote = url.absoluteString
+                Task { _ = try? await CacheCoordinator.shared.video.data(for: remote) }
+                return url
+            }()
+            let item = AVPlayerItem(url: playbackURL)
             if looping {
                 let queuePlayer = AVQueuePlayer()
                 self.avPlayerLooper = AVPlayerLooper(player: queuePlayer, templateItem: item)

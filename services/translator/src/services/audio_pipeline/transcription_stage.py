@@ -32,6 +32,7 @@ from ..redis_service import (
     AudioCacheService,
     get_audio_cache_service
 )
+from ..segment_serialization import _segment_to_dict
 
 # Configure logging
 logger = logging.getLogger(__name__)
@@ -386,15 +387,7 @@ class TranscriptionStage:
         try:
             # Convertir les segments (dataclasses) en dictionnaires pour sérialisation JSON
             segments_as_dicts = [
-                {
-                    "text": seg.text,
-                    "startMs": seg.start_ms,
-                    "endMs": seg.end_ms,
-                    "confidence": seg.confidence,
-                    "speakerId": seg.speaker_id if hasattr(seg, 'speaker_id') and seg.speaker_id else None,
-                    "voiceSimilarityScore": seg.voice_similarity_score if isinstance(seg.voice_similarity_score, (int, float)) else None,
-                    "language": seg.language if hasattr(seg, 'language') and seg.language else None
-                }
+                _segment_to_dict(seg)
                 for seg in (result.segments or [])
             ]
 

@@ -4,6 +4,8 @@ import CoreMedia
 import AVFoundation
 import Metal
 import PencilKit
+import Combine
+import os
 import MeeshySDK
 
 // MARK: - Story Canvas Notifications
@@ -65,7 +67,7 @@ public final class StoryCanvasUIView: UIView {
             // revision token, so this fires at most once per slide change.
             if mode == .play {
                 reconfigureAudioForPlayback()
-                try? audioMixer.play()
+                startAudioPlayback()
             }
         }
     }
@@ -158,6 +160,11 @@ public final class StoryCanvasUIView: UIView {
     /// and on every `setReaderContext` so re-keying replays the wait.
     private var contentReadyFired: Bool = false
 
+    /// `true` once the slide background (color / gradient / image / video) is
+    /// visually settled. The combined `onContentReady` signal additionally
+    /// waits on foreground video readiness (T6).
+    private var backgroundContentReady: Bool = false
+
     /// KVO token watching `backgroundLayer.contentLayer.contents` while an
     /// image background is loading. Held until the real bytes land or the
     /// background is replaced. `NSKeyValueObservation` invalidates on deinit
@@ -218,6 +225,25 @@ public final class StoryCanvasUIView: UIView {
     /// changes when `slide` itself is reassigned.
     private var lastAudioConfigRevision: UInt64?
 
+    /// `true` while this view holds a balanced `.playback` claim on the shared
+    /// `MediaSessionCoordinator` (RC4.3). Keeps request/release symmetric.
+    /// `nonisolated(unsafe)` so the `nonisolated deinit` can read it to decide
+    /// whether to release the session — all mutations happen in MainActor
+    /// playback methods, so single-context mutation is preserved.
+    private nonisolated(unsafe) var didRequestPlaybackSession: Bool = false
+
+    /// Subscription to `MediaSessionCoordinator.events` — pauses the mixer on
+    /// interruptions / headset unplug and resumes it on an explicit
+    /// shouldResume while the viewer is still foreground (RC4.3 / T7).
+    /// `nonisolated(unsafe)` so the `nonisolated deinit` can cancel it without
+    /// a MainActor hop — `AnyCancellable.cancel()` is idempotent and the
+    /// property is only assigned once, from a MainActor init path.
+    private nonisolated(unsafe) var audioSessionEventsCancellable: AnyCancellable?
+
+    /// KVO tokens watching foreground video readiness so `onContentReady`
+    /// does not fire while a foreground clip is still a black rectangle (T6).
+    private var foregroundVideoStatusObservers: [NSKeyValueObservation] = []
+
     // MARK: - Display link
 
     /// Drives `currentTime` advance during `.play` mode (preferred 60 Hz, range 60–120).
@@ -255,15 +281,28 @@ public final class StoryCanvasUIView: UIView {
         setupGesturesAll()
         observeAppLifecycle()
         observeMuteNotifications()
+        // Single-owner audio registry: registering the reader mixer lets a
+        // second reader surface (viewer + composer preview mounted together)
+        // stop this engine before starting its own (RC4.6).
+        PlaybackCoordinator.shared.registerExternal(audioMixer)
+        observeAudioSessionEvents()
     }
 
-    deinit {
+    nonisolated deinit {
         NotificationCenter.default.removeObserver(self)
+        audioSessionEventsCancellable?.cancel()
         // `shutdown()` is @MainActor-isolated and deinit is nonisolated —
         // capture the mixer and defer the call to the main actor so it
         // outlives this view's deallocation.
         let mixer = audioMixer
-        Task { @MainActor in mixer.shutdown() }
+        let releaseSession = didRequestPlaybackSession
+        Task { @MainActor in
+            PlaybackCoordinator.shared.unregisterExternal(mixer)
+            mixer.shutdown()
+            if releaseSession {
+                await MediaSessionCoordinator.shared.release()
+            }
+        }
     }
 
     @available(*, unavailable)
@@ -559,7 +598,7 @@ public final class StoryCanvasUIView: UIView {
         if mode == .play {
             lastAudioConfigRevision = nil
             reconfigureAudioForPlayback()
-            try? audioMixer.play()
+            startAudioPlayback()
         }
     }
 
@@ -585,18 +624,109 @@ public final class StoryCanvasUIView: UIView {
                 stopEditDisplayLink()
                 startPlayback()
                 reconfigureAudioForPlayback()
-                try? audioMixer.play()
+                startAudioPlayback()
             case .edit:
                 stopPlayback()
                 audioMixer.pause()
+                releasePlaybackSessionIfNeeded()
                 startEditDisplayLinkIfNeeded()
             }
         }
     }
 
+    // MARK: - Reader audio transport (Sprint 4)
+
+    /// Stable identifier for the current slide content + language resolution.
+    /// Drives `ReaderAudioMixer`'s idempotence guard: a re-render replays with
+    /// the same key (no echo) while a genuine content change re-schedules
+    /// against a fresh key (RC4.6).
+    private var currentSlideKey: String {
+        let langs = readerContext.preferredLanguages.joined(separator: ",")
+        return "\(slide.id)#\(slideContentRevision)#\(langs)"
+    }
+
+    /// Materialises the slide's `t = 0` as a host-time. When the playhead is
+    /// already advanced (`currentTime > 0`, composer preview scrub) the origin
+    /// is back-dated so audio and the canvas playhead share one zero (RC4.4).
+    private func captureSlideTimelineOrigin() -> UInt64 {
+        let now = mach_absolute_time()
+        let elapsed = currentTime.seconds
+        guard elapsed > 0, elapsed.isFinite else { return now }
+        let back = ReaderAudioMixer.hostTime(forDelaySeconds: elapsed)
+        return back < now ? now - back : now
+    }
+
+    /// Single funnel for the three `.play` audio entry points (`slide.didSet`,
+    /// `setReaderContext`, `setMode(.play)`). Captures the timeline origin,
+    /// activates the audio session, enforces single-owner exclusion and applies
+    /// the default fade envelope — consistently every time.
+    private func startAudioPlayback() {
+        guard mode == .play else { return }
+        requestPlaybackSessionIfNeeded()
+        let origin = captureSlideTimelineOrigin()
+        // Stop any other reader engine before starting this one (RC4.6).
+        PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)
+        do {
+            let scheduledFresh = try audioMixer.play(originHost: origin,
+                                                     slideKey: currentSlideKey)
+            // Default fade envelope — applied once per scheduled pass, never
+            // on an idempotent resume. Self-guards: no-op when the slide
+            // authored explicit fadeIn/fadeOut (RC4.7).
+            if scheduledFresh {
+                audioMixer.applyDefaultBackgroundEnvelope(
+                    originHost: origin,
+                    slideDuration: slide.effectiveSlideDuration()
+                )
+            }
+        } catch {
+            os.Logger(subsystem: "me.meeshy.app", category: "media")
+                .error("ReaderAudioMixer.play failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Activates the shared `.playback` `AVAudioSession` through the existing
+    /// `MediaSessionCoordinator` (RC4.3). Refcounted; the boolean keeps this
+    /// view's request/release at exactly one claim.
+    private func requestPlaybackSessionIfNeeded() {
+        guard !didRequestPlaybackSession else { return }
+        didRequestPlaybackSession = true
+        Task { try? await MediaSessionCoordinator.shared.request(role: .playback) }
+    }
+
+    /// Balances `requestPlaybackSessionIfNeeded()`.
+    private func releasePlaybackSessionIfNeeded() {
+        guard didRequestPlaybackSession else { return }
+        didRequestPlaybackSession = false
+        Task { await MediaSessionCoordinator.shared.release() }
+    }
+
+    /// Subscribes to `MediaSessionCoordinator` interruption / route-change
+    /// events and applies Apple's playback policy to the reader engine: pause
+    /// on interruption-began and on headset unplug, resume only on an explicit
+    /// `shouldResume` while still foreground (RC4.3 / T7).
+    private func observeAudioSessionEvents() {
+        audioSessionEventsCancellable = MediaSessionCoordinator.shared.events
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] event in
+                guard let self else { return }
+                switch event {
+                case .interruptionBegan, .routeChangedOldDeviceUnavailable:
+                    self.audioMixer.pause()
+                case .interruptionEndedShouldResume:
+                    guard self.mode == .play,
+                          self.window != nil,
+                          !self.completionFired else { return }
+                    self.startAudioPlayback()
+                case .interruptionEndedShouldNotResume, .routeChangedOther:
+                    break
+                }
+            }
+    }
+
     /// Loads the slide's foreground + background audio clips into the
-    /// `audioMixer` so `audioMixer.play()` actually emits sound. No-op outside
-    /// `.play` mode (the composer never plays audio while editing) and skipped
+    /// `audioMixer` so the subsequent `startAudioPlayback()` actually emits
+    /// sound. No-op outside `.play` mode (the composer never plays while
+    /// editing) and skipped
     /// when the slide content hasn't changed since the last configure pass —
     /// `configure(audios:urls:)` tears down prior clips, so repeated calls are
     /// safe but reload AVAudioFiles, which we avoid on every display-link tick.
@@ -688,6 +818,8 @@ public final class StoryCanvasUIView: UIView {
                                             at: currentTime,
                                             mode: mode,
                                             languages: readerContext.preferredLanguages,
+                                            resolver: readerContext.postMediaURLResolver,
+                                            imageCache: readerContext.imageCache,
                                             backdropProvider: { [weak backdropCapture] frame in
                                                 backdropCapture?.cropRegion(frame)
                                             })
@@ -877,6 +1009,8 @@ public final class StoryCanvasUIView: UIView {
                                             at: currentTime,
                                             mode: mode,
                                             languages: readerContext.preferredLanguages,
+                                            resolver: readerContext.postMediaURLResolver,
+                                            imageCache: readerContext.imageCache,
                                             backdropProvider: { [weak backdropCapture] frame in
                                                 backdropCapture?.cropRegion(frame)
                                             })
@@ -931,6 +1065,7 @@ public final class StoryCanvasUIView: UIView {
     /// slides (slide swipe in the reader rebuilds layers on every keyframe).
     private func scheduleContentReadyEvaluation(for kind: StoryBackgroundLayer.Kind) {
         contentReadyFired = false
+        backgroundContentReady = false
         teardownReadinessObservers()
 
         // Explicit `_` placeholders on the comma-combined cases — Swift 6.2
@@ -946,7 +1081,7 @@ public final class StoryCanvasUIView: UIView {
             // can attach `onContentReady` after `rebuildLayers()` returns
             // (the prefetcher attaches the callback right after init).
             DispatchQueue.main.async { [weak self] in
-                self?.fireContentReadyIfNeeded()
+                self?.backgroundDidBecomeReady()
             }
         case .image:
             thumbHashPlaceholderRef = backgroundLayer.contentLayer?.contents.map { $0 as AnyObject }
@@ -972,7 +1107,7 @@ public final class StoryCanvasUIView: UIView {
                         // assignment the trigger.
                         let placeholderID = self.thumbHashPlaceholderRef.map { ObjectIdentifier($0) }
                         if let placeholderID, snapshotID == placeholderID { return }
-                        self.fireContentReadyIfNeeded()
+                        self.backgroundDidBecomeReady()
                     }
                 }
             } else {
@@ -980,20 +1115,20 @@ public final class StoryCanvasUIView: UIView {
                 // settled (e.g. solidColor path took precedence). Fire async
                 // so the contract still observes a single trailing-edge tick.
                 DispatchQueue.main.async { [weak self] in
-                    self?.fireContentReadyIfNeeded()
+                    self?.backgroundDidBecomeReady()
                 }
             }
         case .video:
             if let item = backgroundLayer.avPlayer?.currentItem {
                 if item.status == .readyToPlay {
                     DispatchQueue.main.async { [weak self] in
-                        self?.fireContentReadyIfNeeded()
+                        self?.backgroundDidBecomeReady()
                     }
                 } else {
                     videoStatusObserver = item.observe(\.status, options: [.new]) { [weak self] observed, _ in
                         guard observed.status == .readyToPlay else { return }
                         Task { @MainActor in
-                            self?.fireContentReadyIfNeeded()
+                            self?.backgroundDidBecomeReady()
                         }
                     }
                 }
@@ -1001,10 +1136,65 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
+    /// Marks the slide background as visually settled. The combined readiness
+    /// signal (`onContentReady`) still waits on foreground video — see
+    /// `fireContentReadyIfNeeded()`.
+    private func backgroundDidBecomeReady() {
+        backgroundContentReady = true
+        fireContentReadyIfNeeded()
+    }
+
     private func fireContentReadyIfNeeded() {
         guard !contentReadyFired else { return }
+        // The background must be settled first — a foreground video KVO ping
+        // can otherwise call in before the background image bytes land.
+        guard backgroundContentReady else { return }
+        // T6 — the background may be settled, but if a foreground video clip
+        // is still preparing the slide is a black rectangle. Hold the signal
+        // (and the progress timer) until at least one foreground video is
+        // `.readyToPlay`; the KVO tokens re-trigger this method when it lands.
+        guard foregroundVideosReady() else {
+            observePendingForegroundVideos()
+            return
+        }
         contentReadyFired = true
         onContentReady?()
+    }
+
+    /// `AVPlayerItem`s of every foreground video layer currently on the canvas.
+    /// A foreground video whose URL never resolved has no `AVPlayer` and so
+    /// never blocks the readiness signal.
+    private func foregroundVideoItems() -> [AVPlayerItem] {
+        var items: [AVPlayerItem] = []
+        for sub in itemsContainer.sublayers ?? [] {
+            if let media = sub as? StoryMediaLayer,
+               let item = media.avPlayer?.currentItem {
+                items.append(item)
+            }
+        }
+        return items
+    }
+
+    /// Foreground videos are "ready" when there are none, or every one has
+    /// *resolved* — `.readyToPlay` OR `.failed`. A broken / stuck clip
+    /// (status `.failed`) must not freeze the slide timer forever, so it
+    /// counts as resolved rather than blocking indefinitely.
+    private func foregroundVideosReady() -> Bool {
+        let items = foregroundVideoItems()
+        guard !items.isEmpty else { return true }
+        return items.allSatisfy { $0.status != .unknown }
+    }
+
+    private func observePendingForegroundVideos() {
+        foregroundVideoStatusObservers.forEach { $0.invalidate() }
+        foregroundVideoStatusObservers = []
+        for item in foregroundVideoItems() where item.status == .unknown {
+            let token = item.observe(\.status, options: [.new]) { [weak self] observed, _ in
+                guard observed.status != .unknown else { return }
+                Task { @MainActor in self?.fireContentReadyIfNeeded() }
+            }
+            foregroundVideoStatusObservers.append(token)
+        }
     }
 
     private func teardownReadinessObservers() {
@@ -1013,6 +1203,8 @@ public final class StoryCanvasUIView: UIView {
         videoStatusObserver?.invalidate()
         videoStatusObserver = nil
         thumbHashPlaceholderRef = nil
+        foregroundVideoStatusObservers.forEach { $0.invalidate() }
+        foregroundVideoStatusObservers = []
     }
 
     /// Test-only seam : forces the readiness signal as if the background
@@ -1020,8 +1212,17 @@ public final class StoryCanvasUIView: UIView {
     /// contract on `StoryReaderTimerController` without staging a real
     /// `URLSession` fetch or `AVPlayer` status transition.
     public func _forceContentReadyForTesting() {
-        fireContentReadyIfNeeded()
+        // Bypasses the foreground-video gate — this seam exists precisely to
+        // force the signal without staging a real `AVPlayer` status transition.
+        guard !contentReadyFired else { return }
+        contentReadyFired = true
+        onContentReady?()
     }
+
+    /// Test-only seam : read-only access to the reader audio engine so the
+    /// lifecycle tests can assert transport state (`isPlaying`) after a
+    /// background / window-detach / interruption event without a fixture.
+    public var _readerAudioMixerForTesting: ReaderAudioMixer { audioMixer }
 
     // MARK: - Window lifecycle
 
@@ -1080,12 +1281,31 @@ public final class StoryCanvasUIView: UIView {
     @objc private func handleWillResignActive() {
         forEachAVPlayer { $0.pause() }
         backgroundLayer.handleAppLifecycle(active: false)
+        // RC4.5 — cut the reader audio engine the moment the app leaves the
+        // foreground so no sound leaks behind a backgrounded app. Releasing
+        // the session lets other apps' audio un-duck.
+        audioMixer.stop()
+        releasePlaybackSessionIfNeeded()
     }
 
     @objc private func handleDidBecomeActive() {
         guard mode == .play else { return }
         forEachAVPlayer { $0.play() }
         backgroundLayer.handleAppLifecycle(active: true)
+        // Resume reader audio (re-acquires the session via startAudioPlayback)
+        // only while the slide is still on screen and has not finished.
+        if window != nil, !completionFired {
+            startAudioPlayback()
+        }
+    }
+
+    /// RC4.5 — deterministic teardown when SwiftUI detaches the canvas view
+    /// (viewer dismissed, slide swiped away) without waiting for ARC `deinit`.
+    public override func willMove(toWindow newWindow: UIWindow?) {
+        super.willMove(toWindow: newWindow)
+        guard newWindow == nil else { return }
+        audioMixer.stop()
+        releasePlaybackSessionIfNeeded()
     }
 
     private func forEachAVPlayer(_ block: (AVPlayer) -> Void) {
