@@ -63,6 +63,12 @@ jest.mock('../../../services/PostCommentService', () => ({
 
 jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+  MentionService: jest.fn().mockImplementation(() => ({
+    extractMentions: jest.fn(),
+    resolveMentions: jest.fn(),
+    validateMentions: jest.fn(),
+    getSuggestions: jest.fn(),
+  })),
 }));
 
 jest.mock('../../../middleware/rate-limiter', () => ({
@@ -75,6 +81,17 @@ jest.mock('../../../utils/withMutationLog', () => ({
 
 jest.mock('../../../services/MediaService', () => ({
   MediaService: jest.fn().mockImplementation(() => ({})),
+}));
+
+jest.mock('../../../services/notifications/NotificationService', () => ({
+  NotificationService: jest.fn().mockImplementation(() => ({
+    createPostMentionNotificationsBatch: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    createFriendContentNotificationsBatch: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    createPostCommentNotification: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    createCommentLikeNotification: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    createPostLikeNotification: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+    createPostRepostNotification: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  })),
 }));
 
 const buildMockPrisma = (): PrismaClient => ({
@@ -165,7 +182,7 @@ describe('posts routes — error response format', () => {
   });
 
   it('core: should return structured error on 400 for invalid payload (POST /posts)', async () => {
-    const resp = await authApp.inject({ method: 'POST', url: '/posts', body: {} });
+    const resp = await authApp.inject({ method: 'POST', url: '/posts', body: { type: 'INVALID_TYPE' } });
     expect(resp.statusCode).toBe(400);
     const body: ErrorBody = resp.json();
     assertErrorShape(body);

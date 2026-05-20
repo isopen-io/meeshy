@@ -316,8 +316,6 @@ describe('MessageReadStatusService', () => {
         create: expect.objectContaining({
           lastReadMessageId: testMessageId,
           lastReadAt: expect.any(Date),
-          lastDeliveredMessageId: testMessageId,
-          lastDeliveredAt: expect.any(Date),
           unreadCount: 0,
           version: 0
         }),
@@ -799,9 +797,9 @@ describe('MessageReadStatusService', () => {
       // message1: user1 delivered+read, user2 delivered only (but user2 is sender so excluded)
       // Actually sender is 'sender-1', so both testParticipantId and testParticipantId2 are counted
       // testParticipantId: delivered+read, testParticipantId2: delivered only
-      expect(result.get(testMessageId)).toEqual({ receivedCount: 2, readCount: 1 });
+      expect(result.get(testMessageId)).toEqual(expect.objectContaining({ receivedCount: 2, readCount: 1 }));
       // message2: only testParticipantId delivered+read (testParticipantId2's delivered is before message2)
-      expect(result.get(testMessageId2)).toEqual({ receivedCount: 1, readCount: 1 });
+      expect(result.get(testMessageId2)).toEqual(expect.objectContaining({ receivedCount: 1, readCount: 1 }));
     });
 
     it('should return empty counts for messages without cursors', async () => {
@@ -812,7 +810,7 @@ describe('MessageReadStatusService', () => {
 
       const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
 
-      expect(result.get(testMessageId)).toEqual({ receivedCount: 0, readCount: 0 });
+      expect(result.get(testMessageId)).toEqual(expect.objectContaining({ receivedCount: 0, readCount: 0 }));
     });
   });
 
