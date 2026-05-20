@@ -580,13 +580,34 @@ public struct AudioPlayerView: View {
         // alors sa largeur native une-ligne — un seul Button énorme ne peut
         // donc plus être wrappé et le texte est tronqué visuellement.
         // On rend directement un Text qui wrap naturellement dans ce cas.
+        // La couleur suit le même contrat que les segments multiples :
+        // idle (avant), actif (pendant lecture), past (après) — pour qu'un
+        // audio sans segments soit aussi lisible pendant la lecture.
         if segments.count == 1, let single = segments.first {
-            Text(single.text)
-                .font(.system(size: 13))
-                .foregroundColor(inlineSegmentColor(isActive: false, isPast: false))
-                .multilineTextAlignment(.leading)
-                .fixedSize(horizontal: false, vertical: true)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            let isActive = player.isPlaying
+                && player.currentTime >= single.startTime
+                && player.currentTime < single.endTime
+            let isPast = !isActive && player.currentTime >= single.endTime
+            Button {
+                player.seekToTime(single.startTime)
+                HapticFeedback.light()
+            } label: {
+                Text(single.text)
+                    .font(.system(size: 13, weight: isActive ? .bold : .regular))
+                    .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, isActive ? 2 : 0)
+                    .padding(.vertical, isActive ? 1 : 0)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
+                    )
+            }
+            .buttonStyle(.plain)
+            .animation(.easeInOut(duration: 0.15), value: isActive)
+            .animation(.easeInOut(duration: 0.15), value: isPast)
         } else {
             let activeIdx = segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
             FlowLayout(spacing: 0) {
