@@ -5,6 +5,7 @@ import MeeshySDK
 enum BubbleFooterStyle: Equatable, Sendable {
     case row      // below text / emoji / audio content, inside the bubble
     case overlay  // dark capsule laid over image / video media
+    case compact  // inline next to emoji-only messages — timestamp + delivery only
 }
 
 /// One language flag in the footer's language switcher.

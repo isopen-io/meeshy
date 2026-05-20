@@ -317,18 +317,18 @@ struct BubbleStandardLayout: View {
                             .onTapGesture { revealBlurredContent() }
                     }
                 }
-                // Reactions sit at the BOTTOM corner of the bubble —
-                // bottom-trailing for sent, bottom-leading for received —
-                // bleeding ~8pt below the bubble's bottom edge so they
-                // float as "stickers" attached to the corner, just above
-                // where the inline quick-reaction bar will rise from the
-                // composer. La leading/trailing edge déborde maintenant
-                // de -4pt (auparavant +8pt INTÉRIEUR) pour donner un effet
-                // "à cheval" sur le coin : ~50% sous le coin de la bulle,
-                // ~50% dehors. C'est le look "sticker collé au coin" demandé.
-                .overlay(alignment: isMe ? .bottomTrailing : .bottomLeading) {
+                // Reactions sit at the BOTTOM corner of the bubble, sur le
+                // cote OPPOSE au bord d'ecran. Une bulle recue (a gauche)
+                // a son strip ancre en bottom-TRAILING (deborde vers la
+                // droite, dans la zone vide de la conversation). Une bulle
+                // envoyee (a droite) a son strip ancre en bottom-LEADING
+                // (deborde vers la gauche, idem). Le strip "echappe" toujours
+                // vers le centre de la conversation, jamais vers le bord
+                // d'ecran. Le -4pt de padding garde l'effet "sticker a cheval
+                // sur le coin" (~50% sous, ~50% dehors).
+                .overlay(alignment: isMe ? .bottomLeading : .bottomTrailing) {
                     reactionsOverlay
-                        .padding(isMe ? .trailing : .leading, -4)
+                        .padding(isMe ? .leading : .trailing, -4)
                         .offset(y: 8)
                 }
 
@@ -491,29 +491,44 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private var emojiOnlyContent: some View {
+        // Layout emoji-only sans reply : l'emoji et la meta-row (timestamp +
+        // delivery) forment un BLOC INDISSOCIABLE rendu sur la meme baseline,
+        // colle au bord de la conversation cote isMe. `.fixedSize()` garantit
+        // que le container epouse le contenu : pas de container invisible
+        // qui s'etire sur toute la largeur disponible (ce qui faisait "voler"
+        // la date a un endroit excentre). Le VStack exterieur conserve
+        // l'alignement isMe pour le secondary content (langue alternative
+        // active) qui descend dessous.
         VStack(alignment: content.isMe ? .trailing : .leading, spacing: 2) {
-            // Emoji-only intentionally renders the ORIGINAL `message.content`,
-            // not the translated text — emoji bubbles are not translated.
-            // NOTE: no `.onLongPressGesture` here — the BubbleSwipeContainer
-            // wrapping the cell already handles long-press to open the
-            // contextual options menu. A second long-press on the text
-            // would race that handler and pop two presentations at once
-            // (translation sheet + options overlay). Translation detail
-            // remains accessible via the translate icon in the identity bar.
-            Text(message.content)
-                .font(.system(size: emojiFontSize))
-                .fixedSize(horizontal: false, vertical: true)
-                .overlay(alignment: .topLeading) {
-                    if content.editedAt != nil {
-                        editedIndicator
-                            .offset(y: -14)
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                // Emoji-only intentionally renders the ORIGINAL `message.content`,
+                // not the translated text — emoji bubbles are not translated.
+                Text(message.content)
+                    .font(.system(size: emojiFontSize))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .overlay(alignment: .topLeading) {
+                        if content.editedAt != nil {
+                            editedIndicator
+                                .offset(y: -14)
+                        }
                     }
-                }
+
+                compactInlineFooter
+            }
+            .fixedSize()
 
             secondaryContentView
-
-            standardFooter
         }
+    }
+
+    /// Meta-row minimaliste pose a cote d'un emoji free-floating : timestamp
+    /// + delivery check (si isMe), sans drapeaux, sans translate, sans capsule.
+    /// Re-utilise le builder `resolvedFooter` pour rester aligne sur la meme
+    /// source de verite que le `standardFooter`.
+    private var compactInlineFooter: some View {
+        let (model, actions) = resolvedFooter(includesTranslationControls: false)
+        return BubbleFooter(model: model, actions: actions, style: .compact, isDark: isDark)
+            .equatable()
     }
 
     // MARK: - Text bubble path (with non-media attachments + reply preview)
@@ -551,11 +566,13 @@ struct BubbleStandardLayout: View {
                     if text.isEmojiOnly {
                         // Emoji-only reply: emoji hosted inside the bubble, above
                         // the quoted-reply card — large (same 90/60/45pt sizing as
-                        // the free-floating path) and centered within the bubble.
+                        // the free-floating path). Pas de `.frame(maxWidth: .infinity)` :
+                        // la bulle doit epouser le contenu (emoji + quoted-reply
+                        // card), pas s'etirer sur 70% de la largeur d'ecran. Le
+                        // VStack parent gere deja l'alignement naturel a gauche.
                         Text(message.content)
                             .font(.system(size: emojiFontSize))
                             .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .center)
                     } else {
                         expandableTextView
                     }

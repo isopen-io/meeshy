@@ -20,7 +20,50 @@ struct BubbleFooter: View, Equatable {
         switch style {
         case .row:     rowFooter
         case .overlay: overlayFooter
+        case .compact: compactFooter
         }
+    }
+
+    // MARK: - Compact style (inline next to emoji-only)
+
+    @ViewBuilder
+    private var compactFooter: some View {
+        // Bloc minimaliste destine a etre pose sur la meme baseline qu'un
+        // emoji free-floating. Pas de drapeaux, pas de bouton translate,
+        // pas de capsule de fond : juste timestamp + delivery check (si
+        // message envoye). Le tout dans un HStack tres serre pour rester
+        // visuellement attache a l'emoji.
+        HStack(spacing: 3) {
+            if let timestamp = model.timestamp {
+                Text(timestamp)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(compactMetaColor)
+            }
+            if model.delivery != nil {
+                if model.isFailed, let onRetry = actions.onRetry {
+                    Button(action: { onRetry(); HapticFeedback.light() }) {
+                        HStack(spacing: 3) {
+                            deliveryView(tint: compactMetaColor, readTint: readColor)
+                            Image(systemName: "arrow.clockwise")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(MeeshyColors.error)
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("Renvoyer le message")
+                } else {
+                    deliveryView(tint: compactMetaColor, readTint: readColor)
+                }
+            }
+        }
+    }
+
+    private var compactMetaColor: Color {
+        // Le compact footer s'affiche TOUJOURS hors d'une bulle (free-floating
+        // emoji), donc on n'a pas de fond brand a contraster. On utilise la
+        // couleur meta neutre quel que soit isMe.
+        isDark ? .white.opacity(0.55) : .black.opacity(0.5)
     }
 
     // MARK: - Row style (text / emoji / audio / story-reply)

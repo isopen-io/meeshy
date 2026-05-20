@@ -80,6 +80,15 @@ public actor CacheCoordinator {
         DiskCacheStore.cachedImage(for: urlString)
     }
 
+    /// Synchronous warm : NSCache hit OR disk-to-NSCache decode + return.
+    /// Used by `CachedAsyncImage.init` to peuple the image at cell mount time
+    /// for cold-start conversations — avoids the thumbHash → image flash that
+    /// otherwise occurs when NSCache has been evicted but the disk file is
+    /// still present.
+    nonisolated public static func warmedImage(for urlString: String) -> UIImage? {
+        shared.images.warmedImage(for: urlString)
+    }
+
     /// Check image disk cache synchronously. Returns local file URL if cached
     /// on disk (even when the decoded NSCache entry has been evicted). Used by
     /// the rendering pipeline to bypass the media policy gate for media that

@@ -214,28 +214,49 @@ extension BubbleContent {
         return all.filter { $0 != activeLang }
     }
 
-    /// Aggregates raw reactions into stable-ordered summaries (first-seen per emoji).
-    /// Mirrors the legacy logic from ThemedMessageBubble.reactionSummaries.
+    /// Aggregates raw reactions into stable-ordered summaries.
+    ///
+    /// Tri stable garanti : chaque emoji est positionne selon sa PLUS ANCIENNE
+    /// `createdAt` parmi les reactions de cet emoji. Ainsi, meme si le backend
+    /// renvoie `message.reactions` dans un ordre different apres un socket
+    /// update (re-sync, edit, etc.), l'ordre d'affichage reste celui de la
+    /// premiere apparition chronologique reelle. C'est la condition pour que
+    /// les pills ne "dansent" pas pendant que l'utilisateur scroll ou
+    /// manipule la bulle.
     static func summarizeReactions(
         _ reactions: [MeeshyReaction],
         currentUserId: String
     ) -> [MeeshyReactionSummary] {
-        var emojiCounts: [String: (count: Int, includesMe: Bool)] = [:]
-        var emojiOrder: [String] = []
+        var emojiData: [String: (count: Int, includesMe: Bool, firstSeen: Date)] = [:]
         for reaction in reactions {
             let isMe = reaction.participantId == currentUserId
-            if var existing = emojiCounts[reaction.emoji] {
+            if var existing = emojiData[reaction.emoji] {
                 existing.count += 1
                 existing.includesMe = existing.includesMe || isMe
-                emojiCounts[reaction.emoji] = existing
+                if reaction.createdAt < existing.firstSeen {
+                    existing.firstSeen = reaction.createdAt
+                }
+                emojiData[reaction.emoji] = existing
             } else {
-                emojiCounts[reaction.emoji] = (count: 1, includesMe: isMe)
-                emojiOrder.append(reaction.emoji)
+                emojiData[reaction.emoji] = (count: 1, includesMe: isMe, firstSeen: reaction.createdAt)
             }
         }
-        return emojiOrder.compactMap { emoji in
-            guard let data = emojiCounts[emoji] else { return nil }
-            return MeeshyReactionSummary(emoji: emoji, count: data.count, includesMe: data.includesMe)
-        }
+        // Tri primaire par `firstSeen` asc ; tie-break par emoji pour stabilite
+        // totale si deux emojis ont exactement la meme date (cas de double-tap).
+        return emojiData
+            .map { (emoji: $0.key, data: $0.value) }
+            .sorted { lhs, rhs in
+                if lhs.data.firstSeen == rhs.data.firstSeen {
+                    return lhs.emoji < rhs.emoji
+                }
+                return lhs.data.firstSeen < rhs.data.firstSeen
+            }
+            .map { entry in
+                MeeshyReactionSummary(
+                    emoji: entry.emoji,
+                    count: entry.data.count,
+                    includesMe: entry.data.includesMe
+                )
+            }
     }
 }

@@ -35,7 +35,11 @@ public struct CachedAsyncImage<Placeholder: View>: View {
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            cachedFull = DiskCacheStore.cachedImage(for: resolved)
+            // `warmedImage` retourne le NSCache hit s'il existe, sinon va
+            // synchroniquement decoder depuis le disque (zero IO reseau).
+            // C'est la cle pour que le cold start d'une conversation affiche
+            // les images directement, sans transitionner via le thumbHash.
+            cachedFull = CacheCoordinator.warmedImage(for: resolved)
         } else {
             cachedFull = nil
         }
@@ -80,7 +84,10 @@ public struct CachedAsyncImage<Placeholder: View>: View {
                 return
             }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            let cached = DiskCacheStore.cachedImage(for: resolved)
+            // Idem qu'a l'init : on tente le warm sync (NSCache puis disque)
+            // pour que les cellules reutilisees au scroll ne flashent pas leur
+            // thumbHash quand la nouvelle URL est deja sur disque.
+            let cached = CacheCoordinator.warmedImage(for: resolved)
             image = cached
             // Refresh the ThumbHash blur for the new url — cells are reused, so
             // stale @State from the previous message must not bleed through.
@@ -200,12 +207,12 @@ public struct CachedAvatarImage: View {
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            cachedFull = DiskCacheStore.cachedImage(for: resolved)
+            cachedFull = CacheCoordinator.warmedImage(for: resolved)
         } else {
             cachedFull = nil
         }
         _image = State(initialValue: cachedFull)
-        
+
         if cachedFull == nil, let thumbHash, !thumbHash.isEmpty {
             _thumbHashImage = State(initialValue: UIImage.fromThumbHash(thumbHash))
         }
@@ -224,7 +231,7 @@ public struct CachedAvatarImage: View {
         .adaptiveOnChange(of: urlString) { _, newUrl in
             guard let newUrl, !newUrl.isEmpty else { image = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            image = DiskCacheStore.cachedImage(for: resolved)
+            image = CacheCoordinator.warmedImage(for: resolved)
         }
     }
 
@@ -271,12 +278,12 @@ public struct CachedBannerImage: View {
         let cachedFull: UIImage?
         if let urlString, !urlString.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
-            cachedFull = DiskCacheStore.cachedImage(for: resolved)
+            cachedFull = CacheCoordinator.warmedImage(for: resolved)
         } else {
             cachedFull = nil
         }
         _image = State(initialValue: cachedFull)
-        
+
         if cachedFull == nil, let thumbHash, !thumbHash.isEmpty {
             _thumbHashImage = State(initialValue: UIImage.fromThumbHash(thumbHash))
         }
@@ -301,7 +308,7 @@ public struct CachedBannerImage: View {
                 return
             }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            if let cached = DiskCacheStore.cachedImage(for: resolved) {
+            if let cached = CacheCoordinator.warmedImage(for: resolved) {
                 image = cached
             } else {
                 image = nil
@@ -348,20 +355,21 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
         self.fullUrl = fullUrl
         self.placeholder = placeholder
 
-        // Tier 2: check disk cache for full image (sync, instant)
+        // Tier 2: warm le full image depuis le disque vers la NSCache puis
+        // peuple l'etat sync — pas de transition thumbnail→full visible.
         let cachedFull: UIImage?
         if let fullUrl, !fullUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(fullUrl)?.absoluteString ?? fullUrl
-            cachedFull = DiskCacheStore.cachedImage(for: resolved)
+            cachedFull = CacheCoordinator.warmedImage(for: resolved)
         } else {
             cachedFull = nil
         }
         _fullImage = State(initialValue: cachedFull)
 
-        // Tier 1: check disk cache for thumbnail (only if full not cached)
+        // Tier 1: idem pour le thumbnail si le full n'est pas encore disponible.
         if cachedFull == nil, let thumbnailUrl, !thumbnailUrl.isEmpty {
             let resolved = MeeshyConfig.resolveMediaURL(thumbnailUrl)?.absoluteString ?? thumbnailUrl
-            _thumbnailImage = State(initialValue: DiskCacheStore.cachedImage(for: resolved))
+            _thumbnailImage = State(initialValue: CacheCoordinator.warmedImage(for: resolved))
         }
 
         // Tier 0: decode ThumbHash instantly (< 0.1ms, always available if provided)
@@ -412,12 +420,12 @@ public struct ProgressiveCachedImage<Placeholder: View>: View {
             guard fullImage == nil else { return }
             guard let newUrl, !newUrl.isEmpty else { thumbnailImage = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            thumbnailImage = DiskCacheStore.cachedImage(for: resolved)
+            thumbnailImage = CacheCoordinator.warmedImage(for: resolved)
         }
         .adaptiveOnChange(of: fullUrl) { _, newUrl in
             guard let newUrl, !newUrl.isEmpty else { fullImage = nil; return }
             let resolved = MeeshyConfig.resolveMediaURL(newUrl)?.absoluteString ?? newUrl
-            if let cached = DiskCacheStore.cachedImage(for: resolved) {
+            if let cached = CacheCoordinator.warmedImage(for: resolved) {
                 fullImage = cached
             } else {
                 fullImage = nil
