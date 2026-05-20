@@ -59,12 +59,12 @@ struct StoryAudioCell: View {
             localVolume = audio.volume
             startWaveformIfNeeded()
         }
-        .onChange(of: url) { _, _ in
+        .adaptiveOnChange(of: url) { _, _ in
             // L'URL peut être résolue après le mount (cache miss → fetch async).
             didStartWaveform = false
             startWaveformIfNeeded()
         }
-        .onChange(of: localVolume) { _, newValue in
+        .adaptiveOnChange(of: localVolume) { _, newValue in
             onVolumeChanged(newValue)
         }
     }
