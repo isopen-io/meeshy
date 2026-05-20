@@ -110,6 +110,8 @@
 		AA11BB22CC33DD44EE55FF07 /* StatusComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = BB22CC33DD44EE55FF660077 /* StatusComposerView.swift */; };
 		AA2000000000002FA2 /* LocationPickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA2000000000001FA2 /* LocationPickerView.swift */; };
 		AA3000000000002FA3 /* MediaCompressor.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA3000000000001FA3 /* MediaCompressor.swift */; };
+		OAA0000000000002F01 /* OptimisticAttachmentAdopter.swift in Sources */ = {isa = PBXBuildFile; fileRef = OAA0000000000001F01 /* OptimisticAttachmentAdopter.swift */; };
+		OAA0000000000002F02 /* OptimisticAttachmentAdopterTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */; };
 		AA5000000000002FA5 /* VideoPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA5000000000001FA5 /* VideoPreviewView.swift */; };
 		AA6000000000002FA6 /* AttachmentSendService.swift in Sources */ = {isa = PBXBuildFile; fileRef = AA6000000000001FA6 /* AttachmentSendService.swift */; };
 		AABB001100220033 /* MeeshySDK in Frameworks */ = {isa = PBXBuildFile; productRef = AABB001100220066 /* MeeshySDK */; };
@@ -605,6 +607,8 @@
 		AA1000000000001FA1 /* UploadProgressBar.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UploadProgressBar.swift; sourceTree = "<group>"; };
 		AA2000000000001FA2 /* LocationPickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationPickerView.swift; sourceTree = "<group>"; };
 		AA3000000000001FA3 /* MediaCompressor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MediaCompressor.swift; sourceTree = "<group>"; };
+		OAA0000000000001F01 /* OptimisticAttachmentAdopter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimisticAttachmentAdopter.swift; sourceTree = "<group>"; };
+		OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OptimisticAttachmentAdopterTests.swift; sourceTree = "<group>"; };
 		AA5000000000001FA5 /* VideoPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VideoPreviewView.swift; sourceTree = "<group>"; };
 		AA5D13830922E297A0AF6C50 /* VideoFilterPipeline.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoFilterPipeline.swift; sourceTree = "<group>"; };
 		AA6000000000001FA6 /* AttachmentSendService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentSendService.swift; sourceTree = "<group>"; };
@@ -1311,6 +1315,7 @@
 				AABB00110023EE01 /* PresenceService.swift */,
 				SBC0000000000001SBC /* StatusBubbleController.swift */,
 				AA3000000000001FA3 /* MediaCompressor.swift */,
+				OAA0000000000001F01 /* OptimisticAttachmentAdopter.swift */,
 				AA6000000000001FA6 /* AttachmentSendService.swift */,
 				PQ7000000000001FPQ /* PendingStatusQueue.swift */,
 				CC2400000000001F24 /* ConversationLockManager.swift */,
@@ -1810,6 +1815,7 @@
 				NTFY0001000100010001000 /* NotificationTests.swift */,
 				1C90BB2C475926F97226B943 /* ConversationLockManagerTests.swift */,
 				A0340CB5A3610F80C0D53F08 /* MediaCompressorTests.swift */,
+				OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */,
 				5FEFAB456AD3F85FCBCDC078 /* PresenceManagerTests.swift */,
 				1DBCE13E5C724D3BCB34B45B /* APIServiceTests.swift */,
 				D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */,
@@ -2144,6 +2150,7 @@
 				AA1000000000002FA1 /* UploadProgressBar.swift in Sources */,
 				AA2000000000002FA2 /* LocationPickerView.swift in Sources */,
 				AA3000000000002FA3 /* MediaCompressor.swift in Sources */,
+				OAA0000000000002F01 /* OptimisticAttachmentAdopter.swift in Sources */,
 				AA5000000000002FA5 /* VideoPreviewView.swift in Sources */,
 				AA6000000000002FA6 /* AttachmentSendService.swift in Sources */,
 				PQ7000000000002FPQ /* PendingStatusQueue.swift in Sources */,
@@ -2416,6 +2423,7 @@
 				NTFY0001000100010001001 /* NotificationTests.swift in Sources */,
 				DLNK0001000100010001001 /* DeepLinkTests.swift in Sources */,
 				8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */,
+				OAA0000000000002F02 /* OptimisticAttachmentAdopterTests.swift in Sources */,
 				D240F5AC635D4F38FD26A6A1 /* APIServiceTests.swift in Sources */,
 				D5A1B2C3E4F506A7B8C9D0E4 /* DraftStoreTests.swift in Sources */,
 				DRRT01001001001001002 /* DraftStoreReplyTests.swift in Sources */,
