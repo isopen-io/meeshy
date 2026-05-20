@@ -461,63 +461,9 @@ extension ConversationView {
     }
 
     func mimeTypeForURL(_ url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
-        switch ext {
-        // Images
-        case "jpg", "jpeg": return "image/jpeg"
-        case "png": return "image/png"
-        case "gif": return "image/gif"
-        case "webp": return "image/webp"
-        case "heic", "heif": return "image/heic"
-        case "svg": return "image/svg+xml"
-        case "bmp": return "image/bmp"
-        case "tiff", "tif": return "image/tiff"
-        // Video
-        case "mp4", "m4v": return "video/mp4"
-        case "mov": return "video/quicktime"
-        case "avi": return "video/x-msvideo"
-        case "mkv": return "video/x-matroska"
-        case "webm": return "video/webm"
-        // Audio
-        case "mp3": return "audio/mpeg"
-        case "m4a", "aac": return "audio/mp4"
-        case "wav": return "audio/wav"
-        case "ogg", "oga": return "audio/ogg"
-        case "flac": return "audio/flac"
-        case "wma": return "audio/x-ms-wma"
-        // Documents
-        case "pdf": return "application/pdf"
-        case "doc": return "application/msword"
-        case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        case "xls": return "application/vnd.ms-excel"
-        case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        case "ppt": return "application/vnd.ms-powerpoint"
-        case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        case "pages": return "application/x-iwork-pages-sffpages"
-        case "numbers": return "application/x-iwork-numbers-sffnumbers"
-        case "keynote": return "application/x-iwork-keynote-sffkey"
-        // Text & Code
-        case "txt": return "text/plain"
-        case "csv": return "text/csv"
-        case "json": return "application/json"
-        case "xml": return "application/xml"
-        case "html", "htm": return "text/html"
-        case "css": return "text/css"
-        case "js": return "application/javascript"
-        case "ts": return "application/typescript"
-        case "py": return "text/x-python"
-        case "swift": return "text/x-swift"
-        case "md", "markdown": return "text/markdown"
-        case "rtf": return "application/rtf"
-        case "log": return "text/plain"
-        // Archives
-        case "zip": return "application/zip"
-        case "rar": return "application/x-rar-compressed"
-        case "7z": return "application/x-7z-compressed"
-        case "tar": return "application/x-tar"
-        case "gz", "gzip": return "application/gzip"
-        default: return "application/octet-stream"
-        }
+        // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).
+        // See its `forwardTable` for the full extension → mime mapping.
+        MimeTypeResolver.mimeType(forURL: url)
     }
 
     func getFileSize(_ url: URL) -> Int {
