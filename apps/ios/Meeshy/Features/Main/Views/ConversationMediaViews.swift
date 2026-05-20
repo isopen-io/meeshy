@@ -201,16 +201,58 @@ final class AttachmentDownloader: ObservableObject {
     func start(attachment: MessageAttachment, onShare: ((URL) -> Void)?) {
         let fileUrl = attachment.fileUrl
         guard !fileUrl.isEmpty else { return }
-        let isAudio = attachment.type == .audio
-        let isImage = attachment.type == .image
+        let store: CacheStoreKind
+        switch attachment.type {
+        case .audio: store = .audio
+        case .image: store = .image
+        case .video: store = .video
+        case .file, .location:
+            // No typed cache for file/location — manual download paths handle these.
+            return
+        }
+        startDownloadFlow(
+            urlString: fileUrl,
+            expectedSize: Int64(attachment.fileSize),
+            cacheStore: store
+        )
+    }
+
+    /// Download a translated audio (HTTPS URL distinct from the original
+    /// attachment). The translated audio's file size is not yet exposed by
+    /// the backend (spec §7 follow-up) — `fileSize == 0` is tolerated and
+    /// the response's Content-Length header is used as the total during DL.
+    /// Note: if the network shifts wifi -> cellular while downloading, the
+    /// download continues. The policy gates triggering, not continuation
+    /// (spec §14.2, consistent with WhatsApp / Telegram).
+    func startTranslatedAudio(url: String, fileSize: Int64) {
+        guard !url.isEmpty else { return }
+        startDownloadFlow(
+            urlString: url,
+            expectedSize: fileSize,
+            cacheStore: .audio
+        )
+    }
+
+    enum CacheStoreKind {
+        case audio, image, video
+    }
+
+    /// Shared download flow: streams URLSession.bytes, publishes progress,
+    /// persists into the typed cache under the resolved canonical key.
+    private func startDownloadFlow(
+        urlString: String,
+        expectedSize: Int64,
+        cacheStore: CacheStoreKind
+    ) {
+        guard !isDownloading, !isCached else { return }
         isDownloading = true
         downloadedBytes = 0
-        totalBytes = Int64(attachment.fileSize)
+        totalBytes = expectedSize
         HapticFeedback.light()
 
         downloadTask = Task.detached { [weak self] in
             do {
-                guard let url = MeeshyConfig.resolveMediaURL(fileUrl) else { throw URLError(.badURL) }
+                guard let url = MeeshyConfig.resolveMediaURL(urlString) else { throw URLError(.badURL) }
 
                 let (asyncBytes, response) = try await URLSession.shared.bytes(from: url)
 
@@ -253,15 +295,16 @@ final class AttachmentDownloader: ObservableObject {
                 // Seed under the exact key the renderer resolves to, in the
                 // store that matches the media type — a download triggered by
                 // the badge must never need to re-fetch on the next render.
-                let resolvedKey = MeeshyConfig.resolveMediaURL(fileUrl)?.absoluteString ?? fileUrl
-                if isAudio {
+                let resolvedKey = MeeshyConfig.resolveMediaURL(urlString)?.absoluteString ?? urlString
+                switch cacheStore {
+                case .audio:
                     await CacheCoordinator.shared.audio.store(data, for: resolvedKey)
-                } else if isImage {
+                case .image:
                     await CacheCoordinator.shared.images.store(data, for: resolvedKey)
                     if let image = UIImage(data: data) {
                         DiskCacheStore.cacheImageForPreview(image, key: resolvedKey)
                     }
-                } else {
+                case .video:
                     await CacheCoordinator.shared.video.store(data, for: resolvedKey)
                 }
 
@@ -399,11 +442,37 @@ struct AudioMediaView: View, Equatable {
         return resolvedAvailability
     }
 
-    /// Résout `resolvedAvailability` depuis l'attachment courant. Appelé par
-    /// `.task(id: attachment.fileUrl)` : se ré-exécute quand l'URL bascule
-    /// optimiste (`file://`) → serveur (`https://`) à la réconciliation.
+    /// URL de la langue actuellement sélectionnée (orig ou traduite).
+    /// Drives `resolveAvailability` and the auto-DL trigger. Used as the
+    /// `.task(id:)` identifier so switching language re-runs availability
+    /// resolution and the policy check.
+    private var currentAudioUrl: String {
+        if let lang = selectedAudioLangCode,
+           let translated = translatedAudios.first(where: {
+               $0.targetLanguage.lowercased() == lang.lowercased()
+           }) {
+            return translated.url
+        }
+        return attachment.fileUrl
+    }
+
+    /// MediaKind for the current URL: original = `.audio`, translated =
+    /// `.audioTranslation`. Discrimination based on presence in
+    /// `translatedAudios` rather than `message.originalLanguage`, which may
+    /// differ from the `nil` sentinel used by `selectedAudioLangCode`.
+    private var currentMediaKind: MediaKind {
+        guard let lang = selectedAudioLangCode,
+              translatedAudios.contains(where: { $0.targetLanguage.lowercased() == lang.lowercased() })
+        else { return .audio }
+        return .audioTranslation
+    }
+
+    /// Résout `resolvedAvailability` depuis l'URL courante (langue active).
+    /// Ré-exécuté par `.task(id: currentAudioUrl)` quand l'URL bascule
+    /// (file:// -> https:// à la réconciliation, ou changement de langue
+    /// via `selectedAudioLangCode`).
     private func resolveAvailability() async {
-        let urlString = attachment.fileUrl
+        let urlString = currentAudioUrl
         if urlString.hasPrefix("file://") {
             let exists = FileManager.default.fileExists(
                 atPath: URL(string: urlString)?.path ?? ""
@@ -454,8 +523,40 @@ struct AudioMediaView: View, Equatable {
                 selectedAudioLangCode = newLang
             }
         }
-        .task(id: attachment.fileUrl) {
+        .task(id: currentAudioUrl) {
+            // Reset stale "cached" flag from a previous URL (e.g. previous
+            // language) so resolveAvailability drives the truth for the new URL.
+            // We never reset mid-download — a running DL belongs to the URL
+            // that initiated it and must complete or be cancelled.
+            if !downloader.isDownloading {
+                downloader.isCached = false
+            }
             await resolveAvailability()
+
+            // Auto-DL when policy permits, the new URL isn't cached and no
+            // DL is already running. The network condition + preferences are
+            // both `@MainActor` singletons, safe to read from this `.task`
+            // which inherits the view's MainActor isolation.
+            if case .needsDownload = resolvedAvailability, !downloader.isDownloading {
+                let condition = NetworkConditionMonitor.shared.condition
+                let prefs = MediaDownloadPreferencesStore.shared.preferences
+                if MediaDownloadPolicyEngine.shouldAutoDownload(
+                    kind: currentMediaKind, condition: condition, prefs: prefs
+                ) {
+                    triggerCurrentLanguageDownload()
+                }
+            }
+        }
+    }
+
+    /// Triggers the download for the currently selected language's URL.
+    /// Routes to `startTranslatedAudio` when the URL points to a translated
+    /// audio, otherwise the standard attachment download.
+    private func triggerCurrentLanguageDownload() {
+        if currentMediaKind == .audioTranslation {
+            downloader.startTranslatedAudio(url: currentAudioUrl, fileSize: 0)
+        } else {
+            downloader.start(attachment: attachment, onShare: nil)
         }
     }
 
@@ -544,7 +645,7 @@ struct AudioMediaView: View, Equatable {
                 },
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
-                onDownload: { downloader.start(attachment: attachment, onShare: nil) },
+                onDownload: { triggerCurrentLanguageDownload() },
                 topContent: { replyTopSlot },
                 bottomContent: { playerBottomContent }
             )
@@ -568,7 +669,7 @@ struct AudioMediaView: View, Equatable {
                 },
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
-                onDownload: { downloader.start(attachment: attachment, onShare: nil) }
+                onDownload: { triggerCurrentLanguageDownload() }
             ) {
                 playerBottomContent
             }
@@ -592,7 +693,7 @@ struct AudioMediaView: View, Equatable {
                 },
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
-                onDownload: { downloader.start(attachment: attachment, onShare: nil) }
+                onDownload: { triggerCurrentLanguageDownload() }
             )
         }
     }
