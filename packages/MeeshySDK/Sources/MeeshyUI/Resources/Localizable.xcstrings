@@ -16609,31 +16609,31 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Text eingeben..."
+            "value" : "Drücke dich aus…"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Enter your text..."
+            "value" : "Express yourself…"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Escribe tu texto..."
+            "value" : "Exprésate…"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Saisissez votre texte..."
+            "value" : "Exprimez-vous…"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Digite seu texto..."
+            "value" : "Expresse-se…"
           }
         }
       }

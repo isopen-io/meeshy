@@ -24,7 +24,7 @@ public final class StoryInlineTextEditor: UITextView {
         placeholderLabel.numberOfLines = 0
         placeholderLabel.isUserInteractionEnabled = false
         placeholderLabel.text = String(localized: "story.textEditor.placeholder",
-                                       defaultValue: "Saisissez votre texte…",
+                                       defaultValue: "Exprimez-vous…",
                                        bundle: .module)
         addSubview(placeholderLabel)
     }

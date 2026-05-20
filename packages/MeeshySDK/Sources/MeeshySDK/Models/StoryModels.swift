@@ -216,7 +216,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var anchor: CGPoint           // NEW; uses CGPoint (x∈0..1, y∈0..1) — NOT UnitPoint (SwiftUI-only)
 
     // Typography (replace textSize with design-pixel fontSize)
-    public var fontSize: Double          // NEW: design pixels (1080-référentiel), default 64
+    public var fontSize: Double          // NEW: design pixels (1080-référentiel), default 96 (decoder legacy fallback = 64)
     public var fontFamily: String        // NEW: default "system"
 
     // Style per-objet (tous optionnels pour backward compat JSON existant)
@@ -270,7 +270,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 scale: Double = 1.0, rotation: Double = 0.0,
                 zIndex: Int = 0,
                 anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
-                fontSize: Double = 64.0,
+                fontSize: Double = 96.0,
                 fontFamily: String = "system",
                 textStyle: String? = "bold",
                 textColor: String? = "FFFFFF",
