@@ -407,6 +407,7 @@
 		SP3400000000002F34 /* SharePickerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = SP3400000000001F34 /* SharePickerView.swift */; };
 		SPS2800000000002F28 /* StoryPublishService.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPS2800000000001F28 /* StoryPublishService.swift */; };
 		SPST0001000100010001B001 /* StoryPublishServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SPST0001000100010001F001 /* StoryPublishServiceTests.swift */; };
+		SVET0001000100010001B001 /* StoryVideoExportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SVET0001000100010001F001 /* StoryVideoExportServiceTests.swift */; };
 		SREMB001A001A001A001A0001 /* StoryRepostEmbedCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = SREMB001A001A001A001A0002 /* StoryRepostEmbedCell.swift */; };
 		SRFT001A001A001A001A0002 /* StoryRepostFlowTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRFT001A001A001A001A0001 /* StoryRepostFlowTests.swift */; };
 		SRPT02002002002002001 /* SearchPerformanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SRPT01001001001001001 /* SearchPerformanceTests.swift */; };
@@ -903,6 +904,7 @@
 		SP3400000000001F34 /* SharePickerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharePickerView.swift; sourceTree = "<group>"; };
 		SPS2800000000001F28 /* StoryPublishService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishService.swift; sourceTree = "<group>"; };
 		SPST0001000100010001F001 /* StoryPublishServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryPublishServiceTests.swift; sourceTree = "<group>"; };
+		SVET0001000100010001F001 /* StoryVideoExportServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryVideoExportServiceTests.swift; sourceTree = "<group>"; };
 		SREMB001A001A001A001A0002 /* StoryRepostEmbedCell.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryRepostEmbedCell.swift; sourceTree = "<group>"; };
 		SRFT001A001A001A001A0001 /* StoryRepostFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryRepostFlowTests.swift; sourceTree = "<group>"; };
 		SRPT01001001001001001 /* SearchPerformanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchPerformanceTests.swift; sourceTree = "<group>"; };
@@ -1827,6 +1829,7 @@
 				SBCT0001000100010001F001 /* StatusBubbleControllerTests.swift */,
 				TSTM0001000100010001F001 /* ToastManagerTests.swift */,
 				SPST0001000100010001F001 /* StoryPublishServiceTests.swift */,
+				SVET0001000100010001F001 /* StoryVideoExportServiceTests.swift */,
 				WDGM0001000100010001F001 /* WidgetDataManagerTests.swift */,
 				VOIP0001000100010001F001 /* VoIPPushManagerTests.swift */,
 				BGTM0001000100010001F001 /* BackgroundTaskManagerTests.swift */,
@@ -2444,6 +2447,7 @@
 				SBCT0001000100010001B001 /* StatusBubbleControllerTests.swift in Sources */,
 				TSTM0001000100010001B001 /* ToastManagerTests.swift in Sources */,
 				SPST0001000100010001B001 /* StoryPublishServiceTests.swift in Sources */,
+				SVET0001000100010001B001 /* StoryVideoExportServiceTests.swift in Sources */,
 				WDGM0001000100010001B001 /* WidgetDataManagerTests.swift in Sources */,
 				VOIP0001000100010001B001 /* VoIPPushManagerTests.swift in Sources */,
 				BGTM0001000100010001B001 /* BackgroundTaskManagerTests.swift in Sources */,

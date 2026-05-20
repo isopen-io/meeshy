@@ -27,7 +27,6 @@ struct StoryActionSidebarView: View {
     let currentGroup: StoryGroup?
     let storyCommentCount: Int
     let isStoryCommentsEmpty: Bool
-    let currentStoryNeedsVideoExport: Bool
     let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
     let isGlobalMuted: Bool
@@ -184,10 +183,12 @@ struct StoryActionSidebarView: View {
             }
 
             // Author-only export — bakes a fidèle-au-preview MP4 the user
-            // can share to Photos / Messages / WhatsApp. NEVER uploads to
-            // the Meeshy backend (stories publish RAW, see CLAUDE.md
-            // "Story Architecture").
-            if isOwnStory, currentStoryNeedsVideoExport {
+            // can share to Photos / Messages / WhatsApp. Available pour
+            // TOUTES les stories de l'auteur (static OU animée — le
+            // compositor synthétise un substrat pour les statiques).
+            // NEVER uploads to the Meeshy backend (stories publish RAW,
+            // see CLAUDE.md "Story Architecture").
+            if isOwnStory {
                 StoryActionButton(
                     icon: "square.and.arrow.up.fill",
                     label: "Exporter"
