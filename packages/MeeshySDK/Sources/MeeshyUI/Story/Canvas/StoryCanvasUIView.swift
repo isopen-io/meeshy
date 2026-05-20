@@ -330,7 +330,18 @@ public final class StoryCanvasUIView: UIView {
         rootLayer.addSublayer(itemsContainer)
         rootLayer.addSublayer(editOverlayLayer)
         editOverlayLayer.zPosition = 10_000  // always on top
-        backgroundColor = .black
+        // `.clear` au lieu de `.black` : pendant les transitions (1st mount,
+        // drop d'un élément foreground qui déclenche `slide.didSet → rebuildLayers`,
+        // lancement preview / viewer avec un canvas fraîchement instancié)
+        // UIKit composite le view AVANT que `backgroundLayer` ait son contenu
+        // dessiné. Avec un fond noir, ces transitions flashent ~16ms de noir
+        // perçu comme un scintillement. Avec `.clear`, on voit le parent
+        // (typiquement le fond du composer / viewer, déjà du contenu utile)
+        // pendant cette latence. Le fond cinema des stories est porté par
+        // `backgroundLayer` (image / video / couleur de slide), pas par
+        // cette view.
+        backgroundColor = .clear
+        isOpaque = false
         setupGesturesAll()
         observeAppLifecycle()
         observeMuteNotifications()
@@ -586,9 +597,19 @@ public final class StoryCanvasUIView: UIView {
 
     public override func layoutSubviews() {
         super.layoutSubviews()
+        // Wrap les assignations de frame des sublayers : sans
+        // `CATransaction.setDisableActions(true)`, un parent qui anime un
+        // resize / reposition (présentation modale, rotation, transition de
+        // mode `.edit` → `.play`) anime IMPLICITEMENT la position des
+        // sublayers, ce qui révèle 1-2 frames du fond pendant l'interpolation
+        // et flashe à l'écran. `rebuildLayers()` a son propre wrapper interne
+        // mais ce dernier ne protège pas l'assignation du frame ci-dessous.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         rootLayer.frame = bounds
         itemsContainer.frame = bounds
         editOverlayLayer.frame = bounds
+        CATransaction.commit()
         rebuildLayers()
     }
 
