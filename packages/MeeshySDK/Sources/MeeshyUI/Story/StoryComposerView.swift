@@ -1180,6 +1180,57 @@ public struct StoryComposerView: View {
                 )
             }
         }
+        .overlay { audioForegroundOverlay }
+    }
+
+    /// Chip glass posé sur le canvas pour chaque audio foreground (i.e.
+    /// `isBackground != true`). La position vient du modèle (`x`/`y`
+    /// normalisés) ; le drag local est éphémère et ne pousse que sur release
+    /// pour éviter le scintillement des vues observant le VM. L'icône absente
+    /// venait du fait que `StoryAudioPlayerView` n'était wired nulle part —
+    /// ce chip est plus léger et dédié à la composition.
+    @ViewBuilder
+    private var audioForegroundOverlay: some View {
+        if !viewModel.isDrawingActive {
+            GeometryReader { geo in
+                ForEach(foregroundAudioBindings, id: \.wrappedValue.id) { binding in
+                    AudioForegroundChip(
+                        audioObject: binding,
+                        canvasSize: geo.size,
+                        isSelected: viewModel.selectedElementId == binding.wrappedValue.id,
+                        onDragEnd: { HapticFeedback.light() },
+                        onTap: {
+                            HapticFeedback.light()
+                            viewModel.selectedElementId = binding.wrappedValue.id
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    /// Bindings vers chaque `StoryAudioPlayerObject` foreground de la slide
+    /// courante. Le binding écrit en retour dans `viewModel.currentEffects`
+    /// — ce qui resync la slide via `currentSlide.didSet` et propage au canvas.
+    private var foregroundAudioBindings: [Binding<StoryAudioPlayerObject>] {
+        let audios = viewModel.currentEffects.audioPlayerObjects ?? []
+        return audios.enumerated().compactMap { idx, obj -> Binding<StoryAudioPlayerObject>? in
+            guard obj.isBackground != true else { return nil }
+            return Binding<StoryAudioPlayerObject>(
+                get: {
+                    let list = viewModel.currentEffects.audioPlayerObjects ?? []
+                    return list.indices.contains(idx) ? list[idx] : obj
+                },
+                set: { newValue in
+                    var effects = viewModel.currentEffects
+                    guard var list = effects.audioPlayerObjects,
+                          list.indices.contains(idx) else { return }
+                    list[idx] = newValue
+                    effects.audioPlayerObjects = list
+                    viewModel.currentEffects = effects
+                }
+            )
+        }
     }
 
     @ViewBuilder
