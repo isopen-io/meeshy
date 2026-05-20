@@ -25,6 +25,12 @@ public enum AttachmentKind: String, Sendable, Equatable, CaseIterable, Codable {
     /// Résout la catégorie à partir d'un mimeType. Retourne `.other` pour les
     /// types non reconnus ou vides.
     ///
+    /// **Case-insensitive.** RFC 2045 §5.1 dit que les mimeTypes sont
+    /// case-insensitive (`Image/JPEG` ≡ `image/jpeg`). On normalise via
+    /// `.lowercased()` pour que cette fonction reste un single-source-of-truth
+    /// robuste face à des payloads non-normalisés (gateway tiers, partage
+    /// inter-app via UTType, etc.).
+    ///
     /// Précédence des règles :
     /// 1. Mimes exacts (Office, archives, code) — match avant les préfixes pour
     ///    que `text/csv` → `.spreadsheet` (pas `.text`), `text/xml` → `.code`.
@@ -32,9 +38,10 @@ public enum AttachmentKind: String, Sendable, Equatable, CaseIterable, Codable {
     /// 3. Préfixe `text/` (fallback texte).
     /// 4. `.other` sinon.
     public init(mimeType: String) {
+        let normalized = mimeType.lowercased()
         // 1. Exact matches first — they would otherwise be shadowed by the
         //    `text/` and `application/` prefixes below.
-        switch mimeType {
+        switch normalized {
         case "application/pdf":
             self = .pdf; return
         case "application/vnd.ms-excel",
@@ -63,11 +70,11 @@ public enum AttachmentKind: String, Sendable, Equatable, CaseIterable, Codable {
             break
         }
         // 2. Media prefixes.
-        if mimeType.hasPrefix("image/") { self = .image; return }
-        if mimeType.hasPrefix("video/") { self = .video; return }
-        if mimeType.hasPrefix("audio/") { self = .audio; return }
+        if normalized.hasPrefix("image/") { self = .image; return }
+        if normalized.hasPrefix("video/") { self = .video; return }
+        if normalized.hasPrefix("audio/") { self = .audio; return }
         // 3. Text fallback (csv / xml already consumed above).
-        if mimeType.hasPrefix("text/") { self = .text; return }
+        if normalized.hasPrefix("text/") { self = .text; return }
         // 4. Unknown.
         self = .other
     }

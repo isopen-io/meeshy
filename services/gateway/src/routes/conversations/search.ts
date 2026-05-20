@@ -173,6 +173,13 @@ export function registerSearchRoutes(
 
         const msg = conversation.messages[0];
         const sender = msg?.sender as any;
+        // `_count.attachments` MUST be propagated so the iOS conv-row can
+        // render the "+N" badge when `attachments` above is truncated by
+        // Prisma's `take: 1`. Fastify silently strips fields not declared
+        // in the response schema (cf. feedback_fastify_schema_strips_fields)
+        // AND a hand-mapped object like this one drops anything we don't
+        // copy explicitly — both layers can blank the field. Mirror exactly
+        // what `core.ts` does via `{ ...msg }`.
         const lastMessage = msg ? {
           id: msg.id,
           content: msg.content,
@@ -188,6 +195,7 @@ export function registerSearchRoutes(
             isOnline: sender.user?.isOnline ?? false,
           } : null,
           attachments: msg.attachments || [],
+          _count: (msg as any)._count,
         } : null;
 
         return {

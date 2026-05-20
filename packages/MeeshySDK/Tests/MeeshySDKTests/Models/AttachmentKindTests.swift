@@ -90,6 +90,19 @@ struct AttachmentKindTests {
         #expect(AttachmentKind(mimeType: "foo/bar") == .other)
     }
 
+    // MARK: - Case-insensitive normalisation (RFC 2045 §5.1)
+
+    @Test("uppercase / mixed-case mime types resolve to the same kind")
+    func case_insensitive() {
+        #expect(AttachmentKind(mimeType: "Image/JPEG") == .image)
+        #expect(AttachmentKind(mimeType: "IMAGE/PNG") == .image)
+        #expect(AttachmentKind(mimeType: "Video/MP4") == .video)
+        #expect(AttachmentKind(mimeType: "AUDIO/MPEG") == .audio)
+        #expect(AttachmentKind(mimeType: "Application/PDF") == .pdf)
+        #expect(AttachmentKind(mimeType: "Text/CSV") == .spreadsheet)
+        #expect(AttachmentKind(mimeType: "APPLICATION/JSON") == .code)
+    }
+
     // MARK: - Precedence rules
 
     @Test("text/csv is .spreadsheet, not .text (exact match wins over text/* prefix)")
