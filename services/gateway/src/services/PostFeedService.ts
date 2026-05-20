@@ -1,44 +1,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
-import { authorSelect, mediaInclude } from './posts/postIncludes';
+import { authorSelect, postInclude } from './posts/postIncludes';
 
-const feedPostInclude = {
-  author: { select: authorSelect },
-  media: mediaInclude,
-  comments: {
-    where: { isDeleted: false, OR: [{ parentId: null }, { parentId: { isSet: false } }] },
-    select: {
-      id: true,
-      content: true,
-      originalLanguage: true,
-      translations: true,
-      likeCount: true,
-      replyCount: true,
-      createdAt: true,
-      author: { select: authorSelect },
-    },
-    orderBy: { likeCount: 'desc' as const },
-    take: 3,
-  },
-  repostOf: {
-    select: {
-      id: true,
-      type: true,
-      content: true,
-      originalLanguage: true,
-      translations: true,
-      storyEffects: true,
-      audioUrl: true,
-      originalRepostOfId: true,
-      author: { select: authorSelect },
-      media: mediaInclude,
-      createdAt: true,
-      likeCount: true,
-      commentCount: true,
-    },
-  },
-};
+// Feed payloads share the canonical postInclude — alias kept for callsite clarity.
+const feedPostInclude = postInclude;
 
 // ============================================
 // SCORING FUNCTIONS

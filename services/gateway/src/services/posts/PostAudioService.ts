@@ -14,46 +14,15 @@ import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ZMQSingleton } from '../ZmqSingleton';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { getLanguagesWithTranslation } from '../../utils/languages';
-import { authorSelect, mediaInclude } from './postIncludes';
+import { postInclude } from './postIncludes';
 
 const log = enhancedLogger.child({ module: 'PostAudioService' });
 
-// Select used when fetching a post after updating PostMedia transcription,
-// mirrors PostService.postInclude to produce a consistent Post shape.
-const postInclude = {
-  author: { select: authorSelect },
-  media: mediaInclude,
-  comments: {
-    where: { isDeleted: false, parentId: null },
-    select: {
-      id: true,
-      content: true,
-      originalLanguage: true,
-      translations: true,
-      likeCount: true,
-      replyCount: true,
-      createdAt: true,
-      author: { select: authorSelect },
-    },
-    orderBy: { likeCount: 'desc' as const },
-    take: 3,
-  },
-  repostOf: {
-    select: {
-      id: true,
-      type: true,
-      content: true,
-      storyEffects: true,
-      audioUrl: true,
-      originalRepostOfId: true,
-      author: { select: authorSelect },
-      media: mediaInclude,
-      createdAt: true,
-      likeCount: true,
-      commentCount: true,
-    },
-  },
-} as const;
+// postInclude is the canonical shape from ./postIncludes — same shape used by
+// PostService and PostFeedService so the `post:updated` broadcast emitted
+// after a TTS pipeline completes carries the SAME payload structure as a
+// fresh REST fetch. Drift here previously stripped Prisme fields from
+// reposts and filtered out legacy comments without parentId — see R3.
 
 type ProcessPostAudioParams = {
   postId: string;

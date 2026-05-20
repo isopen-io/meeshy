@@ -9,7 +9,7 @@ import type { MediaStorage, MediaDuplicateResult } from './storage/MediaStorage'
 import type { OrphanMediaCleanupService } from './storage/OrphanMediaCleanupService';
 import { enhancedLogger } from '../utils/logger-enhanced';
 import { ZMQSingleton } from './ZmqSingleton';
-import { authorSelect, mediaSelect, mediaInclude } from './posts/postIncludes';
+import { authorSelect, mediaSelect, mediaInclude, postInclude } from './posts/postIncludes';
 
 const log = enhancedLogger.child({ module: 'PostService' });
 
@@ -50,43 +50,7 @@ function detectLanguage(text: string): string {
   return 'en';
 }
 
-// Base post include — authorSelect / mediaSelect are shared (./posts/postIncludes)
-const postInclude = {
-  author: { select: authorSelect },
-  media: mediaInclude,
-  comments: {
-    where: { isDeleted: false, OR: [{ parentId: null }, { parentId: { isSet: false } }] },
-    select: {
-      id: true,
-      content: true,
-      originalLanguage: true,
-      translations: true,
-      likeCount: true,
-      replyCount: true,
-      createdAt: true,
-      author: { select: authorSelect },
-    },
-    orderBy: { likeCount: 'desc' as const },
-    take: 3,
-  },
-  repostOf: {
-    select: {
-      id: true,
-      type: true,
-      content: true,
-      originalLanguage: true,
-      translations: true,
-      storyEffects: true,
-      audioUrl: true,
-      originalRepostOfId: true,
-      author: { select: authorSelect },
-      media: mediaInclude,
-      createdAt: true,
-      likeCount: true,
-      commentCount: true,
-    },
-  },
-};
+// postInclude is shared — see ./posts/postIncludes for the single source of truth.
 
 export class PostService {
   private readonly postReactionService: PostReactionService;
