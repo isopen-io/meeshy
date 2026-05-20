@@ -557,10 +557,16 @@ public actor MessagePersistenceActor {
         updatedAt: Date
     ) throws {
         var affectedConversationId: String?
+        // Snapshot the optimistic attachments BEFORE the UPDATE overwrites
+        // them — adoption logic below needs to pair each new attachment with
+        // the optimistic file:// URL we just replaced.
+        var optimisticAttachmentsJson: Data?
         try dbWriter.write { db in
-            affectedConversationId = try MessageRecord
+            let existing = try MessageRecord
                 .filter(Column("localId") == localId)
-                .fetchOne(db)?.conversationId
+                .fetchOne(db)
+            affectedConversationId = existing?.conversationId
+            optimisticAttachmentsJson = existing?.attachmentsJson
             // `COALESCE(?, col)` keeps the existing blob when the caller passes
             // `nil`. A server ACK echo never *removes* a message's attachments
             // or reactions; a media echo that races server-side processing can
@@ -589,8 +595,63 @@ public actor MessagePersistenceActor {
                 ]
             )
         }
+        // PR B: adopt any optimistic local attachments into the canonical
+        // typed cache so the very next read of the new HTTPS URL is an
+        // instant disk hit. Fire-and-forget — adoption is purely additive
+        // and must not block the ACK path.
+        if let newAtts = attachmentsJson, let oldAtts = optimisticAttachmentsJson {
+            Task.detached(priority: .utility) {
+                await Self.adoptChangedAttachments(oldJson: oldAtts, newJson: newAtts)
+            }
+        }
         if let convId = affectedConversationId {
             postMessageStoreRefresh(conversationIds: [convId])
+        }
+    }
+
+    /// Pair each new attachment with the optimistic one it replaces — by id,
+    /// then by index, then by `originalName + mimeType` — and adopt the local
+    /// file into the typed cache when the URL flips `file://` → `https://`.
+    private static func adoptChangedAttachments(oldJson: Data, newJson: Data) async {
+        let decoder = JSONDecoder()
+        guard let oldAtts = try? decoder.decode([MeeshyMessageAttachment].self, from: oldJson),
+              let newAtts = try? decoder.decode([MeeshyMessageAttachment].self, from: newJson),
+              !newAtts.isEmpty else { return }
+
+        for (newIdx, newAtt) in newAtts.enumerated() {
+            let pairedById = oldAtts.first(where: { $0.id == newAtt.id })
+            let pairedByIndex: MeeshyMessageAttachment? = newIdx < oldAtts.count ? oldAtts[newIdx] : nil
+            let pairedByMeta = oldAtts.first(where: {
+                $0.originalName == newAtt.originalName && $0.mimeType == newAtt.mimeType
+            })
+            guard let previous = pairedById ?? pairedByIndex ?? pairedByMeta else { continue }
+            await Self.adoptSDKLevel(new: newAtt, previousFileUrl: previous.fileUrl)
+        }
+    }
+
+    /// SDK-level mirror of `OptimisticAttachmentAdopter.adoptIfNeeded` (the app
+    /// helper). Lives here because the SDK cannot import the app target; the
+    /// app helper remains useful for call sites that do not flow through this
+    /// persistence actor.
+    private static func adoptSDKLevel(new: MeeshyMessageAttachment, previousFileUrl: String?) async {
+        guard let previous = previousFileUrl,
+              previous.hasPrefix("file://"),
+              new.fileUrl.hasPrefix("http") else { return }
+
+        guard let localURL = URL(string: previous),
+              FileManager.default.fileExists(atPath: localURL.path) else { return }
+
+        let canonicalKey = MeeshyConfig.resolveMediaURL(new.fileUrl)?.absoluteString ?? new.fileUrl
+
+        switch new.type {
+        case .audio:
+            await CacheCoordinator.shared.audio.adopt(localFile: localURL, for: canonicalKey)
+        case .image:
+            await CacheCoordinator.shared.images.adoptImage(localFile: localURL, for: canonicalKey)
+        case .video:
+            await CacheCoordinator.shared.video.adopt(localFile: localURL, for: canonicalKey)
+        case .file, .location:
+            return
         }
     }
 
