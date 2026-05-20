@@ -212,6 +212,78 @@ final class BubbleContentMatrixTests: XCTestCase {
         XCTAssertEqual(resolved, "Bonjour")
     }
 
+    // MARK: - Reply routing (audioHostsReply / visualHostsReply)
+
+    /// Un audio seul en reply doit héberger la citation dans son widget — pas
+    /// de chat bubble parasite autour.
+    func test_audioHostsReply_pureAudioWithReply_isTrue() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let audio = makeAttachment(type: .audio)
+        let msg = makeMessage(content: "", attachments: [audio], replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.audioHostsReply)
+        XCTAssertFalse(content.visualHostsReply)
+    }
+
+    /// Audio avec caption courte + reply : `isAudioOnlyWithText` force
+    /// `hasTextOrNonMediaContent == false` → l'audio reste l'unique hôte de
+    /// la citation (caption rendue par `AudioMediaView.body`, transcription par
+    /// `inlineTranscription`, footer par bottomSlot).
+    func test_audioHostsReply_audioWithCaptionAndReply_isTrue() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let audio = makeAttachment(type: .audio)
+        let msg = makeMessage(content: "ma caption", attachments: [audio], replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.audioHostsReply)
+    }
+
+    /// Visual seul en reply doit basculer vers le conteneur unifié — pas de
+    /// chat bubble séparée sous la grille.
+    func test_visualHostsReply_pureVisualWithReply_isTrue() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let img = makeAttachment(type: .image)
+        let msg = makeMessage(content: "", attachments: [img], replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertTrue(content.visualHostsReply)
+        XCTAssertFalse(content.audioHostsReply)
+    }
+
+    /// Texte + reply : la bulle texte reste légitime — ni audioHostsReply ni
+    /// visualHostsReply ne doivent s'activer.
+    func test_neitherHostsReply_textWithReply_isFalse() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let msg = makeMessage(content: "ma reponse", replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertFalse(content.audioHostsReply)
+        XCTAssertFalse(content.visualHostsReply)
+    }
+
+    /// Pas de reply du tout : aucun host actif (le widget audio/visual rend
+    /// son footer standalone, comportement non touché par la refonte).
+    func test_neitherHostsReply_noReply_isFalse() {
+        let audio = makeAttachment(type: .audio)
+        let msg = makeMessage(content: "", attachments: [audio])
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertFalse(content.audioHostsReply)
+        XCTAssertFalse(content.visualHostsReply)
+    }
+
+    /// Emoji-only + reply : l'emoji est rendu agrandi dans la bulle texte ;
+    /// ni audio ni visual ne hostent — comportement préservé.
+    func test_neitherHostsReply_emojiOnlyWithReply_isFalse() {
+        let reply = ReplyReference(messageId: "m0", authorName: "Bob", previewText: "Salut")
+        let msg = makeMessage(content: "🔥", replyTo: reply)
+        let content = BubbleContent(message: msg, translations: [], preferredTranslation: nil, currentUserId: "u1")
+
+        XCTAssertFalse(content.audioHostsReply)
+        XCTAssertFalse(content.visualHostsReply)
+    }
+
     // MARK: - Helpers
 
     private func makeMessage(
