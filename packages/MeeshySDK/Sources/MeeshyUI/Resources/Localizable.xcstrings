@@ -14069,6 +14069,36 @@
         }
       }
     },
+    "story.canvas.layer.canvas" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Canvas" } },
+        "en" : { "stringUnit" : { "state" : "needs_review", "value" : "Canvas" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Lienzo" } },
+        "fr" : { "stringUnit" : { "state" : "new", "value" : "Canvas" } },
+        "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Tela" } }
+      }
+    },
+    "story.canvas.layer.background" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Hintergrund" } },
+        "en" : { "stringUnit" : { "state" : "needs_review", "value" : "Background" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Fondo" } },
+        "fr" : { "stringUnit" : { "state" : "new", "value" : "Fond" } },
+        "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Fundo" } }
+      }
+    },
+    "story.canvas.layer.foreground" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : { "stringUnit" : { "state" : "needs_review", "value" : "Vordergrund" } },
+        "en" : { "stringUnit" : { "state" : "needs_review", "value" : "Foreground" } },
+        "es" : { "stringUnit" : { "state" : "needs_review", "value" : "Primer plano" } },
+        "fr" : { "stringUnit" : { "state" : "new", "value" : "Premier" } },
+        "pt-BR" : { "stringUnit" : { "state" : "needs_review", "value" : "Frente" } }
+      }
+    },
     "story.composer.addText" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {

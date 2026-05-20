@@ -129,6 +129,13 @@ public struct StoryComposerView: View {
     @State private var mediaAudioEditorItem: AudioEditorItemWrapper?
     @State private var confirmedMediaAudioURL: URL?
 
+    // MARK: - Manipulation layer (verrouillage en cascade)
+
+    /// Couche active courante du canvas, miroir SwiftUI de
+    /// `StoryCanvasUIView.currentManipulationLayer`. Mise à jour via le
+    /// callback `onManipulationLayerChanged` du `StoryComposerCanvasView`.
+    @State private var manipulationLayer: CanvasManipulationLayer = .canvas
+
     // MARK: - Publication
 
     @State private var publishTask: Task<Void, Never>?
@@ -1061,6 +1068,11 @@ public struct StoryComposerView: View {
             .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
             .overlay { mediaLoadingOverlay }
             .overlay(alignment: .topTrailing) { canvasZoomResetButton }
+            .overlay(alignment: .top) {
+                CanvasLayerIndicator(layer: manipulationLayer)
+                    .padding(.top, 6)
+                    .allowsHitTesting(false)
+            }
             .ignoresSafeArea()
             .background(
                 GeometryReader { proxy in
@@ -1139,6 +1151,9 @@ public struct StoryComposerView: View {
             },
             onInlineTextEditEnded: { _ in
                 viewModel.exitTextEditingMode()
+            },
+            onManipulationLayerChanged: { layer in
+                manipulationLayer = layer
             }
         )
         .allowsHitTesting(!viewModel.isDrawingActive)

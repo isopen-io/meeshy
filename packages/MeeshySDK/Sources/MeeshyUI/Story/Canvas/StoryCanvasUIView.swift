@@ -26,6 +26,23 @@ public extension Notification.Name {
     static let timelineDidStopPlaying = Notification.Name("timelineDidStopPlaying")
 }
 
+// MARK: - Canvas Manipulation Layer
+
+/// Couche active pour la manipulation des éléments du canvas. Détermine quel
+/// type d'élément reçoit les gestes (pan/pinch/rotate) selon le contenu de la
+/// slide. Le verrouillage se fait en cascade : dès qu'un foreground est posé,
+/// le background n'est plus manipulable. Voir spec
+/// `2026-05-20-stories-video-layers-text-sprint-design.md` § 4.
+public enum CanvasManipulationLayer: String, Sendable, Equatable {
+    /// Slide vierge (aucun média / texte / sticker). Aucune manipulation.
+    case canvas
+    /// Background media posé, aucun foreground. Le bg seul est manipulable.
+    case background
+    /// Au moins un foreground (média fg, texte ou sticker). Le fg sous le
+    /// doigt est manipulable ; le bg et le canvas root sont gelés.
+    case foreground
+}
+
 /// The UIKit canvas surface that renders a `StorySlide` and switches between
 /// `.edit` (gestures, all items visible, ProMotion 120 Hz) and `.play`
 /// (timing-driven playback at 60 Hz with optional 120 Hz wake-up for gestures).
@@ -55,6 +72,10 @@ public final class StoryCanvasUIView: UIView {
                 updateManipulatedItemLayer()
                 return
             }
+            // Recalculer la couche active. Si la suppression d'un élément a
+            // changé la couche (ex: dernier fg supprimé → repasse en
+            // `.background` ou `.canvas`), notifie l'UI.
+            updateManipulationLayer()
             // The captured filter source texture is content-dependent. Drop the
             // freshness token so the next `updateFilterLayer()` rebuilds it
             // against the new slide. Geometry-only changes (`layoutSubviews`)
@@ -211,6 +232,24 @@ public final class StoryCanvasUIView: UIView {
     private var baseScale: Double = 1.0
     private var baseRotation: Double = 0.0
 
+    /// `true` quand un gesture pan/pinch/rotate est en cours sur un item.
+    /// Indique au parent SwiftUI (`StoryCanvasRepresentable.updateUIView`) que
+    /// la vérité de `slide` est temporairement dans UIKit ; les mutations
+    /// parent doivent être différées jusqu'à la fin du geste pour éviter
+    /// scintillement et conflits de réécriture.
+    public var isGestureActive: Bool { manipulatedItemId != nil }
+
+    /// Couche active courante. Recalculée à chaque `slide.didSet` via
+    /// `updateManipulationLayer()`. Le routage des gestes pan/pinch/rotate
+    /// se fait à partir de cette valeur. Voir `CanvasManipulationLayer`.
+    public private(set) var currentManipulationLayer: CanvasManipulationLayer = .canvas
+
+    /// Notifié lorsque la couche active change (transition `.canvas` ↔
+    /// `.background` ↔ `.foreground`). Le composer peut s'abonner pour
+    /// mettre à jour l'indicateur visuel (chip row) et / ou bloquer des
+    /// commandes inadéquates pour la couche courante.
+    public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
+
     // MARK: - Audio
 
     /// Sample-accurate foreground+background audio engine for mode `.play`.
@@ -286,6 +325,11 @@ public final class StoryCanvasUIView: UIView {
         // stop this engine before starting its own (RC4.6).
         PlaybackCoordinator.shared.registerExternal(audioMixer)
         observeAudioSessionEvents()
+        // Calcul initial de la couche active à partir du contenu initial.
+        // `slide.didSet` ne se déclenche pas dans l'init donc on appelle
+        // explicitement (silencieux : pas de callback car la valeur n'a pas
+        // « changé » depuis sa valeur par défaut `.canvas`).
+        updateManipulationLayer()
     }
 
     nonisolated deinit {
@@ -1525,7 +1569,12 @@ public final class StoryCanvasUIView: UIView {
         guard mode == .edit else { return }
         switch recognizer.state {
         case .began:
-            guard let id = hitTestItem(at: recognizer.location(in: self)) else { return }
+            // Routage par couche : `.canvas` absorbe (recognizer cancelled),
+            // `.background` cible le bg media, `.foreground` hit-teste les fg.
+            guard let id = resolveManipulationTarget(at: recognizer.location(in: self)) else {
+                recognizer.state = .cancelled
+                return
+            }
             manipulatedItemId = id
             baseScale = currentScale(forId: id) ?? 1.0
             bringForegroundToFront(id: id)
@@ -1547,7 +1596,10 @@ public final class StoryCanvasUIView: UIView {
         guard mode == .edit else { return }
         switch recognizer.state {
         case .began:
-            guard let id = hitTestItem(at: recognizer.location(in: self)) else { return }
+            guard let id = resolveManipulationTarget(at: recognizer.location(in: self)) else {
+                recognizer.state = .cancelled
+                return
+            }
             manipulatedItemId = id
             baseRotation = currentRotation(forId: id) ?? 0
             bringForegroundToFront(id: id)
@@ -1570,8 +1622,11 @@ public final class StoryCanvasUIView: UIView {
         let location = recognizer.location(in: self)
         switch recognizer.state {
         case .began:
-            guard let id = hitTestItem(at: location),
-                  let (sx, sy) = currentItemNormalizedPosition(forId: id) else { return }
+            guard let id = resolveManipulationTarget(at: location),
+                  let (sx, sy) = currentItemNormalizedPosition(forId: id) else {
+                recognizer.state = .cancelled
+                return
+            }
             manipulatedItemId = id
             dragStartSlideX = sx
             dragStartSlideY = sy
@@ -1627,6 +1682,12 @@ public final class StoryCanvasUIView: UIView {
     }
 
     private func updateSnapGuides(x: Double?, y: Double?) {
+        // Désactive les actions implicites de CoreAnimation (fade in / out de
+        // contents) pour éviter tout scintillement quand on recrée les guides
+        // à chaque tick de drag. Voir spec § 2.5 A.4.a.
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        defer { CATransaction.commit() }
         hideSnapGuides()
         guard bounds.size != .zero else { return }
         if let x {
@@ -1646,8 +1707,11 @@ public final class StoryCanvasUIView: UIView {
     }
 
     private func hideSnapGuides() {
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
         snapGuideLayers.forEach { $0.removeFromSuperlayer() }
         snapGuideLayers.removeAll()
+        CATransaction.commit()
     }
 
     private func makeGuideLine(verticalAt offset: CGFloat,
@@ -1748,6 +1812,61 @@ public final class StoryCanvasUIView: UIView {
             current = c.superlayer
         }
         return nil
+    }
+
+    /// Hit-test qui exclut explicitement les médias `isBackground == true`.
+    /// Utilisé en mode `.foreground` pour empêcher la manipulation du fond
+    /// quand au moins un foreground est posé sur la slide.
+    private func hitTestForegroundItem(at point: CGPoint) -> String? {
+        guard let id = hitTestItem(at: point) else { return nil }
+        if let media = slide.effects.mediaObjects?.first(where: { $0.id == id }),
+           media.isBackground == true {
+            return nil
+        }
+        return id
+    }
+
+    // MARK: - Manipulation layer
+
+    /// Recalcule `currentManipulationLayer` à partir du contenu de la slide.
+    /// Textes et stickers comptent comme foreground (cohérent avec le modèle
+    /// de couches : tout ce qui n'est pas un bg media bloque la manipulation
+    /// du bg).
+    private func updateManipulationLayer() {
+        let medias = slide.effects.mediaObjects ?? []
+        let hasBg = medias.contains(where: { $0.isBackground == true })
+            || slide.effects.resolvedBackgroundMedia != nil
+        let hasFg = medias.contains(where: { $0.isBackground != true })
+            || !slide.effects.textObjects.isEmpty
+            || !(slide.effects.stickerObjects ?? []).isEmpty
+        let new: CanvasManipulationLayer
+        if hasFg { new = .foreground }
+        else if hasBg { new = .background }
+        else { new = .canvas }
+        guard new != currentManipulationLayer else { return }
+        currentManipulationLayer = new
+        onManipulationLayerChanged?(new)
+    }
+
+    /// Résout l'id de l'élément manipulable courant pour un gesture qui
+    /// vient de commencer. Retourne `nil` si la couche active est `.canvas`
+    /// (gesture absorbé), ou si le hit-test n'a rien trouvé de manipulable
+    /// pour la couche courante.
+    private func resolveManipulationTarget(at location: CGPoint) -> String? {
+        switch currentManipulationLayer {
+        case .canvas:
+            return nil
+        case .background:
+            // En `.background`, peu importe où l'utilisateur touche, c'est le
+            // bg qui est manipulé. Résout le bg media (flag explicite ou
+            // résolution legacy via `resolvedBackgroundMedia`).
+            if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground == true }) {
+                return bg.id
+            }
+            return slide.effects.resolvedBackgroundMedia?.id
+        case .foreground:
+            return hitTestForegroundItem(at: location)
+        }
     }
 
     // MARK: - Slide mutation helpers
