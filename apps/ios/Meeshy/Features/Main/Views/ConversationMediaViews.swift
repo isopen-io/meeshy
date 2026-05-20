@@ -354,6 +354,15 @@ struct AudioMediaView: View, Equatable {
     var footerModel: BubbleFooterModel? = nil
     var footerActions: BubbleFooterActions = .none
 
+    /// Quand non-nil, la citation est rendue dans le topSlot d'AudioPlayerView
+    /// (au-dessus de la ligne lecteur, à l'intérieur du même playerBackground).
+    /// Activé par `BubbleStandardLayout.audioHostsReply` — voir spec §4.3.
+    var replyReference: ReplyReference? = nil
+    var replyIsStory: Bool = false
+    var parentIsMe: Bool = false
+    var onReplyTap: ((String) -> Void)? = nil
+    var onStoryReplyTap: ((String) -> Void)? = nil
+
     static func == (lhs: AudioMediaView, rhs: AudioMediaView) -> Bool {
         lhs.attachment.id == rhs.attachment.id
             && lhs.attachment.fileUrl == rhs.attachment.fileUrl
@@ -365,6 +374,11 @@ struct AudioMediaView: View, Equatable {
             && lhs.contactColor == rhs.contactColor
             && lhs.activeAudioLanguageOverride == rhs.activeAudioLanguageOverride
             && lhs.footerModel == rhs.footerModel
+            && lhs.replyReference?.messageId == rhs.replyReference?.messageId
+            && lhs.replyReference?.previewText == rhs.replyReference?.previewText
+            && lhs.replyReference?.attachmentThumbnailUrl == rhs.replyReference?.attachmentThumbnailUrl
+            && lhs.replyIsStory == rhs.replyIsStory
+            && lhs.parentIsMe == rhs.parentIsMe
     }
 
     @State private var resolvedAvailability: AudioAvailability = .needsDownload
@@ -445,13 +459,6 @@ struct AudioMediaView: View, Equatable {
         }
     }
 
-    /// The audio widget carries a bottom slot only when a footer was injected
-    /// (audio-only messages). Without this gate `AudioPlayerView` would draw
-    /// an empty divider strip under the player for audio-with-caption.
-    private var hasPlayerBottomContent: Bool {
-        footerModel != nil
-    }
-
     /// The final footer for the audio widget: the injected base model with
     /// the audio-language flags folded in, and `onFlagTap` wired to the audio
     /// language switch. One unified `BubbleFooter` — no separate flag row.
@@ -482,12 +489,66 @@ struct AudioMediaView: View, Equatable {
         return (model, actions)
     }
 
-    /// The playable audio widget. The bottom slot is only wired in when there
-    /// is content for it, so `AudioPlayerView` keeps `bottomSlot` nil and
-    /// skips the divider strip otherwise.
+    /// Citation rendue dans le topSlot d'`AudioPlayerView` quand le message
+    /// est une réponse hébergée par l'audio (`audioHostsReply`).
+    @ViewBuilder
+    private var replyTopSlot: some View {
+        if let ref = replyReference {
+            BubbleQuotedReply(
+                style: .inline,
+                reply: ref,
+                parentIsMe: false,
+                accentHex: accentColor,
+                isDark: isDark,
+                mentionDisplayNames: mentionDisplayNames
+            )
+            .contentShape(Rectangle())
+            .onTapGesture {
+                guard !ref.messageId.isEmpty else { return }
+                HapticFeedback.light()
+                if replyIsStory {
+                    onStoryReplyTap?(ref.messageId)
+                } else {
+                    onReplyTap?(ref.messageId)
+                }
+            }
+        }
+    }
+
+    /// The playable audio widget. Trois variantes pour préserver la détection
+    /// EmptyView du SDK (qui n'opère que sur le défaut littéral, pas sur un
+    /// `_ConditionalContent<..., EmptyView>` issu d'un @ViewBuilder interne) :
+    /// - reply présent → top (citation) + bottom (footer toujours injecté pour
+    ///   `audioHostsReply`, garanti par la matrice du spec §4.4) ;
+    /// - reply absent, footer présent → bottom seul (variant A historique) ;
+    /// - reply absent, footer absent → aucun slot (variant B historique).
     @ViewBuilder
     private var audioPlayer: some View {
-        if hasPlayerBottomContent {
+        if replyReference != nil {
+            AudioPlayerView(
+                attachment: attachment,
+                context: .messageBubble,
+                accentColor: contactColor,
+                transcription: transcription,
+                translatedAudios: translatedAudios,
+                onFullscreen: { showAudioFullscreen = true },
+                onRetranscribe: {
+                    Task {
+                        try? await AttachmentService.shared.requestTranscription(
+                            attachmentId: attachment.id, force: true
+                        )
+                    }
+                },
+                onPlayingChange: { playing in
+                    withAnimation(.easeInOut(duration: 0.2)) { isAudioPlaying = playing }
+                },
+                externalLanguage: $selectedAudioLangCode,
+                availability: availability,
+                onDownload: { downloader.start(attachment: attachment, onShare: nil) },
+                topContent: { replyTopSlot },
+                bottomContent: { playerBottomContent }
+            )
+        } else if footerModel != nil {
             AudioPlayerView(
                 attachment: attachment,
                 context: .messageBubble,
