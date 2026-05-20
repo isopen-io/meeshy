@@ -158,7 +158,7 @@ public final class StoryCanvasUIView: UIView {
     /// `true` after `onContentReady` has fired for the current background
     /// state. Reset on every slide change (via `slide.didSet` → `rebuildLayers`)
     /// and on every `setReaderContext` so re-keying replays the wait.
-    private var contentReadyFired: Bool = false
+    private(set) public var contentReadyFired: Bool = false
 
     /// `true` once the slide background (color / gradient / image / video) is
     /// visually settled. The combined `onContentReady` signal additionally

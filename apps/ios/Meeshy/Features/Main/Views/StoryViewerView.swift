@@ -605,6 +605,16 @@ struct StoryViewerView: View {
             canvas.onContentReady = { [weak t = t] in
                 t?.markContentReady(slideId: slideId)
             }
+            // The prefetcher bootstrapped this canvas before we could attach
+            // the callback — its `scheduleContentReadyEvaluation` may have
+            // already fired (solidColor backgrounds fire on the next runloop
+            // tick). When that happens `contentReadyFired == true` and our
+            // newly-attached callback would never be invoked. Fast-forward
+            // the timer here so the loader doesn't stick on already-settled
+            // backgrounds.
+            if canvas.contentReadyFired {
+                t.markContentReady(slideId: slideId)
+            }
         }
     }
 
