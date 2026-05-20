@@ -4,6 +4,76 @@ Date : 2026-05-20
 Statut : design validé par l'utilisateur (5 itérations clarifying — couverture politique configurable + adoption optimiste + stories prefix-buffer)
 Branche prévue : `feat/ios-media-download-policy`
 
+## 0. État du code existant (audit pré-impl 2026-05-20)
+
+Audit cross-référence entre spec et code actuel. Composants déjà présents (à réutiliser ou refactorer) vs à créer.
+
+### Déjà présent et à réutiliser
+| Composant | Path | État |
+|---|---|---|
+| `AudioAvailability` enum + `resolve(...)` | `packages/MeeshySDK/Sources/MeeshySDK/Models/AudioAvailability.swift` | ✅ Signature exacte conforme au spec. **Réutilisé tel quel.** |
+| `MediaDownloadSettingsView` + `MediaDownloadPreferences` struct | `apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift` | ⚠️ Existe avec UI scaffold (header, 3 sections Images/Audio/Video, persistence UserDefaults clé `meeshy_media_download_prefs`) MAIS struct = **6 booleans wifi/cellular**, pas le `AutoDownloadPolicy` enum 4 cases du spec. **N'est consommé nulle part** (orphelin) — seulement présenté via `SettingsView.swift:78` `.sheet(...)`. **À refactorer** vers le modèle policy + branchement effectif. |
+| `SettingsView` avec `showMediaDownload` sheet | `apps/ios/Meeshy/Features/Main/Views/SettingsView.swift:78` | ✅ Branchement présentation déjà en place. **Aucun changement nécessaire** côté SettingsView. |
+| `DiskCacheStore.fileKey(for:)` | `packages/MeeshySDK/Sources/MeeshySDK/Cache/DiskCacheStore.swift:381` | ✅ `nonisolated static func`. Signature exacte. **Réutilisé.** |
+| `DiskCacheStore.cacheImageForPreview(_:key:)` | Idem:371 | ✅ `nonisolated public static`. Réutilisé par `adoptImage`. |
+| `DiskCacheStore.cachedFileURL(for:)` | Idem:136 | ✅ `nonisolated public func`. Réutilisé par `StoryMediaPlayerCoordinator` path A. |
+| `DiskCacheStore.{data, isCached}` | Idem:142, 150 | ✅ Réutilisés. |
+| `CacheBox(_ value: Data)` | `Cache/CacheBox.swift` | ✅ Signature confirmée. |
+| `CacheCoordinator.shared.{audio, video, images}` | `Cache/CacheCoordinator.swift:61-64` | ✅ Tous présents en `DiskCacheStore`. |
+| `AudioPlaybackManager.{play, playLocal, stop}` | `MeeshyUI/Media/AudioPlayerView.swift:32, 58, 101` | ✅ Signatures confirmées. `stop()` met bien `isPlaying = false`. |
+| `MeeshyMessageAttachment` champs (fileSize, type, originalName, mimeType, audioTranslations) | `Models/CoreModels.swift:611-686` | ✅ Tous présents. |
+| `MeeshyConfig.resolveMediaURL` | Config | ✅ Utilisé partout. |
+| `MeeshyColors.brandPrimary{,Hex}` | `MeeshyColors.swift:21, 32` | ✅ |
+| `ThemeManager.shared.{textMuted, textPrimary, mode.isDark}` | `ThemeManager.swift:56, 160, 168` | ✅ |
+| `Logger.{cache, media, network}` | `Logging.swift` | ✅ Déclarés. |
+| `BubbleFooterModel.make(...)` | (confirmé session précédente) | ✅ |
+| `SharedAVPlayerManager.shared.{load, activeURL}` | `MeeshyUI/Media/SharedAVPlayerManager.swift:33, 18` | ✅ |
+| `StoryMediaLoader.shared.{cachedPlayer, preloadAndCachePlayer}` | `MeeshyUI/Stories/StoryMediaLoader.swift:191, 175` | ✅ |
+| `AttachmentDownloader.{start, fmt}` + propriétés | `apps/ios/.../ConversationMediaViews.swift:201, 294, 166-173` | ✅ Signature exacte. À étendre avec `startTranslatedAudio(url:fileSize:cacheKey:)`. |
+| `MessagePersistenceActor.updateServerAckedFields` | `Persistence/MessagePersistenceActor.swift:543` | ✅ Hook d'adoption confirmé. |
+| `MessagePersistenceActor.dbWriter: any DatabaseWriter` | Idem:41 | ✅ |
+| `HapticFeedback.light()` | (utilisé partout) | ✅ |
+
+### À créer (n'existe pas)
+| Composant | Path proposé | Rôle |
+|---|---|---|
+| `NetworkConditionMonitor` + `NetworkCondition` enum | `packages/MeeshySDK/Sources/MeeshySDK/Networking/NetworkConditionMonitor.swift` | §4.1 |
+| `AutoDownloadPolicy` enum + nouvelle `MediaDownloadPreferences` (avec `audioTranslation` + enum 4-cases) | `packages/MeeshySDK/Sources/MeeshySDK/Networking/MediaDownloadPreferences.swift` | §4.2 |
+| `MediaDownloadPolicyEngine` | `packages/MeeshySDK/Sources/MeeshySDK/Networking/MediaDownloadPolicyEngine.swift` | §4.3 |
+| `MediaDownloadPreferencesStore` singleton | `packages/MeeshySDK/Sources/MeeshyUI/Networking/MediaDownloadPreferencesStore.swift` | §4.4 |
+| `VideoAvailability` enum (miroir de `AudioAvailability`) | `packages/MeeshySDK/Sources/MeeshySDK/Models/VideoAvailability.swift` | §4.9 |
+| `VideoMediaView` (wrapper miroir `AudioMediaView`) | `apps/ios/Meeshy/Features/Main/Views/VideoMediaView.swift` | §4.9 |
+| `OptimisticAttachmentAdopter` | `apps/ios/Meeshy/Features/Main/Services/OptimisticAttachmentAdopter.swift` | §5.2 |
+| `DiskCacheStore.adopt(localFile:for:)` + `adoptImage` | Ajout dans `DiskCacheStore.swift` (PAS extension externe — `baseDirectory` est `private`) | §5.1 |
+| `StoryMediaPlayerCoordinator` + `StoryMediaPlaybackState` (renommé pour éviter collision avec `StoryAudioAvailability` qui a un usage différent) | `packages/MeeshySDK/Sources/MeeshyUI/Stories/StoryMediaPlayerCoordinator.swift` | §6 (après audit §6.2.1) |
+
+### À modifier (signature à étendre)
+| Composant | Path | Modification |
+|---|---|---|
+| `MediaDownloadPreferences` struct | `apps/ios/Meeshy/Features/Main/Views/MediaDownloadSettingsView.swift:6` | **Remplacement** : passer de 6-booleans (wifi/cellular toggles) à 4 `AutoDownloadPolicy` properties (image, audio, audioTranslation, video). Migration UserDefaults light au démarrage (lit l'ancien format si présent, applique défauts sinon — pas de prefs effectivement persistées en prod car orphelin). Déplacement de la struct vers SDK MeeshyUI. |
+| `MediaDownloadSettingsView` UI | Idem | **Refactor sections** : remplacer chaque section toggle wifi/cellular par un `Picker` 4-options. Ajouter 4ème section "Traductions audio". Garder le styling existant (header, sectionBackground, accent color). |
+| `InlineVideoPlayerView` init | `packages/MeeshySDK/Sources/MeeshyUI/Media/InlineVideoPlayerView.swift` | Ajouter params `availability: VideoAvailability`, `onDownload: (() -> Void)?`. `startPlayback()` gated. |
+| `AudioPlayerView.switchToLanguage` | `MeeshyUI/Media/AudioPlayerView.swift:417-425` | **Bugfix §1.1** : `player.stop()` AVANT set langue ; supprimer le `player.play(urlString:)` direct. |
+| `AudioMediaView` (struct dans `ConversationMediaViews.swift`) | `apps/ios/.../ConversationMediaViews.swift` | Ajouter `currentAudioUrl`/`currentMediaKind`/`currentFileSize` computed + auto-DL dans `.task(id:)`. |
+| `AttachmentDownloader` | Idem | Ajouter `startTranslatedAudio(url:fileSize:cacheKey:)`. Refactoring intérieur pour partager `startDownloadFlow`. |
+| `SharedAVPlayerManager.load()` | `MeeshyUI/Media/SharedAVPlayerManager.swift:33-70` | Supprimer streaming fallback (l. 63-69). Logger warning défensif. |
+| `VideoFullscreenPlayerView` | `MeeshyUI/Media/VideoFullscreenPlayerView.swift` | Gating `availability:` + bouton DL. |
+| `ConversationMediaGalleryView` | `apps/ios/.../ConversationMediaGalleryView.swift` | Gating per-item + badge DL. |
+| `CachedAsyncImage` / `ProgressiveCachedImage` | `MeeshyUI/Primitives/CachedAsyncImage.swift` | Consulter engine (skip fetch network si policy `false`). |
+| `MessagePersistenceActor.updateServerAckedFields` | `Persistence/MessagePersistenceActor.swift:543` | Hook adoption pré-UPDATE. |
+
+### Particularité — `DiskCacheStore.adopt` et `baseDirectory: private`
+
+`DiskCacheStore.baseDirectory` est déclaré `private` (l. 13). Une `extension DiskCacheStore` dans un fichier séparé ne pourrait pas y accéder. **Conséquence** : `adopt` et `adoptImage` doivent être ajoutés **directement dans `DiskCacheStore.swift`** (pas en extension externe). Pas un problème de design — juste une contrainte de placement.
+
+### Particularité — `StoryAudioAvailability` existant ≠ availability cache des médias story
+
+`StoryAudioAvailability` enum à `Models/StoryAudioAvailability.swift` existe mais c'est une **décision pure différente** : `hasAudibleSound(effects:videoAudioTracks:)` détermine si le bouton mute/son est affiché dans le viewer, basé sur le volume des médias. **N'a aucun lien avec le cache disk ou la disponibilité de lecture**.
+
+Le sous-système C aura donc besoin d'un type distinct (par exemple `StoryMediaPlaybackState`, déjà proposé §6.1) qui n'entre PAS en collision avec `StoryAudioAvailability`. Noms à garder distincts.
+
+---
+
 ## 1. Problèmes adressés
 
 Trois douleurs distinctes mais liées dans la couche média iOS :
