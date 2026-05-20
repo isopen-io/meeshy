@@ -7,6 +7,7 @@ export * from './languages.js';
 export * from './errors.js';
 export * from './validation.js';
 export * from './conversation-helpers.js';
+export * from './attachment-validators.js';
 export { getSenderUserId } from './sender-identity.js';
 export {
   generateClientMessageId,

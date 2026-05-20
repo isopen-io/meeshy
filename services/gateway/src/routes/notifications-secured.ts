@@ -16,6 +16,7 @@ import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { notificationLogger, securityLogger } from '../utils/logger-enhanced';
 import { SecuritySanitizer } from '../utils/sanitize';
+import { attachmentMediaSelect } from '../services/attachments/attachmentIncludes';
 import {
   GetNotificationsQuerySchema,
   CreateNotificationSchema,
@@ -212,31 +213,7 @@ export async function notificationRoutes(fastify: FastifyInstance) {
             message: {
               include: {
                 attachments: {
-                  select: {
-                    id: true,
-                    messageId: true,
-                    fileName: true,
-                    originalName: true,
-                    mimeType: true,
-                    fileSize: true,
-                    fileUrl: true,
-                    thumbnailUrl: true,
-                    width: true,
-                    height: true,
-                    duration: true,
-                    bitrate: true,
-                    sampleRate: true,
-                    codec: true,
-                    channels: true,
-                    fps: true,
-                    videoCodec: true,
-                    pageCount: true,
-                    lineCount: true,
-                    metadata: true,
-                    uploadedBy: true,
-                    isAnonymous: true,
-                    createdAt: true
-                  }
+                  select: attachmentMediaSelect
                 }
               }
             }

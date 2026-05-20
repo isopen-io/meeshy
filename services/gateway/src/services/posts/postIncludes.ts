@@ -1,0 +1,144 @@
+/**
+ * Canonical Prisma `select` / `include` shapes for Post-related queries.
+ *
+ * Single source of truth — every service that fetches Posts or PostMedia MUST
+ * import these constants instead of redeclaring them. Drift between local
+ * copies has caused production bugs (Prisme Linguistique fields silently
+ * dropped from feed endpoints, etc.). See commit 42cae57 for the R1 fix that
+ * motivated this consolidation.
+ *
+ * All exports are wrapped in `Prisma.validator<…Select>()` so a typo or a
+ * stale field name fails the build instead of failing in production. The
+ * `Prisma.<Model>GetPayload<...>` type exports give every consumer a fully
+ * typed result without resorting to `as any`.
+ */
+
+import { Prisma } from '@meeshy/shared/prisma/client';
+
+export const authorSelect = Prisma.validator<Prisma.UserSelect>()({
+  id: true,
+  username: true,
+  displayName: true,
+  avatar: true,
+});
+
+/**
+ * Canonical media select.
+ *
+ * Includes the Prisme Linguistique foundation fields:
+ *   - language       : base language of this media
+ *   - variantOf      : link to the source media when this is an auto-generated variant
+ *   - transcription  : Whisper output for the base language
+ *   - translations   : per-language TTS variants + sub-titles
+ *
+ * Adding a new field to PostMedia? Add it here ONCE.
+ */
+export const mediaSelect = Prisma.validator<Prisma.PostMediaSelect>()({
+  id: true,
+  fileName: true,
+  originalName: true,
+  mimeType: true,
+  fileSize: true,
+  fileUrl: true,
+  width: true,
+  height: true,
+  thumbnailUrl: true,
+  thumbHash: true,
+  duration: true,
+  order: true,
+  caption: true,
+  alt: true,
+  language: true,
+  variantOf: true,
+  transcription: true,
+  translations: true,
+});
+
+/**
+ * Ordered media include block — the de facto way to attach media to any
+ * Post query. Use as: `media: mediaInclude`.
+ */
+export const mediaInclude = Prisma.validator<Prisma.Post$mediaArgs>()({
+  select: mediaSelect,
+  orderBy: { order: 'asc' },
+});
+
+/**
+ * Top-3 comments preview shape attached to every Post response.
+ *
+ * The `OR isSet:false` clause is REQUIRED — MongoDB documents that were
+ * created before `parentId` existed in the schema don't have the field at all,
+ * and a bare `parentId: null` filter silently drops them. Removing the OR
+ * caused PostAudioService to broadcast `post:updated` payloads with empty
+ * comment lists for older threads — see R3 of the stories media-model refactor.
+ */
+export const commentsPreviewInclude = Prisma.validator<Prisma.Post$commentsArgs>()({
+  where: {
+    isDeleted: false,
+    OR: [{ parentId: null }, { parentId: { isSet: false } }],
+  },
+  select: {
+    id: true,
+    content: true,
+    originalLanguage: true,
+    translations: true,
+    likeCount: true,
+    replyCount: true,
+    createdAt: true,
+    author: { select: authorSelect },
+  },
+  orderBy: { likeCount: 'desc' },
+  take: 3,
+});
+
+/**
+ * Nested repost preview shape attached to every Post response.
+ *
+ * Includes `originalLanguage` + `translations` — required by the Prisme
+ * Linguistique resolver on the client. Dropping either field strips a
+ * repost down to its base language only, breaking translation rendering
+ * for any user whose preferred language differs from the source.
+ */
+export const repostOfInclude = Prisma.validator<Prisma.Post$repostOfArgs>()({
+  select: {
+    id: true,
+    type: true,
+    content: true,
+    originalLanguage: true,
+    translations: true,
+    storyEffects: true,
+    audioUrl: true,
+    originalRepostOfId: true,
+    author: { select: authorSelect },
+    media: mediaInclude,
+    createdAt: true,
+    likeCount: true,
+    commentCount: true,
+  },
+});
+
+/**
+ * Canonical post include — single source of truth used by every service that
+ * needs a fully-hydrated Post (PostService, PostFeedService, PostAudioService,
+ * etc.). DO NOT redeclare a local copy: drift between copies is what caused
+ * R1 (feed missing Prisme fields) and R3 (audio service stripping reposts).
+ */
+export const postInclude = Prisma.validator<Prisma.PostInclude>()({
+  author: { select: authorSelect },
+  media: mediaInclude,
+  comments: commentsPreviewInclude,
+  repostOf: repostOfInclude,
+});
+
+// ============================================================================
+// Derived payload types — consumers get fully-typed results, no `as any`.
+// ============================================================================
+
+/** Public-author identity attached to every Post / Comment response. */
+export type AuthorPayload = Prisma.UserGetPayload<{ select: typeof authorSelect }>;
+
+/** Single PostMedia row as returned by every Post response. */
+export type MediaPayload = Prisma.PostMediaGetPayload<{ select: typeof mediaSelect }>;
+
+/** Fully-hydrated Post — author + media + top-3 comments + repostOf. */
+export type PostPayload = Prisma.PostGetPayload<{ include: typeof postInclude }>;

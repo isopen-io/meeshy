@@ -14,6 +14,7 @@ import { MessagingService } from '../../services/MessagingService';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
+import { attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -497,7 +498,7 @@ export class MessageHandler {
             select: {
               id: true, content: true, senderId: true, messageType: true, createdAt: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, type: true } },
-              attachments: { select: { id: true, mimeType: true, thumbnailUrl: true, fileUrl: true }, take: 1 }
+              attachments: { select: attachmentForwardPreviewSelect, take: 1 }
             }
           }),
           message.forwardedFromConversationId

@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { AttachmentService } from '../services/attachments/index.js';
+import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../services/attachments/attachmentIncludes';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -151,30 +152,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               }
             }
           },
-          attachments: {
-            select: {
-              id: true,
-              fileName: true,
-              originalName: true,
-              mimeType: true,
-              fileSize: true,
-              fileUrl: true,
-              thumbnailUrl: true,
-              width: true,
-              height: true,
-              duration: true,
-              // Champs dénormalisés pour éviter N+1
-              viewedCount: true,
-              downloadedCount: true,
-              consumedCount: true,
-              viewedByAllAt: true,
-              downloadedByAllAt: true,
-              listenedByAllAt: true,
-              watchedByAllAt: true,
-              transcription: true,
-              translations: true
-            }
-          }
+          attachments: { select: attachmentFullSelect }
         }
       });
 
@@ -241,33 +219,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           deletedAt: null
         },
         include: {
-          attachments: {
-            select: {
-              id: true,
-              messageId: true,
-              fileName: true,
-              originalName: true,
-              mimeType: true,
-              fileSize: true,
-              fileUrl: true,
-              thumbnailUrl: true,
-              width: true,
-              height: true,
-              duration: true,
-              bitrate: true,
-              sampleRate: true,
-              codec: true,
-              channels: true,
-              fps: true,
-              videoCodec: true,
-              pageCount: true,
-              lineCount: true,
-              metadata: true, // Inclure audioEffectsTimeline et autres métadonnées JSON
-              uploadedBy: true,
-              isAnonymous: true,
-              createdAt: true
-            }
-          },
+          attachments: { select: attachmentMediaSelect },
           conversation: {
             include: {
               participants: {

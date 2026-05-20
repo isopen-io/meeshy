@@ -10,75 +10,20 @@
 
 import type { PrismaClient, Prisma } from '@meeshy/shared/prisma/client';
 import type { Post } from '@meeshy/shared/types/post';
+import { parseAttachmentTranscription } from '@meeshy/shared/utils/attachment-validators';
 import { enhancedLogger } from '../../utils/logger-enhanced';
 import { ZMQSingleton } from '../ZmqSingleton';
 import type { SocialEventsHandler } from '../../socketio/handlers/SocialEventsHandler';
 import { getLanguagesWithTranslation } from '../../utils/languages';
+import { postInclude } from './postIncludes';
 
 const log = enhancedLogger.child({ module: 'PostAudioService' });
 
-// Select used when fetching a post after updating PostMedia transcription,
-// mirrors PostService.postInclude to produce a consistent Post shape.
-const authorSelect = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatar: true,
-} as const;
-
-const mediaSelect = {
-  id: true,
-  fileName: true,
-  originalName: true,
-  mimeType: true,
-  fileSize: true,
-  fileUrl: true,
-  width: true,
-  height: true,
-  thumbnailUrl: true,
-  thumbHash: true,
-  duration: true,
-  order: true,
-  caption: true,
-  alt: true,
-  transcription: true,
-  translations: true,
-} as const;
-
-const postInclude = {
-  author: { select: authorSelect },
-  media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
-  comments: {
-    where: { isDeleted: false, parentId: null },
-    select: {
-      id: true,
-      content: true,
-      originalLanguage: true,
-      translations: true,
-      likeCount: true,
-      replyCount: true,
-      createdAt: true,
-      author: { select: authorSelect },
-    },
-    orderBy: { likeCount: 'desc' as const },
-    take: 3,
-  },
-  repostOf: {
-    select: {
-      id: true,
-      type: true,
-      content: true,
-      storyEffects: true,
-      audioUrl: true,
-      originalRepostOfId: true,
-      author: { select: authorSelect },
-      media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
-      createdAt: true,
-      likeCount: true,
-      commentCount: true,
-    },
-  },
-} as const;
+// postInclude is the canonical shape from ./postIncludes — same shape used by
+// PostService and PostFeedService so the `post:updated` broadcast emitted
+// after a TTS pipeline completes carries the SAME payload structure as a
+// fresh REST fetch. Drift here previously stripped Prisme fields from
+// reposts and filtered out legacy comments without parentId — see R3.
 
 type ProcessPostAudioParams = {
   postId: string;
@@ -227,6 +172,11 @@ export class PostAudioService {
       log.info('Post transcription ready — persisting', { postId, postMediaId, lang: transcription.language });
 
       const transcriptionPayload: Prisma.InputJsonValue = {
+        // `type` discriminator aligns persistence with the Fastify response
+        // schema (api-schemas.ts:343 declares enum ['audio','video',
+        // 'document','image']). Was missing pre-R6, leaving the
+        // discriminator implicit (clients inferred from mimeType).
+        type: 'audio',
         text: transcription.text,
         language: transcription.language,
         confidence: transcription.confidence ?? 0,
@@ -239,6 +189,21 @@ export class PostAudioService {
         senderVoiceIdentified: transcription.senderVoiceIdentified,
         senderSpeakerId: transcription.senderSpeakerId,
       };
+
+      // Defense-in-depth: validate the payload against the shared Zod
+      // schema before persisting. We TRUST the translator service (this
+      // path is server-server, not user-facing) so a validation failure
+      // doesn't block the write — but it surfaces a structured warning
+      // so any contract drift on the translator side is caught instantly.
+      const validation = parseAttachmentTranscription(transcriptionPayload);
+      if (validation.ok === false) {
+        log.warn('Transcription payload failed Zod validation — persisting anyway', {
+          postId,
+          postMediaId,
+          code: validation.code,
+          issues: validation.issues,
+        });
+      }
 
       await this.prisma.postMedia.update({
         where: { id: postMediaId },
