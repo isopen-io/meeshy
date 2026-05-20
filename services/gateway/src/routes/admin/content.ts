@@ -10,6 +10,7 @@ import {
   type ShareLinkListQuery
 } from './types';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
+import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 
 // Middleware d'autorisation admin
@@ -158,31 +159,7 @@ export async function registerContentRoutes(fastify: FastifyInstance) {
                 type: true
               }
             },
-            attachments: {
-              select: {
-                id: true,
-                fileName: true,
-                originalName: true,
-                mimeType: true,
-                fileSize: true,
-                fileUrl: true,
-                thumbnailUrl: true,
-                width: true,
-                height: true,
-                duration: true,
-                bitrate: true,
-                sampleRate: true,
-                codec: true,
-                channels: true,
-                fps: true,
-                videoCodec: true,
-                pageCount: true,
-                lineCount: true,
-                uploadedBy: true,
-                isAnonymous: true,
-                createdAt: true
-              }
-            },
+            attachments: { select: attachmentMediaSelect },
             _count: {
               select: {
                 replies: true
