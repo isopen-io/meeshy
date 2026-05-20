@@ -96,6 +96,14 @@ public struct VideoFullscreenPlayerView: View {
     public var mentionDisplayNames: [String: String]? = nil
     public var availability: VideoAvailability = .ready
     public var onDownload: (() -> Void)? = nil
+    /// ThumbHash base64 du media — affiché en placeholder flouté plein écran
+    /// dans le download overlay (avant téléchargement). `nil` autorisé →
+    /// fallback noir.
+    public var thumbHash: String? = nil
+    /// URL du thumbnail JPEG/PNG côté serveur — affiché par-dessus le
+    /// ThumbHash (résolution supérieure quand dispo). Téléchargé via le cache
+    /// d'images standard (NSCache + disk).
+    public var thumbnailUrl: String? = nil
 
     @ObservedObject private var manager = SharedAVPlayerManager.shared
     @Environment(\.dismiss) private var dismiss
@@ -128,7 +136,9 @@ public struct VideoFullscreenPlayerView: View {
         caption: String? = nil,
         mentionDisplayNames: [String: String]? = nil,
         availability: VideoAvailability = .ready,
-        onDownload: (() -> Void)? = nil
+        onDownload: (() -> Void)? = nil,
+        thumbHash: String? = nil,
+        thumbnailUrl: String? = nil
     ) {
         self.urlString = urlString
         self.accentColor = accentColor
@@ -137,6 +147,8 @@ public struct VideoFullscreenPlayerView: View {
         self.mentionDisplayNames = mentionDisplayNames
         self.availability = availability
         self.onDownload = onDownload
+        self.thumbHash = thumbHash
+        self.thumbnailUrl = thumbnailUrl
     }
 
     // MARK: - Body
@@ -169,8 +181,38 @@ public struct VideoFullscreenPlayerView: View {
 
     // MARK: - Download Overlay
 
+    /// Background blur du download overlay : ThumbHash (instantané) +
+    /// thumbnail URL (résolution supérieure quand le cache image l'a). Vide
+    /// si aucun preview disponible → fallback Color.black de la ZStack
+    /// principale (ligne 146).
+    @ViewBuilder
+    private var downloadOverlayBackground: some View {
+        if thumbHash != nil || (thumbnailUrl?.isEmpty == false) {
+            ProgressiveCachedImage(
+                thumbHash: thumbHash,
+                thumbnailUrl: thumbnailUrl,
+                fullUrl: thumbnailUrl ?? ""
+            ) {
+                Color.black
+            }
+            .aspectRatio(contentMode: .fill)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .clipped()
+            .blur(radius: 18)
+            .overlay(Color.black.opacity(0.45))  // assombri pour lisibilité du CTA
+            .ignoresSafeArea()
+        }
+    }
+
     @ViewBuilder
     private var downloadOverlay: some View {
+        ZStack {
+            downloadOverlayBackground
+            downloadOverlayContent
+        }
+    }
+
+    private var downloadOverlayContent: some View {
         VStack(spacing: 16) {
             Button {
                 onDownload?()

@@ -126,7 +126,9 @@ struct GatedVideoFullscreenPlayer: View {
             caption: caption,
             mentionDisplayNames: mentionDisplayNames,
             availability: availability,
-            onDownload: { downloader.start(attachment: attachment, onShare: nil) }
+            onDownload: { downloader.start(attachment: attachment, onShare: nil) },
+            thumbHash: attachment.thumbHash,
+            thumbnailUrl: attachment.thumbnailUrl
         )
         .task(id: attachment.fileUrl) {
             if !downloader.isDownloading {

@@ -60,7 +60,12 @@ export const CreateBroadcastBodySchema = z.object({
   subject: z.string(),
   body: z.string(),
   sourceLanguage: z.string(),
-  targeting: z.record(z.unknown()).optional(),
+  targeting: z.record(z.unknown())
+    .refine(
+      (t) => { try { return JSON.stringify(t).length <= 32 * 1024; } catch { return false; } },
+      { message: 'targeting exceeds 32KB serialized' }
+    )
+    .optional(),
 });
 
 export type CreateBroadcastBody = z.infer<typeof CreateBroadcastBodySchema>;
@@ -70,7 +75,12 @@ export const UpdateBroadcastBodySchema = z.object({
   subject: z.string().optional(),
   body: z.string().optional(),
   sourceLanguage: z.string().optional(),
-  targeting: z.record(z.unknown()).optional(),
+  targeting: z.record(z.unknown())
+    .refine(
+      (t) => { try { return JSON.stringify(t).length <= 32 * 1024; } catch { return false; } },
+      { message: 'targeting exceeds 32KB serialized' }
+    )
+    .optional(),
 });
 
 export type UpdateBroadcastBody = z.infer<typeof UpdateBroadcastBodySchema>;
