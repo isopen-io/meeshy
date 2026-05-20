@@ -7,18 +7,12 @@ final class BubbleFooterModelTests: XCTestCase {
     private func makeModel(
         deliveryStatus: MeeshyMessage.DeliveryStatus = .sent,
         isMe: Bool = true,
-        isDirect: Bool = true,
-        isLastSentMessage: Bool = false,
-        isLastReceivedMessage: Bool = false,
         isOnline: Bool = true
     ) -> BubbleFooterModel {
         BubbleFooterModel.make(
             timeString: "09:41",
             deliveryStatus: deliveryStatus,
             isMe: isMe,
-            isDirect: isDirect,
-            isLastSentMessage: isLastSentMessage,
-            isLastReceivedMessage: isLastReceivedMessage,
             isOnline: isOnline,
             sender: nil,
             flags: [],
@@ -26,33 +20,45 @@ final class BubbleFooterModelTests: XCTestCase {
         )
     }
 
-    func test_make_directNonLastSent_hidesTimestamp() {
-        XCTAssertNil(makeModel(deliveryStatus: .sent, isDirect: true, isLastSentMessage: false).timestamp)
+    // MARK: - Timestamp toujours visible
+
+    func test_make_directNonLastSent_showsTimestamp() {
+        // Nouveau contrat : l'heure s'affiche sur TOUTES les bulles, y compris
+        // une bulle envoyée intermédiaire en conversation directe.
+        XCTAssertEqual(makeModel(deliveryStatus: .sent).timestamp, "09:41")
+    }
+
+    func test_make_directNonLastReceived_showsTimestamp() {
+        XCTAssertEqual(makeModel(deliveryStatus: .read, isMe: false).timestamp, "09:41")
     }
 
     func test_make_directLastSent_showsTimestamp() {
-        XCTAssertEqual(makeModel(deliveryStatus: .sent, isDirect: true, isLastSentMessage: true).timestamp, "09:41")
+        XCTAssertEqual(makeModel(deliveryStatus: .sent).timestamp, "09:41")
     }
 
-    func test_make_directNonLastButSending_showsTimestamp() {
-        XCTAssertEqual(makeModel(deliveryStatus: .sending, isDirect: true, isLastSentMessage: false).timestamp, "09:41")
+    func test_make_directSending_showsTimestamp() {
+        XCTAssertEqual(makeModel(deliveryStatus: .sending).timestamp, "09:41")
     }
 
-    func test_make_directNonLastButFailed_showsTimestamp() {
-        XCTAssertEqual(makeModel(deliveryStatus: .failed, isDirect: true, isLastSentMessage: false).timestamp, "09:41")
+    func test_make_directFailed_showsTimestamp() {
+        XCTAssertEqual(makeModel(deliveryStatus: .failed).timestamp, "09:41")
     }
 
     func test_make_groupNonLast_showsTimestamp() {
-        XCTAssertEqual(makeModel(deliveryStatus: .sent, isDirect: false, isLastSentMessage: false).timestamp, "09:41")
+        XCTAssertEqual(makeModel(deliveryStatus: .sent).timestamp, "09:41")
     }
 
+    // MARK: - Delivery côté sortant uniquement
+
     func test_make_received_hidesDelivery() {
-        XCTAssertNil(makeModel(deliveryStatus: .read, isMe: false, isLastReceivedMessage: true).delivery)
+        XCTAssertNil(makeModel(deliveryStatus: .read, isMe: false).delivery)
     }
 
     func test_make_sent_carriesDelivery() {
-        XCTAssertEqual(makeModel(deliveryStatus: .delivered, isMe: true, isLastSentMessage: true).delivery, .delivered)
+        XCTAssertEqual(makeModel(deliveryStatus: .delivered).delivery, .delivered)
     }
+
+    // MARK: - États dérivés
 
     func test_make_offline_setsIsOffline() {
         XCTAssertTrue(makeModel(isOnline: false).isOffline)

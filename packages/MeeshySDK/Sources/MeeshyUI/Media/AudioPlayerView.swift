@@ -264,6 +264,7 @@ public struct AudioPlayerView: View {
     public var onEdit: (() -> Void)? = nil
     public var onPlayingChange: ((Bool) -> Void)? = nil
     private var externalLanguage: Binding<String?>?
+    private var topSlot: AnyView?
     private var bottomSlot: AnyView?
     private var availability: AudioAvailability
     private var onDownload: (() -> Void)?
@@ -333,18 +334,21 @@ public struct AudioPlayerView: View {
         return player.duration
     }
 
-    public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
-                accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
-                translatedAudios: [MessageTranslatedAudio] = [],
-                onFullscreen: (() -> Void)? = nil,
-                onRequestTranscription: (() -> Void)? = nil,
-                onRetranscribe: (() -> Void)? = nil,
-                onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
-                onPlayingChange: ((Bool) -> Void)? = nil,
-                externalLanguage: Binding<String?>? = nil,
-                availability: AudioAvailability = .ready,
-                onDownload: (() -> Void)? = nil,
-                @ViewBuilder bottomContent: () -> some View = { EmptyView() }) {
+    public init<TopContent: View, BottomContent: View>(
+        attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
+        accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
+        translatedAudios: [MessageTranslatedAudio] = [],
+        onFullscreen: (() -> Void)? = nil,
+        onRequestTranscription: (() -> Void)? = nil,
+        onRetranscribe: (() -> Void)? = nil,
+        onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
+        onPlayingChange: ((Bool) -> Void)? = nil,
+        externalLanguage: Binding<String?>? = nil,
+        availability: AudioAvailability = .ready,
+        onDownload: (() -> Void)? = nil,
+        @ViewBuilder topContent: () -> TopContent = { EmptyView() },
+        @ViewBuilder bottomContent: () -> BottomContent = { EmptyView() }
+    ) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
         self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
@@ -354,8 +358,10 @@ public struct AudioPlayerView: View {
         self.externalLanguage = externalLanguage
         self.availability = availability
         self.onDownload = onDownload
-        let content = bottomContent()
-        self.bottomSlot = content is EmptyView ? nil : AnyView(content)
+        let top = topContent()
+        self.topSlot = top is EmptyView ? nil : AnyView(top)
+        let bottom = bottomContent()
+        self.bottomSlot = bottom is EmptyView ? nil : AnyView(bottom)
     }
 
     private var fullTranscriptionText: String {
@@ -422,6 +428,12 @@ public struct AudioPlayerView: View {
     // MARK: - Main Player
     private var mainPlayer: some View {
         VStack(spacing: 0) {
+            if let slot = topSlot {
+                slot
+                Divider()
+                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+            }
+
             HStack(spacing: context.isCompact ? 8 : 10) {
                 playButton
                 VStack(alignment: .leading, spacing: context.isCompact ? 3 : 4) {
@@ -571,33 +583,70 @@ public struct AudioPlayerView: View {
         return result
     }
 
+    @ViewBuilder
     private func inlineFlowTranscription(segments: [TranscriptionDisplaySegment]) -> some View {
-        let activeIdx = segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
-
-        return FlowLayout(spacing: 0) {
-            ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
-                let isActive = index == activeIdx
-                let isPast = activeIdx != nil && index < activeIdx!
-
-                Button {
-                    player.seekToTime(segment.startTime)
-                    HapticFeedback.light()
-                } label: {
-                    Text(segment.text + " ")
-                        .font(.system(size: 13, weight: isActive ? .bold : .regular))
-                        .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
-                        .padding(.horizontal, isActive ? 2 : 0)
-                        .padding(.vertical, isActive ? 1 : 0)
-                        .background(
-                            RoundedRectangle(cornerRadius: 4)
-                                .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
-                        )
-                }
-                .buttonStyle(.plain)
-                .animation(.easeInOut(duration: 0.15), value: isActive)
+        // Cas fallback synthesized : `resolveDisplaySegments` renvoie un
+        // unique segment qui porte tout le texte quand la transcription n'a
+        // pas de découpe par segment (audio sans segments structurés).
+        // `FlowLayout` propose `.unspecified` à chaque subview, qui retourne
+        // alors sa largeur native une-ligne — un seul Button énorme ne peut
+        // donc plus être wrappé et le texte est tronqué visuellement.
+        // On rend directement un Text qui wrap naturellement dans ce cas.
+        // La couleur suit le même contrat que les segments multiples :
+        // idle (avant), actif (pendant lecture), past (après) — pour qu'un
+        // audio sans segments soit aussi lisible pendant la lecture.
+        if segments.count == 1, let single = segments.first {
+            let isActive = player.isPlaying
+                && player.currentTime >= single.startTime
+                && player.currentTime < single.endTime
+            let isPast = !isActive && player.currentTime >= single.endTime
+            Button {
+                player.seekToTime(single.startTime)
+                HapticFeedback.light()
+            } label: {
+                Text(single.text)
+                    .font(.system(size: 13, weight: isActive ? .bold : .regular))
+                    .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                    .multilineTextAlignment(.leading)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, isActive ? 2 : 0)
+                    .padding(.vertical, isActive ? 1 : 0)
+                    .background(
+                        RoundedRectangle(cornerRadius: 4)
+                            .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
+                    )
             }
+            .buttonStyle(.plain)
+            .animation(.easeInOut(duration: 0.15), value: isActive)
+            .animation(.easeInOut(duration: 0.15), value: isPast)
+        } else {
+            let activeIdx = segments.firstIndex { player.currentTime >= $0.startTime && player.currentTime < $0.endTime }
+            FlowLayout(spacing: 0) {
+                ForEach(Array(segments.enumerated()), id: \.element.id) { index, segment in
+                    let isActive = index == activeIdx
+                    let isPast = activeIdx != nil && index < activeIdx!
+
+                    Button {
+                        player.seekToTime(segment.startTime)
+                        HapticFeedback.light()
+                    } label: {
+                        Text(segment.text + " ")
+                            .font(.system(size: 13, weight: isActive ? .bold : .regular))
+                            .foregroundColor(inlineSegmentColor(isActive: isActive, isPast: isPast))
+                            .padding(.horizontal, isActive ? 2 : 0)
+                            .padding(.vertical, isActive ? 1 : 0)
+                            .background(
+                                RoundedRectangle(cornerRadius: 4)
+                                    .fill(Color(hex: accentColor).opacity(isActive ? 0.12 : 0))
+                            )
+                    }
+                    .buttonStyle(.plain)
+                    .animation(.easeInOut(duration: 0.15), value: isActive)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func inlineSegmentColor(isActive: Bool, isPast: Bool) -> Color {

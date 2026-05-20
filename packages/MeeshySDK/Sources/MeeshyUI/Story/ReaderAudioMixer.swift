@@ -77,8 +77,17 @@ public final class ReaderAudioMixer {
     /// previous configuration and tears down dangling nodes.
     public func configure(audios: [StoryAudioPlayerObject], urls: [String: URL]) throws {
         teardown()
+        logger.info("ReaderAudioMixer.configure audios=\(audios.count) urls=\(urls.count)")
         for audio in audios {
-            guard let url = urls[audio.id] else { continue }
+            guard let url = urls[audio.id] else {
+                logger.error("ReaderAudioMixer.configure skipping \(audio.id, privacy: .public) — no URL in dict")
+                continue
+            }
+            // AVAudioFile(forReading:) rejects HTTPS URLs with OSStatus 2003334207
+            // ("not a file"). Log explicitly so a silent skip becomes diagnosable.
+            if !url.isFileURL {
+                logger.error("ReaderAudioMixer.configure \(audio.id, privacy: .public) URL is not file:// scheme=\(url.scheme ?? "nil", privacy: .public) — AVAudioFile will reject")
+            }
             do {
                 let file = try AVAudioFile(forReading: url)
                 let node = AVAudioPlayerNode()
@@ -101,6 +110,7 @@ public final class ReaderAudioMixer {
                 logger.error("ReaderAudioMixer failed to load \(audio.id): \(error.localizedDescription)")
             }
         }
+        logger.info("ReaderAudioMixer.configure done entries=\(self.entries.count)")
     }
 
     // MARK: - Transport
@@ -123,12 +133,14 @@ public final class ReaderAudioMixer {
     /// fade envelope exactly once per scheduled pass.
     @discardableResult
     public func play(originHost: UInt64, slideKey: String) throws -> Bool {
+        logger.info("ReaderAudioMixer.play slideKey=\(slideKey, privacy: .public) entries=\(self.entries.count) bg=\(self.backgroundEntry == nil ? "nil" : "set") resume=\(self.startedSlideKey == slideKey)")
         if startedSlideKey == slideKey {
             try resumeWithoutRescheduling()
             return false
         }
         playbackStartHostTime = originHost
         guard !entries.isEmpty || backgroundEntry != nil else {
+            logger.error("ReaderAudioMixer.play nothing scheduled (entries empty + no bg) — silent slide slideKey=\(slideKey, privacy: .public)")
             startedSlideKey = slideKey
             isPlaying = true
             return true

@@ -204,7 +204,6 @@ struct StoryCardView: View {
     let storyReactionCount: Int
     let storyCommentCount: Int
     let isStoryCommentsEmpty: Bool
-    let currentStoryNeedsVideoExport: Bool
     let storyHasAudibleSound: Bool
     let storyHasTranslatableContent: Bool
     let isGlobalMuted: Bool
@@ -464,7 +463,6 @@ struct StoryCardView: View {
                     currentGroup: currentGroup,
                     storyCommentCount: storyCommentCount,
                     isStoryCommentsEmpty: isStoryCommentsEmpty,
-                    currentStoryNeedsVideoExport: currentStoryNeedsVideoExport,
                     storyHasAudibleSound: storyHasAudibleSound,
                     storyHasTranslatableContent: storyHasTranslatableContent,
                     isGlobalMuted: isGlobalMuted,
