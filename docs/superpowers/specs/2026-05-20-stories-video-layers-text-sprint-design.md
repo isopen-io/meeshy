@@ -78,7 +78,17 @@ private var rendererCache = StoryRendererCache()
 
 `rebuildLayers()` ligne ~816 : passer `cache: rendererCache` à `StoryRenderer.render(...)`. La signature de `StoryRenderer.render` accepte déjà un `cache:` optionnel (utilisé par `StoryAVCompositor` ligne 37).
 
-À la fin de chaque `rebuildLayers()`, après l'itération, le cache élimine les entrées dont l'ID n'apparaît plus dans la slide (méthode `prune(ids: Set<String>)` à ajouter — éviction propre des `AVPlayer.pause()` + `removeAllObservers`).
+À la fin de chaque `rebuildLayers()`, après l'itération, le cache élimine les entrées dont l'ID n'apparaît plus dans la slide. Signature à ajouter :
+
+```swift
+public extension StoryRendererCache {
+    /// Retire toutes les entrées dont `id` n'est pas dans `keepIds`. Pour les
+    /// `StoryMediaLayer` retenues, effectue `avPlayerLayer?.player?.pause()`
+    /// puis `replaceCurrentItem(with: nil)` avant le retrait, pour libérer
+    /// proprement les ressources AVFoundation.
+    func prune(keepIds: Set<String>)
+}
+```
 
 **Critère de succès** : 2 `rebuildLayers()` consécutifs sans changement de contenu → `mediaLayer.avPlayerLayer?.player` reste identique (vérifié en integration test).
 
@@ -129,18 +139,39 @@ private func configureVideo(_ media: StoryMediaObject,
 }
 
 private static func resolveLocalFileURL(remote: URL) async -> URL? {
-    if remote.isFileURL { return remote }
-    if let cached = CacheCoordinator.videoLocalFileURL(for: remote.absoluteString) {
-        return cached
+    await CacheCoordinator.videoLocalFileURLAwait(for: remote)
+}
+```
+
+**Helper à ajouter dans `CacheCoordinator`** (`packages/MeeshySDK/Sources/MeeshySDK/Cache/CacheCoordinator.swift`) pour factorisation avec `StoryBackgroundLayer` :
+
+```swift
+extension CacheCoordinator {
+    /// Variante async de `videoLocalFileURL` qui :
+    /// 1) Retourne immédiatement si l'URL est déjà file:// ou si le cache est chaud
+    /// 2) Sinon, télécharge via `data(for:)` puis retourne l'URL locale produite
+    /// 3) Retourne `nil` si tout échoue
+    /// Garantit que le caller peut passer une `file://` à `AVPlayer` / `AVAudioFile`.
+    nonisolated public static func videoLocalFileURLAwait(for remote: URL) async -> URL? {
+        if remote.isFileURL { return remote }
+        if let cached = videoLocalFileURL(for: remote.absoluteString) { return cached }
+        _ = try? await shared.video.data(for: remote.absoluteString)
+        return videoLocalFileURL(for: remote.absoluteString)
     }
-    _ = try? await CacheCoordinator.shared.video.data(for: remote.absoluteString)
-    return CacheCoordinator.videoLocalFileURL(for: remote.absoluteString)
+
+    /// Idem pour l'audio. Utilisé par le hotfix audio (cf. spec audio § 5.7).
+    nonisolated public static func audioLocalFileURLAwait(for remote: URL) async -> URL? {
+        if remote.isFileURL { return remote }
+        if let cached = audioLocalFileURL(for: remote.absoluteString) { return cached }
+        _ = try? await shared.audio.data(for: remote.absoluteString)
+        return audioLocalFileURL(for: remote.absoluteString)
+    }
 }
 ```
 
 `waitForReadyToPlay` observe `AVPlayerItem.status` via `NSKeyValueObservation` ; timeout 3s ; fallback play même si pas ready (best-effort).
 
-**`StoryBackgroundLayer.swift:167-189`** : appliquer le même pattern (cache-first avant `AVPlayer`).
+**`StoryBackgroundLayer.swift:167-189`** : appliquer le même pattern via le helper factorisé.
 
 ### 2.4 Fix A.3 — ThumbHash sur média foreground
 
@@ -327,7 +358,156 @@ public func updateUIView(_ uiView: StoryCanvasUIView, context: Context) {
 
 **Note sur mutations légitimes via toolbar** : si l'utilisateur change un filtre via la toolbar pendant un drag (rare), la mutation parent est skippée. À la fin du gesture (`onItemModified`), le callback renvoie le slide à jour avec la position finale ; le diff incrémental SwiftUI inclura aussi le filtre changé, et le prochain `updateUIView` (gesture nil) re-pousse tout. Acceptable trade-off.
 
-## 3. Axe B — Manipulation par couche (verrouillage en cascade)
+## 3. Axe D — Reader loader : ThumbHash plein écran + gating 20%
+
+### 3.D.1 Objectif
+
+À l'ouverture d'une slide en mode reader, l'utilisateur voit **immédiatement** une représentation visuelle de la slide (ThumbHash background + ThumbHash de chaque média foreground positionné) + un spinner discret. La lecture (vidéo + audio) ne démarre que lorsque **≥ 20% du contenu de la slide est disponible localement** (bytes en cache). Au-delà du seuil, l'overlay fade out et la lecture commence.
+
+Ce gating remplace le comportement actuel (binaire `onContentReady` qui attend 100% sans rien afficher en attendant).
+
+### 3.D.2 Signal de progression `onContentProgress`
+
+`StoryCanvasUIView` expose un nouveau callback :
+
+```swift
+/// Fraction `[0, 1]` du contenu de la slide actuellement disponible localement.
+/// Émis à chaque transition d'état d'asset (KVO video.status, KVO contents,
+/// audio cache populé, etc.). `1.0` correspond à 100% des assets prêts —
+/// équivalent fonctionnel de `onContentReady`.
+public var onContentProgress: ((Double) -> Void)?
+```
+
+Calcul interne dans `StoryCanvasUIView` :
+
+```swift
+private func recomputeContentProgress() {
+    let bg: Double = backgroundContentReady ? 1.0 : 0.0
+    let fgMedia = slide.effects.mediaObjects?.filter { !$0.isBackground } ?? []
+    let fgVideoReady = foregroundVideoReadyIds.count
+    let fgImageReady = foregroundImageReadyIds.count
+    let fgReady = Double(fgVideoReady + fgImageReady)
+    let fgTotal = Double(fgMedia.count)
+    let audios = slide.effects.audioPlayerObjects ?? []
+    let audiosReady = Double(audios.filter { audioLocalReady[$0.id] == true }.count)
+    let audiosTotal = Double(audios.count)
+    let total = 1.0 + fgTotal + audiosTotal
+    let ready = bg + fgReady + audiosReady
+    let progress = total > 0 ? ready / total : 1.0
+    onContentProgress?(progress)
+}
+```
+
+`recomputeContentProgress()` est invoqué à chaque transition (KVO ready, audio cache populé, etc.). Le tracking `foregroundVideoReadyIds: Set<String>`, `foregroundImageReadyIds: Set<String>`, `audioLocalReady: [String: Bool]` étend les structures existantes (`foregroundVideoStatusObservers` ligne 245, `scheduleContentReadyEvaluation` ligne 1066).
+
+### 3.D.3 Gating de la lecture
+
+`StoryCanvasUIView.setMode(.play)` n'appelle plus `startPlayback()` / `startAudioPlayback()` immédiatement, mais après que `progress >= startThreshold` (constante `0.20`). Si déjà ≥ 20% au moment du `setMode`, démarrage immédiat.
+
+```swift
+private static let playStartThreshold: Double = 0.20
+
+private func tryStartPlaybackIfReady(progress: Double) {
+    guard mode == .play, !playbackStarted, progress >= Self.playStartThreshold else { return }
+    playbackStarted = true
+    startPlayback()
+    startAudioPlayback()
+}
+```
+
+`tryStartPlaybackIfReady` est appelé à la fin de `recomputeContentProgress`. Un timeout safety (5s) force le démarrage même si le seuil n'est pas atteint (best-effort plutôt que blocage).
+
+### 3.D.4 Overlay UI `StoryReaderLoadingOverlay`
+
+**Nouveau composant SwiftUI**, monté par le parent (`StoryViewerView` ou équivalent dans `apps/ios`) au-dessus du `StoryReaderRepresentable`. Pas dans `StoryCanvasUIView` (UIKit), car le rendu est plus simple en SwiftUI.
+
+```swift
+@MainActor
+public struct StoryReaderLoadingOverlay: View {
+    let slide: StorySlide
+    let progress: Double  // 0..1
+    let canvasSize: CGSize  // pour positionner les fg ThumbHash en design space
+
+    public var body: some View {
+        ZStack {
+            // ThumbHash background plein écran
+            if let hash = slide.effects.thumbHash,
+               let img = UIImage.fromThumbHash(hash) {
+                Image(uiImage: img)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: canvasSize.width, height: canvasSize.height)
+                    .clipped()
+            } else {
+                Color.black
+            }
+
+            // ThumbHash de chaque média foreground, positionné en design-space
+            ForEach(slide.effects.mediaObjects?.filter { !$0.isBackground } ?? []) { media in
+                if let hash = media.thumbHash,
+                   let img = UIImage.fromThumbHash(hash) {
+                    let pos = designToScreen(x: media.x, y: media.y, canvas: canvasSize)
+                    let size = mediaScreenSize(for: media, canvas: canvasSize)
+                    Image(uiImage: img)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: size.width, height: size.height)
+                        .clipped()
+                        .rotationEffect(.degrees(media.rotation))
+                        .position(x: pos.x, y: pos.y)
+                        .opacity(0.85)
+                }
+            }
+
+            // Spinner discret + pourcentage
+            VStack(spacing: 8) {
+                ProgressView()
+                    .progressViewStyle(.circular)
+                    .tint(.white.opacity(0.8))
+                Text("\(Int(progress * 100))%")
+                    .font(.caption2.monospacedDigit())
+                    .foregroundStyle(.white.opacity(0.7))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: progress)
+    }
+}
+```
+
+### 3.D.5 Intégration côté parent
+
+```swift
+// apps/ios/StoryViewerView.swift (ou équivalent)
+@State private var slideProgress: Double = 0
+
+ZStack {
+    StoryReaderRepresentable(
+        story: item,
+        // ...
+        onContentProgress: { slideProgress = $0 }
+    )
+
+    if slideProgress < 0.20 {
+        StoryReaderLoadingOverlay(
+            slide: item.toRenderableSlide(...),
+            progress: slideProgress,
+            canvasSize: geometry.size
+        )
+        .transition(.opacity)
+    }
+}
+.animation(.easeOut(duration: 0.25), value: slideProgress >= 0.20)
+```
+
+### 3.D.6 Dépendances et séquençage
+
+Cet axe D **dépend de l'axe A.3** (ajout `StoryMediaObject.thumbHash`). Il faut séquencer :
+1. Axe A complet (A.1 cache layers + A.2 cache vidéo + A.3 thumbHash sur media + A.4 anti-flicker)
+2. Axe D (gating loader 20%) — implémentable après A.3
+
+Si A.3 n'est pas mergé, l'overlay ne montre que le bg ThumbHash (le foreground reste vide pendant le chargement). C'est dégradé mais fonctionnel.
+
+## 4. Axe B — Manipulation par couche (verrouillage en cascade)
 
 ### 3.1 Modèle des 3 couches
 
@@ -427,7 +607,7 @@ Nouveau composant `CanvasLayerIndicator` dans `StoryComposerView`. **Pas de `But
 - SF Symbols : `circle.dashed` (canvas), `rectangle` (bg), `square.stack.3d.up` (fg)
 - i18n : `story.canvas.layer.canvas`, `story.canvas.layer.background`, `story.canvas.layer.foreground`
 
-## 4. Axe C — Texte (taille + placeholder)
+## 5. Axe C — Texte (taille + placeholder)
 
 ### 4.1 Taille par défaut
 
@@ -460,7 +640,7 @@ Deux modifications minimales :
 
 2. **`StoryInlineTextEditor.swift:27`** : `defaultValue: "Exprimez-vous…"` (aligné avec le FR pour le fallback dev).
 
-## 5. Fichiers modifiés (consolidé)
+## 6. Fichiers modifiés (consolidé)
 
 | Phase | Fichier | Changement |
 |-------|---------|------------|
@@ -479,10 +659,16 @@ Deux modifications minimales :
 | C.1 | `Models/StoryModels.swift` | `StoryTextObject.init` default `fontSize: Double = 96.0` (decoder fallback reste 64) |
 | C.2 | `Resources/Localizable.xcstrings` | `story.textEditor.placeholder` → « Exprimez-vous… » / « Express yourself… » |
 | C.2 | `Canvas/StoryInlineTextEditor.swift` | Ligne 27 : `defaultValue: "Exprimez-vous…"` |
+| D.2 | `Canvas/StoryCanvasUIView.swift` | `onContentProgress: ((Double) -> Void)?` + `recomputeContentProgress()` + tracking `foregroundVideoReadyIds`, `foregroundImageReadyIds`, `audioLocalReady` |
+| D.3 | `Canvas/StoryCanvasUIView.swift` | `playStartThreshold = 0.20` + `tryStartPlaybackIfReady` + timeout safety 5s |
+| D.4 | `Story/StoryReaderLoadingOverlay.swift` *(nouveau)* | Overlay SwiftUI : ThumbHash bg + ThumbHash fg positionnés + spinner discret + pourcentage |
+| D.5 | `Story/StoryReaderRepresentable.swift` | Propager `onContentProgress` au parent |
+| D.5 | `apps/ios/.../StoryViewerView.swift` | Monter `StoryReaderLoadingOverlay` quand `progress < 0.20`, fade out animé au-dessus |
+| Helper | `Cache/CacheCoordinator.swift` | `videoLocalFileURLAwait(for:)` + `audioLocalFileURLAwait(for:)` (factorisation cache-first) |
 
-## 6. Stratégie tests
+## 7. Stratégie tests
 
-### 6.1 Unit
+### 7.1 Unit
 
 - `StoryMediaObject.thumbHash` decode/encode + back-compat (absence du champ = nil)
 - `StoryTextObject.fontSize` default = 96.0 via init publique ; decoder sans `fontSize` = 64.0
@@ -490,7 +676,7 @@ Deux modifications minimales :
 - `computeManipulationLayer()` : combinaisons bg/fg/text/sticker → bon enum
 - `hitTestForegroundItem` ne renvoie jamais un media `isBackground == true`
 
-### 6.2 Integration
+### 7.2 Integration
 
 - `rendererCache` : 2 `rebuildLayers()` consécutifs sans changement → `mediaLayer.avPlayerLayer?.player` identique (strong ref retenue par le test)
 - `configureVideo` cache miss : ne `play()` qu'après cache populé (mock `CacheCoordinator`)
@@ -499,14 +685,17 @@ Deux modifications minimales :
 - Mode `.background` : tap n'importe où dans le canvas → manipule le bg
 - Mode `.canvas` (no media) : gesture absorbé (.cancelled au .began)
 - `StoryComposerView.snapshotAllSlides` async produit `media.thumbHash != nil` pour chaque image/vidéo
+- `recomputeContentProgress` émet `1.0` quand tous assets prêts ; `0.0` au mount avant transition KVO
+- `tryStartPlaybackIfReady` ne `startPlayback` qu'à `progress >= 0.20` ; timeout safety force après 5s
 
-### 6.3 Snapshot
+### 7.3 Snapshot
 
 - `CanvasLayerIndicator` 3 états (light/dark)
 - `StoryInlineTextEditor` placeholder visible (light/dark, font 96 design px)
 - `StoryMediaLayer` avec ThumbHash placeholder (avant et après fade-out)
+- `StoryReaderLoadingOverlay` à 0%, 10%, 19%, 20%+ (avec et sans foreground ThumbHash)
 
-### 6.4 Manuel (E2E sur device)
+### 7.4 Manuel (E2E sur device)
 
 1. **Vidéo cold-start** : ajouter vidéo en story → preview démarre instantanément, pas de scintillement
 2. **Cache vidéo** : poster story vidéo, fermer, rouvrir → pas de network call (vérifier Charles/Proxyman), démarrage instant
@@ -517,8 +706,10 @@ Deux modifications minimales :
 7. **Indicator** : ajouter bg → chip "Fond" devient actif ; ajouter fg → chip "Premier" devient actif
 8. **Texte créé** : insertion texte → taille suffisante immédiate, placeholder « Exprimez-vous… » visible
 9. **Publish UX** : taper publish sur une story 5+ médias → spinner visible, bouton désactivé, complétion en < 5s
+10. **Reader loader** : ouvrir story sur Wi-Fi froid → overlay ThumbHash (bg + fg) visible instantanément + spinner + %, lecture démarre au seuil 20%, overlay fade out
+11. **Reader loader airplane mode** : ouvrir story sans réseau → overlay reste affiché, % monte si certains assets sont cachés ; sinon timeout safety après 5s force le démarrage
 
-## 7. Risques & mitigations
+## 8. Risques & mitigations
 
 | Risque | Probabilité | Mitigation |
 |--------|-------------|------------|
@@ -531,17 +722,23 @@ Deux modifications minimales :
 | Cascade async `publishAllSlides` brise capture `@State` | Moyen | Tests integration explicit ; spinner UI cover le compute |
 | `weak avPlayer` libéré pendant Task | Moyen | Utiliser `avPlayerLayer?.player` strong path + `weak self` dans Task |
 | `prune` libère `AVPlayer` qui jouait encore | Faible | `player.pause()` + `replaceCurrentItem(with: nil)` avant retrait du dict |
+| Seuil 20% trop strict si Wi-Fi très lent | Moyen | Timeout safety 5s force le démarrage ; constante `playStartThreshold` ajustable selon retour utilisateur |
+| Overlay `StoryReaderLoadingOverlay` reste visible après fin du loader | Faible | Test integration explicit + `transition(.opacity)` côté parent SwiftUI |
+| Positionnement design-space → screen incorrect pour ThumbHash fg | Moyen | Réutiliser le même `CanvasGeometry` que le canvas réel ; snapshot tests pour vérifier l'alignement |
 
-## 8. Décisions tranchées
+## 9. Décisions tranchées
 
 - **Pas de `mediaLayerCache` parallèle** : étendre `StoryRendererCache` existant (cf. § 2.2)
-- **Pas de pan/zoom canvas root** : reporté ; en mode `.canvas` les gestures sont absorbés silencieusement (cf. § 3.1)
-- **Pas de TextField SwiftUI à modifier** : `StoryInlineTextEditor` est UITextView, placeholder déjà câblé via `placeholderLabel`. Seulement modifier i18n + defaultValue ligne 27 (cf. § 4.2)
+- **Pas de pan/zoom canvas root** : reporté ; en mode `.canvas` les gestures sont absorbés silencieusement (cf. § 4.1)
+- **Pas de TextField SwiftUI à modifier** : `StoryInlineTextEditor` est UITextView, placeholder déjà câblé via `placeholderLabel`. Seulement modifier i18n + defaultValue ligne 27 (cf. § 5.2)
 - **`isGestureActive` public computed** : préserve l'encapsulation de `manipulatedItemId` private tout en permettant la garde Representable (cf. § 2.5 A.4.c)
 - **iOS 17+** : confirmé par `Package.swift`. Pas de fallback iOS 16.
 - **Decoder fallback `fontSize`** : reste 64.0 pour back-compat ; seul `init publique` passe à 96.
+- **Cache helper unifié** : `videoLocalFileURLAwait` / `audioLocalFileURLAwait` dans `CacheCoordinator` (DRY entre vidéo bg/fg et audio reader)
+- **Seuil démarrage reader** : 20% (constante `playStartThreshold`) + timeout safety 5s (best-effort)
+- **Overlay loader** : SwiftUI (parent `StoryViewerView`), pas dans UIKit `StoryCanvasUIView` — séparation propre de la couche UI
 
-## 9. Out of scope (déféré)
+## 10. Out of scope (déféré)
 
 - **Pan/zoom du canvas root en mode `.canvas`** : nécessite `effects.canvasTransform: CGAffineTransform` persisté + export `StoryAVCompositor` qui le respecte. Sprint dédié si demandé.
 - Sélection multi-fg simultanée (pinch sur 2 fg)
@@ -550,7 +747,7 @@ Deux modifications minimales :
 - Cross-fade transitions entre slides
 - Audio waveform animée pendant playback viewer (post-launch)
 
-## 10. Critères d'acceptation
+## 11. Critères d'acceptation
 
 1. Vidéo en story démarre sans scintillement ni cold-restart (vérifiable visuellement)
 2. Revisite d'une story vidéo n'émet aucun call réseau pour le contenu (Charles/Proxyman)
@@ -563,14 +760,17 @@ Deux modifications minimales :
 9. Placeholder « Exprimez-vous… » visible dans l'inline editor
 10. Pas de scintillement visible pendant drag de média
 11. Publish multi-média : spinner UX correct, complétion < 5s pour 5 médias
-12. Tests unit + integration + snapshots passent
-13. Checklist E2E manuelle validée sur device
+12. Reader loader : ThumbHash plein écran (bg + fg) visible instantanément à l'ouverture d'une slide
+13. Reader loader : lecture démarre quand `progress >= 0.20` ou après timeout 5s (best-effort)
+14. Reader loader : overlay fade out propre quand le seuil est franchi
+15. Tests unit + integration + snapshots passent
+16. Checklist E2E manuelle validée sur device
 
-## 11. Décisions de design (récapitulatif)
+## 12. Décisions de design (récapitulatif)
 
 | Décision | Choix | Raison |
 |----------|-------|--------|
-| Ordre des phases | A (P0) → B (P1) → C (P2) | A bloque chaque visionnage, B améliore édition, C cosmétique |
+| Ordre des phases | A (P0) → D (P1) → B (P1) → C (P2) | A bloque chaque visionnage ; D dépend de A.3 et améliore directement le perçu reader ; B/C édition |
 | Cache layers | Étendre `StoryRendererCache` existant | Pas de dual-cache contradictoire |
 | FG actif | Hit-test au point de contact | Pas d'état "actif" persistant à gérer |
 | Indicator visuel | Subtile chip row non-tappable | Informatif sans zone tactile inerte |
@@ -583,3 +783,6 @@ Deux modifications minimales :
 | `isGestureActive` | Computed public read-only | Préserve encapsulation `manipulatedItemId` private |
 | `publishAllSlides` | Async + TaskGroup parallèle | UX correcte (spinner) sans bloquer le main |
 | AVPlayer ref | Toujours via `avPlayerLayer?.player` | Contourne la `weak var avPlayer` |
+| Reader loader seuil | 20% des assets locaux + timeout 5s | Démarrage perçu instantané + safety net |
+| Reader loader UI | Overlay SwiftUI `StoryReaderLoadingOverlay` côté parent | Séparation propre UIKit canvas / SwiftUI loader ; rendu ThumbHash bg + fg + spinner + % |
+| Signal de progression | `onContentProgress: ((Double) -> Void)?` sur canvas + Representable | Continu (0-1), pas binaire — pilote l'overlay et le gating play |

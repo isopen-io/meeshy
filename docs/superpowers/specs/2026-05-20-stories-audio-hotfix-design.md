@@ -32,17 +32,28 @@ Avant `85bf841b`, l'audio fonctionnait. Le diagnostic initial du brainstorming p
 
 → Fix direct : poster les notifications côté engine.
 
-### 2.3 Rupture A — Silence reader, vraie cause à identifier (observation requise)
+### 2.3 Rupture A — Silence reader : H2 confirmée par diff avec pipeline message
 
-Le call site reader (`StoryCanvasUIView.swift:670` via `startAudioPlayback()`) appelle correctement `audioMixer.play(originHost:slideKey:)` avec arguments valides. La signature est bonne. Les hypothèses restantes :
+**Le pipeline message audio FONCTIONNE** (bulles audio dans les conversations). **Le pipeline story audio NE FONCTIONNE PAS**. La diff est éclairante :
 
-- **H1** : `reconfigureAudioForPlayback()` (ligne 575+) reçoit une `urls` vide parce que `readerContext.postMediaURLResolver(postMediaId)` retourne `nil` pour les audios (cache non rempli, URL non résolue après publish).
-- **H2** : `audioMixer.configure(audios:urls:)` (`ReaderAudioMixer.swift`) échoue silencieusement via `try?` sur un `AVAudioFile(forReading:)` qui ne trouve pas le fichier.
-- **H3** : `mach_absolute_time()` capturé après un `currentTime > 0` (scrub composer) renvoie un origin déjà dépassé → tous les clips schedulés dans le passé sont skippés par `AVAudioPlayerNode`.
-- **H4** : `PlaybackCoordinator.shared.willStartPlaying(external: audioMixer)` (ligne 668) appelle `stop()` sur l'audio mixer juste avant que `play()` ne soit invoqué (race entre external claim et play).
-- **H5** : `readerContext.preferredLanguages` change entre la pose d'`audios` et le `play()` → `currentSlideKey` mute → `audioMixer.play` voit un nouveau slideKey et re-schedule from scratch → audio démarre puis stop instantané.
+| Aspect | Pipeline message (✅ joue) | Pipeline story (❌ silent) |
+|--------|---------------------------|---------------------------|
+| Player | `AVAudioPlayer(data: Data)` | `AVAudioFile(forReading: URL)` + `AVAudioPlayerNode` |
+| Source | `Data` bytes en mémoire | URL passée directement à `AVAudioFile` |
+| URL resolver | `MeeshyConfig.resolveMediaURL` → `CacheCoordinator.shared.audio.data(for:)` async → `Data` | `readerContext.postMediaURLResolver(postMediaId)` → URL telle quelle |
+| Contrainte source | `AVAudioPlayer(data:)` accepte tout format Core Audio | **`AVAudioFile(forReading:)` n'accepte QUE des URLs `file://`** (Apple docs) |
 
-→ **Observation avant fix** : pas de "fix" dans la spec audio sur cette rupture tant que les logs n'ont pas confirmé une hypothèse. Le livrable initial est la couche de logs ; le fix root cause est défini après mesure.
+**Conséquence** : si `postMediaURLResolver` retourne une URL HTTPS (cas viewer post-publication d'une story d'un autre user, où `preloadedAudioURLs` est vide → fallback sur `mediaList.first.url` HTTPS dans `StoryReaderRepresentable.swift:92-98`), `AVAudioFile(forReading: url)` jette `OSStatus 2003334207` ("not a file"). L'erreur est attrapée par le `catch` dans `ReaderAudioMixer.configure` (l.100-102), le clip est skippé silencieusement, `entries` reste vide, `play()` retourne `true` sans rien jouer.
+
+**Hypothèses runtime ordonnées par probabilité** :
+
+- **H2 (HAUTE)** : `AVAudioFile(forReading: url)` rejette une URL HTTPS. C'est le diff fondamental avec le pipeline message qui pre-télécharge en `Data` via `CacheCoordinator`.
+- **H1 (MOYENNE)** : `postMediaURLResolver` retourne `nil` pour les audios (cache non rempli, `audio.resolvedPostMediaId(preferredLanguages:)` ne match aucun id dans `StoryItem.media`).
+- **H3 (FAIBLE pour silence, mais aggravant)** : `StoryTimelineEngine.configureAudioSession()` (`StoryTimelineEngine.swift:110-127`) pose une seconde config `AVAudioSession.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])` concurrente à `MediaSessionCoordinator` → refcount du coordinator désynchro, peut amplifier H2.
+- **H4 (FAIBLE)** : `PlaybackCoordinator` race avant `play()`.
+- **H5 (FAIBLE)** : `currentSlideKey` mute entre `configure` et `play`.
+
+→ **Approche corrective** : pré-cache audio garanti (`CacheCoordinator.shared.audio.data(for:)`) + utiliser l'URL locale (`audioLocalFileURL(for:)`) AVANT `audioMixer.configure(urls:)`. Voir § 5.7.
 
 ### 2.4 Aggravant — `try?` muet partout
 
@@ -77,15 +88,21 @@ Quatre livrables ordonnés :
 
 ### 4.3 Waveform (validé brainstorming)
 
-**Principe global Meeshy** : waveform réelle calculée une seule fois par source audio, mise en cache local long via `WaveformCache.shared` (déjà présent dans `packages/MeeshySDK/Sources/MeeshyUI/Media/AudioWaveformAnalyzer.swift`).
+**Principe global Meeshy** : waveform réelle calculée une seule fois par source audio, mise en cache local persistant via `WaveformCache.shared` (`packages/MeeshySDK/Sources/MeeshySDK/Audio/WaveformCache.swift:11`).
 
-- Clé cache : **`postMediaId`** quand connu (stable post-publish), sinon hash de l'URL absolue. Pas `audioId` (UUID éphémère composer).
-- TTL : ≥ 6 mois (par défaut `DiskCacheStore` policy audio).
-- Au render d'une cellule audio :
-  1. `WaveformCache.shared.samples(from:count:)` async ; pendant le compute, on affiche `AudioWaveformAnalyzer.generateFallback(count: 40)` (lignes déterministes hash de l'id).
-  2. Au callback, remplacement transparent sans flash.
+**Détails effectifs du cache existant** (à utiliser tel quel, ne PAS reconfigurer) :
+- Type : `public actor WaveformCache` singleton (`.shared`)
+- L1 : mémoire (`memoryCache: [String: [Float]]`)
+- L2 : disque dans `~/Library/Caches/com.meeshy.waveforms/` (fichiers `.waveform`)
+- **Clé cache** : `"\(url.lastPathComponent)_\(count)"` (lastPathComponent du URL, généralement le sha256-id côté backend Meeshy)
+- **TTL** : aucun expiration explicite — eviction uniquement via `clearAllCaches()` / `clearMemoryCache()`. Cache effectivement persistant.
+- API : `samples(from url: URL, count: Int = 120) async throws -> [Float]` et `samples(from data: Data, count: Int) async throws -> [Float]`
 
-Ce principe s'applique aussi aux autres surfaces (message audio bubble, voice profile, story viewer) — mais ce spec n'élargit pas le scope ; uniquement la cellule composer.
+Au render d'une cellule audio :
+1. `WaveformCache.shared.samples(from:count:)` async via `AudioWaveformAnalyzer` ; pendant le compute, on affiche `AudioWaveformAnalyzer.generateFallback(count: 40)` (lignes déterministes hash).
+2. Au callback, remplacement transparent sans flash.
+
+Ce principe s'applique aussi aux autres surfaces (message audio bubble via `AudioPlayerView`, voice profile, story viewer) — déjà câblé. Le spec ne l'élargit pas ; on en hérite uniquement pour la cellule composer.
 
 ## 5. Composants & fichiers modifiés
 
@@ -124,10 +141,11 @@ struct StoryAudioCell: View {
     let onDelete: () -> Void
 
     @StateObject private var waveform = AudioWaveformAnalyzer()
-    @State private var isPlaying = false
-    // ... AVPlayer local pour preview cellule
+    @StateObject private var playback = AudioPlaybackManager()  // réutilise existant (AudioPlayerView.swift:9)
 }
 ```
+
+**Réutilisation imposée** : `AudioPlaybackManager` (`/Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK/Sources/MeeshyUI/Media/AudioPlayerView.swift:9-239`) est le composant existant pour play/pause/seek d'un audio dans l'app. Il gère déjà `AVAudioPlayer(data:)`, pré-cache via `CacheCoordinator.shared.audio.data(for:)`, ainsi que `PlaybackCoordinator.shared.willStartPlaying(audio:)`. **Ne PAS instancier un `AVPlayer` ad-hoc** dans la cellule.
 
 Layout (hauteur 64pt, flat dans la liste) :
 
@@ -238,19 +256,88 @@ Nouvelles clés (FR / EN) :
 
 (Pas de clé `story.audio.duration` — formatage local via `DurationFormatter`.)
 
-### 5.7 (Livrable n°4) — Fix Rupture A
+### 5.7 Livrable n°4 — Fix Rupture A : pré-cache audio garanti
 
-**À renseigner après mesure** des logs du livrable n°1 sur device.
+**Approche** : aligner le pipeline story sur ce qui fait fonctionner le pipeline message — **garantir que les URLs passées à `audioMixer.configure(urls:)` sont des `file://` locales**.
 
-Selon l'hypothèse confirmée (cf. § 2.3) :
+#### Contrat AVAudioFile
 
-- **Si H1 confirmée** (URL audio non résolue) → fix dans `StoryComposerViewModel.loadedAudioURLs` priming au mount du reader.
-- **Si H2 confirmée** (`AVAudioFile` ouverture échoue) → fix cache audio post-publish (assure que `CacheCoordinator.audio.data(for:)` est appelé avant le `play`).
-- **Si H3 confirmée** (origin dépassé) → clamp `origin` à `mach_absolute_time()` minimum dans `captureSlideTimelineOrigin` quand `elapsed > duration`.
-- **Si H4 confirmée** (race PlaybackCoordinator) → réordonner `willStartPlaying` avant la création du `AVAudioPlayerNode`.
-- **Si H5 confirmée** (slideKey mute) → snapshotter `preferredLanguages` au moment du `configure` et le réutiliser pour le `play`.
+`AVAudioFile(forReading: URL)` (`ReaderAudioMixer.swift:83`, `AudioMixer.swift` côté composer) **n'accepte QUE des URLs `file://`**. La doc Apple est explicite : "The fileURL parameter is the URL of an audio file. The file must be in a format supported by Core Audio." Une URL HTTPS lève `OSStatus 2003334207` ("not a file") — c'est la cause du silence reader.
 
-Une fois identifiée, mise à jour de cette spec et plan d'implémentation chirurgical (≤ 30 lignes de code).
+#### Fix dans `reconfigureAudioForPlayback()`
+
+`/Users/smpceo/Documents/v2_meeshy/packages/MeeshySDK/Sources/MeeshyUI/Story/Canvas/StoryCanvasUIView.swift` ~ligne 745-770 :
+
+```swift
+private func reconfigureAudioForPlayback() {
+    guard mode == .play else { return }
+    guard slideContentRevision != lastAudioConfigRevision else { return }
+    let audios = slide.effects.audioPlayerObjects ?? []
+    let languages = readerContext.preferredLanguages
+    Task { @MainActor [weak self] in
+        guard let self else { return }
+        var localURLs: [String: URL] = [:]
+        for audio in audios {
+            let mediaId = audio.resolvedPostMediaId(preferredLanguages: languages)
+            guard let remoteURL = self.readerContext.postMediaURLResolver?(mediaId) else {
+                Logger.audio.error("Audio URL not resolved for postMediaId=\(mediaId, privacy: .public)")
+                continue
+            }
+            // Garantir une URL file:// locale avant de toucher AVAudioFile
+            if remoteURL.isFileURL {
+                localURLs[audio.id] = remoteURL
+            } else if let cached = CacheCoordinator.audioLocalFileURL(for: remoteURL.absoluteString) {
+                localURLs[audio.id] = cached
+            } else {
+                do {
+                    _ = try await CacheCoordinator.shared.audio.data(for: remoteURL.absoluteString)
+                    if let local = CacheCoordinator.audioLocalFileURL(for: remoteURL.absoluteString) {
+                        localURLs[audio.id] = local
+                    } else {
+                        Logger.audio.error("Audio cache populated but local URL nil: \(remoteURL.absoluteString, privacy: .public)")
+                    }
+                } catch {
+                    Logger.audio.error("Audio fetch failed: \(error.localizedDescription, privacy: .public)")
+                }
+            }
+        }
+        // Tous les chemins sont garantis file:// à ce point
+        do {
+            try self.audioMixer.configure(audios: audios, urls: localURLs)
+            self.lastAudioConfigRevision = self.slideContentRevision
+        } catch {
+            Logger.audio.error("ReaderAudioMixer.configure failed: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+}
+```
+
+**Pré-requis** : `CacheCoordinator.audioLocalFileURL(for:)` doit exister (sinon créer en miroir de `videoLocalFileURL`). À vérifier dans `CacheCoordinator.swift:69` — si absent, ajouter :
+
+```swift
+nonisolated public static func audioLocalFileURL(for urlString: String) -> URL? {
+    shared.audio.cachedFileURL(for: urlString)
+}
+```
+
+#### Conflit `StoryTimelineEngine.configureAudioSession`
+
+Le `StoryTimelineEngine.configureAudioSession()` (`StoryTimelineEngine.swift:110-127`) pose une seconde config `AVAudioSession.setCategory(.playback, mode: .moviePlayback, options: [.mixWithOthers])` **concurrente** à `MediaSessionCoordinator`. Cela désynchronise le refcount du coordinator et peut aggraver les symptômes.
+
+**Action** : refactorer `configureAudioSession()` pour déléguer à `MediaSessionCoordinator.shared.request(role: .playback)`. **Hors scope du hotfix** si trop risqué (impact composer preview) — à traiter en sprint dédié. Documenter en out of scope (§ 9).
+
+#### Critère de succès du livrable 4
+
+`audioMixer.configure(audios:urls:)` reçoit uniquement des URLs satisfaisant `url.isFileURL == true`. Vérification automatique :
+
+```swift
+public func configure(audios: [StoryAudioPlayerObject], urls: [String: URL]) throws {
+    for (audioId, url) in urls {
+        assert(url.isFileURL, "ReaderAudioMixer.configure requires file:// URLs (got \(url) for audioId=\(audioId))")
+    }
+    // ...
+}
+```
 
 ## 6. Data flow cible (post-fix complet)
 
@@ -338,6 +425,7 @@ preview composer:                              [sample-accurate scheduling]
 - Visualizer en lecture reader (waveform animée pendant playback)
 - Upload de waveform pré-calculée côté backend
 - Modification de la config `MediaSessionCoordinator` (ducking semantics)
+- **Refactor de `StoryTimelineEngine.configureAudioSession`** pour déléguer à `MediaSessionCoordinator` (impact composer preview, sprint dédié) — à documenter comme dette technique
 
 ## 10. Critères d'acceptation
 
