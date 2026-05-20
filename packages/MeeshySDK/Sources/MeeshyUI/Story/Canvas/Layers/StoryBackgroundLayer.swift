@@ -117,8 +117,22 @@ extension StoryBackgroundLayer {
             addSublayer(img)
             contentLayer = img
 
-            // Synchronous thumbHash placeholder (if any)
-            if let hash = thumbHash,
+            // Fast-path cache chaud : si on peut résoudre le bitmap MAINTENANT
+            // (sync NSCache via `warmedImage`), on stamp `contents` direct sans
+            // afficher de ThumbHash placeholder. Évite le flash placeholder→
+            // bitmap réel quand on revisite une story.
+            let directURLForWarm = Self.directURLIfAny(from: postMediaId)
+            let warmURL: URL? = directURLForWarm ?? resolver?(postMediaId)
+            var skippedPlaceholder = false
+            if let warm = warmURL,
+               let cached = CacheCoordinator.warmedImage(for: warm.absoluteString)?.cgImage {
+                img.contents = cached
+                skippedPlaceholder = true
+            }
+
+            // Synchronous thumbHash placeholder (si pas de hit cache chaud).
+            if !skippedPlaceholder,
+               let hash = thumbHash,
                let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
                 img.contents = placeholderImage.cgImage
             }

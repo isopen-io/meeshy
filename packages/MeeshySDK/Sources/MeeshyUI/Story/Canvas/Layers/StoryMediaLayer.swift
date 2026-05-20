@@ -289,8 +289,19 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
                                 resolver: (@Sendable (String) -> URL?)?) {
         guard let remoteURL = resolvedMediaURL(for: media, resolver: resolver) else { return }
 
-        // ThumbHash placeholder visible immédiatement pendant que la vidéo
-        // est résolue / téléchargée / préparée.
+        // Fast-path cache chaud : si l'URL est déjà locale (file://) OU si le
+        // cache disk a déjà le fichier, on attache directement le player SANS
+        // afficher de placeholder ThumbHash — évite le flash visuel quand on
+        // revisite une story déjà vue / pré-chauffée par le prefetcher.
+        if let immediateLocalURL = synchronouslyResolvedLocalVideoURL(remoteURL) {
+            currentVideoLoadTask?.cancel()
+            videoLoadGeneration &+= 1
+            // Pas de placeholder — le bitmap réel est instantané.
+            attachPlayer(url: immediateLocalURL, mode: mode, loop: media.loop)
+            return
+        }
+
+        // Cache miss → ThumbHash placeholder pendant le fetch async.
         applyThumbHashPlaceholder(media.thumbHash)
 
         // Annule le load précédent : un layer recyclé pour un autre média
@@ -312,6 +323,14 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             guard self.videoLoadGeneration == generation else { return }
             self.attachPlayer(url: localURL, mode: mode, loop: media.loop)
         }
+    }
+
+    /// Résout l'URL locale vidéo SANS toucher au réseau ni à une Task. Retourne
+    /// `nil` si le cache n'a rien — auquel cas le caller doit afficher un
+    /// placeholder et lancer un fetch async.
+    private nonisolated func synchronouslyResolvedLocalVideoURL(_ remoteURL: URL) -> URL? {
+        if remoteURL.isFileURL { return remoteURL }
+        return CacheCoordinator.videoLocalFileURL(for: remoteURL.absoluteString)
     }
 
     /// Attache (ou réutilise) le `AVPlayer` du layer pour l'URL fournie. Si
