@@ -346,14 +346,11 @@ struct MessageOverlayMenu: View {
     @ViewBuilder
     private var previewContent: some View {
         let hasText = !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let images = message.attachments.filter { $0.mimeType.hasPrefix("image/") }
-        let videos = message.attachments.filter { $0.mimeType.hasPrefix("video/") }
-        let audios = message.attachments.filter { $0.mimeType.hasPrefix("audio/") }
-        let files = message.attachments.filter {
-            !$0.mimeType.hasPrefix("image/") &&
-            !$0.mimeType.hasPrefix("video/") &&
-            !$0.mimeType.hasPrefix("audio/")
-        }
+        // Family dispatch via `AttachmentKind` — single source of truth.
+        let images = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .image }
+        let videos = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .video }
+        let audios = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .audio }
+        let files = message.attachments.filter { !AttachmentKind(mimeType: $0.mimeType).isMedia }
 
         VStack(alignment: message.isMe ? .trailing : .leading, spacing: 8) {
             if !images.isEmpty {

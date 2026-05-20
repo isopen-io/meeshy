@@ -235,7 +235,7 @@ struct MessageDetailSheet: View {
             switch tab {
             case .delete: return canDelete
             case .sentiment: return !message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            case .transcription: return message.attachments.contains { $0.mimeType.hasPrefix("audio/") || $0.mimeType.hasPrefix("video/") }
+            case .transcription: return message.attachments.contains { AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack }
             case .edits: return message.isEdited && !editRevisions.isEmpty
             default: return true
             }
@@ -244,8 +244,8 @@ struct MessageDetailSheet: View {
 
     private var availableViewsFilters: [ViewsFilter] {
         var filters: [ViewsFilter] = [.sent, .delivered, .read, .notSeen]
-        let hasAudio = message.attachments.contains { $0.mimeType.hasPrefix("audio/") }
-        let hasVideo = message.attachments.contains { $0.mimeType.hasPrefix("video/") }
+        let hasAudio = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .audio }
+        let hasVideo = message.attachments.contains { AttachmentKind(mimeType: $0.mimeType) == .video }
         if hasAudio { filters.append(.listened) }
         if hasVideo { filters.append(.watched) }
         return filters
@@ -878,10 +878,10 @@ struct MessageDetailSheet: View {
         case .read: count = readStatusData?.readCount
         case .notSeen: count = readStatusData?.notSeenCount
         case .listened:
-            let audioIds = message.attachments.filter { $0.mimeType.hasPrefix("audio/") }.map(\.id)
+            let audioIds = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .audio }.map(\.id)
             count = audioIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
         case .watched:
-            let videoIds = message.attachments.filter { $0.mimeType.hasPrefix("video/") }.map(\.id)
+            let videoIds = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .video }.map(\.id)
             count = videoIds.reduce(0) { $0 + (attachmentStatuses[$1]?.count ?? 0) }
         default: break
         }
@@ -1207,7 +1207,7 @@ struct MessageDetailSheet: View {
     // MARK: - Écouté (Listened) — Per-Audio Attachment
 
     private func viewsListenedContent(accent: Color) -> some View {
-        let audioAttachments = message.attachments.filter { $0.mimeType.hasPrefix("audio/") }
+        let audioAttachments = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .audio }
 
         return VStack(alignment: .leading, spacing: 14) {
             if isLoadingAttachmentStatuses {
@@ -1231,7 +1231,7 @@ struct MessageDetailSheet: View {
     // MARK: - Vu (Watched) — Per-Video Attachment
 
     private func viewsWatchedContent(accent: Color) -> some View {
-        let videoAttachments = message.attachments.filter { $0.mimeType.hasPrefix("video/") }
+        let videoAttachments = message.attachments.filter { AttachmentKind(mimeType: $0.mimeType) == .video }
 
         return VStack(alignment: .leading, spacing: 14) {
             if isLoadingAttachmentStatuses {
@@ -2036,7 +2036,7 @@ struct MessageDetailSheet: View {
     private var transcriptionTabContent: some View {
         let accent = Color(hex: contactColor)
         let mediaAttachments = message.attachments.filter {
-            $0.mimeType.hasPrefix("audio/") || $0.mimeType.hasPrefix("video/")
+            AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
         }
 
         return VStack(alignment: .leading, spacing: 14) {
@@ -2149,7 +2149,7 @@ struct MessageDetailSheet: View {
             // Attachment cards
             ForEach(mediaAttachments) { attachment in
                 HStack(spacing: 10) {
-                    Image(systemName: attachment.mimeType.hasPrefix("audio/") ? "waveform" : "video")
+                    Image(systemName: AttachmentKind(mimeType: attachment.mimeType).sfSymbolName)
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(accent)
                         .frame(width: 20)
@@ -2366,7 +2366,7 @@ struct MessageDetailSheet: View {
 
     private func loadAttachmentStatuses() async {
         let mediaAttachments = message.attachments.filter {
-            $0.mimeType.hasPrefix("audio/") || $0.mimeType.hasPrefix("video/")
+            AttachmentKind(mimeType: $0.mimeType).hasTimebasedTrack
         }
         guard !mediaAttachments.isEmpty, !isLoadingAttachmentStatuses else { return }
         isLoadingAttachmentStatuses = true
