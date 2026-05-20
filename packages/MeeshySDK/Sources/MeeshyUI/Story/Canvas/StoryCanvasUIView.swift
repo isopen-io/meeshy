@@ -746,23 +746,55 @@ public final class StoryCanvasUIView: UIView {
 
         // Foreground clips.
         let foreground = effects.resolvedForegroundAudioPlayers
+        let background = effects.resolvedBackgroundAudio
+        os.Logger.storyAudio.info(
+            "reconfigureAudioForPlayback slide=\(self.slide.id, privacy: .public) fg=\(foreground.count) bg=\(background == nil ? 0 : 1) langs=\(languages.joined(separator: ","), privacy: .public) resolverPresent=\(resolver != nil)"
+        )
+
         var urls: [String: URL] = [:]
         for audio in foreground {
             let mediaId = audio.resolvedPostMediaId(preferredLanguages: languages)
-            if let url = resolver?(mediaId) {
-                urls[audio.id] = url
+            guard let url = resolver?(mediaId) else {
+                os.Logger.storyAudio.error(
+                    "FG audio URL not resolved audioId=\(audio.id, privacy: .public) postMediaId=\(mediaId, privacy: .public)"
+                )
+                continue
             }
+            os.Logger.storyAudio.debug(
+                "FG audio URL resolved audioId=\(audio.id, privacy: .public) isFile=\(url.isFileURL) scheme=\(url.scheme ?? "nil", privacy: .public)"
+            )
+            urls[audio.id] = url
         }
-        try? audioMixer.configure(audios: foreground, urls: urls)
+
+        do {
+            try audioMixer.configure(audios: foreground, urls: urls)
+        } catch {
+            os.Logger.storyAudio.error(
+                "ReaderAudioMixer.configure failed: \(error.localizedDescription, privacy: .public)"
+            )
+        }
 
         // Background clip (at most one per slide).
-        if let background = effects.resolvedBackgroundAudio {
+        if let background {
             let mediaId = background.resolvedPostMediaId(preferredLanguages: languages)
             if let url = resolver?(mediaId) {
-                try? audioMixer.configureBackground(
-                    audio: background,
-                    url: url,
-                    looping: background.loop ?? true
+                os.Logger.storyAudio.debug(
+                    "BG audio URL resolved audioId=\(background.id, privacy: .public) isFile=\(url.isFileURL) scheme=\(url.scheme ?? "nil", privacy: .public)"
+                )
+                do {
+                    try audioMixer.configureBackground(
+                        audio: background,
+                        url: url,
+                        looping: background.loop ?? true
+                    )
+                } catch {
+                    os.Logger.storyAudio.error(
+                        "ReaderAudioMixer.configureBackground failed audioId=\(background.id, privacy: .public): \(error.localizedDescription, privacy: .public)"
+                    )
+                }
+            } else {
+                os.Logger.storyAudio.error(
+                    "BG audio URL not resolved audioId=\(background.id, privacy: .public) postMediaId=\(mediaId, privacy: .public)"
                 )
             }
         }
