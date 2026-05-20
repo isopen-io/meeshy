@@ -713,7 +713,6 @@ struct StoryViewerView: View {
             storyReactionCount: storyReactionCount,
             storyCommentCount: storyCommentCount,
             isStoryCommentsEmpty: storyComments.isEmpty,
-            currentStoryNeedsVideoExport: currentStoryNeedsVideoExport,
             storyHasAudibleSound: storyHasAudibleSound,
             storyHasTranslatableContent: storyHasTranslatableContent,
             isGlobalMuted: isGlobalMuted,
@@ -782,16 +781,6 @@ struct StoryViewerView: View {
 
     private var isOwnStory: Bool {
         currentGroup?.id == AuthManager.shared.currentUser?.id
-    }
-
-    /// Whether the currently shown story has time-evolving content worth
-    /// baking into an MP4 (animated text, background video, voice
-    /// attachment, opening transition, etc.). Reconstructs the
-    /// renderable slide via the same path the live canvas consumes so the
-    /// gate matches the export's own routing in `prepareExport`.
-    private var currentStoryNeedsVideoExport: Bool {
-        guard let story = currentStory else { return false }
-        return story.toRenderableSlide(preferredLanguages: preferredContentLanguagesForReader).needsVideoExport
     }
 
     // MARK: - Available Translation Languages

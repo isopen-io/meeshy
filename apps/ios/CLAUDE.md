@@ -247,9 +247,8 @@ Le backend **ne stocke jamais** de MP4 baked composite. Les viewers re-rendent l
 Le MP4 export (`StoryVideoExportService` + `StoryExporter`) est une feature **auteur-only**, partage externe via `UIActivityViewController` (Photos / Messages / WhatsApp / AirDrop) — **NE TOUCHE JAMAIS LE BACKEND MEESHY**.
 
 ### Entry point
-- `StoryViewerView` → bouton "Exporter" dans `storyActionSidebar`, visible uniquement si :
-  - `currentGroup?.id == currentUser.id` (l'utilisateur est l'auteur)
-  - `slide.needsVideoExport == true` (contenu animé / video / audio à graver)
+- `StoryViewerView` → bouton "Exporter" dans `storyActionSidebar`, visible dès que l'utilisateur est l'auteur (`currentGroup?.id == currentUser.id`)
+- **Universal export** : toute story de l'auteur est exportable, qu'elle contienne de la vidéo/audio/keyframes OU juste du texte/sticker/image statique. Le compositor synthétise un substrat vidéo transparent pour les slides sans background (cf. `StoryExporterStaticOnlyTests`)
 - Le tap présente `StoryExportShareSheet` driven par `StoryExportShareViewModel`
 - Le sheet expose un picker de langue d'export (Prisme Linguistique) → la langue choisie est gravée dans le MP4 (texte des overlays)
 
