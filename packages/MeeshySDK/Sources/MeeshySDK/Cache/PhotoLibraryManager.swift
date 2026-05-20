@@ -23,10 +23,18 @@ public final class PhotoLibraryManager: @unchecked Sendable {
     public func saveImage(_ image: UIImage) async -> Bool {
         guard await requestAuthorization() else { return false }
 
+        // Resolve the album OUTSIDE the `performChanges` block. `fetchOrCreateAlbum`
+        // calls `performChangesAndWait`, which dispatch_syncs onto the same
+        // `com.apple.PHPhotoLibrary.changes` queue that `performChanges` enqueues
+        // onto. Re-entering that queue from within the closure triggers
+        // `__DISPATCH_WAIT_FOR_QUEUE__` (EXC_BREAKPOINT) — the user-visible
+        // "app crashes on save image" bug.
+        let album = self.fetchOrCreateAlbum()
+
         return await withCheckedContinuation { continuation in
             PHPhotoLibrary.shared().performChanges {
                 let request = PHAssetChangeRequest.creationRequestForAsset(from: image)
-                if let album = self.fetchOrCreateAlbum(),
+                if let album,
                    let placeholder = request.placeholderForCreatedAsset {
                     let albumChangeRequest = PHAssetCollectionChangeRequest(for: album)
                     albumChangeRequest?.addAssets([placeholder] as NSFastEnumeration)
@@ -42,10 +50,15 @@ public final class PhotoLibraryManager: @unchecked Sendable {
     public func saveVideo(at fileURL: URL) async -> Bool {
         guard await requestAuthorization() else { return false }
 
+        // Same dispatch deadlock fix as `saveImage`: resolve the album before
+        // entering `performChanges` so we never dispatch_sync onto our own
+        // serial queue.
+        let album = self.fetchOrCreateAlbum()
+
         return await withCheckedContinuation { continuation in
             PHPhotoLibrary.shared().performChanges {
                 let request = PHAssetChangeRequest.creationRequestForAssetFromVideo(atFileURL: fileURL)
-                if let album = self.fetchOrCreateAlbum(),
+                if let album,
                    let placeholder = request?.placeholderForCreatedAsset {
                     let albumChangeRequest = PHAssetCollectionChangeRequest(for: album)
                     albumChangeRequest?.addAssets([placeholder] as NSFastEnumeration)
