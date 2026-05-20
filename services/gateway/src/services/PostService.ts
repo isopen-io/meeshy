@@ -73,6 +73,8 @@ const mediaSelect = {
   order: true,
   caption: true,
   alt: true,
+  language: true,
+  variantOf: true,
   transcription: true,
   translations: true,
 };
