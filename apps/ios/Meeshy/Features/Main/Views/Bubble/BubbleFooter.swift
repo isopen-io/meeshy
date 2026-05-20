@@ -199,7 +199,31 @@ struct BubbleFooter: View, Equatable {
     @ViewBuilder
     private func deliveryView(tint: Color, readTint: Color) -> some View {
         if let delivery = model.delivery {
-            BubbleDeliveryCheck(status: delivery, isOffline: model.isOffline, tint: tint, readTint: readTint)
+            let check = BubbleDeliveryCheck(
+                status: delivery,
+                isOffline: model.isOffline,
+                tint: tint,
+                readTint: readTint
+            )
+            if let onShowReadStatus = actions.onShowReadStatus {
+                // Tap sur les coches -> ouvre le sheet detail a l'onglet
+                // "Vues" pour consulter qui a recu / qui a lu. Le bouton
+                // englobe une hit-area 22pt pour rester confortable au
+                // pouce sans elargir visuellement la coche.
+                Button(action: {
+                    HapticFeedback.light()
+                    onShowReadStatus()
+                }) {
+                    check
+                        .frame(minWidth: 22, minHeight: 22)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Voir le statut de lecture")
+                .accessibilityHint("Ouvre le detail du message a l'onglet Vues")
+            } else {
+                check
+            }
         }
     }
 

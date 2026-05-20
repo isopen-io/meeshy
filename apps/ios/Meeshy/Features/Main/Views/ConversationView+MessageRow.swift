@@ -91,6 +91,14 @@ extension ConversationView {
                         overlayState.detailSheetInitialTab = .reactions
 
                     },
+                    onShowReadStatus: { messageId in
+                        // Tap sur les coches de livraison (✓ / ✓✓ / ✓✓ bleu)
+                        // ouvre le sheet detail a l'onglet "Vues" pour
+                        // consulter les details de reception/lecture.
+                        let target = viewModel.messageIndex(for: messageId).map { viewModel.messages[$0] } ?? msg
+                        overlayState.detailSheetMessage = target
+                        overlayState.detailSheetInitialTab = .views
+                    },
                     onReplyTap: { messageId in
                         overlayState.replyThreadParentId = messageId
                         overlayState.showReplyThread = true

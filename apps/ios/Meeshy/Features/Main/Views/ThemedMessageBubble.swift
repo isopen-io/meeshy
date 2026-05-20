@@ -55,6 +55,8 @@ struct ThemedMessageBubble: View {
     var onOpenReactPicker: ((String) -> Void)? = nil
     var onShowInfo: (() -> Void)? = nil
     var onShowReactions: ((String) -> Void)? = nil
+    /// Tap sur les coches de livraison -> ouvre le sheet detail sur "Vues".
+    var onShowReadStatus: ((String) -> Void)? = nil
     var onReplyTap: ((String) -> Void)? = nil
     var onStoryReplyTap: ((String) -> Void)? = nil
     var onMediaTap: ((MessageAttachment) -> Void)? = nil
@@ -189,6 +191,7 @@ struct ThemedMessageBubble: View {
             onToggleReaction: onToggleReaction,
             onOpenReactPicker: onOpenReactPicker,
             onShowReactions: onShowReactions,
+            onShowReadStatus: onShowReadStatus,
             onReplyTap: onReplyTap,
             onStoryReplyTap: onStoryReplyTap,
             onMediaTap: onMediaTap,

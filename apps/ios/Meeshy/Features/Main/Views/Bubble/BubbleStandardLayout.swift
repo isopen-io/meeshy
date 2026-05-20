@@ -64,6 +64,9 @@ struct BubbleStandardLayout: View {
     let onToggleReaction: ((String) -> Void)?
     let onOpenReactPicker: ((String) -> Void)?
     let onShowReactions: ((String) -> Void)?
+    /// Tap sur les coches de livraison -> ouvre le sheet detail a l'onglet
+    /// "Vues" (read receipts). Passe `nil` pour rendre les coches inertes.
+    let onShowReadStatus: ((String) -> Void)?
     let onReplyTap: ((String) -> Void)?
     let onStoryReplyTap: ((String) -> Void)?
     let onMediaTap: ((MessageAttachment) -> Void)?
@@ -130,11 +133,25 @@ struct BubbleStandardLayout: View {
 
     private var hasReactions: Bool { !content.reactions.isEmpty }
 
+    /// Indique qu'un overlay de reaction (pills ou bouton +) deborde sous la
+    /// bulle. Le strip flotte de 8pt sous le coin et a une hit-area de 40pt
+    /// (cf. `BubbleReactionsOverlay.addButton`), donc il faut reserver assez
+    /// d'espace pour qu'il n'entre pas en collision avec la cellule suivante.
+    private var hasOverflowingOverlay: Bool {
+        hasReactions || (!content.isMe && isLastReceivedMessage)
+    }
+
     private var bottomSpacing: CGFloat {
+        // Espacement majore x1.6 (22 -> 35pt, 20 -> 32pt) quand un overlay
+        // de reaction deborde sous la bulle, pour eviter que le bouton +
+        // (face.smiling, hit-area 40pt) ou les pills ne tapent contre le
+        // message suivant. Le facteur x1.6 garde une silhouette compacte
+        // entre messages sans overlay, et offre une "respiration" claire
+        // autour de ceux qui en ont.
         if isLastInGroup {
-            return hasReactions ? 22 : 10
+            return hasOverflowingOverlay ? 35 : 10
         }
-        return hasReactions ? 20 : 2
+        return hasOverflowingOverlay ? 32 : 2
     }
 
     private var showIdentityBar: Bool {
@@ -684,12 +701,21 @@ struct BubbleStandardLayout: View {
             showsTranslate: showTranslation
         )
 
+        // Le tap sur les coches n'a de sens que sur les messages envoyes
+        // (les seuls qui portent une `delivery` non-nulle dans le footer).
+        // Sur un message recu, `model.delivery == nil` donc le bouton n'est
+        // jamais rendu meme si un callback etait branche.
+        let readStatusCallback: (() -> Void)? = (content.isMe && onShowReadStatus != nil)
+            ? { onShowReadStatus?(content.messageId) }
+            : nil
+
         let actions = BubbleFooterActions(
             onFlagTap: showFlags ? { code in handleFlagTap(code) } : nil,
             onTranslate: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
             onRetry: { performManualRetry() },
             onSenderTap: { selectedProfileUser = .from(message: message) },
-            onViewStory: onViewStory
+            onViewStory: onViewStory,
+            onShowReadStatus: readStatusCallback
         )
         return (model, actions)
     }
