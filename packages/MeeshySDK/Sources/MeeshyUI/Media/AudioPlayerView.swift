@@ -264,6 +264,7 @@ public struct AudioPlayerView: View {
     public var onEdit: (() -> Void)? = nil
     public var onPlayingChange: ((Bool) -> Void)? = nil
     private var externalLanguage: Binding<String?>?
+    private var topSlot: AnyView?
     private var bottomSlot: AnyView?
     private var availability: AudioAvailability
     private var onDownload: (() -> Void)?
@@ -333,18 +334,21 @@ public struct AudioPlayerView: View {
         return player.duration
     }
 
-    public init(attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
-                accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
-                translatedAudios: [MessageTranslatedAudio] = [],
-                onFullscreen: (() -> Void)? = nil,
-                onRequestTranscription: (() -> Void)? = nil,
-                onRetranscribe: (() -> Void)? = nil,
-                onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
-                onPlayingChange: ((Bool) -> Void)? = nil,
-                externalLanguage: Binding<String?>? = nil,
-                availability: AudioAvailability = .ready,
-                onDownload: (() -> Void)? = nil,
-                @ViewBuilder bottomContent: () -> some View = { EmptyView() }) {
+    public init<TopContent: View, BottomContent: View>(
+        attachment: MeeshyMessageAttachment, context: MediaPlayerContext,
+        accentColor: String = "08D9D6", transcription: MessageTranscription? = nil,
+        translatedAudios: [MessageTranslatedAudio] = [],
+        onFullscreen: (() -> Void)? = nil,
+        onRequestTranscription: (() -> Void)? = nil,
+        onRetranscribe: (() -> Void)? = nil,
+        onDelete: (() -> Void)? = nil, onEdit: (() -> Void)? = nil,
+        onPlayingChange: ((Bool) -> Void)? = nil,
+        externalLanguage: Binding<String?>? = nil,
+        availability: AudioAvailability = .ready,
+        onDownload: (() -> Void)? = nil,
+        @ViewBuilder topContent: () -> TopContent = { EmptyView() },
+        @ViewBuilder bottomContent: () -> BottomContent = { EmptyView() }
+    ) {
         self.attachment = attachment; self.context = context; self.accentColor = accentColor
         self.transcription = transcription; self.translatedAudios = translatedAudios
         self.onFullscreen = onFullscreen; self.onRequestTranscription = onRequestTranscription
@@ -354,8 +358,10 @@ public struct AudioPlayerView: View {
         self.externalLanguage = externalLanguage
         self.availability = availability
         self.onDownload = onDownload
-        let content = bottomContent()
-        self.bottomSlot = content is EmptyView ? nil : AnyView(content)
+        let top = topContent()
+        self.topSlot = top is EmptyView ? nil : AnyView(top)
+        let bottom = bottomContent()
+        self.bottomSlot = bottom is EmptyView ? nil : AnyView(bottom)
     }
 
     private var fullTranscriptionText: String {
@@ -422,6 +428,12 @@ public struct AudioPlayerView: View {
     // MARK: - Main Player
     private var mainPlayer: some View {
         VStack(spacing: 0) {
+            if let slot = topSlot {
+                slot
+                Divider()
+                    .background(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.06))
+            }
+
             HStack(spacing: context.isCompact ? 8 : 10) {
                 playButton
                 VStack(alignment: .leading, spacing: context.isCompact ? 3 : 4) {
