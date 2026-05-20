@@ -549,6 +549,14 @@ struct AudioMediaView: View, Equatable {
                 bottomContent: { playerBottomContent }
             )
         } else if footerModel != nil {
+            // ⚠ NE PAS utiliser de trailing closure ici. `AudioPlayerView` a
+            // DEUX `@ViewBuilder` closure params (topContent + bottomContent)
+            // tous deux avec une default value `{ EmptyView() }`. Avec un
+            // trailing closure unique non labellisé, Swift le mappe au PREMIER
+            // closure param (topContent), pas au dernier — résultat observé :
+            // le `BubbleFooter` rendu via `playerBottomContent` apparaissait
+            // EN HAUT du player au lieu d'en bas. Passer `bottomContent:` de
+            // façon explicite force le routing correct vers `bottomSlot`.
             AudioPlayerView(
                 attachment: attachment,
                 context: .messageBubble,
@@ -568,10 +576,9 @@ struct AudioMediaView: View, Equatable {
                 },
                 externalLanguage: $selectedAudioLangCode,
                 availability: availability,
-                onDownload: { downloader.start(attachment: attachment, onShare: nil) }
-            ) {
-                playerBottomContent
-            }
+                onDownload: { downloader.start(attachment: attachment, onShare: nil) },
+                bottomContent: { playerBottomContent }
+            )
         } else {
             AudioPlayerView(
                 attachment: attachment,
