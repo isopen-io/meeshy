@@ -16,7 +16,22 @@ struct NewConversationView: View {
     @State private var selectedUsers: [SearchedUser] = []
     @State private var groupTitle = ""
 
-    init(viewModel: NewConversationViewModel = NewConversationViewModel()) {
+    /// Default initializer used by production callers. The `wrappedValue:`
+    /// argument of `StateObject` is `@autoclosure @escaping`, so the
+    /// `NewConversationViewModel()` expression is only evaluated by
+    /// SwiftUI the first time the view appears — not on every re-render
+    /// of the parent. Constructing the VM inside the body of `init` is
+    /// the only shape that gets the lazy semantics; passing a default
+    /// argument (`viewModel: VM = VM()`) defeats them.
+    init() {
+        _viewModel = StateObject(wrappedValue: NewConversationViewModel())
+    }
+
+    /// Test- and preview-only initializer. Tests build the VM with a mock
+    /// `APIClientProviding` and inject it ready-made; SwiftUI still
+    /// honours the StateObject identity contract because the instance is
+    /// captured exactly once.
+    init(testHook viewModel: NewConversationViewModel) {
         _viewModel = StateObject(wrappedValue: viewModel)
     }
 
@@ -58,6 +73,27 @@ struct NewConversationView: View {
             guard message != nil else { return }
             HapticFeedback.error()
         }
+        // Surface the error to the user — not just to the haptic engine.
+        // The previous shape silently swallowed failures, exactly the
+        // pattern the audit flagged. The dismiss path goes through
+        // `viewModel.dismissError()` so the view never mutates the
+        // VM's `@Published` state directly.
+        .alert(
+            String(localized: "new_conversation.error.title", defaultValue: "Erreur"),
+            isPresented: Binding(
+                get: { viewModel.errorMessage != nil },
+                set: { isPresented in
+                    if !isPresented { viewModel.dismissError() }
+                }
+            ),
+            presenting: viewModel.errorMessage,
+            actions: { _ in
+                Button(String(localized: "common.ok", defaultValue: "OK"), role: .cancel) { }
+            },
+            message: { message in
+                Text(message)
+            }
+        )
         .withStatusBubble()
     }
 
@@ -210,7 +246,7 @@ struct NewConversationView: View {
             } else if !searchQuery.isEmpty {
                 Button {
                     searchQuery = ""
-                    viewModel.searchResults = []
+                    viewModel.clearSearch()
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .font(.system(size: 14))

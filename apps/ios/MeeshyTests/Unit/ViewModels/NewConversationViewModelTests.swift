@@ -85,27 +85,72 @@ final class NewConversationViewModelTests: XCTestCase {
 
     func test_performSearch_apiFailure_clearsResultsAndStopsSpinner() async {
         let (sut, api) = makeSUT()
+
+        // Drive the state via the real pipeline (no `searchResults = [...]`
+        // — that property is `private(set)` so the view can never mutate it
+        // directly, and the test honours the same contract).
+        api.stub(
+            "/users/search",
+            result: Self.makeSearchResponse(users: [("u-1", "alice")])
+        )
+        await sut.performSearch(query: "first")
+        XCTAssertFalse(sut.searchResults.isEmpty)
+
         api.errorToThrow = NSError(domain: "TestNetwork", code: 503)
+        await sut.performSearch(query: "second")
 
-        // Seed prior results so we can prove they're wiped on failure.
-        sut.searchResults = [Self.makeUser(id: "stale", username: "stale")]
-
-        await sut.performSearch(query: "anything")
-
-        XCTAssertTrue(sut.searchResults.isEmpty)
+        XCTAssertTrue(sut.searchResults.isEmpty, "Failure must clear previously displayed results")
         XCTAssertFalse(sut.isSearching)
     }
 
-    func test_search_shortQuery_clearsResultsWithoutNetwork() {
+    func test_search_shortQuery_clearsResultsWithoutNetwork() async {
         let (sut, api) = makeSUT()
-        sut.searchResults = [Self.makeUser(id: "x", username: "x")]
-        sut.isSearching = true
 
-        sut.search(query: "a")  // 1 char
+        // Populate via the real pipeline first.
+        api.stub(
+            "/users/search",
+            result: Self.makeSearchResponse(users: [("u-1", "alice")])
+        )
+        await sut.performSearch(query: "first")
+        let baselineRequestCount = api.requestCount
+        XCTAssertFalse(sut.searchResults.isEmpty)
+
+        sut.search(query: "a")  // 1 char — below threshold
 
         XCTAssertTrue(sut.searchResults.isEmpty)
         XCTAssertFalse(sut.isSearching)
-        XCTAssertEqual(api.requestCount, 0, "No network call must happen below the 2-char threshold")
+        XCTAssertEqual(
+            api.requestCount, baselineRequestCount,
+            "No network call must happen below the 2-char threshold"
+        )
+    }
+
+    // MARK: - dismissError / clearSearch (encapsulation contract)
+
+    func test_dismissError_clearsErrorMessage() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = NSError(domain: "TestNetwork", code: 500)
+        await sut.createConversation(
+            selectedUsers: [Self.makeUser(id: "u-1", username: "alice")],
+            groupTitle: ""
+        )
+        XCTAssertNotNil(sut.errorMessage)
+
+        sut.dismissError()
+
+        XCTAssertNil(sut.errorMessage)
+    }
+
+    func test_clearSearch_resetsResultsAndSpinner() async {
+        let (sut, api) = makeSUT()
+        api.stub("/users/search", result: Self.makeSearchResponse(users: [("u-1", "alice")]))
+        await sut.performSearch(query: "first")
+        XCTAssertFalse(sut.searchResults.isEmpty)
+
+        sut.clearSearch()
+
+        XCTAssertTrue(sut.searchResults.isEmpty)
+        XCTAssertFalse(sut.isSearching)
     }
 
     // MARK: - createConversation

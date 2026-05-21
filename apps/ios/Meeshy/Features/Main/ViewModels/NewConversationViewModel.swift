@@ -18,10 +18,10 @@ final class NewConversationViewModel: ObservableObject {
 
     // MARK: - Published state
 
-    @Published var searchResults: [SearchedUser] = []
-    @Published var isSearching = false
-    @Published var isCreating = false
-    @Published var errorMessage: String?
+    @Published private(set) var searchResults: [SearchedUser] = []
+    @Published private(set) var isSearching = false
+    @Published private(set) var isCreating = false
+    @Published private(set) var errorMessage: String?
     /// Set after a successful `createConversation` so the view can dismiss
     /// itself and trigger navigation. Cleared back to `nil` by `consume…`.
     @Published private(set) var createdConversation: MeeshyConversation?
@@ -131,6 +131,24 @@ final class NewConversationViewModel: ObservableObject {
     /// re-rendered view) doesn't navigate twice.
     func consumeCreatedConversation() {
         createdConversation = nil
+    }
+
+    /// Clears the latest error so the view's alert can dismiss without the
+    /// view mutating `@Published` state directly. Calling this from the
+    /// alert's `isPresented` binding keeps the encapsulation contract:
+    /// only the ViewModel writes its own state.
+    func dismissError() {
+        errorMessage = nil
+    }
+
+    /// Used by the view's search field clear button so the view does not
+    /// have to write into `searchResults` directly (which would defeat the
+    /// MVVM encapsulation we are extracting in P4.1).
+    func clearSearch() {
+        searchTask?.cancel()
+        searchTask = nil
+        searchResults = []
+        isSearching = false
     }
 
     // MARK: - Body
