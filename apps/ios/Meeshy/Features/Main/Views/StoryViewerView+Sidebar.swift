@@ -309,10 +309,9 @@ struct StoryActionSidebarView: View {
                                 }
                                 guard let story = currentStory else { return }
                                 Task {
-                                    let body: [String: String] = ["targetLanguage": lang.id]
-                                    let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
-                                        endpoint: "/posts/\(story.id)/translate",
-                                        body: body
+                                    await StoryInteractionService().requestTranslation(
+                                        storyId: story.id,
+                                        targetLanguage: lang.id
                                     )
                                 }
                             } label: {

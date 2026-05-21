@@ -859,19 +859,12 @@ extension StoryViewerView {
         // Send to API
         let language = composerLanguage
         Task {
-            var body: [String: AnyCodable] = [
-                "content": AnyCodable(text),
-                "originalLanguage": AnyCodable(language),
-            ]
-            if let effectFlags {
-                body["effectFlags"] = AnyCodable(effectFlags)
-            }
-            if let parentId {
-                body["parentId"] = AnyCodable(parentId)
-            }
-            let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
-                endpoint: "/posts/\(story.id)/comments",
-                body: body
+            await StoryInteractionService().postComment(
+                storyId: story.id,
+                content: text,
+                originalLanguage: language,
+                effectFlags: effectFlags,
+                parentId: parentId
             )
         }
 
@@ -888,11 +881,7 @@ extension StoryViewerView {
 
         // Fire & forget like
         Task {
-            let body = ReactionRequest(emoji: emoji)
-            let _: APIResponse<[String: AnyCodable]>? = try? await APIClient.shared.post(
-                endpoint: "/posts/\(story.id)/like",
-                body: body
-            )
+            await StoryInteractionService().react(storyId: story.id, emoji: emoji)
         }
     }
 
