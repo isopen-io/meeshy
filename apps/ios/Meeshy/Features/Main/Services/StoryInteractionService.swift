@@ -76,6 +76,38 @@ final class StoryInteractionService {
         }
     }
 
+    /// Fetches the list of viewers (with their optional reaction emoji)
+    /// for a story. Unlike the 3 fire-and-forget methods above, this one
+    /// returns data the view layer actually renders — the silent-swallow
+    /// pattern would just give the user an empty viewer list with no
+    /// recourse, so we surface the error to the caller via the optional
+    /// return. A `nil` result means "couldn't load — keep the previous
+    /// list / show empty state"; an empty array means "loaded, no one
+    /// has seen this story yet".
+    func loadViewers(storyId: String) async -> [StoryViewerSnapshot]? {
+        do {
+            let response: APIResponse<StoryViewersWireResponse> = try await api.request(
+                endpoint: "/posts/\(storyId)/interactions",
+                method: "GET",
+                body: nil,
+                queryItems: nil
+            )
+            return response.data.viewers.map { wire in
+                StoryViewerSnapshot(
+                    id: wire.id,
+                    username: wire.username,
+                    displayName: wire.displayName ?? wire.username,
+                    avatarUrl: wire.avatarUrl,
+                    viewedAt: wire.viewedAt ?? Date(),
+                    reactionEmoji: wire.reaction
+                )
+            }
+        } catch {
+            Self.logger.error("Failed to load viewers for story \(storyId, privacy: .public): \(error.localizedDescription)")
+            return nil
+        }
+    }
+
     /// Toggles the user's reaction (emoji) on a story. Fire-and-forget:
     /// the optimistic UI in the viewer already flipped the like badge.
     func react(storyId: String, emoji: String) async {
@@ -114,4 +146,37 @@ final class StoryInteractionService {
         }
     }
 
+}
+
+/// View-layer snapshot of a single story viewer. Doesn't try to be a
+/// rich domain type — just the fields `StoryViewersSheet` needs.
+/// `StoryViewerItem` (in `StoryViewerView+Content.swift`) is mapped
+/// from this struct at the view boundary so the existing rendering
+/// code keeps working without churn.
+struct StoryViewerSnapshot: Equatable, Identifiable {
+    let id: String
+    let username: String
+    let displayName: String
+    let avatarUrl: String?
+    let viewedAt: Date
+    let reactionEmoji: String?
+}
+
+/// Wire shape returned by `GET /posts/{id}/interactions`.
+///
+/// Left `internal` (rather than `private`) so the test bundle can
+/// declare matching stubs via `MockAPIClientForApp.stub`. Views MUST
+/// NOT use this type directly — consume `StoryViewerSnapshot` instead.
+/// (The view boundary is enforced by convention, not by access level,
+/// because Swift doesn't have a "test-only public" visibility.)
+struct StoryViewersWireResponse: Decodable {
+    struct Viewer: Decodable {
+        let id: String
+        let username: String
+        let displayName: String?
+        let avatarUrl: String?
+        let viewedAt: Date?
+        let reaction: String?
+    }
+    let viewers: [Viewer]
 }

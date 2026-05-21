@@ -1134,31 +1134,23 @@ struct StoryViewersSheet: View {
         .listRowBackground(ThemeManager.shared.mode.isDark ? Color(UIColor.secondarySystemGroupedBackground) : Color.white)
     }
 
-    struct ViewersResponse: Decodable {
-        struct ViewerApi: Decodable {
-            let id: String
-            let username: String
-            let displayName: String?
-            let avatarUrl: String?
-            let viewedAt: Date?
-            let reaction: String?
-        }
-        let viewers: [ViewerApi]
-    }
-
     private func loadViewers() async {
-        let response: APIResponse<ViewersResponse>? = try? await APIClient.shared.request(endpoint: "/posts/\(story.id)/interactions")
-
+        // M1 follow-up: the wire-shape decoding + nullable-field
+        // defaulting now lives in StoryInteractionService.loadViewers.
+        // A nil result here means "couldn't load" (logged at fault level
+        // in the service) — we leave the previous list alone, matching
+        // the prior swallow-and-show-empty behaviour.
+        let snapshots = await StoryInteractionService().loadViewers(storyId: story.id)
         await MainActor.run {
-            if let apiViewers = response?.data.viewers {
-                self.viewers = apiViewers.map { v in
+            if let snapshots {
+                self.viewers = snapshots.map { s in
                     StoryViewerItem(
-                        id: v.id,
-                        username: v.username,
-                        displayName: v.displayName ?? v.username,
-                        avatarUrl: v.avatarUrl,
-                        viewedAt: v.viewedAt ?? Date(),
-                        reactionEmoji: v.reaction,
+                        id: s.id,
+                        username: s.username,
+                        displayName: s.displayName,
+                        avatarUrl: s.avatarUrl,
+                        viewedAt: s.viewedAt,
+                        reactionEmoji: s.reactionEmoji,
                         replyContent: nil,
                         hasReshared: false
                     )

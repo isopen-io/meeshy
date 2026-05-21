@@ -138,4 +138,70 @@ final class StoryInteractionServiceTests: XCTestCase {
         await sut.react(storyId: Self.storyId, emoji: "❤️")
         XCTAssertEqual(api.postCount, 2)
     }
+
+    // MARK: - loadViewers (returns data, so we can assert structure)
+
+    private func makeViewersResponse(count: Int) -> APIResponse<StoryViewersWireResponse> {
+        // The mock's stub lookup goes via `as? APIResponse<T>` so we
+        // need to stub with the exact generic the service requests.
+        // `StoryViewersWireResponse` is intentionally non-private on
+        // the service for this reason — documented at its definition.
+        let viewers = (0..<count).map { i in
+            """
+            {
+              "id":"viewer-\(i)",
+              "username":"user\(i)",
+              "displayName":\(i.isMultiple(of: 2) ? "null" : "\"User \(i)\""),
+              "avatarUrl":null,
+              "viewedAt":"2026-05-21T12:0\(i):00.000Z",
+              "reaction":\(i == 0 ? "\"🔥\"" : "null")
+            }
+            """
+        }
+        return JSONStub.decode("""
+        {
+          "success": true,
+          "data": { "viewers": [\(viewers.joined(separator: ","))] },
+          "error": null
+        }
+        """)
+    }
+
+    func test_loadViewers_success_returnsConvertedSnapshots() async {
+        let (sut, api) = makeSUT()
+        let endpoint = "/posts/\(Self.storyId)/interactions"
+        api.stub(endpoint, result: makeViewersResponse(count: 3))
+
+        let result = await sut.loadViewers(storyId: Self.storyId)
+
+        XCTAssertNotNil(result)
+        XCTAssertEqual(result?.count, 3)
+        // Viewer 0 has null displayName → defaults to username
+        XCTAssertEqual(result?[0].displayName, "user0")
+        XCTAssertEqual(result?[0].reactionEmoji, "🔥")
+        // Viewer 1 has explicit displayName
+        XCTAssertEqual(result?[1].displayName, "User 1")
+        XCTAssertNil(result?[1].reactionEmoji)
+    }
+
+    func test_loadViewers_apiFailure_returnsNil() async {
+        let (sut, api) = makeSUT()
+        api.errorToThrow = NSError(domain: "TestNetwork", code: 500)
+
+        let result = await sut.loadViewers(storyId: Self.storyId)
+
+        XCTAssertNil(result,
+                     "nil signals to the view 'keep previous list' — not 'empty list'")
+    }
+
+    func test_loadViewers_empty_returnsEmptyArray() async {
+        let (sut, api) = makeSUT()
+        let endpoint = "/posts/\(Self.storyId)/interactions"
+        api.stub(endpoint, result: makeViewersResponse(count: 0))
+
+        let result = await sut.loadViewers(storyId: Self.storyId)
+
+        XCTAssertEqual(result, [],
+                       "empty array means 'loaded, nobody has viewed yet'")
+    }
 }
