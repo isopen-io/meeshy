@@ -197,12 +197,16 @@ extension StoryBackgroundLayer {
                 hasVisual = true
             }
 
-            // backgroundColor noir UNIQUEMENT si aucun visuel placeholder n'est
-            // disponible — sinon le ThumbHash ou le bitmap chaud couvre déjà
-            // la totalité du frame, le noir serait une couche perdue (parfois
-            // visible 1-2 frames pendant un re-layout). Quand un placeholder
-            // existe on garde transparent ; sinon noir.
-            backgroundColor = hasVisual ? UIColor.clear.cgColor : UIColor.black.cgColor
+            // Toujours `.clear` : le parent (`StoryCanvasUIView` lui-même
+            // déjà `.clear`, qui laisse voir le composer ou le viewer
+            // derrière) porte le fond cinéma. Avant ce changement on posait
+            // un `.black` cgColor en fallback "aucun visuel" ; pendant les
+            // transitions (slide change, rebuildLayers pendant un edit /
+            // validation d'élément) cette couche flashait NOIR ~1 frame
+            // avant que le bitmap réel arrive — exactement le scintillement
+            // décrit par l'utilisateur. Garder `.clear` rend la couche
+            // muette pendant la latence d'async ; le parent reste visible.
+            backgroundColor = UIColor.clear.cgColor
 
             // Charge le bitmap réel par-dessus le placeholder thumbHash.
             // Trois sources, dans l'ordre : (1) cache image fourni par le
@@ -253,8 +257,12 @@ extension StoryBackgroundLayer {
                 return resolver?(postMediaId)
             }()
             guard let remoteURL = resolvedURL else {
-                // No URL at all → black floor (rien à afficher).
-                backgroundColor = UIColor.black.cgColor
+                // Pas d'URL : on laisse le layer transparent, le parent
+                // (composer / viewer) porte le fond. Évite un flash noir
+                // pendant qu'une vidéo de fond async se résout (le
+                // resolver peut retourner nil 1-2 frames le temps que le
+                // postMediaId soit enregistré côté cache).
+                backgroundColor = UIColor.clear.cgColor
                 break
             }
 
@@ -273,8 +281,9 @@ extension StoryBackgroundLayer {
             }
 
             // Cache miss : placeholder ThumbHash dans un sublayer si dispo,
-            // sinon backgroundColor noir (seulement ici, fallback strict).
-            var placeholderApplied = false
+            // sinon on garde le layer transparent (le parent porte le fond
+            // cinéma — ne JAMAIS forcer un `.black` ici, ça provoque le
+            // flash NOIR transitoire pendant les rebuildLayers).
             if let hash = thumbHash,
                let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
                 let placeholder = CALayer()
@@ -284,9 +293,8 @@ extension StoryBackgroundLayer {
                 placeholder.masksToBounds = true
                 addSublayer(placeholder)
                 contentLayer = placeholder
-                placeholderApplied = true
             }
-            backgroundColor = placeholderApplied ? UIColor.clear.cgColor : UIColor.black.cgColor
+            backgroundColor = UIColor.clear.cgColor
 
             // Précache async puis play. AVPlayerLayer s'ajoute par-dessus
             // le placeholder, qui disparaît visuellement quand la vidéo joue.

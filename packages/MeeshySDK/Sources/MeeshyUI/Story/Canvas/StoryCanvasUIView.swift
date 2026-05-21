@@ -815,7 +815,7 @@ public final class StoryCanvasUIView: UIView {
             if scheduledFresh {
                 audioMixer.applyDefaultBackgroundEnvelope(
                     originHost: origin,
-                    slideDuration: slide.effectiveSlideDuration()
+                    slideDuration: slide.computedTotalDuration()
                 )
             }
         } catch {
@@ -1804,7 +1804,7 @@ public final class StoryCanvasUIView: UIView {
     @objc private func displayLinkTick(_ link: CADisplayLink) {
         let dt = link.targetTimestamp - link.timestamp
         let nextSeconds = CMTimeGetSeconds(currentTime) + dt
-        let effectiveDuration = slide.effectiveSlideDuration()
+        let effectiveDuration = slide.computedTotalDuration()
         let clamped = min(nextSeconds, effectiveDuration)
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
         // Publie le playhead pour les overlays SwiftUI (chip audio
@@ -1829,7 +1829,7 @@ public final class StoryCanvasUIView: UIView {
     /// Test-only seam: simulate a displayLink tick at a specific timestamp
     /// to validate completion logic without spinning a real CADisplayLink.
     public func simulateTickAt(seconds: Double) {
-        let effectiveDuration = slide.effectiveSlideDuration()
+        let effectiveDuration = slide.computedTotalDuration()
         currentTime = CMTime(seconds: seconds, preferredTimescale: 600_000)
         rebuildLayers()
         if !completionFired,
@@ -1839,6 +1839,7 @@ public final class StoryCanvasUIView: UIView {
             readerContext.onCompletion?()
         }
     }
+
 
     // MARK: - ProMotion edit-mode link
 
