@@ -385,6 +385,15 @@ struct StoryHeaderView: View {
     let pauseTimer: () -> Void
     let dismissViewer: () -> Void
     let reportStory: (_ storyId: String, _ reportType: String, _ reason: String?) async throws -> Void
+    /// Toggle mode plein écran (session-scoped) exposé dans le menu hamburger.
+    /// Quand `true`, le chrome est caché par défaut pour la session entière
+    /// jusqu'au prochain toggle. Reseté par le parent quand le viewer se
+    /// ferme — pas de persistance cross-session voulue.
+    @Binding var isFullscreenStorySession: Bool
+    /// Visibilité courante du chrome — utilisée pour synchroniser
+    /// instantanément le glissement à l'activation du mode plein écran
+    /// (`isFullscreenStorySession = true` ⇒ `chromeVisible = false`).
+    @Binding var chromeVisible: Bool
 
     @State private var avatarLongPressGlow = false
 
@@ -508,6 +517,33 @@ struct StoryHeaderView: View {
 
             // Options menu (three dots)
             Menu {
+                // Toggle mode plein écran (session-scoped) — pertinent quelle
+                // que soit la propriété de la story. Placé en tête du menu
+                // pour être accessible immédiatement, avec un `Divider`
+                // suivant qui le sépare visuellement des actions destructives
+                // ou de partage propres à la story courante.
+                Button {
+                    HapticFeedback.light()
+                    isFullscreenStorySession.toggle()
+                    // Synchronise instantanément l'état au repos du chrome :
+                    // mode actif ⇒ caché ; mode inactif ⇒ visible. Le
+                    // touch-and-hold inversera ce repos pendant le hold.
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        chromeVisible = !isFullscreenStorySession
+                    }
+                } label: {
+                    Label(
+                        isFullscreenStorySession
+                            ? "Quitter le plein écran"
+                            : "Plein écran",
+                        systemImage: isFullscreenStorySession
+                            ? "arrow.down.right.and.arrow.up.left"
+                            : "arrow.up.left.and.arrow.down.right"
+                    )
+                }
+
+                Divider()
+
                 if let story = currentStory, let group = currentGroup {
                     if isOwnStory {
                         // External share via system share sheet (Messages,

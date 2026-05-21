@@ -25,44 +25,134 @@ struct StoryGestureOverlayView: View {
     let onNext: () -> Void
     let onPauseTimer: () -> Void
     let onResumeTimer: () -> Void
+    /// Callback de basculement du chrome — invoqué quand le seuil 200 ms est
+    /// franchi (touch-and-hold confirmé) et au relâchement, avec `visible:
+    /// Bool` qui suit la sémantique demandée :
+    /// - en mode normal (`isFullscreenStorySession == false`) : `false` au
+    ///   début du hold (on cache pour immersion), `true` au relâchement.
+    /// - en mode plein écran (`isFullscreenStorySession == true`) : inverse,
+    ///   `true` au début (on révèle), `false` au relâchement.
+    /// Le parent applique l'animation et coupe le clavier au besoin.
+    let onChromeVisibilityChange: (Bool) -> Void
+    /// État de session « plein écran » lu depuis le parent. Détermine le
+    /// sens du toggle du chrome au touch-and-hold (voir doc ci-dessus).
+    let isFullscreenStorySession: Bool
+
+    /// Seuil au-delà duquel un touch sur l'écran cesse d'être un tap de
+    /// navigation prev/next et devient un hold (pause + hide chrome).
+    private let holdThresholdSeconds: TimeInterval = 0.2
+    /// Marge horizontale autorisée avant qu'un drag soit considéré comme un
+    /// swipe (et donc ignoré par cet overlay — laissé au drag gesture parent
+    /// qui gère le dismiss).
+    private let dragSlopPixels: CGFloat = 14
+
+    @State private var touchStartTime: Date? = nil
+    @State private var touchStartLocation: CGPoint = .zero
+    /// `true` dès que le seuil 200 ms est franchi pendant un hold actif. Sert
+    /// à : (a) supprimer le tap nav prev/next à `.onEnded` (l'utilisateur
+    /// voulait pauser, pas naviguer), (b) garantir qu'on n'invoque pas deux
+    /// fois `onChromeVisibilityChange(hold-state)` si plusieurs ticks
+    /// `onChanged` arrivent après dépassement du seuil.
+    @State private var holdActive: Bool = false
+    /// `Task` armée au touchDown pour fire le hold à `holdThresholdSeconds`.
+    /// Annulée si le doigt bouge trop, est relâché tôt, ou si le composer
+    /// devient engaged en cours de geste.
+    @State private var holdArmingTask: Task<Void, Never>? = nil
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Left half — previous
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if isComposerEngaged { onDismissComposer(); return }
-                    onPrevious()
-                }
-                .accessibilityLabel("Story precedente")
-                .accessibilityHint("Toucher pour revenir a la story precedente")
-                .accessibilityAddTraits(.isButton)
-
-            // Right half — next
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if isComposerEngaged { onDismissComposer(); return }
-                    onNext()
-                }
-                .accessibilityLabel("Story suivante")
-                .accessibilityHint("Toucher pour passer a la story suivante")
-                .accessibilityAddTraits(.isButton)
-        }
-        // Exclude the bottom composer zone from tap targets
-        .padding(.bottom, 120 + geometry.safeAreaInsets.bottom)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.2)
-                .onChanged { _ in
-                    guard !isComposerEngaged else { return }
-                    onPauseTimer()
-                }
-                .onEnded { _ in
-                    guard !isComposerEngaged else { return }
-                    onResumeTimer()
-                }
-        )
+        Color.clear
+            .contentShape(Rectangle())
+            .accessibilityElement()
+            .accessibilityLabel("Lecteur de stories")
+            .accessibilityHint("Toucher à gauche pour la story précédente, à droite pour la suivante, maintenir pour mettre en pause")
+            // `DragGesture(minimumDistance: 0)` capture LE PREMIER touch-down
+            // ainsi que le release. C'est le seul moyen fiable en SwiftUI de
+            // distinguer un tap court d'un hold long sur la même hit-area —
+            // `simultaneousGesture(LongPressGesture)` perdait toujours la
+            // course contre `onTapGesture` car le tap fire au release tant
+            // qu'aucun mouvement significatif n'a eu lieu, et le release
+            // arrive bien avant la fin du holdThreshold.
+            // `simultaneousGesture` plutôt que `gesture` pour cohabiter avec
+            // le `unifiedDragGesture` parent (swipe down pour dismiss,
+            // minimumDistance: 15). Sans ça, notre DragGesture(minimumDistance:0)
+            // capturait l'évènement touchDown et le parent ne voyait plus
+            // jamais les swipes verticaux.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onChanged { value in
+                        guard !isComposerEngaged else { return }
+                        if touchStartTime == nil {
+                            // Touch DOWN — armer la détection du hold.
+                            touchStartTime = Date()
+                            touchStartLocation = value.startLocation
+                            holdActive = false
+                            holdArmingTask?.cancel()
+                            holdArmingTask = Task { @MainActor in
+                                try? await Task.sleep(for: .milliseconds(Int(holdThresholdSeconds * 1000)))
+                                if Task.isCancelled { return }
+                                if isComposerEngaged { return }
+                                holdActive = true
+                                onPauseTimer()
+                                // En mode normal : holding cache le chrome.
+                                // En mode plein écran : holding le révèle.
+                                onChromeVisibilityChange(isFullscreenStorySession)
+                            }
+                        } else {
+                            // Drag en cours — si le doigt bouge trop loin
+                            // dans n'importe quelle direction, on annule
+                            // le hold (l'utilisateur fait un swipe, pas un
+                            // touch-and-hold).
+                            let dx = value.location.x - touchStartLocation.x
+                            let dy = value.location.y - touchStartLocation.y
+                            if abs(dx) > dragSlopPixels || abs(dy) > dragSlopPixels {
+                                holdArmingTask?.cancel()
+                                if holdActive {
+                                    holdActive = false
+                                    onResumeTimer()
+                                    onChromeVisibilityChange(!isFullscreenStorySession)
+                                }
+                            }
+                        }
+                    }
+                    .onEnded { value in
+                        defer {
+                            touchStartTime = nil
+                            holdArmingTask?.cancel()
+                            holdArmingTask = nil
+                        }
+                        guard !isComposerEngaged else {
+                            onDismissComposer()
+                            return
+                        }
+                        let elapsed = touchStartTime.map { Date().timeIntervalSince($0) } ?? 0
+                        if holdActive {
+                            // Le hold a fait son job — on rétablit l'état au
+                            // repos sans déclencher de nav prev/next, et on
+                            // reprend le timer en pause.
+                            onResumeTimer()
+                            onChromeVisibilityChange(!isFullscreenStorySession)
+                            holdActive = false
+                            return
+                        }
+                        if elapsed >= holdThresholdSeconds {
+                            // Seuil franchi mais le tick `onChanged` n'a pas
+                            // encore appliqué le hold (rare, race d'ordre).
+                            // On considère que c'est tout de même un hold —
+                            // on ne navigue pas mais on n'a pas non plus
+                            // pausé : juste un no-op cohérent.
+                            return
+                        }
+                        // Tap court → navigation prev/next selon la moitié.
+                        let halfWidth = geometry.size.width / 2
+                        if value.startLocation.x < halfWidth {
+                            onPrevious()
+                        } else {
+                            onNext()
+                        }
+                    }
+            )
+            // Exclude the bottom composer zone from tap targets
+            .padding(.bottom, 120 + geometry.safeAreaInsets.bottom)
     }
 }
 
@@ -248,6 +338,17 @@ struct StoryCardView: View {
     @Binding var emojiToInject: String
     @Binding var composerFocusTrigger: Bool
     @Binding var storyDrafts: [String: StoryDraft]
+    /// Visibilité du chrome (header + sidebar + composer). Drivé par le parent
+    /// `StoryViewerView` selon les gestes (touch-and-hold) et l'état session
+    /// (mode plein écran via hamburger). Le `Binding` est nécessaire car le
+    /// touch-and-hold interne au canvas mute la valeur en temps réel.
+    @Binding var chromeVisible: Bool
+    /// Mode session « plein écran » toggleable depuis le menu hamburger « … »
+    /// du header. Quand actif, le chrome est caché par défaut pour TOUTE la
+    /// session story ; un touch-and-hold le révèle temporairement (sémantique
+    /// inversée par rapport au mode normal). Binding car le toggle vit dans
+    /// le hamburger menu, qui est rendu par le header — qui le mute donc.
+    @Binding var isFullscreenStorySession: Bool
 
     @ObservedObject var keyboard: KeyboardObserver
 
@@ -466,7 +567,24 @@ struct StoryCardView: View {
                 onPrevious: goToPrevious,
                 onNext: goToNext,
                 onPauseTimer: pauseTimer,
-                onResumeTimer: resumeTimer
+                onResumeTimer: resumeTimer,
+                onChromeVisibilityChange: { newValue in
+                    // Animation spring rapide (lecture immersive) avec un
+                    // léger overshoot pour donner du caractère au reveal et au
+                    // hide. Sortie clavier en parallèle si le composer était
+                    // engagé — le keyboard.hide() ne déclenche pas re-render
+                    // du composer s'il est déjà non-focused.
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        chromeVisible = newValue
+                    }
+                    if !newValue {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
+                },
+                isFullscreenStorySession: isFullscreenStorySession
             )
 
             // === Layer 6.5: Foreground audio chips ===
@@ -510,13 +628,24 @@ struct StoryCardView: View {
                     repostAsPostDirect: repostAsPostDirect,
                     pauseTimer: pauseTimer,
                     dismissViewer: dismissViewer,
-                    reportStory: reportStory
+                    reportStory: reportStory,
+                    isFullscreenStorySession: $isFullscreenStorySession,
+                    chromeVisible: $chromeVisible
                 )
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
 
                 Spacer()
             }
+            // Glissement vers le HAUT à la disparition + fondu. Le `.offset`
+            // négatif fait sortir progress bars + header de l'écran ; on
+            // ajoute une opacity 0 pour que l'élément reste totalement
+            // invisible lorsqu'il est positionné juste en dehors du safe area
+            // (sinon un sliver pixelé peut traîner sur certaines tailles).
+            .offset(y: chromeVisible ? 0 : -(topInset + 120))
+            .opacity(chromeVisible ? 1 : 0)
+            .allowsHitTesting(chromeVisible)
+            .animation(.spring(response: 0.32, dampingFraction: 0.78), value: chromeVisible)
 
             // === Layer 8: Right action sidebar — centered vertically, right side ===
             // The sidebar is bounded between the header strip (top) and the
@@ -565,6 +694,14 @@ struct StoryCardView: View {
             .padding(.top, topReserved)
             .padding(.bottom, bottomReserved)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            // Glissement vers la DROITE à la disparition + fondu. L'offset
+            // de 110pt couvre largement la largeur du chip (max 48pt) + son
+            // padding-trailing (6pt) + un peu de marge pour les écrans sans
+            // bord arrondi. Hit-testing désactivé en plus de l'opacité 0 pour
+            // éviter qu'un tap fantôme atterrisse sur un bouton invisible.
+            .offset(x: chromeVisible ? 0 : 110)
+            .opacity(chromeVisible ? 1 : 0)
+            .allowsHitTesting(chromeVisible)
 
             // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
             if let emoji = bigReactionEmoji {
@@ -651,6 +788,15 @@ struct StoryCardView: View {
             .padding(.bottom, composerBottomPadding(geometry))
             .animation(.easeInOut(duration: 0.25), value: keyboard.height)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)
+            // Glissement vers le BAS à la disparition + fondu. L'offset 240pt
+            // couvre l'ensemble composer + picker emoji + safe area inférieure
+            // pour les iPhones les plus grands ; le composant étant ancré
+            // bottom via `Spacer()`, c'est suffisant pour le sortir totalement
+            // du viewport. Hit-testing OFF en plus pour ne pas intercepter
+            // les taps même invisible.
+            .offset(y: chromeVisible ? 0 : 240)
+            .opacity(chromeVisible ? 1 : 0)
+            .allowsHitTesting(chromeVisible)
 
             // Full emoji picker — REACTIONS ONLY (sends via API)
             if showFullEmojiPicker {

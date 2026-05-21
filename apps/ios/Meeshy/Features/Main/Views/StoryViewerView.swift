@@ -126,6 +126,20 @@ struct StoryViewerView: View {
     @State var hasFiredFadeOut = false // internal for cross-file extension access
     @State var hasFiredNextPrefetch = false // déclencheur du prefetch de la slide N+1, armé à 5s de la fin de la slide en cours pour que la transition soit fluide.
 
+    /// Visibilité du chrome (header, sidebar droite, composer) — animé par
+    /// glissements directionnels. En mode normal `chromeVisible = true` au
+    /// repos, passe à `false` pendant un touch-and-hold pour révéler le
+    /// contenu en pleine surface (typique « immersion lecture »). En mode
+    /// `isFullscreenStorySession`, l'état au repos est inversé : `false`,
+    /// révélé temporairement par le toucher.
+    @State var chromeVisible: Bool = true // internal for cross-file extension access
+
+    /// Mode "plein écran" toggleable via le menu hamburger « … ». Quand actif,
+    /// le chrome est caché par défaut pour TOUTE la session story (jusqu'au
+    /// prochain toggle), et n'apparaît que pendant un touch-and-hold. La
+    /// distinction avec le toggle ponctuel : ici l'état au repos est inversé.
+    @State var isFullscreenStorySession: Bool = false // internal for cross-file extension access
+
     // MARK: - P3 wire-up : Prefetcher + gated timer
     //
     // `StoryReaderPrefetcher` maintains a sliding window of 3 bootstrapped
@@ -814,6 +828,8 @@ struct StoryViewerView: View {
             emojiToInject: $emojiToInject,
             composerFocusTrigger: $composerFocusTrigger,
             storyDrafts: $storyDrafts,
+            chromeVisible: $chromeVisible,
+            isFullscreenStorySession: $isFullscreenStorySession,
             keyboard: keyboard,
             triggerStoryReaction: { triggerStoryReaction($0) },
             pauseTimer: { pauseTimer() },
