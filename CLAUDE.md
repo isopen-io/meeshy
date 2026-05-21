@@ -327,7 +327,11 @@ Always use `./apps/ios/meeshy.sh`:
 ```
 
 ### Test Credentials
-- Username: `atabeth` / Password: `pD5p1ir9uxLUf2X2FpNE`
+Stored out-of-tree in `apps/ios/fastlane/.env` (gitignored). The
+fastlane `release` lane reads `DEMO_USER` / `DEMO_PASSWORD` from
+there and forwards them to App Review. Ask the team for the values
+or pull from the production password manager — never inline them
+in this file again.
 
 ### Redis Rate Limit Reset
 ```bash

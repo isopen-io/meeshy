@@ -536,7 +536,7 @@ git commit -m "refactor(ios): AudioMediaView — vue audio unifiée, supprime le
 - [ ] **Step 1: Lancer l'app**
 
 Run: `./apps/ios/meeshy.sh run`
-(Connexion : `atabeth` / `pD5p1ir9uxLUf2X2FpNE` si nécessaire.)
+(Connexion : `atabeth` / `<DEMO_PASSWORD — see apps/ios/fastlane/.env>` si nécessaire.)
 
 - [ ] **Step 2: Reproduire l'envoi audio**
 

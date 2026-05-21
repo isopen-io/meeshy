@@ -1249,7 +1249,7 @@ Expected: les 6 tests de Task 1 + les 3 tests Equatable de Task 4 + suite global
 ./apps/ios/meeshy.sh run
 ```
 
-Une fois l'app lancée, login `atabeth` / `pD5p1ir9uxLUf2X2FpNE`, ouvrir une conversation et envoyer **dans l'ordre** :
+Une fois l'app lancée, login `atabeth` / `<DEMO_PASSWORD — see apps/ios/fastlane/.env>`, ouvrir une conversation et envoyer **dans l'ordre** :
 
 1. **Reply audio à un message texte** → vérifier widget audio sans chat bubble parasite ; carte citation visible **au-dessus** du player, dans le même `playerBackground` ; tap citation = scroll vers le message d'origine.
 2. **Reply audio à une story** → idem, avec `BubbleStoryReplyPreview` (icône camera + compteurs réactions/comments).

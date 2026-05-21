@@ -186,8 +186,12 @@ platform :ios do
         add_id_info_uses_idfa: false
       },
       app_review_information: {
-        demo_user: "atabeth",
-        demo_password: "pD5p1ir9uxLUf2X2FpNE",
+        # Read from apps/ios/fastlane/.env (gitignored). The dotenv gem
+        # auto-loads that file when fastlane runs from this directory.
+        # We crash loudly on missing values rather than ship an empty
+        # `demo_user` to App Review.
+        demo_user: ENV.fetch("DEMO_USER") { UI.user_error!("DEMO_USER is unset — populate apps/ios/fastlane/.env before submitting") },
+        demo_password: ENV.fetch("DEMO_PASSWORD") { UI.user_error!("DEMO_PASSWORD is unset — populate apps/ios/fastlane/.env before submitting") },
         notes: "Use these credentials to log in and test all features: messaging, social feed, stories, voice/video calls, and translation."
       }
     )
