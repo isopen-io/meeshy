@@ -92,16 +92,14 @@
   - [x] 4 tests : buffering, dedup, drop-stale, cap+drop-oldest
 - **Scope volontairement étroit** : pas de framework générique parce qu'il n'y a qu'un seul vrai consommateur. Si d'autres événements émergent, l'extension est mécanique.
 
-### [P2.2] Re-auth socket sur token refresh
-- **Cible** : `MessageSocketManager.swift`, `SocialSocketManager.swift`, `AuthManager.swift`
-- **Plan** :
-  - [ ] Test : `MessageSocketManagerTests.test_tokenRefresh_reconnectsWithNewToken`
-  - [ ] `AuthManager` publie un `tokenDidRefresh` (Combine `PassthroughSubject<String, Never>`)
-  - [ ] Socket managers s'abonnent et soit :
-    - réémettent un `auth:refresh` côté serveur si l'API gateway le supporte (à vérifier)
-    - soit déconnectent proprement + reconnectent avec le nouveau token (fallback générique)
-  - [ ] Sur 401 reçu via socket ack → triggers `AuthManager.refreshIfNeeded()`
-- **Préreq** : confirmer que le gateway accepte `auth:refresh` ou exige reconnect (audit gateway si besoin)
+### [P2.2] Re-auth socket sur token refresh ✅
+- **Statut** : **VALIDÉ — déjà implémenté correctement**. L'audit était trop prudent.
+- **Preuve** : `AuthManager.applySession:389` détecte `isTokenRotation` (même userId déjà authentifié), puis `MessageSocketManager.shared.forceReconnect()` + `SocialSocketManager.shared.forceReconnect()` aux lignes 405-408. `forceReconnect()` lit `APIClient.shared.authToken` frais (déjà MAJ ligne 399), donc reconnecte avec le nouveau JWT.
+- **Plan livré (durcissement)** :
+  - [x] Extraction de `isTokenRotation(currentlyAuthenticated:currentActiveUserId:newUserId:)` en fonction pure `nonisolated static`
+  - [x] Publisher `tokenDidRotate: PassthroughSubject<Void, Never>` exposé pour NSE, widgets, futurs consommateurs
+  - [x] 4 tests couvrant les 4 branches du prédicat (same user + auth → true ; cold start → false ; user switch → false ; nil active id → false)
+- **Note** : les erreurs socket level ne déclenchent intentionnellement PAS de refresh (false-positive lockouts historiques) — seul l'APIClient 401 path le fait. Cohérent.
 
 ---
 

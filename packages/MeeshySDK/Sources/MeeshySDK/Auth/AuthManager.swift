@@ -72,6 +72,18 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// All accounts that have saved credentials on this device, sorted by most recently active.
     @Published public var savedAccounts: [SavedAccount] = []
 
+    /// Fires every time the SDK rotates the JWT for the currently active
+    /// user — i.e. `applySession` ran while the same userId was already
+    /// authenticated. `MessageSocketManager` already reacts to this via a
+    /// direct `forceReconnect()` call inside `applySession`; the publisher
+    /// is exposed so other long-lived subscribers (NSE, widgets) can also
+    /// react to a fresh token without coupling to `MessageSocketManager`.
+    ///
+    /// P2.2 — the audit suspected this signal was missing; in fact the
+    /// direct socket-reconnect chain has existed since the initial
+    /// implementation. The publisher pins the contract for future readers.
+    public let tokenDidRotate = PassthroughSubject<Void, Never>()
+
     // MARK: - Protocol Publisher
 
     public var currentUserPublisher: AnyPublisher<MeeshyUser?, Never> {
@@ -378,6 +390,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Internal session helpers
 
+    /// Pure helper exposed for tests: returns true iff a new
+    /// `applySession(token:sessionToken:user:)` call constitutes a token
+    /// rotation (same user already authenticated). Pulled out of
+    /// `applySession` so the contract can be pinned without driving the
+    /// full keychain / sockets side effects.
+    nonisolated static func isTokenRotation(
+        currentlyAuthenticated: Bool,
+        currentActiveUserId: String?,
+        newUserId: String
+    ) -> Bool {
+        currentlyAuthenticated && currentActiveUserId == newUserId
+    }
+
     private func applySession(token: String, sessionToken: String?, user: MeeshyUser) {
         let userId = user.id
         // Capture BEFORE we mutate state. If we were already authenticated
@@ -386,7 +411,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // The `onChange(isAuthenticated:)` observer in MeeshyApp would
         // otherwise miss this transition because the boolean stays true
         // throughout the rotation.
-        let isTokenRotation = isAuthenticated && activeUserId == userId
+        let isTokenRotation = Self.isTokenRotation(
+            currentlyAuthenticated: isAuthenticated,
+            currentActiveUserId: activeUserId,
+            newUserId: userId
+        )
 
         try? keychain.save(token, forKey: tokenKey(for: userId))
         if let sessionToken = sessionToken, !sessionToken.isEmpty {
@@ -405,6 +434,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         if isTokenRotation {
             MessageSocketManager.shared.forceReconnect()
             SocialSocketManager.shared.forceReconnect()
+            tokenDidRotate.send(())
         }
     }
 
