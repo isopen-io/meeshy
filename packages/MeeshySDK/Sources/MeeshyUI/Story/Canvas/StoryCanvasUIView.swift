@@ -87,13 +87,16 @@ public final class StoryCanvasUIView: UIView {
             // `.play` mode. `reconfigureAudioForPlayback()` guards on the
             // revision token, so this fires at most once per slide change.
             if mode == .play {
-                // Reset le mute per-piste — la nouvelle slide a ses propres
-                // ids d'audio et démarre nécessairement « son audible ».
-                StoryReaderAudioMuteRegistry.shared.clear()
-                lastAppliedMutedSet.removeAll()
-                // Reset le playhead — la nouvelle slide repart de 0 et le
-                // displayLinkTick reprendra à publier.
-                StoryReaderPlayheadState.shared.reset()
+                // Reset le mute per-piste + le playhead uniquement quand
+                // l'id de slide change (pas sur chaque mutation mineure
+                // comme un keyframe). Sinon on perdrait l'état mute au
+                // milieu de la lecture si la slide est dirty-mise-à-jour
+                // (rare en `.play` mais le garde-fou est cheap).
+                if oldValue.id != slide.id {
+                    StoryReaderAudioMuteRegistry.shared.clear()
+                    lastAppliedMutedSet.removeAll()
+                    StoryReaderPlayheadState.shared.reset()
+                }
                 reconfigureAudioForPlayback()
                 startAudioPlayback()
             }

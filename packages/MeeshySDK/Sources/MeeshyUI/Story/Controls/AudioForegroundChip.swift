@@ -147,9 +147,7 @@ public struct AudioForegroundChip: View {
 
     private var chipContent: some View {
         HStack(spacing: 8) {
-            Image(systemName: iconName)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(iconStyle)
+            iconView
                 .frame(width: 18, height: 18)
             AudioForegroundSineWave(paused: isUserMuted)
                 .frame(width: 54, height: 18)
@@ -165,6 +163,21 @@ public struct AudioForegroundChip: View {
         .contentShape(Capsule())
     }
 
+    /// L'icône bascule entre un gradient brand (audible) et un gris clair
+    /// (mutée). Split en `@ViewBuilder` pour rester iOS 16 compatible :
+    /// `AnyShapeStyle` n'existe qu'à partir d'iOS 17, donc on applique deux
+    /// modifiers différents au lieu d'un computed `var: some ShapeStyle`.
+    @ViewBuilder
+    private var iconView: some View {
+        let icon = Image(systemName: iconName)
+            .font(.system(size: 14, weight: .bold))
+        if isUserMuted {
+            icon.foregroundColor(.white.opacity(0.55))
+        } else {
+            icon.foregroundStyle(MeeshyColors.brandGradient)
+        }
+    }
+
     /// `isUserMuted` ne s'applique qu'au mode reader (la registry n'a pas de
     /// sens pour les audios en cours d'édition côté composer).
     private var isUserMuted: Bool {
@@ -173,12 +186,6 @@ public struct AudioForegroundChip: View {
 
     private var iconName: String {
         isUserMuted ? "waveform.slash" : "waveform"
-    }
-
-    private var iconStyle: AnyShapeStyle {
-        isUserMuted
-            ? AnyShapeStyle(Color.white.opacity(0.55))
-            : AnyShapeStyle(MeeshyColors.brandGradient)
     }
 
     private var strokeColor: Color {
