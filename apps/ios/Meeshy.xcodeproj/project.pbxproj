@@ -420,6 +420,7 @@
 		STAB0001000100010001002 /* StoryActiveBridgeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STAB0001000100010001001 /* StoryActiveBridgeTests.swift */; };
 		SGDT0001000100010001002 /* StoryGestureDecisionsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = SGDT0001000100010001001 /* StoryGestureDecisionsTests.swift */; };
 		CLRT0001000100010001002 /* ComposerLanguageResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLRT0001000100010001001 /* ComposerLanguageResolverTests.swift */; };
+		AE6AF9B4AA7E4759A0A02D38 /* ThemedBackButtonTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 26375B0D72C248DB90C4AE91 /* ThemedBackButtonTests.swift */; };
 		STAV0001000100010001002 /* StoryActiveBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = STAV0001000100010001001 /* StoryActiveBridge.swift */; };
 		STEC0001000100010001002 /* StoryExpiredContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = STEC0001000100010001001 /* StoryExpiredContent.swift */; };
 		STET0001000100010001002 /* StoryExpiredContentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = STET0001000100010001001 /* StoryExpiredContentTests.swift */; };
@@ -924,6 +925,7 @@
 		STAB0001000100010001001 /* StoryActiveBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryActiveBridgeTests.swift; sourceTree = "<group>"; };
 		SGDT0001000100010001001 /* StoryGestureDecisionsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryGestureDecisionsTests.swift; sourceTree = "<group>"; };
 		CLRT0001000100010001001 /* ComposerLanguageResolverTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ComposerLanguageResolverTests.swift; sourceTree = "<group>"; };
+		26375B0D72C248DB90C4AE91 /* ThemedBackButtonTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ThemedBackButtonTests.swift; sourceTree = "<group>"; };
 		STAV0001000100010001001 /* StoryActiveBridge.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryActiveBridge.swift; sourceTree = "<group>"; };
 		STEC0001000100010001001 /* StoryExpiredContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExpiredContent.swift; sourceTree = "<group>"; };
 		STET0001000100010001001 /* StoryExpiredContentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoryExpiredContentTests.swift; sourceTree = "<group>"; };
@@ -1606,6 +1608,7 @@
 				ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */,
 				CMPAU0001000100010001000 /* ConversationComposerStateTests.swift */,
 				CLRT0001000100010001001 /* ComposerLanguageResolverTests.swift */,
+				26375B0D72C248DB90C4AE91 /* ThemedBackButtonTests.swift */,
 				TSTVWHLPR000G000G000001 /* Helpers */,
 				BBLM0001000100010001GRP /* Bubble */,
 				SKLN0002000100010001GRP /* Skeletons */,
@@ -2504,6 +2507,7 @@
 				STAB0001000100010001002 /* StoryActiveBridgeTests.swift in Sources */,
 				SGDT0001000100010001002 /* StoryGestureDecisionsTests.swift in Sources */,
 				CLRT0001000100010001002 /* ComposerLanguageResolverTests.swift in Sources */,
+				AE6AF9B4AA7E4759A0A02D38 /* ThemedBackButtonTests.swift in Sources */,
 				STNF0001000100010001002 /* StoryNotificationFlowTests.swift in Sources */,
 				BBLM0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleContentMatrixTests.swift in Sources */,
 				BFMT0001000100010001BLD /* MeeshyTests/Unit/Views/Bubble/BubbleFooterModelTests.swift in Sources */,
