@@ -114,14 +114,16 @@
 - **Plan livré (regression test)** :
   - [x] `test_loadMoreIfNeeded_concurrentCalls_makeExactlyOneAPIRequest` — 5 calls concurrents → 1 seule requête API. Pin le contrat pour les refactors futurs.
 
-### [P3.2] Purger `Locale.current` pour résolution de contenu
-- **Cible** : 4 sites identifiés (`ConversationView.swift:339, 346, 353, 397, 725`, `RegistrationViewModel.swift:146, 180, 187`)
-- **Plan** :
-  - [ ] Test : `LanguageResolverTests.test_resolveContentLanguage_ignoresDeviceLocale`
-  - [ ] Créer `ContentLanguageResolver` (struct pure) dans `MeeshySDK/Utils/` qui implémente l'ordre `systemLanguage > regionalLanguage > customDestinationLanguage > "fr"` (cf. CLAUDE.md ligne 38)
-  - [ ] Remplacer toutes les utilisations de `Locale.current` pour résolution **de contenu** (pas UI)
-  - [ ] Pour le `DateFormatter` dans ConversationView : utiliser `preferredContentLocale()` qui lit AuthManager.currentUser
-  - [ ] Pour `RegistrationViewModel` : laisser auto-suggestion mais préciser `editable: true` et ne pas écraser un choix explicite
+### [P3.2] Purger `Locale.current` pour résolution de contenu ✅
+- **Cible** : audit re-vérifié, seul **1 vrai site** sur les 4 listés
+  - `ConversationView.swift:725` (composer language fallback) → **violation réelle**, corrigée
+  - `ConversationView.swift:339/346/353/397` (DateFormatter section headers) → **UI chrome**, Locale.current est correct (CLAUDE.md autorise pour la langue d'interface)
+  - `RegistrationViewModel.swift:146/180/187` → **registration onboarding** sans préf utilisateur encore configurée → Locale.current est la meilleure source signal disponible
+  - `ClientInfoProvider:21` + `EdgeTranscriptionService:199` → diagnostics + SFSpeechRecognizer region matching → OK
+- **Plan livré** :
+  - [x] Composer fallback utilise maintenant `AuthManager.shared.currentUser?.preferredContentLanguages.first` (source canonique SDK, déjà testée)
+  - [x] Commentaire explicite citant la règle Prisme Linguistique pour bloquer les regressions futures
+- **Note méthodologique** : l'audit a sur-compté les violations. Locale.current = UI language est **autorisé** par CLAUDE.md. Le seul interdit est de l'utiliser pour la résolution de CONTENU (langue de traduction, langue de composition, langue de transcription).
 
 ---
 
