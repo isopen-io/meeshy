@@ -50,7 +50,8 @@ final class VoIPTokenStoreTests: XCTestCase {
         let date = Date(timeIntervalSince1970: 1_700_000_000)
 
         try await sut.save(token: "abc123", at: date)
-        let read = try XCTUnwrap(await sut.read())
+        let optional = await sut.read()
+        let read = try XCTUnwrap(optional)
 
         XCTAssertEqual(read.token, "abc123")
         XCTAssertEqual(read.at.timeIntervalSince1970, date.timeIntervalSince1970, accuracy: 0.001)
@@ -79,7 +80,8 @@ final class VoIPTokenStoreTests: XCTestCase {
         try await sut.save(token: "old", at: Date(timeIntervalSince1970: 0))
         try await sut.save(token: "new", at: Date(timeIntervalSince1970: 100))
 
-        let read = try XCTUnwrap(await sut.read())
+        let optional = await sut.read()
+        let read = try XCTUnwrap(optional)
         XCTAssertEqual(read.token, "new")
         XCTAssertEqual(read.at.timeIntervalSince1970, 100, accuracy: 0.001)
     }
@@ -94,7 +96,8 @@ final class VoIPTokenStoreTests: XCTestCase {
         defaults.set(legacyDate, forKey: legacyDateKey)
 
         let sut = makeSUT()
-        let migrated = try XCTUnwrap(await sut.migrateFromUserDefaultsIfNeeded())
+        let optional = await sut.migrateFromUserDefaultsIfNeeded()
+        let migrated = try XCTUnwrap(optional)
 
         XCTAssertEqual(migrated.token, "legacy_token_value")
         XCTAssertEqual(migrated.at.timeIntervalSince1970, legacyDate.timeIntervalSince1970, accuracy: 0.001)
@@ -131,7 +134,8 @@ final class VoIPTokenStoreTests: XCTestCase {
 
         // The keychain value wins; migration returns the existing record.
         XCTAssertEqual(migrated?.token, "fresh")
-        let read = try XCTUnwrap(await sut.read())
+        let optionalFresh = await sut.read()
+        let read = try XCTUnwrap(optionalFresh)
         XCTAssertEqual(read.token, "fresh")
         XCTAssertEqual(read.at.timeIntervalSince1970, freshDate.timeIntervalSince1970, accuracy: 0.001)
 
