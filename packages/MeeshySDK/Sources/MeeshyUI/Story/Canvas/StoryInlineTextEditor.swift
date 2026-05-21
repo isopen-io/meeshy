@@ -78,9 +78,46 @@ public final class StoryInlineTextEditor: UITextView {
         }
 
         placeholderLabel.font = resolved
-        placeholderLabel.textColor = color.withAlphaComponent(0.45)
+        // Le placeholder doit rester visible quelle que soit la couleur de
+        // texte choisie. On dérive sa teinte de la luminance de `color`
+        // pour garantir un contraste minimum :
+        //   - texte clair (slide sombre)  → placeholder blanc translucide
+        //   - texte sombre (slide claire) → placeholder noir translucide
+        // L'alpha 0.65 (vs 0.45 avant) donne un texte hint nettement plus
+        // lisible que la version précédente quasi-invisible.
+        placeholderLabel.textColor = Self.placeholderTint(for: color)
         placeholderLabel.textAlignment = align
         updatePlaceholderVisibility()
+    }
+
+    /// Ajuste les bounds pour englober tout le texte courant — appelé après
+    /// chaque mutation utilisateur via `textViewDidChange`. Sans ça les
+    /// caractères tapés débordaient des bounds dérivés de la calque
+    /// pré-édition et étaient clippés jusqu'au prochain `rebuildLayers()`
+    /// (cycle async via `viewModel`), donnant l'impression visuelle de mots
+    /// qui disparaissent pendant la saisie. Le centre est préservé pour
+    /// que la croissance se fasse symétriquement autour du point d'ancrage.
+    ///
+    /// Quand le texte est vide, on garantit une largeur minimum capable
+    /// d'afficher le placeholder — sinon une calque texte fraîchement
+    /// ajoutée a des bounds quasi-nulles (designSize ≈ 0 + 16 padding)
+    /// et l'invite "Exprimez-vous…" reste clippée à 6 px de large.
+    public func sizeToFitTextContent(maxWidth: CGFloat) {
+        let constraint = CGSize(width: max(maxWidth, 1), height: .greatestFiniteMagnitude)
+        let fit = sizeThatFits(constraint)
+        var width = min(fit.width, maxWidth)
+        var height = fit.height
+        if (text ?? "").isEmpty {
+            let phFit = placeholderLabel.sizeThatFits(constraint)
+            width = max(width, min(phFit.width, maxWidth))
+            height = max(height, phFit.height)
+        }
+        let next = CGSize(width: width, height: height)
+        guard next != bounds.size else { return }
+        let savedCenter = center
+        bounds.size = next
+        center = savedCenter
+        // `placeholderLabel.frame` est resynchronisé par `layoutSubviews`.
     }
 
     /// Masque le placeholder dès que le champ contient du texte.
@@ -101,6 +138,20 @@ public final class StoryInlineTextEditor: UITextView {
         case "right": return .right
         default:      return .center
         }
+    }
+
+    /// Choisit une teinte de placeholder qui contraste avec la couleur du
+    /// texte choisi par l'utilisateur. La luminance perçue (formule Rec.
+    /// 709) départage clair vs sombre — c'est plus robuste qu'un simple
+    /// `withAlphaComponent` qui rendait le placeholder invisible quand
+    /// `color` était proche du blanc (et le fond aussi).
+    private static func placeholderTint(for color: UIColor) -> UIColor {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        color.getRed(&r, green: &g, blue: &b, alpha: &a)
+        let luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b
+        return luminance > 0.5
+            ? UIColor.white.withAlphaComponent(0.65)
+            : UIColor.black.withAlphaComponent(0.55)
     }
 
     private static func color(hex: String?) -> UIColor? {

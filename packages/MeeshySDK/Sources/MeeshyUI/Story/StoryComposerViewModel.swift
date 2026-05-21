@@ -916,13 +916,17 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     func addText() -> StoryTextObject? {
         guard canAddText else { return nil }
         let center = CGPoint(x: 0.5, y: 0.5)
+        // fontSize en design units (référentiel 1080-px). 96 design ≈ 36 pt
+        // sur iPhone 16 Pro (scaleFactor ≈ 0.38) — taille parfaitement
+        // lisible. La valeur précédente de 24 produisait du 9 pt rendu
+        // (et un editor inline minuscule au moment de saisir).
         let obj = StoryTextObject(
             text: "",
             x: center.x,
             y: center.y,
             scale: 1.0,
             rotation: 0,
-            fontSize: 24,
+            fontSize: 96,
             textStyle: "classic",
             textColor: "FFFFFF",
             textAlign: "center",

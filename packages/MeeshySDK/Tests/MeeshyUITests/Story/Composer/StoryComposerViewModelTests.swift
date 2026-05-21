@@ -305,6 +305,17 @@ final class StoryComposerViewModelTests: XCTestCase {
         XCTAssertEqual(vm.selectedElementId, obj.id)
     }
 
+    /// Régression : `addText()` posait `fontSize: 24` en design units,
+    /// ce qui sur iPhone (scaleFactor ≈ 0.38) donnait du 9 pt rendu —
+    /// quasi-illisible dans l'éditeur inline. On garantit un minimum
+    /// design correspondant au défaut du modèle (96 ≈ 36 pt rendu).
+    func test_addText_usesReadableFontSize() {
+        let vm = makeSubject()
+        let obj = vm.addText()!
+        XCTAssertGreaterThanOrEqual(obj.fontSize, 64,
+            "fontSize design trop petite → texte illisible à l'écran")
+    }
+
     func test_deselectAll_clearsSelectionAndActiveTool() {
         let vm = makeSubject()
         _ = vm.addText()

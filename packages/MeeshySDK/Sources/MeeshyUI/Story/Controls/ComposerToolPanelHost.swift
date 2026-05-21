@@ -414,11 +414,7 @@ struct ComposerToolPanelHost: View {
             HStack(spacing: 8) {
                 if viewModel.canAddText {
                     Button {
-                        let new = viewModel.addText()
-                        HapticFeedback.light()
-                        if let id = new?.id {
-                            onEditText?(id)
-                        }
+                        addTextAndEdit()
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: "plus.circle.fill")
@@ -454,6 +450,24 @@ struct ComposerToolPanelHost: View {
                 }
                 .frame(maxHeight: 170)
             }
+        }
+        // Ouvrir le panel Texte sur une slide vierge déclenche directement
+        // l'ajout + l'édition inline : pas besoin de re-tapper "Ajouter du
+        // texte" alors qu'on vient explicitement d'entrer dans l'éditeur
+        // texte. Si la slide a déjà du texte, on respecte l'intent (l'user
+        // veut probablement éditer un existant via la liste).
+        .onAppear {
+            if viewModel.currentEffects.textObjects.isEmpty && viewModel.canAddText {
+                addTextAndEdit()
+            }
+        }
+    }
+
+    private func addTextAndEdit() {
+        let new = viewModel.addText()
+        HapticFeedback.light()
+        if let id = new?.id {
+            onEditText?(id)
         }
     }
 
