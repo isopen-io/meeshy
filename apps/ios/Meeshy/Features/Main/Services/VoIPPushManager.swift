@@ -322,8 +322,17 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // no-op. PushKit re-emits the same token on every `register()` call
         // (`forceReregister` etc.) — without this guard each cycle produced
         // a redundant POST.
+        // `??` is an `@autoclosure`-based operator; Swift 6 rejects `await`
+        // inside the rhs autoclosure ("'async' call in an autoclosure that
+        // does not support concurrency"), so resolve the fallback in an
+        // explicit branch.
         let now = Date()
-        let last = lastRegisteredRecord ?? (await tokenStore.read())
+        let last: VoIPTokenRecord?
+        if let cached = lastRegisteredRecord {
+            last = cached
+        } else {
+            last = await tokenStore.read()
+        }
         if let last,
            last.token == token,
            now.timeIntervalSince(last.at) < Self.voipRegistrationCooldown {
