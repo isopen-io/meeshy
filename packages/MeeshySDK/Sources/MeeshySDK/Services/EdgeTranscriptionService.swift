@@ -143,16 +143,39 @@ public final class EdgeTranscriptionService: ObservableObject {
                     let overallConfidence = segments.isEmpty
                         ? 0.0
                         : segments.reduce(0.0) { $0 + $1.confidence } / Double(segments.count)
+                    // `bestTranscription.speakingRate` est une foot-gun sur
+                    // certaines builds iOS quand `segments` est vide : le
+                    // sentinel SFTranscription crash au getter. On ne lit la
+                    // valeur que si segments non vides — sinon nil.
+                    let speakingRate: Double? = segments.isEmpty
+                        ? nil
+                        : result.bestTranscription.speakingRate
                     continuation.resume(returning: OnDeviceTranscription(
                         text: result.bestTranscription.formattedString,
                         language: localeIdentifier,
                         confidence: overallConfidence,
                         segments: segments,
-                        speakingRate: result.bestTranscription.speakingRate
+                        speakingRate: speakingRate
                     ))
                 }
                 box.attach(task)
-                self.currentTask = task
+                // CRITICAL : `self.currentTask` est `@MainActor`-isolated. Ce
+                // closure body s'exécute dans le contexte de
+                // `withCheckedThrowingContinuation` qui peut tourner hors
+                // MainActor (la continuation est `Sendable`). Une assignation
+                // directe `self.currentTask = task` viole l'isolation et
+                // crash sous Swift 6 strict / iOS 18 hardened runtime
+                // (`_dispatch_assert_queue_fail` → SIGTRAP).
+                //
+                // On hop explicitement sur MainActor. La race avec le `defer`
+                // qui clear `currentTask` à la fin du `transcribe(audioURL:)`
+                // est bénigne : si la Task arrive après, on aura juste
+                // `currentTask = task` puis `cancel()` n'agit pas (task déjà
+                // terminée). `box.attach(task)` couvre déjà le path de
+                // cancellation côté Task.
+                Task { @MainActor in
+                    self.currentTask = task
+                }
             }
         } onCancel: {
             box.cancel()
