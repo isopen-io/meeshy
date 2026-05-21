@@ -17,6 +17,24 @@ import os
 ///
 /// Spec note §14.3: if the message is deleted before adoption completes the
 /// file may still be adopted and then evicted normally by the LRU. Accepted.
+///
+/// ## ⚠️ Deprecated — kept for tests only
+///
+/// Since commit `b8222212`, the production adoption path runs at the
+/// **SDK** layer via `MessagePersistenceActor.adoptSDKLevel` (called from
+/// `updateServerAckedFields` BEFORE the row UPDATE so the canonical https
+/// cache key is hot the moment the UI re-renders). This app-level helper
+/// has no remaining live call site — it's referenced only by
+/// `OptimisticAttachmentAdopterTests.swift`.
+///
+/// The helper is intentionally NOT removed yet: the iOS classic xcodeproj
+/// (objectVersion 63, no synchronized groups — see project memory
+/// `ios-classic-pbxproj`) requires manual pbxproj surgery to drop a `.swift`
+/// file, which is risky to bundle in a refactor PR. Plan: migrate the 7
+/// branch-coverage tests to target `MessagePersistenceActor.updateServerAcked
+/// Fields` end-to-end, then delete this file + its tests + pbxproj entries
+/// in a dedicated cleanup session.
+@available(*, deprecated, message: "Production path uses MessagePersistenceActor.adoptSDKLevel. Kept for branch-coverage tests; do not call from new code.")
 enum OptimisticAttachmentAdopter {
 
     static func adoptIfNeeded(

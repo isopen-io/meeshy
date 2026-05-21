@@ -21,9 +21,16 @@ export function registerCoreRoutes(
   const notificationService = new NotificationService(prisma);
 
   // POST /posts — Create a new post
+  //
+  // Per-route bodyLimit 1MB : suffisant pour content (5KB max) + storyEffects
+  // (256KB max via StoryEffectsSchema refine) + autres champs ≈ 300KB worst-case.
+  // Le bodyLimit global serveur (50MB) reste actif pour les routes d'upload
+  // audio/TUS qui en ont besoin ; ici on durcit avant que Zod parse, évite
+  // le DoS où un attaquant force 50MB de JSON à parser (CPU/RAM).
   fastify.post('/posts', {
     preValidation: [requiredAuth],
     config: { rateLimit: createPostRouteRateLimitConfig('create') },
+    bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;
@@ -174,8 +181,10 @@ export function registerCoreRoutes(
   });
 
   // PUT /posts/:postId — Update a post (author only)
+  // Per-route bodyLimit 1MB — voir POST /posts pour la justification.
   fastify.put('/posts/:postId', {
     preValidation: [requiredAuth],
+    bodyLimit: 1 * 1024 * 1024,
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
     try {
       const authContext = (request as UnifiedAuthRequest).authContext;

@@ -266,6 +266,7 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
     private var reconnectAttempt: Int = 0
     private var hadPreviousConnection = false
     private var heartbeatTimer: Timer?
+    private var lifecycleCancellables = Set<AnyCancellable>()
 
     // Cached formatters — ISO8601DateFormatter is expensive to allocate.
     // Safe to share: options are set once during init and never mutated after.
@@ -293,6 +294,30 @@ public final class SocialSocketManager: ObservableObject, SocialSocketProviding,
             if let date = SocialSocketManager.isoFormatterBasic.date(from: dateStr) { return date }
             throw DecodingError.dataCorruptedError(in: container, debugDescription: "Invalid date: \(dateStr)")
         }
+        observeNetworkRecovery()
+    }
+
+    /// Source unique de vérité réseau : quand `NetworkMonitor` repasse en
+    /// ligne, forcer une reconnexion socket immédiate. Évite la persistance
+    /// de la bannière "Reconnexion..." pendant la boucle de retry interne
+    /// de Socket.IO après une coupure prolongée.
+    private func observeNetworkRecovery() {
+        NetworkMonitor.shared.$isOffline
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.handleNetworkBackOnline()
+            }
+            .store(in: &lifecycleCancellables)
+    }
+
+    private func handleNetworkBackOnline() {
+        guard !isConnected else { return }
+        guard APIClient.shared.authToken != nil else { return }
+        Logger.socket.info("SocialSocket: network back online → forcing reconnect")
+        forceReconnect()
     }
 
     // MARK: - JWT Helpers

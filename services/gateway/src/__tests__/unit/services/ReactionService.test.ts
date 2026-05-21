@@ -205,7 +205,7 @@ describe('ReactionService', () => {
 
       await expect(
         service.addReaction({
-          messageId: 'non-existent',
+          messageId: '507f1f77bcf86cd799439099',
           participantId: testParticipantId,
           emoji: '👍'
         })
@@ -264,28 +264,23 @@ describe('ReactionService', () => {
     });
 
     it('should throw error when max reactions per user reached', async () => {
-      // User has already 3 different emojis
+      // User has already 1 emoji (current max is 1 per user per message)
       mockPrisma.reaction.findMany.mockResolvedValue([
-        { emoji: '👍' },
-        { emoji: '❤️' },
-        { emoji: '🎉' }
+        { emoji: '👍' }
       ]);
 
       await expect(
         service.addReaction({
           messageId: testMessageId,
           participantId: testParticipantId,
-          emoji: '🔥' // Trying to add 4th different emoji
+          emoji: '🔥' // Trying to add a 2nd different emoji
         })
-      ).rejects.toThrow('Maximum 3 different reactions per message reached');
+      ).rejects.toThrow('Maximum 1 different reactions per message reached');
     });
 
     it('should allow adding same emoji again (returns existing)', async () => {
-      // User has 3 different emojis
       mockPrisma.reaction.findMany.mockResolvedValue([
-        { emoji: '👍' },
-        { emoji: '❤️' },
-        { emoji: '🎉' }
+        { emoji: '👍' }
       ]);
 
       const existingReaction = createMockReaction({ emoji: '👍' });
@@ -301,11 +296,8 @@ describe('ReactionService', () => {
       expect(result?.emoji).toBe('👍');
     });
 
-    it('should allow adding reaction when user has less than 3 emojis', async () => {
-      mockPrisma.reaction.findMany.mockResolvedValue([
-        { emoji: '👍' },
-        { emoji: '❤️' }
-      ]);
+    it('should allow adding reaction when user has zero emojis', async () => {
+      mockPrisma.reaction.findMany.mockResolvedValue([]);
 
       const result = await service.addReaction({
         messageId: testMessageId,

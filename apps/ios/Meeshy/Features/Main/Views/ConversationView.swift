@@ -716,15 +716,24 @@ struct ConversationView: View {
             }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
-                // Language priority: keyboard layout > system language > current default
+                // Language priority: active keyboard layout > user's primary
+                // content language (Prisme Linguistique source of truth) >
+                // existing composer default.
+                //
+                // Locale.current is intentionally NOT consulted here: it
+                // reflects the device's UI language, which is decoupled from
+                // the user's chosen content language (CLAUDE.md "Prisme
+                // Linguistique"). A French-speaker on an English iPhone must
+                // compose in French unless their keyboard says otherwise.
                 if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
                     let code = String(kbd.prefix(2))
                     if LanguageOption.defaults.contains(where: { $0.code == code }) {
                         composerState.selectedLanguage = code
                     }
-                } else if let sysLang = Locale.current.language.languageCode?.identifier,
-                          LanguageOption.defaults.contains(where: { $0.code == sysLang }) {
-                    composerState.selectedLanguage = sysLang
+                } else if let userLang = AuthManager.shared.currentUser?
+                            .preferredContentLanguages.first,
+                          LanguageOption.defaults.contains(where: { $0.code == userLang }) {
+                    composerState.selectedLanguage = userLang
                 }
                 if messageText.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
                     messageText = draft.text
@@ -955,6 +964,14 @@ struct ConversationView: View {
                     overlayState.detailSheetMessage = msg
                     overlayState.detailSheetInitialTab = .views
                 },
+                onShowReadStatus: { messageId in
+                    // Tap sur les coches (✓ / ✓✓ / ✓✓ bleu) d'un message envoyé.
+                    // Ouvre la sheet detail sur l'onglet "Vues" pour consulter
+                    // qui a reçu / qui a lu — sans passer par le long-press.
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .views
+                },
                 onShowReactions: { messageId in
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.detailSheetMessage = msg
@@ -1166,7 +1183,7 @@ struct ConversationView: View {
                 anonymousHeaderBar
             } else if isTyping {
                 HStack(spacing: 8) {
-                    ThemedBackButton(color: accentColor) { HapticFeedback.light(); router.pop() }
+                    ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
                     Spacer()
                     ThemedAvatarButton(
                         name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
@@ -1238,7 +1255,7 @@ struct ConversationView: View {
     private var expandedHeaderBandBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                ThemedBackButton(color: accentColor, compactMode: composerState.showOptions) { HapticFeedback.light(); router.pop() }
+                ThemedBackButton(color: accentColor, compactMode: composerState.showOptions, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
                 expandedHeaderMidContent
                 headerAvatarView
             }

@@ -16,6 +16,16 @@
     "#%@" : {
 
     },
+    "%@  %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "%1$@  %2$@"
+          }
+        }
+      }
+    },
     "%@ — %@" : {
       "localizations" : {
         "fr" : {
@@ -57,9 +67,6 @@
       }
     },
     "%@ partage sa position" : {
-
-    },
-    "%@ sélectionné" : {
 
     },
     "%@. %@" : {
@@ -107,6 +114,9 @@
     "%lld pages" : {
 
     },
+    "%lld sous-titres" : {
+
+    },
     "%lld/%lld" : {
       "localizations" : {
         "fr" : {
@@ -128,6 +138,9 @@
       }
     },
     "%lld%%" : {
+
+    },
+    "%lld°" : {
 
     },
     "%llds" : {
@@ -157,6 +170,9 @@
     "Absent" : {
 
     },
+    "Actif" : {
+
+    },
     "Admin" : {
 
     },
@@ -169,6 +185,9 @@
     "Ajouter un tag..." : {
 
     },
+    "Analyse de l'audio…" : {
+
+    },
     "Annuler" : {
 
     },
@@ -177,6 +196,435 @@
     },
     "Aucun membre trouve" : {
 
+    },
+    "audio.editor.apply" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Appliquer les modifications"
+          }
+        }
+      }
+    },
+    "audio.editor.close" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fermer"
+          }
+        }
+      }
+    },
+    "audio.editor.error.generic" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "L'édition a échoué."
+          }
+        }
+      }
+    },
+    "audio.editor.error.load" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Impossible de charger cet audio."
+          }
+        }
+      }
+    },
+    "audio.editor.fade.in" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fondu d'entrée"
+          }
+        }
+      }
+    },
+    "audio.editor.fade.out" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fondu de sortie"
+          }
+        }
+      }
+    },
+    "audio.editor.mode.pro" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pro"
+          }
+        }
+      }
+    },
+    "audio.editor.mode.simple" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Simple"
+          }
+        }
+      }
+    },
+    "audio.editor.op.fade" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fondu"
+          }
+        }
+      }
+    },
+    "audio.editor.op.gain" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Volume"
+          }
+        }
+      }
+    },
+    "audio.editor.op.original" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Original"
+          }
+        }
+      }
+    },
+    "audio.editor.op.removeRange" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Section coupée"
+          }
+        }
+      }
+    },
+    "audio.editor.op.speed" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vitesse"
+          }
+        }
+      }
+    },
+    "audio.editor.op.trim" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rogné"
+          }
+        }
+      }
+    },
+    "audio.editor.pause" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pause"
+          }
+        }
+      }
+    },
+    "audio.editor.play" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lire"
+          }
+        }
+      }
+    },
+    "audio.editor.preparing" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Préparation de l'audio…"
+          }
+        }
+      }
+    },
+    "audio.editor.processing" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Traitement…"
+          }
+        }
+      }
+    },
+    "audio.editor.redo" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rétablir"
+          }
+        }
+      }
+    },
+    "audio.editor.reset" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Réinitialiser"
+          }
+        }
+      }
+    },
+    "audio.editor.split.hint" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Sélectionnez la section à supprimer."
+          }
+        }
+      }
+    },
+    "audio.editor.tool.fade" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fondu"
+          }
+        }
+      }
+    },
+    "audio.editor.tool.speed" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vitesse"
+          }
+        }
+      }
+    },
+    "audio.editor.tool.split" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couper"
+          }
+        }
+      }
+    },
+    "audio.editor.tool.transcribe" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Transcrire"
+          }
+        }
+      }
+    },
+    "audio.editor.tool.trim" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rogner"
+          }
+        }
+      }
+    },
+    "audio.editor.tool.volume" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Volume"
+          }
+        }
+      }
+    },
+    "audio.editor.transcription.denied" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Accès à la reconnaissance vocale refusé. Activez-le dans Réglages."
+          }
+        }
+      }
+    },
+    "audio.editor.transcription.empty" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "L'enregistrement est vide."
+          }
+        }
+      }
+    },
+    "audio.editor.transcription.failed" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Transcription impossible."
+          }
+        }
+      }
+    },
+    "audio.editor.transcription.fileMissing" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fichier audio introuvable."
+          }
+        }
+      }
+    },
+    "audio.editor.transcription.noSpeech" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Aucune parole détectée."
+          }
+        }
+      }
+    },
+    "audio.editor.transcription.retry" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Transcrire à nouveau"
+          }
+        }
+      }
+    },
+    "audio.editor.transcription.running" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Transcription en cours…"
+          }
+        }
+      }
+    },
+    "audio.editor.transcription.start" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Transcrire"
+          }
+        }
+      }
+    },
+    "audio.editor.trim.hint" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Glissez les poignées pour garder une portion."
+          }
+        }
+      }
+    },
+    "audio.editor.undo" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Annuler"
+          }
+        }
+      }
+    },
+    "audio.editor.use" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Utiliser l'audio"
+          }
+        }
+      }
+    },
+    "audio.editor.volume.normal" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Normal"
+          }
+        }
+      }
     },
     "audio.recorder.micDenied" : {
       "extractionState" : "extracted_with_value",
@@ -7431,13 +7879,19 @@
     "Deutsch" : {
 
     },
-    "Done" : {
+    "Diviser au point de lecture" : {
+
+    },
+    "Durée %@" : {
 
     },
     "Easing" : {
 
     },
     "Echantillon %lld" : {
+
+    },
+    "Effacer" : {
 
     },
     "Effacer la saisie" : {
@@ -7698,6 +8152,12 @@
 
     },
     "Expire %@" : {
+
+    },
+    "Export %lld %%" : {
+
+    },
+    "Export impossible" : {
 
     },
     "Expulser" : {
@@ -9212,6 +9672,9 @@
     "Langue du contenu" : {
 
     },
+    "Langue parlée" : {
+
+    },
     "Langues: %@" : {
 
     },
@@ -9400,7 +9863,7 @@
 
     },
     "media.audio.cancel" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -9435,7 +9898,7 @@
       }
     },
     "media.audio.edit" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -9465,6 +9928,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Editar"
+          }
+        }
+      }
+    },
+    "media.audio.open.fullscreen" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ouvrir en plein écran, lecture %lld%%"
+          }
+        }
+      }
+    },
+    "media.audio.open.fullscreen.hint" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Affiche la vue plein écran avec les options de sauvegarde"
           }
         }
       }
@@ -9500,6 +9985,28 @@
           "stringUnit" : {
             "state" : "needs_review",
             "value" : "Original"
+          }
+        }
+      }
+    },
+    "media.audio.retranscribe" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Re-transcrire"
+          }
+        }
+      }
+    },
+    "media.audio.speed.cycle" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Vitesse de lecture %@"
           }
         }
       }
@@ -9540,7 +10047,7 @@
       }
     },
     "media.audio.use" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -9749,8 +10256,19 @@
         }
       }
     },
-    "media.editor.brightness" : {
+    "media.editor.before" : {
       "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Original"
+          }
+        }
+      }
+    },
+    "media.editor.brightness" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -9820,7 +10338,7 @@
       }
     },
     "media.editor.contrast" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -9854,6 +10372,17 @@
         }
       }
     },
+    "media.editor.crop.applied" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recadrage"
+          }
+        }
+      }
+    },
     "media.editor.cropHint" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -9878,7 +10407,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Faites glisser les poignees pour recadrer"
+            "value" : "Faites glisser les poignées pour recadrer"
           }
         },
         "pt-BR" : {
@@ -9889,8 +10418,63 @@
         }
       }
     },
-    "media.editor.preview" : {
+    "media.editor.done" : {
       "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Terminé"
+          }
+        }
+      }
+    },
+    "media.editor.flip" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Miroir"
+          }
+        }
+      }
+    },
+    "media.editor.flipH" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Miroir horizontal"
+          }
+        }
+      }
+    },
+    "media.editor.flipV" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Miroir vertical"
+          }
+        }
+      }
+    },
+    "media.editor.history" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Historique"
+          }
+        }
+      }
+    },
+    "media.editor.preview" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -9924,6 +10508,17 @@
         }
       }
     },
+    "media.editor.redo" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rétablir"
+          }
+        }
+      }
+    },
     "media.editor.reset" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -9948,7 +10543,7 @@
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Reinitialiser"
+            "value" : "Réinitialiser"
           }
         },
         "pt-BR" : {
@@ -9959,8 +10554,52 @@
         }
       }
     },
-    "media.editor.saturation" : {
+    "media.editor.resetAdjust" : {
       "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ajustements réinitialisés"
+          }
+        }
+      }
+    },
+    "media.editor.rotateLeft" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pivoter à gauche"
+          }
+        }
+      }
+    },
+    "media.editor.rotateRight" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Pivoter à droite"
+          }
+        }
+      }
+    },
+    "media.editor.rotation" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Rotation"
+          }
+        }
+      }
+    },
+    "media.editor.saturation" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -9995,7 +10634,7 @@
       }
     },
     "media.editor.sharpness" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10030,7 +10669,7 @@
       }
     },
     "media.editor.tab.adjustments" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10065,7 +10704,7 @@
       }
     },
     "media.editor.tab.crop" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10100,7 +10739,7 @@
       }
     },
     "media.editor.tab.effects" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10135,7 +10774,7 @@
       }
     },
     "media.editor.tab.filters" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10169,8 +10808,63 @@
         }
       }
     },
-    "media.editor.vignette" : {
+    "media.editor.tool.adjust" : {
       "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ajuster"
+          }
+        }
+      }
+    },
+    "media.editor.tool.crop" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recadrer"
+          }
+        }
+      }
+    },
+    "media.editor.tool.effects" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Effets"
+          }
+        }
+      }
+    },
+    "media.editor.tool.filters" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Filtres"
+          }
+        }
+      }
+    },
+    "media.editor.undo" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Annuler la modification"
+          }
+        }
+      }
+    },
+    "media.editor.vignette" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10240,7 +10934,7 @@
       }
     },
     "media.preview.addCaption" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10275,7 +10969,7 @@
       }
     },
     "media.preview.cancel" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10310,7 +11004,7 @@
       }
     },
     "media.preview.edit" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10345,7 +11039,7 @@
       }
     },
     "media.preview.use" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10520,7 +11214,7 @@
       }
     },
     "media.video.analyzingAudio" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10554,8 +11248,63 @@
         }
       }
     },
-    "media.video.hide" : {
+    "media.video.close" : {
       "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fermer"
+          }
+        }
+      }
+    },
+    "media.video.download" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Telecharger la video"
+          }
+        }
+      }
+    },
+    "media.video.downloading" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Telechargement en cours"
+          }
+        }
+      }
+    },
+    "media.video.downloadingHint" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "La lecture demarrera apres le telechargement"
+          }
+        }
+      }
+    },
+    "media.video.downloadToPlay" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Telechargez pour lire la video"
+          }
+        }
+      }
+    },
+    "media.video.hide" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10590,7 +11339,7 @@
       }
     },
     "media.video.noAudioDetected" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10624,8 +11373,19 @@
         }
       }
     },
-    "media.video.preview" : {
+    "media.video.play" : {
       "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Lire la video"
+          }
+        }
+      }
+    },
+    "media.video.preview" : {
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10660,7 +11420,7 @@
       }
     },
     "media.video.retry" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10695,7 +11455,7 @@
       }
     },
     "media.video.show" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10730,7 +11490,7 @@
       }
     },
     "media.video.transcribe" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10765,7 +11525,7 @@
       }
     },
     "media.video.transcription" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10800,7 +11560,7 @@
       }
     },
     "media.video.transcriptionUnavailable" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10905,7 +11665,7 @@
       }
     },
     "media.videoPreview.addCaption" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10940,7 +11700,7 @@
       }
     },
     "media.videoPreview.cancel" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -10975,7 +11735,7 @@
       }
     },
     "media.videoPreview.edit" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -11010,7 +11770,7 @@
       }
     },
     "media.videoPreview.use" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -11063,6 +11823,9 @@
 
     },
     "mshy_" : {
+
+    },
+    "Muet" : {
 
     },
     "Nederlands" : {
@@ -11984,9 +12747,6 @@
     "Nouvelle catégorie" : {
 
     },
-    "OK" : {
-
-    },
     "Ouvrir les outils d'effets" : {
 
     },
@@ -11994,6 +12754,12 @@
 
     },
     "Pause" : {
+
+    },
+    "Placez la tête de lecture puis divisez la vidéo en segments." : {
+
+    },
+    "Play" : {
 
     },
     "Poignée de la barre d'outils" : {
@@ -12006,6 +12772,9 @@
 
     },
     "Premier plan" : {
+
+    },
+    "Préparation…" : {
 
     },
     "profile.action.acceptConnection" : {
@@ -13424,6 +14193,28 @@
     "Rechercher une langue" : {
 
     },
+    "Recommandé pour %@ : %@" : {
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Recommandé pour %1$@ : %2$@"
+          }
+        }
+      }
+    },
+    "Recommencer" : {
+
+    },
+    "Réinitialiser" : {
+
+    },
+    "Reprendre l'édition ?" : {
+
+    },
+    "Restaurer" : {
+
+    },
     "Retirer la catégorie %@" : {
 
     },
@@ -13436,10 +14227,19 @@
     "Retrograder Membre" : {
 
     },
+    "Rotation" : {
+
+    },
     "Ruler" : {
 
     },
     "Safe area" : {
+
+    },
+    "Segment %lld" : {
+
+    },
+    "Segment sélectionné" : {
 
     },
     "Sélectionner la catégorie %@" : {
@@ -13451,11 +14251,14 @@
     "Si un compte existe avec %@, un lien de reinitialisation a ete envoye." : {
 
     },
+    "Son" : {
+
+    },
     "Sticker %@" : {
 
     },
     "story.audioEditor.retranscribe" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -13490,7 +14293,7 @@
       }
     },
     "story.audioEditor.tapTranscribe" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -13525,7 +14328,7 @@
       }
     },
     "story.audioEditor.title" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -13560,7 +14363,7 @@
       }
     },
     "story.audioEditor.transcribe" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -13595,7 +14398,7 @@
       }
     },
     "story.audioEditor.transcribing" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -13630,7 +14433,7 @@
       }
     },
     "story.audioEditor.transcription" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -13665,7 +14468,7 @@
       }
     },
     "story.audioEditor.transcriptionFailed" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -13700,7 +14503,7 @@
       }
     },
     "story.audioEditor.useRecording" : {
-      "extractionState" : "extracted_with_value",
+      "extractionState" : "stale",
       "localizations" : {
         "de" : {
           "stringUnit" : {
@@ -14043,6 +14846,122 @@
           "stringUnit" : {
             "state" : "new",
             "value" : "Touchez pour appliquer ce fond."
+          }
+        }
+      }
+    },
+    "story.canvas.layer.background" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Hintergrund"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Background"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fondo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Fond"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Fundo"
+          }
+        }
+      }
+    },
+    "story.canvas.layer.canvas" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Canvas"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Canvas"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Lienzo"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Canvas"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Tela"
+          }
+        }
+      }
+    },
+    "story.canvas.layer.foreground" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Vordergrund"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Foreground"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Primer plano"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Premier"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Frente"
+          }
+        }
+      }
+    },
+    "story.canvas.layer.indicator.label" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Couche active : %@"
           }
         }
       }
@@ -15379,6 +16298,28 @@
         }
       }
     },
+    "story.composer.tool.back" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Retour"
+          }
+        }
+      }
+    },
+    "story.composer.tool.switch.hint" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Ouvre l'éditeur"
+          }
+        }
+      }
+    },
     "story.composer.transitions" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -16292,6 +17233,41 @@
         }
       }
     },
+    "story.reader.loading" : {
+      "extractionState" : "extracted_with_value",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Story wird geladen…"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Loading story…"
+          }
+        },
+        "es" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Cargando historia…"
+          }
+        },
+        "fr" : {
+          "stringUnit" : {
+            "state" : "new",
+            "value" : "Chargement de la story…"
+          }
+        },
+        "pt-BR" : {
+          "stringUnit" : {
+            "state" : "needs_review",
+            "value" : "Carregando story…"
+          }
+        }
+      }
+    },
     "story.repost.reprojected" : {
       "extractionState" : "extracted_with_value",
       "localizations" : {
@@ -16609,31 +17585,31 @@
         "de" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Text eingeben..."
+            "value" : "Drücke dich aus…"
           }
         },
         "en" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Enter your text..."
+            "value" : "Express yourself…"
           }
         },
         "es" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Escribe tu texto..."
+            "value" : "Exprésate…"
           }
         },
         "fr" : {
           "stringUnit" : {
             "state" : "new",
-            "value" : "Saisissez votre texte..."
+            "value" : "Exprimez-vous…"
           }
         },
         "pt-BR" : {
           "stringUnit" : {
             "state" : "needs_review",
-            "value" : "Digite seu texto..."
+            "value" : "Expresse-se…"
           }
         }
       }
@@ -19110,7 +20086,13 @@
     "Tap to open full map" : {
 
     },
+    "Terminer" : {
+
+    },
     "Terminer l'édition du texte" : {
+
+    },
+    "Timeline" : {
 
     },
     "Touchez deux fois pour fermer. Faites glisser vers le bas pour masquer la barre." : {
@@ -19120,6 +20102,9 @@
 
     },
     "Tout le monde" : {
+
+    },
+    "Toute la vidéo" : {
 
     },
     "Traduction automatique" : {
@@ -19135,6 +20120,9 @@
 
     },
     "Turkce" : {
+
+    },
+    "Une session d'édition non terminée a été retrouvée pour cette vidéo." : {
 
     },
     "vide" : {
@@ -21067,6 +22055,9 @@
           }
         }
       }
+    },
+    "Volume" : {
+
     },
     "Vous avez rejoint %@ en tant que %@" : {
       "localizations" : {

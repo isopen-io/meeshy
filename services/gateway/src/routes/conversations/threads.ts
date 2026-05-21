@@ -3,6 +3,7 @@ import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { canAccessConversation } from './utils/access-control';
 import { resolveConversationId } from '../../utils/conversation-id-cache';
 import { UnifiedAuthRequest } from '../../middleware/auth';
+import { attachmentMediaSelect } from '../../services/attachments/attachmentIncludes';
 import { sendSuccess, sendNotFound, sendForbidden, sendInternalError } from '../../utils/response';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { enhancedLogger } from '../../utils/logger-enhanced';
@@ -52,23 +53,7 @@ const threadMessageSelect = {
       }
     }
   },
-  attachments: {
-    select: {
-      id: true,
-      messageId: true,
-      fileName: true,
-      originalName: true,
-      mimeType: true,
-      fileSize: true,
-      fileUrl: true,
-      thumbnailUrl: true,
-      width: true,
-      height: true,
-      duration: true,
-      transcription: true,
-      translations: true
-    }
-  },
+  attachments: { select: attachmentMediaSelect },
   replyTo: {
     select: {
       id: true,

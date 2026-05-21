@@ -38,7 +38,7 @@ public final class NetworkConditionMonitor: ObservableObject {
 
     public var isOnline: Bool { condition != .offline }
 
-    public static func resolve(path: NWPath) -> NetworkCondition {
+    nonisolated public static func resolve(path: NWPath) -> NetworkCondition {
         resolveFromFlags(
             isSatisfied: path.status == .satisfied,
             isConstrained: path.isConstrained,
@@ -49,8 +49,9 @@ public final class NetworkConditionMonitor: ObservableObject {
     }
 
     /// Pure resolution depuis les flags. Testable sans dépendre de `NWPath`
-    /// qui n'est pas instanciable directement.
-    public static func resolveFromFlags(
+    /// qui n'est pas instanciable directement. `nonisolated` pour permettre
+    /// l'appel depuis `pathUpdateHandler` (closure non-MainActor).
+    nonisolated public static func resolveFromFlags(
         isSatisfied: Bool,
         isConstrained: Bool,
         isExpensive: Bool,

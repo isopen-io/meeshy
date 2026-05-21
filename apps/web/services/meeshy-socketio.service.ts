@@ -373,6 +373,14 @@ class MeeshySocketIOService {
   }
 
   /**
+   * Souscrit aux changements d'état de connexion (event-driven, pas de polling).
+   * Retourne une fonction de désinscription.
+   */
+  public onStatusChange(callback: (diag: any) => void): () => void {
+    return this.orchestrator.onStatusChange(callback);
+  }
+
+  /**
    * Nettoie les ressources
    */
   public cleanup(): void {

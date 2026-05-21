@@ -216,7 +216,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
     public var anchor: CGPoint           // NEW; uses CGPoint (x∈0..1, y∈0..1) — NOT UnitPoint (SwiftUI-only)
 
     // Typography (replace textSize with design-pixel fontSize)
-    public var fontSize: Double          // NEW: design pixels (1080-référentiel), default 64
+    public var fontSize: Double          // NEW: design pixels (1080-référentiel), default 96 (decoder legacy fallback = 64)
     public var fontFamily: String        // NEW: default "system"
 
     // Style per-objet (tous optionnels pour backward compat JSON existant)
@@ -270,7 +270,7 @@ public struct StoryTextObject: Codable, Identifiable, Sendable {
                 scale: Double = 1.0, rotation: Double = 0.0,
                 zIndex: Int = 0,
                 anchor: CGPoint = CGPoint(x: 0.5, y: 0.5),
-                fontSize: Double = 64.0,
+                fontSize: Double = 96.0,
                 fontFamily: String = "system",
                 textStyle: String? = "bold",
                 textColor: String? = "FFFFFF",
@@ -473,6 +473,27 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
     public var sourceLanguage: String?
     // Timeline V2 — animation keyframes (position/scale/opacity)
     public var keyframes: [StoryKeyframe]?
+    /// ThumbHash du contenu (première frame pour vidéo, image décompressée
+    /// pour image). Généré au publish (cf. spec § 2.4). Sert de placeholder
+    /// pendant le fetch via `applyThumbHashPlaceholder`. `nil` autorisé
+    /// (back-compat stories antérieures, médias sans génération).
+    ///
+    /// Format attendu : base64 d'un hash ThumbHash (~28-33 chars). Le setter
+    /// clamp à `maxThumbHashLength` (100 chars) — defense-in-depth contre un
+    /// payload malformé qui pourrait passer un blob de plusieurs MB dans la
+    /// slide effects JSON. Si > limite, le field est mis à `nil` (placeholder
+    /// noir au render — dégradation visuelle acceptable vs DB blow up).
+    public var thumbHash: String? {
+        didSet {
+            if let hash = thumbHash, hash.count > Self.maxThumbHashLength {
+                thumbHash = nil
+            }
+        }
+    }
+
+    /// Longueur max acceptée pour un thumbHash base64. ThumbHash spec produit
+    /// 5-25 bytes binaires ≈ 8-36 chars base64. Marge x3 pour tolérance future.
+    public static let maxThumbHashLength: Int = 100
 
     enum CodingKeys: String, CodingKey {
         case id, postMediaId, mediaURL, mediaType, placement
@@ -480,7 +501,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         case aspectRatio, anchor, intrinsicDuration
         case isBackground, loop, zIndex
         case startTime, duration, fadeIn, fadeOut
-        case sourceLanguage, keyframes
+        case sourceLanguage, keyframes, thumbHash
     }
 
     public init(id: String = UUID().uuidString,
@@ -502,7 +523,8 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
                 fadeIn: Double? = nil,
                 fadeOut: Double? = nil,
                 sourceLanguage: String? = nil,
-                keyframes: [StoryKeyframe]? = nil) {
+                keyframes: [StoryKeyframe]? = nil,
+                thumbHash: String? = nil) {
         self.id = id
         self.postMediaId = postMediaId
         self.mediaURL = mediaURL
@@ -521,6 +543,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         self.fadeIn = fadeIn; self.fadeOut = fadeOut
         self.sourceLanguage = sourceLanguage
         self.keyframes = keyframes
+        self.thumbHash = thumbHash
     }
 
     // Custom init(from decoder:) for legacy backward compat
@@ -555,6 +578,11 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         fadeOut = try c.decodeIfPresent(Double.self, forKey: .fadeOut)
         sourceLanguage = try c.decodeIfPresent(String.self, forKey: .sourceLanguage)
         keyframes = try c.decodeIfPresent([StoryKeyframe].self, forKey: .keyframes)
+        // Decoder clamp : `didSet` ne se déclenche pas pendant init, donc on
+        // applique la limite explicitement pour protéger contre un payload
+        // malformé / malveillant (slide effects JSON externe → cache disque).
+        let rawThumbHash = try c.decodeIfPresent(String.self, forKey: .thumbHash)
+        thumbHash = (rawThumbHash?.count ?? 0) > Self.maxThumbHashLength ? nil : rawThumbHash
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -581,6 +609,7 @@ public struct StoryMediaObject: Codable, Identifiable, Sendable {
         try c.encodeIfPresent(fadeOut, forKey: .fadeOut)
         try c.encodeIfPresent(sourceLanguage, forKey: .sourceLanguage)
         try c.encodeIfPresent(keyframes, forKey: .keyframes)
+        try c.encodeIfPresent(thumbHash, forKey: .thumbHash)
     }
 
     private enum AnchorKeys: String, CodingKey { case x, y }
@@ -611,7 +640,8 @@ extension StoryMediaObject {
                 fadeIn: Double? = nil,
                 fadeOut: Double? = nil,
                 sourceLanguage: String? = nil,
-                keyframes: [StoryKeyframe]? = nil) {
+                keyframes: [StoryKeyframe]? = nil,
+                thumbHash: String? = nil) {
         self.init(id: id,
                   postMediaId: postMediaId,
                   mediaURL: mediaURL,
@@ -629,7 +659,8 @@ extension StoryMediaObject {
                   duration: duration,
                   fadeIn: fadeIn, fadeOut: fadeOut,
                   sourceLanguage: sourceLanguage,
-                  keyframes: keyframes)
+                  keyframes: keyframes,
+                  thumbHash: thumbHash)
     }
 }
 
@@ -1373,6 +1404,25 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.isViewed = isViewed
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
+    }
+
+    /// A5 — returns `true` when the story has aged past its visibility window.
+    ///
+    /// Resolution order:
+    /// 1. If `expiresAt` is set and is `<= now`, the story is expired.
+    /// 2. Otherwise, fall back to the product rule of "stories live 24h" and
+    ///    consider the story expired when `createdAt + 24h <= now`.
+    ///
+    /// Used by the viewer to skip past stale stories the cache may have
+    /// surfaced (cache TTL > 24h is intentional so we don't redownload
+    /// avatars/text on every cold start, but the *content* must not be
+    /// rendered).
+    public func isExpired(at now: Date = Date()) -> Bool {
+        if let explicit = expiresAt {
+            return explicit <= now
+        }
+        let twentyFourHoursAfterCreation = createdAt.addingTimeInterval(24 * 60 * 60)
+        return twentyFourHoursAfterCreation <= now
     }
 }
 

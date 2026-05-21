@@ -44,6 +44,10 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
             return
         }
 
+        // A3 — from here on, the session is active. Any failure path MUST
+        // deactivate it to avoid leaking the microphone indicator + battery
+        // drain (previously the AVAudioRecorder init failure left the
+        // session active indefinitely).
         let fileName = "voice_\(Int(Date().timeIntervalSince1970)).m4a"
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
 
@@ -61,6 +65,9 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
             recorder?.record()
             recordedFileURL = url
         } catch {
+            // A3 — rollback the AVAudioSession we just activated so the OS
+            // releases the microphone hardware and turns off the indicator.
+            deactivateAudioSessionAfterFailure()
             return
         }
 
@@ -72,6 +79,17 @@ final class AudioRecorderManager: ObservableObject, AudioRecordingProviding {
         timer = Timer.scheduledTimer(withTimeInterval: 0.05, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.updateMetering() }
         }
+    }
+
+    /// A3 — central deactivation helper. Exposed `internal` for tests; not
+    /// called from anywhere except the failure path of `startRecording`.
+    /// Idempotent: safe to call when no session is active (the OS returns
+    /// the no-op status silently).
+    internal func deactivateAudioSessionAfterFailure() {
+        // Only deactivate when no VoIP call is active — we never want to
+        // tear down a session owned by the WebRTC stack.
+        guard !CallManager.shared.callState.isActive else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     @discardableResult

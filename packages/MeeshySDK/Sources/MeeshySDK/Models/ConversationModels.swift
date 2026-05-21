@@ -253,7 +253,12 @@ extension APIConversation {
                 duration: apiAtt.duration
             )
         }
-        let lastMsgAttCount = lastMessage?._count?.attachments ?? lastMsgAttachments.count
+        // Use the MAX of payload size and backend `_count` : a payload that
+        // truncates attachments (gateway returns only first N to save bandwidth)
+        // should never under-display the "+N" suffix in the conversation row.
+        // Conversely, a server `_count` that lags behind a fresh payload
+        // (optimistic insert just landed locally) must not erase what we see.
+        let lastMsgAttCount = max(lastMessage?._count?.attachments ?? 0, lastMsgAttachments.count)
         let lastMsgSenderName = lastMessage?.sender?.name
 
         let recentPreviews: [RecentMessagePreview] = (recentMessages ?? []).map { msg in

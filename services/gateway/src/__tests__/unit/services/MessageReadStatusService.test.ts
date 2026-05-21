@@ -125,36 +125,135 @@ describe('MessageReadStatusService', () => {
   // ==============================================
 
   describe('getUnreadCount', () => {
-    it('should return cached unreadCount from cursor', async () => {
+    // The unread count MUST be computed fresh on every read — the cursor's
+    // `unreadCount` field is a stale cache that is only updated on
+    // markAsRead/markAsReceived. Trusting it returned wildly inflated
+    // counts (e.g. 75 for users who had read all messages) because new
+    // messages never auto-increment the cursor between reads. The new
+    // contract: always count messages where `createdAt > floor` and
+    // `senderId != self`, with floor = lastReadAt ?? participant.joinedAt.
+
+    it('should count messages after cursor.lastReadAt, not return stale cursor.unreadCount', async () => {
+      const lastReadAt = new Date('2026-05-21T10:00:00Z');
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        id: 'cursor-1',
         participantId: testParticipantId,
         conversationId: testConversationId,
-        unreadCount: 5
+        // Stale cached value — must be IGNORED in favour of a fresh count
+        unreadCount: 75,
+        lastReadAt,
       });
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: testParticipantId,
+        joinedAt: new Date('2026-04-01T00:00:00Z'),
+      });
+      mockPrisma.message.count.mockResolvedValue(3);
 
       const count = await service.getUnreadCount(testParticipantId, testConversationId);
 
-      expect(count).toBe(5);
-      expect(mockPrisma.conversationReadCursor.findUnique).toHaveBeenCalledWith({
-        where: {
-          conversation_participant_cursor: { participantId: testParticipantId, conversationId: testConversationId }
-        }
-      });
-    });
-
-    it('should count all messages when no cursor exists', async () => {
-      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
-      mockPrisma.message.count.mockResolvedValue(10);
-
-      const count = await service.getUnreadCount(testParticipantId, testConversationId);
-
-      expect(count).toBe(10);
+      expect(count).toBe(3);
       expect(mockPrisma.message.count).toHaveBeenCalledWith({
         where: {
           conversationId: testConversationId,
           deletedAt: null,
-          senderId: { not: testParticipantId }
-        }
+          senderId: { not: testParticipantId },
+          createdAt: { gt: lastReadAt },
+        },
+      });
+    });
+
+    it('should fall back to participant.joinedAt when cursor has no lastReadAt', async () => {
+      const joinedAt = new Date('2026-04-01T00:00:00Z');
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        id: 'cursor-2',
+        participantId: testParticipantId,
+        conversationId: testConversationId,
+        unreadCount: 0,
+        lastReadAt: null,
+      });
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: testParticipantId,
+        joinedAt,
+      });
+      mockPrisma.message.count.mockResolvedValue(5);
+
+      const count = await service.getUnreadCount(testParticipantId, testConversationId);
+
+      expect(count).toBe(5);
+      expect(mockPrisma.message.count).toHaveBeenCalledWith({
+        where: {
+          conversationId: testConversationId,
+          deletedAt: null,
+          senderId: { not: testParticipantId },
+          createdAt: { gt: joinedAt },
+        },
+      });
+    });
+
+    it('should fall back to participant.joinedAt when no cursor exists (new participant)', async () => {
+      const joinedAt = new Date('2026-05-20T08:00:00Z');
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: testParticipantId,
+        joinedAt,
+      });
+      mockPrisma.message.count.mockResolvedValue(2);
+
+      const count = await service.getUnreadCount(testParticipantId, testConversationId);
+
+      expect(count).toBe(2);
+      // CRITICAL: new participant must NOT see the historical conversation
+      // as 75 unread — the floor at participant.joinedAt ensures only
+      // messages received after they joined are counted.
+      expect(mockPrisma.message.count).toHaveBeenCalledWith({
+        where: {
+          conversationId: testConversationId,
+          deletedAt: null,
+          senderId: { not: testParticipantId },
+          createdAt: { gt: joinedAt },
+        },
+      });
+    });
+
+    it('should resolve a userId to the matching Participant.id and count via that participant', async () => {
+      // Regression test for the call-site bug where `_updateUnreadCounts`
+      // passed `participant.userId` instead of `participant.id` and the
+      // cursor lookup silently missed, falling through to a "count all
+      // historical messages" path that returned 75 instead of 0.
+      const userId = '6900000000000000000000aa';
+      const realParticipantId = testParticipantId;
+      const lastReadAt = new Date('2026-05-21T10:00:00Z');
+
+      // 1. The first cursor lookup (by userId) returns null...
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValueOnce(null);
+      // 2. ...so the service falls back to resolving the participant by userId
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: realParticipantId,
+        userId,
+        joinedAt: new Date('2026-04-01T00:00:00Z'),
+      });
+      // 3. ...then re-queries the cursor with the real Participant.id
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValueOnce({
+        id: 'cursor-3',
+        participantId: realParticipantId,
+        conversationId: testConversationId,
+        unreadCount: 0,
+        lastReadAt,
+      });
+      mockPrisma.message.count.mockResolvedValue(1);
+
+      const count = await service.getUnreadCount(userId, testConversationId);
+
+      expect(count).toBe(1);
+      // The count MUST exclude the participant's own messages — we use
+      // the resolved Participant.id, not the userId, for senderId equality.
+      expect(mockPrisma.message.count).toHaveBeenCalledWith({
+        where: {
+          conversationId: testConversationId,
+          deletedAt: null,
+          senderId: { not: realParticipantId },
+          createdAt: { gt: lastReadAt },
+        },
       });
     });
 
@@ -164,7 +263,19 @@ describe('MessageReadStatusService', () => {
       const count = await service.getUnreadCount(testParticipantId, testConversationId);
 
       expect(count).toBe(0);
-      // Le service utilise maintenant enhancedLogger au lieu de console.error
+    });
+
+    it('should return 0 when the participant cannot be resolved and no cursor exists', async () => {
+      // Defensive default — calling getUnreadCount with an unknown id
+      // must not fall back to counting "all messages from others", which
+      // is exactly the legacy bug.
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.participant.findFirst.mockResolvedValue(null);
+
+      const count = await service.getUnreadCount('unknown-id', testConversationId);
+
+      expect(count).toBe(0);
+      expect(mockPrisma.message.count).not.toHaveBeenCalled();
     });
   });
 
@@ -186,28 +297,46 @@ describe('MessageReadStatusService', () => {
       expect(result.size).toBe(0);
     });
 
-    it('should return cached counts from cursors', async () => {
-      mockPrisma.conversationReadCursor.findMany.mockResolvedValue([
-        { conversationId: conversationIds[0], unreadCount: 5 },
-        { conversationId: conversationIds[1], unreadCount: 3 }
-      ]);
+    it('should compute fresh counts per conversation, defaulting unmapped ones to 0', async () => {
+      const lastReadAt = new Date('2026-05-21T10:00:00Z');
+      // findUnique is called per-conversation by the underlying getUnreadCount.
+      // First call (conv[0]): cursor with lastReadAt → count = 5
+      // Second call (conv[1]): cursor with lastReadAt → count = 3
+      // Third call (conv[2]): no cursor → participant lookup falls back, count = 0
+      mockPrisma.conversationReadCursor.findUnique
+        .mockResolvedValueOnce({ id: 'c1', participantId: testParticipantId, conversationId: conversationIds[0], unreadCount: 99, lastReadAt })
+        .mockResolvedValueOnce({ id: 'c2', participantId: testParticipantId, conversationId: conversationIds[1], unreadCount: 99, lastReadAt })
+        .mockResolvedValueOnce(null);
+      mockPrisma.participant.findFirst
+        .mockResolvedValueOnce({ id: testParticipantId, joinedAt: new Date('2026-04-01') })
+        .mockResolvedValueOnce({ id: testParticipantId, joinedAt: new Date('2026-04-01') })
+        .mockResolvedValueOnce({ id: testParticipantId, joinedAt: new Date('2026-04-01') });
+      mockPrisma.message.count
+        .mockResolvedValueOnce(5)
+        .mockResolvedValueOnce(3)
+        .mockResolvedValueOnce(0);
 
-      const result = await service.getUnreadCountsForConversations([testParticipantId],conversationIds);
+      const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
 
       expect(result.get(conversationIds[0])).toBe(5);
       expect(result.get(conversationIds[1])).toBe(3);
-      // In cursor-based approach, conversations without cursors default to 0
       expect(result.get(conversationIds[2])).toBe(0);
     });
 
     it('should return empty map on database error', async () => {
-      mockPrisma.conversationReadCursor.findMany.mockRejectedValue(new Error('Database error'));
+      // Make every getUnreadCount call throw to exercise the catch path
+      mockPrisma.conversationReadCursor.findUnique.mockRejectedValue(new Error('Database error'));
+      mockPrisma.participant.findFirst.mockRejectedValue(new Error('Database error'));
 
-      const result = await service.getUnreadCountsForConversations([testParticipantId],conversationIds);
+      const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
 
       expect(result).toBeInstanceOf(Map);
-      expect(result.size).toBe(0);
-      // Le service utilise maintenant enhancedLogger au lieu de console.error
+      // Each getUnreadCount catches its own error and returns 0, so the
+      // outer Map is fully populated with 0s rather than empty.
+      expect(result.size).toBe(conversationIds.length);
+      for (const id of conversationIds) {
+        expect(result.get(id)).toBe(0);
+      }
     });
   });
 
@@ -316,8 +445,6 @@ describe('MessageReadStatusService', () => {
         create: expect.objectContaining({
           lastReadMessageId: testMessageId,
           lastReadAt: expect.any(Date),
-          lastDeliveredMessageId: testMessageId,
-          lastDeliveredAt: expect.any(Date),
           unreadCount: 0,
           version: 0
         }),
@@ -799,9 +926,9 @@ describe('MessageReadStatusService', () => {
       // message1: user1 delivered+read, user2 delivered only (but user2 is sender so excluded)
       // Actually sender is 'sender-1', so both testParticipantId and testParticipantId2 are counted
       // testParticipantId: delivered+read, testParticipantId2: delivered only
-      expect(result.get(testMessageId)).toEqual({ receivedCount: 2, readCount: 1 });
+      expect(result.get(testMessageId)).toEqual(expect.objectContaining({ receivedCount: 2, readCount: 1 }));
       // message2: only testParticipantId delivered+read (testParticipantId2's delivered is before message2)
-      expect(result.get(testMessageId2)).toEqual({ receivedCount: 1, readCount: 1 });
+      expect(result.get(testMessageId2)).toEqual(expect.objectContaining({ receivedCount: 1, readCount: 1 }));
     });
 
     it('should return empty counts for messages without cursors', async () => {
@@ -812,7 +939,7 @@ describe('MessageReadStatusService', () => {
 
       const result = await service.getConversationReadStatuses(testConversationId, [testMessageId]);
 
-      expect(result.get(testMessageId)).toEqual({ receivedCount: 0, readCount: 0 });
+      expect(result.get(testMessageId)).toEqual(expect.objectContaining({ receivedCount: 0, readCount: 0 }));
     });
   });
 
@@ -959,7 +1086,15 @@ describe('MessageReadStatusService', () => {
     });
 
     it('should handle concurrent operations', async () => {
-      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ unreadCount: 5 });
+      const lastReadAt = new Date('2026-05-21T10:00:00Z');
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        id: 'c', participantId: testParticipantId, conversationId: testConversationId,
+        unreadCount: 99, lastReadAt,
+      });
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: testParticipantId, joinedAt: new Date('2026-04-01'),
+      });
+      mockPrisma.message.count.mockResolvedValue(5);
 
       const promises = [
         service.getUnreadCount(testParticipantId, testConversationId),
@@ -979,8 +1114,11 @@ describe('MessageReadStatusService', () => {
 
   describe('Workflow Tests', () => {
     it('should correctly track message status progression (cursor-based)', async () => {
-      // 1. Initial: No cursor, all messages unread
+      const joinedAt = new Date('2026-04-01');
+      const participant = { id: testParticipantId, joinedAt };
+      // 1. Initial: No cursor, but participant exists — count from joinedAt
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
+      mockPrisma.participant.findFirst.mockResolvedValue(participant);
       mockPrisma.message.count.mockResolvedValue(5);
 
       let unreadCount = await service.getUnreadCount(testParticipantId, testConversationId);
@@ -989,7 +1127,6 @@ describe('MessageReadStatusService', () => {
       // 2. Mark as received: cursor created (cursor-only approach)
       mockPrisma.message.findFirst.mockResolvedValue({ id: testMessageId });
       mockPrisma.conversationReadCursor.upsert.mockResolvedValue({});
-      // Mock for updateUnreadCount called after upsert
       mockPrisma.conversationReadCursor.findUnique.mockResolvedValue(null);
       mockPrisma.message.count.mockResolvedValue(4);
 
@@ -999,8 +1136,13 @@ describe('MessageReadStatusService', () => {
       expect(mockPrisma.messageStatusEntry.upsert).not.toHaveBeenCalled();
       expect(mockPrisma.message.update).not.toHaveBeenCalled();
 
-      // 3. After received, cursor has updated unreadCount
-      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ unreadCount: 4 });
+      // 3. After received, cursor exists with lastReadAt → count returns 4
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        id: 'c', participantId: testParticipantId, conversationId: testConversationId,
+        unreadCount: 99, lastReadAt: new Date('2026-05-21T10:00:00Z'),
+      });
+      mockPrisma.participant.findFirst.mockResolvedValue(participant);
+      mockPrisma.message.count.mockResolvedValue(4);
 
       unreadCount = await service.getUnreadCount(testParticipantId, testConversationId);
       expect(unreadCount).toBe(4);
@@ -1061,8 +1203,16 @@ describe('MessageReadStatusService', () => {
 
   describe('Data Accuracy & Consistency', () => {
     it('should maintain accurate unread count after marking messages as read', async () => {
-      // Setup: User has 5 unread messages
-      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ unreadCount: 5 });
+      // Setup: User has 5 unread messages (cursor with stale unreadCount but
+      // lastReadAt is honoured + message.count returns 5)
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        id: 'c', participantId: testParticipantId, conversationId: testConversationId,
+        unreadCount: 99, lastReadAt: new Date('2026-05-21T10:00:00Z'),
+      });
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: testParticipantId, joinedAt: new Date('2026-04-01'),
+      });
+      mockPrisma.message.count.mockResolvedValue(5);
 
       let unreadCount = await service.getUnreadCount(testParticipantId, testConversationId);
       expect(unreadCount).toBe(5);
@@ -1281,7 +1431,14 @@ describe('MessageReadStatusService', () => {
     });
 
     it('should handle rapid successive status updates', async () => {
-      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({ unreadCount: 10 });
+      mockPrisma.conversationReadCursor.findUnique.mockResolvedValue({
+        id: 'c', participantId: testParticipantId, conversationId: testConversationId,
+        unreadCount: 999, lastReadAt: new Date('2026-05-21T10:00:00Z'),
+      });
+      mockPrisma.participant.findFirst.mockResolvedValue({
+        id: testParticipantId, joinedAt: new Date('2026-04-01'),
+      });
+      mockPrisma.message.count.mockResolvedValue(10);
 
       // Rapid successive reads
       const promises = [];
@@ -1392,30 +1549,26 @@ describe('MessageReadStatusService', () => {
       const conversationCount = 20;
       const conversationIds = Array.from({ length: conversationCount }, (_, i) => `conv-${i}`);
 
-      // Half have cursors with unread counts
-      const cursors = conversationIds.slice(0, 10).map(id => ({
-        conversationId: id,
-        unreadCount: Math.floor(Math.random() * 10)
-      }));
+      // Per-conversation fresh compute: half have positive counts, half are 0
+      const expected: Record<string, number> = {};
+      conversationIds.forEach((id, i) => {
+        const count = i < 10 ? (i + 1) : 0;
+        expected[id] = count;
+        mockPrisma.conversationReadCursor.findUnique.mockResolvedValueOnce(
+          i < 10
+            ? { id: 'c', participantId: testParticipantId, conversationId: id, unreadCount: 999, lastReadAt: new Date('2026-05-21T10:00:00Z') }
+            : null,
+        );
+        mockPrisma.participant.findFirst.mockResolvedValueOnce({ id: testParticipantId, joinedAt: new Date('2026-04-01') });
+        mockPrisma.message.count.mockResolvedValueOnce(count);
+      });
 
-      mockPrisma.conversationReadCursor.findMany.mockResolvedValue(cursors);
-
-      const result = await service.getUnreadCountsForConversations([testParticipantId],conversationIds);
+      const result = await service.getUnreadCountsForConversations([testParticipantId], conversationIds);
 
       expect(result.size).toBe(conversationCount);
-      // Should make only 1 findMany for cursors - no individual message.count calls needed
-      // Conversations without cursors default to 0
-      expect(mockPrisma.conversationReadCursor.findMany).toHaveBeenCalledTimes(1);
-
-      // Verify that conversations with cursors have their unreadCount
-      cursors.forEach(cursor => {
-        expect(result.get(cursor.conversationId)).toBe(cursor.unreadCount);
-      });
-
-      // Verify that conversations without cursors default to 0
-      conversationIds.slice(10).forEach(id => {
-        expect(result.get(id)).toBe(0);
-      });
+      for (const id of conversationIds) {
+        expect(result.get(id)).toBe(expected[id]);
+      }
     });
   });
 

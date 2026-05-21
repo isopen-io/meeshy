@@ -256,11 +256,13 @@ struct VideoEditorTimeline: View {
     }
 
     private var zoomGesture: some Gesture {
-        MagnifyGesture()
+        // MagnificationGesture (iOS 13+) au lieu de MagnifyGesture (iOS 17+).
+        // `value` est directement le CGFloat (pas via .magnification).
+        MagnificationGesture()
             .onChanged { value in
                 let anchor = zoomAnchor ?? viewModel.timelineZoom
                 if zoomAnchor == nil { zoomAnchor = anchor }
-                let next = anchor * value.magnification
+                let next = anchor * value
                 viewModel.timelineZoom = min(maxZoom, max(minZoom, next))
             }
             .onEnded { _ in

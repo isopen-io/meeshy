@@ -2,7 +2,6 @@ import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
-import os
 
 // MARK: - Shared Content Types
 
@@ -29,13 +28,17 @@ struct SharePickerView: View {
     @EnvironmentObject var router: Router
     @EnvironmentObject private var statusViewModel: StatusViewModel
 
-    @State private var conversations: [Conversation] = []
-    @State private var isLoading = true
+    @StateObject private var viewModel = SharePickerViewModel()
     @State private var searchText = ""
-    @State private var sentToIds: Set<String> = []
-    @State private var sendingToId: String? = nil
-
-    private static let logger = Logger(subsystem: "me.meeshy.app", category: "share")
+    // The view exposes thin computed accessors that read from `viewModel`
+    // so the existing body code that referenced `conversations` /
+    // `isLoading` / `sentToIds` / `sendingToId` stays compact. These
+    // properties intentionally aren't @State anymore — the ViewModel
+    // owns the truth (P4.1 MVVM extraction).
+    private var conversations: [Conversation] { viewModel.conversations }
+    private var isLoading: Bool { viewModel.isLoading }
+    private var sentToIds: Set<String> { viewModel.sentToIds }
+    private var sendingToId: String? { viewModel.sendingToId }
 
     private var filteredConversations: [Conversation] {
         let active = conversations.filter { $0.isActive }
@@ -320,74 +323,36 @@ struct SharePickerView: View {
     // MARK: - Actions
 
     private func loadConversations() async {
-        if !conversationListViewModel.conversations.isEmpty {
-            conversations = conversationListViewModel.conversations
-            isLoading = false
-            return
-        }
-
-        let cacheResult = await CacheCoordinator.shared.conversations.load(for: "list")
-        switch cacheResult {
-        case .fresh(let cached, _), .stale(let cached, _):
-            conversations = cached
-            isLoading = false
-            if case .stale = cacheResult { await refreshConversationsForShare() }
-            return
-        case .expired, .empty:
-            await refreshConversationsForShare()
-        }
-    }
-
-    private func refreshConversationsForShare() async {
-        do {
-            let response: OffsetPaginatedAPIResponse<[APIConversation]> = try await APIClient.shared.offsetPaginatedRequest(
-                endpoint: "/conversations",
-                offset: 0,
-                limit: 50
-            )
-            if response.success {
-                let userId = AuthManager.shared.currentUser?.id ?? ""
-                conversations = response.data.map { $0.toConversation(currentUserId: userId) }
-            }
-        } catch {
-            Self.logger.error("Failed to load conversations for share: \(error.localizedDescription)")
-        }
-        isLoading = false
+        await viewModel.loadConversations(
+            seededFrom: conversationListViewModel.conversations
+        )
     }
 
     private func shareToConversation(_ conv: Conversation) {
         if let handler = onShareToConversation {
             handler(conv, sharedContent)
-            sentToIds.insert(conv.id)
+            viewModel.markSent(conv.id)
             HapticFeedback.success()
             return
         }
 
-        sendingToId = conv.id
         Task {
-            do {
-                let content = contentToSend
-                let body = SendMessageRequest(
-                    content: content,
-                    originalLanguage: nil,
-                    replyToId: nil,
-                    forwardedFromId: forwardedMessageId,
-                    forwardedFromConversationId: nil,
-                    attachmentIds: nil
-                )
-                let _: APIResponse<SendMessageResponseData> = try await APIClient.shared.post(
-                    endpoint: "/conversations/\(conv.id)/messages",
-                    body: body
-                )
-                sentToIds.insert(conv.id)
+            guard let content = contentToSend, !content.isEmpty else {
+                HapticFeedback.error()
+                ToastManager.shared.showError("Erreur lors du partage")
+                return
+            }
+            let success = await viewModel.send(
+                content,
+                to: conv.id,
+                forwardedMessageId: forwardedMessageId
+            )
+            if success {
                 HapticFeedback.success()
-                Self.logger.info("Shared content to conversation \(conv.id)")
-            } catch {
-                Self.logger.error("Failed to share to conversation: \(error.localizedDescription)")
+            } else {
                 HapticFeedback.error()
                 ToastManager.shared.showError("Erreur lors du partage")
             }
-            sendingToId = nil
         }
     }
 

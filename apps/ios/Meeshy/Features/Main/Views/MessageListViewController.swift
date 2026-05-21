@@ -83,6 +83,11 @@ final class MessageListViewController: UIViewController {
     var onOpenReactPicker: ((String) -> Void)?
     /// Open the detail sheet on the message-info tab.
     var onShowMessageInfo: ((String) -> Void)?
+    /// Tap on the delivery checkmarks (✓ / ✓✓ / ✓✓ bleu) of a sent message.
+    /// Opens the detail sheet on the "vues" tab so the author can inspect who
+    /// received / read the message. Only fires for `isMe` messages — received
+    /// bubbles never render a delivery check.
+    var onShowReadStatus: ((String) -> Void)?
     /// Open the detail sheet on the reactions tab.
     var onShowReactions: ((String) -> Void)?
     /// Open the detail sheet on the language / translation tab.
@@ -369,6 +374,12 @@ final class MessageListViewController: UIViewController {
             let preferred = vm?.preferredTranslation(for: message.id)
             let transcription = vm?.messageTranscriptions[message.id]
             let translatedAudios = vm?.messageTranslatedAudios[message.id] ?? []
+            // Galerie audio plein écran : `AudioFullscreenView` n'affiche son
+            // pager que si cette liste est non-vide. Sans ce wiring, le tap
+            // sur l'icône / chip plein écran d'une bulle audio ouvre un
+            // ZStack contenant uniquement le `Color.black` de fond — d'où
+            // l'écran noir observé en prod.
+            let allAudioItems = vm?.allAudioItems ?? []
             let mentionDisplayNames = vm?.mentionDisplayNames ?? [:]
             let isLastReceived = (vm?.lastReceivedMessageId == message.id)
             let isLastSent = (vm?.lastSentMessageId == message.id)
@@ -397,6 +408,7 @@ final class MessageListViewController: UIViewController {
             let toggleReactionHandler = self.onToggleReaction
             let openReactPickerHandler = self.onOpenReactPicker
             let showInfoHandler = self.onShowMessageInfo
+            let showReadStatusHandler = self.onShowReadStatus
             let showReactionsHandler = self.onShowReactions
             let showTranslationHandler = self.onShowTranslationDetail
             let mediaTapHandler = self.onMediaTap
@@ -438,12 +450,14 @@ final class MessageListViewController: UIViewController {
                         onOpenReactPicker: openReactPickerHandler,
                         onShowInfo: { showInfoHandler?(messageId) },
                         onShowReactions: showReactionsHandler,
+                        onShowReadStatus: showReadStatusHandler,
                         onReplyTap: scrollHandler,
                         onStoryReplyTap: storyReplyHandler,
                         onMediaTap: mediaTapHandler,
                         onConsumeViewOnce: consumeViewOnceHandler,
                         onRequestTranslation: requestTranslationHandler,
                         onShowTranslationDetail: showTranslationHandler,
+                        allAudioItems: allAudioItems,
                         onScrollToMessage: scrollHandler,
                         isLastInGroup: true,
                         isLastReceivedMessage: isLastReceived,
@@ -582,7 +596,11 @@ final class MessageListViewController: UIViewController {
             vm.$messageTranslations.map { _ in () }.eraseToAnyPublisher(),
             vm.$messageTranscriptions.map { _ in () }.eraseToAnyPublisher(),
             vm.$messageTranslatedAudios.map { _ in () }.eraseToAnyPublisher(),
-            vm.$activeTranslationOverrides.map { _ in () }.eraseToAnyPublisher()
+            vm.$activeTranslationOverrides.map { _ in () }.eraseToAnyPublisher(),
+            // B2 — preferred-language change triggers a full bubble
+            // re-resolution so the previously selected translation is
+            // swapped for the one matching the new language preferences.
+            vm.$preferredLanguageRevision.map { _ in () }.eraseToAnyPublisher()
         )
         .dropFirst() // skip the @Published initial emission
         .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)

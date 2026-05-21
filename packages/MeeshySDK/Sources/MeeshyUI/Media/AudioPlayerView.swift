@@ -1,6 +1,7 @@
 import SwiftUI
 import AVFoundation
 import Combine
+import os
 import MeeshySDK
 
 // MARK: - Audio Playback Manager
@@ -49,6 +50,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
                 guard !Task.isCancelled else { return }
                 playData(data)
             } catch {
+                Self.log.error("play(urlString) cache fetch echec (\(resolved, privacy: .public)): \(error.localizedDescription, privacy: .public)")
                 isLoading = false
             }
         }
@@ -59,13 +61,31 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
         PlaybackCoordinator.shared.willStartPlaying(audio: self)
         resetState()
         currentUrl = url.absoluteString
+        // Pre-flight : vérifie l'existence du fichier AVANT d'ouvrir une
+        // audio session. Sans ce check, `Data(contentsOf:)` jetait, le
+        // `catch {}` historique avalait l'erreur, et le preview composer
+        // restait silencieusement muet ("le bouton play ne joue rien").
+        let fm = FileManager.default
+        if url.isFileURL, !fm.fileExists(atPath: url.path) {
+            Self.log.error("playLocal: fichier introuvable -> \(url.path, privacy: .public)")
+            isLoading = false
+            return
+        }
         do {
             try AVAudioSession.sharedInstance().setCategory(.playback, mode: .default, options: [])
             try AVAudioSession.sharedInstance().setActive(true)
             let data = try Data(contentsOf: url)
             playData(data)
-        } catch { }
+        } catch {
+            Self.log.error("playLocal echec (\(url.lastPathComponent, privacy: .public)): \(error.localizedDescription, privacy: .public)")
+            isLoading = false
+        }
     }
+
+    /// Logger dédié — `os.Logger` subsystem `me.meeshy.app`, catégorie
+    /// `audio-playback`. Permet de filtrer rapidement dans Console.app
+    /// quand un preview ne déclenche aucune lecture audible.
+    private static let log = os.Logger(subsystem: "me.meeshy.app", category: "audio-playback")
 
     private func playData(_ data: Data) {
         do {
@@ -81,6 +101,7 @@ public class AudioPlaybackManager: NSObject, ObservableObject {
             listenStartTime = Date()
             startProgressTimer()
         } catch {
+            Self.log.error("playData AVAudioPlayer init echec (\(data.count, privacy: .public)o): \(error.localizedDescription, privacy: .public)")
             isLoading = false
         }
     }
@@ -448,13 +469,13 @@ public struct AudioPlayerView: View {
                 slotDivider
             }
 
-            HStack(spacing: context.isCompact ? 8 : 10) {
+            HStack(alignment: .center, spacing: context.isCompact ? 8 : 10) {
                 playButton
                 VStack(alignment: .leading, spacing: context.isCompact ? 3 : 4) {
                     waveformProgress
                     timeRow
                 }
-                percentageView
+                rightChipsColumn
                 contextActions
             }
             .padding(.horizontal, context.isCompact ? 10 : 14)
@@ -800,49 +821,94 @@ public struct AudioPlayerView: View {
     }
 
     // MARK: - Time Row
+    /// Timecodes seuls : `currentTime` à gauche, `estimatedDuration` à droite.
+    /// La vitesse de lecture et l'affordance plein écran ont migré vers
+    /// `rightChipsColumn` (capsules empilées à droite du widget).
     private var timeRow: some View {
         HStack(spacing: 0) {
             Text(formatMediaDuration(player.currentTime))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.5) : .black.opacity(0.4))
-
-            Button { player.cycleSpeed() } label: {
-                Text(player.speed.label)
-                    .font(.system(size: context.isCompact ? 9 : 10, weight: .bold, design: .monospaced))
-                    .foregroundColor(player.speed == .x1_0
-                        ? (isDark ? .white.opacity(0.35) : .black.opacity(0.25))
-                        : accent)
-            }
-            .padding(.leading, 4)
-
             Spacer()
-
             Text(formatMediaDuration(estimatedDuration))
                 .font(.system(size: context.isCompact ? 9 : 10, weight: .semibold, design: .monospaced))
                 .foregroundColor(isDark ? .white.opacity(0.3) : .black.opacity(0.25))
-
-            if let onFullscreen = onFullscreen {
-                Button { onFullscreen() } label: {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 9, weight: .bold))
-                        .foregroundColor(isDark ? .white.opacity(0.4) : .black.opacity(0.3))
-                }
-                .padding(.leading, 4)
-            }
         }
     }
 
-    // MARK: - Percentage View
-    private var percentageView: some View {
+    // MARK: - Right Chips Column (speed + progress, stacked vertically)
+    /// Colonne droite du widget : chip vitesse en haut (alignée avec la
+    /// waveform), chip pourcentage juste en dessous (alignée avec timeRow).
+    /// Le tap sur la chip pourcentage ouvre la vue plein écran — l'ancienne
+    /// icône `arrow.up.left.and.arrow.down.right` a été supprimée du timeRow,
+    /// le pourcentage qui n'était qu'un libellé devient l'affordance.
+    private var rightChipsColumn: some View {
+        VStack(alignment: .trailing, spacing: context.isCompact ? 3 : 4) {
+            speedChip
+            percentageChip
+        }
+    }
+
+    private var speedChip: some View {
+        let isDefault = player.speed == .x1_0
+        let chipBg: Color = isDefault
+            ? (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+            : accent.opacity(0.85)
+        let chipFg: Color = isDefault
+            ? (isDark ? .white.opacity(0.55) : .black.opacity(0.45))
+            : .white
+        return Button {
+            player.cycleSpeed()
+            HapticFeedback.light()
+        } label: {
+            Text(player.speed.label)
+                .font(.system(size: context.isCompact ? 9 : 10, weight: .bold, design: .monospaced))
+                .foregroundColor(chipFg)
+                .padding(.horizontal, context.isCompact ? 7 : 8)
+                .padding(.vertical, context.isCompact ? 2 : 3)
+                .background(Capsule().fill(chipBg))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(String(localized: "media.audio.speed.cycle",
+                                   defaultValue: "Vitesse de lecture \(player.speed.label)",
+                                   bundle: .module))
+    }
+
+    private var percentageChip: some View {
         let pct = Int(player.progress * 100)
-        return Text("\(pct)%")
-            .font(.system(size: context.isCompact ? 10 : 12, weight: .heavy, design: .monospaced))
-            .foregroundColor(pct == 0
-                ? (isDark ? .white.opacity(0.35) : .black.opacity(0.25))
-                : accent)
-            .frame(minWidth: context.isCompact ? 32 : 38)
+        let isStarted = pct > 0
+        let chipBg: Color = isStarted
+            ? accent.opacity(0.85)
+            : (isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.05))
+        let chipFg: Color = isStarted
+            ? .white
+            : (isDark ? .white.opacity(0.55) : .black.opacity(0.45))
+        let label = Text("\(pct)%")
+            .font(.system(size: context.isCompact ? 9 : 10, weight: .heavy, design: .monospaced))
+            .foregroundColor(chipFg)
+            .padding(.horizontal, context.isCompact ? 7 : 8)
+            .padding(.vertical, context.isCompact ? 2 : 3)
+            .background(Capsule().fill(chipBg))
             .contentTransition(.numericText())
             .animation(.easeInOut(duration: 0.15), value: pct)
+
+        return Group {
+            if let onFullscreen = onFullscreen {
+                Button {
+                    HapticFeedback.light()
+                    onFullscreen()
+                } label: { label }
+                .buttonStyle(.plain)
+                .accessibilityLabel(String(localized: "media.audio.open.fullscreen",
+                                           defaultValue: "Ouvrir en plein écran, lecture \(pct)%",
+                                           bundle: .module))
+                .accessibilityHint(String(localized: "media.audio.open.fullscreen.hint",
+                                          defaultValue: "Affiche la vue plein écran avec les options de sauvegarde",
+                                          bundle: .module))
+            } else {
+                label
+            }
+        }
     }
 
     // MARK: - Context Actions

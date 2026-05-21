@@ -20,6 +20,7 @@ export interface ConversationHeaderProps {
   onOpenGallery?: () => void;
   t: (key: string) => string;
   showBackButton?: boolean;
+  otherUnreadCount?: number;
 }
 
 export interface HeaderPreferences {

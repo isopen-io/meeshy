@@ -100,6 +100,14 @@ struct StoryViewerView: View {
     /// and the centered loading spinner.
     @State var isContentReady: Bool = false // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
+    /// Spécifique au toggle long-press : `true` UNIQUEMENT entre le hold
+    /// confirmé (200 ms) et le tap suivant de reprise. Distinct de `isPaused`,
+    /// qui couvre **toutes** les pauses du timer (sheets, drag-to-dismiss,
+    /// composer engaged…). Le notification au canvas (`storyPlayerPause` /
+    /// `storyPlayerResume`) n'est postée QUE quand ce drapeau bascule —
+    /// sinon ouvrir une sheet ou drag pour dismiss freezerait la vidéo BG
+    /// et l'audio mixer (blip audible au play/pause rapide).
+    @State var isLongPressPaused = false // internal for cross-file extension access
     @State var isGlobalMuted = false // internal for cross-file extension access
     /// Audio-track presence for the current slide's foreground videos, keyed by
     /// `StoryMediaObject.id`. Populated by `refreshVideoAudioTrackPresence()` —
@@ -124,6 +132,21 @@ struct StoryViewerView: View {
     @State var computedStoryDuration: Double = 12.0 // internal for cross-file extension access
     @State var timerCancellable: AnyCancellable? // internal for cross-file extension access
     @State var hasFiredFadeOut = false // internal for cross-file extension access
+    @State var hasFiredNextPrefetch = false // déclencheur du prefetch de la slide N+1, armé à 5s de la fin de la slide en cours pour que la transition soit fluide.
+
+    /// Visibilité du chrome (header, sidebar droite, composer) — animé par
+    /// glissements directionnels. En mode normal `chromeVisible = true` au
+    /// repos, passe à `false` pendant un touch-and-hold pour révéler le
+    /// contenu en pleine surface (typique « immersion lecture »). En mode
+    /// `isFullscreenStorySession`, l'état au repos est inversé : `false`,
+    /// révélé temporairement par le toucher.
+    @State var chromeVisible: Bool = true // internal for cross-file extension access
+
+    /// Mode "plein écran" toggleable via le menu hamburger « … ». Quand actif,
+    /// le chrome est caché par défaut pour TOUTE la session story (jusqu'au
+    /// prochain toggle), et n'apparaît que pendant un touch-and-hold. La
+    /// distinction avec le toggle ponctuel : ici l'état au repos est inversé.
+    @State var isFullscreenStorySession: Bool = false // internal for cross-file extension access
 
     // MARK: - P3 wire-up : Prefetcher + gated timer
     //
@@ -234,9 +257,21 @@ struct StoryViewerView: View {
     /// presentation.
     @State var hasTriggeredInitialAction = false
 
-    private var screenH: CGFloat { UIScreen.main.bounds.height }
+    // Use the active window bounds rather than `UIScreen.main.bounds` so
+    // iPad split-screen / Stage Manager / multi-window scenes report the
+    // viewer's actual window (UIScreen reports the full display). Used by
+    // swipe-to-dismiss thresholds and horizontal-slide normalization.
+    private var windowSize: CGSize {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })?
+            .windows.first(where: { $0.isKeyWindow })?
+            .bounds.size ?? UIScreen.main.bounds.size
+    }
 
-    var screenW: CGFloat { UIScreen.main.bounds.width } // internal for cross-file extension access
+    private var screenH: CGFloat { windowSize.height }
+
+    var screenW: CGFloat { windowSize.width } // internal for cross-file extension access
 
     // Drag dismiss progress 0–1
     private var dragProgress: CGFloat {
@@ -283,8 +318,29 @@ struct StoryViewerView: View {
             if initialStoryIndex > 0, currentGroupIndex < groups.count {
                 currentStoryIndex = min(initialStoryIndex, groups[currentGroupIndex].stories.count - 1)
             }
+            // A5 — skip past stories whose 24h visibility window has elapsed.
+            // Cache TTL > 24h is intentional (avoid redownloading avatars)
+            // but the *content* must not be rendered once expired. If no
+            // non-expired story remains in the current group, dismiss.
+            skipExpiredStoriesIfNeeded()
             StoryMediaCoordinator.shared.activate {
-                isGlobalMuted = true
+                // No-op : ne PAS forcer `isGlobalMuted = true` ici. Cette
+                // closure est invoquée par `PlaybackCoordinator` chaque fois
+                // qu'un autre `StoppablePlayer` claim le canal audio — y
+                // compris l'`audioMixer` interne à la story elle-même
+                // (cf. `StoryCanvasUIView.startAudioPlayback` →
+                // `willStartPlaying(external: audioMixer)` qui sweep tous
+                // les externals sauf lui-même → arrête `StoryMediaCoordinator`
+                // → invoque ce closure). Le résultat était que le viewer
+                // s'ouvrait toujours en muted parce que le canvas lui-même
+                // déclenchait le stop handler dès le premier `startAudioPlayback`.
+                //
+                // L'état `isGlobalMuted` doit rester un choix utilisateur. Si
+                // une vraie interruption externe arrive (appel iOS, autre app
+                // qui prend le canal), `AVAudioSession` s'occupera de
+                // l'interruption au niveau système, et le canvas réagira via
+                // `observeAudioSessionEvents` (interruption began/ended). Pas
+                // besoin de basculer la UI mute pour ça.
             }
             installPrefetchPipelineIfNeeded()
             refreshPrefetchWindowAndTimer()
@@ -327,6 +383,20 @@ struct StoryViewerView: View {
                 Task { await MediaSessionCoordinator.shared.deactivateForBackground() }
                 isPresented = false
             }
+        }
+        // Long-press toggle UNIQUEMENT — pas les autres pauses du timer.
+        //
+        // Sheets, drag-to-dismiss, composer engaged… mutent `isPaused`
+        // (timer-only). Si on postait `.storyPlayerPause` dessus, chaque
+        // ouverture/fermeture de sheet ferait un cycle pause/play sur
+        // l'audio mixer et la vidéo BG — blip audible. Le canvas ne se
+        // freeze comme une vidéo que quand l'utilisateur le demande
+        // explicitement via long-press.
+        .adaptiveOnChange(of: isLongPressPaused) { _, paused in
+            NotificationCenter.default.post(
+                name: paused ? .storyPlayerPause : .storyPlayerResume,
+                object: nil
+            )
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
             isContentReady = false
@@ -620,6 +690,40 @@ struct StoryViewerView: View {
 
     /// Direct repost-as-post action wired to the kebab menu's "Republier en
     /// post" item. Mirrors the share-button repost UX (C.1) but skips the
+    /// A5 — advance past stories whose 24h visibility window has elapsed.
+    ///
+    /// The cache TTL is intentionally longer than 24h (avoids redownloading
+    /// avatars + metadata on cold start), so the viewer may receive expired
+    /// stories from the local store. We skip them here rather than filter
+    /// at the tray level — the tray must keep showing the user's ring for
+    /// UX continuity, but rendering an expired story (deleted server-side
+    /// by the GC job) would 404 on reactions and confuse the user.
+    ///
+    /// Behavior:
+    /// - advance `currentStoryIndex` to the first non-expired story in the
+    ///   current group (forward only — never go back to an unexpired one);
+    /// - if every remaining story in the group is expired, dismiss the
+    ///   viewer (the user is opening an empty ring).
+    private func skipExpiredStoriesIfNeeded() {
+        let now = Date()
+        guard currentGroupIndex < groups.count else { return }
+        let group = groups[currentGroupIndex]
+        guard !group.stories.isEmpty else { return }
+
+        var idx = currentStoryIndex
+        while idx < group.stories.count, group.stories[idx].isExpired(at: now) {
+            idx += 1
+        }
+        if idx >= group.stories.count {
+            // Whole tail of the group is expired — close.
+            isPresented = false
+            return
+        }
+        if idx != currentStoryIndex {
+            currentStoryIndex = idx
+        }
+    }
+
     /// composer — fires `PostService.repost` immediately with no content and
     /// Transitions the Socket.IO post room subscription from `oldStory` to `newStory`.
     /// The old.id != new.id check makes redundant calls (e.g. double-fire from both
@@ -735,6 +839,7 @@ struct StoryViewerView: View {
             isOwnStory: isOwnStory,
             quickEmojis: quickEmojis,
             progress: progress,
+            currentSlideDuration: currentSlideDuration,
             outgoingOpacity: outgoingOpacity,
             closingScale: closingScale,
             contentOpacity: contentOpacity,
@@ -784,6 +889,9 @@ struct StoryViewerView: View {
             emojiToInject: $emojiToInject,
             composerFocusTrigger: $composerFocusTrigger,
             storyDrafts: $storyDrafts,
+            chromeVisible: $chromeVisible,
+            isFullscreenStorySession: $isFullscreenStorySession,
+            isLongPressPaused: $isLongPressPaused,
             keyboard: keyboard,
             triggerStoryReaction: { triggerStoryReaction($0) },
             pauseTimer: { pauseTimer() },

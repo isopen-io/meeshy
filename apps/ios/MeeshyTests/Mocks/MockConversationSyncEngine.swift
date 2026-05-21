@@ -9,9 +9,12 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
 
     private let _conversationsDidChange = PassthroughSubject<Void, Never>()
     private let _messagesDidChange = PassthroughSubject<String, Never>()
+    private let _totalConversationsUnread = CurrentValueSubject<Int, Never>(0)
 
     var conversationsDidChange: AnyPublisher<Void, Never> { _conversationsDidChange.eraseToAnyPublisher() }
     var messagesDidChange: AnyPublisher<String, Never> { _messagesDidChange.eraseToAnyPublisher() }
+    var totalConversationsUnread: AnyPublisher<Int, Never> { _totalConversationsUnread.eraseToAnyPublisher() }
+    var totalConversationsUnreadValue: Int { _totalConversationsUnread.value }
 
     // MARK: - Stubbing
 
@@ -80,6 +83,13 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         updateConversationAfterSendCallCount += 1
     }
 
+    var setCurrentlyOpenConversationCallCount = 0
+    var lastSetCurrentlyOpenConversationId: String?
+    func setCurrentlyOpenConversation(_ conversationId: String?) {
+        setCurrentlyOpenConversationCallCount += 1
+        lastSetCurrentlyOpenConversationId = conversationId
+    }
+
     // MARK: - Simulation Helpers
 
     func simulateConversationsChanged() {
@@ -88,6 +98,10 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
 
     func simulateMessagesChanged(conversationId: String) {
         _messagesDidChange.send(conversationId)
+    }
+
+    func simulateTotalUnread(_ value: Int) {
+        _totalConversationsUnread.send(value)
     }
 
     // MARK: - Reset
@@ -105,6 +119,8 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         markConversationReadLocallyCallCount = 0
         lastMarkReadConversationId = nil
         updateConversationAfterSendCallCount = 0
+        setCurrentlyOpenConversationCallCount = 0
+        lastSetCurrentlyOpenConversationId = nil
         onSyncSinceLastCheckpoint = nil
     }
 }

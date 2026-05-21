@@ -186,7 +186,7 @@ private struct ProbedInspector: View {
         )
         return inspector
             .onAppear { onProbe(inspector._stateSnapshot) }
-            .onChange(of: clip) { _, _ in
+            .adaptiveOnChange(of: clip) { _, _ in
                 // After the inspector's own .onChange has fired, the @State
                 // is resynced — schedule one runloop tick later so we observe
                 // the post-sync values rather than the pre-sync ones.

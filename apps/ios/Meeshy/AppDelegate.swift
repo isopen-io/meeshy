@@ -49,6 +49,15 @@ class AppDelegate: NSObject, UIApplicationDelegate {
             StoryFilteredLayer.preheatAllPipelines()
             MeeshyMetricsSubscriber.shared.register()
             AnalyticsManager.shared.syncCollectionState()
+            // P1.5 — surface DependencyContainer boot diagnostics now that
+            // the crash reporter is wired. The container no longer crashes
+            // on a corrupted SQLite file but it does need to tell us when
+            // it recovered, so the issue is investigated rather than
+            // silently swept under the rug.
+            Self.reportDependencyContainerDiagnostics(
+                DependencyContainer.shared.initDiagnostics,
+                reporter: crashReporter
+            )
         }
 
         UNUserNotificationCenter.current().delegate = self
@@ -314,6 +323,21 @@ class AppDelegate: NSObject, UIApplicationDelegate {
     /// the launch flow stays unchanged. Idempotent: safe to call multiple
     /// times — only the first call configures, subsequent calls return the
     /// already-active reporter.
+    /// Forward the database init diagnostics to the crash reporter so the
+    /// recovered-from-corruption / in-memory-fallback paths are visible in
+    /// the dashboard. Silent recoveries used to leave no trace; this
+    /// signal lets us notice when a fleet of users hits SQLITE_CORRUPT.
+    private static func reportDependencyContainerDiagnostics(
+        _ diagnostics: DatabaseInitDiagnostics,
+        reporter: CrashReporting
+    ) {
+        guard diagnostics.recoveryAttempted || diagnostics.fellBackToInMemory else { return }
+        let summary = diagnostics.fellBackToInMemory
+            ? "DB init fell back to in-memory pool"
+            : "DB recovered from corruption"
+        reporter.log("[db-init] \(summary) — first-attempt-error=\(diagnostics.firstAttemptError ?? "nil") quarantined=\(diagnostics.quarantinedFilePath ?? "nil")")
+    }
+
     private static func bootCrashReporting() -> CrashReporting {
         guard Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil else {
             Logger.crash.info("Firebase not configured (GoogleService-Info.plist missing); using NoOp reporter")

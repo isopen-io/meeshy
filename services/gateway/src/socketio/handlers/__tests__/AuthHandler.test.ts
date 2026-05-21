@@ -11,7 +11,7 @@ import { StatusService } from '../../../services/StatusService';
 import jwt from 'jsonwebtoken';
 
 // Mocks
-const createMockSocket = (overrides = {}): Socket => ({
+const createMockSocket = (overrides: Record<string, unknown> = {}): Socket => ({
   id: 'socket-123',
   handshake: {
     auth: {},
@@ -20,16 +20,23 @@ const createMockSocket = (overrides = {}): Socket => ({
   emit: jest.fn(),
   join: jest.fn(),
   leave: jest.fn(),
+  on: jest.fn(),
+  disconnect: jest.fn(),
   ...overrides
 } as unknown as Socket);
 
 const createMockPrisma = (): PrismaClient => ({
   user: {
-    findUnique: jest.fn()
+    findUnique: jest.fn(),
+    update: jest.fn().mockResolvedValue(undefined)
   },
   participant: {
     findFirst: jest.fn(),
-    findUnique: jest.fn()
+    findUnique: jest.fn(),
+    findMany: jest.fn().mockResolvedValue([])
+  },
+  callParticipant: {
+    findMany: jest.fn().mockResolvedValue([])
   }
 } as unknown as PrismaClient);
 
@@ -37,6 +44,8 @@ describe('AuthHandler', () => {
   let authHandler: AuthHandler;
   let mockPrisma: PrismaClient;
   let mockStatusService: StatusService;
+  let mockMaintenanceService: any;
+  let mockCallService: any;
   let connectedUsers: Map<string, any>;
   let socketToUser: Map<string, string>;
   let userSockets: Map<string, Set<string>>;
@@ -47,8 +56,19 @@ describe('AuthHandler', () => {
 
     mockPrisma = createMockPrisma();
     mockStatusService = {
-      updateLastSeen: jest.fn()
+      updateLastSeen: jest.fn(),
+      markConnected: jest.fn(),
+      markDisconnected: jest.fn()
     } as unknown as StatusService;
+
+    mockMaintenanceService = {
+      updateUserOnlineStatus: jest.fn().mockResolvedValue(undefined),
+      updateAnonymousOnlineStatus: jest.fn().mockResolvedValue(undefined)
+    };
+
+    mockCallService = {
+      leaveCall: jest.fn().mockResolvedValue(undefined)
+    };
 
     connectedUsers = new Map();
     socketToUser = new Map();
@@ -57,6 +77,8 @@ describe('AuthHandler', () => {
     authHandler = new AuthHandler({
       prisma: mockPrisma,
       statusService: mockStatusService,
+      maintenanceService: mockMaintenanceService,
+      callService: mockCallService,
       connectedUsers,
       socketToUser,
       userSockets
@@ -89,10 +111,13 @@ describe('AuthHandler', () => {
 
       expect(connectedUsers.size).toBe(1);
       expect(socketToUser.get('socket-123')).toBe('user-123');
-      expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', {
-        userId: 'user-123',
-        isAnonymous: false
-      });
+      expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', expect.objectContaining({
+        success: true,
+        user: expect.objectContaining({
+          id: 'user-123',
+          isAnonymous: false
+        })
+      }));
     });
 
     it('should authenticate anonymous user with session token', async () => {
@@ -115,24 +140,30 @@ describe('AuthHandler', () => {
 
       expect(connectedUsers.size).toBe(1);
       expect(socketToUser.get('socket-123')).toBe('anon-123');
-      expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', {
-        userId: 'anon-123',
-        isAnonymous: true
-      });
+      expect(mockSocket.emit).toHaveBeenCalledWith('authenticated', expect.objectContaining({
+        success: true,
+        user: expect.objectContaining({
+          id: 'anon-123',
+          isAnonymous: true
+        })
+      }));
     });
 
     it('should handle missing tokens gracefully', async () => {
+      jest.useFakeTimers();
       const mockSocket = createMockSocket();
 
       await authHandler.handleTokenAuthentication(mockSocket);
 
       expect(connectedUsers.size).toBe(0);
       expect(socketToUser.size).toBe(0);
+      jest.clearAllTimers();
+      jest.useRealTimers();
     });
   });
 
   describe('handleDisconnection', () => {
-    it('should cleanup user data on disconnect', () => {
+    it('should cleanup user data on disconnect', async () => {
       // Setup connected user
       socketToUser.set('socket-123', 'user-123');
       connectedUsers.set('user-123', {
@@ -145,14 +176,14 @@ describe('AuthHandler', () => {
 
       const mockSocket = createMockSocket();
 
-      authHandler.handleDisconnection(mockSocket);
+      await authHandler.handleDisconnection(mockSocket);
 
       expect(connectedUsers.size).toBe(0);
       expect(socketToUser.size).toBe(0);
       expect(userSockets.size).toBe(0);
     });
 
-    it('should handle multi-device disconnect correctly', () => {
+    it('should handle multi-device disconnect correctly', async () => {
       // User with 2 devices
       socketToUser.set('socket-123', 'user-123');
       socketToUser.set('socket-456', 'user-123');
@@ -166,7 +197,7 @@ describe('AuthHandler', () => {
 
       const mockSocket = createMockSocket({ id: 'socket-123' });
 
-      authHandler.handleDisconnection(mockSocket);
+      await authHandler.handleDisconnection(mockSocket);
 
       // User should still have 1 socket active
       expect(userSockets.get('user-123')?.size).toBe(1);

@@ -385,7 +385,7 @@ cd apps/web && npm run dev
 **Step 2: Log in and verify message alignment**
 
 1. Open `http://localhost:3100` in browser
-2. Log in with test credentials (`atabeth` / `pD5p1ir9uxLUf2X2FpNE`)
+2. Log in with test credentials (`atabeth` / `<DEMO_PASSWORD — see apps/ios/fastlane/.env>`)
 3. Open any conversation with existing messages
 4. Verify: own messages appear on the RIGHT side
 5. Verify: other users' messages appear on the LEFT side
@@ -393,7 +393,7 @@ cd apps/web && npm run dev
 
 **Step 3: Verify unread counts**
 
-1. Open a second browser/incognito as `jcharlesnm` / `zircy8-kyrgot-putcoC`
+1. Open a second browser/incognito as `jcharlesnm` / `<DEMO_PASSWORD_2 — see apps/ios/fastlane/.env>`
 2. Send a message from jcharlesnm to atabeth
 3. Verify: atabeth's conversation list shows the unread badge (not incrementing for own messages)
 

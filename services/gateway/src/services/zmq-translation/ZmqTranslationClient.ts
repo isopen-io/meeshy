@@ -52,6 +52,11 @@ export interface ZMQClientStats {
 const ZMQ_REQUEST_TIMEOUT_MS = 30_000;
 // Maximum number of retries before emitting an error
 const ZMQ_MAX_RETRIES = 3;
+// Long-running voice pipeline (voice_translate / voice_translate_async) can take
+// several minutes (Whisper + NLLB + Chatterbox). Resending after 30 s would
+// duplicate the same job 4× in the translator worker pool and saturate CPU.
+// → Single shot, long deadman timeout, no retry.
+const ZMQ_VOICE_TRANSLATE_DEADMAN_MS = 15 * 60_000; // 15 minutes
 
 export class ZmqTranslationClient extends EventEmitter {
   private connectionManager: ZmqConnectionManager;
@@ -108,22 +113,42 @@ export class ZmqTranslationClient extends EventEmitter {
   }
 
   /**
-   * Registers a 30-second timeout for a pending ZMQ request.
-   * On timeout: retries the send with the SAME taskId (to avoid duplicate processing).
-   * On final timeout: emits a synthetic error event and cleans up.
+   * Registers a timeout for a pending ZMQ request.
+   *
+   * Default behavior: 30s timeout + up to 3 retries with the SAME taskId.
+   *
+   * When `retryEnabled` is false (long voice pipelines), the function arms a
+   * single long "deadman" timeout (`timeoutMs`) with no retry: the translator
+   * worker pool queues the work and the result comes back asynchronously via
+   * the SUB socket. Re-pushing the request would just create a parallel
+   * duplicate job in the worker pool and saturate CPU.
    *
    * @param taskId - Correlation ID for the request (preserved across retries)
-   * @param errorEvent - The error event payload to emit if all retries fail
+   * @param errorEvent - The error event payload to emit if the request fails
    * @param errorEventName - The EventEmitter event name to emit on final failure
    * @param resend - Async function that re-sends the request with the same taskId
+   * @param opts.retryEnabled - When false, no retry; one shot with the long deadman
+   * @param opts.timeoutMs - Override timeout (defaults to ZMQ_REQUEST_TIMEOUT_MS)
    */
   private _registerRequestTimeout(
     taskId: string,
     errorEventName: string,
     errorEvent: Record<string, unknown>,
-    resend: (existingTaskId: string) => Promise<string>
+    resend: (existingTaskId: string) => Promise<string>,
+    opts: { retryEnabled?: boolean; timeoutMs?: number } = {}
   ): void {
-    this.requestSender.registerTimeout(taskId, ZMQ_REQUEST_TIMEOUT_MS, async () => {
+    const retryEnabled = opts.retryEnabled !== false;
+    const timeoutMs = opts.timeoutMs ?? ZMQ_REQUEST_TIMEOUT_MS;
+
+    this.requestSender.registerTimeout(taskId, timeoutMs, async () => {
+      if (!retryEnabled) {
+        logger.error(`❌ ZMQ deadman timeout (${Math.round(timeoutMs / 1000)}s) for taskId=${taskId}, giving up (no retry for long voice pipelines)`);
+        this.retryCount.delete(taskId);
+        this.stats.errors_received++;
+        this.emit(errorEventName, { ...errorEvent, taskId });
+        return;
+      }
+
       const retries = this.retryCount.get(taskId) ?? 0;
 
       if (retries < ZMQ_MAX_RETRIES) {
@@ -131,7 +156,7 @@ export class ZmqTranslationClient extends EventEmitter {
         try {
           await resend(taskId);
           this.retryCount.set(taskId, retries + 1);
-          this._registerRequestTimeout(taskId, errorEventName, errorEvent, resend);
+          this._registerRequestTimeout(taskId, errorEventName, errorEvent, resend, opts);
         } catch (err) {
           logger.error(`❌ ZMQ retry failed for taskId=${taskId}: ${err}`);
           this.retryCount.delete(taskId);
@@ -146,6 +171,16 @@ export class ZmqTranslationClient extends EventEmitter {
       }
     });
   }
+
+  /**
+   * Voice translation operations that must NOT be retried by the ZMQ client.
+   * These are long-running pipelines (Whisper + NLLB + TTS) queued by the
+   * translator's worker pool — retries would just duplicate work in the queue.
+   */
+  private static readonly VOICE_LONG_RUNNING_TYPES = new Set<string>([
+    'voice_translate',
+    'voice_translate_async',
+  ]);
 
   /**
    * Configure le forwarding des événements du handler vers le client
@@ -408,11 +443,23 @@ export class ZmqTranslationClient extends EventEmitter {
   }
 
   /**
-   * Envoie une requête Voice API
+   * Envoie une requête Voice API.
+   *
+   * Pour `voice_translate` / `voice_translate_async` (pipelines longs), aucun retry
+   * n'est armé : la requête est PUSH-ée une seule fois vers le translator qui la
+   * met en file dans son worker pool. La réponse remonte de manière asynchrone
+   * via le canal PUB/SUB. Un deadman de 15 minutes émet `voiceAPIError` si rien
+   * ne revient (le translator est probablement mort).
+   *
+   * Pour les autres opérations Voice API (rapides : status, list, feedback, …),
+   * le retry par défaut (30 s × 4) s'applique.
    */
   async sendVoiceAPIRequest(request: VoiceAPIRequest): Promise<string> {
     const taskId = await this.requestSender.sendVoiceAPIRequest(request);
     this.stats.requests_sent++;
+
+    const isLongRunning = ZmqTranslationClient.VOICE_LONG_RUNNING_TYPES.has(request.type);
+
     this._registerRequestTimeout(
       taskId,
       'voiceAPIError',
@@ -421,7 +468,10 @@ export class ZmqTranslationClient extends EventEmitter {
         await this.requestSender.sendVoiceAPIRequest(request, existingTaskId);
         this.stats.requests_sent++;
         return existingTaskId;
-      }
+      },
+      isLongRunning
+        ? { retryEnabled: false, timeoutMs: ZMQ_VOICE_TRANSLATE_DEADMAN_MS }
+        : undefined
     );
     return taskId;
   }

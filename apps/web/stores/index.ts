@@ -15,11 +15,16 @@ export {
 export {
   useAppStore,
   useTheme,
-  useIsOnline,
   useNotifications,
   useIsInitialized,
   useAppActions,
 } from './app-store';
+
+// Réseau / Socket : source unique de vérité (event-driven)
+export {
+  useConnectionStatus,
+  useIsOnline,
+} from '@/hooks/use-connection-status';
 
 // Language Store
 export {

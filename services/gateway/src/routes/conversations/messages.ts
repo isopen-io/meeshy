@@ -5,6 +5,7 @@ import { MessageTranslationService } from '../../services/message-translation/Me
 import { MessagingService } from '../../services/messaging/MessagingService';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
+import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { conversationStatsService } from '../../services/ConversationStatsService';
 import { ErrorCode } from '@meeshy/shared/types';
 import { createError, sendErrorResponse } from '@meeshy/shared/utils/errors';
@@ -58,7 +59,12 @@ export const SendMessageBodySchema = z.object({
   forwardedFromConversationId: z.string().optional(),
   encryptedContent: z.string().optional(),
   encryptionMode: z.enum(['e2ee', 'server', 'hybrid']).optional(),
-  encryptionMetadata: z.record(z.unknown()).optional(),
+  encryptionMetadata: z.record(z.unknown())
+    .refine(
+      (m) => { try { return JSON.stringify(m).length <= 8 * 1024; } catch { return false; } },
+      { message: 'encryptionMetadata exceeds 8KB serialized' }
+    )
+    .optional(),
   isEncrypted: z.boolean().optional(),
   attachmentIds: z.array(z.string()).optional(),
   isBlurred: z.boolean().optional(),
@@ -556,36 +562,7 @@ export function registerMessagesRoutes(
             }
           }
         },
-        attachments: {
-          select: {
-            id: true,
-            messageId: true,
-            fileName: true,
-            originalName: true,
-            mimeType: true,
-            fileSize: true,
-            fileUrl: true,
-            thumbnailUrl: true,
-            width: true,
-            height: true,
-            duration: true,
-            bitrate: true,
-            sampleRate: true,
-            codec: true,
-            channels: true,
-            fps: true,
-            videoCodec: true,
-            pageCount: true,
-            lineCount: true,
-            metadata: true,
-            uploadedBy: true,
-            isAnonymous: true,
-            createdAt: true,
-            // V2: Champs JSON intégrés (pas de sous-sélection sur JSON scalaires)
-            transcription: true,
-            translations: true
-          }
-        },
+        attachments: { select: attachmentMediaSelect },
         _count: {
           select: {
             reactions: true,
@@ -664,44 +641,7 @@ export function registerMessagesRoutes(
                 }
               }
             },
-            attachments: {
-              select: {
-                id: true,
-                fileName: true,
-                originalName: true,
-                mimeType: true,
-                fileSize: true,
-                fileUrl: true,
-                thumbnailUrl: true,
-                width: true,
-                height: true,
-                duration: true,
-                bitrate: true,
-                sampleRate: true,
-                codec: true,
-                channels: true,
-                fps: true,
-                videoCodec: true,
-                pageCount: true,
-                lineCount: true,
-                metadata: true,
-                transcription: true,  // ✅ Champ JSON scalaire
-                translations: true,   // ✅ Champ JSON scalaire (pas translationsJson!)
-                uploadedBy: true,
-                isAnonymous: true,
-                createdAt: true,
-                isForwarded: true,
-                isViewOnce: true,
-                viewOnceCount: true,
-                isBlurred: true,
-                effectFlags: true,
-                viewedCount: true,
-                downloadedCount: true,
-                consumedCount: true,
-                isEncrypted: true
-              },
-              take: 4
-            },
+            attachments: { select: attachmentFullSelect, take: 4 },
             _count: {
               select: {
                 reactions: true
@@ -1016,10 +956,7 @@ export function registerMessagesRoutes(
             sender: {
               select: { id: true, userId: true, displayName: true, avatar: true, user: { select: { username: true } } }
             },
-            attachments: {
-              select: { id: true, mimeType: true, thumbnailUrl: true, fileUrl: true },
-              take: 1
-            }
+            attachments: { select: attachmentForwardPreviewSelect, take: 1 }
           }
         });
 

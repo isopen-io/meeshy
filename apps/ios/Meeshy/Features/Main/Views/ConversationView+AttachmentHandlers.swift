@@ -260,6 +260,13 @@ extension ConversationView {
                         // and never re-downloads our own upload. See RC3.3.
                         let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
                         await CacheCoordinator.shared.audio.store(audioData, for: renderKey)
+                        // Also seed under the local `file://` key. Mirrors how
+                        // images cache under their `file://` URL (line 102): a
+                        // defence-in-depth so the optimistic GRDB row (which
+                        // still carries the `file://` URL until reconciliation)
+                        // resolves to a cached blob if the on-disk file is
+                        // cleaned up before the URL flips to https.
+                        await CacheCoordinator.shared.audio.store(audioData, for: audioURL.absoluteString)
                     }
                     let userId = AuthManager.shared.currentUser?.id ?? ""
                     localAttachments.append(result.toMessageAttachment(uploadedBy: userId))
@@ -335,7 +342,26 @@ extension ConversationView {
                 // Clear UI after upload+send and clean up local files
                 await MainActor.run {
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
-                    if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
+                    // Audio: defer disk deletion.
+                    //
+                    // The optimistic GRDB record's audio attachment carries the
+                    // `file://` URL until the `message:new` socket echo flips it
+                    // to the canonical `https://` URL (~100-500ms after REST
+                    // returns). During that reconciliation window the bubble's
+                    // play tap routes to `AudioPlayerView.playLocal` which
+                    // reads from disk — deleting the file eagerly here made the
+                    // player silently fail (the "I can't listen to my own audio
+                    // immediately after sending" bug). The bytes are already
+                    // cached under the canonical https key (seeded above), so
+                    // once reconciled the play works via the cache without any
+                    // disk read. A 10s delay covers worst-case socket latency
+                    // with ample margin while keeping Documents/ small.
+                    if let audioURL {
+                        Task {
+                            try? await Task.sleep(nanoseconds: 10_000_000_000)
+                            try? FileManager.default.removeItem(at: audioURL)
+                        }
+                    }
                     composerState.pendingMediaFiles.removeAll()
                     composerState.pendingAudioURL = nil
                     composerState.uploadProgress = nil
@@ -461,63 +487,9 @@ extension ConversationView {
     }
 
     func mimeTypeForURL(_ url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
-        switch ext {
-        // Images
-        case "jpg", "jpeg": return "image/jpeg"
-        case "png": return "image/png"
-        case "gif": return "image/gif"
-        case "webp": return "image/webp"
-        case "heic", "heif": return "image/heic"
-        case "svg": return "image/svg+xml"
-        case "bmp": return "image/bmp"
-        case "tiff", "tif": return "image/tiff"
-        // Video
-        case "mp4", "m4v": return "video/mp4"
-        case "mov": return "video/quicktime"
-        case "avi": return "video/x-msvideo"
-        case "mkv": return "video/x-matroska"
-        case "webm": return "video/webm"
-        // Audio
-        case "mp3": return "audio/mpeg"
-        case "m4a", "aac": return "audio/mp4"
-        case "wav": return "audio/wav"
-        case "ogg", "oga": return "audio/ogg"
-        case "flac": return "audio/flac"
-        case "wma": return "audio/x-ms-wma"
-        // Documents
-        case "pdf": return "application/pdf"
-        case "doc": return "application/msword"
-        case "docx": return "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-        case "xls": return "application/vnd.ms-excel"
-        case "xlsx": return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        case "ppt": return "application/vnd.ms-powerpoint"
-        case "pptx": return "application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        case "pages": return "application/x-iwork-pages-sffpages"
-        case "numbers": return "application/x-iwork-numbers-sffnumbers"
-        case "keynote": return "application/x-iwork-keynote-sffkey"
-        // Text & Code
-        case "txt": return "text/plain"
-        case "csv": return "text/csv"
-        case "json": return "application/json"
-        case "xml": return "application/xml"
-        case "html", "htm": return "text/html"
-        case "css": return "text/css"
-        case "js": return "application/javascript"
-        case "ts": return "application/typescript"
-        case "py": return "text/x-python"
-        case "swift": return "text/x-swift"
-        case "md", "markdown": return "text/markdown"
-        case "rtf": return "application/rtf"
-        case "log": return "text/plain"
-        // Archives
-        case "zip": return "application/zip"
-        case "rar": return "application/x-rar-compressed"
-        case "7z": return "application/x-7z-compressed"
-        case "tar": return "application/x-tar"
-        case "gz", "gzip": return "application/gzip"
-        default: return "application/octet-stream"
-        }
+        // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).
+        // See its `forwardTable` for the full extension → mime mapping.
+        MimeTypeResolver.mimeType(forURL: url)
     }
 
     func getFileSize(_ url: URL) -> Int {

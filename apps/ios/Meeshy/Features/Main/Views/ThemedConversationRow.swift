@@ -31,6 +31,13 @@ struct ThemedConversationRow: View {
     /// la ligne affiche « Brouillon : … » au lieu de l'aperçu du dernier
     /// message.
     var draftSummary: DraftSummary? = nil
+    /// B1 (Prisme Linguistique) — viewer's preferred content languages,
+    /// passed by `ConversationListView` from `AuthManager.currentUser?
+    /// .preferredContentLanguages`. Used to resolve `lastMessagePreview`
+    /// through `MeeshyConversation.resolvedLastMessagePreview(...)`.
+    /// Falls back to the raw preview if the conversation has no
+    /// translations attached (e.g., gateway not yet providing them).
+    var preferredContentLanguages: [String] = []
 
     private var accentColor: String { conversation.accentColor }
 
@@ -433,7 +440,9 @@ struct ThemedConversationRow: View {
                     attachmentIcon(for: attachments[0].mimeType)
                         .font(.system(size: 11))
                 }
-                Text(conversation.lastMessagePreview ?? "")
+                // B1 — apply Prisme Linguistique. Falls back to the raw
+                // preview when no translations are attached.
+                Text(conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages) ?? "")
                     .font(.system(size: 13))
                     .foregroundColor(textSecondary)
                     .lineLimit(1)
@@ -515,40 +524,32 @@ struct ThemedConversationRow: View {
     // MARK: - Attachment Helpers
 
     private func attachmentIcon(for mimeType: String) -> some View {
-        let (icon, color) = attachmentIconInfo(mimeType)
-        return Image(systemName: icon)
+        let display = AttachmentDisplay.make(for: mimeType)
+        return Image(systemName: display.icon)
             .font(.system(size: 12, weight: .medium))
-            .foregroundColor(color)
-    }
-
-    private func attachmentIconInfo(_ mimeType: String) -> (String, Color) {
-        if mimeType.hasPrefix("image/") { return ("camera.fill", .blue) }
-        if mimeType.hasPrefix("video/") { return ("video.fill", .red) }
-        if mimeType.hasPrefix("audio/") { return ("waveform", .purple) }
-        if mimeType == "application/pdf" { return ("doc.fill", .orange) }
-        return ("paperclip", .gray)
+            .foregroundColor(display.tintColor)
     }
 
     private func attachmentMeta(for attachment: MessageAttachment) -> some View {
-        let mimeType = attachment.mimeType
-        var meta = ""
+        let kind = AttachmentKind(mimeType: attachment.mimeType)
+        let meta: String
 
-        if mimeType.hasPrefix("image/") {
+        switch kind {
+        case .image:
             if let w = attachment.width, let h = attachment.height {
                 meta = "\(w)x\(h)"
-            } else { meta = "Photo" }
-        } else if mimeType.hasPrefix("video/") {
+            } else { meta = kind.shortLabel }
+        case .video, .audio:
             if let d = attachment.duration {
                 meta = formatDurationMs(d)
-            } else { meta = "Video" }
-        } else if mimeType.hasPrefix("audio/") {
-            if let d = attachment.duration {
-                meta = formatDurationMs(d)
-            } else { meta = "Audio" }
-        } else if mimeType == "application/pdf" {
-            meta = "PDF"
-        } else {
-            meta = attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
+            } else { meta = kind.shortLabel }
+        case .pdf, .spreadsheet, .document, .presentation,
+             .archive, .code, .text, .other:
+            // Prefer the original file name (e.g. "rapport.xlsx") since the
+            // user picked it deliberately; fall back to the family label
+            // ("Excel", "Word", ...) so unnamed payloads still convey
+            // something more useful than "Fichier".
+            meta = attachment.originalName.isEmpty ? kind.shortLabel : attachment.originalName
         }
 
         return Text(meta)

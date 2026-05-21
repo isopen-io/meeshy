@@ -52,6 +52,32 @@ class FeedViewModel: ObservableObject {
         self.socialSocket = socialSocket
         self.postService = postService
         self.languageProvider = languageProvider
+        observePreferredLanguageChanges()
+    }
+
+    /// B2 (Prisme Linguistique) — when the viewer's preferred-content
+    /// languages change mid-session (Settings edit), re-resolve every
+    /// already-mapped FeedPost. The `translations` dict stored on each
+    /// post is enough; no network re-fetch is needed.
+    ///
+    /// Observed on `AuthManager.shared.currentUserPublisher` (the canonical
+    /// source-of-truth — `LanguageProviding` is reactive too but exposes
+    /// no publisher). Distinct duplicate filter avoids spurious work on
+    /// unrelated `currentUser` mutations (e.g. avatar change).
+    private func observePreferredLanguageChanges() {
+        AuthManager.shared.currentUserPublisher
+            .removeDuplicates { old, new in
+                old?.systemLanguage == new?.systemLanguage
+                && old?.regionalLanguage == new?.regionalLanguage
+                && old?.customDestinationLanguage == new?.customDestinationLanguage
+            }
+            .dropFirst()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                let langs = self.preferredLanguages
+                self.posts = self.posts.map { $0.resolved(preferredLanguages: langs) }
+            }
+            .store(in: &cancellables)
     }
 
     /// Wire persistence store and socket handler for GRDB-backed feed.

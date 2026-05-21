@@ -215,7 +215,7 @@ public final class StoryTimelineEngine {
     // MARK: Transport (D3)
 
     public func play() {
-        guard player != nil, currentProject != nil else { return }
+        guard player != nil, let project = currentProject else { return }
         player?.play()
         do {
             try audioMixer.play()
@@ -226,12 +226,18 @@ public final class StoryTimelineEngine {
             onError?(StoryTimelineEngineError.audioEngineUnavailable(reason: error.localizedDescription))
         }
         isPlaying = true
+        NotificationCenter.default.post(
+            name: .timelineDidStartPlaying,
+            object: self,
+            userInfo: ["slideId": project.slideId]
+        )
     }
 
     public func pause() {
         player?.pause()
         audioMixer.pause()
         isPlaying = false
+        NotificationCenter.default.post(name: .timelineDidStopPlaying, object: self)
     }
 
     public func toggle() {

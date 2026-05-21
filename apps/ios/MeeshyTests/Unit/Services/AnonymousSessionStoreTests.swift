@@ -1,8 +1,38 @@
 import XCTest
+import Security
 @testable import Meeshy
 import MeeshySDK
 
 final class AnonymousSessionStoreTests: XCTestCase {
+
+    // MARK: - A2 — Keychain accessibility class invariants (no Keychain access)
+
+    /// Rationale: the Notification Service Extension must be able to decrypt
+    /// push payloads for guest conversations even when the device is locked
+    /// (post first-unlock since boot). Using `WhenUnlockedThisDeviceOnly`
+    /// would make NSE silently fall back to localized placeholder
+    /// ("Encrypted message") for every push received on lockscreen.
+    /// Aligned with `KeychainVoIPTokenStore` (PR #280).
+    func test_accessibilityClass_isAfterFirstUnlockThisDeviceOnly() {
+        XCTAssertTrue(
+            CFEqual(
+                AnonymousSessionStore.accessibilityClass,
+                kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly
+            ),
+            "Guest session Keychain must be readable by NSE on lockscreen post-boot-unlock"
+        )
+    }
+
+    func test_accessibilityClass_isNotWhenUnlockedThisDeviceOnly() {
+        XCTAssertFalse(
+            CFEqual(
+                AnonymousSessionStore.accessibilityClass,
+                kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+            ),
+            "Regression guard: stricter class would silently break NSE decryption on lockscreen"
+        )
+    }
+
 
     func test_save_thenLoad_returnsContext() {
         let ctx = makeContext()

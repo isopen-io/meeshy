@@ -13,7 +13,7 @@ final class StoryBackgroundLayerVideoTests: XCTestCase {
             throw XCTSkip("test-1s.mp4 fixture not bundled — add later")
         }
         let resolver: (String) -> URL? = { _ in url }
-        layer.configure(kind: .video(postMediaId: "vid-1", looping: true, mute: true),
+        layer.configure(kind: .video(postMediaId: "vid-1", looping: true, mute: true, thumbHash: nil),
                         transform: .identity, geometry: geom,
                         resolver: resolver, imageCache: nil)
         let avLayer = layer.sublayers?.first { $0 is AVPlayerLayer } as? AVPlayerLayer
@@ -29,7 +29,7 @@ final class StoryBackgroundLayerVideoTests: XCTestCase {
             throw XCTSkip("test-1s.mp4 fixture not bundled — add later")
         }
         let resolver: (String) -> URL? = { _ in url }
-        layer.configure(kind: .video(postMediaId: "vid-1", looping: true, mute: true),
+        layer.configure(kind: .video(postMediaId: "vid-1", looping: true, mute: true, thumbHash: nil),
                         transform: .identity, geometry: geom,
                         resolver: resolver, imageCache: nil)
         layer.handleAppLifecycle(active: false)

@@ -1417,7 +1417,12 @@ export class MeeshySocketIOManager {
 
           for (const participant of participants) {
             const roomTarget = participant.userId || participant.id;
-            const unreadCount = await readStatusService.getUnreadCount(roomTarget, normalizedId);
+            // Pass `participant.id` (not `roomTarget`) — the cursor's
+            // participantId column is the Participant.id. Using the userId
+            // here previously caused every registered recipient to fall
+            // through to a stale "count all historical messages" path and
+            // see inflated unread counts (e.g. 75).
+            const unreadCount = await readStatusService.getUnreadCount(participant.id, normalizedId);
 
             // Émettre vers le socket personnel de l'utilisateur
             this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {

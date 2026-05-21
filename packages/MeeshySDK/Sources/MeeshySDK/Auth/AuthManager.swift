@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import os
 
 // MARK: - Profile Snapshot
 
@@ -72,6 +73,18 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// All accounts that have saved credentials on this device, sorted by most recently active.
     @Published public var savedAccounts: [SavedAccount] = []
 
+    /// Fires every time the SDK rotates the JWT for the currently active
+    /// user — i.e. `applySession` ran while the same userId was already
+    /// authenticated. `MessageSocketManager` already reacts to this via a
+    /// direct `forceReconnect()` call inside `applySession`; the publisher
+    /// is exposed so other long-lived subscribers (NSE, widgets) can also
+    /// react to a fresh token without coupling to `MessageSocketManager`.
+    ///
+    /// P2.2 — the audit suspected this signal was missing; in fact the
+    /// direct socket-reconnect chain has existed since the initial
+    /// implementation. The publisher pins the contract for future readers.
+    public let tokenDidRotate = PassthroughSubject<Void, Never>()
+
     // MARK: - Protocol Publisher
 
     public var currentUserPublisher: AnyPublisher<MeeshyUser?, Never> {
@@ -135,18 +148,44 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     /// Returns true if the stored JWT is expired (with 30s margin).
     /// Decodes the payload inline to read `exp`.
+    ///
+    /// D2 — every "malformed → expired" branch now logs a structured
+    /// reason so the next time a user complains about a silent logout
+    /// we can trace whether the JWT was truncated, base64-corrupted,
+    /// or just missing `exp`. Returning `true` is the safe default
+    /// (forces refresh) but the silence was actively hurting support.
     public var isCurrentTokenExpired: Bool {
-        guard let token = authToken else { return true }
+        Self.isTokenExpired(authToken, now: Date())
+    }
+
+    /// D2 — pure decoder so tests can probe every branch without driving
+    /// the singleton's Keychain/UserDefaults state. Returns `true` for
+    /// every malformed input (safe default) and logs the reason so a
+    /// silent-logout report can be traced.
+    nonisolated public static func isTokenExpired(_ token: String?, now: Date) -> Bool {
+        guard let token else { return true }
         let parts = token.split(separator: ".")
-        guard parts.count == 3 else { return true }
+        guard parts.count == 3 else {
+            Logger.auth.warning("JWT structurally invalid (parts=\(parts.count)); treating as expired")
+            return true
+        }
         var base64 = String(parts[1])
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
         while base64.count % 4 != 0 { base64.append("=") }
-        guard let data = Data(base64Encoded: base64),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let exp = json["exp"] as? TimeInterval else { return true }
-        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < Date()
+        guard let data = Data(base64Encoded: base64) else {
+            Logger.auth.warning("JWT payload base64 decode failed; treating as expired")
+            return true
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Logger.auth.warning("JWT payload not JSON; treating as expired")
+            return true
+        }
+        guard let exp = json["exp"] as? TimeInterval else {
+            Logger.auth.warning("JWT payload missing `exp` claim; treating as expired")
+            return true
+        }
+        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < now
     }
 
     // MARK: - Login
@@ -250,7 +289,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
             return
         }
 
-        Task { await authService.logout() }
+        // D5 — drive the server-side logout with retries (network blip
+        // should not leave the session live on the gateway).
+        Task { await self.performServerLogoutWithRetries() }
 
         keychain.delete(forKey: tokenKey(for: userId))
         keychain.delete(forKey: sessionTokenKey(for: userId))
@@ -262,6 +303,38 @@ public final class AuthManager: ObservableObject, AuthManaging {
         currentUser = nil
         isAuthenticated = false
         APIClient.shared.authToken = nil
+
+        // D3 — wipe every cached store so a subsequent login (same device,
+        // different user) cannot momentarily render the previous user's
+        // conversations / friends / profiles. `CacheCoordinator.reset()`
+        // also tears down lifecycle subscriptions so the next login starts
+        // from a clean slate. Best-effort: the local logout already
+        // succeeded above, so a cache reset failure here cannot block UX.
+        Task {
+            await CacheCoordinator.shared.reset()
+        }
+    }
+
+    /// D5 — best-effort server logout with bounded retries. Returns once
+    /// the server has acked OR after 3 attempts (10s total) have failed.
+    /// The local logout state is already gone by the time this runs, so
+    /// failures are tolerated — the worst case is the gateway sees the
+    /// next request, fails token verification, and lazily kills the
+    /// session.
+    private func performServerLogoutWithRetries() async {
+        let delays: [TimeInterval] = [0, 1, 5] // total ≈ 6s wall-clock
+        for delay in delays {
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+            do {
+                try await authService.logoutThrowing()
+                return
+            } catch {
+                Logger.auth.warning("Server logout attempt failed: \(error.localizedDescription)")
+            }
+        }
+        Logger.auth.error("Server logout exhausted retries — session may linger on gateway")
     }
 
     // MARK: - Remove Saved Account
@@ -369,14 +442,34 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
 
+        // D1 — guard against concurrent refreshes. `@MainActor` already
+        // serializes consecutive `handleUnauthorized()` calls so the
+        // `guard !isRefreshing` above is sufficient, but we lift the flag
+        // reset into a `defer` so a future refactor that introduces
+        // mid-await cancellation can't leave the flag stuck `true` (which
+        // would silently block every subsequent 401 from ever triggering
+        // a refresh).
         isRefreshing = true
-        Task {
-            await attemptTokenRefresh(token: token, sessionToken: sessionToken, userId: userId)
-            isRefreshing = false
+        Task { [weak self] in
+            defer { Task { @MainActor [weak self] in self?.isRefreshing = false } }
+            await self?.attemptTokenRefresh(token: token, sessionToken: sessionToken, userId: userId)
         }
     }
 
     // MARK: - Internal session helpers
+
+    /// Pure helper exposed for tests: returns true iff a new
+    /// `applySession(token:sessionToken:user:)` call constitutes a token
+    /// rotation (same user already authenticated). Pulled out of
+    /// `applySession` so the contract can be pinned without driving the
+    /// full keychain / sockets side effects.
+    nonisolated static func isTokenRotation(
+        currentlyAuthenticated: Bool,
+        currentActiveUserId: String?,
+        newUserId: String
+    ) -> Bool {
+        currentlyAuthenticated && currentActiveUserId == newUserId
+    }
 
     private func applySession(token: String, sessionToken: String?, user: MeeshyUser) {
         let userId = user.id
@@ -386,7 +479,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // The `onChange(isAuthenticated:)` observer in MeeshyApp would
         // otherwise miss this transition because the boolean stays true
         // throughout the rotation.
-        let isTokenRotation = isAuthenticated && activeUserId == userId
+        let isTokenRotation = Self.isTokenRotation(
+            currentlyAuthenticated: isAuthenticated,
+            currentActiveUserId: activeUserId,
+            newUserId: userId
+        )
 
         try? keychain.save(token, forKey: tokenKey(for: userId))
         if let sessionToken = sessionToken, !sessionToken.isEmpty {
@@ -405,6 +502,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         if isTokenRotation {
             MessageSocketManager.shared.forceReconnect()
             SocialSocketManager.shared.forceReconnect()
+            tokenDidRotate.send(())
         }
     }
 
@@ -502,7 +600,20 @@ public final class AuthManager: ObservableObject, AuthManaging {
             savedAccounts = []
             return
         }
-        savedAccounts = accounts.sorted { $0.lastActiveAt > $1.lastActiveAt }
+        // D4 — sort with a stable secondary key (`id`). When two accounts
+        // share the same `lastActiveAt` (rare but possible across rapid
+        // automated logins or sub-millisecond switches) the prior code
+        // could produce a different ordering on each cold start because
+        // Swift's `sorted(by:)` only guarantees stability since 5.0 and
+        // even then only for the *exact same input order*; the input is
+        // a Decodable dict-roundtripped Array whose order isn't
+        // contractually stable.
+        savedAccounts = accounts.sorted { a, b in
+            if a.lastActiveAt != b.lastActiveAt {
+                return a.lastActiveAt > b.lastActiveAt
+            }
+            return a.id < b.id
+        }
     }
 
     private func persistSavedAccounts() {

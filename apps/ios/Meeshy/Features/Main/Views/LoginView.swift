@@ -39,10 +39,32 @@ struct LoginView: View {
     // On simulator only: prefill test credentials
     private static let isSimulator = ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"] != nil
 
+    /// Optional DX hook: when running Debug builds, the dev can populate the
+    /// Xcode scheme env with `DEBUG_AUTOFILL_USERNAME` / `DEBUG_AUTOFILL_PASSWORD`
+    /// to skip the login form. The values are read at runtime — they NEVER
+    /// ship inside the Release binary because the whole branch is gated by
+    /// `#if DEBUG`.
+    private static var debugAutofillUsername: String? {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["DEBUG_AUTOFILL_USERNAME"]
+        #else
+        return nil
+        #endif
+    }
+    private static var debugAutofillPassword: String? {
+        #if DEBUG
+        return ProcessInfo.processInfo.environment["DEBUG_AUTOFILL_PASSWORD"]
+        #else
+        return nil
+        #endif
+    }
+
     init() {
-        if Self.isSimulator {
-            _username = State(initialValue: "atabeth")
-            _password = State(initialValue: "pD5p1ir9uxLUf2X2FpNE")
+        if Self.isSimulator, let user = Self.debugAutofillUsername {
+            _username = State(initialValue: user)
+        }
+        if Self.isSimulator, let pwd = Self.debugAutofillPassword {
+            _password = State(initialValue: pwd)
         }
     }
 
@@ -208,7 +230,7 @@ struct LoginView: View {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                 selectedAccount = account
                 username = account.username
-                accountPassword = Self.isSimulator ? "pD5p1ir9uxLUf2X2FpNE" : ""
+                accountPassword = Self.isSimulator ? (Self.debugAutofillPassword ?? "") : ""
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 focusedField = .accountPassword

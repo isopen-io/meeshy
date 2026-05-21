@@ -119,6 +119,7 @@ interface ConversationViewProps {
 
   // Options
   showBackButton?: boolean;
+  otherUnreadCount?: number;
 }
 
 /**
@@ -183,6 +184,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
       t,
       tCommon,
       showBackButton = false,
+      otherUnreadCount = 0,
     } = props;
 
     // Normaliser le type de conversation
@@ -238,6 +240,7 @@ export const ConversationView = memo(forwardRef<HTMLDivElement, ConversationView
             onOpenGallery={onOpenGallery}
             t={t}
             showBackButton={showBackButton}
+            otherUnreadCount={otherUnreadCount}
           />
 
           {!isConnected && (

@@ -1036,25 +1036,52 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
     }
     // MARK: - Socket.IO Real-Time Updates
 
+    /// Mimics the sort applied by `Array<APIPost>.toStoryGroups(currentUserId:)`
+    /// so the tray ordering stays consistent between cold-start (REST fetch)
+    /// and live updates (Socket.IO sink). Without this re-sort, a new story
+    /// from an existing author would land in their group but the group would
+    /// stay frozen at its initial tray position — the user would never see
+    /// the "most recent author bubbles up to the front" behaviour they
+    /// expect from Stories.
+    private func sortStoryGroupsInPlace() {
+        let currentUserId = AuthManager.shared.currentUser?.id
+        storyGroups.sort { a, b in
+            if let uid = currentUserId {
+                if a.id == uid { return true }
+                if b.id == uid { return false }
+            }
+            if a.hasUnviewed != b.hasUnviewed { return a.hasUnviewed }
+            return (a.latestStory?.createdAt ?? .distantPast) > (b.latestStory?.createdAt ?? .distantPast)
+        }
+    }
+
     func subscribeToSocketEvents() {
         socialSocket.storyCreated
             .receive(on: DispatchQueue.main)
             .sink { [weak self] apiPost in
                 guard let self else { return }
-                // Convert to StoryItem and insert into the right group
-                let groups = [apiPost].toStoryGroups()
+                let currentUserId = AuthManager.shared.currentUser?.id
+                let groups = [apiPost].toStoryGroups(currentUserId: currentUserId)
                 for newGroup in groups {
                     if let idx = self.storyGroups.firstIndex(where: { $0.id == newGroup.id }) {
-                        var updated = self.storyGroups[idx].stories
-                        for story in newGroup.stories where !updated.contains(where: { $0.id == story.id }) {
-                            updated.append(story)
+                        // Existing author: append the new stories (de-duped),
+                        // keep the per-group stories ordered ascending by
+                        // createdAt so `latestStory` (== stories.last) keeps
+                        // pointing at the freshest one.
+                        var stories = self.storyGroups[idx].stories
+                        for story in newGroup.stories where !stories.contains(where: { $0.id == story.id }) {
+                            stories.append(story)
                         }
-                        self.storyGroups[idx] = self.storyGroups[idx].with(stories: updated)
+                        stories.sort { $0.createdAt < $1.createdAt }
+                        self.storyGroups[idx] = self.storyGroups[idx].with(stories: stories)
                     } else {
-                        // New author — insert at beginning
-                        self.storyGroups.insert(newGroup, at: 0)
+                        // New author — append; sortStoryGroupsInPlace will
+                        // promote them to the right slot (self → head, then
+                        // unviewed > viewed, then most-recent-first).
+                        self.storyGroups.append(newGroup)
                     }
                 }
+                self.sortStoryGroupsInPlace()
                 self.persistStoryCache()
             }
             .store(in: &cancellables)
@@ -1068,6 +1095,10 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         var updatedStories = self.storyGroups[i].stories
                         updatedStories[j].isViewed = true
                         self.storyGroups[i] = self.storyGroups[i].with(stories: updatedStories)
+                        // Re-sort: `hasUnviewed` may flip when the last
+                        // unviewed story is consumed, dropping the group
+                        // below the "fresh" bubbles.
+                        self.sortStoryGroupsInPlace()
                         self.persistStoryCache()
                         return
                     }
@@ -1079,7 +1110,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
             .receive(on: DispatchQueue.main)
             .sink { [weak self] event in
                 guard let self else { return }
-                let updated = [event.story].toStoryGroups()
+                let updated = [event.story].toStoryGroups(currentUserId: AuthManager.shared.currentUser?.id)
                 for updatedGroup in updated {
                     guard let groupIdx = self.storyGroups.firstIndex(where: { $0.id == updatedGroup.id }) else { continue }
                     var stories = self.storyGroups[groupIdx].stories
@@ -1106,6 +1137,9 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         } else {
                             self.storyGroups[i] = self.storyGroups[i].with(stories: filtered)
                         }
+                        // Tray order can shift when a group loses its
+                        // last unviewed story or disappears altogether.
+                        self.sortStoryGroupsInPlace()
                         self.persistStoryCache()
                         return
                     }

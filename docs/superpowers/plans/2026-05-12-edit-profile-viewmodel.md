@@ -2313,7 +2313,7 @@ to viewModel.saveProfile { dismiss() }."
 
 **Files:** none (manual verification)
 
-- [ ] **Step 1: Run app, sign in as `atabeth / pD5p1ir9uxLUf2X2FpNE`**
+- [ ] **Step 1: Run app, sign in as `atabeth / <DEMO_PASSWORD — see apps/ios/fastlane/.env>`**
 
 ```bash
 ./apps/ios/meeshy.sh run

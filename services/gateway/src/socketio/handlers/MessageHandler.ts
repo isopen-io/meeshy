@@ -14,6 +14,7 @@ import { MessagingService } from '../../services/MessagingService';
 import { StatusService } from '../../services/StatusService';
 import { NotificationService } from '../../services/notifications/NotificationService';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
+import { attachmentForwardPreviewSelect } from '../../services/attachments/attachmentIncludes';
 import { validateMessageLength } from '../../config/message-limits';
 import {
   getConnectedUser,
@@ -497,7 +498,7 @@ export class MessageHandler {
             select: {
               id: true, content: true, senderId: true, messageType: true, createdAt: true,
               sender: { select: { id: true, userId: true, displayName: true, avatar: true, type: true } },
-              attachments: { select: { id: true, mimeType: true, thumbnailUrl: true, fileUrl: true }, take: 1 }
+              attachments: { select: attachmentForwardPreviewSelect, take: 1 }
             }
           }),
           message.forwardedFromConversationId
@@ -919,7 +920,14 @@ export class MessageHandler {
       await Promise.all(participants.map(async (participant) => {
         // Use userId for registered users (for their personal room), participantId for anonymous
         const roomTarget = participant.userId || participant.id;
-        const unreadCount = await readStatusService.getUnreadCount(roomTarget, conversationId);
+        // CRITICAL: pass `participant.id` (not `roomTarget`) to
+        // `getUnreadCount`. `ConversationReadCursor.participantId` is the
+        // Participant.id per the schema — passing the userId here used to
+        // silently miss the cursor lookup and fall back to a "count all
+        // historical messages" path, returning wildly inflated unread
+        // counts (e.g. 75 for users who had read everything). The room
+        // target stays based on userId for socket delivery.
+        const unreadCount = await readStatusService.getUnreadCount(participant.id, conversationId);
         this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
           unreadCount

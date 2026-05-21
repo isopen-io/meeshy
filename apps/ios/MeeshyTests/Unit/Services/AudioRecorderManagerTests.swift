@@ -96,4 +96,28 @@ final class AudioRecorderManagerTests: XCTestCase {
         XCTAssertFalse(sut.isRecording)
         XCTAssertNil(sut.recordedFileURL)
     }
+
+    // MARK: - A3 — Audio session cleanup on failure
+
+    /// Idempotency contract: the helper must be safe to call when no
+    /// session is active (no-op) and must not throw. Pinning this lets
+    /// `startRecording`'s catch path call it without `try?` boilerplate.
+    func test_deactivateAudioSessionAfterFailure_isIdempotent() {
+        let sut = makeSUT()
+        sut.deactivateAudioSessionAfterFailure()
+        sut.deactivateAudioSessionAfterFailure()
+        sut.deactivateAudioSessionAfterFailure()
+        // No crash, no precondition. The OS no-ops if nothing is active.
+        XCTAssertFalse(sut.isRecording)
+    }
+
+    /// Regression guard: the helper is referenced by the AVAudioRecorder
+    /// init failure path. If someone removes the call from `startRecording`,
+    /// the test below ensures the helper still exists (compile-time pin).
+    func test_deactivateAudioSessionAfterFailure_isCallable() {
+        let sut = makeSUT()
+        // Method is internal; simply being able to call it = invariant holds.
+        sut.deactivateAudioSessionAfterFailure()
+        XCTAssertFalse(sut.isRecording)
+    }
 }

@@ -161,8 +161,19 @@ export async function registerTusRoutes(fastify: FastifyInstance): Promise<void>
       }
 
       // Generate thumbHash for visual media (images/videos)
-      // Client may provide thumbHash via TUS metadata; backend generates as fallback
-      let thumbHash: string | null = upload.metadata?.thumbhash || null;
+      // Client may provide thumbHash via TUS metadata; backend generates as fallback.
+      // Defense-in-depth length cap: ThumbHash base64 is ~28-33 chars; reject
+      // anything over MAX_THUMBHASH_LENGTH to avoid storing malformed/malicious
+      // blobs in the DB document.
+      const MAX_THUMBHASH_LENGTH = 100;
+      const rawClientThumbHash = upload.metadata?.thumbhash || null;
+      let thumbHash: string | null =
+        (rawClientThumbHash && rawClientThumbHash.length <= MAX_THUMBHASH_LENGTH)
+          ? rawClientThumbHash
+          : null;
+      if (rawClientThumbHash && rawClientThumbHash.length > MAX_THUMBHASH_LENGTH) {
+        logger.warn(`[TUS] Rejecting oversized client thumbHash (${rawClientThumbHash.length} chars)`);
+      }
       if (!thumbHash && (attachmentType === 'image' || attachmentType === 'video')) {
         try {
           thumbHash = await ThumbHashGenerator.generate(destPath, mimeType);

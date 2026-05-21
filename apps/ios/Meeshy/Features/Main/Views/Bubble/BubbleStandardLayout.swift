@@ -64,6 +64,9 @@ struct BubbleStandardLayout: View {
     let onToggleReaction: ((String) -> Void)?
     let onOpenReactPicker: ((String) -> Void)?
     let onShowReactions: ((String) -> Void)?
+    /// Tap sur les coches de livraison -> ouvre le sheet detail a l'onglet
+    /// "Vues" (read receipts). Passe `nil` pour rendre les coches inertes.
+    let onShowReadStatus: ((String) -> Void)?
     let onReplyTap: ((String) -> Void)?
     let onStoryReplyTap: ((String) -> Void)?
     let onMediaTap: ((MessageAttachment) -> Void)?
@@ -89,6 +92,10 @@ struct BubbleStandardLayout: View {
 
     @ObservedObject var blurController: BubbleBlurRevealController
     @ObservedObject var ephemeralController: BubbleEphemeralController
+
+    // MARK: - Adaptive sizing (iPad regular size class needs a tighter cap)
+
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     // MARK: - Layout constants
 
@@ -130,11 +137,25 @@ struct BubbleStandardLayout: View {
 
     private var hasReactions: Bool { !content.reactions.isEmpty }
 
+    /// Indique qu'un overlay de reaction (pills ou bouton +) deborde sous la
+    /// bulle. Le strip flotte de 8pt sous le coin et a une hit-area de 40pt
+    /// (cf. `BubbleReactionsOverlay.addButton`), donc il faut reserver assez
+    /// d'espace pour qu'il n'entre pas en collision avec la cellule suivante.
+    private var hasOverflowingOverlay: Bool {
+        hasReactions || (!content.isMe && isLastReceivedMessage)
+    }
+
     private var bottomSpacing: CGFloat {
+        // Espacement majore x1.6 (22 -> 35pt, 20 -> 32pt) quand un overlay
+        // de reaction deborde sous la bulle, pour eviter que le bouton +
+        // (face.smiling, hit-area 40pt) ou les pills ne tapent contre le
+        // message suivant. Le facteur x1.6 garde une silhouette compacte
+        // entre messages sans overlay, et offre une "respiration" claire
+        // autour de ceux qui en ont.
         if isLastInGroup {
-            return hasReactions ? 22 : 10
+            return hasOverflowingOverlay ? 35 : 10
         }
-        return hasReactions ? 20 : 2
+        return hasOverflowingOverlay ? 32 : 2
     }
 
     private var showIdentityBar: Bool {
@@ -317,18 +338,18 @@ struct BubbleStandardLayout: View {
                             .onTapGesture { revealBlurredContent() }
                     }
                 }
-                // Reactions sit at the BOTTOM corner of the bubble —
-                // bottom-trailing for sent, bottom-leading for received —
-                // bleeding ~8pt below the bubble's bottom edge so they
-                // float as "stickers" attached to the corner, just above
-                // where the inline quick-reaction bar will rise from the
-                // composer. La leading/trailing edge déborde maintenant
-                // de -4pt (auparavant +8pt INTÉRIEUR) pour donner un effet
-                // "à cheval" sur le coin : ~50% sous le coin de la bulle,
-                // ~50% dehors. C'est le look "sticker collé au coin" demandé.
-                .overlay(alignment: isMe ? .bottomTrailing : .bottomLeading) {
+                // Reactions sit at the BOTTOM corner of the bubble, sur le
+                // cote OPPOSE au bord d'ecran. Une bulle recue (a gauche)
+                // a son strip ancre en bottom-TRAILING (deborde vers la
+                // droite, dans la zone vide de la conversation). Une bulle
+                // envoyee (a droite) a son strip ancre en bottom-LEADING
+                // (deborde vers la gauche, idem). Le strip "echappe" toujours
+                // vers le centre de la conversation, jamais vers le bord
+                // d'ecran. Le -4pt de padding garde l'effet "sticker a cheval
+                // sur le coin" (~50% sous, ~50% dehors).
+                .overlay(alignment: isMe ? .bottomLeading : .bottomTrailing) {
                     reactionsOverlay
-                        .padding(isMe ? .trailing : .leading, -4)
+                        .padding(isMe ? .leading : .trailing, -4)
                         .offset(y: 8)
                 }
 
@@ -346,7 +367,7 @@ struct BubbleStandardLayout: View {
             // (UserIdentityBar's greedy Spacer is collapsed via
             // `.fixedSize(horizontal: true, vertical: false)` on the bar
             // inside `textBubbleContent`).
-            .frame(maxWidth: UIScreen.main.bounds.width * 0.70, alignment: isMe ? .trailing : .leading)
+            .frame(maxWidth: DeviceLayout.bubbleMaxWidth(containerWidth: UIScreen.main.bounds.width, sizeClass: horizontalSizeClass), alignment: isMe ? .trailing : .leading)
 
             if !isMe { Spacer(minLength: 50) }
         }
@@ -434,9 +455,23 @@ struct BubbleStandardLayout: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(alignment: .bottomTrailing) {
                             if !content.hasTextOrNonMediaContent {
+                                // Sur une bulle 100% media, le footer est posé en
+                                // overlay sur la grille. La grille porte un
+                                // `.onTapGesture` (ouverture plein écran) — sans
+                                // hit-area dédiée au check, le tap glisse dessous
+                                // et la sheet "Vues" devient inaccessible. On
+                                // injecte donc le callback `onShowReadStatus` :
+                                // `BubbleFooter.deliveryView` enveloppe alors la
+                                // coche dans un `Button(.plain)` 22pt, qui prend
+                                // la priorité au hit-test car l'overlay est
+                                // au-dessus du gesture parent.
+                                let (model, fullActions) = resolvedFooter(includesTranslationControls: false)
                                 BubbleFooter(
-                                    model: resolvedFooter().0,
-                                    actions: .none,
+                                    model: model,
+                                    actions: BubbleFooterActions(
+                                        onRetry: fullActions.onRetry,
+                                        onShowReadStatus: fullActions.onShowReadStatus
+                                    ),
                                     style: .overlay,
                                     isDark: isDark
                                 )
@@ -491,29 +526,44 @@ struct BubbleStandardLayout: View {
 
     @ViewBuilder
     private var emojiOnlyContent: some View {
+        // Layout emoji-only sans reply : l'emoji et la meta-row (timestamp +
+        // delivery) forment un BLOC INDISSOCIABLE rendu sur la meme baseline,
+        // colle au bord de la conversation cote isMe. `.fixedSize()` garantit
+        // que le container epouse le contenu : pas de container invisible
+        // qui s'etire sur toute la largeur disponible (ce qui faisait "voler"
+        // la date a un endroit excentre). Le VStack exterieur conserve
+        // l'alignement isMe pour le secondary content (langue alternative
+        // active) qui descend dessous.
         VStack(alignment: content.isMe ? .trailing : .leading, spacing: 2) {
-            // Emoji-only intentionally renders the ORIGINAL `message.content`,
-            // not the translated text — emoji bubbles are not translated.
-            // NOTE: no `.onLongPressGesture` here — the BubbleSwipeContainer
-            // wrapping the cell already handles long-press to open the
-            // contextual options menu. A second long-press on the text
-            // would race that handler and pop two presentations at once
-            // (translation sheet + options overlay). Translation detail
-            // remains accessible via the translate icon in the identity bar.
-            Text(message.content)
-                .font(.system(size: emojiFontSize))
-                .fixedSize(horizontal: false, vertical: true)
-                .overlay(alignment: .topLeading) {
-                    if content.editedAt != nil {
-                        editedIndicator
-                            .offset(y: -14)
+            HStack(alignment: .lastTextBaseline, spacing: 6) {
+                // Emoji-only intentionally renders the ORIGINAL `message.content`,
+                // not the translated text — emoji bubbles are not translated.
+                Text(message.content)
+                    .font(.system(size: emojiFontSize))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .overlay(alignment: .topLeading) {
+                        if content.editedAt != nil {
+                            editedIndicator
+                                .offset(y: -14)
+                        }
                     }
-                }
+
+                compactInlineFooter
+            }
+            .fixedSize()
 
             secondaryContentView
-
-            standardFooter
         }
+    }
+
+    /// Meta-row minimaliste pose a cote d'un emoji free-floating : timestamp
+    /// + delivery check (si isMe), sans drapeaux, sans translate, sans capsule.
+    /// Re-utilise le builder `resolvedFooter` pour rester aligne sur la meme
+    /// source de verite que le `standardFooter`.
+    private var compactInlineFooter: some View {
+        let (model, actions) = resolvedFooter(includesTranslationControls: false)
+        return BubbleFooter(model: model, actions: actions, style: .compact, isDark: isDark)
+            .equatable()
     }
 
     // MARK: - Text bubble path (with non-media attachments + reply preview)
@@ -551,11 +601,13 @@ struct BubbleStandardLayout: View {
                     if text.isEmojiOnly {
                         // Emoji-only reply: emoji hosted inside the bubble, above
                         // the quoted-reply card — large (same 90/60/45pt sizing as
-                        // the free-floating path) and centered within the bubble.
+                        // the free-floating path). Pas de `.frame(maxWidth: .infinity)` :
+                        // la bulle doit epouser le contenu (emoji + quoted-reply
+                        // card), pas s'etirer sur 70% de la largeur d'ecran. Le
+                        // VStack parent gere deja l'alignement naturel a gauche.
                         Text(message.content)
                             .font(.system(size: emojiFontSize))
                             .fixedSize(horizontal: false, vertical: true)
-                            .frame(maxWidth: .infinity, alignment: .center)
                     } else {
                         expandableTextView
                     }
@@ -667,12 +719,21 @@ struct BubbleStandardLayout: View {
             showsTranslate: showTranslation
         )
 
+        // Le tap sur les coches n'a de sens que sur les messages envoyes
+        // (les seuls qui portent une `delivery` non-nulle dans le footer).
+        // Sur un message recu, `model.delivery == nil` donc le bouton n'est
+        // jamais rendu meme si un callback etait branche.
+        let readStatusCallback: (() -> Void)? = (content.isMe && onShowReadStatus != nil)
+            ? { onShowReadStatus?(content.messageId) }
+            : nil
+
         let actions = BubbleFooterActions(
             onFlagTap: showFlags ? { code in handleFlagTap(code) } : nil,
             onTranslate: showTranslation ? { onShowTranslationDetail?(content.messageId) } : nil,
             onRetry: { performManualRetry() },
             onSenderTap: { selectedProfileUser = .from(message: message) },
-            onViewStory: onViewStory
+            onViewStory: onViewStory,
+            onShowReadStatus: readStatusCallback
         )
         return (model, actions)
     }

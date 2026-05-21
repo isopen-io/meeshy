@@ -77,6 +77,11 @@ jest.mock('../../../services/posts/StoryTextObjectTranslationService', () => {
 
 jest.mock('../../../services/MentionService', () => ({
   resolveMentionedUsers: jest.fn<() => Promise<unknown[]>>().mockResolvedValue([]),
+  MentionService: jest.fn().mockImplementation(() => ({
+    extractMentions: jest.fn(() => []),
+    resolveUsernames: jest.fn(async () => new Map()),
+    createPostMentions: jest.fn<() => Promise<void>>().mockResolvedValue(undefined),
+  })),
 }));
 
 jest.mock('../../../utils/withMutationLog', () => ({
@@ -163,7 +168,7 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     expect(translatePostMock).toHaveBeenCalledWith(
       'post-id-123',
       'Hello story caption',
-      expect.anything(),
+      null,
       'user-id-abc',
     );
 
@@ -217,7 +222,7 @@ describe('POST /posts — story content translation (Prisme Linguistique)', () =
     expect(translatePostMock).toHaveBeenCalledWith(
       'post-id-123',
       'A regular post caption',
-      expect.anything(),
+      null,
       'user-id-abc',
     );
 

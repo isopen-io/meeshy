@@ -66,19 +66,84 @@ public struct APIAttachmentTranslation: Codable, Sendable {
 }
 
 public struct APIMessageAttachment: Decodable, Sendable {
+    // ── Identifiers ──
     public let id: String
+    public let messageId: String?
+
+    // ── File info ──
     public let fileName: String?
     public let originalName: String?
     public let mimeType: String?
     public let fileSize: Int?
     public let fileUrl: String?
+
+    // ── Visual / thumbnail ──
     public let thumbnailUrl: String?
     public let thumbHash: String?
     public let width: Int?
     public let height: Int?
+
+    // ── Audio / video ──
     public let duration: Int?
+    public let bitrate: Int?
+    public let sampleRate: Int?
+    public let codec: String?
+    public let channels: Int?
+    public let fps: Double?
+    public let videoCodec: String?
+
+    // ── Document ──
+    public let pageCount: Int?
+    public let lineCount: Int?
+
+    // ── Location (legacy fields, kept for compat) ──
     public let latitude: Double?
     public let longitude: Double?
+
+    // ── Uploader / timestamps ──
+    public let uploadedBy: String?
+    public let isAnonymous: Bool?
+    public let createdAt: Date?
+
+    // NOTE: `metadata` (generic JSON blob) is intentionally NOT decoded
+    // here — iOS has no JSONValue-style any-codable helper yet and no
+    // current consumer reads it. Add when needed.
+
+    // ── Forwarding ──
+    public let forwardedFromAttachmentId: String?
+    public let isForwarded: Bool?
+
+    // ── View-once / Effects / Blur ──
+    public let isViewOnce: Bool?
+    public let maxViewOnceCount: Int?
+    public let viewOnceCount: Int?
+    public let isBlurred: Bool?
+    public let effectFlags: UInt32?
+
+    // ── Consumption tracking (R5 — denormalized counters surfaced in
+    //    attachmentFullSelect; required to render the consumption strip
+    //    and the per-attachment "delivered / viewed / listened / watched
+    //    by all" timestamps). Pre-R7 these fields existed on the wire
+    //    but iOS dropped them silently because `APIMessageAttachment`
+    //    didn't declare them.
+    public let deliveredToAllAt: Date?
+    public let viewedByAllAt: Date?
+    public let downloadedByAllAt: Date?
+    public let listenedByAllAt: Date?
+    public let watchedByAllAt: Date?
+    public let viewedCount: Int?
+    public let downloadedCount: Int?
+    public let consumedCount: Int?
+
+    // ── E2EE envelope (R5 — clients MUST receive these to decrypt the
+    //    attachment payload. Pre-R7 they were sent by the gateway but
+    //    dropped silently here because the iOS struct didn't declare them.
+    public let isEncrypted: Bool?
+    public let encryptionMode: String?
+    public let encryptionIv: String?
+    public let encryptionAuthTag: String?
+
+    // ── Prisme Linguistique JSON blobs ──
     public let transcription: APIAttachmentTranscription?
     public let translations: [String: APIAttachmentTranslation]?
 }
