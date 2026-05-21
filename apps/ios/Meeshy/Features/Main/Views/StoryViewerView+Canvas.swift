@@ -481,6 +481,15 @@ struct StoryCardView: View {
             }
 
             // === Layer 8: Right action sidebar — centered vertically, right side ===
+            // The sidebar is bounded between the header strip (top) and the
+            // composer strip (bottom) so its action buttons never slide
+            // off-screen on small iPhones (SE, mini). The sidebar itself
+            // ships a `ViewThatFits` fallback that switches to a vertical
+            // scroller when the bounded height is still too small for the
+            // full button stack.
+            let topReserved: CGFloat = topInset + 100   // progress bars + header
+            let bottomReserved: CGFloat = geometry.safeAreaInsets.bottom + (isOwnStory ? 56 : 96)
+            let sidebarMaxHeight = max(180, geometry.size.height - topReserved - bottomReserved)
             HStack {
                 Spacer()
                 StoryActionSidebarView(
@@ -512,8 +521,11 @@ struct StoryCardView: View {
                     pauseTimer: pauseTimer,
                     loadStoryComments: loadStoryComments
                 )
+                    .frame(maxHeight: sidebarMaxHeight)
                     .padding(.trailing, 6)
             }
+            .padding(.top, topReserved)
+            .padding(.bottom, bottomReserved)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
 
             // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
