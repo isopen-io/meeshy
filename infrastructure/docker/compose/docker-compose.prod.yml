@@ -320,6 +320,7 @@ services:
       - "traefik.http.routers.gateway.rule=Host(`gate.${DOMAIN:-meeshy.me}`) || Host(`api.${DOMAIN:-meeshy.me}`)"
       - "traefik.http.routers.gateway.entrypoints=websecure"
       - "traefik.http.routers.gateway.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.gateway.middlewares=compress@file"
       - "traefik.http.services.gateway.loadbalancer.server.port=3000"
 
   # ===========================================================================
@@ -346,6 +347,7 @@ services:
       - "traefik.http.routers.static.rule=Host(`static.${DOMAIN:-meeshy.me}`)"
       - "traefik.http.routers.static.entrypoints=websecure"
       - "traefik.http.routers.static.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.static.middlewares=compress@file"
       - "traefik.http.services.static.loadbalancer.server.port=80"
 
   # ===========================================================================
@@ -386,6 +388,7 @@ services:
       - "traefik.http.routers.frontend.rule=Host(`${DOMAIN:-meeshy.me}`) || Host(`www.${DOMAIN:-meeshy.me}`)"
       - "traefik.http.routers.frontend.entrypoints=websecure"
       - "traefik.http.routers.frontend.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.frontend.middlewares=compress@file"
       - "traefik.http.services.frontend.loadbalancer.server.port=3100"
       - "traefik.http.routers.frontend.priority=1"
 
