@@ -531,6 +531,7 @@ extension StoryViewerView {
         progress = 0
         isContentReady = false
         hasFiredFadeOut = false
+        hasFiredNextPrefetch = false
         showCommentsOverlay = false
         replyingToStoryComment = nil
         storyCommentRepliesMap = [:]
@@ -541,6 +542,13 @@ extension StoryViewerView {
         updateStoryDuration()
         let duration = computedStoryDuration
         let fadeOutThreshold = max(0, 1.0 - (2.0 / duration))
+        // Seuil d'amorçage du prefetch de la slide suivante : 5 secondes avant
+        // la fin de la slide en cours (clamp à 0 pour les slides ≤ 5 s, où
+        // le prefetch s'arme dès l'apparition). Ça donne ~5 s de marge réseau
+        // au décodeur pour avoir au moins quelques secondes de la prochaine
+        // vidéo prêtes en mémoire / cache disk avant la transition, ce qui
+        // élimine le loader 0% lors du switch.
+        let nextPrefetchThreshold = max(0, 1.0 - (5.0 / duration))
 
         // Drive the progress bar from a CADisplayLink instead of `Timer.publish(every: 0.03)`.
         // Two wins:
@@ -576,6 +584,17 @@ extension StoryViewerView {
             if raw >= fadeOutThreshold && !hasFiredFadeOut {
                 hasFiredFadeOut = true
                 NotificationCenter.default.post(name: .storyAudioFadeOut, object: nil)
+            }
+            // Prefetch de la slide suivante 5 secondes avant la fin. On laisse
+            // ainsi au décodeur le temps de mettre en cache disk au moins les
+            // premières secondes (typiquement 5 s suffisent même sur 4G) avant
+            // que l'utilisateur transitionne — la prochaine ouverture est alors
+            // instantanée. Idempotent via `hasFiredNextPrefetch` : un seul
+            // déclenchement par slide. Sécurisé en bout de groupe (prefetchStory
+            // borne l'index et `prefetchAllMedia` est un no-op si déjà en cache).
+            if raw >= nextPrefetchThreshold && !hasFiredNextPrefetch {
+                hasFiredNextPrefetch = true
+                _ = prefetchStory(at: currentStoryIndex + 1)
             }
             if raw >= 1.0 {
                 goToNext()

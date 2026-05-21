@@ -69,6 +69,25 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
         }
     }
 
+    /// Drapeau levé par le canvas (`StoryCanvasUIView`) en mode `.play` pour
+    /// autoriser la lecture du player vidéo de fond. Quand un nouveau player
+    /// est attaché alors que le canvas est déjà actif (slide change durant
+    /// un viewing), on le démarre tout de suite ; sinon (prefetcher en
+    /// `.edit`, composer preview), on attache silencieux et on attend
+    /// l'activation explicite. Garantie : pas d'audio de vidéo de fond
+    /// off-screen ni de lecture « avant son tour ».
+    @MainActor
+    public var isPlaybackActive: Bool = false {
+        didSet {
+            guard oldValue != isPlaybackActive else { return }
+            if isPlaybackActive {
+                avPlayer?.play()
+            } else {
+                avPlayer?.pause()
+            }
+        }
+    }
+
     nonisolated(unsafe) var contentLayer: CALayer?
     nonisolated(unsafe) var avPlayer: AVPlayer?
     nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
@@ -342,7 +361,17 @@ extension StoryBackgroundLayer {
         pl.videoGravity = .resizeAspectFill
         addSublayer(pl)
         self.avPlayerLayer = pl
-        self.avPlayer?.play()
+        // IMPORTANT — on n'appelle PLUS `play()` ici inconditionnellement.
+        // `attachBackgroundPlayer` peut être invoqué depuis un canvas en
+        // `.edit` mode (prefetcher, composer preview), auquel cas démarrer
+        // la lecture leakerait l'audio d'une story qui n'est PAS encore à
+        // l'écran (« vidéo joue avant son tour »). C'est désormais le canvas
+        // qui décide via `isPlaybackActive` (drapeau levé en mode `.play`).
+        // La vidéo prefetchée reste prête à jouer instantanément sans
+        // gaspiller le décodeur audio.
+        if isPlaybackActive {
+            self.avPlayer?.play()
+        }
     }
 
     @MainActor

@@ -226,6 +226,14 @@ public final class StoryCanvasUIView: UIView {
     /// `.readyToPlay` or the background is replaced.
     private var videoStatusObserver: NSKeyValueObservation?
 
+    /// Tâche de sondage utilisée pour la branche cache-miss de
+    /// `scheduleContentReadyEvaluation(.video)` : quand `backgroundLayer
+    /// .configure` lance une `Task` async pour télécharger l'URL distante,
+    /// `avPlayer` n'existe pas encore au moment de l'évaluation et il faut
+    /// attendre son apparition pour brancher l'observer status. Annulée à
+    /// chaque changement de slide et dans `teardownReadinessObservers`.
+    private var pendingVideoReadinessTask: Task<Void, Never>?
+
     /// `CGImage` captured the moment the ThumbHash placeholder was assigned
     /// to `backgroundLayer.contentLayer.contents`. Used to distinguish
     /// "still showing the placeholder" from "real bitmap landed" — the
@@ -377,6 +385,15 @@ public final class StoryCanvasUIView: UIView {
         // explicitement (silencieux : pas de callback car la valeur n'a pas
         // « changé » depuis sa valeur par défaut `.canvas`).
         updateManipulationLayer()
+        // Alignement initial du gate de lecture du background vidéo sur le
+        // mode du canvas. Sans cette ligne, un canvas créé directement en
+        // `.play` (cas du viewer via `StoryReaderRepresentable`) n'active
+        // jamais `isPlaybackActive` (pas de transition de mode) et la vidéo
+        // de fond reste figée même quand l'utilisateur la regarde. Pour
+        // les canvas en `.edit` (prefetcher, composer preview), on reste
+        // sur `false` — la vidéo est attachée silencieuse, prête à jouer
+        // dès la promotion au mode `.play`.
+        backgroundLayer.isPlaybackActive = (mode == .play)
     }
 
     nonisolated deinit {
@@ -1358,7 +1375,19 @@ public final class StoryCanvasUIView: UIView {
             }
         case .video:
             if let item = backgroundLayer.avPlayer?.currentItem {
-                if item.status == .readyToPlay {
+                // Fast-path : URL `file://` (cache local déjà téléchargé) →
+                // l'`AVPlayerItem.status` transite de `.unknown` à
+                // `.readyToPlay` de façon asynchrone (~50-150 ms, le temps
+                // que l'AV decoder lise les metadata du conteneur MP4/MOV),
+                // même pour des fichiers locaux. Attendre ce KVO génère un
+                // flash de loader sur les vidéos déjà cachées, ce qui casse
+                // la sensation d'instantanéité (l'utilisateur SAIT que la
+                // vidéo est dispo en local). On considère le fichier local
+                // immédiatement prêt : le `.play()` enchaîne sur un decoder
+                // qui spinup en 1-2 vsyncs et le placeholder ThumbHash, s'il
+                // existe, couvre le gap.
+                let isLocalFile = (item.asset as? AVURLAsset)?.url.isFileURL ?? false
+                if isLocalFile || item.status == .readyToPlay {
                     DispatchQueue.main.async { [weak self] in
                         self?.backgroundDidBecomeReady()
                     }
@@ -1367,6 +1396,37 @@ public final class StoryCanvasUIView: UIView {
                         guard observed.status == .readyToPlay else { return }
                         Task { @MainActor in
                             self?.backgroundDidBecomeReady()
+                        }
+                    }
+                }
+            } else {
+                // Path cache miss : `backgroundLayer.configure` a démarré une
+                // `Task` async pour résoudre l'URL distante (download / cache
+                // disk). Le player n'est pas encore créé. Sans signal de fin,
+                // le loader reste coincé. On déclenche un sondage léger toutes
+                // les ~50 ms jusqu'à ce que le player apparaisse, puis on
+                // applique la même logique fast-path. Limité à 30 itérations
+                // (~1.5 s) pour ne pas tourner indéfiniment si quelque chose
+                // est cassé en amont.
+                pendingVideoReadinessTask?.cancel()
+                pendingVideoReadinessTask = Task { @MainActor [weak self] in
+                    for _ in 0..<30 {
+                        try? await Task.sleep(for: .milliseconds(50))
+                        if Task.isCancelled { return }
+                        guard let self else { return }
+                        if let item = self.backgroundLayer.avPlayer?.currentItem {
+                            let isLocalFile = (item.asset as? AVURLAsset)?.url.isFileURL ?? false
+                            if isLocalFile || item.status == .readyToPlay {
+                                self.backgroundDidBecomeReady()
+                                return
+                            }
+                            self.videoStatusObserver = item.observe(\.status, options: [.new]) { [weak self] observed, _ in
+                                guard observed.status == .readyToPlay else { return }
+                                Task { @MainActor in
+                                    self?.backgroundDidBecomeReady()
+                                }
+                            }
+                            return
                         }
                     }
                 }
@@ -1480,6 +1540,8 @@ public final class StoryCanvasUIView: UIView {
         imageContentsObserver = nil
         videoStatusObserver?.invalidate()
         videoStatusObserver = nil
+        pendingVideoReadinessTask?.cancel()
+        pendingVideoReadinessTask = nil
         thumbHashPlaceholderRef = nil
         foregroundVideoStatusObservers.forEach { $0.invalidate() }
         foregroundVideoStatusObservers = []
@@ -1638,11 +1700,22 @@ public final class StoryCanvasUIView: UIView {
         link.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 60)
         link.add(to: .main, forMode: .common)
         displayLink = link
+        // Autorise (ou ré-autorise après pause) la lecture du player vidéo de
+        // fond. `attachBackgroundPlayer` ne joue plus automatiquement —
+        // l'autorisation passe désormais EXCLUSIVEMENT par ce drapeau, ce qui
+        // garantit qu'un canvas en `.edit` mode (prefetcher, composer
+        // preview) n'émet jamais d'audio même si son player est attaché et
+        // prêt.
+        backgroundLayer.isPlaybackActive = true
     }
 
     private func stopPlayback() {
         displayLink?.invalidate()
         displayLink = nil
+        // Pause symétrique du player vidéo de fond. Une slide qui sort du
+        // mode `.play` (changement de mode, dismiss du viewer, transition
+        // vers prefetch off-screen) ne doit plus émettre ni vidéo ni audio.
+        backgroundLayer.isPlaybackActive = false
     }
 
     @objc private func displayLinkTick(_ link: CADisplayLink) {

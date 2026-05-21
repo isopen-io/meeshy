@@ -124,6 +124,7 @@ struct StoryViewerView: View {
     @State var computedStoryDuration: Double = 12.0 // internal for cross-file extension access
     @State var timerCancellable: AnyCancellable? // internal for cross-file extension access
     @State var hasFiredFadeOut = false // internal for cross-file extension access
+    @State var hasFiredNextPrefetch = false // déclencheur du prefetch de la slide N+1, armé à 5s de la fin de la slide en cours pour que la transition soit fluide.
 
     // MARK: - P3 wire-up : Prefetcher + gated timer
     //
