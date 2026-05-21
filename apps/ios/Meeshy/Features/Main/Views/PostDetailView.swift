@@ -662,7 +662,8 @@ struct PostDetailView: View {
                     mute: true
                 )
                 .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                .frame(maxWidth: .infinity)
+                .frame(maxWidth: 460)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .clipShape(RoundedRectangle(cornerRadius: 12))
                 .padding(.horizontal, 12)
                 .padding(.bottom, 8)

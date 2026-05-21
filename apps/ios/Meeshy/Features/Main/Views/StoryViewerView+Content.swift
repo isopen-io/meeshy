@@ -1324,7 +1324,7 @@ struct StoryCommentsOverlayView: View {
                 // Inline composer for story comments (reply banner attached inside)
                 storyCommentComposerBar
             }
-            .frame(maxHeight: UIScreen.main.bounds.height * 0.5)
+            .frame(maxHeight: min(UIScreen.main.bounds.height * 0.5, 520))
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(.ultraThinMaterial)

@@ -124,7 +124,11 @@ public struct LanguagePickerSheet: View {
     @State private var selectedId: String?
     @State private var sheetDragOffset: CGFloat = 0
 
-    private let maxHeight: CGFloat = UIScreen.main.bounds.height * 0.65
+    // Cap to a reasonable max so iPad (1024+pt height) doesn't get a sheet
+    // that towers across the entire screen. 65% on iPhone, ~520pt on iPad.
+    private var maxHeight: CGFloat {
+        min(UIScreen.main.bounds.height * 0.65, 620)
+    }
 
     public init(
         style: Style = .dark,
@@ -155,7 +159,9 @@ public struct LanguagePickerSheet: View {
                 searchBar
                 languageGrid
             }
-            .frame(maxWidth: .infinity)
+            // On iPad, keep the sheet a sane width — full-bleed across a
+            // 1024pt screen feels like a wall of flags.
+            .frame(maxWidth: 600)
             .frame(maxHeight: maxHeight)
             .background(sheetBackground)
             .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
@@ -252,7 +258,7 @@ public struct LanguagePickerSheet: View {
             .padding(.horizontal, 16)
             .padding(.bottom, 40)
         }
-        .frame(maxHeight: UIScreen.main.bounds.height * 0.52)
+        .frame(maxHeight: min(UIScreen.main.bounds.height * 0.52, 460))
     }
 
     private func languageCell(_ lang: TranslationLanguage) -> some View {

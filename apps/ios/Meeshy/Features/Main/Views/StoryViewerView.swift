@@ -234,9 +234,21 @@ struct StoryViewerView: View {
     /// presentation.
     @State var hasTriggeredInitialAction = false
 
-    private var screenH: CGFloat { UIScreen.main.bounds.height }
+    // Use the active window bounds rather than `UIScreen.main.bounds` so
+    // iPad split-screen / Stage Manager / multi-window scenes report the
+    // viewer's actual window (UIScreen reports the full display). Used by
+    // swipe-to-dismiss thresholds and horizontal-slide normalization.
+    private var windowSize: CGSize {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })?
+            .windows.first(where: { $0.isKeyWindow })?
+            .bounds.size ?? UIScreen.main.bounds.size
+    }
 
-    var screenW: CGFloat { UIScreen.main.bounds.width } // internal for cross-file extension access
+    private var screenH: CGFloat { windowSize.height }
+
+    var screenW: CGFloat { windowSize.width } // internal for cross-file extension access
 
     // Drag dismiss progress 0–1
     private var dragProgress: CGFloat {

@@ -35,7 +35,10 @@ struct StoryRepostEmbedCell: View {
                     mute: true
                 )
                 .aspectRatio(9.0 / 16.0, contentMode: .fit)
-                .frame(maxWidth: .infinity)
+                // Cap the embed width so on iPad it doesn't stretch into
+                // a giant vertical column when the feed sits in a wide pane.
+                .frame(maxWidth: 420)
+                .frame(maxWidth: .infinity, alignment: .center)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Story de \(repost.author)")
