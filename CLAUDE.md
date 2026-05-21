@@ -327,7 +327,9 @@ Always use `./apps/ios/meeshy.sh`:
 ```
 
 ### Test Credentials
-- Username: `atabeth` / Password: `pD5p1ir9uxLUf2X2FpNE`
+Test account credentials are stored as CI secrets (`ASC_DEMO_USER`, `ASC_DEMO_PASSWORD`)
+and in your local secret manager. They are intentionally NOT committed to the repository.
+Ask a maintainer or check your team password manager for current values.
 
 ### Redis Rate Limit Reset
 ```bash

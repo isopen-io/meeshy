@@ -12,14 +12,14 @@
 
 ## Phase 1 — Sécurité hardening (Critique)
 
-### [P1.1] Retirer les credentials démo App Store + ENV vars
+### [P1.1] Retirer les credentials démo App Store + ENV vars ✅
 - **Cible** : `apps/ios/fastlane/Fastfile:189-191` + `CLAUDE.md` (Test Credentials section)
 - **Action** :
-  - [ ] Remplacer `demo_user: "atabeth"` par `ENV["ASC_DEMO_USER"]` (idem password)
-  - [ ] Mettre à jour `.github/workflows/ios-release.yml` pour injecter les ENV
-  - [ ] Retirer le bloc `Test Credentials` de `CLAUDE.md` (remplacer par mention « stockés en secret CI »)
-  - [ ] Documenter dans `apps/ios/fastlane/README.md` quels ENV sont requis
-  - [ ] User doit rotater le password Apple côté ASC ensuite
+  - [x] Remplacer `demo_user: "atabeth"` par `require_env("ASC_DEMO_USER")` (idem password)
+  - [x] Mettre à jour `.github/workflows/ios-release.yml` pour injecter les ENV
+  - [x] Retirer le bloc `Test Credentials` de `CLAUDE.md`
+  - [x] Documenter dans `apps/ios/fastlane/SECRETS.md` quels ENV sont requis
+  - [ ] (user) Rotater le password Apple côté ASC + ajouter les secrets GitHub
 - **Tests** : N/A (config)
 
 ### [P1.2] VoIP token : UserDefaults → Keychain
