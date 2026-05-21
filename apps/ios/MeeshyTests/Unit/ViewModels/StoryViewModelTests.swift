@@ -104,15 +104,16 @@ final class StoryViewModelTests: XCTestCase {
     private func makeStoryItem(
         id: String = "item-1",
         content: String? = "Test story",
-        isViewed: Bool = false
+        isViewed: Bool = false,
+        createdAt: Date = Date()
     ) -> StoryItem {
         StoryItem(
             id: id,
             content: content,
             media: [],
             storyEffects: nil,
-            createdAt: Date(),
-            expiresAt: Date().addingTimeInterval(72000),
+            createdAt: createdAt,
+            expiresAt: createdAt.addingTimeInterval(72000),
             isViewed: isViewed
         )
     }
@@ -321,6 +322,121 @@ final class StoryViewModelTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(sut.storyGroups[0].stories.count, 1, "Duplicate story should not be added")
+    }
+
+    // MARK: - Tray re-sort tests (sortStoryGroupsInPlace)
+
+    /// Regression for the bug where an existing author posting a new story did
+    /// NOT bubble their group back to the top of the tray. The pre-fix sink
+    /// only mutated `storyGroups[idx]` in place — the slot index was frozen.
+    func test_socketStoryCreated_promotesExistingAuthorToFrontOfTray() async {
+        // Two friends, both with unviewed stories so the only tie-break is
+        // latestStory.createdAt desc. Bob's latest is more recent than alice's
+        // initial story, so Bob sits at index 0 at startup.
+        let aliceOldStory = makeStoryItem(
+            id: "alice-old",
+            isViewed: false,
+            createdAt: Date(timeIntervalSince1970: 1_000_000)
+        )
+        let bobStory = makeStoryItem(
+            id: "bob",
+            isViewed: false,
+            createdAt: Date(timeIntervalSince1970: 1_500_000)
+        )
+        sut.storyGroups = [
+            makeStoryGroup(userId: "bob", username: "bob", stories: [bobStory]),
+            makeStoryGroup(userId: "alice", username: "alice", stories: [aliceOldStory]),
+        ]
+
+        sut.subscribeToSocketEvents()
+
+        // Alice posts a brand new story, more recent than Bob's.
+        let aliceFreshPost = Self.makeStoryAPIPost(
+            id: "alice-fresh",
+            authorId: "alice",
+            authorUsername: "alice",
+            createdAt: "2026-01-15T13:00:00.000Z"
+        )
+        mockSocket.storyCreated.send(aliceFreshPost)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.storyGroups.count, 2)
+        XCTAssertEqual(
+            sut.storyGroups[0].id, "alice",
+            "Alice should bubble to index 0 because her latest story is now the most recent across all unviewed groups"
+        )
+        XCTAssertEqual(sut.storyGroups[0].stories.count, 2, "Alice keeps both stories")
+        XCTAssertEqual(
+            sut.storyGroups[0].stories.last?.id, "alice-fresh",
+            "Per-group order stays ascending by createdAt so `latestStory` (stories.last) points to the freshest"
+        )
+    }
+
+    /// Unviewed groups always sit above all-viewed groups, regardless of
+    /// per-story timestamps. New groups must respect that ordering too — not
+    /// just be plopped at index 0.
+    func test_socketStoryCreated_newGroupRespectsUnviewedPriorityOverViewedRecent() async {
+        // Carol's existing story was already seen, but it's the most recent
+        // by createdAt. Without `sortStoryGroupsInPlace`, a newly arriving
+        // group with an unviewed but older story would still be inserted at
+        // index 0 — which is the bug. With it, Carol stays in front only if
+        // she still has unviewed content. Test the inverse here: Carol is
+        // all-viewed, Alice posts a new unviewed older story → Alice goes on
+        // top because hasUnviewed beats createdAt.
+        let carolViewedRecent = makeStoryItem(
+            id: "carol",
+            isViewed: true,
+            createdAt: Date(timeIntervalSince1970: 2_000_000)
+        )
+        sut.storyGroups = [
+            makeStoryGroup(userId: "carol", username: "carol", stories: [carolViewedRecent]),
+        ]
+
+        sut.subscribeToSocketEvents()
+
+        let aliceNewerButOlderPost = Self.makeStoryAPIPost(
+            id: "alice-new",
+            authorId: "alice",
+            authorUsername: "alice",
+            createdAt: "2026-01-10T12:00:00.000Z" // older than carol's timestamp
+        )
+        mockSocket.storyCreated.send(aliceNewerButOlderPost)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.storyGroups.count, 2)
+        XCTAssertEqual(
+            sut.storyGroups[0].id, "alice",
+            "Alice (unviewed) must outrank carol (viewed) even though carol's story is more recent"
+        )
+        XCTAssertEqual(sut.storyGroups[1].id, "carol")
+    }
+
+    /// When the last unviewed story of a group is marked as viewed, the group
+    /// must drop below any remaining unviewed group on the next sort pass.
+    func test_socketStoryViewed_dropsAllViewedGroupBelowUnviewedPeers() async {
+        let aliceStory = makeStoryItem(id: "alice-1", isViewed: false,
+                                       createdAt: Date(timeIntervalSince1970: 2_500_000))
+        let bobStory = makeStoryItem(id: "bob-1", isViewed: false,
+                                     createdAt: Date(timeIntervalSince1970: 1_000_000))
+        // Alice on top initially (both unviewed, alice more recent).
+        sut.storyGroups = [
+            makeStoryGroup(userId: "alice", username: "alice", stories: [aliceStory]),
+            makeStoryGroup(userId: "bob", username: "bob", stories: [bobStory]),
+        ]
+
+        sut.subscribeToSocketEvents()
+
+        // Mark Alice's only story as viewed → alice.hasUnviewed flips to false,
+        // bob is still unviewed → bob takes the front slot.
+        mockSocket.storyViewed.send(SocketStoryViewedData(
+            storyId: "alice-1", viewerId: "me", viewerUsername: "me", viewCount: 1
+        ))
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertTrue(sut.storyGroups[0].id == "bob",
+                      "Bob keeps unviewed content so he must outrank the now-all-viewed Alice")
+        XCTAssertFalse(sut.storyGroups[1].hasUnviewed,
+                       "Alice's group is now fully viewed")
     }
 
     // MARK: - Lookup Method Tests
