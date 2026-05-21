@@ -492,16 +492,40 @@ public struct StoryComposerView: View {
                 url: item.url,
                 context: .story,
                 onComplete: { result in
-                    // 1. Remplace l'URL cached par la version éditée — la
-                    //    vidéo originale en mémoire est implicitement
-                    //    supplantée (le renderer la résout par `elementId`
-                    //    via `loadedVideoURLs`).
-                    viewModel.loadedVideoURLs[item.elementId] = result.url
+                    // 1. **Écrase le fichier cache** par la version éditée.
+                    //    Le caller a stocké `item.url` (path original cached
+                    //    dans le composer tmp) → on remplace son contenu par
+                    //    `result.url` (output du `VideoExportPipeline`).
+                    //    Bénéfices :
+                    //    - L'URL reste **identique** : AVPlayer items, thumb
+                    //      caches keyés par URL n'invalident pas → 0 reload.
+                    //    - Pas d'orphelin temp : `result.url` est consommé.
+                    //    Fallback : si le move échoue (cross-volume, perm),
+                    //    on garde simplement `result.url` (le comportement
+                    //    pré-fix).
+                    let destinationURL = item.url
+                    let cachedURL: URL
+                    if result.url != destinationURL {
+                        do {
+                            try? FileManager.default.removeItem(at: destinationURL)
+                            try FileManager.default.moveItem(at: result.url, to: destinationURL)
+                            cachedURL = destinationURL
+                        } catch {
+                            // Move impossible → on conserve result.url tel
+                            // quel. Le map pointera dessus, le contenu sera
+                            // valide. L'ancien item.url reste sur disque
+                            // jusqu'à l'éviction tmp système.
+                            cachedURL = result.url
+                        }
+                    } else {
+                        cachedURL = destinationURL
+                    }
+                    viewModel.loadedVideoURLs[item.elementId] = cachedURL
 
                     // 2. Refresh la vignette pour qu'elle reflète la frame
                     //    courante du clip édité (utilisée par le composer
                     //    tray, l'export et le placeholder).
-                    let thumbnail = Self.generateVideoThumbnail(url: result.url)
+                    let thumbnail = Self.generateVideoThumbnail(url: cachedURL)
                     if let thumbnail { viewModel.loadedImages[item.elementId] = thumbnail }
 
                     // 3. Si l'utilisateur a transcrit la piste audio, on
