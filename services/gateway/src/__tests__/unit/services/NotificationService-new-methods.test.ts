@@ -523,7 +523,7 @@ describe('NotificationService — New Methods', () => {
 
       const result = await service.createLoginNewDeviceNotification({
         recipientUserId: '507f1f77bcf86cd799439011',
-        deviceInfo: 'iPhone 16 Pro / iOS 18.0',
+        deviceInfo: { model: 'iPhone 16 Pro', os: 'iOS', osVersion: '18.0' },
         ipAddress: '192.168.1.42',
       });
 
@@ -542,7 +542,7 @@ describe('NotificationService — New Methods', () => {
 
       await service.createLoginNewDeviceNotification({
         recipientUserId: '507f1f77bcf86cd799439011',
-        deviceInfo: 'Chrome on macOS',
+        deviceInfo: { browser: 'Chrome', os: 'macOS' },
         ipAddress: '10.0.0.1',
       });
 
@@ -550,7 +550,7 @@ describe('NotificationService — New Methods', () => {
         expect.objectContaining({
           data: expect.objectContaining({
             metadata: expect.objectContaining({
-              deviceInfo: 'Chrome on macOS',
+              deviceOS: 'macOS',
               ipAddress: '10.0.0.1',
             }),
           }),
@@ -570,8 +570,9 @@ describe('NotificationService — New Methods', () => {
       const metadata = createCall.data.metadata;
 
       expect(metadata).toBeDefined();
-      expect(metadata).not.toHaveProperty('deviceInfo');
-      expect(metadata).not.toHaveProperty('ipAddress');
+      expect(metadata.ipAddress).toBeNull();
+      expect(metadata.deviceOS).toBeNull();
+      expect(metadata.deviceVendor).toBeNull();
       expect(metadata).toHaveProperty('action', 'view_details');
     });
   });

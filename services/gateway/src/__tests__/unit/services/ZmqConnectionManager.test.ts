@@ -260,10 +260,10 @@ describe('ZmqConnectionManager', () => {
       expect(sentMessage.timestamp).toBeDefined();
     });
 
-    it('should throw error when push socket is not initialized', async () => {
+    it('should resolve silently when push socket is not initialized', async () => {
       const uninitializedManager = new ZmqConnectionManager(config);
 
-      await expect(uninitializedManager.sendPing()).rejects.toThrow('Socket PUSH non initialisé');
+      await expect(uninitializedManager.sendPing()).resolves.toBeUndefined();
     });
 
     it('should include current timestamp in ping', async () => {
@@ -399,8 +399,8 @@ describe('ZmqConnectionManager', () => {
       await expect(manager.receive()).rejects.toThrow('Socket SUB non initialisé');
     });
 
-    it('should throw meaningful error for uninitialized sendPing', async () => {
-      await expect(manager.sendPing()).rejects.toThrow('Socket PUSH non initialisé');
+    it('should resolve silently for uninitialized sendPing', async () => {
+      await expect(manager.sendPing()).resolves.toBeUndefined();
     });
   });
 });

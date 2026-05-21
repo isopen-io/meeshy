@@ -111,6 +111,7 @@ const originalEnv = { ...process.env };
 let mockConsoleLog: jest.SpyInstance;
 let mockConsoleError: jest.SpyInstance;
 let mockConsoleWarn: jest.SpyInstance;
+let mockConsoleInfo: jest.SpyInstance;
 
 describe('PushNotificationService', () => {
   beforeEach(() => {
@@ -129,6 +130,7 @@ describe('PushNotificationService', () => {
     mockConsoleLog = jest.spyOn(console, 'log').mockImplementation(() => {});
     mockConsoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     mockConsoleWarn = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    mockConsoleInfo = jest.spyOn(console, 'info').mockImplementation(() => {});
 
     // Reset environment variables
     process.env = { ...originalEnv };
@@ -139,6 +141,7 @@ describe('PushNotificationService', () => {
     mockConsoleLog?.mockRestore();
     mockConsoleError?.mockRestore();
     mockConsoleWarn?.mockRestore();
+    mockConsoleInfo?.mockRestore();
   });
 
   // Helper function to get fresh service with specific env config
@@ -259,7 +262,7 @@ describe('PushNotificationService', () => {
       await service.initialize();
 
       expect(mockConsoleWarn).toHaveBeenCalledWith(
-        expect.stringContaining('[PUSH] Firebase credentials not found')
+        expect.stringContaining('[PUSH] Firebase credentials invalid')
       );
     });
 
@@ -275,7 +278,7 @@ describe('PushNotificationService', () => {
 
       await service.initialize();
 
-      expect(mockConsoleLog).toHaveBeenCalledWith('[PUSH] APNS client initialized');
+      expect(mockConsoleLog).toHaveBeenCalledWith('[PUSH] APNS clients initialized (production + sandbox)');
     });
 
     it('should only initialize once (idempotent) for APNS', async () => {
@@ -294,7 +297,7 @@ describe('PushNotificationService', () => {
 
       // APNS initialization log should appear only once
       const apnsLogs = mockConsoleLog.mock.calls.filter(
-        (call: any[]) => call[0] === '[PUSH] APNS client initialized'
+        (call: any[]) => call[0] === '[PUSH] APNS clients initialized (production + sandbox)'
       );
       expect(apnsLogs.length).toBe(1);
     });
@@ -339,7 +342,7 @@ describe('PushNotificationService', () => {
       });
 
       expect(result).toEqual([]);
-      expect(mockConsoleLog).toHaveBeenCalledWith('[PUSH] No active tokens found for user user-123');
+      expect(mockConsoleWarn).toHaveBeenCalledWith('[PUSH] No active tokens found for user user-123');
     });
 
     it('should return error for FCM token when Firebase not initialized', async () => {
@@ -460,6 +463,7 @@ describe('PushNotificationService', () => {
           type: true,
           platform: true,
           bundleId: true,
+          apnsEnvironment: true,
         },
       });
     });
@@ -715,7 +719,7 @@ describe('PushNotificationService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].success).toBe(false);
-      expect(result[0].error).toBe('APNS not initialized');
+      expect(result[0].error).toBe('APNS production client not initialized');
     });
 
     it('should send APNS notification with badge and custom sound', async () => {
@@ -981,7 +985,7 @@ describe('PushNotificationService', () => {
           ],
         },
       });
-      expect(mockConsoleLog).toHaveBeenCalledWith('[PUSH] Cleaned up 15 inactive/stale tokens');
+      expect(mockConsoleInfo).toHaveBeenCalledWith('[PUSH] Cleaned up 15 inactive/stale tokens');
     });
 
     it('should use default 90 days when not specified', async () => {

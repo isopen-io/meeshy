@@ -14,7 +14,8 @@ import Fastify, { FastifyInstance } from 'fastify';
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
-import { registerStoryAudioRoutes } from '../audio';
+// Note: audio module is imported dynamically inside buildApp so that UPLOAD_DIR
+// (read at module-load time) picks up the per-test temp directory.
 
 // ---------------------------------------------------------------------------
 // Auth middleware stub — simulates requiredAuth preValidation
@@ -59,6 +60,9 @@ async function buildApp(opts: { authenticated?: boolean; uploadDir: string } = {
   const { authenticated = true, uploadDir } = opts;
 
   process.env['UPLOAD_DIR'] = uploadDir;
+
+  jest.resetModules();
+  const { registerStoryAudioRoutes } = await import('../audio');
 
   const app: FastifyInstance = Fastify({ logger: false });
   app.decorate('prisma', buildMockPrisma());
@@ -132,9 +136,9 @@ describe('GET /static/:filename — story audio static route', () => {
     });
 
     expect(response.statusCode).toBe(404);
-    const body = JSON.parse(response.body) as { success: boolean; error: { code: string } };
+    const body = JSON.parse(response.body) as { success: boolean; code: string };
     expect(body.success).toBe(false);
-    expect(body.error.code).toBe('FILE_NOT_FOUND');
+    expect(body.code).toBe('FILE_NOT_FOUND');
   });
 
   it('should_reject_non_audio_extensions', async () => {
@@ -146,9 +150,9 @@ describe('GET /static/:filename — story audio static route', () => {
     });
 
     expect(response.statusCode).toBe(400);
-    const body = JSON.parse(response.body) as { success: boolean; error: { code: string } };
+    const body = JSON.parse(response.body) as { success: boolean; code: string };
     expect(body.success).toBe(false);
-    expect(body.error.code).toBe('INVALID_FILE_TYPE');
+    expect(body.code).toBe('INVALID_FILE_TYPE');
   });
 
   it('should_reject_path_traversal_attempts', async () => {
