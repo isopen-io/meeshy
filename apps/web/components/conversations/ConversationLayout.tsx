@@ -149,6 +149,18 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
     setLocalSelectedConversationId,
   } = useConversationSelection({ selectedConversationId, conversations });
 
+  // Somme des messages non lus des conversations AUTRES que celle ouverte —
+  // affichée comme badge sur la flèche de retour
+  const otherUnreadCount = useMemo(
+    () =>
+      conversations.reduce(
+        (sum, conv) =>
+          conv.id !== effectiveSelectedId ? sum + (conv.unreadCount ?? 0) : sum,
+        0
+      ),
+    [conversations, effectiveSelectedId]
+  );
+
   // UI (mobile, resize, modals, galerie)
   const {
     isMobile,
@@ -870,6 +882,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
           t={t}
           tCommon={tCommon}
           showBackButton={!!selectedConversationId}
+          otherUnreadCount={otherUnreadCount}
         />
 
         {galleryOpen && displayConversation && (
@@ -1022,6 +1035,7 @@ export function ConversationLayout({ selectedConversationId }: ConversationLayou
                   t={t}
                   tCommon={tCommon}
                   showBackButton={!!selectedConversationId}
+                  otherUnreadCount={otherUnreadCount}
                 />
               </FeatureErrorBoundary>
             ) : (
