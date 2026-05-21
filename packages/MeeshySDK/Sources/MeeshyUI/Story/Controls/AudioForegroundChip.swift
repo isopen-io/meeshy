@@ -1,17 +1,28 @@
 import SwiftUI
 import MeeshySDK
 
-/// Chip glass affichant un audio foreground sur le canvas composer.
+/// Chip glass affichant un audio foreground sur le canvas.
 ///
-/// V1 : capsule `.ultraThinMaterial` + icône audio + onde sinusoïdale animée.
-/// Position dérivée des coordonnées normalisées `x`/`y` du modèle ; drag local
-/// via `@GestureState` puis commit unique au release (mêmes patterns que
-/// `StoryAudioPlayerView` + `StoryAudioCell` pour éviter le scintillement des
-/// vues observant le ViewModel à chaque tick de drag).
+/// Capsule `.ultraThinMaterial` + icône audio + onde sinusoïdale animée.
+/// Position dérivée des coordonnées normalisées `x`/`y` du modèle.
+///
+/// Deux modes :
+/// - `.composer` : drag actif (commit `x`/`y` au release pour éviter le
+///   scintillement des vues observant le VM à chaque tick), tap = sélection.
+/// - `.reader`  : pas de drag, tap absorbé pour bloquer la navigation
+///   gauche/droite entre slides (le caller décide de l'action — typiquement
+///   toggle mute global).
 @MainActor
 public struct AudioForegroundChip: View {
+
+    public enum Mode: Sendable {
+        case composer
+        case reader
+    }
+
     @Binding public var audioObject: StoryAudioPlayerObject
     public let canvasSize: CGSize
+    public let mode: Mode
     public let isSelected: Bool
     public let onDragEnd: () -> Void
     public let onTap: () -> Void
@@ -21,17 +32,44 @@ public struct AudioForegroundChip: View {
 
     public init(audioObject: Binding<StoryAudioPlayerObject>,
                 canvasSize: CGSize,
+                mode: Mode = .composer,
                 isSelected: Bool = false,
                 onDragEnd: @escaping () -> Void = {},
                 onTap: @escaping () -> Void = {}) {
         self._audioObject = audioObject
         self.canvasSize = canvasSize
+        self.mode = mode
         self.isSelected = isSelected
         self.onDragEnd = onDragEnd
         self.onTap = onTap
     }
 
     public var body: some View {
+        Group {
+            switch mode {
+            case .composer:
+                positionedChip.gesture(dragGesture)
+            case .reader:
+                positionedChip
+            }
+        }
+    }
+
+    private var positionedChip: some View {
+        chipContent
+            .position(
+                x: max(0, min(canvasSize.width, audioObject.x * canvasSize.width)) + dragOffset.width,
+                y: max(0, min(canvasSize.height, audioObject.y * canvasSize.height)) + dragOffset.height
+            )
+            // `.onTapGesture` consomme le tap : en mode reader le chip se trouve
+            // dans un layer ZStack au-dessus du `StoryGestureOverlayView`, donc
+            // la navigation gauche/droite ne se déclenche pas.
+            .onTapGesture(perform: onTap)
+            .accessibilityLabel("Audio foreground")
+            .accessibilityAddTraits(.isButton)
+    }
+
+    private var chipContent: some View {
         HStack(spacing: 8) {
             Image(systemName: "waveform")
                 .font(.system(size: 14, weight: .bold))
@@ -48,14 +86,6 @@ public struct AudioForegroundChip: View {
                 .stroke(strokeColor, lineWidth: isSelected ? 2 : 1)
         )
         .contentShape(Capsule())
-        .position(
-            x: max(0, min(canvasSize.width, audioObject.x * canvasSize.width)) + dragOffset.width,
-            y: max(0, min(canvasSize.height, audioObject.y * canvasSize.height)) + dragOffset.height
-        )
-        .onTapGesture(perform: onTap)
-        .gesture(dragGesture)
-        .accessibilityLabel("Audio foreground")
-        .accessibilityAddTraits(.isButton)
     }
 
     private var strokeColor: Color {
@@ -107,6 +137,58 @@ struct AudioForegroundSineWave: View {
                            with: .color(.white.opacity(0.9)),
                            style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
             }
+        }
+    }
+}
+
+/// Overlay reader : rend un `AudioForegroundChip` (mode `.reader`) pour chaque
+/// audio foreground de la slide ACTUELLEMENT dans sa fenêtre de lecture
+/// (`startTime` ... `startTime + duration`). Hors fenêtre → masqué (pas
+/// d'animation gaspillée). Tap absorbé par le chip → propagation bloquée vers
+/// la navigation gauche/droite du `StoryGestureOverlayView`.
+@MainActor
+public struct AudioForegroundReaderOverlay: View {
+
+    public let foregroundAudios: [StoryAudioPlayerObject]
+    public let elapsedTime: TimeInterval
+    public let slideDuration: TimeInterval
+    public let onTap: (StoryAudioPlayerObject) -> Void
+
+    public init(foregroundAudios: [StoryAudioPlayerObject],
+                elapsedTime: TimeInterval,
+                slideDuration: TimeInterval,
+                onTap: @escaping (StoryAudioPlayerObject) -> Void) {
+        self.foregroundAudios = foregroundAudios
+        self.elapsedTime = elapsedTime
+        self.slideDuration = slideDuration
+        self.onTap = onTap
+    }
+
+    public var body: some View {
+        GeometryReader { geo in
+            ForEach(visibleAudios, id: \.id) { audio in
+                AudioForegroundChip(
+                    audioObject: .constant(audio),
+                    canvasSize: geo.size,
+                    mode: .reader,
+                    isSelected: false,
+                    onTap: { onTap(audio) }
+                )
+            }
+        }
+    }
+
+    /// Filtre :
+    /// - exclut les audios background (le bg n'a pas de chip visuel — il joue
+    ///   en boucle sur toute la slide).
+    /// - garde ceux dont la fenêtre `start..end` contient `elapsedTime`.
+    ///   `start` par défaut = 0, `end` par défaut = `slideDuration`.
+    private var visibleAudios: [StoryAudioPlayerObject] {
+        foregroundAudios.filter { audio in
+            guard audio.isBackground != true else { return false }
+            let start = Double(audio.startTime ?? 0)
+            let end = audio.duration.map { start + Double($0) } ?? slideDuration
+            return elapsedTime >= start && elapsedTime <= end
         }
     }
 }

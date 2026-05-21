@@ -735,6 +735,7 @@ struct StoryViewerView: View {
             isOwnStory: isOwnStory,
             quickEmojis: quickEmojis,
             progress: progress,
+            currentSlideDuration: currentSlideDuration,
             outgoingOpacity: outgoingOpacity,
             closingScale: closingScale,
             contentOpacity: contentOpacity,
