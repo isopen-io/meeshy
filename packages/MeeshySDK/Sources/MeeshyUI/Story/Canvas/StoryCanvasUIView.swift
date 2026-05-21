@@ -1994,21 +1994,28 @@ public final class StoryCanvasUIView: UIView {
     /// pour resync SwiftUI quand le bootstrap initial a pu rater le coche
     /// (callback nil au moment de l'init, race avec @State).
     private func updateManipulationLayer(forceEmit: Bool = false) {
-        let medias = slide.effects.mediaObjects ?? []
-        let hasBg = medias.contains(where: { $0.isBackground == true })
-            || slide.effects.resolvedBackgroundMedia != nil
-        let hasFg = medias.contains(where: { $0.isBackground != true })
-            || !slide.effects.textObjects.isEmpty
-            || !(slide.effects.stickerObjects ?? []).isEmpty
-        let new: CanvasManipulationLayer
-        if hasFg { new = .foreground }
-        else if hasBg { new = .background }
-        else { new = .canvas }
+        let new = Self.resolveManipulationLayer(for: slide.effects)
         let changed = new != currentManipulationLayer
         currentManipulationLayer = new
         if changed || forceEmit {
             onManipulationLayerChanged?(new)
         }
+    }
+
+    /// Résolution pure de la couche manipulable à partir des effets d'une
+    /// slide. Extraite en `static` pour permettre les tests sans monter de
+    /// UIView. Règle : fg media OU text OU sticker → `.foreground`, sinon
+    /// bg media → `.background`, sinon `.canvas`.
+    public static func resolveManipulationLayer(for effects: StoryEffects) -> CanvasManipulationLayer {
+        let medias = effects.mediaObjects ?? []
+        let hasFg = medias.contains(where: { $0.isBackground != true })
+            || !effects.textObjects.isEmpty
+            || !(effects.stickerObjects ?? []).isEmpty
+        if hasFg { return .foreground }
+        let hasBg = medias.contains(where: { $0.isBackground == true })
+            || effects.resolvedBackgroundMedia != nil
+        if hasBg { return .background }
+        return .canvas
     }
 
     /// Force la propagation de la couche courante (sans recompute) — appelée
@@ -2344,7 +2351,10 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     /// mouvement. On assigne maintenant `nextTopZ()` à l'élément pour piloter
     /// le z-order de rendu, et on réordonne aussi le tableau pour rester
     /// cohérent avec l'inspecteur.
-    private func bringForegroundToFront(id: String) {
+    ///
+    /// `internal` plutôt que `private` pour symétrie avec `sendToBack(id:)`
+    /// et pour permettre les tests sans simuler un tap UIKit.
+    internal func bringForegroundToFront(id: String) {
         let topZ = nextTopZ()
 
         // Texte
