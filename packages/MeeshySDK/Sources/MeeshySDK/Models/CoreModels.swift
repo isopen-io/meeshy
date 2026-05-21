@@ -109,6 +109,26 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
 
     public var unreadCount: Int = 0
     public var lastMessagePreview: String?
+    /// B1 (Prisme Linguistique) — `[targetLanguage: translatedContent]`
+    /// pairs for the last message, bundled at the conversation level so
+    /// the list row can resolve the preview in the viewer's preferred
+    /// language without a per-row GRDB lookup.
+    ///
+    /// Currently populated by the in-memory message cache attach path
+    /// (see `ConversationListViewModel.attachLastMessageTranslations`).
+    /// When the gateway starts shipping these in `/conversations` it will
+    /// be wired through the API → domain converter; until then the field
+    /// stays `nil` and the list falls back to the raw `lastMessagePreview`.
+    ///
+    /// `[String: String]` (not `[APITextTranslation]`) is intentional:
+    /// `APITextTranslation` is `Decodable`-only, but `MeeshyConversation`
+    /// must stay `Codable` for the cache round-trip. Language codes are
+    /// stored lower-cased to make resolution case-insensitive.
+    public var lastMessageTranslations: [String: String]? = nil
+    /// B1 — original language of the last message. Combined with
+    /// `lastMessageTranslations` and the viewer's preferred languages by
+    /// `resolvedLastMessagePreview` to apply the Prisme Linguistique.
+    public var lastMessageOriginalLanguage: String? = nil
     public var lastMessageAttachments: [MeeshyMessageAttachment] = []
     public var lastMessageAttachmentCount: Int = 0
     public var lastMessageId: String? = nil
@@ -165,6 +185,45 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         return "Vu il y a \(Int(interval / 86400))j"
     }
 
+    /// B1 — applies the Prisme Linguistique to `lastMessagePreview`.
+    ///
+    /// Resolution mirrors `resolveUserLanguage` in
+    /// `packages/shared/utils/conversation-helpers.ts`:
+    ///
+    /// 1. Walk the viewer's preferred languages in order.
+    /// 2. Return the first matching translation found in
+    ///    `lastMessageTranslations`.
+    /// 3. If no preferred language matches, return the original
+    ///    `lastMessagePreview` (which is the message in its source
+    ///    language).
+    ///
+    /// **Critical Prisme rule**: never fall back to `translations.first`.
+    /// The absence of a preferred-language translation means the content
+    /// is already in that language OR no translation has been generated —
+    /// surfacing an unrelated language would be worse than the original.
+    ///
+    /// `preferredLanguages` must be ordered: systemLanguage first, then
+    /// regionalLanguage, then customDestinationLanguage. Empty/nil entries
+    /// are tolerated and skipped.
+    public func resolvedLastMessagePreview(preferredLanguages: [String]) -> String? {
+        guard let translations = lastMessageTranslations, !translations.isEmpty else {
+            return lastMessagePreview
+        }
+        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
+        // If the message is already in one of the preferred languages, the
+        // raw preview is canonical — no translation needed.
+        if let original = lastMessageOriginalLanguage?.lowercased(),
+           preferred.contains(original) {
+            return lastMessagePreview
+        }
+        for lang in preferred {
+            if let translated = translations[lang] {
+                return translated
+            }
+        }
+        return lastMessagePreview
+    }
+
     /// Hash des champs visuels — utilisé dans ThemedConversationRow.== pour détecter les changements de contenu.
     /// Mettre à jour ce hash quand un nouveau champ est affiché dans ThemedConversationRow.
     public var renderFingerprint: Int {
@@ -178,6 +237,11 @@ public struct MeeshyConversation: Identifiable, Hashable, Codable, Sendable {
         h.combine(lastMessageIsBlurred)
         h.combine(lastMessageIsViewOnce)
         h.combine(lastMessageExpiresAt)
+        // B1 — make the row re-render when a fresh translation arrives.
+        if let translations = lastMessageTranslations {
+            h.combine(translations.keys.sorted().joined(separator: ","))
+        }
+        h.combine(lastMessageOriginalLanguage)
         h.combine(name)
         h.combine(isMuted)
         h.combine(isPinned)
