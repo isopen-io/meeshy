@@ -188,7 +188,16 @@ export class MeeshySocketIOManager {
       pingInterval: 25000, // 25s - Intervalle entre les pings (par défaut)
       connectTimeout: 45000, // 45s - Timeout pour la connexion initiale
       // Autoriser reconnexion rapide
-      allowEIO3: true
+      allowEIO3: true,
+      perMessageDeflate: {
+        threshold: 1024,
+        zlibDeflateOptions: { level: 6, memLevel: 7 },
+        clientNoContextTakeover: true,
+        serverNoContextTakeover: true,
+      },
+      httpCompression: {
+        threshold: 1024,
+      },
     });
 
     // Initialiser le SocialEventsHandler pour les broadcasts feed
