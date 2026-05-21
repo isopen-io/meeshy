@@ -41,7 +41,11 @@ final class ReplyThreadLoader {
         return ThreadResult(parent: parent, replies: replies)
     }
 
-    struct ThreadResult: Equatable {
+    // `MeeshyMessage` is not `Equatable` (see CoreModels.swift), so we
+    // don't promise it here either — callers in the overlay and the test
+    // suite access `.parent` / `.replies` field-by-field rather than
+    // comparing the whole struct.
+    struct ThreadResult {
         let parent: MeeshyMessage
         let replies: [MeeshyMessage]
     }
