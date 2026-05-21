@@ -492,6 +492,76 @@ describe('ZmqTranslationClient', () => {
 
       await expect(client.sendVoiceAPIRequest(request)).rejects.toThrow();
     });
+
+    it('should NOT retry voice_translate after 30s (long pipeline, single shot)', async () => {
+      // Regression: in prod we observed 4× duplicate worker-pool jobs because
+      // the gateway resent voice_translate every 30s. Voice pipelines take
+      // several minutes (Whisper + NLLB + TTS) — retries just saturate CPU.
+      const request: VoiceAPIRequest = {
+        type: 'voice_translate',
+        taskId: 'no-retry-task',
+        userId: 'user-1',
+        audioBase64: 'AAAA',
+        targetLanguages: ['fr']
+      };
+
+      await client.sendVoiceAPIRequest(request);
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBe(1);
+
+      // Advance well past the legacy 30s retry window: no retry should fire.
+      jest.advanceTimersByTime(35_000);
+      await Promise.resolve();
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBe(1);
+
+      // And past a second window for good measure.
+      jest.advanceTimersByTime(35_000);
+      await Promise.resolve();
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBe(1);
+    });
+
+    it('should emit voiceAPIError after the 15-minute deadman timeout on voice_translate', async () => {
+      const request: VoiceAPIRequest = {
+        type: 'voice_translate',
+        taskId: 'deadman-task',
+        userId: 'user-1',
+        audioBase64: 'AAAA',
+        targetLanguages: ['fr']
+      };
+
+      const errorEvents: any[] = [];
+      client.on('voiceAPIError', (e) => errorEvents.push(e));
+
+      await client.sendVoiceAPIRequest(request);
+
+      // No error before deadman.
+      jest.advanceTimersByTime(14 * 60_000);
+      await Promise.resolve();
+      expect(errorEvents.length).toBe(0);
+
+      // Deadman fires at 15 minutes.
+      jest.advanceTimersByTime(60_000 + 1_000);
+      await Promise.resolve();
+      expect(errorEvents.length).toBe(1);
+      expect(errorEvents[0].taskId).toBe('deadman-task');
+      expect(errorEvents[0].errorCode).toBe('TIMEOUT');
+      expect(errorEvents[0].requestType).toBe('voice_translate');
+    });
+
+    it('should still retry fast voice ops (e.g. voice_health) on 30s timeout', async () => {
+      const request: VoiceAPIRequest = {
+        type: 'voice_health',
+        taskId: 'health-retry-task'
+      };
+
+      await client.sendVoiceAPIRequest(request);
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBe(1);
+
+      jest.advanceTimersByTime(30_000 + 100);
+      await Promise.resolve();
+      await Promise.resolve();
+      // A retry should have been queued for the same taskId.
+      expect((mockPushSocket.send as jest.Mock).mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
   });
 
   describe('sendVoiceProfileRequest()', () => {
@@ -985,13 +1055,13 @@ describe('ZmqTranslationClient', () => {
       expect(isHealthy).toBe(false);
     });
 
-    it('should return false when ping fails', async () => {
+    it('should return true even when ping send fails (manager swallows ping errors)', async () => {
       await client.initialize();
       (mockPushSocket.send as jest.Mock).mockRejectedValueOnce(new Error('Send failed'));
 
       const isHealthy = await client.healthCheck();
 
-      expect(isHealthy).toBe(false);
+      expect(isHealthy).toBe(true);
     });
   });
 

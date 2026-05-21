@@ -2144,7 +2144,7 @@ Expected: SDK + UI tests verts.
 
 - [ ] **Step 15.3 : Smoke visuel 10 scénarios (manuel)**
 
-Lancer l'app et tester (login `atabeth` / `pD5p1ir9uxLUf2X2FpNE`) :
+Lancer l'app et tester (login `atabeth` / `<DEMO_PASSWORD — see apps/ios/fastlane/.env>`) :
 
 1. **Audio orig non cached** → button DL + taille → tap → DL progress → joue ✓
 2. **Switch langue audio non cached** → stop player + button DL (sans taille tant que backend follow-up) → tap → DL → joue ✓

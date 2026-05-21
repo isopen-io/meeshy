@@ -468,7 +468,7 @@ git push
 ## Vérification end-to-end
 
 1. Lancer l'app iOS avec `./apps/ios/meeshy.sh run`
-2. Se connecter avec `atabeth` / `pD5p1ir9uxLUf2X2FpNE`
+2. Se connecter avec `atabeth` / `<DEMO_PASSWORD — see apps/ios/fastlane/.env>`
 3. Dans les logs gateway, chercher `client` dans le log du login :
    ```json
    { "client": { "appVersion": "1.0.0", "build": "42", "platform": "ios", "device": "iPhone16,1", "country": "FR" } }

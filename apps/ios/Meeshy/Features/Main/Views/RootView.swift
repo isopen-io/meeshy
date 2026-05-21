@@ -30,7 +30,7 @@ struct RootView: View {
     @StateObject private var conversationViewModel = ConversationListViewModel()
     @StateObject private var router = Router()
     @ObservedObject private var callManager = CallManager.shared
-    @ObservedObject private var networkMonitor = NetworkMonitor.shared
+    @StateObject private var connectionStatus = ConnectionStatusViewModel()
     @ObservedObject private var notificationManager = NotificationManager.shared
     @EnvironmentObject private var deepLinkRouter: DeepLinkRouter
     @Environment(\.colorScheme) private var systemColorScheme
@@ -262,14 +262,17 @@ struct RootView: View {
                 menuLadder
             }
 
-            // 7. Offline banner
-            if networkMonitor.isOffline {
+            // 7. Offline banner — source unique : ConnectionStatusViewModel.
+            // Quand le réseau revient, `status` cesse d'être `.offline` et la
+            // bannière disparaît immédiatement ; les sockets se reconnectent
+            // en parallèle (cf. NetworkMonitor → forceReconnect dans le SDK).
+            if connectionStatus.status == .offline {
                 VStack {
                     OfflineBanner()
                         .transition(.move(edge: .top).combined(with: .opacity))
                     Spacer()
                 }
-                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: networkMonitor.isOffline)
+                .animation(.spring(response: 0.4, dampingFraction: 0.8), value: connectionStatus.status)
                 .zIndex(190)
             } else {
                 pendingSettingsBannerOverlay
@@ -321,6 +324,11 @@ struct RootView: View {
             // Connect Socket.IO early so the backend knows we're online
             MessageSocketManager.shared.connect()
             statusViewModel.subscribeToSocketEvents()
+            // Sans cet appel, le SDK reçoit bien `story:created` /
+            // `story:updated` / `story:deleted` mais personne n'est sink'é
+            // sur les publishers de SocialSocketManager → les stories des
+            // amis n'arrivent jamais dans `storyGroups` en temps réel.
+            storyViewModel.subscribeToSocketEvents()
 
             // Start SyncEngine socket relay
             await ConversationSyncEngine.shared.startSocketRelay()

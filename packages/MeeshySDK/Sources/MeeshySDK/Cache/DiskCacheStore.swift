@@ -323,6 +323,34 @@ public actor DiskCacheStore: ReadableCacheStore {
         return _imageCache.object(forKey: key)
     }
 
+    /// Cold-start synchronous warm : retourne l'image immediatement si elle
+    /// est en NSCache, sinon va lire le fichier du disque (sans IO reseau),
+    /// decode l'UIImage de maniere paresseuse via `contentsOfFile:`, store
+    /// le resultat dans la NSCache et le retourne.
+    ///
+    /// Conçu pour `CachedAsyncImage.init` à l'ouverture froide d'une
+    /// conversation : la NSCache est vide apres une liberation d'app, donc
+    /// `cachedImage(for:)` retourne nil meme si l'image est presente sur
+    /// disque. Sans `warmedImage`, la cellule rend d'abord son thumbHash
+    /// puis bascule sur l'image apres un `task { await ... }` async — d'ou
+    /// le flash "magenta/thumbhash → image" visible a chaque cold start.
+    ///
+    /// `UIImage(contentsOfFile:)` ne decompresse pas immediatement les
+    /// pixels (lazy decode au premier draw), donc le cout en init reste
+    /// minime. C'est le redraw initial qui paie le decodage — exactement
+    /// ce qu'on veut : un cycle de render, l'image visible directement,
+    /// pas de transition de placeholder.
+    nonisolated public func warmedImage(for urlString: String) -> UIImage? {
+        if let cached = Self.cachedImage(for: urlString) { return cached }
+        guard let fileURL = cachedFileURL(for: urlString),
+              let image = UIImage(contentsOfFile: fileURL.path) else {
+            return nil
+        }
+        let key = Self.fileKey(for: urlString) as NSString
+        Self._imageCache.setObject(image, forKey: key)
+        return image
+    }
+
     /// Hard cap for the decoded bitmap we will keep resident in the NSCache
     /// (in bytes). A malicious or accidentally-huge image (e.g. 20K×20K JPEG
     /// that decodes to >1 GB of pixel data) would otherwise blow the NSCache

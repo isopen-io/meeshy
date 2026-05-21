@@ -77,6 +77,13 @@ public final class StoryRendererCache: @unchecked Sendable {
         public nonisolated let opacity: Double
         public nonisolated let visible: Bool
         public nonisolated let languages: [String]
+        // Content fingerprints — invalident le cache quand le contenu de
+        // l'élément change (live composer / canvas reader). Pour le compositor
+        // export où l'item est figé pour la session, ces champs restent
+        // stables et n'introduisent aucun overhead.
+        public nonisolated let mediaPostMediaId: String?
+        public nonisolated let textContent: String?
+        public nonisolated let stickerEmoji: String?
 
         public nonisolated init(id: String,
                                 position: CGPoint,
@@ -84,7 +91,10 @@ public final class StoryRendererCache: @unchecked Sendable {
                                 rotation: Double,
                                 opacity: Double,
                                 visible: Bool,
-                                languages: [String] = []) {
+                                languages: [String] = [],
+                                mediaPostMediaId: String? = nil,
+                                textContent: String? = nil,
+                                stickerEmoji: String? = nil) {
             self.id = id
             self.position = position
             self.scale = scale
@@ -92,6 +102,9 @@ public final class StoryRendererCache: @unchecked Sendable {
             self.opacity = opacity
             self.visible = visible
             self.languages = languages
+            self.mediaPostMediaId = mediaPostMediaId
+            self.textContent = textContent
+            self.stickerEmoji = stickerEmoji
         }
     }
 
@@ -144,9 +157,34 @@ public final class StoryRendererCache: @unchecked Sendable {
         return layer
     }
 
+    /// Retire toutes les entrées dont `id` n'apparaît pas dans `keepIds`.
+    /// Pour un `StoryMediaLayer` retenu (vidéo), pause l'AVPlayer et coupe
+    /// la `currentItem` avant le retrait pour libérer proprement les
+    /// ressources AVFoundation (sinon le player continue de buffer en
+    /// arrière-plan jusqu'au prochain GC).
+    ///
+    /// Appelé en fin de `rebuildLayers()` côté canvas live pour éviter que
+    /// le cache accumule des layers fantômes après suppression d'un élément.
+    public func prune(keepIds: Set<String>) {
+        let staleIds = layerCache.keys.filter { !keepIds.contains($0) }
+        for id in staleIds {
+            if let cached = layerCache[id], let media = cached.layer as? StoryMediaLayer {
+                media.tearDownPlayback()
+            }
+            layerCache.removeValue(forKey: id)
+        }
+    }
+
     /// Drops every cached layer + counters + scoping context. The next
-    /// `layer(for:...)` call rebuilds every item from scratch.
+    /// `layer(for:...)` call rebuilds every item from scratch. Pour chaque
+    /// `StoryMediaLayer` libère son AVPlayer avant de drop la référence —
+    /// nécessaire pour ne pas laisser un player bufferer en arrière-plan.
     public func invalidate() {
+        for cached in layerCache.values {
+            if let media = cached.layer as? StoryMediaLayer {
+                media.tearDownPlayback()
+            }
+        }
         layerCache.removeAll()
         lastSlideId = nil
         lastLanguages = []
@@ -211,6 +249,20 @@ public final class StoryRendererCache: @unchecked Sendable {
         let opacity: Double = overrides.opacity ?? 1.0
         let visible: Bool = isVisible(item: item, at: time)
 
+        // Empreinte de contenu — n'a d'effet que pour le canvas live, où le
+        // model peut muter à id constant. Le compositor export ne mute pas
+        // l'item, ces champs restent identiques d'une frame à l'autre.
+        var mediaPostMediaId: String?
+        var textContent: String?
+        var stickerEmoji: String?
+        if let media = item as? StoryMediaObject {
+            mediaPostMediaId = media.postMediaId
+        } else if let text = item as? StoryTextObject {
+            textContent = text.text
+        } else if let sticker = item as? StorySticker {
+            stickerEmoji = sticker.emoji
+        }
+
         return ItemSignature(
             id: item.id,
             position: CGPoint(x: posX, y: posY),
@@ -218,7 +270,10 @@ public final class StoryRendererCache: @unchecked Sendable {
             rotation: rot,
             opacity: opacity,
             visible: visible,
-            languages: languages
+            languages: languages,
+            mediaPostMediaId: mediaPostMediaId,
+            textContent: textContent,
+            stickerEmoji: stickerEmoji
         )
     }
 
@@ -268,6 +323,9 @@ extension StoryRendererCache.ItemSignature: Hashable {
             && lhs.opacity == rhs.opacity
             && lhs.visible == rhs.visible
             && lhs.languages == rhs.languages
+            && lhs.mediaPostMediaId == rhs.mediaPostMediaId
+            && lhs.textContent == rhs.textContent
+            && lhs.stickerEmoji == rhs.stickerEmoji
     }
 
     public nonisolated func hash(into hasher: inout Hasher) {
@@ -279,5 +337,8 @@ extension StoryRendererCache.ItemSignature: Hashable {
         hasher.combine(opacity)
         hasher.combine(visible)
         hasher.combine(languages)
+        hasher.combine(mediaPostMediaId)
+        hasher.combine(textContent)
+        hasher.combine(stickerEmoji)
     }
 }

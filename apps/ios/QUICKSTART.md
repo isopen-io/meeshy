@@ -32,7 +32,7 @@ From the repo root:
 
 | User       | Password                 |
 |------------|--------------------------|
-| `atabeth`  | `pD5p1ir9uxLUf2X2FpNE`   |
+| `atabeth`  | `<DEMO_PASSWORD — see apps/ios/fastlane/.env>`   |
 
 API base: `http://localhost:3000/api/v1/` (dev) or `https://gate.meeshy.me/api/v1/` (prod)
 

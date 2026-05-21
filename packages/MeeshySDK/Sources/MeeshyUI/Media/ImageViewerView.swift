@@ -215,8 +215,9 @@ public struct ImageFullscreen: View {
                 .scaleEffect(scale)
                 .offset(offset)
                 .simultaneousGesture(
-                    MagnifyGesture()
-                        .onChanged { value in scale = value.magnification }
+                    // MagnificationGesture (iOS 13+) au lieu de MagnifyGesture (iOS 17+).
+                    MagnificationGesture()
+                        .onChanged { value in scale = value }
                         .onEnded { _ in
                             withAnimation(.spring()) {
                                 scale = max(1, min(5, scale))

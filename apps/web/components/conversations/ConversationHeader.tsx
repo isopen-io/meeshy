@@ -2,6 +2,7 @@
 
 import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { OngoingCallBanner } from '@/components/video-calls/OngoingCallBanner';
 import { ConversationImageUploadDialog } from './conversation-image-upload-dialog';
 import { ConversationSettingsModal } from './ConversationSettingsModal';
@@ -30,7 +31,8 @@ export function ConversationHeader({
   onStartCall,
   onOpenGallery,
   t,
-  showBackButton = false
+  showBackButton = false,
+  otherUnreadCount = 0
 }: ConversationHeaderProps) {
   const { preferences, togglePin, toggleMute, toggleArchive } = useHeaderPreferences(
     conversation.id,
@@ -96,15 +98,29 @@ export function ConversationHeader({
         <div className="flex items-center justify-between px-4 py-3 min-h-[80px]">
           <div className="flex items-center gap-3 flex-1 min-w-0">
             {(isMobile || showBackButton) && (
-              <Button
-                size="icon"
-                variant="ghost"
-                onClick={onBackToList}
-                className="flex-shrink-0 h-9 w-9 mt-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                aria-label={t('conversationHeader.backToList') || 'Retour à la liste'}
-              >
-                <ArrowLeft className="h-5 w-5" aria-hidden="true" />
-              </Button>
+              <div className="relative flex-shrink-0">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={onBackToList}
+                  className="h-9 w-9 mt-0.5 focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  aria-label={t('conversationHeader.backToList') || 'Retour à la liste'}
+                >
+                  <ArrowLeft className="h-5 w-5" aria-hidden="true" />
+                </Button>
+                {otherUnreadCount > 0 && (
+                  <Badge
+                    variant="destructive"
+                    className="absolute -top-1 -right-1 h-4 min-w-[16px] px-1 text-[10px] leading-none pointer-events-none"
+                    aria-label={`${otherUnreadCount} ${
+                      t('conversationHeader.unreadInOtherConversations') ||
+                      'messages non lus dans les autres conversations'
+                    }`}
+                  >
+                    {otherUnreadCount > 99 ? '99+' : otherUnreadCount}
+                  </Badge>
+                )}
+              </div>
             )}
 
             <HeaderAvatar

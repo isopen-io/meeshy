@@ -306,8 +306,13 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
     // MARK: - Actions
 
     private func handleStartRecording() {
+        // See `StoryVoiceRecorder.startRecording` for the same fix rationale:
+        // `requestRecordPermission`'s callback runs on the TCC server queue
+        // and `DispatchQueue.main.async` does not prove `@MainActor` to
+        // Swift 6, so calling `@MainActor` APIs from there crashes with
+        // `swift_task_isCurrentExecutorImpl`.
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard granted else { return }
                 recorder.startRecording()
                 HapticFeedback.medium()

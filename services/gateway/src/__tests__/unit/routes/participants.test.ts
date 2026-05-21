@@ -261,7 +261,7 @@ describe('registerParticipantsRoutes', () => {
               systemLanguage: 'en',
               regionalLanguage: 'fr',
               customDestinationLanguage: 'es',
-              autoTranslateEnabled: false,
+              autoTranslateEnabled: true,
               canSendMessages: true,
               canSendFiles: true,
               canSendImages: true,
@@ -670,7 +670,7 @@ describe('registerParticipantsRoutes', () => {
 
     it('should return 404 when target user does not exist', async () => {
       const route = getRoute(mockFastify, 'POST', '/participants');
-      mockPrisma.participant.findFirst.mockResolvedValueOnce(createParticipant());
+      mockPrisma.participant.findFirst.mockResolvedValueOnce(createParticipant({ role: 'admin' }));
       mockPrisma.user.findFirst.mockResolvedValue(null);
       const reply = createMockReply();
 
@@ -685,7 +685,7 @@ describe('registerParticipantsRoutes', () => {
     it('should return 400 when user is already an active participant', async () => {
       const route = getRoute(mockFastify, 'POST', '/participants');
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: 'admin' }))
         .mockResolvedValueOnce(createParticipant({ userId: TARGET_USER_ID }));
       mockPrisma.user.findFirst.mockResolvedValue({ id: TARGET_USER_ID, username: 'target' });
       const reply = createMockReply();
@@ -707,7 +707,7 @@ describe('registerParticipantsRoutes', () => {
         systemLanguage: 'fr',
       };
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: 'admin' }))
         .mockResolvedValueOnce(null);
       mockPrisma.user.findFirst.mockResolvedValue(targetUser);
       mockPrisma.participant.create.mockResolvedValue({});
@@ -753,7 +753,7 @@ describe('registerParticipantsRoutes', () => {
         systemLanguage: null,
       };
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: "admin" }))
         .mockResolvedValueOnce(null);
       mockPrisma.user.findFirst.mockResolvedValue(targetUser);
       mockPrisma.participant.create.mockResolvedValue({});
@@ -782,7 +782,7 @@ describe('registerParticipantsRoutes', () => {
         systemLanguage: 'es',
       };
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: "admin" }))
         .mockResolvedValueOnce(null);
       mockPrisma.user.findFirst.mockResolvedValue(targetUser);
       mockPrisma.participant.create.mockResolvedValue({});
@@ -810,7 +810,7 @@ describe('registerParticipantsRoutes', () => {
         systemLanguage: 'en',
       };
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: "admin" }))
         .mockResolvedValueOnce(null);
       mockPrisma.user.findFirst.mockResolvedValue(targetUser);
       mockPrisma.participant.create.mockResolvedValue({});
@@ -836,7 +836,7 @@ describe('registerParticipantsRoutes', () => {
         systemLanguage: null,
       };
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: "admin" }))
         .mockResolvedValueOnce(null);
       mockPrisma.user.findFirst.mockResolvedValue(targetUser);
       mockPrisma.participant.create.mockResolvedValue({});
@@ -855,7 +855,7 @@ describe('registerParticipantsRoutes', () => {
       const ns = createMockNotificationService();
       const request = createPostRequest({ server: { notificationService: ns } });
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: "admin" }))
         .mockResolvedValueOnce(null);
       mockPrisma.user.findFirst.mockResolvedValue({
         id: TARGET_USER_ID, username: 'target', displayName: 'Target',
@@ -881,7 +881,7 @@ describe('registerParticipantsRoutes', () => {
       const member1Id = '507f1f77bcf86cd799439066';
       const member2Id = '507f1f77bcf86cd799439077';
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: "admin" }))
         .mockResolvedValueOnce(null);
       mockPrisma.user.findFirst.mockResolvedValue({
         id: TARGET_USER_ID, username: 'target', displayName: 'Target',
@@ -911,7 +911,7 @@ describe('registerParticipantsRoutes', () => {
       const route = getRoute(mockFastify, 'POST', '/participants');
       const request = createPostRequest({ server: {} });
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: "admin" }))
         .mockResolvedValueOnce(null);
       mockPrisma.user.findFirst.mockResolvedValue({
         id: TARGET_USER_ID, username: 'target', displayName: 'T',
@@ -930,7 +930,7 @@ describe('registerParticipantsRoutes', () => {
       const ns = createMockNotificationService();
       const request = createPostRequest({ server: { notificationService: ns } });
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: "admin" }))
         .mockResolvedValueOnce(null);
       mockPrisma.user.findFirst.mockResolvedValue({
         id: TARGET_USER_ID, username: 'target', displayName: 'T',
@@ -951,7 +951,7 @@ describe('registerParticipantsRoutes', () => {
       ns.createAddedToConversationNotification.mockRejectedValue(new Error('push failed'));
       const request = createPostRequest({ server: { notificationService: ns } });
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: "admin" }))
         .mockResolvedValueOnce(null);
       mockPrisma.user.findFirst.mockResolvedValue({
         id: TARGET_USER_ID, username: 'target', displayName: 'T',
@@ -976,7 +976,7 @@ describe('registerParticipantsRoutes', () => {
       const request = createPostRequest({ server: { notificationService: ns } });
       const memberId = '507f1f77bcf86cd799439066';
       mockPrisma.participant.findFirst
-        .mockResolvedValueOnce(createParticipant())
+        .mockResolvedValueOnce(createParticipant({ role: "admin" }))
         .mockResolvedValueOnce(null);
       mockPrisma.user.findFirst.mockResolvedValue({
         id: TARGET_USER_ID, username: 'target', displayName: 'T',
@@ -1076,16 +1076,18 @@ describe('registerParticipantsRoutes', () => {
       );
     });
 
-    it('should return 403 when user is MODERATOR role (not sufficient)', async () => {
+    it('should allow MODERATOR role to remove participants', async () => {
       const route = getRoute(mockFastify, 'DELETE', '/participants');
       mockPrisma.participant.findFirst.mockResolvedValue(
         createParticipant({ role: 'moderator', user: { ...createParticipant().user, role: 'MODERATOR' } })
       );
+      mockPrisma.participant.updateMany.mockResolvedValue({ count: 1 });
+      mockPrisma.participant.findMany.mockResolvedValue([]);
       const reply = createMockReply();
 
       await route.handler(createDeleteRequest(), reply);
 
-      expect(reply.status).toHaveBeenCalledWith(403);
+      expect(reply.send).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
     });
 
     it('should return 400 when trying to remove yourself', async () => {

@@ -190,23 +190,20 @@ extension ConversationView {
             return
         }
 
-        // Create a new DM via API
+        // P4.1: the network call lives in `ConversationCreator` so the
+        // view doesn't have to know about APIClient.shared, the body
+        // encoding, or the conversion to the local `Conversation` model.
+        // Errors are intentionally swallowed here (preserved behaviour) —
+        // the call is fire-and-forget from a user gesture; if it fails
+        // the user can re-tap.
+        let currentUserId = AuthManager.shared.currentUser?.id ?? ""
         do {
-            struct CreateDMBody: Encodable {
-                let type: String
-                let participantIds: [String]
-            }
-            let body = CreateDMBody(type: "direct", participantIds: [userId])
-            let response: APIResponse<APIConversation> = try await APIClient.shared.post(
-                endpoint: "/conversations",
-                body: body
+            let newConv = try await ConversationCreator().createDirectConversation(
+                with: userId,
+                currentUserId: currentUserId
             )
-            if response.success {
-                let currentUserId = AuthManager.shared.currentUser?.id ?? ""
-                let newConv = response.data.toConversation(currentUserId: currentUserId)
-                await conversationListViewModel.refresh()
-                router.navigateToConversation(newConv)
-            }
+            await conversationListViewModel.refresh()
+            router.navigateToConversation(newConv)
         } catch { }
     }
 }

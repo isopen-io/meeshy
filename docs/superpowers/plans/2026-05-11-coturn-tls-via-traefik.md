@@ -735,7 +735,7 @@ Récupérer un username + credential HMAC valides via la gateway :
 # Récupérer le token d'auth
 TOKEN=$(curl -sX POST https://gate.meeshy.me/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"atabeth","password":"pD5p1ir9uxLUf2X2FpNE"}' | jq -r '.data.token')
+  -d '{"username":"atabeth","password":"<DEMO_PASSWORD — see apps/ios/fastlane/.env>"}' | jq -r '.data.token')
 
 # Appeler l'endpoint qui produit les credentials TURN
 CREDS=$(curl -s https://gate.meeshy.me/api/v1/calls/turn-credentials \

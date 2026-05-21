@@ -62,7 +62,7 @@ describe('GET /conversations?updatedSince', () => {
     const loginRes = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
-      payload: { username: 'atabeth', password: 'pD5p1ir9uxLUf2X2FpNE' }
+      payload: { username: 'atabeth', password: '<DEMO_PASSWORD — see apps/ios/fastlane/.env>' }
     })
     authToken = loginRes.json().data.token
   })

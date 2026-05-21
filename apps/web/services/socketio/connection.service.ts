@@ -37,6 +37,8 @@ export class ConnectionService {
   private isAppUpdating = false;
   private autoJoinCallback: (() => void) | null = null;
 
+  private statusListeners = new Set<(diag: ConnectionDiagnostics) => void>();
+
   private listenerCallbacks: {
     onAuthenticated?: (user: User) => void;
     onDisconnected?: (reason: string) => void;
@@ -49,6 +51,43 @@ export class ConnectionService {
         this.isAppUpdating = true;
         if (this.state.socket) this.state.socket.disconnect();
       });
+
+      // Source unique de vérité réseau : aligner l'état du socket sur la
+      // connectivité physique du navigateur. Évite que la bannière
+      // "attente de réseau" reste affichée après le retour du réseau.
+      window.addEventListener('offline', () => {
+        if (this.state.isConnected || this.state.isConnecting) {
+          this.state.isConnected = false;
+          this.state.isConnecting = false;
+          this.emitStatusChange();
+        }
+      });
+
+      window.addEventListener('online', () => {
+        if (this.isAppUpdating) return;
+        this.state.reconnectAttempts = 0;
+        if (!this.state.isConnected && !this.state.isConnecting) {
+          this.connect();
+        }
+      });
+    }
+  }
+
+  onStatusChange(callback: (diag: ConnectionDiagnostics) => void): () => void {
+    this.statusListeners.add(callback);
+    return () => {
+      this.statusListeners.delete(callback);
+    };
+  }
+
+  private emitStatusChange(): void {
+    const diag = this.getConnectionDiagnostics();
+    for (const cb of this.statusListeners) {
+      try {
+        cb(diag);
+      } catch (err) {
+        logger.warn('[Socket] status listener error', err as any);
+      }
     }
   }
 
@@ -98,6 +137,7 @@ export class ConnectionService {
     if (socket && !socket.connected && !this.state.isConnecting) {
       this.state.isConnecting = true;
       socket.connect();
+      this.emitStatusChange();
     }
   }
 
@@ -106,6 +146,7 @@ export class ConnectionService {
       this.state.socket.disconnect();
       this.state.isConnected = false;
       this.state.isConnecting = false;
+      this.emitStatusChange();
     }
   }
 
@@ -134,18 +175,21 @@ export class ConnectionService {
       this.state.isConnecting = false;
       this.state.reconnectAttempts = 0;
       if (this.autoJoinCallback) this.autoJoinCallback();
+      this.emitStatusChange();
     });
 
     socket.on('disconnect', (reason) => {
       this.state.isConnected = false;
       this.state.isConnecting = false;
       if (onDisconnected) onDisconnected(reason);
+      this.emitStatusChange();
     });
 
     socket.on('connect_error', (error) => {
       this.state.isConnecting = false;
       if (onError) onError(error);
       this.handleConnectionError(error);
+      this.emitStatusChange();
     });
 
     socket.on(SERVER_EVENTS.AUTHENTICATED, (data: any) => {
@@ -222,5 +266,3 @@ export class ConnectionService {
     this.currentUser = null;
   }
 }
-
-export const meeshySocketIOService = new ConnectionService();

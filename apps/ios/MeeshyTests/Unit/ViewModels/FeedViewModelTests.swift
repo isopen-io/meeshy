@@ -295,6 +295,53 @@ final class FeedViewModelTests: XCTestCase {
         XCTAssertEqual(api.requestCount, initialRequestCount, "Should not load more when hasMore is false")
     }
 
+    /// P3.1 — coalescing regression test.
+    ///
+    /// Multiple cells near the threshold fire `.onAppear` essentially at the
+    /// same time, each calling `loadMoreIfNeeded`. Because the ViewModel is
+    /// `@MainActor`-isolated, the first call should win the
+    /// `isLoadingMore=true` race and the others must short-circuit. Without
+    /// the guard, the feed would burn N redundant GET /posts/feed per page
+    /// boundary scroll.
+    func test_loadMoreIfNeeded_concurrentCalls_makeExactlyOneAPIRequest() async {
+        let (sut, api, _, _) = makeSUT()
+
+        var initialPosts: [APIPost] = []
+        for i in 0..<10 {
+            initialPosts.append(Self.makeAPIPost(id: "post-\(i)"))
+        }
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(
+            posts: initialPosts, hasMore: true, nextCursor: "cursor-page2"
+        ))
+
+        await sut.loadFeed()
+        let initialRequestCount = api.requestCount
+
+        // Stub a different response for the second page so we'd notice if
+        // multiple page-2 fetches actually completed.
+        let morePosts = [Self.makeAPIPost(id: "post-10")]
+        api.stub("/posts/feed", result: Self.makePaginatedResponse(posts: morePosts))
+
+        // Five cells near the threshold all fire concurrently. With
+        // structured concurrency on @MainActor, they all suspend at the
+        // first await; only one progresses past the `!isLoadingMore` guard.
+        let triggerPost = sut.posts[5]
+        async let one: Void = sut.loadMoreIfNeeded(currentPost: triggerPost)
+        async let two: Void = sut.loadMoreIfNeeded(currentPost: triggerPost)
+        async let three: Void = sut.loadMoreIfNeeded(currentPost: triggerPost)
+        async let four: Void = sut.loadMoreIfNeeded(currentPost: triggerPost)
+        async let five: Void = sut.loadMoreIfNeeded(currentPost: triggerPost)
+        _ = await (one, two, three, four, five)
+
+        let extraRequests = api.requestCount - initialRequestCount
+        XCTAssertEqual(
+            extraRequests, 1,
+            "5 concurrent loadMoreIfNeeded calls must coalesce into exactly 1 paginated request"
+        )
+        XCTAssertEqual(sut.posts.count, 11, "Only the first page-2 fetch must append posts")
+        XCTAssertFalse(sut.isLoadingMore)
+    }
+
     // MARK: - likePost() Optimistic UI
 
     func test_likePost_optimisticSuccess_togglesIsLikedAndIncrementsCount() async {

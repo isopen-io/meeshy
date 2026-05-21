@@ -7,7 +7,7 @@ Date: 2026-05-12
 ## Pré-requis
 
 - App lancée via `./apps/ios/meeshy.sh run`
-- Connexion : `atabeth / pD5p1ir9uxLUf2X2FpNE`
+- Connexion : `atabeth / <DEMO_PASSWORD — see apps/ios/fastlane/.env>`
 - Naviguer vers Profile → Edit Profile
 
 ## Steps

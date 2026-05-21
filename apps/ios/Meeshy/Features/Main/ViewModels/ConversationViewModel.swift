@@ -152,6 +152,18 @@ class ConversationViewModel: ObservableObject {
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
 
+    /// Snapshot of the current conversation's unread count. Initialised
+    /// from `initialUnreadCount`, then dropped to 0 when the user reads
+    /// (markAsRead). Combined with `syncEngine.totalConversationsUnread`
+    /// to derive `otherConversationsUnread`.
+    @Published private(set) var currentConversationUnreadCount: Int = 0
+
+    /// Total unread across every OTHER conversation (excludes this one).
+    /// Drives the cross-conversation pill stuck next to the back button.
+    /// Always clamped ≥ 0 — never negative even when our local snapshot
+    /// of the current conv is briefly stale relative to the aggregate.
+    @Published private(set) var otherConversationsUnread: Int = 0
+
     /// Updated by the MessageListViewController's scroll delegate via the
     /// `onNearBottomChanged` callback. Drives the anticipatory prefetch:
     /// when the user is NOT near the bottom (scrolling up into history),
@@ -659,6 +671,11 @@ class ConversationViewModel: ObservableObject {
         handler.delegate = self
         handler.persistence = dependencies.persistence
         self.socketHandler = handler
+        // Declare this conversation as currently visible so the sync engine
+        // forces its `unreadCount` to 0 on every server broadcast (the user
+        // IS reading it) and excludes it from the cross-conversation
+        // aggregator. Cleared in `deinit`.
+        syncEngine.setCurrentlyOpenConversation(conversationId)
         store.startObserving(dbPool: dependencies.dbPool)
         Task { await store.loadInitial() }
         messagesPersistCancellable = $messages
@@ -673,6 +690,18 @@ class ConversationViewModel: ObservableObject {
         subscribeToMessageStore()
         subscribeToQueueReconciliation()
         subscribeToLanguagePreferenceChanges()
+        // Cross-conversation unread aggregator powers the back-button pill.
+        // Seed `currentConversationUnreadCount` BEFORE wiring the CombineLatest
+        // so the initial `totalConversationsUnread` value (delivered as soon
+        // as the sink subscribes — CurrentValueSubject semantics) is reduced
+        // against the right baseline.
+        currentConversationUnreadCount = unreadCount
+        Publishers.CombineLatest(syncEngine.totalConversationsUnread, $currentConversationUnreadCount)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] total, current in
+                self?.otherConversationsUnread = max(0, total - current)
+            }
+            .store(in: &cancellables)
         if let session = anonymousSession {
             APIClient.shared.anonymousSessionToken = session.sessionToken
             MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
@@ -831,8 +860,11 @@ class ConversationViewModel: ObservableObject {
             }
             .dropFirst()
             .sink { [weak self] _ in
-                self?._cachedPreferredLanguages = nil
-                self?._cachedPreferredLanguagesUserId = nil
+                // P4.2: cache invalidation follows the same rename that
+                // moved `preferredLanguages` into ``ConversationLanguagePreferences``;
+                // the old `_cachedPreferredLanguages` / `_cachedPreferredLanguagesUserId`
+                // pair was collapsed into a single Equatable cache slot.
+                self?._cachedLanguagePreferences = nil
             }
             .store(in: &cancellables)
     }
@@ -841,6 +873,9 @@ class ConversationViewModel: ObservableObject {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
         APIClient.shared.anonymousSessionToken = nil
+        // Clear the currently-open conversation gate so cross-conversation
+        // surfaces (back-button pill on other screens) resume counting it.
+        syncEngine.setCurrentlyOpenConversation(nil)
     }
 
     // MARK: - Typing Emission (delegated to socketHandler)
@@ -1455,34 +1490,14 @@ class ConversationViewModel: ObservableObject {
         guard !isSending else { return false }
         isSending = true
 
-        // Build ReplyReference from quoted message or story
-        var replyRef: ReplyReference?
-        if let storyRef = storyReplyReference {
-            replyRef = storyRef
-        } else if let replyId = replyToId, let quoted = messages.first(where: { $0.id == replyId }) {
-            let previewText: String = {
-                if !quoted.content.isEmpty { return quoted.content }
-                if let first = quoted.attachments.first {
-                    switch first.type {
-                    case .image: return "\u{1F4F7} Photo"
-                    case .video: return "\u{1F3AC} Video"
-                    case .audio: return "\u{1F3B5} Message vocal"
-                    case .file: return "\u{1F4CE} Fichier"
-                    default: return "\u{1F4CE} Piece jointe"
-                    }
-                }
-                return ""
-            }()
-            replyRef = ReplyReference(
-                messageId: replyId,
-                authorName: quoted.senderName ?? "Utilisateur",
-                previewText: previewText,
-                isMe: quoted.isMe,
-                authorColor: quoted.senderColor,
-                attachmentType: quoted.attachments.first?.type.rawValue,
-                attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl
-            )
-        }
+        // Build ReplyReference from quoted message or story via la helper
+        // unifiee — meme logique que `insertOptimisticMediaMessage` pour
+        // garantir que la quoted-reply card apparait identiquement quel que
+        // soit le chemin d'envoi (texte-seul vs media).
+        let replyRef = makeReplyReference(
+            storyReplyReference: storyReplyReference,
+            replyToId: replyToId
+        )
 
         // Optimistic insert.
         // Phase 4 §6.1 — local id is the canonical `cid_<uuid v4 lowercase>`
@@ -1781,6 +1796,50 @@ class ConversationViewModel: ObservableObject {
     /// Linguistique pour les utilisateurs non-francophones — l'affichage
     /// optimiste afficherait le mauvais drapeau de langue jusqu'à la
     /// réconciliation serveur.
+    /// Construit le `ReplyReference` riche destine a la bulle optimiste a
+    /// partir d'un `replyToId` (message normal) ou d'un `storyReplyReference`
+    /// pre-fourni (story reply). Single source of truth pour les deux chemins
+    /// d'envoi : texte-seul (sendMessage) et avec attachements
+    /// (insertOptimisticMediaMessage).
+    ///
+    /// L'absence de cette helper laissait `replyToJson` a nil dans le chemin
+    /// avec attachements, ce qui faisait que la quoted-reply card n'apparaissait
+    /// jamais dans la bulle optimiste pour les replies audio/video/image/galerie.
+    private func makeReplyReference(
+        storyReplyReference: ReplyReference?,
+        replyToId: String?
+    ) -> ReplyReference? {
+        if let storyRef = storyReplyReference {
+            return storyRef
+        }
+        guard let rid = replyToId,
+              let quoted = messages.first(where: { $0.id == rid }) else {
+            return nil
+        }
+        let previewText: String = {
+            if !quoted.content.isEmpty { return quoted.content }
+            if let first = quoted.attachments.first {
+                switch first.type {
+                case .image: return "\u{1F4F7} Photo"
+                case .video: return "\u{1F3AC} Video"
+                case .audio: return "\u{1F3B5} Message vocal"
+                case .file: return "\u{1F4CE} Fichier"
+                default: return "\u{1F4CE} Piece jointe"
+                }
+            }
+            return ""
+        }()
+        return ReplyReference(
+            messageId: rid,
+            authorName: quoted.senderName ?? "Utilisateur",
+            previewText: previewText,
+            isMe: quoted.isMe,
+            authorColor: quoted.senderColor,
+            attachmentType: quoted.attachments.first?.type.rawValue,
+            attachmentThumbnailUrl: quoted.attachments.first?.thumbnailUrl
+        )
+    }
+
     func insertOptimisticMediaMessage(
         tempId: String,
         content: String,
@@ -1793,7 +1852,15 @@ class ConversationViewModel: ObservableObject {
     ) {
         let now = Date()
         let attachmentsJson = attachments.isEmpty ? nil : try? JSONEncoder().encode(attachments)
-        let replyToJson = replyReference.flatMap { try? JSONEncoder().encode($0) }
+        // Construit le ReplyReference riche AVANT l'insert : si `replyReference`
+        // est fourni (story reply), on l'utilise ; sinon on resout via
+        // `replyToId` depuis `self.messages`. Garantit que `replyToJson` est
+        // non-nil des que `replyToId` ou `replyReference` n'est pas nil.
+        let resolvedReplyRef = makeReplyReference(
+            storyReplyReference: replyReference,
+            replyToId: replyToId
+        )
+        let replyToJson = resolvedReplyRef.flatMap { try? JSONEncoder().encode($0) }
         let resolvedOriginalLanguage = originalLanguage ?? defaultComposeLanguage()
         let record = MessageRecord(
             localId: tempId, serverId: nil,
@@ -2216,6 +2283,11 @@ class ConversationViewModel: ObservableObject {
 
     func markAsRead() {
         let convId = conversationId
+        // 0. Drop our snapshot of the current conv's unread to 0 so the
+        // CombineLatest pipeline driving `otherConversationsUnread` no
+        // longer subtracts a stale count — without this, the back-button
+        // pill briefly under-shoots while the SDK aggregator catches up.
+        currentConversationUnreadCount = 0
         // 1. Update cache immediately (local-first) — survives reloadFromCache()
         Task { await ConversationSyncEngine.shared.markConversationReadLocally(convId) }
         // 2. Notify ConversationListViewModel to clear badge in current @Published state
@@ -2686,34 +2758,21 @@ class ConversationViewModel: ObservableObject {
         activeAudioLanguageOverrides[messageId] = language
     }
 
-    private var _cachedPreferredLanguages: [String]?
-    private var _cachedPreferredLanguagesUserId: String?
+    private var _cachedLanguagePreferences: ConversationLanguagePreferences?
 
+    /// Ordered language priority used by `preferredTranslation(for:)`.
+    /// Extracted into ``ConversationLanguagePreferences`` (P4.2 step 1)
+    /// so the resolution can be unit-tested without spinning up a full
+    /// ViewModel + AuthManager + cached message graph. The cache is keyed
+    /// on the source `MeeshyUser` rather than just userId so a profile
+    /// edit (system/regional language change) is picked up immediately.
     private var preferredLanguages: [String] {
-        let userId = currentUserId
-        if let cached = _cachedPreferredLanguages, _cachedPreferredLanguagesUserId == userId {
-            return cached
+        let prefs = ConversationLanguagePreferences(user: authManager.currentUser)
+        if _cachedLanguagePreferences == prefs, let cached = _cachedLanguagePreferences {
+            return cached.resolved
         }
-        let user = authManager.currentUser
-        var preferred: [String] = []
-        // 1. Primary language (systemLanguage) — highest priority
-        if let sys = user?.systemLanguage, !preferred.contains(where: { $0.lowercased() == sys.lowercased() }) {
-            preferred.append(sys)
-        }
-        // 2. Secondary language (regionalLanguage)
-        if let reg = user?.regionalLanguage, !preferred.contains(where: { $0.lowercased() == reg.lowercased() }) {
-            preferred.append(reg)
-        }
-        // 3. Custom destination language (lowest auto-priority)
-        if let custom = user?.customDestinationLanguage, !preferred.contains(where: { $0.lowercased() == custom.lowercased() }) {
-            preferred.append(custom)
-        }
-        // NOTE: Device locale (Locale.current) is NOT added here — it is the UI interface
-        // language, not the user's content language preference. Content languages are
-        // systemLanguage (primary) and regionalLanguage (secondary) configured in-app.
-        _cachedPreferredLanguages = preferred
-        _cachedPreferredLanguagesUserId = userId
-        return preferred
+        _cachedLanguagePreferences = prefs
+        return prefs.resolved
     }
 
     func preferredTranslation(for messageId: String) -> MessageTranslation? {

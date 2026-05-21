@@ -84,11 +84,16 @@ function makeFakePrisma(initialRows: FakeRow[] = []) {
     }),
   };
 
+  let transactionChain: Promise<unknown> = Promise.resolve();
   const prisma = {
     orphanMediaCleanup,
-    $transaction: jest.fn(async (fn: (tx: typeof prisma) => Promise<unknown>) => {
-      onBeforeTransaction?.();
-      return fn(prisma);
+    $transaction: jest.fn((fn: (tx: typeof prisma) => Promise<unknown>) => {
+      const next = transactionChain.then(async () => {
+        onBeforeTransaction?.();
+        return fn(prisma);
+      });
+      transactionChain = next.catch(() => undefined);
+      return next;
     }),
   };
 

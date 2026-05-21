@@ -14,6 +14,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     public var editingTextId: String?
     public var onInlineTextChanged: ((String, String) -> Void)?
     public var onInlineTextEditEnded: ((String) -> Void)?
+    /// Notifié quand la couche manipulable change (`.canvas` / `.background` /
+    /// `.foreground`). Le composer abonne ce callback à un `@State` qui pilote
+    /// le `CanvasLayerIndicator` (chip row).
+    public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
@@ -21,7 +25,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 onItemDuplicated: ((String, String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
                 editingTextId: String? = nil,
                 onInlineTextChanged: ((String, String) -> Void)? = nil,
-                onInlineTextEditEnded: ((String) -> Void)? = nil) {
+                onInlineTextEditEnded: ((String) -> Void)? = nil,
+                onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil) {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
@@ -29,6 +34,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.editingTextId = editingTextId
         self.onInlineTextChanged = onInlineTextChanged
         self.onInlineTextEditEnded = onInlineTextEditEnded
+        self.onManipulationLayerChanged = onManipulationLayerChanged
     }
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
@@ -41,6 +47,14 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onItemDuplicated = onItemDuplicated
         view.onInlineTextChanged = onInlineTextChanged
         view.onInlineTextEditEnded = onInlineTextEditEnded
+        view.onManipulationLayerChanged = onManipulationLayerChanged
+        // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
+        // poussée au callback (nil à ce moment). On force l'émission après
+        // une frame pour que le chip indicator reflète bien la couche
+        // courante dès le premier rendu SwiftUI.
+        DispatchQueue.main.async {
+            view.emitCurrentManipulationLayer()
+        }
         return view
     }
 
@@ -51,6 +65,24 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onItemTapped = onItemTapped
         uiView.onItemDoubleTapped = onItemDoubleTapped
         uiView.onItemDuplicated = onItemDuplicated
+        uiView.onManipulationLayerChanged = onManipulationLayerChanged
+        // Re-emit la couche courante après chaque body eval (deferred via
+        // async pour ne pas muter le @State pendant la phase d'update
+        // SwiftUI). SwiftUI dédupe les writes égaux côté @State, donc le
+        // coût est nul quand la valeur ne change pas. Indispensable parce
+        // que le bootstrap async unique du `makeUIView` peut perdre la
+        // course avec un premier re-render — et l'indicator restait
+        // scotché sur `.canvas` même quand `currentManipulationLayer` était
+        // passé à `.foreground` côté UIKit. Cf. spec § 4.4.
+        DispatchQueue.main.async { [weak uiView] in
+            uiView?.emitCurrentManipulationLayer()
+        }
+
+        // Skip de synchronisation pendant un geste actif : UIKit possède la
+        // vérité de `slide`, propager une re-écriture parent provoquerait un
+        // scintillement et un conflit (cf. spec § 2.5 A.4.c). L'`onItemModified`
+        // de fin de geste resync naturellement le parent.
+        if uiView.isGestureActive { return }
 
         // Push outside-driven slide changes (e.g. toolbar mutations of
         // `slide.effects`) into the canvas. Skip pushes when the slide is

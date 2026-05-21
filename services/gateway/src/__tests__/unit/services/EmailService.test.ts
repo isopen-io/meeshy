@@ -548,7 +548,7 @@ describe('EmailService', () => {
       expect(mockAxiosPost).toHaveBeenCalledWith(
         expect.any(String),
         expect.objectContaining({
-          htmlContent: expect.stringContaining('Multiple Failed Logins')
+          htmlContent: expect.stringContaining('5 failed attempts from IP 192.168.1.1')
         }),
         expect.any(Object)
       );

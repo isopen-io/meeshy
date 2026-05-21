@@ -129,6 +129,13 @@ public struct StoryComposerView: View {
     @State private var mediaAudioEditorItem: AudioEditorItemWrapper?
     @State private var confirmedMediaAudioURL: URL?
 
+    // MARK: - Manipulation layer (verrouillage en cascade)
+
+    /// Couche active courante du canvas, miroir SwiftUI de
+    /// `StoryCanvasUIView.currentManipulationLayer`. Mise à jour via le
+    /// callback `onManipulationLayerChanged` du `StoryComposerCanvasView`.
+    @State private var manipulationLayer: CanvasManipulationLayer = .canvas
+
     // MARK: - Publication
 
     @State private var publishTask: Task<Void, Never>?
@@ -151,12 +158,14 @@ public struct StoryComposerView: View {
     }
 
     private var viewportPinchGesture: some Gesture {
-        MagnifyGesture()
+        // MagnificationGesture (iOS 13+) au lieu de MagnifyGesture (iOS 17+).
+        // `value` est directement le CGFloat (pas via .magnification).
+        MagnificationGesture()
             .updating($viewportPinchDelta) { value, state, _ in
-                state = value.magnification
+                state = value
             }
             .onEnded { value in
-                let newScale = min(4.0, max(0.5, viewModel.canvasScale * value.magnification))
+                let newScale = min(4.0, max(0.5, viewModel.canvasScale * value))
                 withAnimation(.spring(response: 0.2)) {
                     viewModel.canvasScale = newScale
                     if newScale <= 1.0 { viewModel.canvasOffset = .zero }
@@ -418,9 +427,7 @@ public struct StoryComposerView: View {
             TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
                 .presentationDetents([.fraction(0.45), .large])
                 .presentationDragIndicator(.visible)
-                .presentationBackground(.ultraThinMaterial)
-                .presentationContentInteraction(.scrolls)
-                .presentationCornerRadius(28)
+                .modifier(StoryTimelinePresentationStyle())
         }
         .adaptiveOnChange(of: viewModel.isTimelineVisible) { _, isVisible in
             if isVisible { viewModel.loadCurrentSlideIntoTimeline() }
@@ -602,8 +609,10 @@ public struct StoryComposerView: View {
     private var previewButton: some View {
         Button {
             NotificationCenter.default.post(name: .storyComposerMuteCanvas, object: nil)
-            let snapshot = snapshotAllSlides()
-            onPreview(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs)
+            Task { @MainActor in
+                let snapshot = await snapshotAllSlides()
+                onPreview(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs)
+            }
         } label: {
             Image(systemName: "play.fill")
                 .font(.system(size: 12, weight: .bold))
@@ -621,10 +630,18 @@ public struct StoryComposerView: View {
 
 
     private var publishButton: some View {
-        Button { publishAllSlides() } label: {
+        let isPublishing = publishTask != nil
+        return Button { publishAllSlides() } label: {
             HStack(spacing: 4) {
-                Text(String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module)).font(.system(size: 13, weight: .bold)).lineLimit(1)
-                Image(systemName: "arrow.up.circle.fill").font(.system(size: 13))
+                if isPublishing {
+                    ProgressView()
+                        .progressViewStyle(.circular)
+                        .tint(.white)
+                        .scaleEffect(0.7)
+                } else {
+                    Text(String(localized: "story.composer.publish", defaultValue: "Publier", bundle: .module)).font(.system(size: 13, weight: .bold)).lineLimit(1)
+                    Image(systemName: "arrow.up.circle.fill").font(.system(size: 13))
+                }
             }
             .fixedSize()
             .foregroundColor(.white)
@@ -632,6 +649,7 @@ public struct StoryComposerView: View {
             .padding(.vertical, 8)
             .background(Capsule().fill(MeeshyColors.brandGradient))
         }
+        .disabled(isPublishing)
     }
 
     private var overflowMenu: some View {
@@ -1061,6 +1079,11 @@ public struct StoryComposerView: View {
             .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
             .overlay { mediaLoadingOverlay }
             .overlay(alignment: .topTrailing) { canvasZoomResetButton }
+            .overlay(alignment: .top) {
+                CanvasLayerIndicator(layer: manipulationLayer)
+                    .padding(.top, 6)
+                    .allowsHitTesting(false)
+            }
             .ignoresSafeArea()
             .background(
                 GeometryReader { proxy in
@@ -1139,6 +1162,9 @@ public struct StoryComposerView: View {
             },
             onInlineTextEditEnded: { _ in
                 viewModel.exitTextEditingMode()
+            },
+            onManipulationLayerChanged: { layer in
+                manipulationLayer = layer
             }
         )
         .allowsHitTesting(!viewModel.isDrawingActive)
@@ -1153,6 +1179,58 @@ public struct StoryComposerView: View {
                     toolType: $drawingTool
                 )
             }
+        }
+        .overlay { audioForegroundOverlay }
+    }
+
+    /// Chip glass posé sur le canvas pour chaque audio foreground (i.e.
+    /// `isBackground != true`). La position vient du modèle (`x`/`y`
+    /// normalisés) ; le drag local est éphémère et ne pousse que sur release
+    /// pour éviter le scintillement des vues observant le VM. L'icône absente
+    /// venait du fait que `StoryAudioPlayerView` n'était wired nulle part —
+    /// ce chip est plus léger et dédié à la composition.
+    @ViewBuilder
+    private var audioForegroundOverlay: some View {
+        if !viewModel.isDrawingActive {
+            GeometryReader { geo in
+                ForEach(foregroundAudioBindings, id: \.wrappedValue.id) { binding in
+                    AudioForegroundChip(
+                        audioObject: binding,
+                        canvasSize: geo.size,
+                        mode: .composer,
+                        isSelected: viewModel.selectedElementId == binding.wrappedValue.id,
+                        onDragEnd: { HapticFeedback.light() },
+                        onTap: {
+                            HapticFeedback.light()
+                            viewModel.selectedElementId = binding.wrappedValue.id
+                        }
+                    )
+                }
+            }
+        }
+    }
+
+    /// Bindings vers chaque `StoryAudioPlayerObject` foreground de la slide
+    /// courante. Le binding écrit en retour dans `viewModel.currentEffects`
+    /// — ce qui resync la slide via `currentSlide.didSet` et propage au canvas.
+    private var foregroundAudioBindings: [Binding<StoryAudioPlayerObject>] {
+        let audios = viewModel.currentEffects.audioPlayerObjects ?? []
+        return audios.enumerated().compactMap { idx, obj -> Binding<StoryAudioPlayerObject>? in
+            guard obj.isBackground != true else { return nil }
+            return Binding<StoryAudioPlayerObject>(
+                get: {
+                    let list = viewModel.currentEffects.audioPlayerObjects ?? []
+                    return list.indices.contains(idx) ? list[idx] : obj
+                },
+                set: { newValue in
+                    var effects = viewModel.currentEffects
+                    guard var list = effects.audioPlayerObjects,
+                          list.indices.contains(idx) else { return }
+                    list[idx] = newValue
+                    effects.audioPlayerObjects = list
+                    viewModel.currentEffects = effects
+                }
+            )
         }
     }
 
@@ -1237,7 +1315,13 @@ public struct StoryComposerView: View {
         }
         let toolbarHeight: CGFloat = 132   // barre bulles + marge (ajuster au visuel)
         let margin: CGFloat = 24
-        let screenHeight = UIScreen.main.bounds.height
+        // Use the active window's height (NOT UIScreen.main.bounds.height),
+        // so split-screen / Stage Manager / iPad multitasking report the
+        // window the composer actually lives in instead of the full display.
+        let screenHeight = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.bounds.height
+            ?? UIScreen.main.bounds.height
         let textCenterY = canvasNaturalFrame.minY
             + CGFloat(textObj.y) * canvasNaturalFrame.height
         let visibleBottom = screenHeight - keyboardHeight - toolbarHeight - margin
@@ -1429,6 +1513,19 @@ public struct StoryComposerView: View {
                         let secs = CMTimeGetSeconds(cmDur)
                         if secs > 0, secs.isFinite { mediaDuration = Float(secs) }
                     }
+                    // Mesure de l'aspectRatio natural de la vidéo via le
+                    // track vidéo (naturalSize × preferredTransform). Sans
+                    // ça, la layer rend la vidéo en carré 540×540 (cf. fix
+                    // B1 review Opus 2026-05-20).
+                    var videoAspectRatio: Double?
+                    if let track = try? await asset.loadTracks(withMediaType: .video).first,
+                       let natural = try? await track.load(.naturalSize),
+                       let transform = try? await track.load(.preferredTransform) {
+                        let effective = natural.applying(transform)
+                        let w = abs(effective.width)
+                        let h = abs(effective.height)
+                        if w > 0, h > 0 { videoAspectRatio = Double(w / h) }
+                    }
                     mediaLoadProgress = 1.0
                     await MainActor.run {
                         viewModel.loadedVideoURLs[objectId] = tempURL
@@ -1440,6 +1537,9 @@ public struct StoryComposerView: View {
                             // the file. Same bridge as the image path — without this,
                             // media.mediaURL is nil and the video layer has no source.
                             viewModel.setMediaURL(id: obj.id, url: tempURL.absoluteString, slideId: targetSlideId)
+                            if let ratio = videoAspectRatio {
+                                viewModel.setMediaAspectRatio(id: obj.id, aspectRatio: ratio, slideId: targetSlideId)
+                            }
                             if obj.id != objectId {
                                 viewModel.loadedVideoURLs.removeValue(forKey: objectId)
                                 viewModel.loadedImages.removeValue(forKey: objectId)
@@ -1483,6 +1583,13 @@ public struct StoryComposerView: View {
                         // between the in-memory UIImage and the CALayer pipeline.
                         if let fileURL = imageFileURL {
                             viewModel.setMediaURL(id: obj.id, url: fileURL.absoluteString, slideId: targetSlideId)
+                        }
+                        // AspectRatio natural depuis l'UIImage.size — sans
+                        // ça la layer rend l'image en carré 540×540 (fix B1).
+                        let imgSize = image.size
+                        if imgSize.width > 0, imgSize.height > 0 {
+                            let ratio = Double(imgSize.width / imgSize.height)
+                            viewModel.setMediaAspectRatio(id: obj.id, aspectRatio: ratio, slideId: targetSlideId)
                         }
                     }
                 }
@@ -1551,14 +1658,27 @@ public struct StoryComposerView: View {
     // MARK: - Publication
 
     private func publishAllSlides() {
-        syncCurrentSlideEffects()
-        let snapshot = snapshotAllSlides()
-        clearAllDrafts()
-        HapticFeedback.success()
-        onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility)
+        // Pré-calcul des thumbHashes (image + vidéo) avant le hand-off vers
+        // l'uploader background. La génération vidéo est async via
+        // `AVAssetImageGenerator.image(at:)` (iOS 16+) ; on cap chaque média
+        // à 5s puis on continue avec thumbHash = nil pour ne pas bloquer.
+        publishTask?.cancel()
+        publishTask = Task { @MainActor in
+            // `defer` garantit le reset de @publishTask même si la Task est
+            // annulée mid-flight (handleDismiss / quit pendant le compute des
+            // thumbHashes). Sans ça, `publishTask != nil` reste true et le
+            // bouton publier reste disabled si l'utilisateur réessaye.
+            defer { publishTask = nil }
+            syncCurrentSlideEffects()
+            let snapshot = await snapshotAllSlides()
+            guard !Task.isCancelled else { return }
+            clearAllDrafts()
+            HapticFeedback.success()
+            onPublishAllInBackground(snapshot.slides, snapshot.bgImages, viewModel.loadedImages, viewModel.loadedVideoURLs, viewModel.loadedAudioURLs, storyLanguage, visibility)
+        }
     }
 
-    private func snapshotAllSlides() -> (slides: [StorySlide], bgImages: [String: UIImage]) {
+    private func snapshotAllSlides() async -> (slides: [StorySlide], bgImages: [String: UIImage]) {
         var slides = viewModel.slides
         let idx = viewModel.currentSlideIndex
         if idx < slides.count {
@@ -1570,7 +1690,7 @@ public struct StoryComposerView: View {
         for i in slides.indices {
             slides[i].effects.slideDuration = Float(slides[i].duration)
         }
-        // Compute composite thumbHash for each slide (bg + text + media + stickers)
+        // ThumbHash composite par slide (bg + texte + média + stickers) — sync.
         for i in slides.indices {
             let bgImage = viewModel.slideImages[slides[i].id]
             slides[i].effects.thumbHash = StorySlideRenderer.computeThumbHash(
@@ -1578,8 +1698,63 @@ public struct StoryComposerView: View {
                 bgImage: bgImage,
                 loadedImages: viewModel.loadedImages
             )
+
+            // ThumbHash per-media foreground.
+            // - Images : sync via `UIImage.toThumbHash()` (~5-15 ms par image).
+            // - Vidéos : on prend d'abord le thumbnail cached dans `loadedImages`
+            //   si présent (issu de `mediaAddedFromPicker`), sinon génération
+            //   async via `AVAssetImageGenerator` (iOS 16+).
+            guard var medias = slides[i].effects.mediaObjects else { continue }
+            var videoJobs: [(j: Int, url: URL)] = []
+
+            for j in medias.indices where medias[j].thumbHash == nil {
+                let mediaId = medias[j].id
+                if let cached = viewModel.loadedImages[mediaId] {
+                    medias[j].thumbHash = cached.toThumbHash()
+                    continue
+                }
+                if medias[j].kind == .video,
+                   let url = viewModel.loadedVideoURLs[mediaId] {
+                    videoJobs.append((j, url))
+                }
+            }
+
+            if !videoJobs.isEmpty {
+                await withTaskGroup(of: (Int, String?).self) { group in
+                    for job in videoJobs {
+                        group.addTask {
+                            let hash = await Self.computeVideoThumbHash(url: job.url)
+                            return (job.j, hash)
+                        }
+                    }
+                    for await (j, hash) in group {
+                        medias[j].thumbHash = hash
+                    }
+                }
+            }
+
+            slides[i].effects.mediaObjects = medias
         }
         return (slides, viewModel.slideImages)
+    }
+
+    /// Génère un thumbHash à partir de la première frame d'une vidéo locale.
+    /// Utilise l'API async iOS 16+ d'`AVAssetImageGenerator`. Timeout interne
+    /// implicite (l'extraction d'une frame à t=0.1s d'une vidéo locale
+    /// prend typiquement < 200 ms). Retourne `nil` si l'extraction échoue —
+    /// le placeholder du reader tombera alors sur le fond noir / le bg slide.
+    nonisolated private static func computeVideoThumbHash(url: URL) async -> String? {
+        let asset = AVURLAsset(url: url)
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        generator.maximumSize = CGSize(width: 100, height: 100)
+        let time = CMTime(seconds: 0.1, preferredTimescale: 600)
+        do {
+            let (cgImage, _) = try await generator.image(at: time)
+            return UIImage(cgImage: cgImage).toThumbHash()
+        } catch {
+            return nil
+        }
     }
 
     // MARK: - Dismiss

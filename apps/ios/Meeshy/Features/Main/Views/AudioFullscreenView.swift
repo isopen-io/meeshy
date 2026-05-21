@@ -683,22 +683,29 @@ private struct AudioFullscreenPage: View {
     // MARK: - Inline Language Flags
 
     private var inlineLanguageFlags: some View {
-        HStack(spacing: 6) {
-            languagePill(flag: originalFlag, code: "orig",
-                         label: LanguageDisplay.from(code: message.originalLanguage)?.name ?? "Original",
-                         isSelected: selectedLanguage == "orig")
+        // Strip horizontalement scrollable des langues disponibles + bouton
+        // "ajouter une langue" ancré à droite (hors du scroll, toujours
+        // accessible). Sans ScrollView, les pills wrappaient en 2 lignes
+        // ("Fran/çais", "Deu/tsch"…) dès qu'on dépassait 3 langues.
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    languagePill(flag: originalFlag, code: "orig",
+                                 label: LanguageDisplay.from(code: message.originalLanguage)?.name ?? "Original",
+                                 isSelected: selectedLanguage == "orig")
 
-            ForEach(translatedAudios, id: \.id) { audio in
-                let display = LanguageDisplay.from(code: audio.targetLanguage)
-                languagePill(
-                    flag: display?.flag ?? "\u{1F310}",
-                    code: audio.targetLanguage,
-                    label: display?.name ?? audio.targetLanguage,
-                    isSelected: selectedLanguage.lowercased() == audio.targetLanguage.lowercased()
-                )
+                    ForEach(translatedAudios, id: \.id) { audio in
+                        let display = LanguageDisplay.from(code: audio.targetLanguage)
+                        languagePill(
+                            flag: display?.flag ?? "\u{1F310}",
+                            code: audio.targetLanguage,
+                            label: display?.name ?? audio.targetLanguage,
+                            isSelected: selectedLanguage.lowercased() == audio.targetLanguage.lowercased()
+                        )
+                    }
+                }
+                .padding(.horizontal, 2)
             }
-
-            Spacer(minLength: 0)
 
             Button {
                 showLanguagePicker = true
@@ -733,7 +740,10 @@ private struct AudioFullscreenPage: View {
         } label: {
             HStack(spacing: 3) {
                 Text(flag).font(.system(size: 12))
-                Text(label).font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                Text(label)
+                    .font(.system(size: 10, weight: isSelected ? .bold : .medium))
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
             .foregroundColor(isSelected ? .white : .white.opacity(0.55))
             .padding(.horizontal, 8)

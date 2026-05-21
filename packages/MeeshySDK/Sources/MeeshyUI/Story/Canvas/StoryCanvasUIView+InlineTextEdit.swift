@@ -19,6 +19,11 @@ extension StoryCanvasUIView: UITextViewDelegate {
 
         position(editor, over: textLayer)
         editor.apply(textObject: textObject, geometry: geometry, setText: true)
+        // Garantit que l'éditeur a au moins la taille nécessaire pour
+        // afficher son placeholder (l'auto-add part d'un texte vide donc
+        // d'une calque bounds quasi-nulle). Le centre de la calque est
+        // préservé par `sizeToFitTextContent`.
+        editor.sizeToFitTextContent(maxWidth: bounds.width * 0.88)
         textLayer.setGlyphsHidden(true)
         editor.becomeFirstResponder()
     }
@@ -49,6 +54,13 @@ extension StoryCanvasUIView: UITextViewDelegate {
         if let editor = inlineEditor, let textObject = textLayer.textObject {
             position(editor, over: textLayer)
             editor.apply(textObject: textObject, geometry: geometry, setText: false)
+            // `position(_:over:)` aligne `editor.bounds = layer.bounds`. Si
+            // le texte vient d'être vidé (backspace de tous les caractères)
+            // la calque a des bounds quasi-nulles et le placeholder
+            // serait clippé. `sizeToFitTextContent` rééquilibre les bounds
+            // vers la taille du contenu (et du placeholder en empty) en
+            // gardant le centre.
+            editor.sizeToFitTextContent(maxWidth: bounds.width * 0.88)
         }
     }
 
@@ -78,7 +90,17 @@ extension StoryCanvasUIView: UITextViewDelegate {
     // MARK: - UITextViewDelegate
 
     public func textViewDidChange(_ textView: UITextView) {
-        (textView as? StoryInlineTextEditor)?.updatePlaceholderVisibility()
+        let editor = textView as? StoryInlineTextEditor
+        editor?.updatePlaceholderVisibility()
+        // Croissance immédiate des bounds de l'éditeur pour englober tout
+        // le texte tapé. Sans ça la nouvelle frappe restait clippée par
+        // les bounds dérivés de la calque pré-saisie jusqu'au prochain
+        // `rebuildLayers()` (qui arrive ~1 tick async après la
+        // propagation viewModel → SwiftUI → updateUIView → slide.didSet).
+        // Pendant ce gap, l'utilisateur voyait des mots disparaître ; le
+        // resync visuel n'arrivait qu'après zoom/dezoom ou nouvelle frappe.
+        let maxWidth = bounds.width * 0.88
+        editor?.sizeToFitTextContent(maxWidth: maxWidth)
         guard let id = inlineEditingTextId else { return }
         onInlineTextChanged?(id, textView.text ?? "")
     }

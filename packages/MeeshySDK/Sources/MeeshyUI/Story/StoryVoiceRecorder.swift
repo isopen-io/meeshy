@@ -151,8 +151,15 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     private func startRecording() {
         guard !recorder.isRecording else { return }
 
+        // `requestRecordPermission` invokes its completion on the
+        // `com.avaudiosession.tccserver` queue. Hopping back via
+        // `DispatchQueue.main.async` does NOT prove `@MainActor` isolation
+        // to Swift 6's runtime; calling `@MainActor`-isolated APIs from
+        // there trips `swift_task_isCurrentExecutorImpl` and crashes with
+        // `EXC_BREAKPOINT`. `Task { @MainActor in ... }` is the
+        // Swift-6-correct hop.
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
-            DispatchQueue.main.async {
+            Task { @MainActor in
                 guard granted else {
                     errorMessage = String(localized: "audio.recorder.micDenied", defaultValue: "Permission micro refus\u{00E9}e", bundle: .module)
                     return

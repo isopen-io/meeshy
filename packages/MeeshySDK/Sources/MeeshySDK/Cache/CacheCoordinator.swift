@@ -75,9 +75,49 @@ public actor CacheCoordinator {
         shared.audio.cachedFileURL(for: urlString)
     }
 
+    /// Variante async de `videoLocalFileURL` qui garantit un retour `file://`.
+    /// 1) Retourne immédiatement si l'URL est déjà file:// ou si le cache disk est chaud.
+    /// 2) Sinon, déclenche un fetch via `video.data(for:)` puis retourne l'URL locale produite.
+    /// 3) Retourne `nil` si tout échoue (réseau down, fichier corrompu, etc.).
+    ///
+    /// Garantit que le caller peut passer le résultat à `AVPlayer(url:)` /
+    /// `AVAudioFile(forReading:)` sans risque de rejet HTTPS.
+    nonisolated public static func videoLocalFileURLAwait(for remote: URL) async -> URL? {
+        if remote.isFileURL { return remote }
+        if let cached = videoLocalFileURL(for: remote.absoluteString) { return cached }
+        _ = try? await shared.video.data(for: remote.absoluteString)
+        return videoLocalFileURL(for: remote.absoluteString)
+    }
+
+    /// Idem pour l'audio. Utilisé par le hotfix audio reader (cf. spec
+    /// `2026-05-20-stories-audio-hotfix-design.md` § 5.7).
+    nonisolated public static func audioLocalFileURLAwait(for remote: URL) async -> URL? {
+        if remote.isFileURL { return remote }
+        if let cached = audioLocalFileURL(for: remote.absoluteString) { return cached }
+        _ = try? await shared.audio.data(for: remote.absoluteString)
+        return audioLocalFileURL(for: remote.absoluteString)
+    }
+
     /// Check image disk cache synchronously. Returns cached UIImage if available.
     nonisolated public static func cachedImage(for urlString: String) -> UIImage? {
         DiskCacheStore.cachedImage(for: urlString)
+    }
+
+    /// Synchronous warm : NSCache hit OR disk-to-NSCache decode + return.
+    /// Used by `CachedAsyncImage.init` to peuple the image at cell mount time
+    /// for cold-start conversations — avoids the thumbHash → image flash that
+    /// otherwise occurs when NSCache has been evicted but the disk file is
+    /// still present.
+    nonisolated public static func warmedImage(for urlString: String) -> UIImage? {
+        shared.images.warmedImage(for: urlString)
+    }
+
+    /// Check image disk cache synchronously. Returns local file URL if cached
+    /// on disk (even when the decoded NSCache entry has been evicted). Used by
+    /// the rendering pipeline to bypass the media policy gate for media that
+    /// is already on device — a disk hit is a zero-network read.
+    nonisolated public static func imageLocalFileURL(for urlString: String) -> URL? {
+        shared.images.cachedFileURL(for: urlString)
     }
 
     /// Configures memory caps for the image pipeline. Call once at app launch.

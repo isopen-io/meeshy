@@ -1,6 +1,7 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { createUnifiedAuthMiddleware, UnifiedAuthRequest } from '../middleware/auth.js';
 import { AttachmentService } from '../services/attachments/index.js';
+import { attachmentMediaSelect, attachmentFullSelect, attachmentForwardPreviewSelect } from '../services/attachments/attachmentIncludes';
 import { MessageTranslationService } from '../services/message-translation/MessageTranslationService';
 import { transformTranslationsToArray, type MessageTranslationJSON } from '../utils/translation-transformer';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
@@ -151,30 +152,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
               }
             }
           },
-          attachments: {
-            select: {
-              id: true,
-              fileName: true,
-              originalName: true,
-              mimeType: true,
-              fileSize: true,
-              fileUrl: true,
-              thumbnailUrl: true,
-              width: true,
-              height: true,
-              duration: true,
-              // Champs dénormalisés pour éviter N+1
-              viewedCount: true,
-              downloadedCount: true,
-              consumedCount: true,
-              viewedByAllAt: true,
-              downloadedByAllAt: true,
-              listenedByAllAt: true,
-              watchedByAllAt: true,
-              transcription: true,
-              translations: true
-            }
-          }
+          attachments: { select: attachmentFullSelect }
         }
       });
 
@@ -241,33 +219,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
           deletedAt: null
         },
         include: {
-          attachments: {
-            select: {
-              id: true,
-              messageId: true,
-              fileName: true,
-              originalName: true,
-              mimeType: true,
-              fileSize: true,
-              fileUrl: true,
-              thumbnailUrl: true,
-              width: true,
-              height: true,
-              duration: true,
-              bitrate: true,
-              sampleRate: true,
-              codec: true,
-              channels: true,
-              fps: true,
-              videoCodec: true,
-              pageCount: true,
-              lineCount: true,
-              metadata: true, // Inclure audioEffectsTimeline et autres métadonnées JSON
-              uploadedBy: true,
-              isAnonymous: true,
-              createdAt: true
-            }
-          },
+          attachments: { select: attachmentMediaSelect },
           conversation: {
             include: {
               participants: {
@@ -345,13 +297,28 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         // Ne pas faire échouer l'édition si la retraduction échoue
       }
 
+      // Transformer `translations` (Object stocké en MongoDB) en Array conforme
+      // au contrat API consommé par iOS (`[APITextTranslation]`) et web. Sans
+      // cette transformation, le client reçoit `translations: { "fr": {...} }`
+      // au lieu d'un tableau et échoue au décodage ("Type mismatch for type
+      // Array<Any> at path data.translations"). La retraduction qui précède a
+      // déjà invalidé `translations` en base, donc le payload renvoyé reflète
+      // cet état : `[]`.
+      const transformedMessage = {
+        ...updatedMessage,
+        translations: transformTranslationsToArray(
+          messageId,
+          (updatedMessage as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+        )
+      };
+
       // Diffuser la mise à jour via Socket.IO
       try {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(message.conversationId);
           (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, {
-            ...updatedMessage,
+            ...transformedMessage,
             conversationId: message.conversationId
           });
         }
@@ -363,7 +330,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: {
-          ...updatedMessage,
+          ...transformedMessage,
           message: 'Message modifié avec succès'
         }
       });

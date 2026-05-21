@@ -23,6 +23,15 @@ const pushLogger = enhancedLogger.child({ module: 'PushNotificationService' });
 
 export interface PushNotificationPayload {
   title: string;
+  /**
+   * Optional subtitle, displayed natively by iOS between title and body on
+   * lock-screen banners. Used for group/global message notifications to
+   * carry the conversation name (e.g. "Meeshy Global") while keeping the
+   * title focused on the sender. Survives iOS Communication Notification
+   * rewriting (INSendMessageIntent.donate) which can mutate the title.
+   * Android/FCM web push ignore subtitle gracefully.
+   */
+  subtitle?: string;
   body: string;
   data?: Record<string, string>;
   link?: string;
@@ -381,16 +390,30 @@ export class PushNotificationService {
         // delegate. That delegate calls `PushDeliveryReceiptService.ack`, which
         // posts `mark-as-received` and lets the sender's checkmark flip from
         // ✓ to ✓✓ even when the recipient never foregrounds the app.
+        //
+        // When a `subtitle` is provided, we MUST use the structured `alert`
+        // object (with title/subtitle/body) — the flat top-level
+        // `notification.title/body` from FCM does NOT carry subtitle, so iOS
+        // would silently drop it. Setting `aps.alert` here overrides the flat
+        // one as APNs honours the more specific payload.
+        const apsBase: Record<string, unknown> = {
+          badge: payload.badge,
+          sound: payload.sound || 'default',
+          category: payload.category,
+          'thread-id': payload.threadId,
+          'mutable-content': 1,
+          'content-available': 1,
+        };
+        if (payload.subtitle) {
+          apsBase.alert = {
+            title: payload.title,
+            subtitle: payload.subtitle,
+            body: payload.body,
+          };
+        }
         message.apns = {
           payload: {
-            aps: {
-              badge: payload.badge,
-              sound: payload.sound || 'default',
-              category: payload.category,
-              'thread-id': payload.threadId,
-              'mutable-content': 1,
-              'content-available': 1,
-            },
+            aps: apsBase,
           },
         };
       } else if (tokenRecord.platform === 'android') {
@@ -498,6 +521,7 @@ export class PushNotificationService {
       notification.alert = {
         title: payload.title,
         body: payload.body,
+        ...(payload.subtitle ? { subtitle: payload.subtitle } : {}),
       };
 
       if (payload.badge !== undefined) {

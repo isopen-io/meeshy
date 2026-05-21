@@ -330,8 +330,15 @@ export class UploadProcessor {
     }
     metadata.thumbnailGenerated = !!thumbnailPath;
 
-    // ThumbHash: backend fallback — skip if client already computed it
-    let thumbHash: string | null = providedMetadata?.thumbHash ?? null;
+    // ThumbHash: backend fallback — skip if client already computed it.
+    // Defense-in-depth length cap (cf. tus-handler.ts) — protège contre un
+    // payload malformé / malveillant qui ferait gonfler la doc DB.
+    const MAX_THUMBHASH_LENGTH = 100;
+    const rawClientThumbHash = providedMetadata?.thumbHash ?? null;
+    let thumbHash: string | null =
+      (rawClientThumbHash && rawClientThumbHash.length <= MAX_THUMBHASH_LENGTH)
+        ? rawClientThumbHash
+        : null;
     if (!thumbHash) {
       const { ThumbHashGenerator } = await import('./ThumbHashGenerator.js');
       thumbHash = await ThumbHashGenerator.generate(path.join(this.uploadBasePath, filePath), file.mimeType);

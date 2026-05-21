@@ -7,6 +7,7 @@
 import type { Server as SocketIOServer } from 'socket.io';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { SERVER_EVENTS, ROOMS } from '@meeshy/shared/types/socketio-events';
+import { enhancedLogger } from '../../utils/logger-enhanced';
 import type {
   Post,
   PostComment,
@@ -24,6 +25,12 @@ import type {
   PostTranslationUpdatedEventData,
   CommentTranslationUpdatedEventData,
 } from '@meeshy/shared/types/post';
+
+// enhancedLogger (Pino) sort en prod ; le `logger` Winston de server.ts est
+// configuré à `level: 'warn'` en prod et filtre tous les `logger.info(...)`.
+// Sans ce logger dédié, le fanout social était totalement invisible côté
+// production et empêchait tout diagnostic en cas de "ma story n'arrive pas".
+const logger = enhancedLogger.child({ module: 'SocialEventsHandler' });
 
 export interface SocialEventsHandlerDependencies {
   io: SocketIOServer;
@@ -142,6 +149,7 @@ export class SocialEventsHandler {
 
   async broadcastPostCreated(post: Post, authorId: string): Promise<void> {
     const friendIds = await this.getFriendIds(authorId);
+    logger.info(`📣 post:created fanout author=${authorId} postId=${(post as any).id} friends=${friendIds.length}`);
     this.emitToFriends(friendIds, authorId, SERVER_EVENTS.POST_CREATED, { post });
   }
 
@@ -182,6 +190,9 @@ export class SocialEventsHandler {
     const visibility = (story as any).visibility ?? 'PUBLIC';
     const visibilityUserIds = (story as any).visibilityUserIds ?? [];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
+    logger.info(
+      `📣 story:created fanout author=${authorId} storyId=${(story as any).id} visibility=${visibility} recipients=${recipients.length}`
+    );
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STORY_CREATED, { story });
   }
 
@@ -228,6 +239,9 @@ export class SocialEventsHandler {
     const visibility = (status as any).visibility ?? 'PUBLIC';
     const visibilityUserIds = (status as any).visibilityUserIds ?? [];
     const recipients = await this.getVisibilityFilteredRecipients(authorId, visibility, visibilityUserIds);
+    logger.info(
+      `📣 status:created fanout author=${authorId} statusId=${(status as any).id} visibility=${visibility} recipients=${recipients.length}`
+    );
     this.emitToFriends(recipients, authorId, SERVER_EVENTS.STATUS_CREATED, { status });
   }
 

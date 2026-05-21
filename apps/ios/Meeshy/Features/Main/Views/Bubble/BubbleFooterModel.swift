@@ -5,6 +5,7 @@ import MeeshySDK
 enum BubbleFooterStyle: Equatable, Sendable {
     case row      // below text / emoji / audio content, inside the bubble
     case overlay  // dark capsule laid over image / video media
+    case compact  // inline next to emoji-only messages — timestamp + delivery only
 }
 
 /// One language flag in the footer's language switcher.
@@ -64,19 +65,28 @@ struct BubbleFooterActions {
     var onRetry: (() -> Void)?
     var onSenderTap: (() -> Void)?
     var onViewStory: (() -> Void)?
+    /// Tap sur les coches de livraison (✓ / ✓✓ / ✓✓ bleu). Quand fourni, le
+    /// `BubbleDeliveryCheck` devient un bouton qui ouvre le sheet detail sur
+    /// l'onglet "Vues" pour consulter le statut de reception/lecture detail.
+    /// Wirage UIKit-bridged : `MessageListViewController` -> `MessageListView`
+    /// -> `ConversationView` (onShowReadStatus) -> `overlayState.detailSheetMessage`
+    /// + `.detailSheetInitialTab = .views`.
+    var onShowReadStatus: (() -> Void)?
 
     init(
         onFlagTap: ((String) -> Void)? = nil,
         onTranslate: (() -> Void)? = nil,
         onRetry: (() -> Void)? = nil,
         onSenderTap: (() -> Void)? = nil,
-        onViewStory: (() -> Void)? = nil
+        onViewStory: (() -> Void)? = nil,
+        onShowReadStatus: (() -> Void)? = nil
     ) {
         self.onFlagTap = onFlagTap
         self.onTranslate = onTranslate
         self.onRetry = onRetry
         self.onSenderTap = onSenderTap
         self.onViewStory = onViewStory
+        self.onShowReadStatus = onShowReadStatus
     }
 
     static let none = BubbleFooterActions()

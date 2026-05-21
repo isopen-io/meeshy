@@ -8,8 +8,51 @@ import MeeshyUI
 struct ThemedBackButton: View {
     let color: String
     var compactMode: Bool = false
+    /// Total unread messages across every OTHER conversation. Rendered as
+    /// a red iOS-style notification badge sitting to the right of the
+    /// chevron glass circle (iMessage pattern).
+    /// `0` hides the badge entirely; `≥ 100` clamps to "99+".
+    var unreadCount: Int = 0
     let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isPressed = false
+
+    // MARK: - Pure formatting helpers (exposed for unit tests)
+
+    static func displayedUnread(_ count: Int) -> String {
+        count >= 100 ? "99+" : "\(count)"
+    }
+
+    static func showsUnread(unreadCount: Int, compactMode: Bool) -> Bool {
+        unreadCount > 0 && !compactMode
+    }
+
+    private var showsPill: Bool {
+        Self.showsUnread(unreadCount: unreadCount, compactMode: compactMode)
+    }
+
+    private var gradientStroke: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: color).opacity(0.5), MeeshyColors.indigo300.opacity(0.5)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var gradientFill: LinearGradient {
+        LinearGradient(
+            colors: [Color(hex: color), MeeshyColors.indigo300],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+    }
+
+    private var badgeBackground: Color {
+        // Source of truth: same red-light / red-dark pair the
+        // ConversationListHelpers row badge uses (vie MeeshyColors).
+        MeeshyColors.unreadBadgeBackground(isDark: colorScheme == .dark)
+    }
 
     var body: some View {
         Button(action: {
@@ -19,41 +62,60 @@ struct ThemedBackButton: View {
             }
             action()
         }) {
-            ZStack {
-                // Circle background — collapses in compact mode
-                Circle()
-                    .fill(.ultraThinMaterial)
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Circle()
-                            .stroke(
-                                LinearGradient(
-                                    colors: [Color(hex: color).opacity(0.5), MeeshyColors.indigo300.opacity(0.5)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-                    .shadow(color: Color(hex: color).opacity(0.3), radius: 6, y: 3)
-                    .opacity(compactMode ? 0 : 1)
-                    .scaleEffect(compactMode ? 0.4 : 1)
-
-                // Chevron — always visible
+            HStack(spacing: 0) {
+                // Chevron — always visible, in a fixed 40-pt slot so the
+                // back affordance stays anchored regardless of pill width
                 Image(systemName: "chevron.left")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(
-                        LinearGradient(
-                            colors: [Color(hex: color), MeeshyColors.indigo300],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
+                    .foregroundStyle(gradientFill)
+                    .frame(width: 40, height: 40)
+
+                if showsPill {
+                    // Vertical separator between chevron and red pill —
+                    // tinted with the conversation accent so it picks up
+                    // the surrounding glass-capsule mood instead of
+                    // looking like a hardcoded grey divider.
+                    Rectangle()
+                        .fill(Color(hex: color).opacity(0.35))
+                        .frame(width: 1, height: 22)
+                        .padding(.trailing, 6)
+
+                    // Red pill — the eye-catcher. Sits INSIDE the outer
+                    // glass capsule, hugged by 6-pt padding on each side
+                    // so the capsule still reads as a single back-button
+                    // affordance. Dark/light parity with the conversation
+                    // list row badge via MeeshyColors.unreadBadgeBackground.
+                    Text(Self.displayedUnread(unreadCount))
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 8)
+                        .frame(minWidth: 22, minHeight: 22)
+                        .background(
+                            Capsule()
+                                .fill(badgeBackground)
+                                .shadow(color: badgeBackground.opacity(0.4), radius: 3, y: 1)
                         )
-                    )
+                        .padding(.trailing, 6)
+                        .accessibilityHidden(true)
+                        .transition(.scale.combined(with: .opacity))
+                }
             }
-            .frame(width: compactMode ? 24 : 40, height: 40)
+            .background(
+                Capsule()
+                    .fill(.ultraThinMaterial)
+                    .overlay(Capsule().stroke(gradientStroke, lineWidth: 1))
+                    .shadow(color: Color(hex: color).opacity(0.3), radius: 6, y: 3)
+                    .opacity(compactMode ? 0 : 1)
+                    .scaleEffect(compactMode ? 0.4 : 1, anchor: .leading)
+            )
+            .frame(minWidth: compactMode ? 24 : 40, minHeight: 40)
             .scaleEffect(isPressed ? 0.9 : 1)
             .animation(.spring(response: 0.35, dampingFraction: 0.8), value: compactMode)
+            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showsPill)
         }
+        .accessibilityLabel(showsPill ? "Retour, \(unreadCount) messages non lus dans les autres conversations" : "Retour")
     }
 }
 

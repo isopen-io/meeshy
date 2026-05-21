@@ -91,7 +91,7 @@ public struct SkeletonConversationRow: View {
                 HStack {
                     SkeletonShape(height: 14, cornerRadius: MeeshyRadius.sm)
                         .frame(maxWidth: .infinity)
-                        .frame(width: UIScreen.main.bounds.width * 0.3)
+                        .frame(width: min(UIScreen.main.bounds.width * 0.3, 180))
 
                     Spacer()
 
@@ -101,7 +101,7 @@ public struct SkeletonConversationRow: View {
 
                 SkeletonShape(height: 12, cornerRadius: MeeshyRadius.sm)
                     .frame(maxWidth: .infinity)
-                    .frame(width: UIScreen.main.bounds.width * 0.5)
+                    .frame(width: min(UIScreen.main.bounds.width * 0.5, 280))
             }
         }
         .padding(14)
@@ -133,7 +133,9 @@ public struct SkeletonMessageBubble: View {
         let screenWidth = UIScreen.main.bounds.width
         let widths: [CGFloat] = [0.55, 0.72, 0.4, 0.65, 0.48, 0.78]
         let fraction = widths[index % widths.count]
-        return screenWidth * fraction
+        // Cap skeleton bubble width on iPad — the iPhone fractions
+        // produce absurdly wide placeholders on a 1024pt screen.
+        return min(screenWidth * fraction, 320)
     }
 
     private var bubbleHeight: CGFloat {

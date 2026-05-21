@@ -1,67 +1,10 @@
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
 import { PostVisibility, PostType } from '@meeshy/shared/prisma/client';
 import { decodeCursor, encodeCursor } from '../routes/posts/types';
+import { authorSelect, postInclude } from './posts/postIncludes';
 
-const authorSelect = {
-  id: true,
-  username: true,
-  displayName: true,
-  avatar: true,
-};
-
-const mediaSelect = {
-  id: true,
-  fileName: true,
-  originalName: true,
-  mimeType: true,
-  fileSize: true,
-  fileUrl: true,
-  width: true,
-  height: true,
-  thumbnailUrl: true,
-  thumbHash: true,
-  duration: true,
-  order: true,
-  caption: true,
-  alt: true,
-};
-
-const feedPostInclude = {
-  author: { select: authorSelect },
-  media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
-  comments: {
-    where: { isDeleted: false, OR: [{ parentId: null }, { parentId: { isSet: false } }] },
-    select: {
-      id: true,
-      content: true,
-      originalLanguage: true,
-      translations: true,
-      likeCount: true,
-      replyCount: true,
-      createdAt: true,
-      author: { select: authorSelect },
-    },
-    orderBy: { likeCount: 'desc' as const },
-    take: 3,
-  },
-  repostOf: {
-    select: {
-      id: true,
-      type: true,
-      content: true,
-      originalLanguage: true,
-      translations: true,
-      storyEffects: true,
-      audioUrl: true,
-      originalRepostOfId: true,
-      author: { select: authorSelect },
-      media: { select: mediaSelect, orderBy: { order: 'asc' as const } },
-      createdAt: true,
-      likeCount: true,
-      commentCount: true,
-    },
-  },
-};
+// Feed payloads share the canonical postInclude — alias kept for callsite clarity.
+const feedPostInclude = postInclude;
 
 // ============================================
 // SCORING FUNCTIONS

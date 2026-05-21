@@ -466,23 +466,13 @@ extension FeedView {
     }
 
     func feedMimeTypeForURL(_ url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
-        switch ext {
-        case "jpg", "jpeg": return "image/jpeg"
-        case "png": return "image/png"
-        case "gif": return "image/gif"
-        case "webp": return "image/webp"
-        case "heic": return "image/heic"
-        case "mp4", "m4v": return "video/mp4"
-        case "mov": return "video/quicktime"
-        case "mp3": return "audio/mpeg"
-        case "m4a": return "audio/mp4"
-        case "wav": return "audio/wav"
-        case "pdf": return "application/pdf"
-        case "doc", "docx": return "application/msword"
-        case "zip": return "application/zip"
-        default: return "application/octet-stream"
-        }
+        // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).
+        // NB: the legacy table here had a latent bug where `docx` was mapped
+        // to `application/msword` (the .doc mime), making Word docx files
+        // indistinguishable from .doc in downstream AttachmentKind dispatch.
+        // The resolver maps docx to its canonical
+        // `application/vnd.openxmlformats-officedocument.wordprocessingml.document`.
+        MimeTypeResolver.mimeType(forURL: url)
     }
 
     func feedIconForType(_ type: MessageAttachment.AttachmentType) -> String {
@@ -1223,18 +1213,10 @@ struct FeedComposerSheet: View {
     }
 
     private func mimeTypeForURL(_ url: URL) -> String {
-        let ext = url.pathExtension.lowercased()
-        switch ext {
-        case "jpg", "jpeg": return "image/jpeg"
-        case "png": return "image/png"
-        case "gif": return "image/gif"
-        case "mp4", "m4v": return "video/mp4"
-        case "mov": return "video/quicktime"
-        case "mp3": return "audio/mpeg"
-        case "m4a": return "audio/mp4"
-        case "pdf": return "application/pdf"
-        default: return "application/octet-stream"
-        }
+        // Single source of truth lives in `MimeTypeResolver` (MeeshySDK).
+        // Replaces a deliberately-narrow table that excluded several formats
+        // (webp/heic/wav/audio/ogg/...) — the resolver covers all of them.
+        MimeTypeResolver.mimeType(forURL: url)
     }
 
     private func sheetIconForType(_ type: MessageAttachment.AttachmentType) -> String {

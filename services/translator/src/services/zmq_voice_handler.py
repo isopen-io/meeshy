@@ -8,9 +8,17 @@ import asyncio
 import json
 import logging
 import time
-from typing import Dict, Optional
+from typing import Dict, Optional, Set
 
 logger = logging.getLogger(__name__)
+
+# Long-running Voice API operations that go through the translation pipeline
+# worker pool (Whisper + NLLB + TTS). Subject to dedup-by-taskId so a duplicate
+# Gateway PUSH (e.g. an old retry path) doesn't enqueue a parallel pipeline run.
+_LONG_RUNNING_VOICE_TYPES = frozenset({
+    'voice_translate',
+    'voice_translate_async',
+})
 
 # Import du Voice API handler
 VOICE_API_AVAILABLE = False
@@ -47,6 +55,13 @@ class VoiceHandler:
         self.voice_api_handler = None
         self.voice_profile_handler = None
 
+        # Dedup set for in-flight long-running voice translations (by taskId).
+        # Defensive: with the Gateway no-retry policy on voice_translate, the
+        # same taskId should only arrive once. If it ever arrives twice we log
+        # and drop the duplicate instead of saturating the worker pool with a
+        # parallel pipeline run.
+        self._in_flight_voice_translates: Set[str] = set()
+
         # Initialiser les handlers si disponibles
         if VOICE_API_AVAILABLE:
             self.voice_api_handler = get_voice_api_handler()
@@ -66,7 +81,24 @@ class VoiceHandler:
         """
         Traite une requête Voice API.
         Délègue au VoiceAPIHandler et publie le résultat via PUB.
+
+        Pour les opérations longues (voice_translate / voice_translate_async),
+        dédoublonne par taskId : si le même taskId est déjà en cours d'exécution,
+        on log et on ignore la nouvelle requête plutôt que de lancer un pipeline
+        parallèle qui saturerait le worker pool.
         """
+        request_type = request_data.get('type', '')
+        task_id = request_data.get('taskId', '')
+        is_long_running = request_type in _LONG_RUNNING_VOICE_TYPES
+
+        if is_long_running and task_id:
+            if task_id in self._in_flight_voice_translates:
+                logger.warning(
+                    f"⚠️ [TRANSLATOR] Duplicate {request_type} ignored (taskId={task_id} already in-flight)"
+                )
+                return
+            self._in_flight_voice_translates.add(task_id)
+
         try:
             if not self.voice_api_handler:
                 logger.error("[TRANSLATOR] Voice API handler non disponible")
@@ -99,6 +131,10 @@ class VoiceHandler:
 
             if self.pub_socket:
                 await self.pub_socket.send(json.dumps(error_response).encode('utf-8'))
+
+        finally:
+            if is_long_running and task_id:
+                self._in_flight_voice_translates.discard(task_id)
 
     async def _handle_voice_profile_request(self, request_data: dict):
         """

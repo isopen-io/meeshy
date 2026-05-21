@@ -74,29 +74,87 @@ export class MessageReadStatusService {
   }
 
   /**
-   * Calcule le nombre de messages non lus dans une conversation pour un utilisateur
-   * Utilise le cache unreadCount du curseur pour performance
+   * Calcule le nombre de messages non lus dans une conversation pour un participant.
+   *
+   * The unread count is computed FRESH on every call — the cursor's
+   * denormalized `unreadCount` field is intentionally ignored because it
+   * is only updated on `markAsRead` / `markAsReceived` and never on new
+   * message creation. Trusting it produced wildly inflated counts (e.g.
+   * 75 for users who had read everything) by silently falling back to a
+   * "count all historical messages from others" path.
+   *
+   * Accepts either a `Participant.id` OR a `User.id` for backwards
+   * compatibility with callers that previously passed the room target
+   * (`participant.userId || participant.id`). The participant is resolved
+   * internally; the senderId-equality check uses the resolved
+   * `Participant.id`, not the user-provided identifier.
+   *
+   * Counting floor: `cursor.lastReadAt` → `participant.joinedAt`. A new
+   * participant therefore sees only messages received since they joined,
+   * NOT the entire historical backlog of the conversation.
    */
   async getUnreadCount(
-    participantId: string,
+    participantIdOrUserId: string,
     conversationId: string
   ): Promise<number> {
     try {
-      const cursor = await this.prisma.conversationReadCursor.findUnique({
+      // First attempt: treat the caller's id as a Participant.id directly.
+      // This is the common path for anonymous users and for callers that
+      // already resolved to a participant.
+      let cursor = await this.prisma.conversationReadCursor.findUnique({
         where: {
-          conversation_participant_cursor: { participantId, conversationId },
+          conversation_participant_cursor: {
+            participantId: participantIdOrUserId,
+            conversationId,
+          },
         },
       });
 
-      if (cursor) {
-        return cursor.unreadCount;
+      // Resolve the actual Participant row. The cursor lookup may have
+      // missed because the caller passed a User.id rather than the
+      // Participant.id — try resolving via either column.
+      const participant = await this.prisma.participant.findFirst({
+        where: {
+          conversationId,
+          isActive: true,
+          OR: [
+            { id: participantIdOrUserId },
+            { userId: participantIdOrUserId },
+          ],
+        },
+        select: { id: true, joinedAt: true },
+      });
+
+      if (!participant) {
+        // Unknown participant in this conversation — refuse to fall back
+        // to a "count everything from others" sweep. Returning 0 is the
+        // safe default; callers that genuinely need the historical count
+        // should pass a known Participant.id.
+        return 0;
       }
+
+      // If the first lookup missed and the resolved Participant.id differs
+      // from what the caller passed, retry the cursor lookup with the
+      // correct id.
+      if (!cursor && participant.id !== participantIdOrUserId) {
+        cursor = await this.prisma.conversationReadCursor.findUnique({
+          where: {
+            conversation_participant_cursor: {
+              participantId: participant.id,
+              conversationId,
+            },
+          },
+        });
+      }
+
+      const floor: Date | null = cursor?.lastReadAt ?? participant.joinedAt ?? null;
 
       return await this.prisma.message.count({
         where: {
           conversationId,
           deletedAt: null,
-          senderId: { not: participantId },
+          senderId: { not: participant.id },
+          ...(floor ? { createdAt: { gt: floor } } : {}),
         },
       });
     } catch (error) {
@@ -106,31 +164,30 @@ export class MessageReadStatusService {
   }
 
   /**
-   * Calcule le unreadCount pour plusieurs conversations d'un utilisateur
-   * Optimisé pour afficher la liste des conversations avec leurs compteurs
+   * Calcule le unreadCount pour plusieurs conversations d'un utilisateur.
+   * Batched variant of `getUnreadCount` — same fresh-compute contract,
+   * same stale-cursor avoidance. Returns 0 for any conversation in which
+   * the participant cannot be resolved.
    */
   async getUnreadCountsForConversations(
     participantIds: string[],
     conversationIds: string[]
   ): Promise<Map<string, number>> {
     try {
-      const cursors = await this.prisma.conversationReadCursor.findMany({
-        where: {
-          participantId: { in: participantIds },
-          conversationId: { in: conversationIds },
-        },
-      });
-
-      // Map conversationId → unreadCount
       const unreadCounts = new Map<string, number>();
-
-      // Initialiser à 0 par défaut
       conversationIds.forEach((id) => unreadCounts.set(id, 0));
 
-      // Remplir avec les valeurs connues
-      for (const cursor of cursors) {
-        unreadCounts.set(cursor.conversationId, cursor.unreadCount);
-      }
+      // Compute per-conversation in parallel. Each call resolves the
+      // participant fresh and counts via `createdAt > floor`.
+      await Promise.all(conversationIds.map(async (convId) => {
+        for (const participantIdOrUserId of participantIds) {
+          const count = await this.getUnreadCount(participantIdOrUserId, convId);
+          if (count > 0) {
+            unreadCounts.set(convId, count);
+            return;
+          }
+        }
+      }));
 
       return unreadCounts;
     } catch (error) {

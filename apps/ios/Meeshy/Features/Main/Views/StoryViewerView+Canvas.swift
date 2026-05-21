@@ -17,52 +17,297 @@ import MeeshyUI
 /// Tap-left / tap-right navigation overlay plus the long-press pause gesture.
 /// Extracted from `StoryViewerView.gestureOverlay(geometry:)` so its subtree
 /// is its own type-metadata unit.
+///
+/// ## Sémantique gestuelle (source de vérité unique : `isPaused`)
+/// - **Tap court (< 200 ms) sur story en lecture** : navigation prev/next
+///   selon le côté tappé (gauche/droite).
+/// - **Long-press ≥ 200 ms** : pause la story (`isPaused = true`). Le timer
+///   de progression et le player de background vidéo s'arrêtent ensemble.
+///   Le chrome bascule en mode immersif. **Le relâchement ne reprend
+///   PAS** — la story reste en pause.
+/// - **Tap court sur story en pause** : reprend la lecture (`isPaused =
+///   false`), rétablit le chrome. Pas de navigation.
+/// - **Drag horizontal/vertical au-delà du `dragSlopPixels`** : geste annulé
+///   et laissé au drag gesture parent (swipe-down pour dismiss).
 struct StoryGestureOverlayView: View {
     let geometry: GeometryProxy
     let isComposerEngaged: Bool
+    /// **Source de vérité du toggle long-press**. Le hold confirmé le pose
+    /// à `true`, le tap suivant le remet à `false`. Le parent observe ce
+    /// drapeau pour gater le timer (`shouldPauseTimer`) ET poster les
+    /// notifications canvas (`.storyPlayerPause` / `.storyPlayerResume`).
+    @Binding var isLongPressPaused: Bool
     let onDismissComposer: () -> Void
     let onPrevious: () -> Void
     let onNext: () -> Void
-    let onPauseTimer: () -> Void
-    let onResumeTimer: () -> Void
+    /// Callback de basculement du chrome — invoqué quand le seuil 200 ms est
+    /// franchi (touch-and-hold confirmé) et quand le tap de reprise remet la
+    /// story en lecture, avec `visible: Bool` qui suit la sémantique :
+    /// - en mode normal (`isFullscreenStorySession == false`) : `false` à la
+    ///   pause (cache pour immersion), `true` à la reprise (rétablit chrome).
+    /// - en mode plein écran (`isFullscreenStorySession == true`) : inverse.
+    /// Le parent applique l'animation et coupe le clavier au besoin.
+    let onChromeVisibilityChange: (Bool) -> Void
+    /// État de session « plein écran » lu depuis le parent. Détermine le
+    /// sens du toggle du chrome (voir doc ci-dessus).
+    let isFullscreenStorySession: Bool
+
+    /// Seuil au-delà duquel un touch sur l'écran cesse d'être un tap de
+    /// navigation prev/next et devient un hold (toggle pause + hide chrome).
+    private let holdThresholdSeconds: TimeInterval = 0.2
+    /// Marge horizontale/verticale autorisée avant qu'un drag soit considéré
+    /// comme un swipe (et donc ignoré par cet overlay — laissé au drag
+    /// gesture parent qui gère le dismiss).
+    private let dragSlopPixels: CGFloat = 14
+
+    @State private var touchStartTime: Date? = nil
+    @State private var touchStartLocation: CGPoint = .zero
+    /// `true` dès que le seuil 200 ms est franchi : la story est passée en
+    /// pause via long-press, le release ne doit ni naviguer ni reprendre.
+    @State private var holdActive: Bool = false
+    /// `Task` armée au touchDown pour fire le hold à `holdThresholdSeconds`.
+    /// Annulée si le doigt bouge trop, est relâché tôt, ou si le composer
+    /// devient engaged en cours de geste.
+    @State private var holdArmingTask: Task<Void, Never>? = nil
+    /// `true` si le touch courant est le tap de reprise : `isLongPressPaused`
+    /// était `true` au touch-down, on l'a remis à `false`, et le release
+    /// doit être consommé (pas de nav, pas de hold).
+    @State private var isResumingTap: Bool = false
+
+    /// Surveille les transitions d'état de la scène pour annuler un hold
+    /// armé si l'app passe inactive (incoming call, lock, app-switcher) —
+    /// sinon `Task.sleep(200ms)` continue à courir et au retour foreground
+    /// la Task fire, posant `isLongPressPaused = true` sans cause visible
+    /// pour l'utilisateur.
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        HStack(spacing: 0) {
-            // Left half — previous
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if isComposerEngaged { onDismissComposer(); return }
-                    onPrevious()
-                }
-                .accessibilityLabel("Story precedente")
-                .accessibilityHint("Toucher pour revenir a la story precedente")
-                .accessibilityAddTraits(.isButton)
+        Color.clear
+            .contentShape(Rectangle())
+            .accessibilityElement()
+            .accessibilityLabel("Lecteur de stories")
+            .accessibilityHint("Toucher à gauche pour la story précédente, à droite pour la suivante, maintenir pour mettre en pause")
+            // `DragGesture(minimumDistance: 0)` capture LE PREMIER touch-down
+            // ainsi que le release. C'est le seul moyen fiable en SwiftUI de
+            // distinguer un tap court d'un hold long sur la même hit-area —
+            // `simultaneousGesture(LongPressGesture)` perdait toujours la
+            // course contre `onTapGesture` car le tap fire au release tant
+            // qu'aucun mouvement significatif n'a eu lieu, et le release
+            // arrive bien avant la fin du holdThreshold.
+            // `simultaneousGesture` plutôt que `gesture` pour cohabiter avec
+            // le `unifiedDragGesture` parent (swipe down pour dismiss,
+            // minimumDistance: 15). Sans ça, notre DragGesture(minimumDistance:0)
+            // capturait l'évènement touchDown et le parent ne voyait plus
+            // jamais les swipes verticaux.
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 0, coordinateSpace: .local)
+                    .onChanged { value in
+                        guard !isComposerEngaged else { return }
 
-            // Right half — next
-            Color.clear
-                .contentShape(Rectangle())
-                .onTapGesture {
-                    if isComposerEngaged { onDismissComposer(); return }
-                    onNext()
+                        if touchStartTime == nil {
+                            // ===== TOUCH DOWN =====
+                            touchStartTime = Date()
+                            touchStartLocation = value.startLocation
+                            holdActive = false
+                            holdArmingTask?.cancel()
+
+                            let ctx = StoryGestureContext(
+                                holdActive: false,
+                                isPaused: isLongPressPaused,
+                                isResumingTap: false,
+                                isComposerEngaged: isComposerEngaged
+                            )
+                            switch StoryGestureDecisions.decideTouchDown(context: ctx) {
+                            case .resumeFromPause:
+                                // Story en pause via long-press précédent.
+                                // Ce tap REPREND la lecture — pas de hold,
+                                // pas de nav au release.
+                                isResumingTap = true
+                                isLongPressPaused = false
+                                onChromeVisibilityChange(!isFullscreenStorySession)
+                                HapticFeedback.light()
+                            case .none:
+                                // Story en lecture : arme le long-press.
+                                isResumingTap = false
+                                holdArmingTask = Task { @MainActor in
+                                    try? await Task.sleep(for: .milliseconds(Int(holdThresholdSeconds * 1000)))
+                                    if Task.isCancelled { return }
+                                    if isComposerEngaged { return }
+                                    // Garde contre le wake-up Task après un
+                                    // backgrounding : si l'app est sortie
+                                    // de foreground pendant l'attente, on
+                                    // ne déclenche pas un freeze invisible.
+                                    guard UIApplication.shared.applicationState == .active else { return }
+                                    holdActive = true
+                                    isLongPressPaused = true
+                                    onChromeVisibilityChange(isFullscreenStorySession)
+                                }
+                            default:
+                                break  // touchDown ne produit pas d'autres actions
+                            }
+                        } else {
+                            // ===== DRAG IN PROGRESS =====
+                            // Le doigt bouge : si on dépasse le slop, on
+                            // annule le geste (laissé au drag parent).
+                            let dx = value.location.x - touchStartLocation.x
+                            let dy = value.location.y - touchStartLocation.y
+                            if abs(dx) > dragSlopPixels || abs(dy) > dragSlopPixels {
+                                holdArmingTask?.cancel()
+                                if holdActive {
+                                    // Hold confirmé puis drag : on **annule
+                                    // la pause** — l'utilisateur swipe, on
+                                    // rend la main au drag parent.
+                                    holdActive = false
+                                    isLongPressPaused = false
+                                    onChromeVisibilityChange(!isFullscreenStorySession)
+                                }
+                                // Drag pendant un tap de reprise : la
+                                // reprise est déjà actée, on garde
+                                // `isResumingTap` pour neutraliser le release.
+                            }
+                        }
+                    }
+                    .onEnded { value in
+                        defer {
+                            touchStartTime = nil
+                            holdArmingTask?.cancel()
+                            holdArmingTask = nil
+                        }
+                        let elapsed = touchStartTime.map { Date().timeIntervalSince($0) } ?? 0
+                        let ctx = StoryGestureContext(
+                            holdActive: holdActive,
+                            isPaused: isLongPressPaused,
+                            isResumingTap: isResumingTap,
+                            isComposerEngaged: isComposerEngaged
+                        )
+                        switch StoryGestureDecisions.decideTouchUp(
+                            context: ctx,
+                            touchStartX: value.startLocation.x,
+                            halfWidth: geometry.size.width / 2,
+                            elapsed: elapsed,
+                            holdThreshold: holdThresholdSeconds
+                        ) {
+                        case .dismissComposer:
+                            onDismissComposer()
+                        case .none:
+                            // Tap de reprise OU race rare seuil-franchi-sans-hold.
+                            // Dans les deux cas, on consomme les flags transients
+                            // et on ne navigue pas.
+                            isResumingTap = false
+                        case .confirmLongPressPause:
+                            // Hold confirmé : la story reste en pause
+                            // (`isLongPressPaused = true` déjà posé par
+                            // la Task). Pas de nav, pas de reprise auto.
+                            holdActive = false
+                            HapticFeedback.medium()
+                        case .navigatePrevious:
+                            onPrevious()
+                        case .navigateNext:
+                            onNext()
+                        case .resumeFromPause:
+                            break  // décidé au touchDown, pas au touchUp
+                        }
+                    }
+            )
+            // Annule un hold armé si la scène devient inactive — évite que
+            // `Task.sleep(200ms)` continue à courir en background et fire au
+            // retour foreground, paus​ant la story sans cause visible.
+            .adaptiveOnChange(of: scenePhase) { _, newPhase in
+                if newPhase != .active {
+                    holdArmingTask?.cancel()
+                    holdArmingTask = nil
+                    if holdActive {
+                        holdActive = false
+                        isLongPressPaused = false
+                    }
                 }
-                .accessibilityLabel("Story suivante")
-                .accessibilityHint("Toucher pour passer a la story suivante")
-                .accessibilityAddTraits(.isButton)
-        }
-        // Exclude the bottom composer zone from tap targets
-        .padding(.bottom, 120 + geometry.safeAreaInsets.bottom)
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.2)
-                .onChanged { _ in
-                    guard !isComposerEngaged else { return }
-                    onPauseTimer()
-                }
-                .onEnded { _ in
-                    guard !isComposerEngaged else { return }
-                    onResumeTimer()
-                }
-        )
+            }
+            // Exclude the bottom composer zone from tap targets
+            .padding(.bottom, 120 + geometry.safeAreaInsets.bottom)
+    }
+}
+
+// MARK: - Story Gesture Decisions (pure, testable)
+
+/// État d'un toucher en cours sur l'overlay story — capture le minimum
+/// nécessaire pour décider quoi faire au touch-down et au touch-up sans
+/// avoir besoin du contexte SwiftUI (`@State`, `View`).
+///
+/// Utilisé par `StoryGestureOverlayView` à travers `StoryGestureDecisions`
+/// pour rendre le comportement testable en XCTest.
+struct StoryGestureContext: Equatable {
+    /// `true` si le toucher en cours est un long-press confirmé (≥ 200 ms).
+    var holdActive: Bool
+    /// `true` si la story est en pause (source de vérité : long-press
+    /// posé `true`, tap suivant pose `false`).
+    var isPaused: Bool
+    /// `true` si le tap en cours est le tap de reprise (touch-down a remis
+    /// `isPaused = false`) — son release doit être consommé sans nav.
+    var isResumingTap: Bool
+    /// `true` si le composer est focused / engaged — toutes les actions
+    /// gestuelles sont court-circuitées dans ce cas.
+    var isComposerEngaged: Bool
+}
+
+/// Action à appliquer suite à un événement gestuel sur l'overlay story.
+/// Pure value type — pas d'effet de bord ; le caller (la View) traduit
+/// l'action en appels aux callbacks.
+enum StoryGestureAction: Equatable {
+    /// Rien à faire (no-op de cohérence : seuil franchi sans suite, etc.).
+    case none
+    /// Le composer était engagé : on délègue à `onDismissComposer`.
+    case dismissComposer
+    /// Touch-down sur story en pause → reprend la lecture (pose `isPaused
+    /// = false`) et arme `isResumingTap = true` pour neutraliser le release.
+    case resumeFromPause
+    /// Touch-up d'un long-press confirmé : la story reste en pause
+    /// (`isPaused` est resté `true`), pas de nav.
+    case confirmLongPressPause
+    /// Tap court → navigation slide précédente (côté gauche).
+    case navigatePrevious
+    /// Tap court → navigation slide suivante (côté droit ou centre).
+    case navigateNext
+}
+
+/// Namespace de fonctions pures qui décident des transitions de l'overlay
+/// gestuel story. Découplé de SwiftUI pour être unit-testable.
+///
+/// **Sémantique** : `isPaused` est l'unique source de vérité du toggle
+/// long-press. La story est en pause ⇔ `isPaused == true` ⇔ timer arrêté
+/// + tout média (bg vidéo, audios, effets) en pause.
+enum StoryGestureDecisions {
+
+    /// Décide quoi faire au TOUCH-DOWN d'un nouveau geste sur l'overlay.
+    /// - `.resumeFromPause` si `isPaused` était `true` (tap qui reprend).
+    /// - `.none` sinon (le caller arme alors la détection du long-press).
+    static func decideTouchDown(context: StoryGestureContext) -> StoryGestureAction {
+        if context.isComposerEngaged { return .none }
+        if context.isPaused { return .resumeFromPause }
+        return .none
+    }
+
+    /// Décide quoi faire au TOUCH-UP (.onEnded) d'un geste.
+    ///
+    /// - Parameters:
+    ///   - context: état courant du toucher.
+    ///   - touchStartX: coordonnée X du touch-down (pour décider prev/next).
+    ///   - halfWidth: largeur / 2 du viewport.
+    ///   - elapsed: durée écoulée depuis le touch-down (s).
+    ///   - holdThreshold: seuil long-press en secondes.
+    static func decideTouchUp(
+        context: StoryGestureContext,
+        touchStartX: CGFloat,
+        halfWidth: CGFloat,
+        elapsed: TimeInterval,
+        holdThreshold: TimeInterval
+    ) -> StoryGestureAction {
+        if context.isComposerEngaged { return .dismissComposer }
+        if context.isResumingTap { return .none }
+        if context.holdActive { return .confirmLongPressPause }
+        // Race rare : seuil franchi mais le tick `onChanged` n'a pas posé
+        // `holdActive = true` à temps. On évite la nav surprise.
+        if elapsed >= holdThreshold { return .none }
+        return touchStartX < halfWidth ? .navigatePrevious : .navigateNext
     }
 }
 
@@ -190,6 +435,7 @@ struct StoryCardView: View {
 
     // Animation drivers (written by parent transition funcs)
     let progress: CGFloat
+    let currentSlideDuration: TimeInterval
     let outgoingOpacity: Double
     let closingScale: CGFloat
     let contentOpacity: Double
@@ -247,15 +493,39 @@ struct StoryCardView: View {
     @Binding var emojiToInject: String
     @Binding var composerFocusTrigger: Bool
     @Binding var storyDrafts: [String: StoryDraft]
+    /// Visibilité du chrome (header + sidebar + composer). Drivé par le parent
+    /// `StoryViewerView` selon les gestes (touch-and-hold) et l'état session
+    /// (mode plein écran via hamburger). Le `Binding` est nécessaire car le
+    /// touch-and-hold interne au canvas mute la valeur en temps réel.
+    @Binding var chromeVisible: Bool
+    /// Mode session « plein écran » toggleable depuis le menu hamburger « … »
+    /// du header. Quand actif, le chrome est caché par défaut pour TOUTE la
+    /// session story ; un touch-and-hold le révèle temporairement (sémantique
+    /// inversée par rapport au mode normal). Binding car le toggle vit dans
+    /// le hamburger menu, qui est rendu par le header — qui le mute donc.
+    @Binding var isFullscreenStorySession: Bool
+    /// État de pause **long-press uniquement**. Bascule à `true` quand le
+    /// hold ≥ 200 ms est confirmé, à `false` au prochain tap. Distinct de
+    /// `isPaused` (qui couvre toutes les pauses du timer — sheets, drag,
+    /// composer engaged). Le parent observe ce drapeau et poste les
+    /// notifications canvas (`.storyPlayerPause` / `.storyPlayerResume`)
+    /// uniquement sur ses transitions — pas sur celles de `isPaused`.
+    @Binding var isLongPressPaused: Bool
 
     @ObservedObject var keyboard: KeyboardObserver
 
-    /// Temporise l'apparition du spinner de chargement. Il ne s'affiche que si
-    /// le média de la slide n'est toujours pas prêt après un court délai de
-    /// grâce (voir le `.task` en bas du `body`). Une slide déjà vue — ou
-    /// préchauffée par le prefetcher — devient prête avant ce délai, donc
-    /// revisiter une slide ne flashe jamais de loader.
-    @State private var showSlowLoader = false
+    /// Fraction `[0, 1]` de contenu de la slide active disponible localement.
+    /// Pilote `StoryReaderLoadingOverlay` (ThumbHash bg + spinner + %) — seul
+    /// loader actif (l'ancien `ProgressView` blanc redondant a été retiré).
+    /// Cf. spec stories-video-layers-text-sprint § 3.D.
+    @State private var slideContentProgress: Double = 0
+
+    /// Gate d'affichage du spinner + % à l'intérieur de l'overlay. La
+    /// backdrop ThumbHash, elle, est rendue immédiatement (cache-first).
+    /// Activé seulement après 200 ms si la slide n'a pas progressé — évite
+    /// que l'utilisateur voie spinner+% flasher sur un cache hit qui se
+    /// rend instantanément.
+    @State private var showProgressOverlay: Bool = false
 
     // Closures — actions on the parent view
     let triggerStoryReaction: (String) -> Void
@@ -294,6 +564,7 @@ struct StoryCardView: View {
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs)
                     .id("out-\(outgoing.id)")
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
                     .allowsHitTesting(false)
@@ -307,36 +578,51 @@ struct StoryCardView: View {
                                       preloadedImages: preloadedImages,
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs,
-                                      onContentReady: { isContentReady = true })
+                                      onContentReady: { isContentReady = true },
+                                      onContentProgress: { p in slideContentProgress = p })
                     .id(story.id)
+                    // Force the reader to the canvas size — UIViewRepresentable
+                    // can otherwise report an intrinsic size that drifts with
+                    // foreground media natural dimensions and pushes the
+                    // sidebar/composer beyond the viewport.
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                     .opacity(contentOpacity)
                     .offset(y: textSlideOffset)
                     .scaleEffect(openingScale)
                     .clipShape(
                         RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
                     )
-            }
 
-            // === Loading spinner — shown only for genuinely slow loads ===
-            // Gated par `isContentReady` ET `showSlowLoader` : le loader
-            // n'apparaît que si le média n'est pas prêt après le délai de grâce
-            // (voir le `.task` en bas du `body`). Un hit cache devient prêt
-            // avant — donc revisiter une slide ne flashe jamais de spinner.
-            // `.allowsHitTesting(false)` keeps tap-to-advance working.
-            if currentStory != nil && !isContentReady && showSlowLoader {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-                    .scaleEffect(1.4)
-                    .padding(20)
-                    .background(
-                        Circle()
-                            .fill(Color.black.opacity(0.35))
+                // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
+                // Le backdrop ThumbHash est monté DÈS qu'une slide est active
+                // pour servir de placeholder instantané (Cache-First : pas de
+                // gradient/canvas vide pendant que le média télécharge). Le
+                // spinner + le pourcentage, eux, restent gated par le délai
+                // de grâce 200ms via `showProgressOverlay` afin de ne pas
+                // flasher sur un cache hit immédiat. L'overlay entier fade
+                // out quand la slide a chargé à 95 % — au-dessus, le canvas
+                // média est révélé.
+                if slideContentProgress < 0.95 {
+                    StoryReaderLoadingOverlay(
+                        slide: story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain),
+                        progress: slideContentProgress,
+                        threshold: 0.95,
+                        showSpinner: showProgressOverlay
                     )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    .id("loader-\(story.id)")
+                    // Hard-frame the overlay to the canvas dimensions and clip
+                    // it: the loader hosts a thumbhash Image + .blur() whose
+                    // intrinsic/halo size could otherwise inflate the parent
+                    // ZStack and push the sidebar/composer beyond the viewport.
+                    // Note: pas de `.ignoresSafeArea()` ici — le parent
+                    // `StoryViewerView` l'applique déjà au scope racine, en
+                    // rajouter localement après `.frame()` ré-étend l'overlay
+                    // horizontalement (~89pt) et casse à nouveau la sidebar.
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
                     .allowsHitTesting(false)
-                    .accessibilityHidden(true)
                     .transition(.opacity)
+                }
             }
 
             // === Voice caption overlay (transcription voix) ===
@@ -411,12 +697,45 @@ struct StoryCardView: View {
             StoryGestureOverlayView(
                 geometry: geometry,
                 isComposerEngaged: isComposerEngaged,
+                isLongPressPaused: $isLongPressPaused,
                 onDismissComposer: dismissComposer,
                 onPrevious: goToPrevious,
                 onNext: goToNext,
-                onPauseTimer: pauseTimer,
-                onResumeTimer: resumeTimer
+                onChromeVisibilityChange: { newValue in
+                    // Animation spring rapide (lecture immersive) avec un
+                    // léger overshoot pour donner du caractère au reveal et au
+                    // hide. Sortie clavier en parallèle si le composer était
+                    // engagé — le keyboard.hide() ne déclenche pas re-render
+                    // du composer s'il est déjà non-focused.
+                    withAnimation(.spring(response: 0.32, dampingFraction: 0.78)) {
+                        chromeVisible = newValue
+                    }
+                    if !newValue {
+                        UIApplication.shared.sendAction(
+                            #selector(UIResponder.resignFirstResponder),
+                            to: nil, from: nil, for: nil
+                        )
+                    }
+                },
+                isFullscreenStorySession: isFullscreenStorySession
             )
+
+            // === Layer 6.5: Foreground audio chips ===
+            // Au-dessus du gesture overlay : le tap d'un chip est consommé
+            // avant d'atteindre la nav gauche/droite des slides. Masqué hors
+            // de la fenêtre `startTime..startTime+duration` de chaque audio.
+            // Le tap toggle le mute *per-piste* via la registry partagée
+            // (`StoryReaderAudioMuteRegistry`) — la canvas applique au mixer.
+            if let story = currentStory,
+               let audios = story.storyEffects?.audioPlayerObjects,
+               !audios.isEmpty {
+                AudioForegroundReaderOverlay(
+                    foregroundAudios: audios,
+                    slideDuration: currentSlideDuration,
+                    fallbackElapsedTime: progress > 0 ? TimeInterval(progress) * currentSlideDuration : nil
+                )
+                .allowsHitTesting(!isComposerEngaged)
+            }
 
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
             // min 59pt accounts for Dynamic Island when .statusBarHidden() zeroes safeAreaInsets
@@ -442,15 +761,35 @@ struct StoryCardView: View {
                     repostAsPostDirect: repostAsPostDirect,
                     pauseTimer: pauseTimer,
                     dismissViewer: dismissViewer,
-                    reportStory: reportStory
+                    reportStory: reportStory,
+                    isFullscreenStorySession: $isFullscreenStorySession,
+                    chromeVisible: $chromeVisible
                 )
                     .padding(.horizontal, 16)
                     .padding(.top, 10)
 
                 Spacer()
             }
+            // Glissement vers le HAUT à la disparition + fondu. Le `.offset`
+            // négatif fait sortir progress bars + header de l'écran ; on
+            // ajoute une opacity 0 pour que l'élément reste totalement
+            // invisible lorsqu'il est positionné juste en dehors du safe area
+            // (sinon un sliver pixelé peut traîner sur certaines tailles).
+            .offset(y: chromeVisible ? 0 : -(topInset + 120))
+            .opacity(chromeVisible ? 1 : 0)
+            .allowsHitTesting(chromeVisible)
+            .animation(.spring(response: 0.32, dampingFraction: 0.78), value: chromeVisible)
 
             // === Layer 8: Right action sidebar — centered vertically, right side ===
+            // The sidebar is bounded between the header strip (top) and the
+            // composer strip (bottom) so its action buttons never slide
+            // off-screen on small iPhones (SE, mini). The sidebar itself
+            // ships a `ViewThatFits` fallback that switches to a vertical
+            // scroller when the bounded height is still too small for the
+            // full button stack.
+            let topReserved: CGFloat = topInset + 100   // progress bars + header
+            let bottomReserved: CGFloat = geometry.safeAreaInsets.bottom + (isOwnStory ? 56 : 96)
+            let sidebarMaxHeight = max(180, geometry.size.height - topReserved - bottomReserved)
             HStack {
                 Spacer()
                 StoryActionSidebarView(
@@ -482,9 +821,20 @@ struct StoryCardView: View {
                     pauseTimer: pauseTimer,
                     loadStoryComments: loadStoryComments
                 )
+                    .frame(maxHeight: sidebarMaxHeight)
                     .padding(.trailing, 6)
             }
+            .padding(.top, topReserved)
+            .padding(.bottom, bottomReserved)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
+            // Glissement vers la DROITE à la disparition + fondu. L'offset
+            // de 110pt couvre largement la largeur du chip (max 48pt) + son
+            // padding-trailing (6pt) + un peu de marge pour les écrans sans
+            // bord arrondi. Hit-testing désactivé en plus de l'opacité 0 pour
+            // éviter qu'un tap fantôme atterrisse sur un bouton invisible.
+            .offset(x: chromeVisible ? 0 : 110)
+            .opacity(chromeVisible ? 1 : 0)
+            .allowsHitTesting(chromeVisible)
 
             // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
             if let emoji = bigReactionEmoji {
@@ -571,6 +921,15 @@ struct StoryCardView: View {
             .padding(.bottom, composerBottomPadding(geometry))
             .animation(.easeInOut(duration: 0.25), value: keyboard.height)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showTextEmojiPicker)
+            // Glissement vers le BAS à la disparition + fondu. L'offset 240pt
+            // couvre l'ensemble composer + picker emoji + safe area inférieure
+            // pour les iPhones les plus grands ; le composant étant ancré
+            // bottom via `Spacer()`, c'est suffisant pour le sortir totalement
+            // du viewport. Hit-testing OFF en plus pour ne pas intercepter
+            // les taps même invisible.
+            .offset(y: chromeVisible ? 0 : 240)
+            .opacity(chromeVisible ? 1 : 0)
+            .allowsHitTesting(chromeVisible)
 
             // Full emoji picker — REACTIONS ONLY (sends via API)
             if showFullEmojiPicker {
@@ -610,15 +969,34 @@ struct StoryCardView: View {
                 .zIndex(150)
             }
         }
-        // Délai de grâce du spinner : à chaque changement de slide on remet
-        // `showSlowLoader` à false, puis on ne l'arme qu'après 200 ms. Si le
-        // média devient prêt avant (cache disque / préchauffe prefetcher), le
-        // spinner n'est jamais affiché — la slide apparaît instantanément.
+        // Lock the entire story canvas (background + reader + overlays +
+        // sidebar + composer) to EXACTLY the viewport size we were handed
+        // in `geometry`. Without this, any child with an intrinsic size
+        // bigger than the proposed size — a long translated text line, a
+        // foreground media at natural pixel size, a 100pt big-reaction
+        // emoji during animation — silently grows the enclosing ZStack
+        // and pushes the right-side action sidebar (and bottom composer)
+        // off-screen, making them untappable. `.clipped()` discards
+        // anything that still tries to draw past the bounds rather than
+        // letting it leak into adjacent UI.
+        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
+        .clipped()
+        // Délai de grâce du spinner+% : on n'arme `showProgressOverlay` qu'au
+        // bout de 200 ms si la slide est sous 20 % de progression. La backdrop
+        // ThumbHash, elle, est rendue immédiatement par
+        // `StoryReaderLoadingOverlay` quand `slideContentProgress < 0.95` —
+        // garantit un placeholder cache-first sans flasher d'indicateur de
+        // chargement sur les slides qui se rendent instantanément.
         .task(id: currentStory?.id) {
-            showSlowLoader = false
+            showProgressOverlay = false
+            slideContentProgress = 0
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
-            withAnimation(.easeIn(duration: 0.2)) { showSlowLoader = true }
+            if slideContentProgress < 0.20 {
+                withAnimation(.easeIn(duration: 0.2)) {
+                    showProgressOverlay = true
+                }
+            }
         }
     }
 
@@ -738,8 +1116,14 @@ struct StoryViewerContentView: View {
 
             GeometryReader { geometry in
                 ZStack {
-                    // The story card with all transforms layered
+                    // The story card with all transforms layered.
+                    // Pin to geometry size BEFORE applying scale/clip — the
+                    // story canvas itself (`StoryCardView`) hard-frames its
+                    // body, and we double-down here so neither the
+                    // `scaleEffect` nor any unexpected intrinsic content
+                    // size can leak beyond the viewport's actual bounds.
                     makeStoryCard(geometry)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
                         .scaleEffect(cardScale * (1.0 - slideProgress * 0.08))
                         .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
                         .opacity(cardOpacity)
