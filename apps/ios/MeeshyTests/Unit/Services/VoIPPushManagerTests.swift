@@ -156,13 +156,28 @@ final class VoIPPushManagerTests: XCTestCase {
             legacy: VoIPTokenRecord(token: legacyToken, at: Date(timeIntervalSince1970: 1_000))
         )
 
-        _ = VoIPPushManager(tokenStore: store)
+        // Keep a strong reference until the assertions run.
+        // ``VoIPPushManager.init`` spawns ``Task { [weak self] ... }`` to
+        // perform the one-shot migration. Discarding the SUT with `_ =`
+        // releases it before that task fires and ``guard let self else {
+        // return }`` short-circuits the call to
+        // ``migrateFromUserDefaultsIfNeeded()`` entirely — the bounded
+        // polling fix in 9065f3a2 was treating a timing symptom of this
+        // ownership bug, not its cause.
+        let sut = VoIPPushManager(tokenStore: store)
 
-        // The Task started inside `init` is asynchronous; give it a beat to run.
-        try await Task.sleep(nanoseconds: 50_000_000)
+        // The migration runs in a detached `Task` inside `init`. Poll up
+        // to 2 s, exiting as soon as the migration lands. Fast runs wake
+        // within a few ms; only the genuinely slow simulator pays the
+        // full budget.
+        let deadline = Date().addingTimeInterval(2.0)
+        while store.migrateCallCount < 1, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
 
         XCTAssertGreaterThanOrEqual(store.migrateCallCount, 1)
         XCTAssertEqual(store.snapshot()?.token, legacyToken)
+        withExtendedLifetime(sut) {}
     }
 
     /// Idempotence guard: when the keychain already holds a matching token
