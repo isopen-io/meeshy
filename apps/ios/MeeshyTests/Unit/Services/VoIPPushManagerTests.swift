@@ -158,8 +158,16 @@ final class VoIPPushManagerTests: XCTestCase {
 
         _ = VoIPPushManager(tokenStore: store)
 
-        // The Task started inside `init` is asynchronous; give it a beat to run.
-        try await Task.sleep(nanoseconds: 50_000_000)
+        // The migration runs in a detached `Task` inside `init`. The original
+        // 50ms fixed sleep was unreliable on the fastlane release lane where
+        // the simulator gets less CPU — the test would flake roughly once
+        // per CI run with `migrateCallCount == 0`. Poll for up to 2 s
+        // instead, exiting as soon as the migration lands. Passing cases
+        // still wake within a few ms; only slow runs pay the full budget.
+        let deadline = Date().addingTimeInterval(2.0)
+        while store.migrateCallCount < 1, Date() < deadline {
+            try await Task.sleep(nanoseconds: 20_000_000)
+        }
 
         XCTAssertGreaterThanOrEqual(store.migrateCallCount, 1)
         XCTAssertEqual(store.snapshot()?.token, legacyToken)
