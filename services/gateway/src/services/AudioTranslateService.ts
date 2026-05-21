@@ -53,8 +53,13 @@ import type {
 import type { AttachmentTranscription, AttachmentTranslations } from '@meeshy/shared/types/attachment-audio';
 
 // Response timeout in milliseconds
-const DEFAULT_TIMEOUT = 60000; // 60 seconds for voice processing
+const DEFAULT_TIMEOUT = 60000; // 60 seconds for fast voice ops (status, profile, …)
 const ASYNC_SUBMIT_TIMEOUT = 5000; // 5 seconds to submit async job
+// Long synchronous voice translation pipeline (Whisper + NLLB + TTS) can take
+// several minutes on CPU. Must outlive ZMQ_VOICE_TRANSLATE_DEADMAN_MS so the
+// ZMQ-level deadman fires first and emits `voiceAPIError`, rejecting the
+// promise cleanly.
+const VOICE_TRANSLATE_SYNC_TIMEOUT = 16 * 60_000; // 16 minutes
 
 // ═══════════════════════════════════════════════════════════════════════════
 // TYPES
@@ -391,7 +396,7 @@ export class AudioTranslateService extends EventEmitter {
       } : undefined
     };
 
-    const result = await this._sendRequest<VoiceTranslationResult>(request);
+    const result = await this._sendRequest<VoiceTranslationResult>(request, VOICE_TRANSLATE_SYNC_TIMEOUT);
 
     // Sauvegarder en base si demandé
     if (options.saveToDatabase && options.attachmentId) {

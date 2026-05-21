@@ -308,7 +308,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         ...updatedMessage,
         translations: transformTranslationsToArray(
           messageId,
-          (updatedMessage as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+          (updatedMessage as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
         )
       };
 

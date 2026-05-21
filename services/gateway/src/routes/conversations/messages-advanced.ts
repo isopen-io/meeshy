@@ -469,7 +469,7 @@ export function registerMessagesAdvancedRoutes(
         conversationId,
         translations: transformTranslationsToArray(
           messageId,
-          (updatedMessage as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+          (updatedMessage as unknown as { translations?: Record<string, MessageTranslationJSON> | null }).translations
         ),
         validatedMentions: updatedMessage.validatedMentions || [],
         meta: { conversationStats: stats }
