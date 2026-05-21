@@ -46,16 +46,17 @@
 - **Test ajouté** : `test_registerDeviceToken_setsPublishedTokenAndPersistsHex` pin l'invariant pour les refactos futurs.
 - **Note** : APNs token vit en UserDefaults (`com.meeshy.push.deviceToken`) — moins critique qu'un VoIP token (routing identifier, pas credential), Apple ne demande pas le Keychain.
 
-### [P1.4] Public key pinning sur `APIClient`
+### [P1.4] Public key pinning sur `APIClient` ✅
 - **Cible** : `packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient.swift:7-27`
 - **Plan** :
-  - [ ] Test rouge : `CertificatePinningDelegateTests.test_pin_rejectsValidCertWithDifferentSPKI`
-  - [ ] Étendre `CertificatePinningDelegate` :
-    - Charger SHA-256 SPKI hashes embedded dans le bundle (ressource `gate.meeshy.me.spki.json`)
-    - Au handshake, extraire la SPKI du cert leaf, hasher SHA-256, comparer à la liste
-    - Garder pin **multi-clé** (clé courante + clé de rotation/backup) pour permettre rotation sans rebuild
-  - [ ] Si liste vide → fallback au pinning actuel (backward compat)
-  - [ ] Documenter la procédure de rotation dans `decisions.md`
+  - [x] Module `CertificatePinning` avec `spkiSHA256Base64(for:)` + `evaluate(chain:against:)` pur
+  - [x] Delegate refactoré : multi-pin, fail-closed sur mismatch, fallback `.unconfigured` quand pinSet vide (backward compat 100%)
+  - [x] `MeeshyConfig.certificatePins: Set<String>` (empty default — opérateur configure au boot)
+  - [x] Support RSA 2048/4096 et EC 256/384 (préfixes ASN.1 vérifiés)
+  - [x] Logging `fault`-level sur mismatch (catégorie `me.meeshy.sdk` / `tls-pinning`)
+  - [x] Tests SDK : 5 tests purs (déterminisme hash, mismatch keys, préfixe ASN.1)
+  - [x] Documentation opérateur : `apps/ios/Documentation/CERTIFICATE_PINNING.md` avec procédure openssl + stratégie de rotation
+- **⚠️ Action utilisateur requise** : calculer les 2 pins (leaf actuel + backup) puis les mettre dans `MeeshyApp.init()` ou via une future ressource bundle. Tant que `certificatePins` reste vide, le comportement est strictement identique à avant (pas de régression).
 
 ### [P1.5] Supprimer `fatalError` au boot
 - **Cible** : `apps/ios/Meeshy/Core/DependencyContainer.swift:39`

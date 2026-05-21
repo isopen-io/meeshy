@@ -50,6 +50,18 @@ public final class MeeshyConfig: @unchecked Sendable {
 
     public var appBundleId: String = "me.meeshy.app"
 
+    /// Base64-encoded SHA-256 hashes of pinned SubjectPublicKeyInfo (SPKI)
+    /// blobs, per RFC 7469. Populate this set to enable public-key pinning
+    /// in ``CertificatePinningDelegate``. An empty set keeps the historical
+    /// behaviour (system chain validation only) so the app does not lock
+    /// itself out before the operator has computed the production pins.
+    ///
+    /// Include **at least two** pins — the leaf key in use today plus a
+    /// backup/rotation key — so rotation does not require shipping a new
+    /// app binary. See `apps/ios/Documentation/CERTIFICATE_PINNING.md`
+    /// for the procedure to compute pins from `gate.meeshy.me`.
+    public var certificatePins: Set<String> = []
+
     private init() {}
 
     /// Resolve a potentially relative media URL (e.g. "/api/v1/attachments/file/...")
