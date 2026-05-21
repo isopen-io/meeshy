@@ -129,13 +129,24 @@
 
 ## Phase 4 — Architectural cleanup (Élevé, gros)
 
-### [P4.1] Retirer les appels `APIClient.shared` depuis les Views
-- **Cibles** : `NewConversationView.swift`, `SharePickerView.swift`, `ThreadView.swift`, `StoryViewerView+Canvas.swift`
-- **Plan par vue** (pattern identique) :
-  - [ ] Créer un `*ViewModel` (ou réutiliser celui existant) avec dépendance protocolaire injectée
-  - [ ] Déplacer les appels API
-  - [ ] Garantir cache-first si applicable
-  - [ ] Tests : un par flow critique (search users, send shared message, load thread, react to story)
+### [P4.1] Retirer les appels `APIClient.shared` depuis les Views ⏳ (1/12 fait, pattern fourni)
+- **Cibles** (12 sites détectés) :
+  - ✅ `NewConversationView.swift` (search + create) — **REFACTORED**, pattern référence
+  - ⏳ `SharePickerView.swift` (conversations list + send) — à refactorer (~30min)
+  - ⏳ `ThreadView.swift` (paginated thread) — à refactorer
+  - ⏳ `ReplyThreadOverlay.swift` — à refactorer
+  - ⏳ `StoryViewerView+Canvas.swift` (story reactions) — à refactorer
+  - ⏳ `StoryViewerView+Sidebar.swift` — à refactorer
+  - ⏳ `StoryViewerView+Content.swift` (3 sites) — à refactorer
+  - ⏳ `ConversationView+Header.swift` — à refactorer
+- **Pattern documenté (`NewConversationViewModel` + tests)** :
+  1. Créer `Features/Main/ViewModels/{Screen}ViewModel.swift` `@MainActor final class` avec `@Published` state
+  2. Dependencies via init injection : `api: APIClientProviding = APIClient.shared`, `currentUserIdProvider: @MainActor () -> String? = { AuthManager.shared.currentUser?.id }`
+  3. Async methods pour le networking, gestion d'erreur explicite via `errorMessage: String?` (pas `try?`)
+  4. View consomme via `@StateObject private var viewModel`, body devient une projection pure
+  5. Tests : `Unit/ViewModels/{Screen}ViewModelTests.swift` avec `MockAPIClientForApp` + `JSONStub.decode` pour les fixtures
+  6. ⚠️ Manual Xcode action : ajouter le nouveau fichier .swift au target (project.pbxproj refs explicites)
+- **Résultat sur NewConversationView** : 7 nouveaux tests qui pinent search success/failure/short-query + create direct/failure/empty/consume. Le `try?` masquant qui swallow les erreurs réseau est remplacé par une gestion explicite via `errorMessage`.
 
 ### [P4.2] Split `ConversationViewModel.swift` (3028 lignes, 42 @Published)
 - **Stratégie** : éviter le big-bang. Approche par extraction de composants cohérents :
