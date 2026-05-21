@@ -202,6 +202,89 @@ final class ConversationSyncEngineTests: XCTestCase {
         try? await Task.sleep(nanoseconds: 100_000_000)
     }
 
+    // MARK: - Total Unread Aggregator (cross-conversation)
+
+    /// The sync engine must expose a CurrentValueSubject that aggregates the
+    /// total `unreadCount` across all cached conversations. UI surfaces such
+    /// as the back-button cross-conversation pill subscribe to it without
+    /// re-implementing the reduce themselves.
+    func test_totalConversationsUnreadValue_isZero_whenCacheEmpty() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+
+        XCTAssertEqual(engine.totalConversationsUnreadValue, 0)
+    }
+
+    /// When the socket signals a single-conversation unread change, the
+    /// aggregator MUST re-sum every cached conversation (not just delta the
+    /// previous total). This guarantees correctness when the cache mutates
+    /// from other code paths (delta sync, optimistic writes) between events.
+    func test_totalConversationsUnread_publishesSumOfAllConversations_afterUnreadUpdatedEvent() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([
+            ("unread-agg-c1", 2),
+            ("unread-agg-c2", 5),
+            ("unread-agg-c3", 0)
+        ])
+
+        await engine.startSocketRelay()
+
+        let exp = expectation(description: "total unread published after event")
+        var observed = [Int]()
+        engine.totalConversationsUnread
+            .sink { value in
+                observed.append(value)
+                if observed.count >= 2 { exp.fulfill() }
+            }
+            .store(in: &cancellables)
+
+        // Update c1 from 2 → 4 ⇒ expected total = 4 + 5 + 0 = 9
+        mockMessageSocket.unreadUpdated.send(UnreadUpdateEvent(conversationId: "unread-agg-c1", unreadCount: 4))
+
+        await fulfillment(of: [exp], timeout: 2.0)
+        XCTAssertEqual(observed.last, 9)
+    }
+
+    /// Negative values are nonsense from the backend but the aggregator must
+    /// not blow up: clamp each conversation contribution to ≥ 0.
+    func test_totalConversationsUnread_clampsNegativeContributions_atZero() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([
+            ("unread-agg-clamp-1", 4),
+            ("unread-agg-clamp-2", -10)
+        ])
+
+        await engine.startSocketRelay()
+
+        let exp = expectation(description: "clamped total")
+        var observed = [Int]()
+        engine.totalConversationsUnread
+            .sink { value in
+                observed.append(value)
+                if observed.count >= 2 { exp.fulfill() }
+            }
+            .store(in: &cancellables)
+
+        mockMessageSocket.unreadUpdated.send(UnreadUpdateEvent(conversationId: "unread-agg-clamp-1", unreadCount: 4))
+
+        await fulfillment(of: [exp], timeout: 2.0)
+        XCTAssertEqual(observed.last, 4, "negative contribution must clamp to 0")
+    }
+
+    // Helper: seed the conversations cache with [id, unreadCount] tuples.
+    // Uses `save()` (not `update()`): `update()` early-returns when the key
+    // is absent from L1, which is exactly the state right after `invalidate`.
+    private func seedConversations(_ entries: [(String, Int)]) async {
+        let conversations: [MeeshyConversation] = entries.map { id, unread in
+            MeeshyConversation(
+                id: id,
+                identifier: "test-\(id)",
+                type: .direct,
+                unreadCount: unread
+            )
+        }
+        try? await CacheCoordinator.shared.conversations.save(conversations, for: "list")
+    }
+
     // MARK: - Sort persistence
 
     /// The sync engine MUST persist the cached list sorted by `lastMessageAt`

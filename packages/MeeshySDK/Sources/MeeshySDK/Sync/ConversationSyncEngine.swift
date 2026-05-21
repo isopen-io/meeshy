@@ -8,6 +8,14 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     var conversationsDidChange: AnyPublisher<Void, Never> { get }
     var messagesDidChange: AnyPublisher<String, Never> { get }
 
+    /// Sum of `unreadCount` across every cached conversation. CurrentValue-
+    /// based: emits the current value on subscribe and again on every
+    /// mutation. Consumers must NOT reduce the list themselves.
+    var totalConversationsUnread: AnyPublisher<Int, Never> { get }
+
+    /// Synchronous snapshot of the aggregate. Always ≥ 0.
+    var totalConversationsUnreadValue: Int { get }
+
     @discardableResult
     func fullSync() async -> Bool
     @discardableResult
@@ -32,9 +40,26 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     private let _conversationsDidChange = PassthroughSubject<Void, Never>()
     private let _messagesDidChange = PassthroughSubject<String, Never>()
 
+    /// Cross-conversation aggregator of `unreadCount`. Rebuilt from the
+    /// authoritative cache on every mutation that may change the total —
+    /// `conversation:unread-updated`, `conversation:read-status-updated`,
+    /// and after each successful sync that overwrites the list. UI surfaces
+    /// (back-button pill, side menus) subscribe here instead of reducing
+    /// the list themselves so the math lives in one place.
+    private let _totalConversationsUnread = CurrentValueSubject<Int, Never>(0)
+
     // Protocol-exposed publishers (read-only)
     public var conversationsDidChange: AnyPublisher<Void, Never> { _conversationsDidChange.eraseToAnyPublisher() }
     public var messagesDidChange: AnyPublisher<String, Never> { _messagesDidChange.eraseToAnyPublisher() }
+
+    /// Publisher of the total unread count across all cached conversations.
+    /// Emits the current value on subscribe (CurrentValueSubject semantics),
+    /// then a new value each time the cache mutates.
+    public var totalConversationsUnread: AnyPublisher<Int, Never> { _totalConversationsUnread.eraseToAnyPublisher() }
+
+    /// Synchronous snapshot of the current aggregated total. Always
+    /// ≥ 0 — negative `unreadCount` values from the backend are clamped.
+    public var totalConversationsUnreadValue: Int { _totalConversationsUnread.value }
 
     // State (protected by serial queue)
     private let stateQueue = DispatchQueue(label: "me.meeshy.sync-engine.state")
@@ -651,6 +676,12 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             .store(in: &socketSubscriptions)
 
         Self.logger.info("[RT-DIAG] startSocketRelay() done — \(self.socketSubscriptions.count, privacy: .public) subscriptions active")
+
+        // Initial recompute so cold-start (cache already hydrated from disk
+        // before any socket event arrives) publishes the correct aggregate
+        // to subscribers. Without this, `totalConversationsUnreadValue`
+        // stays at 0 until the first `unread-updated` event lands.
+        await recomputeTotalUnread()
     }
 
     public func stopSocketRelay() async {
@@ -719,6 +750,11 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                     updated.insert(domainConv, at: 0)
                     return updated
                 }
+                // The freshly-fetched conversation may carry an `unreadCount`
+                // > 0 (group the user was added to, missed during fullSync).
+                // Recompute now so the back-button pill is correct before
+                // the next `conversation:unread-updated` arrives.
+                await recomputeTotalUnread()
             } catch {
                 Self.logger.error("[SyncEngine] Failed to fetch missing conversation \(msg.conversationId): \(error.localizedDescription)")
             }
@@ -813,6 +849,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             return updated
         }
         _conversationsDidChange.send()
+        await recomputeTotalUnread()
     }
 
     private func handleReadStatusUpdated(_ event: ReadStatusUpdateEvent) async {
@@ -830,6 +867,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
                 return updated
             }
             _conversationsDidChange.send()
+            await recomputeTotalUnread()
         }
 
         // Update delivery status of own messages in the message cache
@@ -883,6 +921,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             return updated
         }
         _conversationsDidChange.send()
+        await recomputeTotalUnread()
     }
 
     public func markConversationReadLocally(_ conversationId: String) async {
@@ -894,6 +933,7 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
             return updated
         }
         _conversationsDidChange.send()
+        await recomputeTotalUnread()
     }
 
     // MARK: - Helpers
@@ -920,5 +960,18 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
         } catch {
             Logger.cache.error("ConversationSyncEngine saveSorted failed for \(cacheKey, privacy: .public): \(error.localizedDescription, privacy: .public)")
         }
+        if cacheKey == "list" {
+            await recomputeTotalUnread()
+        }
+    }
+
+    /// Reads the authoritative cache for the conversation list, sums the
+    /// `unreadCount` of every entry (clamped to ≥ 0 to defend against bogus
+    /// negative values), and publishes the result. Cheap: one cache read +
+    /// a linear reduce; runs only when a mutation likely changed the total.
+    private func recomputeTotalUnread() async {
+        let cached = await cache.conversations.load(for: "list").snapshot() ?? []
+        let total = cached.reduce(0) { acc, conv in acc + max(0, conv.unreadCount) }
+        _totalConversationsUnread.send(total)
     }
 }
