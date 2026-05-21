@@ -204,17 +204,67 @@ public final class ReaderAudioMixer {
         guard var entry = entries[audioId] else { return }
         entry.targetVolume = clamped
         entries[audioId] = entry
-        if !isMuted { entry.node.volume = clamped }
+        entry.node.volume = effectiveVolume(for: entry)
     }
 
     public func setMute(_ muted: Bool) {
         isMuted = muted
         for entry in entries.values {
-            entry.node.volume = muted ? 0 : entry.targetVolume
+            entry.node.volume = effectiveVolume(for: entry)
         }
         if let bg = backgroundEntry {
             bg.player.volume = muted ? 0 : bg.targetVolume
         }
+    }
+
+    /// Mute / unmute a single foreground clip without touching the global
+    /// `isMuted` flag (used by the per-chip tap action in the reader). The
+    /// background slot is not exposed here — the bg has no dedicated chip.
+    public func setMute(_ muted: Bool, for audioId: String) {
+        guard var entry = entries[audioId] else { return }
+        entry.isUserMuted = muted
+        entries[audioId] = entry
+        entry.node.volume = effectiveVolume(for: entry)
+    }
+
+    public func isMuted(audioId: String) -> Bool {
+        entries[audioId]?.isUserMuted ?? false
+    }
+
+    private func effectiveVolume(for entry: Entry) -> Float {
+        (isMuted || entry.isUserMuted) ? 0 : entry.targetVolume
+    }
+
+    // MARK: - Playhead
+
+    /// Temps écoulé depuis l'origine `t = 0` de la slide en cours, en
+    /// secondes. Calculé contre `playbackStartHostTime` qui partage le même
+    /// référentiel `mach_absolute_time()` que les `AVAudioTime` utilisés pour
+    /// scheduler les buffers — c'est donc *le clock audio réel* (sample-
+    /// accurate, identique à celui qu'utilise le moteur).
+    ///
+    /// Retourne `nil` quand aucune slide ne joue (`playbackStartHostTime` nil
+    /// après `teardown()` / `stop()`, ou avant le premier `play(...)`).
+    public var slideElapsedSeconds: TimeInterval? {
+        guard let start = playbackStartHostTime, isPlaying else { return nil }
+        // `delaySeconds(forHostTime:relativeTo:)` retourne `target - relativeTo`
+        // si positif, sinon `0`. On l'utilise à l'envers (now = target, start
+        // = relativeTo) pour obtenir l'écoulé.
+        return Self.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: start)
+    }
+
+    /// Position de lecture sample-accurate d'un clip particulier (en
+    /// secondes, relative au début du fichier audio). Lit
+    /// `AVAudioPlayerNode.playerTime(forNodeTime:)` qui est l'API canonique
+    /// Apple pour obtenir le temps réel de lecture. Retourne `nil` si le clip
+    /// n'a pas encore commencé à rendre (pas de `lastRenderTime`).
+    public func clipElapsedSeconds(for audioId: String) -> TimeInterval? {
+        guard let entry = entries[audioId],
+              let nodeTime = entry.node.lastRenderTime,
+              let playerTime = entry.node.playerTime(forNodeTime: nodeTime),
+              playerTime.sampleRate > 0
+        else { return nil }
+        return Double(playerTime.sampleTime) / playerTime.sampleRate
     }
 
     // MARK: - Lifecycle
@@ -326,7 +376,7 @@ public final class ReaderAudioMixer {
 
     private func runVolumeRamp(entry: Entry, from start: Float, to end: Float, duration: TimeInterval) {
         guard duration > 0 else {
-            entry.node.volume = isMuted ? 0 : end
+            entry.node.volume = (isMuted || entry.isUserMuted) ? 0 : end
             return
         }
         // Async ramp instead of Timer because Swift 6 won't let us capture
@@ -344,10 +394,10 @@ public final class ReaderAudioMixer {
                 guard let live = self.entries[audioId] else { return }
                 let progress = Float(i) / Float(steps)
                 let v = start + (end - start) * progress
-                live.node.volume = self.isMuted ? 0 : v
+                live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : v
             }
             if let live = self.entries[audioId] {
-                live.node.volume = self.isMuted ? 0 : end
+                live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : end
             }
         }
         if var stored = entries[entry.audioId] {
@@ -407,6 +457,9 @@ public final class ReaderAudioMixer {
         let loop: Bool
         var fadeTimers: [Timer] = []
         var fadeTasks: [Task<Void, Never>] = []
+        /// Mute per-piste déclenché par le tap utilisateur sur le chip du
+        /// reader. Indépendant du mute global (`ReaderAudioMixer.isMuted`).
+        var isUserMuted: Bool = false
     }
 
     /// Internal helper for the single background audio slot.

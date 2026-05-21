@@ -1197,6 +1197,7 @@ public struct StoryComposerView: View {
                     AudioForegroundChip(
                         audioObject: binding,
                         canvasSize: geo.size,
+                        mode: .composer,
                         isSelected: viewModel.selectedElementId == binding.wrappedValue.id,
                         onDragEnd: { HapticFeedback.light() },
                         onTap: {

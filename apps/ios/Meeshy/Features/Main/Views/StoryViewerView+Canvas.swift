@@ -190,6 +190,7 @@ struct StoryCardView: View {
 
     // Animation drivers (written by parent transition funcs)
     let progress: CGFloat
+    let currentSlideDuration: TimeInterval
     let outgoingOpacity: Double
     let closingScale: CGFloat
     let contentOpacity: Double
@@ -453,6 +454,23 @@ struct StoryCardView: View {
                 onPauseTimer: pauseTimer,
                 onResumeTimer: resumeTimer
             )
+
+            // === Layer 6.5: Foreground audio chips ===
+            // Au-dessus du gesture overlay : le tap d'un chip est consommé
+            // avant d'atteindre la nav gauche/droite des slides. Masqué hors
+            // de la fenêtre `startTime..startTime+duration` de chaque audio.
+            // Le tap toggle le mute *per-piste* via la registry partagée
+            // (`StoryReaderAudioMuteRegistry`) — la canvas applique au mixer.
+            if let story = currentStory,
+               let audios = story.storyEffects?.audioPlayerObjects,
+               !audios.isEmpty {
+                AudioForegroundReaderOverlay(
+                    foregroundAudios: audios,
+                    slideDuration: currentSlideDuration,
+                    fallbackElapsedTime: progress > 0 ? TimeInterval(progress) * currentSlideDuration : nil
+                )
+                .allowsHitTesting(!isComposerEngaged)
+            }
 
             // === Layer 7: Top UI (progress bars + header) — ABOVE gesture overlay for hit testing ===
             // min 59pt accounts for Dynamic Island when .statusBarHidden() zeroes safeAreaInsets

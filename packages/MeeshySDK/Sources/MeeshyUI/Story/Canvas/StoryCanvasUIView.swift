@@ -87,6 +87,16 @@ public final class StoryCanvasUIView: UIView {
             // `.play` mode. `reconfigureAudioForPlayback()` guards on the
             // revision token, so this fires at most once per slide change.
             if mode == .play {
+                // Reset le mute per-piste + le playhead uniquement quand
+                // l'id de slide change (pas sur chaque mutation mineure
+                // comme un keyframe). Sinon on perdrait l'état mute au
+                // milieu de la lecture si la slide est dirty-mise-à-jour
+                // (rare en `.play` mais le garde-fou est cheap).
+                if oldValue.id != slide.id {
+                    StoryReaderAudioMuteRegistry.shared.clear()
+                    lastAppliedMutedSet.removeAll()
+                    StoryReaderPlayheadState.shared.reset()
+                }
                 reconfigureAudioForPlayback()
                 startAudioPlayback()
             }
@@ -169,7 +179,12 @@ public final class StoryCanvasUIView: UIView {
     /// (only `currentTime` advances), so the same captured texture is reused
     /// across the full slide duration — turning the worst case 60 Hz
     /// `CARenderer.render()` loop into a single capture per slide.
-    private var slideContentRevision: UInt64 = 0
+    /// Compteur incrémenté à chaque `slide.didSet` (révision sémantique
+    /// du contenu). Utilisé en interne pour le caching renderer et en
+    /// test pour vérifier qu'une mutation déclenche un nombre prévisible
+    /// de `didSet` (régression perf : la triple mutation directe via
+    /// subscript en faisait exploser le compte).
+    internal var slideContentRevision: UInt64 = 0
     private var lastCapturedRevision: UInt64?
     private var lastCapturedSize: CGSize?
 
@@ -292,6 +307,13 @@ public final class StoryCanvasUIView: UIView {
     /// a MainActor hop — `AnyCancellable.cancel()` is idempotent and the
     /// property is only assigned once, from a MainActor init path.
     private nonisolated(unsafe) var audioSessionEventsCancellable: AnyCancellable?
+
+    /// Souscription au `$muted` du `StoryReaderAudioMuteRegistry` partagé. Le
+    /// chip foreground du reader pousse sur la registry ; on diff l'ensemble
+    /// publié contre `lastAppliedMutedSet` pour n'appeler `setMute(_:for:)`
+    /// que pour les pistes qui ont effectivement changé d'état.
+    private nonisolated(unsafe) var muteRegistryCancellable: AnyCancellable?
+    private var lastAppliedMutedSet: Set<String> = []
 
     /// KVO tokens watching foreground video readiness so `onContentReady`
     /// does not fire while a foreground clip is still a black rectangle (T6).
@@ -1506,6 +1528,24 @@ public final class StoryCanvasUIView: UIView {
                        selector: #selector(handleComposerUnmute),
                        name: .storyComposerUnmuteCanvas,
                        object: nil)
+        muteRegistryCancellable = StoryReaderAudioMuteRegistry.shared.$muted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] muted in
+                self?.applyPerTrackMute(muted)
+            }
+    }
+
+    /// Diff la nouvelle valeur du registry contre celle déjà appliquée et
+    /// invoque `setMute(_:for:)` uniquement pour les ids qui ont basculé.
+    /// Gating sur `.play` : en `.edit` la registry n'a pas de sens (le
+    /// composer mute via son propre slider de volume).
+    private func applyPerTrackMute(_ next: Set<String>) {
+        guard mode == .play else { return }
+        let toMute = next.subtracting(lastAppliedMutedSet)
+        let toUnmute = lastAppliedMutedSet.subtracting(next)
+        for id in toMute { audioMixer.setMute(true, for: id) }
+        for id in toUnmute { audioMixer.setMute(false, for: id) }
+        lastAppliedMutedSet = next
     }
 
     @objc private func handleComposerMute() {
@@ -1577,6 +1617,15 @@ public final class StoryCanvasUIView: UIView {
         let effectiveDuration = slide.effectiveSlideDuration()
         let clamped = min(nextSeconds, effectiveDuration)
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
+        // Publie le playhead pour les overlays SwiftUI (chip audio
+        // foreground). Préfère le clock audio réel du mixer
+        // (`slideElapsedSeconds`) quand une slide est en lecture audio —
+        // c'est le même référentiel host-time que les `AVAudioTime` qui
+        // schedulent les buffers, donc sample-accurate. Fallback sur le
+        // `clamped` du displayLink pour les slides sans audio (texte,
+        // image statique). Auto-throttle à ~30 Hz dans la state.
+        let publishedTime = audioMixer.slideElapsedSeconds ?? clamped
+        StoryReaderPlayheadState.shared.publish(min(publishedTime, effectiveDuration))
         rebuildLayers()
         if clamped >= effectiveDuration {
             stopPlayback()
@@ -1943,21 +1992,38 @@ public final class StoryCanvasUIView: UIView {
     /// Recalcule `currentManipulationLayer` à partir du contenu de la slide.
     /// Textes et stickers comptent comme foreground (cohérent avec le modèle
     /// de couches : tout ce qui n'est pas un bg media bloque la manipulation
-    /// du bg).
+    /// du bg). N'émet via `onManipulationLayerChanged` que si la valeur a
+    /// effectivement changé — pour les re-emissions « défensives »
+    /// (bootstrap, resync SwiftUI), utiliser `emitCurrentManipulationLayer()`.
     private func updateManipulationLayer() {
-        let medias = slide.effects.mediaObjects ?? []
-        let hasBg = medias.contains(where: { $0.isBackground == true })
-            || slide.effects.resolvedBackgroundMedia != nil
-        let hasFg = medias.contains(where: { $0.isBackground != true })
-            || !slide.effects.textObjects.isEmpty
-            || !(slide.effects.stickerObjects ?? []).isEmpty
-        let new: CanvasManipulationLayer
-        if hasFg { new = .foreground }
-        else if hasBg { new = .background }
-        else { new = .canvas }
+        let new = Self.resolveManipulationLayer(for: slide.effects)
         guard new != currentManipulationLayer else { return }
         currentManipulationLayer = new
         onManipulationLayerChanged?(new)
+    }
+
+    /// Résolution pure de la couche manipulable à partir des effets d'une
+    /// slide. Extraite en `static` pour permettre les tests sans monter de
+    /// UIView. Règle : fg media OU text OU sticker → `.foreground`, sinon
+    /// bg media → `.background`, sinon `.canvas`.
+    public static func resolveManipulationLayer(for effects: StoryEffects) -> CanvasManipulationLayer {
+        let medias = effects.mediaObjects ?? []
+        let hasFg = medias.contains(where: { $0.isBackground != true })
+            || !effects.textObjects.isEmpty
+            || !(effects.stickerObjects ?? []).isEmpty
+        if hasFg { return .foreground }
+        let hasBg = medias.contains(where: { $0.isBackground == true })
+            || effects.resolvedBackgroundMedia != nil
+        if hasBg { return .background }
+        return .canvas
+    }
+
+    /// Force la propagation de la couche courante (sans recompute) — appelée
+    /// par le `UIViewRepresentable` après (re)assignation du callback côté
+    /// SwiftUI pour garantir que le chip indicator reflète bien la couche
+    /// active dès la première frame, et après chaque body eval.
+    public func emitCurrentManipulationLayer() {
+        onManipulationLayerChanged?(currentManipulationLayer)
     }
 
     /// Résout l'id de l'élément manipulable courant pour un gesture qui
@@ -2275,20 +2341,47 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     /// que l'élément manipulé soit immédiatement le plus en avant. No-op pour
     /// le background media (les bg restent toujours derrière les fg via le
     /// filtre de `StoryRenderer.collectItems`).
-    private func bringForegroundToFront(id: String) {
+    /// Ramène l'élément touché au premier plan visuel.
+    ///
+    /// **Important** : le rendu canvas (`StoryRenderer.render`) trie les
+    /// éléments par `zIndex` (pas par leur ordre dans les arrays).
+    /// Réordonner uniquement les tableaux (`remove + append`) ne suffisait
+    /// donc pas — le visuel ne bougeait pas alors que les listes de
+    /// l'inspecteur (qui lisent l'ordre du tableau) reflétaient bien le
+    /// mouvement. On assigne maintenant `nextTopZ()` à l'élément pour piloter
+    /// le z-order de rendu, et on réordonne aussi le tableau pour rester
+    /// cohérent avec l'inspecteur.
+    ///
+    /// **Perf** : chaque mutation passe par une copie locale puis UNE
+    /// réassignation au `slide`. Mutations directes via subscript (`.foo[i]
+    /// = ...`) ou `remove/append` sur la propriété déclencheraient
+    /// `slide.didSet` plusieurs fois — donc `rebuildLayers()` plusieurs
+    /// fois par tap — visible jitter sur les devices lents.
+    ///
+    /// `internal` plutôt que `private` pour symétrie avec `sendToBack(id:)`
+    /// et pour permettre les tests sans simuler un tap UIKit.
+    internal func bringForegroundToFront(id: String) {
+        let topZ = nextTopZ()
+
         // Texte
-        if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }),
-           idx != slide.effects.textObjects.count - 1 {
-            let item = slide.effects.textObjects.remove(at: idx)
-            slide.effects.textObjects.append(item)
+        if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }) {
+            var texts = slide.effects.textObjects
+            guard texts[idx].zIndex < topZ
+                  || idx != texts.count - 1 else { return }
+            texts[idx].zIndex = topZ
+            let item = texts.remove(at: idx)
+            texts.append(item)
+            slide.effects.textObjects = texts
             onItemModified?(slide)
             return
         }
         // Media foreground (skip si bg)
         if var medias = slide.effects.mediaObjects,
            let idx = medias.firstIndex(where: { $0.id == id }),
-           medias[idx].isBackground == false,
-           idx != medias.count - 1 {
+           medias[idx].isBackground == false {
+            guard medias[idx].zIndex < topZ
+                  || idx != medias.count - 1 else { return }
+            medias[idx].zIndex = topZ
             let item = medias.remove(at: idx)
             medias.append(item)
             slide.effects.mediaObjects = medias
@@ -2297,8 +2390,10 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         }
         // Sticker
         if var stickers = slide.effects.stickerObjects,
-           let idx = stickers.firstIndex(where: { $0.id == id }),
-           idx != stickers.count - 1 {
+           let idx = stickers.firstIndex(where: { $0.id == id }) {
+            guard stickers[idx].zIndex < topZ
+                  || idx != stickers.count - 1 else { return }
+            stickers[idx].zIndex = topZ
             let item = stickers.remove(at: idx)
             stickers.append(item)
             slide.effects.stickerObjects = stickers
