@@ -11,7 +11,7 @@ import os
 /// State machine for a media attachment moving from raw selection to
 /// upload-ready. Single source of truth across messages, posts and stories so
 /// the loading tile shows the same stage labels and progression everywhere.
-public enum AttachmentPreparationStage: Equatable, Sendable {
+enum AttachmentPreparationStage: Equatable, Sendable {
     case loading        // Pulling bytes from PhotosPicker / disk
     case compressing    // MediaCompressor running
     case thumbnailing   // Extracting still frame (video) or decoding image
@@ -23,13 +23,13 @@ public enum AttachmentPreparationStage: Equatable, Sendable {
 // MARK: - Prepared Attachment (final value)
 
 /// Fully prepared attachment with everything the composer / uploader needs.
-public struct PreparedAttachment: Sendable {
-    public let attachment: MessageAttachment
-    public let fileURL: URL
-    public let thumbHash: String?
-    public let thumbnailData: Data?    // JPEG bytes for renderer cache seeding
+struct PreparedAttachment: Sendable {
+    let attachment: MessageAttachment
+    let fileURL: URL
+    let thumbHash: String?
+    let thumbnailData: Data?    // JPEG bytes for renderer cache seeding
 
-    public init(attachment: MessageAttachment, fileURL: URL, thumbHash: String?, thumbnailData: Data?) {
+    init(attachment: MessageAttachment, fileURL: URL, thumbHash: String?, thumbnailData: Data?) {
         self.attachment = attachment
         self.fileURL = fileURL
         self.thumbHash = thumbHash
@@ -45,20 +45,20 @@ public struct PreparedAttachment: Sendable {
 /// which point the caller transfers the result into its pending state and
 /// drops the handle.
 @MainActor
-public final class PreparingAttachment: ObservableObject, Identifiable {
-    public let id: String
-    public let kind: MessageAttachment.AttachmentType
-    @Published public var stage: AttachmentPreparationStage = .loading
-    @Published public var thumbnail: UIImage?
-    @Published public private(set) var prepared: PreparedAttachment?
-    public let accentColor: String
+final class PreparingAttachment: ObservableObject, Identifiable {
+    let id: String
+    let kind: MessageAttachment.AttachmentType
+    @Published var stage: AttachmentPreparationStage = .loading
+    @Published var thumbnail: UIImage?
+    @Published private(set) var prepared: PreparedAttachment?
+    let accentColor: String
 
     /// Continuations parked in `awaitCompletion()`. We resume them all once
     /// the preparation transitions to a terminal state (.ready / .failed) so
     /// callers can drive UI side-effects without polling `@Published` values.
     private var waiters: [CheckedContinuation<Result<PreparedAttachment, AttachmentPreparationError>, Never>] = []
 
-    public init(id: String = UUID().uuidString,
+    init(id: String = UUID().uuidString,
                 kind: MessageAttachment.AttachmentType,
                 initialThumbnail: UIImage? = nil,
                 accentColor: String) {
@@ -72,7 +72,7 @@ public final class PreparingAttachment: ObservableObject, Identifiable {
     /// callers can wait concurrently — all are resumed with the same result.
     /// If the preparation has already finished, the continuation resumes
     /// immediately on the next runloop tick.
-    public func awaitCompletion() async -> Result<PreparedAttachment, AttachmentPreparationError> {
+    func awaitCompletion() async -> Result<PreparedAttachment, AttachmentPreparationError> {
         if case .ready = stage, let prep = prepared {
             return .success(prep)
         }
@@ -106,7 +106,7 @@ public final class PreparingAttachment: ObservableObject, Identifiable {
     }
 }
 
-public enum AttachmentPreparationError: Error, Sendable {
+enum AttachmentPreparationError: Error, Sendable {
     case preparationFailed(String)
 }
 
@@ -119,15 +119,15 @@ public enum AttachmentPreparationError: Error, Sendable {
 /// while compression, thumbnail extraction and ThumbHash encoding run in the
 /// background.
 @MainActor
-public final class AttachmentPreparationService {
-    public static let shared = AttachmentPreparationService()
+final class AttachmentPreparationService {
+    static let shared = AttachmentPreparationService()
     private let log = Logger(subsystem: "me.meeshy.app", category: "attachment-prep")
 
-    public init() {}
+    init() {}
 
     // MARK: Image (already-decoded UIImage — camera capture / image editor)
 
-    public func prepareImage(_ image: UIImage,
+    func prepareImage(_ image: UIImage,
                              context: MediaContext = .message,
                              accentColor: String = "4ECDC4") -> PreparingAttachment {
         let prep = PreparingAttachment(kind: .image, initialThumbnail: image, accentColor: accentColor)
@@ -140,7 +140,7 @@ public final class AttachmentPreparationService {
 
     // MARK: Image data (PhotosPicker / share extension)
 
-    public func prepareImageData(_ data: Data,
+    func prepareImageData(_ data: Data,
                                  image: UIImage,
                                  context: MediaContext = .message,
                                  accentColor: String = "4ECDC4") -> PreparingAttachment {
@@ -154,7 +154,7 @@ public final class AttachmentPreparationService {
 
     // MARK: Video (URL on disk — camera or already-extracted picker payload)
 
-    public func prepareVideo(sourceURL: URL,
+    func prepareVideo(sourceURL: URL,
                              deleteSourceAfterCompression: Bool,
                              context: MediaContext = .message,
                              accentColor: String = "FF6B6B") -> PreparingAttachment {
@@ -171,7 +171,7 @@ public final class AttachmentPreparationService {
 
     // MARK: Audio (recorded clip — already produced by AudioRecorderManager)
 
-    public func prepareAudio(url: URL,
+    func prepareAudio(url: URL,
                              durationMs: Int,
                              accentColor: String) -> PreparingAttachment {
         let prep = PreparingAttachment(kind: .audio, accentColor: accentColor)
@@ -193,7 +193,7 @@ public final class AttachmentPreparationService {
 
     // MARK: PhotosPicker (unified entry — auto-detects image vs video)
 
-    public func preparePhotosPickerItem(_ item: PhotosPickerItem,
+    func preparePhotosPickerItem(_ item: PhotosPickerItem,
                                         context: MediaContext = .message,
                                         accentColor: String) -> PreparingAttachment {
         let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
@@ -221,7 +221,7 @@ public final class AttachmentPreparationService {
     private func runImagePreparation(prep: PreparingAttachment,
                                      image: UIImage,
                                      context: MediaContext) async {
-        let result = MediaCompressor.shared.compressImage(image, maxDimension: context.maxImageDimension)
+        let result = await MediaCompressor.shared.compressImage(image, maxDimension: context.maxImageDimension)
         await populateImage(prep: prep, result: result, sourceImage: image)
     }
 
@@ -229,7 +229,7 @@ public final class AttachmentPreparationService {
                                          data: Data,
                                          image: UIImage,
                                          context: MediaContext) async {
-        let result = MediaCompressor.shared.compressImageData(data, maxDimension: context.maxImageDimension)
+        let result = await MediaCompressor.shared.compressImageData(data, maxDimension: context.maxImageDimension)
         await populateImage(prep: prep, result: result, sourceImage: image)
     }
 
