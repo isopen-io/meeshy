@@ -12,140 +12,65 @@ extension FeedView {
     // MARK: - Photo Selection
     func handleFeedPhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
-        let itemsCopy = items
         selectedPhotoItems.removeAll()
-        isLoadingMedia = true
         HapticFeedback.light()
-
-        Task {
-            for item in itemsCopy {
-                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-
-                if isVideo {
-                    if let movieData = try? await item.loadTransferable(type: Data.self) {
-                        let rawName = "video_raw_\(UUID().uuidString).mp4"
-                        let rawURL = FileManager.default.temporaryDirectory.appendingPathComponent(rawName)
-                        try? movieData.write(to: rawURL)
-
-                        let compressedURL: URL
-                        do {
-                            compressedURL = try await MediaCompressor.shared.compressVideo(rawURL, context: .feedPost)
-                            try? FileManager.default.removeItem(at: rawURL)
-                        } catch {
-                            compressedURL = rawURL
-                        }
-
-                        let fileSize = (try? FileManager.default.attributesOfItem(atPath: compressedURL.path)[.size] as? Int) ?? movieData.count
-                        let attachmentId = UUID().uuidString
-                        let attachment = MessageAttachment(
-                            id: attachmentId,
-                            fileName: compressedURL.lastPathComponent,
-                            originalName: compressedURL.lastPathComponent,
-                            mimeType: "video/mp4",
-                            fileSize: fileSize,
-                            fileUrl: compressedURL.absoluteString,
-                            thumbnailColor: "FF6B6B"
-                        )
-
-                        let thumb = await feedGenerateVideoThumbnail(url: compressedURL)
-
-                        await MainActor.run {
-                            pendingMediaFiles[attachmentId] = compressedURL
-                            if let thumb { pendingThumbnails[attachmentId] = thumb }
-                            pendingAttachments.append(attachment)
-                        }
-                    }
-                } else {
-                    if let imageData = try? await item.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: imageData) {
-                        let result = await MediaCompressor.shared.compressImageData(imageData)
-                        let fileName = "image_\(UUID().uuidString).\(result.fileExtension)"
-                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                        try? result.data.write(to: tempURL)
-
-                        let attachmentId = UUID().uuidString
-                        let attachment = MessageAttachment(
-                            id: attachmentId,
-                            fileName: fileName,
-                            originalName: fileName,
-                            mimeType: result.mimeType,
-                            fileSize: result.data.count,
-                            fileUrl: tempURL.absoluteString,
-                            width: Int(uiImage.size.width),
-                            height: Int(uiImage.size.height),
-                            thumbnailColor: "4ECDC4"
-                        )
-
-                        await MainActor.run {
-                            pendingMediaFiles[attachmentId] = tempURL
-                            pendingThumbnails[attachmentId] = uiImage
-                            pendingAttachments.append(attachment)
-                        }
-                    }
-                }
-            }
-            await MainActor.run { isLoadingMedia = false }
+        for item in items {
+            let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
+                item,
+                context: .feedPost,
+                accentColor: ""
+            )
+            trackFeedPreparation(prep)
         }
     }
 
     // MARK: - Camera Capture
     func handleFeedCameraCapture(_ image: UIImage) {
-        Task {
-            let result = await MediaCompressor.shared.compressImage(image)
-            let fileName = "camera_\(UUID().uuidString).\(result.fileExtension)"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try? result.data.write(to: tempURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(
-                id: attachmentId,
-                fileName: fileName,
-                originalName: fileName,
-                mimeType: result.mimeType,
-                fileSize: result.data.count,
-                fileUrl: tempURL.absoluteString,
-                width: Int(image.size.width),
-                height: Int(image.size.height),
-                thumbnailColor: "4ECDC4"
-            )
-            await MainActor.run {
-                pendingMediaFiles[attachmentId] = tempURL
-                pendingThumbnails[attachmentId] = image
-                pendingAttachments.append(attachment)
-                HapticFeedback.success()
-            }
-        }
+        let prep = AttachmentPreparationService.shared.prepareImage(
+            image,
+            context: .feedPost,
+            accentColor: "4ECDC4"
+        )
+        trackFeedPreparation(prep)
     }
 
     func handleFeedCameraVideo(_ url: URL) {
-        Task {
-            let compressedURL: URL
-            do {
-                compressedURL = try await MediaCompressor.shared.compressVideo(url, context: .feedPost)
-                try? FileManager.default.removeItem(at: url)
-            } catch {
-                compressedURL = url
-            }
+        let prep = AttachmentPreparationService.shared.prepareVideo(
+            sourceURL: url,
+            deleteSourceAfterCompression: true,
+            context: .feedPost,
+            accentColor: "FF6B6B"
+        )
+        trackFeedPreparation(prep)
+    }
 
-            let fileSize = feedGetFileSize(compressedURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(
-                id: attachmentId,
-                fileName: compressedURL.lastPathComponent,
-                originalName: compressedURL.lastPathComponent,
-                mimeType: "video/mp4",
-                fileSize: fileSize,
-                fileUrl: compressedURL.absoluteString,
-                thumbnailColor: "FF6B6B"
-            )
-
-            let thumb = await feedGenerateVideoThumbnail(url: compressedURL)
-            await MainActor.run {
-                pendingMediaFiles[attachmentId] = compressedURL
-                if let thumb { pendingThumbnails[attachmentId] = thumb }
-                pendingAttachments.append(attachment)
+    /// Append an in-flight preparation to the loading row and promote its
+    /// result into `pendingAttachments` / `pendingMediaFiles` /
+    /// `pendingThumbnails` once it reaches `.ready`. Mirrors
+    /// `ConversationView.trackPreparation` so the publish pipeline keeps
+    /// reading the same three dictionaries.
+    func trackFeedPreparation(_ prep: PreparingAttachment) {
+        preparingAttachments.append(prep)
+        Task { @MainActor [prep] in
+            let result = await prep.awaitCompletion()
+            switch result {
+            case .success(let prepared):
+                pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
+                if let thumb = prep.thumbnail {
+                    pendingThumbnails[prepared.attachment.id] = thumb
+                }
+                pendingAttachments.append(prepared.attachment)
                 HapticFeedback.success()
+            case .failure(.preparationFailed(let message)):
+                HapticFeedback.error()
+                ToastManager.shared.showError(message)
             }
+            preparingAttachments.removeAll { $0.id == prep.id }
         }
+    }
+
+    func cancelFeedPreparation(_ prep: PreparingAttachment) {
+        preparingAttachments.removeAll { $0.id == prep.id }
     }
 
     // MARK: - File Import
@@ -343,10 +268,15 @@ extension FeedView {
         VStack(spacing: 0) {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
+                    ForEach(preparingAttachments) { prep in
+                        AttachmentLoadingTile(prep: prep) {
+                            cancelFeedPreparation(prep)
+                        }
+                    }
                     ForEach(pendingAttachments) { attachment in
                         feedAttachmentTile(attachment)
                     }
-                    if isLoadingMedia {
+                    if isLoadingMedia && preparingAttachments.isEmpty {
                         ProgressView()
                             .tint(Color(hex: "4ECDC4"))
                             .padding(.horizontal, 12)
@@ -518,6 +448,7 @@ struct FeedComposerSheet: View {
     @State private var pendingMediaFiles: [String: URL] = [:]
     @State private var pendingThumbnails: [String: UIImage] = [:]
     @State private var pendingAudioURL: URL?
+    @State private var preparingAttachments: [PreparingAttachment] = []
     @State private var showPhotoPicker = false
     @State private var selectedPhotoItems: [PhotosPickerItem] = []
     @State private var showCamera = false
@@ -679,7 +610,7 @@ struct FeedComposerSheet: View {
                 }
 
                 // Pending attachments
-                if !pendingAttachments.isEmpty || isLoadingMedia {
+                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia {
                     sheetAttachmentsRow
                 }
 
@@ -891,10 +822,15 @@ struct FeedComposerSheet: View {
     private var sheetAttachmentsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
+                ForEach(preparingAttachments) { prep in
+                    AttachmentLoadingTile(prep: prep, size: 72) {
+                        cancelSheetPreparation(prep)
+                    }
+                }
                 ForEach(pendingAttachments) { attachment in
                     sheetAttachmentTile(attachment)
                 }
-                if isLoadingMedia {
+                if isLoadingMedia && preparingAttachments.isEmpty {
                     ProgressView()
                         .tint(Color(hex: "4ECDC4"))
                         .padding(.horizontal, 12)
@@ -984,18 +920,20 @@ struct FeedComposerSheet: View {
         }
     }
 
-    // MARK: - Handlers (Adapted from FeedView+Attachments)
+    // MARK: - Handlers (delegated to AttachmentPreparationService)
     private func handlePhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
-        let itemsCopy = items
         selectedPhotoItems.removeAll()
-        isLoadingMedia = true
         HapticFeedback.light()
-
-        Task {
-            for item in itemsCopy {
-                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-                if isVideo {
+        for item in items {
+            let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
+            if isVideo {
+                // Videos go through the editor first — compress + queue the
+                // compressed URL for the previewer. The editor is the source
+                // of truth for trimming/cover selection; once the user
+                // confirms there, `handleCameraVideo` (below) wires the
+                // preparation into the loading tray.
+                Task {
                     if let movieData = try? await item.loadTransferable(type: Data.self) {
                         let rawURL = FileManager.default.temporaryDirectory.appendingPathComponent("video_raw_\(UUID().uuidString).mp4")
                         try? movieData.write(to: rawURL)
@@ -1004,66 +942,57 @@ struct FeedComposerSheet: View {
                             compressedURL = try await MediaCompressor.shared.compressVideo(rawURL, context: .feedPost)
                             try? FileManager.default.removeItem(at: rawURL)
                         } catch { compressedURL = rawURL }
-                        await MainActor.run {
-                            videosToPreview.append(compressedURL)
-                        }
-                    }
-                } else {
-                    if let imageData = try? await item.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: imageData) {
-                        let result = await MediaCompressor.shared.compressImageData(imageData)
-                        let fileName = "image_\(UUID().uuidString).\(result.fileExtension)"
-                        let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-                        try? result.data.write(to: tempURL)
-                        let attachmentId = UUID().uuidString
-                        let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: result.mimeType, fileSize: result.data.count, fileUrl: tempURL.absoluteString, width: Int(uiImage.size.width), height: Int(uiImage.size.height), thumbnailColor: "4ECDC4")
-                        await MainActor.run {
-                            pendingMediaFiles[attachmentId] = tempURL
-                            pendingThumbnails[attachmentId] = uiImage
-                            pendingAttachments.append(attachment)
-                        }
+                        await MainActor.run { videosToPreview.append(compressedURL) }
                     }
                 }
+            } else {
+                let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
+                    item, context: .feedPost, accentColor: "4ECDC4"
+                )
+                trackSheetPreparation(prep)
             }
-            await MainActor.run { isLoadingMedia = false }
         }
     }
 
     private func handleCameraCapture(_ image: UIImage) {
-        Task {
-            let result = await MediaCompressor.shared.compressImage(image)
-            let fileName = "camera_\(UUID().uuidString).\(result.fileExtension)"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try? result.data.write(to: tempURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(id: attachmentId, fileName: fileName, originalName: fileName, mimeType: result.mimeType, fileSize: result.data.count, fileUrl: tempURL.absoluteString, width: Int(image.size.width), height: Int(image.size.height), thumbnailColor: "4ECDC4")
-            await MainActor.run {
-                pendingMediaFiles[attachmentId] = tempURL
-                pendingThumbnails[attachmentId] = image
-                pendingAttachments.append(attachment)
-                HapticFeedback.success()
-            }
-        }
+        let prep = AttachmentPreparationService.shared.prepareImage(
+            image, context: .feedPost, accentColor: "4ECDC4"
+        )
+        trackSheetPreparation(prep)
     }
 
     private func handleCameraVideo(_ url: URL) {
-        Task {
-            let compressedURL: URL
-            do {
-                compressedURL = try await MediaCompressor.shared.compressVideo(url, context: .feedPost)
-                try? FileManager.default.removeItem(at: url)
-            } catch { compressedURL = url }
-            let fileSize = (try? FileManager.default.attributesOfItem(atPath: compressedURL.path)[.size] as? Int) ?? 0
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(id: attachmentId, fileName: compressedURL.lastPathComponent, originalName: compressedURL.lastPathComponent, mimeType: "video/mp4", fileSize: fileSize, fileUrl: compressedURL.absoluteString, thumbnailColor: "FF6B6B")
-            let thumb = await generateVideoThumbnail(url: compressedURL)
-            await MainActor.run {
-                pendingMediaFiles[attachmentId] = compressedURL
-                if let thumb { pendingThumbnails[attachmentId] = thumb }
-                pendingAttachments.append(attachment)
+        let prep = AttachmentPreparationService.shared.prepareVideo(
+            sourceURL: url,
+            deleteSourceAfterCompression: true,
+            context: .feedPost,
+            accentColor: "FF6B6B"
+        )
+        trackSheetPreparation(prep)
+    }
+
+    private func trackSheetPreparation(_ prep: PreparingAttachment) {
+        preparingAttachments.append(prep)
+        Task { @MainActor [prep] in
+            let result = await prep.awaitCompletion()
+            switch result {
+            case .success(let prepared):
+                pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
+                if let thumb = prep.thumbnail {
+                    pendingThumbnails[prepared.attachment.id] = thumb
+                }
+                pendingAttachments.append(prepared.attachment)
                 HapticFeedback.success()
+            case .failure(.preparationFailed(let message)):
+                HapticFeedback.error()
+                ToastManager.shared.showError(message)
             }
+            preparingAttachments.removeAll { $0.id == prep.id }
         }
+    }
+
+    private func cancelSheetPreparation(_ prep: PreparingAttachment) {
+        preparingAttachments.removeAll { $0.id == prep.id }
     }
 
     private func handleFileImport(_ result: Result<[URL], Error>) {

@@ -143,6 +143,9 @@
 		ATDLT0001000100010001001 /* AttachmentDownloaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */; };
 		ATUP00200000000001F00 /* AttachmentUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATUP00100000000001F00 /* AttachmentUploader.swift */; };
 		ATUT00200000000001F00 /* AttachmentUploaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATUT00100000000001F00 /* AttachmentUploaderTests.swift */; };
+		APREPS02000000000000F002 /* AttachmentPreparationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = APREPS01000000000000F001 /* AttachmentPreparationService.swift */; };
+		ATTLT002000000000000F002 /* AttachmentLoadingTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */; };
+		APREPT02000000000000F002 /* AttachmentPreparationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = APREPT01000000000000F001 /* AttachmentPreparationServiceTests.swift */; };
 		AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */; };
 		AUPL0001000100010001001 /* AudioPlayerManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AUPL0001000100010001002 /* AudioPlayerManagerTests.swift */; };
 		AURC0001000100010001001 /* AudioRecorderManagerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = AURC0001000100010001002 /* AudioRecorderManagerTests.swift */; };
@@ -648,6 +651,9 @@
 		ANYCD00000000001001 /* AnyCodable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyCodable.swift; sourceTree = "<group>"; };
 		ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDownloaderTests.swift; sourceTree = "<group>"; };
 		ATUP00100000000001F00 /* AttachmentUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentUploader.swift; sourceTree = "<group>"; };
+		APREPS01000000000000F001 /* AttachmentPreparationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentPreparationService.swift; sourceTree = "<group>"; };
+		ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentLoadingTile.swift; sourceTree = "<group>"; };
+		APREPT01000000000000F001 /* AttachmentPreparationServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AttachmentPreparationServiceTests.swift; sourceTree = "<group>"; };
 		ATUT00100000000001F00 /* AttachmentUploaderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AttachmentUploaderTests.swift; sourceTree = "<group>"; };
 		AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioFullscreenView.swift; sourceTree = "<group>"; };
 		AUPL0001000100010001002 /* AudioPlayerManagerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlayerManagerTests.swift; sourceTree = "<group>"; };
@@ -1071,6 +1077,7 @@
 				AA1000000000001FA1 /* UploadProgressBar.swift */,
 				AA2000000000001FA2 /* LocationPickerView.swift */,
 				AA5000000000001FA5 /* VideoPreviewView.swift */,
+				ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */,
 				67D6DD3DD18D11CD174DF95C /* MessageComposer.swift */,
 				CC11DD22EE33FF44AA550099 /* StatusBubbleOverlay.swift */,
 				CC11DD22EE33FF44AA5500AC /* ComposerModels.swift */,
@@ -1358,6 +1365,7 @@
 				AABB00110023EE01 /* PresenceService.swift */,
 				SBC0000000000001SBC /* StatusBubbleController.swift */,
 				AA3000000000001FA3 /* MediaCompressor.swift */,
+				APREPS01000000000000F001 /* AttachmentPreparationService.swift */,
 				OAA0000000000001F01 /* OptimisticAttachmentAdopter.swift */,
 				AA6000000000001FA6 /* AttachmentSendService.swift */,
 				PQ7000000000001FPQ /* PendingStatusQueue.swift */,
@@ -1907,6 +1915,7 @@
 				WTTT000000001F01 /* WebRTCTypesTests.swift */,
 				CDPF000000001F01 /* CodecPreferencesTests.swift */,
 				ATUT00100000000001F00 /* AttachmentUploaderTests.swift */,
+				APREPT01000000000000F001 /* AttachmentPreparationServiceTests.swift */,
 				4955C8F3EA2744580E65FF10 /* ConversationCreatorTests.swift */,
 			);
 			path = Services;
@@ -2206,6 +2215,8 @@
 				AA1000000000002FA1 /* UploadProgressBar.swift in Sources */,
 				AA2000000000002FA2 /* LocationPickerView.swift in Sources */,
 				AA3000000000002FA3 /* MediaCompressor.swift in Sources */,
+				APREPS02000000000000F002 /* AttachmentPreparationService.swift in Sources */,
+				ATTLT002000000000000F002 /* AttachmentLoadingTile.swift in Sources */,
 				OAA0000000000002F01 /* OptimisticAttachmentAdopter.swift in Sources */,
 				AA5000000000002FA5 /* VideoPreviewView.swift in Sources */,
 				AA6000000000002FA6 /* AttachmentSendService.swift in Sources */,
@@ -2563,6 +2574,7 @@
 				BBLH0001000100010001BLD /* BubbleBlurRevealLifecycleTests.swift in Sources */,
 				320813BE4021B286D9F68C98 /* ConversationOptionsViewModelTests.swift in Sources */,
 				ATUT00200000000001F00 /* AttachmentUploaderTests.swift in Sources */,
+				APREPT02000000000000F002 /* AttachmentPreparationServiceTests.swift in Sources */,
 				MATU00200000000001F00 /* MockAttachmentUploader.swift in Sources */,
 				MEPD00200000000001F00 /* MockEditProfileDoubles.swift in Sources */,
 				EPVT00200000000001F00 /* EditProfileViewModelTests.swift in Sources */,

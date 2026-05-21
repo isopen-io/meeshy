@@ -120,6 +120,7 @@ struct ForwardPickerSheet: View {
                     .font(.system(size: 10, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
+            .accessibilityLabel("Fermer")
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 8)
@@ -190,10 +191,12 @@ struct ForwardPickerSheet: View {
             Image(systemName: "checkmark.circle.fill")
                 .font(.system(size: 24))
                 .foregroundColor(.green)
+                .accessibilityLabel("Transféré")
         } else if sendingToId == conv.id {
             ProgressView()
                 .scaleEffect(0.8)
                 .frame(width: 24, height: 24)
+                .accessibilityLabel("Envoi en cours")
         } else {
             Button {
                 forwardTo(conv)
@@ -202,6 +205,7 @@ struct ForwardPickerSheet: View {
                     .font(.system(size: 24))
                     .foregroundColor(Color(hex: accentColor))
             }
+            .accessibilityLabel("Transférer à \(conv.title ?? "cette conversation")")
             .disabled(sendingToId != nil)
         }
     }

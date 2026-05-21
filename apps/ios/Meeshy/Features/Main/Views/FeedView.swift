@@ -48,6 +48,12 @@ struct FeedView: View {
     @State var pendingMediaFiles: [String: URL] = [:]
     @State var pendingThumbnails: [String: UIImage] = [:]
     @State var pendingAudioURL: URL?
+
+    /// In-flight preparations rendered as loading tiles in the attachments
+    /// row. Each entry is promoted to `pendingAttachments` once it reaches
+    /// `.ready`. Source-of-truth pipeline:
+    /// `AttachmentPreparationService` (apps/ios/.../Services).
+    @State var preparingAttachments: [PreparingAttachment] = []
     @State var showPhotoPicker = false
     @State var selectedPhotoItems: [PhotosPickerItem] = []
     @State var showCamera = false
@@ -740,7 +746,7 @@ struct FeedView: View {
                 }
 
                 // Pending attachments preview
-                if !pendingAttachments.isEmpty || isLoadingMedia {
+                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia {
                     feedPendingAttachmentsRow
                 }
 

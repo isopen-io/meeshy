@@ -103,6 +103,13 @@ struct ConversationComposerState {
     var pendingMediaFiles: [String: URL] = [:]
     var pendingThumbnails: [String: UIImage] = [:]
     var isLoadingMedia = false
+
+    /// In-flight attachment preparations (decompression → compression →
+    /// thumbnailing → ThumbHash). Each entry renders an `AttachmentLoadingTile`
+    /// in the composer tray until it transitions to `.ready`, at which point
+    /// the result is moved into `pendingAttachments`/`pendingMediaFiles`/
+    /// `pendingThumbnails` and the handle is dropped from this array.
+    var preparingAttachments: [PreparingAttachment] = []
     
     // Pickers
     var showPhotoPicker = false

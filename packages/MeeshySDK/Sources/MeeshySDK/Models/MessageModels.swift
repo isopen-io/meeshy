@@ -475,10 +475,16 @@ extension APIMessage {
                 let isReplyMe = reply.senderId == currentUserId
                 let authorName = reply.sender?.name ?? "?"
                 let firstAtt = reply.attachments?.first
+                // Single source of truth for mime → category: AttachmentKind
+                // (see `AttachmentKind.swift`). Pre-fix this stored the raw
+                // MIME (`"image/jpeg"`) which broke the reply-preview icon
+                // resolution — consumers expect a short kind (`"image"`,
+                // `"video"`, ...) matching `AttachmentKind.rawValue`.
+                let kindRaw = firstAtt?.mimeType.map { AttachmentKind(mimeType: $0).rawValue }
                 return ReplyReference(
                     messageId: reply.id, authorName: authorName,
                     previewText: reply.content ?? "", isMe: isReplyMe,
-                    attachmentType: firstAtt?.mimeType,
+                    attachmentType: kindRaw,
                     attachmentThumbnailUrl: firstAtt?.thumbnailUrl
                 )
             }
@@ -509,6 +515,9 @@ extension APIMessage {
             guard let fwd = forwardedFrom else { return nil }
             let fwdSenderName = fwd.sender?.name ?? "?"
             let firstAtt = fwd.attachments?.first
+            // Same mime → short kind contract as `uiReplyTo` above —
+            // single source of truth is `AttachmentKind`.
+            let fwdKindRaw = firstAtt?.mimeType.map { AttachmentKind(mimeType: $0).rawValue }
             return ForwardReference(
                 originalMessageId: fwd.id,
                 senderName: fwdSenderName,
@@ -516,7 +525,7 @@ extension APIMessage {
                 previewText: fwd.content ?? "",
                 conversationId: forwardedFromConversation?.id,
                 conversationName: forwardedFromConversation?.title,
-                attachmentType: firstAtt?.mimeType,
+                attachmentType: fwdKindRaw,
                 attachmentThumbnailUrl: firstAtt?.thumbnailUrl
             )
         }()
