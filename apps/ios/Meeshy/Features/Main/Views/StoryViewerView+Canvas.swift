@@ -336,19 +336,33 @@ struct StoryCardView: View {
                         RevealCircleShape(progress: isRevealActive ? 1.0 : (currentStory?.storyEffects?.opening == .reveal ? 0.001 : 1.0))
                     )
 
-                // Overlay loader granulaire — ThumbHash bg flouté + spinner + %.
-                // Monté uniquement quand `showProgressOverlay` est armé après le
-                // délai de grâce 200ms ET que la slide n'est pas encore prête :
-                // évite le flash de l'overlay sur les slides déjà cachées qui
-                // rendent instantanément.
-                if showProgressOverlay {
+                // Overlay loader granulaire — ThumbHash bg flouté + (spinner+%).
+                // Le backdrop ThumbHash est monté DÈS qu'une slide est active
+                // pour servir de placeholder instantané (Cache-First : pas de
+                // gradient/canvas vide pendant que le média télécharge). Le
+                // spinner + le pourcentage, eux, restent gated par le délai
+                // de grâce 200ms via `showProgressOverlay` afin de ne pas
+                // flasher sur un cache hit immédiat. L'overlay entier fade
+                // out quand la slide a chargé à 95 % — au-dessus, le canvas
+                // média est révélé.
+                if slideContentProgress < 0.95 {
                     StoryReaderLoadingOverlay(
                         slide: story.toRenderableSlide(preferredLanguages: resolvedViewerLanguageChain),
                         progress: slideContentProgress,
-                        threshold: 0.20
+                        threshold: 0.95,
+                        showSpinner: showProgressOverlay
                     )
                     .id("loader-\(story.id)")
-                    .ignoresSafeArea()
+                    // Hard-frame the overlay to the canvas dimensions and clip
+                    // it: the loader hosts a thumbhash Image + .blur() whose
+                    // intrinsic/halo size could otherwise inflate the parent
+                    // ZStack and push the sidebar/composer beyond the viewport.
+                    // Note: pas de `.ignoresSafeArea()` ici — le parent
+                    // `StoryViewerView` l'applique déjà au scope racine, en
+                    // rajouter localement après `.frame()` ré-étend l'overlay
+                    // horizontalement (~89pt) et casse à nouveau la sidebar.
+                    .frame(width: geometry.size.width, height: geometry.size.height)
+                    .clipped()
                     .allowsHitTesting(false)
                     .transition(.opacity)
                 }

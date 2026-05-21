@@ -691,6 +691,12 @@ public final class StoryCanvasUIView: UIView {
         readerContext = context
         isAudioMuted = context.mute
         audioMixer.setMute(context.mute)
+        // Propagation immédiate aux video media layers : `rebuildLayers()` qui
+        // suit peut recréer des layers, mais celles qui survivent (cache LRU
+        // live) doivent voir leur AVPlayer.isMuted basculer maintenant. Les
+        // nouvelles layers consommeront `isMuted` via leur propre
+        // `attachPlayer()` au moment du re-stamping.
+        forEachMediaLayer { $0.isMuted = context.mute }
         rebuildLayers()
         // The context carries `postMediaURLResolver` / `preferredLanguages`,
         // both inputs to audio URL resolution. A context swap (e.g. `.empty`
@@ -1035,6 +1041,13 @@ public final class StoryCanvasUIView: UIView {
         for sub in rendered.sublayers ?? [] {
             itemsContainer.addSublayer(sub)
         }
+
+        // Re-stamp l'état mute global sur les media layers fraîchement
+        // (re-)attachées. `StoryRenderer.renderItem` n'a pas accès à
+        // `isAudioMuted` au moment de créer le layer ; sans cette passe, une
+        // vidéo attachée après que l'utilisateur a tapé Mute en sidebar
+        // jouerait son audio jusqu'au prochain toggle.
+        forEachMediaLayer { $0.isMuted = isAudioMuted }
 
         // Prune le cache des layers dont l'id n'est plus présent dans la
         // slide (élément supprimé) — libère les AVPlayer associés.
@@ -1551,11 +1564,13 @@ public final class StoryCanvasUIView: UIView {
     @objc private func handleComposerMute() {
         isAudioMuted = true
         audioMixer.setMute(true)
+        forEachMediaLayer { $0.isMuted = true }
     }
 
     @objc private func handleComposerUnmute() {
         isAudioMuted = false
         audioMixer.setMute(false)
+        forEachMediaLayer { $0.isMuted = false }
     }
 
     @objc private func handleWillResignActive() {
@@ -1592,6 +1607,20 @@ public final class StoryCanvasUIView: UIView {
         for sub in itemsContainer.sublayers ?? [] {
             if let media = sub as? StoryMediaLayer, let player = media.avPlayer {
                 block(player)
+            }
+        }
+    }
+
+    /// Itère sur toutes les `StoryMediaLayer` du canvas (vidéos + images de
+    /// fond), même celles dont l'`AVPlayer` n'est pas encore attaché. Utile
+    /// pour propager un toggle de mute global : on stocke l'état sur la
+    /// layer, qui le stampera sur le player dès `attachPlayer()` — ferme la
+    /// fenêtre de course où un player fraîchement créé jouait audible le
+    /// temps d'un cycle de display-link.
+    private func forEachMediaLayer(_ block: (StoryMediaLayer) -> Void) {
+        for sub in itemsContainer.sublayers ?? [] {
+            if let media = sub as? StoryMediaLayer {
+                block(media)
             }
         }
     }

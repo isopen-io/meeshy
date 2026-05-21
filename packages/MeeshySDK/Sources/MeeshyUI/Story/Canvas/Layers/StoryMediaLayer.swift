@@ -46,6 +46,21 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
     public private(set) nonisolated(unsafe) weak var avPlayer: AVPlayer?
     public private(set) nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
 
+    /// Reflète l'état de mute global du reader (bouton sidebar / contexte). Le
+    /// canvas synchronise cette propriété sur chaque media layer dès qu'un
+    /// `handleComposerMute()` / `handleComposerUnmute()` ou un changement de
+    /// `StoryReaderContext.mute` est reçu, et `attachPlayer` la consomme pour
+    /// stamper `AVPlayer.isMuted` sur un player fraîchement créé. C'est la
+    /// brèche qui faisait que la sidebar mute coupait le mixer audio
+    /// (foreground chips + voice) mais pas l'audio de la vidéo de fond.
+    @MainActor
+    public var isMuted: Bool = false {
+        didSet {
+            guard oldValue != isMuted else { return }
+            avPlayer?.isMuted = isMuted
+        }
+    }
+
     private nonisolated(unsafe) var loopObserver: NSObjectProtocol?
 
     /// Image loader used by `configureImage`. Defaults to a shim that calls
@@ -358,6 +373,13 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         }
 
         guard let player = avPlayerLayer?.player else { return }
+
+        // Stampe l'état mute courant : si l'utilisateur a déjà tapé Mute dans
+        // la sidebar AVANT que la layer attache son `AVPlayer` (cas du switch
+        // de slide pendant que le mute est actif), le nouveau player doit
+        // démarrer silencieux. Sans ça, on entend ~200ms d'audio vidéo entre
+        // l'attach et le prochain `forEachMediaLayer { $0.isMuted = ... }`.
+        player.isMuted = isMuted
 
         switch mode {
         case .play:
