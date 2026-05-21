@@ -455,9 +455,23 @@ struct BubbleStandardLayout: View {
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(alignment: .bottomTrailing) {
                             if !content.hasTextOrNonMediaContent {
+                                // Sur une bulle 100% media, le footer est posé en
+                                // overlay sur la grille. La grille porte un
+                                // `.onTapGesture` (ouverture plein écran) — sans
+                                // hit-area dédiée au check, le tap glisse dessous
+                                // et la sheet "Vues" devient inaccessible. On
+                                // injecte donc le callback `onShowReadStatus` :
+                                // `BubbleFooter.deliveryView` enveloppe alors la
+                                // coche dans un `Button(.plain)` 22pt, qui prend
+                                // la priorité au hit-test car l'overlay est
+                                // au-dessus du gesture parent.
+                                let (model, fullActions) = resolvedFooter(includesTranslationControls: false)
                                 BubbleFooter(
-                                    model: resolvedFooter().0,
-                                    actions: .none,
+                                    model: model,
+                                    actions: BubbleFooterActions(
+                                        onRetry: fullActions.onRetry,
+                                        onShowReadStatus: fullActions.onShowReadStatus
+                                    ),
                                     style: .overlay,
                                     isDark: isDark
                                 )

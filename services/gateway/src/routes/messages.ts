@@ -297,13 +297,28 @@ export default async function messageRoutes(fastify: FastifyInstance) {
         // Ne pas faire échouer l'édition si la retraduction échoue
       }
 
+      // Transformer `translations` (Object stocké en MongoDB) en Array conforme
+      // au contrat API consommé par iOS (`[APITextTranslation]`) et web. Sans
+      // cette transformation, le client reçoit `translations: { "fr": {...} }`
+      // au lieu d'un tableau et échoue au décodage ("Type mismatch for type
+      // Array<Any> at path data.translations"). La retraduction qui précède a
+      // déjà invalidé `translations` en base, donc le payload renvoyé reflète
+      // cet état : `[]`.
+      const transformedMessage = {
+        ...updatedMessage,
+        translations: transformTranslationsToArray(
+          messageId,
+          (updatedMessage as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+        )
+      };
+
       // Diffuser la mise à jour via Socket.IO
       try {
         const socketIOManager = socketIOHandler.getManager();
         if (socketIOManager) {
           const room = ROOMS.conversation(message.conversationId);
           (socketIOManager as any).io.to(room).emit(SERVER_EVENTS.MESSAGE_EDITED, {
-            ...updatedMessage,
+            ...transformedMessage,
             conversationId: message.conversationId
           });
         }
@@ -315,7 +330,7 @@ export default async function messageRoutes(fastify: FastifyInstance) {
       return reply.send({
         success: true,
         data: {
-          ...updatedMessage,
+          ...transformedMessage,
           message: 'Message modifié avec succès'
         }
       });
