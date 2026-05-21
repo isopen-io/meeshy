@@ -204,17 +204,35 @@ public final class ReaderAudioMixer {
         guard var entry = entries[audioId] else { return }
         entry.targetVolume = clamped
         entries[audioId] = entry
-        if !isMuted { entry.node.volume = clamped }
+        entry.node.volume = effectiveVolume(for: entry)
     }
 
     public func setMute(_ muted: Bool) {
         isMuted = muted
         for entry in entries.values {
-            entry.node.volume = muted ? 0 : entry.targetVolume
+            entry.node.volume = effectiveVolume(for: entry)
         }
         if let bg = backgroundEntry {
             bg.player.volume = muted ? 0 : bg.targetVolume
         }
+    }
+
+    /// Mute / unmute a single foreground clip without touching the global
+    /// `isMuted` flag (used by the per-chip tap action in the reader). The
+    /// background slot is not exposed here — the bg has no dedicated chip.
+    public func setMute(_ muted: Bool, for audioId: String) {
+        guard var entry = entries[audioId] else { return }
+        entry.isUserMuted = muted
+        entries[audioId] = entry
+        entry.node.volume = effectiveVolume(for: entry)
+    }
+
+    public func isMuted(audioId: String) -> Bool {
+        entries[audioId]?.isUserMuted ?? false
+    }
+
+    private func effectiveVolume(for entry: Entry) -> Float {
+        (isMuted || entry.isUserMuted) ? 0 : entry.targetVolume
     }
 
     // MARK: - Lifecycle
@@ -326,7 +344,7 @@ public final class ReaderAudioMixer {
 
     private func runVolumeRamp(entry: Entry, from start: Float, to end: Float, duration: TimeInterval) {
         guard duration > 0 else {
-            entry.node.volume = isMuted ? 0 : end
+            entry.node.volume = (isMuted || entry.isUserMuted) ? 0 : end
             return
         }
         // Async ramp instead of Timer because Swift 6 won't let us capture
@@ -344,10 +362,10 @@ public final class ReaderAudioMixer {
                 guard let live = self.entries[audioId] else { return }
                 let progress = Float(i) / Float(steps)
                 let v = start + (end - start) * progress
-                live.node.volume = self.isMuted ? 0 : v
+                live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : v
             }
             if let live = self.entries[audioId] {
-                live.node.volume = self.isMuted ? 0 : end
+                live.node.volume = (self.isMuted || live.isUserMuted) ? 0 : end
             }
         }
         if var stored = entries[entry.audioId] {
@@ -407,6 +425,9 @@ public final class ReaderAudioMixer {
         let loop: Bool
         var fadeTimers: [Timer] = []
         var fadeTasks: [Task<Void, Never>] = []
+        /// Mute per-piste déclenché par le tap utilisateur sur le chip du
+        /// reader. Indépendant du mute global (`ReaderAudioMixer.isMuted`).
+        var isUserMuted: Bool = false
     }
 
     /// Internal helper for the single background audio slot.

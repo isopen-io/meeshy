@@ -87,6 +87,10 @@ public final class StoryCanvasUIView: UIView {
             // `.play` mode. `reconfigureAudioForPlayback()` guards on the
             // revision token, so this fires at most once per slide change.
             if mode == .play {
+                // Reset le mute per-piste — la nouvelle slide a ses propres
+                // ids d'audio et démarre nécessairement « son audible ».
+                StoryReaderAudioMuteRegistry.shared.clear()
+                lastAppliedMutedSet.removeAll()
                 reconfigureAudioForPlayback()
                 startAudioPlayback()
             }
@@ -292,6 +296,13 @@ public final class StoryCanvasUIView: UIView {
     /// a MainActor hop — `AnyCancellable.cancel()` is idempotent and the
     /// property is only assigned once, from a MainActor init path.
     private nonisolated(unsafe) var audioSessionEventsCancellable: AnyCancellable?
+
+    /// Souscription au `$muted` du `StoryReaderAudioMuteRegistry` partagé. Le
+    /// chip foreground du reader pousse sur la registry ; on diff l'ensemble
+    /// publié contre `lastAppliedMutedSet` pour n'appeler `setMute(_:for:)`
+    /// que pour les pistes qui ont effectivement changé d'état.
+    private nonisolated(unsafe) var muteRegistryCancellable: AnyCancellable?
+    private var lastAppliedMutedSet: Set<String> = []
 
     /// KVO tokens watching foreground video readiness so `onContentReady`
     /// does not fire while a foreground clip is still a black rectangle (T6).
@@ -1506,6 +1517,24 @@ public final class StoryCanvasUIView: UIView {
                        selector: #selector(handleComposerUnmute),
                        name: .storyComposerUnmuteCanvas,
                        object: nil)
+        muteRegistryCancellable = StoryReaderAudioMuteRegistry.shared.$muted
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] muted in
+                self?.applyPerTrackMute(muted)
+            }
+    }
+
+    /// Diff la nouvelle valeur du registry contre celle déjà appliquée et
+    /// invoque `setMute(_:for:)` uniquement pour les ids qui ont basculé.
+    /// Gating sur `.play` : en `.edit` la registry n'a pas de sens (le
+    /// composer mute via son propre slider de volume).
+    private func applyPerTrackMute(_ next: Set<String>) {
+        guard mode == .play else { return }
+        let toMute = next.subtracting(lastAppliedMutedSet)
+        let toUnmute = lastAppliedMutedSet.subtracting(next)
+        for id in toMute { audioMixer.setMute(true, for: id) }
+        for id in toUnmute { audioMixer.setMute(false, for: id) }
+        lastAppliedMutedSet = next
     }
 
     @objc private func handleComposerMute() {

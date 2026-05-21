@@ -1,6 +1,43 @@
 import SwiftUI
 import MeeshySDK
 
+/// Registry partagée du mute per-piste pour les chips audio du reader.
+///
+/// Source de vérité unique pour l'icône du chip (`waveform` vs
+/// `waveform.slash`) ET pour la commande envoyée à `ReaderAudioMixer`.
+/// `StoryCanvasUIView` souscrit au `$muted` Publisher en mode `.play` et
+/// applique chaque changement via `setMute(_:for:)` sur le mixer.
+///
+/// Le scope est volontairement global : un seul reader est actif à la fois
+/// (la PlaybackCoordinator garantit l'exclusivité). À chaque changement de
+/// slide / story, appeler `clear()` pour repartir d'un état neutre.
+@MainActor
+public final class StoryReaderAudioMuteRegistry: ObservableObject {
+
+    public static let shared = StoryReaderAudioMuteRegistry()
+
+    @Published public private(set) var muted: Set<String> = []
+
+    public init() {}
+
+    public func isMuted(_ audioId: String) -> Bool { muted.contains(audioId) }
+
+    @discardableResult
+    public func toggle(_ audioId: String) -> Bool {
+        if muted.contains(audioId) {
+            muted.remove(audioId)
+            return false
+        }
+        muted.insert(audioId)
+        return true
+    }
+
+    public func clear() {
+        guard !muted.isEmpty else { return }
+        muted.removeAll()
+    }
+}
+
 /// Chip glass affichant un audio foreground sur le canvas.
 ///
 /// Capsule `.ultraThinMaterial` + icône audio + onde sinusoïdale animée.
@@ -29,6 +66,9 @@ public struct AudioForegroundChip: View {
 
     @GestureState private var dragOffset: CGSize = .zero
     @Environment(\.colorScheme) private var colorScheme
+    /// Observée uniquement en mode reader — pilote l'icône `waveform.slash`
+    /// quand l'utilisateur a coupé cette piste depuis le chip.
+    @ObservedObject private var muteRegistry = StoryReaderAudioMuteRegistry.shared
 
     public init(audioObject: Binding<StoryAudioPlayerObject>,
                 canvasSize: CGSize,
@@ -71,12 +111,13 @@ public struct AudioForegroundChip: View {
 
     private var chipContent: some View {
         HStack(spacing: 8) {
-            Image(systemName: "waveform")
+            Image(systemName: iconName)
                 .font(.system(size: 14, weight: .bold))
-                .foregroundStyle(MeeshyColors.brandGradient)
+                .foregroundStyle(iconStyle)
                 .frame(width: 18, height: 18)
-            AudioForegroundSineWave()
+            AudioForegroundSineWave(paused: isUserMuted)
                 .frame(width: 54, height: 18)
+                .opacity(isUserMuted ? 0.35 : 1.0)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -86,6 +127,22 @@ public struct AudioForegroundChip: View {
                 .stroke(strokeColor, lineWidth: isSelected ? 2 : 1)
         )
         .contentShape(Capsule())
+    }
+
+    /// `isUserMuted` ne s'applique qu'au mode reader (la registry n'a pas de
+    /// sens pour les audios en cours d'édition côté composer).
+    private var isUserMuted: Bool {
+        mode == .reader && muteRegistry.isMuted(audioObject.id)
+    }
+
+    private var iconName: String {
+        isUserMuted ? "waveform.slash" : "waveform"
+    }
+
+    private var iconStyle: AnyShapeStyle {
+        isUserMuted
+            ? AnyShapeStyle(Color.white.opacity(0.55))
+            : AnyShapeStyle(MeeshyColors.brandGradient)
     }
 
     private var strokeColor: Color {
@@ -112,8 +169,12 @@ public struct AudioForegroundChip: View {
 /// chaque frame (sinon toutes les vues observant le ViewModel scintillent).
 @MainActor
 struct AudioForegroundSineWave: View {
+    let paused: Bool
+
+    init(paused: Bool = false) { self.paused = paused }
+
     var body: some View {
-        TimelineView(.animation) { context in
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: paused)) { context in
             Canvas { ctx, size in
                 let t = context.date.timeIntervalSinceReferenceDate
                 let midY = size.height / 2
@@ -152,12 +213,15 @@ public struct AudioForegroundReaderOverlay: View {
     public let foregroundAudios: [StoryAudioPlayerObject]
     public let elapsedTime: TimeInterval
     public let slideDuration: TimeInterval
-    public let onTap: (StoryAudioPlayerObject) -> Void
+    /// Hook optionnel pour le caller (haptic supplémentaire, logging, …).
+    /// L'overlay gère lui-même le toggle dans `StoryReaderAudioMuteRegistry`
+    /// — `StoryCanvasUIView` souscrit à la registry et applique au mixer.
+    public let onTap: ((StoryAudioPlayerObject) -> Void)?
 
     public init(foregroundAudios: [StoryAudioPlayerObject],
                 elapsedTime: TimeInterval,
                 slideDuration: TimeInterval,
-                onTap: @escaping (StoryAudioPlayerObject) -> Void) {
+                onTap: ((StoryAudioPlayerObject) -> Void)? = nil) {
         self.foregroundAudios = foregroundAudios
         self.elapsedTime = elapsedTime
         self.slideDuration = slideDuration
@@ -172,7 +236,11 @@ public struct AudioForegroundReaderOverlay: View {
                     canvasSize: geo.size,
                     mode: .reader,
                     isSelected: false,
-                    onTap: { onTap(audio) }
+                    onTap: {
+                        HapticFeedback.light()
+                        StoryReaderAudioMuteRegistry.shared.toggle(audio.id)
+                        onTap?(audio)
+                    }
                 )
             }
         }

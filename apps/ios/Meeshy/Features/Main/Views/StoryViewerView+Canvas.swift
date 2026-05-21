@@ -453,21 +453,15 @@ struct StoryCardView: View {
             // Au-dessus du gesture overlay : le tap d'un chip est consommé
             // avant d'atteindre la nav gauche/droite des slides. Masqué hors
             // de la fenêtre `startTime..startTime+duration` de chaque audio.
+            // Le tap toggle le mute *per-piste* via la registry partagée
+            // (`StoryReaderAudioMuteRegistry`) — la canvas applique au mixer.
             if let story = currentStory,
                let audios = story.storyEffects?.audioPlayerObjects,
                !audios.isEmpty {
                 AudioForegroundReaderOverlay(
                     foregroundAudios: audios,
                     elapsedTime: TimeInterval(progress) * currentSlideDuration,
-                    slideDuration: currentSlideDuration,
-                    onTap: { _ in
-                        HapticFeedback.light()
-                        isGlobalMutedBinding.toggle()
-                        NotificationCenter.default.post(
-                            name: isGlobalMutedBinding ? .storyComposerMuteCanvas : .storyComposerUnmuteCanvas,
-                            object: nil
-                        )
-                    }
+                    slideDuration: currentSlideDuration
                 )
                 .allowsHitTesting(!isComposerEngaged)
             }
