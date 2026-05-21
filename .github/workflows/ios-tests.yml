@@ -27,13 +27,23 @@ jobs:
       - name: Select Xcode 26.0.1 (Swift 6.2)
         run: sudo xcode-select -s /Applications/Xcode_26.0.1.app/Contents/Developer
 
+      # `-quiet` was hiding the failing test name on PR #280; keep it off for
+      # one diagnostic cycle, then re-quiet once the offender is identified.
       - name: Run SDK tests
         run: |
           xcodebuild test \
             -scheme MeeshySDK-Package \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro' \
-            -quiet
+            -resultBundlePath /tmp/MeeshySDK.xcresult
         working-directory: packages/MeeshySDK
+
+      - name: Upload xcresult bundle on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-tests-xcresult
+          path: /tmp/MeeshySDK.xcresult
+          retention-days: 7
 
   ios-tests:
     runs-on: macos-15
