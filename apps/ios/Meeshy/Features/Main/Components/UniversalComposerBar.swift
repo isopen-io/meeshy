@@ -552,15 +552,45 @@ struct UniversalComposerBar: View {
             }
             onFocusChange?(focused)
         }
-        .adaptiveOnChange(of: textAnalyzer.isLanguageLocked) { _, locked in
-            guard locked, let detected = textAnalyzer.language else { return }
-            currentLanguage = detected.code
-            onLanguageChange?(detected.code)
+        // Détection de langue en temps réel (Prisme Linguistique).
+        //
+        // `TextAnalyzer.performAnalysis` mute `language` ET `languageConfidence`
+        // dans le **même** `DispatchQueue.main.async` — observer la confiance
+        // seule suffit (elle change toujours en même temps que la langue).
+        // Évite un double-fire de `applyDetectedLanguage` par cycle de
+        // détection.
+        //
+        // Adoption au seuil 86 % (`ComposerLanguageResolver.confidenceFloor`).
+        // Tant qu'aucune langue n'a atteint 86 %, le pill et la langue
+        // envoyée restent sur le défaut « fr ». À 10 mots, le détecteur se
+        // verrouille — la dernière langue à ≥ 86 % (ou « fr » si rien) est
+        // définitive pour ce message.
+        //
+        // Override manuel (menu) : prioritaire, propagé immédiatement
+        // (force=true) quelle que soit la confiance.
+        .adaptiveOnChange(of: textAnalyzer.languageConfidence) { _, _ in
+            applyDetectedLanguage()
+        }
+        .adaptiveOnChange(of: textAnalyzer.languageOverride?.code) { _, _ in
+            applyDetectedLanguage(force: true)
         }
         .adaptiveOnChange(of: text) { _, newValue in
             onAnyInteraction?()
             notifyContentChange()
             textAnalyzer.analyze(text: newValue)
+            // Texte vidé : on retombe sur le défaut (« fr ») pour que la
+            // prochaine frappe parte d'un état propre. **Sauf** si la
+            // langue a été choisie à la main (override) — dans ce cas on
+            // respecte le choix utilisateur même quand le champ se vide,
+            // sinon le pill afficherait EN (override) mais on enverrait FR.
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               textAnalyzer.languageOverride == nil {
+                let defaultLanguage = DefaultComposerLanguage.resolve()
+                if currentLanguage != defaultLanguage {
+                    currentLanguage = defaultLanguage
+                    onLanguageChange?(defaultLanguage)
+                }
+            }
             onTextChange?(newValue)
             // Sync to external binding
             if let binding = textBinding, binding.wrappedValue != newValue {
@@ -848,6 +878,31 @@ struct UniversalComposerBar: View {
     /// Notify parent that composer has content requiring timer pause (text, attachments, or recording).
     func notifyContentChange() {
         onHasContentChange?(hasText || !attachments.isEmpty || effectiveIsRecording)
+    }
+
+    // ========================================================================
+    // MARK: - Language detection
+    // ========================================================================
+
+    /// Propagate the detected language (or an explicit user override) to
+    /// `currentLanguage` and notify the parent. Called in real-time as
+    /// `TextAnalyzer.language` updates — restores the « detection visible
+    /// before the 18-word lock » behaviour that was previously gated on
+    /// `isLanguageLocked` alone.
+    ///
+    /// - Parameter force: skip the confidence floor (used when the analyzer
+    ///   transitions to locked or the user picks a language explicitly).
+    func applyDetectedLanguage(force: Bool = false) {
+        let resolution = ComposerLanguageResolver.resolve(
+            current: currentLanguage,
+            override: textAnalyzer.languageOverride?.code,
+            detected: textAnalyzer.language?.code,
+            confidence: textAnalyzer.languageConfidence,
+            force: force
+        )
+        guard let next = resolution else { return }
+        currentLanguage = next
+        onLanguageChange?(next)
     }
 
     // ========================================================================

@@ -100,6 +100,14 @@ struct StoryViewerView: View {
     /// and the centered loading spinner.
     @State var isContentReady: Bool = false // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
+    /// Spécifique au toggle long-press : `true` UNIQUEMENT entre le hold
+    /// confirmé (200 ms) et le tap suivant de reprise. Distinct de `isPaused`,
+    /// qui couvre **toutes** les pauses du timer (sheets, drag-to-dismiss,
+    /// composer engaged…). Le notification au canvas (`storyPlayerPause` /
+    /// `storyPlayerResume`) n'est postée QUE quand ce drapeau bascule —
+    /// sinon ouvrir une sheet ou drag pour dismiss freezerait la vidéo BG
+    /// et l'audio mixer (blip audible au play/pause rapide).
+    @State var isLongPressPaused = false // internal for cross-file extension access
     @State var isGlobalMuted = false // internal for cross-file extension access
     /// Audio-track presence for the current slide's foreground videos, keyed by
     /// `StoryMediaObject.id`. Populated by `refreshVideoAudioTrackPresence()` —
@@ -370,6 +378,20 @@ struct StoryViewerView: View {
                 Task { await MediaSessionCoordinator.shared.deactivateForBackground() }
                 isPresented = false
             }
+        }
+        // Long-press toggle UNIQUEMENT — pas les autres pauses du timer.
+        //
+        // Sheets, drag-to-dismiss, composer engaged… mutent `isPaused`
+        // (timer-only). Si on postait `.storyPlayerPause` dessus, chaque
+        // ouverture/fermeture de sheet ferait un cycle pause/play sur
+        // l'audio mixer et la vidéo BG — blip audible. Le canvas ne se
+        // freeze comme une vidéo que quand l'utilisateur le demande
+        // explicitement via long-press.
+        .adaptiveOnChange(of: isLongPressPaused) { _, paused in
+            NotificationCenter.default.post(
+                name: paused ? .storyPlayerPause : .storyPlayerResume,
+                object: nil
+            )
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
             isContentReady = false
@@ -830,6 +852,7 @@ struct StoryViewerView: View {
             storyDrafts: $storyDrafts,
             chromeVisible: $chromeVisible,
             isFullscreenStorySession: $isFullscreenStorySession,
+            isLongPressPaused: $isLongPressPaused,
             keyboard: keyboard,
             triggerStoryReaction: { triggerStoryReaction($0) },
             pauseTimer: { pauseTimer() },
