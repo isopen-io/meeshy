@@ -549,7 +549,6 @@ export interface AudioTranslationEventData {
     readonly id: string;
     readonly targetLanguage: string;
     readonly url: string;
-    readonly path?: string;
     readonly transcription: string;
     readonly durationMs: number;
     readonly format: string;

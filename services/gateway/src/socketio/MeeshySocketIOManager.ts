@@ -1024,7 +1024,6 @@ export class MeeshySocketIOManager {
           id: data.translatedAudio.id || `${data.attachmentId}_${data.language}`,
           targetLanguage: data.translatedAudio.targetLanguage || data.language,
           url: data.translatedAudio.url,
-          path: data.translatedAudio.path,
           transcription: data.translatedAudio.translatedText || data.translatedAudio.transcription || '',
           durationMs: data.translatedAudio.durationMs || data.translatedAudio.duration || 0,
           format: data.translatedAudio.format || 'mp3',
