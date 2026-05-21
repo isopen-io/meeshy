@@ -79,29 +79,28 @@ public struct StoryReaderLoadingOverlay: View {
             }
 
             if showSpinner {
-                // Indicateur central — frame explicite 100×100 sur le cercle
-                // pour éviter que `.background(Circle())` inscrive un disque
-                // déformé autour du bounding-box vertical du `VStack` (qui
-                // rendait spinner et % désaxés et collés en bas). Avec un
-                // `ZStack` aligné par défaut, le `VStack` reste centré dans
-                // le cercle, et le spacing 12pt entre le spinner et le %
-                // garantit une vraie respiration visuelle (pas de chevauchement
-                // sur les variants de spinner iOS qui prennent plus de hauteur
-                // en mode large dynamic type).
-                ZStack {
-                    Circle()
-                        .fill(Color.black.opacity(0.35))
-                    VStack(spacing: 12) {
+                // Layout en deux étages :
+                //   1) Cercle frosted (80×80) qui sert d'écrin au spinner ;
+                //      le spinner est scalé (2.0) pour OCCUPER tout l'espace
+                //      du cercle moins une petite marge interne, donnant
+                //      l'illusion que le cercle EST le spinner.
+                //   2) Pourcentage HORS cercle, en dessous, avec 12pt de gap.
+                // Le `VStack` reste centré dans le canvas via le ZStack parent.
+                VStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.black.opacity(0.35))
                         ProgressView()
                             .progressViewStyle(.circular)
                             .tint(.white)
-                            .scaleEffect(1.4)
-                        Text("\(Int((progress.isFinite ? progress : 0) * 100))%")
-                            .font(.caption.monospacedDigit())
-                            .foregroundStyle(.white.opacity(0.85))
+                            .scaleEffect(2.0)
                     }
+                    .frame(width: 80, height: 80)
+
+                    Text("\(Int((progress.isFinite ? progress : 0) * 100))%")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.white.opacity(0.9))
                 }
-                .frame(width: 100, height: 100)
                 .transition(.opacity)
             }
         }
