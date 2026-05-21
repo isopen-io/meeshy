@@ -123,6 +123,7 @@ struct AddParticipantSheet: View {
                         .font(.system(size: 16))
                         .foregroundColor(theme.textMuted)
                 }
+                .accessibilityLabel("Effacer la recherche")
             }
         }
         .padding(.horizontal, 14)

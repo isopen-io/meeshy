@@ -233,16 +233,20 @@ struct ThreadView: View {
 
     private func loadReplies() async {
         isLoading = true
+        let user = AuthManager.shared.currentUser
         do {
-            let response: OffsetPaginatedAPIResponse<[APIMessage]> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/messages",
-                queryItems: [
-                    URLQueryItem(name: "replyToId", value: parentMessage.id),
-                    URLQueryItem(name: "limit", value: "50"),
-                ]
+            replies = try await ThreadRepliesLoader().loadReplies(
+                conversationId: conversationId,
+                parentMessageId: parentMessage.id,
+                currentUserId: user?.id ?? "",
+                currentUsername: user?.username
             )
-            replies = response.data.map { $0.toMessage(currentUserId: AuthManager.shared.currentUser?.id ?? "", currentUsername: AuthManager.shared.currentUser?.username) }
-        } catch {}
+        } catch {
+            // Match prior behaviour: silently swallow on error so the
+            // empty-state UI is shown. ThreadView has no error surface
+            // (no `loadError` like ReplyThreadOverlay) — that's an
+            // existing limitation, not something this refactor changes.
+        }
         isLoading = false
     }
 

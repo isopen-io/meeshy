@@ -3,6 +3,7 @@ import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
+import os
 
 final class MessageListViewController: UIViewController {
 
@@ -49,6 +50,16 @@ final class MessageListViewController: UIViewController {
     /// In the inverted layout, increasing `contentOffset.y` scrolls visually
     /// upward (toward older messages).
     private let slowScrollSpeed: CGFloat = 80
+
+    /// Maps each message's gateway-side `serverId` (MongoDB ObjectId) to
+    /// the client-side `localId` (UUID) that the diffable datasource uses
+    /// as its item identifier. Rebuilt from `store.messages` on every
+    /// `applySnapshot`. Consulted by `resolveLocalId(_:)` so the reply-tap
+    /// path can find a cited message even when the caller hands us a
+    /// server id (which is what `ReplyReference.messageId` carries —
+    /// gateway sends `replyTo.id`, not the local UUID).
+    private var serverIdToLocalId: [String: String] = [:]
+
     var onNewMessagesBadge: ((Int) -> Void)?
     var onScrollToMessage: ((String) -> Void)?
     /// Invoked when the scroll position approaches the older-messages
@@ -493,6 +504,20 @@ final class MessageListViewController: UIViewController {
         let reversedMessages = Array(store.messages.reversed())
         let messageItems = reversedMessages.map { MessageListItem.message(localId: $0.localId) }
 
+        // Rebuild the serverId → localId map every time we apply a new
+        // snapshot. The reply chip in a bubble carries the cited message's
+        // SERVER id (gateway sends `replyTo.id` = MongoDB ObjectId), but the
+        // diffable datasource items are keyed on the LOCAL id (UUID minted
+        // client-side, kept stable across send → ack). Without this map,
+        // `scrollToMessage(localId:)` would never find a reply target that
+        // wasn't sent during this session — typical for any reply.
+        serverIdToLocalId.removeAll(keepingCapacity: true)
+        for record in reversedMessages {
+            if let serverId = record.serverId, !serverId.isEmpty {
+                serverIdToLocalId[serverId] = record.localId
+            }
+        }
+
         // Pour chaque groupe de jour on aligne d'abord les messages dans
         // l'ordre du flux puis on pousse le séparateur juste après — qui se
         // retrouve visuellement AU-DESSUS de ses messages, à la WhatsApp.
@@ -644,12 +669,32 @@ final class MessageListViewController: UIViewController {
     /// `onScrollToMessage` closure so the parent ConversationViewModel can
     /// also load older messages if the target lives outside the current
     /// window.
+    /// Resolves a message id — either a local UUID or a gateway-issued
+    /// server id — to the local UUID used by the diffable datasource. The
+    /// snapshot items are keyed on `localId`; reply chips pass the server
+    /// id; this method bridges the two without forcing every call site
+    /// to remember which kind it has.
+    private func resolveLocalId(_ id: String) -> String {
+        // Most call sites pass a localId already (e.g. the typing → message
+        // glue, the scroll-to-bottom action). Look it up via the
+        // server-side map only when we don't already match an item key —
+        // saves a dict probe on the hot scroll-to-bottom path.
+        serverIdToLocalId[id] ?? id
+    }
+
     func scrollToMessage(localId: String) {
         // Forward to parent first — if the message lives outside the current
         // window, the parent ViewModel will trigger a `loadWindow(around:)`
         // which repopulates the store. The store observer reapplies the
         // snapshot, then this method runs again with the message visible.
+        Logger.messages.debug("scrollToMessage requested target=\(localId, privacy: .public)")
         onScrollToMessage?(localId)
+
+        // Reply chips pass the citation's SERVER id; the snapshot uses
+        // LOCAL ids. Translate before the lookup so any message in the
+        // current window is reachable, regardless of which id flavour the
+        // caller has.
+        let resolvedId = resolveLocalId(localId)
 
         // Items are inserted reversed (newest first) for the inverted
         // collection view. Locate by linear scan over the snapshot — there
@@ -657,9 +702,17 @@ final class MessageListViewController: UIViewController {
         // negligible compared to the layout pass that follows.
         let snapshot = dataSource.snapshot()
         guard let index = snapshot.itemIdentifiers.firstIndex(where: {
-            if case .message(let id) = $0 { return id == localId }
+            if case .message(let id) = $0 { return id == resolvedId }
             return false
-        }) else { return }
+        }) else {
+            // Not in the current snapshot — `onScrollToMessage` was just
+            // asked to load it. When the store observer reapplies the
+            // snapshot, the second pass through `scrollToMessage` (driven
+            // by `scrollState.scrollToMessageId`) will find it. If it
+            // doesn't, the log below will show the gap during diagnostic.
+            Logger.messages.debug("scrollToMessage target=\(localId, privacy: .public) NOT in snapshot — relying on parent jump path")
+            return
+        }
 
         let indexPath = IndexPath(item: index, section: 0)
         collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)
@@ -673,9 +726,13 @@ final class MessageListViewController: UIViewController {
     func scrollToMessageFast(localId: String) {
         stopSlowScroll()
 
+        // Same id-flavour bridge as `scrollToMessage` — see
+        // `resolveLocalId(_:)` for the rationale.
+        let resolvedId = resolveLocalId(localId)
+
         let snapshot = dataSource.snapshot()
         guard let index = snapshot.itemIdentifiers.firstIndex(where: {
-            if case .message(let id) = $0 { return id == localId }
+            if case .message(let id) = $0 { return id == resolvedId }
             return false
         }) else { return }
 
@@ -694,9 +751,12 @@ final class MessageListViewController: UIViewController {
     /// transform, so the returned rect is the upright frame the user sees.
     /// Used to anchor the floating quick-reaction bar to the tapped bubble.
     func cellFrameInWindow(messageId: String) -> CGRect? {
+        // Quick-reaction bar anchors on a tap by id — same server/local
+        // id-flavour bridge as the scroll routines.
+        let resolvedId = resolveLocalId(messageId)
         let snapshot = dataSource.snapshot()
         guard let index = snapshot.itemIdentifiers.firstIndex(where: {
-            if case .message(let id) = $0 { return id == messageId }
+            if case .message(let id) = $0 { return id == resolvedId }
             return false
         }) else { return nil }
         guard let cell = collectionView.cellForItem(at: IndexPath(item: index, section: 0)) else {

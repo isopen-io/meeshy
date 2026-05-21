@@ -111,6 +111,25 @@ class ConversationViewModel: ObservableObject {
     /// the user knows fresher data is on its way without seeing a blocking
     /// spinner (cache-first + stale-while-revalidate discipline).
     @Published var isRevalidating = false
+
+    /// Canonical projection of the 4 message-loading booleans above into
+    /// a single mutually-exclusive `ConversationLoadingPhase`. Views and
+    /// future refactors should prefer reading this over the booleans —
+    /// the boolean state-machine is preserved as the source of truth for
+    /// now (additive migration, M2 follow-up to PR #280), but the
+    /// invariants (`loadingInitial` excludes `loadingOlder`, etc.) are
+    /// expressible only on the enum side. The `hasObservedAnyData` flag
+    /// distinguishes `.idle` (cold-open) from `.loaded` (finished load).
+    var paginationPhase: ConversationLoadingPhase {
+        ConversationLoadingPhase.derive(
+            isLoadingInitial: isLoadingInitial,
+            isLoadingOlder: isLoadingOlder,
+            isLoadingNewer: isLoadingNewer,
+            isRevalidating: isRevalidating,
+            hasObservedAnyData: !messages.isEmpty
+        )
+    }
+
     /// Message ids whose `messageService.edit` round-trip is in flight. The
     /// bubble renders a "Enregistrement…" indicator next to the "Modifie"
     /// badge while the set contains its id so the user never wonders if
