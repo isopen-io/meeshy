@@ -381,6 +381,35 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         // l'attach et le prochain `forEachMediaLayer { $0.isMuted = ... }`.
         player.isMuted = isMuted
 
+        // Volume explicite : l'AVPlayer démarre par défaut à 1.0 mais on le
+        // force ici en defensive — certains paths (live composer, cache LRU)
+        // re-attachent un player existant via `replaceCurrentItem`, et si le
+        // volume avait été baissé à 0 ailleurs, on hérite du silence sans le
+        // savoir. Le modèle `StoryMediaObject` porte un champ `volume` à
+        // 1.0 par défaut ; on le respecte mais on le ré-applique à chaque
+        // attach pour garantir le state determinist.
+        if let mediaVolume = media?.volume {
+            player.volume = mediaVolume
+        } else {
+            player.volume = 1.0
+        }
+
+        // Defensive : s'assurer que l'`AVAudioSession` est en `.playback` avant
+        // de lancer le player. La session est normalement déjà activée par
+        // `StoryMediaCoordinator.activate` (sync, depuis `onAppear`) puis
+        // re-confirmée par `MediaSessionCoordinator.request(.playback)` (async,
+        // depuis `startAudioPlayback`). Mais l'`AVPlayer` peut être attaché
+        // entre les deux — auquel cas il joue sous catégorie `.ambient`, donc
+        // silencieux en simulator silent mode et sur device avec le switch
+        // physique. Forcer la catégorie ici est idempotent et coûte ~0 ms.
+        if mode == .play {
+            let session = AVAudioSession.sharedInstance()
+            if session.category != .playback {
+                try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
+                try? session.setActive(true)
+            }
+        }
+
         switch mode {
         case .play:
             player.play()

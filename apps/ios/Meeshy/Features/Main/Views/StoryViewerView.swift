@@ -296,7 +296,23 @@ struct StoryViewerView: View {
                 currentStoryIndex = min(initialStoryIndex, groups[currentGroupIndex].stories.count - 1)
             }
             StoryMediaCoordinator.shared.activate {
-                isGlobalMuted = true
+                // No-op : ne PAS forcer `isGlobalMuted = true` ici. Cette
+                // closure est invoquée par `PlaybackCoordinator` chaque fois
+                // qu'un autre `StoppablePlayer` claim le canal audio — y
+                // compris l'`audioMixer` interne à la story elle-même
+                // (cf. `StoryCanvasUIView.startAudioPlayback` →
+                // `willStartPlaying(external: audioMixer)` qui sweep tous
+                // les externals sauf lui-même → arrête `StoryMediaCoordinator`
+                // → invoque ce closure). Le résultat était que le viewer
+                // s'ouvrait toujours en muted parce que le canvas lui-même
+                // déclenchait le stop handler dès le premier `startAudioPlayback`.
+                //
+                // L'état `isGlobalMuted` doit rester un choix utilisateur. Si
+                // une vraie interruption externe arrive (appel iOS, autre app
+                // qui prend le canal), `AVAudioSession` s'occupera de
+                // l'interruption au niveau système, et le canvas réagira via
+                // `observeAudioSessionEvents` (interruption began/ended). Pas
+                // besoin de basculer la UI mute pour ça.
             }
             installPrefetchPipelineIfNeeded()
             refreshPrefetchWindowAndTimer()
