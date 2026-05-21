@@ -1174,7 +1174,7 @@ struct ConversationView: View {
                 anonymousHeaderBar
             } else if isTyping {
                 HStack(spacing: 8) {
-                    ThemedBackButton(color: accentColor) { HapticFeedback.light(); router.pop() }
+                    ThemedBackButton(color: accentColor, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
                     Spacer()
                     ThemedAvatarButton(
                         name: conversation?.name ?? "?", color: accentColor, secondaryColor: secondaryColor,
@@ -1246,7 +1246,7 @@ struct ConversationView: View {
     private var expandedHeaderBandBody: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 8) {
-                ThemedBackButton(color: accentColor, compactMode: composerState.showOptions) { HapticFeedback.light(); router.pop() }
+                ThemedBackButton(color: accentColor, compactMode: composerState.showOptions, unreadCount: viewModel.otherConversationsUnread) { HapticFeedback.light(); router.pop() }
                 expandedHeaderMidContent
                 headerAvatarView
             }
