@@ -492,9 +492,38 @@ public struct StoryComposerView: View {
                 url: item.url,
                 context: .story,
                 onComplete: { result in
+                    // 1. Remplace l'URL cached par la version éditée — la
+                    //    vidéo originale en mémoire est implicitement
+                    //    supplantée (le renderer la résout par `elementId`
+                    //    via `loadedVideoURLs`).
                     viewModel.loadedVideoURLs[item.elementId] = result.url
+
+                    // 2. Refresh la vignette pour qu'elle reflète la frame
+                    //    courante du clip édité (utilisée par le composer
+                    //    tray, l'export et le placeholder).
                     let thumbnail = Self.generateVideoThumbnail(url: result.url)
                     if let thumbnail { viewModel.loadedImages[item.elementId] = thumbnail }
+
+                    // 3. Si l'utilisateur a transcrit la piste audio, on
+                    //    propage les sous-titres comme **metadata** de la
+                    //    vidéo cached (cf. spec : « sauvegardé comme une
+                    //    metadata de la vidéo lors de la validation pour
+                    //    remplacer la vidéo originellement chargé »).
+                    //    Le renderer story peut les overlay au rendu sans
+                    //    avoir besoin de re-transcrire.
+                    if !result.captions.isEmpty || result.transcriptionText != nil {
+                        viewModel.loadedVideoCaptions[item.elementId] = StoryVideoCaptionMetadata(
+                            captions: result.captions,
+                            transcriptionText: result.transcriptionText,
+                            languageCode: result.captionLanguageCode
+                        )
+                    } else {
+                        // L'utilisateur a effacé / pas transcrit — purge la
+                        // metadata pour ne pas réutiliser celle d'un
+                        // précédent edit du même element.
+                        viewModel.loadedVideoCaptions.removeValue(forKey: item.elementId)
+                    }
+
                     editingElementVideo = nil
                 },
                 onCancel: { editingElementVideo = nil }
@@ -1149,6 +1178,12 @@ public struct StoryComposerView: View {
                     }
                     if let url = viewModel.loadedVideoURLs[oldId] {
                         viewModel.loadedVideoURLs[newId] = url
+                    }
+                    // Captions duplicate together with the video — sinon le
+                    // clone perdrait ses sous-titres et l'utilisateur devrait
+                    // re-transcrire alors qu'il duplique exprès.
+                    if let captions = viewModel.loadedVideoCaptions[oldId] {
+                        viewModel.loadedVideoCaptions[newId] = captions
                     }
                 }
             },

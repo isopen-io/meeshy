@@ -137,6 +137,10 @@ protocol StoryComposerProviding: AnyObject {
     var loadedImages: [String: UIImage] { get set }
     var loadedVideoURLs: [String: URL] { get set }
     var loadedAudioURLs: [String: URL] { get set }
+    /// Captions de transcription (vidéo) produites par `MeeshyVideoEditorView`
+    /// au confirm. Keyed par `StoryMediaObject.id`. Metadata render-time —
+    /// pas persistée dans le slide model (cf. doc dans l'impl).
+    var loadedVideoCaptions: [String: StoryVideoCaptionMetadata] { get set }
     var mediaAspectRatios: [String: CGFloat] { get set }
     func setAspectRatio(_ ratio: CGFloat, for mediaId: String)
 
@@ -398,6 +402,18 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
     @Published var loadedImages: [String: UIImage] = [:]
     @Published var loadedVideoURLs: [String: URL] = [:]
     @Published var loadedAudioURLs: [String: URL] = [:]
+
+    /// Captions / transcription metadata produced by `MeeshyVideoEditorView`
+    /// when the user transcribes a foreground video then taps « Terminer ».
+    /// Keyed by `StoryMediaObject.id` (same key space as `loadedVideoURLs`).
+    ///
+    /// **Why a sibling map and not a field on `StoryMediaObject`** — captions
+    /// are *render-time* metadata that the story canvas / exporter can
+    /// optionally honour ; they don't belong in the persisted slide model
+    /// (which is reused for re-rendering by viewers in their own language).
+    /// Keeping them in a `@Published` dict avoids polluting `StoryMediaObject`
+    /// and lets the consumer (canvas, exporter) read them lazily.
+    @Published var loadedVideoCaptions: [String: StoryVideoCaptionMetadata] = [:]
 
     // MARK: - Media Aspect Ratios (render-time only, not persisted)
 
@@ -1455,6 +1471,7 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         loadedImages = [:]
         loadedVideoURLs = [:]
         loadedAudioURLs = [:]
+        loadedVideoCaptions = [:]
         isTimelineVisible = false
         timelinePlaybackTime = 0
         isTimelinePlaying = false
