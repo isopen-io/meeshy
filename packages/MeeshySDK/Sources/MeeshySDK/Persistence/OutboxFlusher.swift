@@ -25,6 +25,32 @@ internal func reactionContext(for record: OutboxRecord) -> OfflineRetrySuccess.R
     )
 }
 
+/// A7+A8 — best-effort cleanup of local files referenced by an outbox
+/// payload. Called when a record terminates (either `.applied` because the
+/// server adopted the file via canonical URL, OR `.exhausted` because we
+/// gave up retrying). Without this sweep, `Documents/pending-audio/` would
+/// accumulate orphan `.m4a` files indefinitely for messages that never made
+/// it to the server.
+///
+/// Currently covers `sendMessage` payloads (the one kind that carries a
+/// `localAudioPath`). Other kinds either don't reference local files, or
+/// their files (TUS upload checkpoints) are managed by their own GC path.
+@inline(__always)
+internal func cleanupLocalFiles(for record: OutboxRecord) {
+    guard record.kind == .sendMessage else { return }
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    guard let item = try? decoder.decode(OfflineQueueItem.self, from: record.payload),
+          let relativePath = item.localAudioPath, !relativePath.isEmpty else {
+        return
+    }
+    let absolutePath = OfflineQueue.absoluteAudioPath(forStored: relativePath)
+    // Silent: it's normal for the file to already be gone (cancelled send,
+    // adoption already moved it, another sweep ran first). The whole point
+    // is to plug the leak, not to gate on file existence.
+    try? FileManager.default.removeItem(atPath: absolutePath)
+}
+
 /// Drains the `outbox` table FIFO, dispatching each pending item via the
 /// supplied `OutboxDispatching`. Failures schedule an exponential backoff
 /// retry; after `maxAttempts` failures the item is marked `.exhausted`.
@@ -101,6 +127,12 @@ public actor OutboxFlusher {
             try? await pool.write { db in
                 try OutboxRecord.deleteOne(db, key: idToDelete)
             }
+            // A7+A8 — drop any local file the payload referenced. On the
+            // happy path, MessagePersistenceActor.adoptSDKLevel already
+            // moved the file into the typed media cache (cf. DiskCacheStore
+            // .adopt's moveItem), so this is a defensive no-op for the
+            // applied path. Real value is on `.exhausted` below.
+            cleanupLocalFiles(for: current)
             onOutcome?(.applied(cmid: current.clientMessageId))
         } catch {
             current.attempts += 1
@@ -132,6 +164,10 @@ public actor OutboxFlusher {
             // best-effort and falls back to `nil` for non-reaction kinds or
             // corrupt rows.
             if current.status == .exhausted {
+                // A7+A8 — terminal failure: the local payload file (e.g.,
+                // pending-audio/.m4a) would otherwise leak forever. Best-
+                // effort delete before emitting the exhausted outcome.
+                cleanupLocalFiles(for: current)
                 onOutcome?(.exhausted(cmid: current.clientMessageId))
                 OfflineQueue.shared.emitRetryExhausted(OfflineRetryExhausted(
                     kind: current.kind,
