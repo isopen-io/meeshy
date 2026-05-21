@@ -20,14 +20,12 @@ interface AppNotification {
 }
 
 interface AppState {
-  isOnline: boolean;
   theme: 'light' | 'dark' | 'auto';
   notifications: AppNotification[];
   isInitialized: boolean;
 }
 
 interface AppActions {
-  setOnline: (isOnline: boolean) => void;
   setTheme: (theme: AppState['theme']) => void;
   addNotification: (notification: Omit<AppNotification, 'id' | 'timestamp'>) => void;
   removeNotification: (id: string) => void;
@@ -38,7 +36,6 @@ interface AppActions {
 type AppStore = AppState & AppActions;
 
 const initialState: AppState = {
-  isOnline: true,
   theme: 'auto',
   notifications: [],
   isInitialized: false,
@@ -49,10 +46,6 @@ export const useAppStore = create<AppStore>()(
     persist(
       (set, get) => ({
         ...initialState,
-
-        setOnline: (isOnline: boolean) => {
-          set({ isOnline });
-        },
 
         setTheme: (theme: AppState['theme']) => {
           set({ theme });
@@ -103,27 +96,15 @@ export const useAppStore = create<AppStore>()(
 
         initialize: async () => {
           try {
-            if (process.env.NODE_ENV === 'development') {
-            }
-            
-            // Initialize online status
+            // NOTE: l'état réseau est désormais géré par la source unique
+            // `useConnectionStatus()` (hooks/use-connection-status.ts).
+            // Plus de listener online/offline dupliqué ici.
             if (typeof window !== 'undefined') {
-              const isOnline = navigator.onLine;
-              set({ isOnline });
-              
-              // Listen for online/offline events
-              const handleOnline = () => get().setOnline(true);
-              const handleOffline = () => get().setOnline(false);
-              
-              window.addEventListener('online', handleOnline);
-              window.addEventListener('offline', handleOffline);
-              
-              // Apply initial theme
               get().setTheme(get().theme);
             }
-            
+
             set({ isInitialized: true });
-            
+
           } catch (error) {
             console.error('[APP_STORE] Initialization error:', error);
             get().addNotification({
@@ -148,7 +129,6 @@ export const useAppStore = create<AppStore>()(
 
 // Selector hooks
 export const useTheme = () => useAppStore((state) => state.theme);
-export const useIsOnline = () => useAppStore((state) => state.isOnline);
 export const useNotifications = () => useAppStore((state) => state.notifications);
 export const useIsInitialized = () => useAppStore((state) => state.isInitialized);
 

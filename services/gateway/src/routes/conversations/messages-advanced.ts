@@ -1,5 +1,6 @@
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { PrismaClient } from '@meeshy/shared/prisma/client';
+import { transformTranslationsToArray, type MessageTranslationJSON } from '../../utils/translation-transformer';
 import { MessageTranslationService } from '../../services/message-translation/MessageTranslationService';
 import { TrackingLinkService } from '../../services/TrackingLinkService';
 import { AttachmentService } from '../../services/attachments';
@@ -458,10 +459,18 @@ export function registerMessagesAdvancedRoutes(
         prisma, conversationId, userId, existingMessage.content ?? '', processedContent
       ).catch(err => logger.error('[MESSAGES] Stats edit update error:', err));
 
-      // Construire la réponse avec mentions validées (PAS de traductions - elles arriveront via socket)
+      // Construire la réponse avec mentions validées (PAS de traductions - elles arriveront via socket).
+      // `translations` est stocké en MongoDB sous forme d'objet (clé = langue) mais le contrat API attend
+      // un tableau (`[APITextTranslation]` côté iOS) : sans cette transformation, iOS échoue au décodage
+      // avec "Type mismatch for type Array<Any> at path data.translations". La retraduction qui suit
+      // invalide `translations` en base, donc le payload renvoyé reflète cet état : `[]`.
       const messageResponse = {
         ...updatedMessage,
         conversationId,
+        translations: transformTranslationsToArray(
+          messageId,
+          (updatedMessage as { translations?: Record<string, MessageTranslationJSON> | null }).translations
+        ),
         validatedMentions: updatedMessage.validatedMentions || [],
         meta: { conversationStats: stats }
       };

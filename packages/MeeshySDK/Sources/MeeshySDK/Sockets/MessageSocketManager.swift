@@ -965,6 +965,7 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
     private var reconnectAttempt: Int = 0
     private var hadPreviousConnection = false
     private var heartbeatTimer: Timer?
+    private var lifecycleCancellables = Set<AnyCancellable>()
 
     // Cached formatters — ISO8601DateFormatter is expensive to allocate.
     // Safe to share: options are set once during init and never mutated after.
@@ -984,7 +985,33 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
         heartbeatTimer = nil
     }
 
-    private init() {}
+    private init() {
+        observeNetworkRecovery()
+    }
+
+    /// Source unique de vérité réseau : quand `NetworkMonitor` repasse en
+    /// ligne, forcer une reconnexion socket immédiate. Évite que la bannière
+    /// "Reconnexion..." persiste pendant que Socket.IO attend sa propre
+    /// boucle de retry (qui peut tarder après une coupure prolongée — iOS
+    /// kille silencieusement la WebSocket en arrière-plan).
+    private func observeNetworkRecovery() {
+        NetworkMonitor.shared.$isOffline
+            .removeDuplicates()
+            .dropFirst()
+            .filter { !$0 }
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in
+                self?.handleNetworkBackOnline()
+            }
+            .store(in: &lifecycleCancellables)
+    }
+
+    private func handleNetworkBackOnline() {
+        guard !isConnected else { return }
+        guard APIClient.shared.authToken != nil else { return }
+        Logger.socket.info("MessageSocket: network back online → forcing reconnect")
+        forceReconnect()
+    }
 
     // MARK: - JWT Helpers
 

@@ -497,6 +497,10 @@ export class SocketIOOrchestrator {
     };
   }
 
+  onStatusChange(callback: (diag: ConnectionDiagnostics) => void): () => void {
+    return this.connectionService.onStatusChange(callback);
+  }
+
   getSocket(): TypedSocket | null {
     return this.connectionService.getSocket();
   }
