@@ -123,6 +123,12 @@ public final class VideoEditorViewModel: ObservableObject {
         self.history = VideoEditHistory(initial: placeholder)
         self.player = AVPlayer(url: url)
         self.player.actionAtItemEnd = .pause
+        // SOTA setup pour un scrub local responsive : AVPlayer attend par
+        // défaut que son buffer soit « confortable » avant de jouer/seek,
+        // ce qui ajoute des hésitations sur un asset déjà entièrement local.
+        // En éditeur, on ne tolère pas cette latence — la source est cached
+        // sur disque, la latence de stalling est inutile.
+        self.player.automaticallyWaitsToMinimizeStalling = false
     }
 
     // MARK: Lifecycle
@@ -393,13 +399,31 @@ public final class VideoEditorViewModel: ObservableObject {
         isPlaying = false
     }
 
-    public func seek(to editedTime: Double) {
+    /// Seeks the preview player to `editedTime`.
+    ///
+    /// - Parameter precise: quand `true` (défaut), force `tolerance = .zero`
+    ///   → AVPlayer décode exactement la frame cible (frame-accurate ; ce
+    ///   qu'on veut pour un commit final ou un tap discret). Quand `false`,
+    ///   on autorise une tolérance de ±33 ms (~2 frames @60fps) → AVPlayer
+    ///   peut s'arrêter sur la keyframe la plus proche, **bien plus rapide**.
+    ///   À utiliser pendant un drag de scrub où la latence batterie le ressenti.
+    ///
+    /// **Pourquoi ce double mode** — AVFoundation pénalise un seek
+    /// `.zero/.zero` par un decode complet ; à 60 Hz de tick (notre
+    /// `installTimeObserver`), le tube saturait facilement et la vidéo
+    /// avait l'air en retard sur le doigt. Le SOTA des pro editors :
+    /// preview tolerant pendant le drag, commit `.zero` au release.
+    public func seek(to editedTime: Double, precise: Bool = true) {
         let clamped = min(max(0, editedTime), editedDuration)
         playheadTime = clamped
+        let target = CMTime(seconds: clamped, preferredTimescale: 600)
+        let tolerance: CMTime = precise
+            ? .zero
+            : CMTime(value: 33, timescale: 1000) // ~33 ms = 2 frames @ 60 fps
         player.seek(
-            to: CMTime(seconds: clamped, preferredTimescale: 600),
-            toleranceBefore: .zero,
-            toleranceAfter: .zero
+            to: target,
+            toleranceBefore: tolerance,
+            toleranceAfter: tolerance
         )
     }
 
@@ -408,12 +432,19 @@ public final class VideoEditorViewModel: ObservableObject {
         pause()
     }
 
+    /// Live scrub pendant un drag — utilise le mode `precise: false` pour
+    /// que le rendu suive le doigt sans jank. Le `endScrub()` fait un
+    /// commit précis au release.
     public func scrub(toFraction fraction: Double) {
-        seek(to: fraction * editedDuration)
+        seek(to: fraction * editedDuration, precise: false)
     }
 
     public func endScrub() {
         isScrubbing = false
+        // Final commit : on re-seek à la position courante en mode précis
+        // pour que le frame visible soit pixel-perfect à la position de la
+        // tape (sinon le drag s'est arrêté entre 2 keyframes).
+        seek(to: playheadTime, precise: true)
         HapticFeedback.light()
     }
 
@@ -426,6 +457,21 @@ public final class VideoEditorViewModel: ObservableObject {
         let locale = Locale(identifier: languageCode)
         transcriptionTask = Task { [weak self] in
             do {
+                // Pre-flight : vérifie que la source contient au moins une
+                // piste audio. SFSpeech sur une vidéo muette retourne un
+                // résultat vide qui flow ensuite vers `buildCaptions` —
+                // celui-ci créerait un caption [0, editedDuration] avec
+                // une chaîne vide qui apparaîtrait comme un sous-titre
+                // fantôme à l'écran. Mieux : court-circuiter avec une
+                // erreur typée que le banner peut afficher proprement.
+                let asset = AVURLAsset(url: url)
+                let audioTracks = try await asset.loadTracks(withMediaType: .audio)
+                if audioTracks.isEmpty {
+                    guard let self, !Task.isCancelled else { return }
+                    self.transcription = .failed("Cette vidéo n'a pas de piste audio à transcrire.")
+                    return
+                }
+
                 let result = try await EdgeTranscriptionService.shared.transcribe(
                     audioURL: url,
                     locale: locale,
@@ -455,6 +501,16 @@ public final class VideoEditorViewModel: ObservableObject {
 
     private func applyTranscription(_ result: OnDeviceTranscription, languageCode: String) {
         let captions = buildCaptions(from: result)
+        // Si la pre-flight a passé (piste audio présente) mais SFSpeech
+        // n'a produit aucun segment exploitable (texte vide, signal trop
+        // bruité…), on ne marque pas `.done` mais on retombe sur un
+        // état d'erreur explicite. Sans ça, l'utilisateur ferait l'effort
+        // de lancer la transcription pour ne RIEN voir apparaître.
+        if captions.isEmpty &&
+            result.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            transcription = .failed("Aucune parole détectée.")
+            return
+        }
         apply(document.settingCaptions(
             captions,
             languageCode: languageCode,
@@ -588,6 +644,13 @@ public final class VideoEditorViewModel: ObservableObject {
             let item = AVPlayerItem(asset: plan.composition)
             item.videoComposition = plan.videoComposition
             item.audioMix = plan.audioMix
+            // SOTA : attendre que la VideoComposition rende la frame cible
+            // AVANT de signaler `seek` complete. Sans ça, le seek résout
+            // sur le frame brut de la composition (sans les CIFilters
+            // appliqués) → l'image affiche un flash de la vidéo source
+            // unfiltered avant le rendu CG. Avec ce flag, AVFoundation
+            // pipeline la composition à travers le compositor avant resume.
+            item.seekingWaitsForVideoCompositionRendering = true
             attachLoopObserver(to: item)
             let resume = min(playheadTime, max(0, snapshot.editedDuration - 0.05))
             player.replaceCurrentItem(with: item)

@@ -43,21 +43,20 @@ struct VideoEditorTimeline: View {
     var body: some View {
         GeometryReader { geo in
             let viewport = geo.size.width
-            let centerX = viewport / 2
             let duration = viewModel.editedDuration
-            let leadingX = centerX - CGFloat(viewModel.playheadTime) * pixelsPerSecond
+            let layout = computeLayout(viewport: viewport, duration: duration)
 
             ZStack(alignment: .topLeading) {
                 theme.backgroundSecondary
 
-                rulerLayer(leadingX: leadingX, duration: duration)
+                rulerLayer(leadingX: layout.leadingX, duration: duration)
 
-                segmentStrip(leadingX: leadingX)
+                segmentStrip(leadingX: layout.leadingX)
                     .frame(height: trackHeight)
                     .offset(y: 22)
 
                 if isTrimActive {
-                    trimOverlay(leadingX: leadingX, duration: duration)
+                    trimOverlay(leadingX: layout.leadingX, duration: duration)
                         .offset(y: 22)
                         .transition(.opacity)
                 }
@@ -69,16 +68,16 @@ struct VideoEditorTimeline: View {
                 // (calculés sur la source — ce qui est la bonne sémantique
                 // pour visualiser le bruit du clip d'origine au moment où
                 // on choisit où couper).
-                audioWaveformLayer(leadingX: leadingX, duration: duration)
+                audioWaveformLayer(leadingX: layout.leadingX, duration: duration)
                     .frame(height: waveformHeight)
                     .offset(y: 22 + trackHeight)
                     .allowsHitTesting(false)
 
                 edgeFades(viewport: viewport)
 
-                playhead(centerX: centerX, accentTint: isSplitActive)
+                playhead(playheadX: layout.playheadX, accentTint: isSplitActive)
 
-                timeReadout(centerX: centerX, viewport: viewport)
+                timeReadout(playheadX: layout.playheadX, viewport: viewport)
             }
             .frame(width: viewport, height: trackHeight + 44 + waveformHeight)
             .contentShape(Rectangle())
@@ -198,18 +197,29 @@ struct VideoEditorTimeline: View {
         .clipped()
     }
 
+    // MARK: - Layout (auto-follow with start/end hold)
+
+    private func computeLayout(viewport: CGFloat, duration: Double) -> VideoTimelineLayoutMath.Layout {
+        VideoTimelineLayoutMath.layout(
+            playheadTime: viewModel.playheadTime,
+            duration: duration,
+            viewport: viewport,
+            pixelsPerSecond: pixelsPerSecond
+        )
+    }
+
     // MARK: - Playhead
 
-    /// Center-pinned playhead. When `accentTint == true` (split tool actif
-    /// en Pro), affiche un trait scissor pour signaler qu'un tap immédiat
-    /// coupera la timeline ici.
+    /// Playhead à position dynamique (sortie de `computeLayout`). Le bar
+    /// vertical glisse en début / fin de timeline (« hold zones ») et
+    /// reste pinné au centre dans la zone médiane. Cette sémantique évite
+    /// la moitié vide à playhead = 0 (bug « début de la timeline pas
+    /// visible » signalé par l'utilisateur).
     ///
-    /// **Layout** — le playhead couvre **la filmstrip + la waveform**
+    /// **Layout vertical** — couvre filmstrip + waveform
     /// (y=22 → y=22+trackHeight+waveformHeight). La pastille circulaire est
-    /// ancrée tout en haut de cette zone. Cela évite que le trait flotte
-    /// au-dessus du ruler ou déborde sous la time readout après l'ajout
-    /// de la waveform.
-    private func playhead(centerX: CGFloat, accentTint: Bool) -> some View {
+    /// ancrée tout en haut de cette zone.
+    private func playhead(playheadX: CGFloat, accentTint: Bool) -> some View {
         let extent = trackHeight + waveformHeight
         return ZStack(alignment: .top) {
             Rectangle()
@@ -230,7 +240,7 @@ struct VideoEditorTimeline: View {
             .offset(y: -2)
         }
         .frame(width: 16, height: extent)
-        .position(x: centerX, y: 22 + extent / 2)
+        .position(x: playheadX, y: 22 + extent / 2)
         .allowsHitTesting(false)
     }
 
@@ -418,8 +428,17 @@ struct VideoEditorTimeline: View {
         .allowsHitTesting(false)
     }
 
-    private func timeReadout(centerX: CGFloat, viewport: CGFloat) -> some View {
-        HStack {
+    /// Readout temps actuel / durée totale, ancré sous le playhead avec
+    /// clamping pour rester dans le viewport (sinon la capsule glisse hors
+    /// écran quand le playhead est près des bords en zone « hold »).
+    private func timeReadout(playheadX: CGFloat, viewport: CGFloat) -> some View {
+        // Largeur estimée de la capsule (suffisante pour `MM:SS / MM:SS`).
+        // Le clamp est conservateur — si le content déborde le HStack se
+        // truncate, le visuel reste correct.
+        let estimatedWidth: CGFloat = 88
+        let halfWidth = estimatedWidth / 2
+        let clampedX = max(halfWidth + 4, min(viewport - halfWidth - 4, playheadX))
+        return HStack {
             Text(formatTime(viewModel.playheadTime))
                 .foregroundStyle(theme.textPrimary)
             Text("/")
@@ -431,7 +450,7 @@ struct VideoEditorTimeline: View {
         .padding(.horizontal, 8)
         .padding(.vertical, 3)
         .background(Capsule().fill(theme.backgroundPrimary.opacity(0.8)))
-        .position(x: centerX, y: trackHeight + 36)
+        .position(x: clampedX, y: trackHeight + 36)
         .allowsHitTesting(false)
     }
 
