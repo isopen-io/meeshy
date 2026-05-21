@@ -422,6 +422,52 @@ final class StoryViewModelTests: XCTestCase {
         XCTAssertEqual(sut.storyGroups[1].id, "carol")
     }
 
+    /// When a remote `story:deleted` removes the last unviewed story of a
+    /// group, that group must drop below remaining unviewed peers on the
+    /// next sort pass (same invariant as storyViewed, but the trigger is
+    /// removal instead of transition).
+    func test_socketStoryDeleted_rebalancesTrayAfterUnviewedStoryGone() async {
+        // Alice has 2 stories: one viewed (old), one unviewed (recent) →
+        // group is hasUnviewed=true and sits in front of Bob's all-viewed
+        // group. When the unviewed story is deleted remotely, alice goes
+        // all-viewed and Bob takes the front slot.
+        let aliceViewed = makeStoryItem(
+            id: "alice-viewed",
+            isViewed: true,
+            createdAt: Date(timeIntervalSince1970: 1_000_000)
+        )
+        let aliceUnviewed = makeStoryItem(
+            id: "alice-unviewed-target",
+            isViewed: false,
+            createdAt: Date(timeIntervalSince1970: 2_000_000)
+        )
+        let bobViewed = makeStoryItem(
+            id: "bob-viewed",
+            isViewed: true,
+            createdAt: Date(timeIntervalSince1970: 1_500_000)
+        )
+        sut.storyGroups = [
+            makeStoryGroup(userId: "alice", username: "alice", stories: [aliceViewed, aliceUnviewed]),
+            makeStoryGroup(userId: "bob", username: "bob", stories: [bobViewed]),
+        ]
+
+        sut.subscribeToSocketEvents()
+
+        let deletedData: SocketStoryDeletedData = JSONStub.decode("""
+        {"storyId":"alice-unviewed-target","authorId":"alice"}
+        """)
+        mockSocket.storyDeleted.send(deletedData)
+        try? await Task.sleep(nanoseconds: 100_000_000)
+
+        XCTAssertEqual(sut.storyGroups.count, 2, "Alice still has remaining story → group not removed")
+        XCTAssertEqual(
+            sut.storyGroups[0].id, "bob",
+            "Both groups now all-viewed; bob's latest (1_500_000) outranks alice's surviving story (1_000_000)"
+        )
+        XCTAssertFalse(sut.storyGroups[0].hasUnviewed)
+        XCTAssertFalse(sut.storyGroups[1].hasUnviewed)
+    }
+
     /// When the last unviewed story of a group is marked as viewed, the group
     /// must drop below any remaining unviewed group on the next sort pass.
     func test_socketStoryViewed_dropsAllViewedGroupBelowUnviewedPeers() async {
