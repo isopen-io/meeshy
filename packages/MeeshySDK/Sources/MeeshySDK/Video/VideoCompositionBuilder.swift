@@ -279,7 +279,11 @@ enum VideoFrameRenderer {
 extension VideoFilterPreset {
     /// Maps a preset to a zero-configuration CoreImage photo-effect filter.
     /// These are guaranteed-available, parameter-free and cheap.
-    var ciFilterName: String? {
+    ///
+    /// `public` so the `MeeshyUI` previewer (a separate SPM target) can drive
+    /// the photo-effect pipeline off the same source-of-truth as the
+    /// composition exporter.
+    public var ciFilterName: String? {
         switch self {
         case .none:    return nil
         case .vivid:   return "CIPhotoEffectChrome"
