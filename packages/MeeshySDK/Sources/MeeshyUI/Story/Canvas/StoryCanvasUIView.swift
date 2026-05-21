@@ -1840,29 +1840,6 @@ public final class StoryCanvasUIView: UIView {
         }
     }
 
-    /// Drives the canvas to render the slide at an arbitrary playhead
-    /// position while staying in `.edit` mode. Used by the composer to keep
-    /// the canvas in sync with the timeline editor's playhead — when the
-    /// user scrubs the timeline, every CALayer (text, foreground media,
-    /// keyframe-animated items) snaps to its rendered state at that exact
-    /// time, so the canvas and the progress bar share one source of truth.
-    ///
-    /// No-op while `mode == .play` — the active `displayLink` owns the
-    /// clock there and any external write would race the next tick.
-    /// Clamps to `[0, computedTotalDuration]` so callers can't drive past
-    /// the end of the slide.
-    public func setPreviewScrubTime(_ seconds: Double) {
-        guard mode == .edit else { return }
-        let clamped = max(0, min(seconds, slide.computedTotalDuration()))
-        // Short-circuit on identical values — `updateUIView` fires on every
-        // SwiftUI body re-eval (selection, mode toggle, picker open, etc.),
-        // and rebuildLayers is expensive (CALayer tree teardown). 0.5ms
-        // tolerance matches a sub-frame motion and keeps the canvas idle
-        // when the timeline isn't actually scrubbing.
-        if abs(currentTime.seconds - clamped) < 0.0005 { return }
-        currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
-        rebuildLayers()
-    }
 
     // MARK: - ProMotion edit-mode link
 
