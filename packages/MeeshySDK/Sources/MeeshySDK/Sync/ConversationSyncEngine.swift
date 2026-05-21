@@ -27,6 +27,21 @@ public protocol ConversationSyncEngineProviding: AnyObject, Sendable {
     func stopSocketRelay() async
     func markConversationReadLocally(_ conversationId: String) async
     func updateConversationAfterSend(conversationId: String, messagePreview: String, messageAt: Date, senderName: String?) async
+
+    /// Declare which conversation is currently visible to the user.
+    /// While set, the engine will:
+    ///   1. Force the open conversation's `unreadCount` to 0 on every
+    ///      `conversation:unread-updated` event (the user IS reading it,
+    ///      so any non-zero value is a visual lie).
+    ///   2. Exclude the open conversation from `totalConversationsUnread`
+    ///      so cross-conversation surfaces (back-button pill, side menus)
+    ///      count OTHER conversations only.
+    ///   3. Reset the open conversation's `unreadCount` to 0 immediately
+    ///      on entry, defending against stale snapshots that pushed an
+    ///      inflated count (e.g. 75) into the cache before we knew the
+    ///      user was looking at it.
+    /// Pass `nil` (on view disappear) to restore pass-through behaviour.
+    func setCurrentlyOpenConversation(_ conversationId: String?)
 }
 
 // MARK: - Implementation
@@ -67,6 +82,14 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
     private var isSyncing: Bool {
         get { stateQueue.sync { _isSyncing } }
         set { stateQueue.sync { _isSyncing = newValue } }
+    }
+    /// Currently-visible conversation. While non-nil the engine forces this
+    /// conversation's `unreadCount` to 0 on every server broadcast and
+    /// excludes it from the cross-conversation aggregator.
+    private var _currentlyOpenConversationId: String?
+    private var currentlyOpenConversationId: String? {
+        get { stateQueue.sync { _currentlyOpenConversationId } }
+        set { stateQueue.sync { _currentlyOpenConversationId = newValue } }
     }
     private var socketSubscriptions = Set<AnyCancellable>()
 
@@ -841,10 +864,19 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     private func handleUnreadUpdated(_ event: UnreadUpdateEvent) async {
         Self.logger.info("[RT-DIAG] handleUnreadUpdated conv=\(event.conversationId, privacy: .public) unread=\(event.unreadCount, privacy: .public)")
+        // Gate the server-provided value on whether the user is currently
+        // viewing this conversation. The gateway broadcasts the same
+        // `unreadCount` to every recipient regardless of presence; the
+        // client overrides it to 0 for the open conversation because the
+        // user IS reading it. This avoids the "11 → 75 then back to 0"
+        // visual flicker when a stale server count momentarily lands.
+        let effectiveUnread = (event.conversationId == currentlyOpenConversationId)
+            ? 0
+            : event.unreadCount
         await cache.conversations.update(for: "list") { conversations in
             var updated = conversations
             if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {
-                updated[idx].unreadCount = event.unreadCount
+                updated[idx].unreadCount = effectiveUnread
             }
             return updated
         }
@@ -967,11 +999,45 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     /// Reads the authoritative cache for the conversation list, sums the
     /// `unreadCount` of every entry (clamped to ≥ 0 to defend against bogus
-    /// negative values), and publishes the result. Cheap: one cache read +
-    /// a linear reduce; runs only when a mutation likely changed the total.
+    /// negative values), and publishes the result. The currently-open
+    /// conversation is excluded — cross-conversation surfaces (back-button
+    /// pill, side menus) count OTHER conversations only. Cheap: one cache
+    /// read + a linear reduce; runs only when a mutation likely changed
+    /// the total.
     private func recomputeTotalUnread() async {
         let cached = await cache.conversations.load(for: "list").snapshot() ?? []
-        let total = cached.reduce(0) { acc, conv in acc + max(0, conv.unreadCount) }
+        let openId = currentlyOpenConversationId
+        let total = cached.reduce(0) { acc, conv in
+            guard conv.id != openId else { return acc }
+            return acc + max(0, conv.unreadCount)
+        }
         _totalConversationsUnread.send(total)
+    }
+
+    // MARK: - Currently-open conversation
+
+    public func setCurrentlyOpenConversation(_ conversationId: String?) {
+        currentlyOpenConversationId = conversationId
+        guard let id = conversationId else {
+            // Restoring pass-through: recompute the aggregator so the
+            // previously-excluded conversation is now counted.
+            Task { await self.recomputeTotalUnread() }
+            return
+        }
+        // On entry, defensively zero the unread count of the open
+        // conversation. The cache may carry an inflated value left over
+        // from a stale `conversation:unread-updated` broadcast or from a
+        // REST refresh that ran against the buggy server fallback.
+        Task {
+            await self.cache.conversations.update(for: "list") { conversations in
+                var updated = conversations
+                if let idx = updated.firstIndex(where: { $0.id == id }) {
+                    updated[idx].unreadCount = 0
+                }
+                return updated
+            }
+            self._conversationsDidChange.send()
+            await self.recomputeTotalUnread()
+        }
     }
 }

@@ -270,6 +270,93 @@ final class ConversationSyncEngineTests: XCTestCase {
         XCTAssertEqual(observed.last, 4, "negative contribution must clamp to 0")
     }
 
+    // MARK: - Currently-open conversation gating
+    //
+    // When the user has a conversation OPEN, the gateway still broadcasts
+    // `conversation:unread-updated` for it (the server has no notion of
+    // "currently visible"). The client must:
+    //   1. Force the open conversation's unreadCount to 0 (the user IS
+    //      reading the messages, so anything else is a visual lie).
+    //   2. Exclude the open conversation from the cross-conversation
+    //      aggregator (so the back-button pill counts OTHER conversations
+    //      only).
+    //
+    // Setting the current id to `nil` (e.g. on view disappear) restores
+    // normal pass-through behaviour.
+
+    func test_setCurrentlyOpenConversation_forcesOpenConvUnreadToZero_onUnreadUpdate() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([
+            ("open-conv", 0),
+            ("other-conv", 3)
+        ])
+        await engine.startSocketRelay()
+        engine.setCurrentlyOpenConversation("open-conv")
+
+        // Server broadcasts a non-zero unread for the open conv — the engine
+        // must ignore the new value and keep it at 0.
+        mockMessageSocket.unreadUpdated.send(UnreadUpdateEvent(conversationId: "open-conv", unreadCount: 75))
+
+        // Wait for the event to be processed
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let openConv = cached.first { $0.id == "open-conv" }
+        XCTAssertEqual(openConv?.unreadCount, 0, "open conversation's unread must stay at 0")
+    }
+
+    func test_setCurrentlyOpenConversation_excludesOpenConvFromAggregator() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([
+            ("open-conv", 10),
+            ("other-conv-1", 4),
+            ("other-conv-2", 2)
+        ])
+        await engine.startSocketRelay()
+        engine.setCurrentlyOpenConversation("open-conv")
+
+        // Trigger a recompute (any event that fires recomputeTotalUnread is fine)
+        mockMessageSocket.unreadUpdated.send(UnreadUpdateEvent(conversationId: "other-conv-1", unreadCount: 4))
+
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        // Aggregator must skip "open-conv" — only 4 + 2 = 6
+        XCTAssertEqual(engine.totalConversationsUnreadValue, 6,
+                       "open conversation must be excluded from totalConversationsUnread")
+    }
+
+    func test_setCurrentlyOpenConversation_immediatelyZeroesOpenConvUnread() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([
+            ("conv-with-11-unread", 11),
+            ("other-conv", 3)
+        ])
+
+        engine.setCurrentlyOpenConversation("conv-with-11-unread")
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        let openConv = cached.first { $0.id == "conv-with-11-unread" }
+        XCTAssertEqual(openConv?.unreadCount, 0,
+                       "opening a conversation must reset its unread count locally")
+    }
+
+    func test_setCurrentlyOpenConversation_nil_restoresNormalPassThrough() async {
+        await CacheCoordinator.shared.conversations.invalidate(for: "list")
+        await seedConversations([("conv-1", 0)])
+        await engine.startSocketRelay()
+
+        engine.setCurrentlyOpenConversation("conv-1")
+        engine.setCurrentlyOpenConversation(nil)
+
+        // Now a server unread update for conv-1 must be applied normally
+        mockMessageSocket.unreadUpdated.send(UnreadUpdateEvent(conversationId: "conv-1", unreadCount: 4))
+        try? await Task.sleep(nanoseconds: 200_000_000)
+
+        let cached = await CacheCoordinator.shared.conversations.load(for: "list").snapshot() ?? []
+        XCTAssertEqual(cached.first?.unreadCount, 4)
+    }
+
     // Helper: seed the conversations cache with [id, unreadCount] tuples.
     // Uses `save()` (not `update()`): `update()` early-returns when the key
     // is absent from L1, which is exactly the state right after `invalidate`.

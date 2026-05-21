@@ -671,6 +671,11 @@ class ConversationViewModel: ObservableObject {
         handler.delegate = self
         handler.persistence = dependencies.persistence
         self.socketHandler = handler
+        // Declare this conversation as currently visible so the sync engine
+        // forces its `unreadCount` to 0 on every server broadcast (the user
+        // IS reading it) and excludes it from the cross-conversation
+        // aggregator. Cleared in `deinit`.
+        syncEngine.setCurrentlyOpenConversation(conversationId)
         store.startObserving(dbPool: dependencies.dbPool)
         Task { await store.loadInitial() }
         messagesPersistCancellable = $messages
@@ -868,6 +873,9 @@ class ConversationViewModel: ObservableObject {
         // socketHandler deinit handles room leave & typing cleanup
         socketHandler = nil
         APIClient.shared.anonymousSessionToken = nil
+        // Clear the currently-open conversation gate so cross-conversation
+        // surfaces (back-button pill on other screens) resume counting it.
+        syncEngine.setCurrentlyOpenConversation(nil)
     }
 
     // MARK: - Typing Emission (delegated to socketHandler)

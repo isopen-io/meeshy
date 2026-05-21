@@ -920,7 +920,14 @@ export class MessageHandler {
       await Promise.all(participants.map(async (participant) => {
         // Use userId for registered users (for their personal room), participantId for anonymous
         const roomTarget = participant.userId || participant.id;
-        const unreadCount = await readStatusService.getUnreadCount(roomTarget, conversationId);
+        // CRITICAL: pass `participant.id` (not `roomTarget`) to
+        // `getUnreadCount`. `ConversationReadCursor.participantId` is the
+        // Participant.id per the schema — passing the userId here used to
+        // silently miss the cursor lookup and fall back to a "count all
+        // historical messages" path, returning wildly inflated unread
+        // counts (e.g. 75 for users who had read everything). The room
+        // target stays based on userId for socket delivery.
+        const unreadCount = await readStatusService.getUnreadCount(participant.id, conversationId);
         this.io.to(ROOMS.user(roomTarget)).emit(SERVER_EVENTS.CONVERSATION_UNREAD_UPDATED, {
           conversationId,
           unreadCount

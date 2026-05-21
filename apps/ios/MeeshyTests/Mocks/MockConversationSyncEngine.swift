@@ -83,6 +83,13 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         updateConversationAfterSendCallCount += 1
     }
 
+    var setCurrentlyOpenConversationCallCount = 0
+    var lastSetCurrentlyOpenConversationId: String?
+    func setCurrentlyOpenConversation(_ conversationId: String?) {
+        setCurrentlyOpenConversationCallCount += 1
+        lastSetCurrentlyOpenConversationId = conversationId
+    }
+
     // MARK: - Simulation Helpers
 
     func simulateConversationsChanged() {
@@ -112,6 +119,8 @@ final class MockConversationSyncEngine: ConversationSyncEngineProviding, @unchec
         markConversationReadLocallyCallCount = 0
         lastMarkReadConversationId = nil
         updateConversationAfterSendCallCount = 0
+        setCurrentlyOpenConversationCallCount = 0
+        lastSetCurrentlyOpenConversationId = nil
         onSyncSinceLastCheckpoint = nil
     }
 }

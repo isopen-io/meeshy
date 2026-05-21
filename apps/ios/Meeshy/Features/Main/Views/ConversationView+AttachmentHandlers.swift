@@ -260,6 +260,13 @@ extension ConversationView {
                         // and never re-downloads our own upload. See RC3.3.
                         let renderKey = MeeshyConfig.resolveMediaURL(result.fileUrl)?.absoluteString ?? result.fileUrl
                         await CacheCoordinator.shared.audio.store(audioData, for: renderKey)
+                        // Also seed under the local `file://` key. Mirrors how
+                        // images cache under their `file://` URL (line 102): a
+                        // defence-in-depth so the optimistic GRDB row (which
+                        // still carries the `file://` URL until reconciliation)
+                        // resolves to a cached blob if the on-disk file is
+                        // cleaned up before the URL flips to https.
+                        await CacheCoordinator.shared.audio.store(audioData, for: audioURL.absoluteString)
                     }
                     let userId = AuthManager.shared.currentUser?.id ?? ""
                     localAttachments.append(result.toMessageAttachment(uploadedBy: userId))
@@ -335,7 +342,26 @@ extension ConversationView {
                 // Clear UI after upload+send and clean up local files
                 await MainActor.run {
                     for (_, url) in mediaFiles { try? FileManager.default.removeItem(at: url) }
-                    if let audioURL { try? FileManager.default.removeItem(at: audioURL) }
+                    // Audio: defer disk deletion.
+                    //
+                    // The optimistic GRDB record's audio attachment carries the
+                    // `file://` URL until the `message:new` socket echo flips it
+                    // to the canonical `https://` URL (~100-500ms after REST
+                    // returns). During that reconciliation window the bubble's
+                    // play tap routes to `AudioPlayerView.playLocal` which
+                    // reads from disk — deleting the file eagerly here made the
+                    // player silently fail (the "I can't listen to my own audio
+                    // immediately after sending" bug). The bytes are already
+                    // cached under the canonical https key (seeded above), so
+                    // once reconciled the play works via the cache without any
+                    // disk read. A 10s delay covers worst-case socket latency
+                    // with ample margin while keeping Documents/ small.
+                    if let audioURL {
+                        Task {
+                            try? await Task.sleep(nanoseconds: 10_000_000_000)
+                            try? FileManager.default.removeItem(at: audioURL)
+                        }
+                    }
                     composerState.pendingMediaFiles.removeAll()
                     composerState.pendingAudioURL = nil
                     composerState.uploadProgress = nil
