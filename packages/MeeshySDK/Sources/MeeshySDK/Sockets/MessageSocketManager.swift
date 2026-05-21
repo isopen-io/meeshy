@@ -1205,10 +1205,85 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
 
     // MARK: - Translation Request
 
-    public func requestTranslation(messageId: String, targetLanguage: String) {
-        socket?.emit("translation:request", ["messageId": messageId, "targetLanguage": targetLanguage])
-        Logger.socket.info("Requested translation for \(messageId) -> \(targetLanguage)")
+    /// Buffered user-triggered emits that the socket layer must NOT silently
+    /// drop on disconnect. Translation requests are at the top of that list:
+    /// the user explicitly tapped a flag to ask for a target-language
+    /// rendering, and without buffering the request vanishes the instant the
+    /// socket is offline (the user blames the app, retries the same tap,
+    /// gets the same nothing). Capped + TTL-bounded so a long disconnect
+    /// cannot turn this into a memory leak.
+    struct PendingTranslationRequest: Equatable, Sendable {
+        let messageId: String
+        let targetLanguage: String
+        let queuedAt: Date
     }
+
+    private var pendingTranslationRequests: [PendingTranslationRequest] = []
+    static let translationBufferMaxSize = 50
+    static let translationBufferTTL: TimeInterval = 60
+
+    public func requestTranslation(messageId: String, targetLanguage: String) {
+        if socket?.status == .connected {
+            socket?.emit("translation:request", ["messageId": messageId, "targetLanguage": targetLanguage])
+            Logger.socket.info("Requested translation for \(messageId) -> \(targetLanguage)")
+            return
+        }
+        bufferTranslationRequest(
+            PendingTranslationRequest(
+                messageId: messageId,
+                targetLanguage: targetLanguage,
+                queuedAt: Date()
+            )
+        )
+    }
+
+    private func bufferTranslationRequest(_ request: PendingTranslationRequest) {
+        // De-dup: if the same (messageId, targetLanguage) is already queued,
+        // refresh its timestamp rather than enqueue twice — the user re-tapped.
+        pendingTranslationRequests.removeAll {
+            $0.messageId == request.messageId && $0.targetLanguage == request.targetLanguage
+        }
+        pendingTranslationRequests.append(request)
+        // Cap from the front: oldest pending requests are the least useful
+        // when the user is staring at the screen.
+        if pendingTranslationRequests.count > Self.translationBufferMaxSize {
+            let dropCount = pendingTranslationRequests.count - Self.translationBufferMaxSize
+            pendingTranslationRequests.removeFirst(dropCount)
+        }
+        Logger.socket.info("[RT-DIAG] translation:request BUFFERED (socket not connected) msg=\(request.messageId, privacy: .public) target=\(request.targetLanguage, privacy: .public) queued=\(self.pendingTranslationRequests.count, privacy: .public)")
+    }
+
+    /// Flush queued translation requests that are still fresh enough to
+    /// matter. Called from the `.connect` handler immediately after
+    /// re-joining rooms so the gateway sees a coherent stream
+    /// (`conversation:join` first, then late translation asks for those
+    /// rooms). Exposed as `internal` so the test bundle can validate the
+    /// replay without driving a real socket.
+    func flushBufferedTranslationRequests(now: Date = Date()) {
+        guard !pendingTranslationRequests.isEmpty else { return }
+        let cutoff = now.addingTimeInterval(-Self.translationBufferTTL)
+        let toReplay = pendingTranslationRequests.filter { $0.queuedAt >= cutoff }
+        let dropped = pendingTranslationRequests.count - toReplay.count
+        pendingTranslationRequests.removeAll()
+        if dropped > 0 {
+            Logger.socket.info("[RT-DIAG] translation:request dropped \(dropped, privacy: .public) stale buffered entries (>\(Int(Self.translationBufferTTL), privacy: .public)s)")
+        }
+        for request in toReplay {
+            socket?.emit("translation:request", [
+                "messageId": request.messageId,
+                "targetLanguage": request.targetLanguage
+            ])
+        }
+        if !toReplay.isEmpty {
+            Logger.socket.info("[RT-DIAG] translation:request REPLAYED \(toReplay.count, privacy: .public) entries on reconnect")
+        }
+    }
+
+    #if DEBUG
+    var debug_pendingTranslationRequests: [PendingTranslationRequest] {
+        pendingTranslationRequests
+    }
+    #endif
 
     // MARK: - Location Emission
 
@@ -1672,6 +1747,11 @@ public final class MessageSocketManager: ObservableObject, MessageSocketProvidin
             for convId in self.joinedConversations where convId != self.activeConversationId {
                 self.socket?.emit("conversation:join", ["conversationId": convId])
             }
+
+            // Replay user-triggered translation requests that arrived during
+            // the disconnect window. The gateway will route them to whichever
+            // conversation rooms we just re-joined.
+            self.flushBufferedTranslationRequests()
 
             if wasReconnect {
                 Logger.socket.info("MessageSocket reconnected — re-joined \(self.joinedConversations.count) room(s)")

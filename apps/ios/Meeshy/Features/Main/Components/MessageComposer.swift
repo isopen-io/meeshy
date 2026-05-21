@@ -62,6 +62,8 @@ struct MessageComposer: View {
                 .foregroundColor(.white.opacity(0.7))
                 .rotationEffect(.degrees(attachRotation))
                 .frame(width: 44, height: 44)
+                .accessibilityLabel(Text("Joindre"))
+                .accessibilityHint(Text("Ouvre le menu pour partager une photo, une video, un fichier ou un lieu"))
                 .background(
                     Circle()
                         .fill(Color.white.opacity(0.1))
@@ -160,6 +162,8 @@ struct MessageComposer: View {
                 .scaleEffect(sendBounce ? 1.2 : 1)
             }
             .frame(width: 44, height: 44)
+            .accessibilityLabel(Text("Envoyer le message"))
+            .accessibilityHint(Text("Envoie le texte saisi dans la conversation"))
             .transition(.scale.combined(with: .opacity))
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasText)
             .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
@@ -183,6 +187,8 @@ struct MessageComposer: View {
                         .foregroundColor(.white.opacity(0.7))
                 }
             }
+            .accessibilityLabel(Text("Enregistrer un message vocal"))
+            .accessibilityHint(Text("Appui maintenu pour enregistrer un message audio"))
             .transition(.scale.combined(with: .opacity))
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasText)
         }

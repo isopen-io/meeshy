@@ -716,15 +716,24 @@ struct ConversationView: View {
             }
             .onAppear {
                 if let context = replyContext { composerState.pendingReplyReference = context.toReplyReference }
-                // Language priority: keyboard layout > system language > current default
+                // Language priority: active keyboard layout > user's primary
+                // content language (Prisme Linguistique source of truth) >
+                // existing composer default.
+                //
+                // Locale.current is intentionally NOT consulted here: it
+                // reflects the device's UI language, which is decoupled from
+                // the user's chosen content language (CLAUDE.md "Prisme
+                // Linguistique"). A French-speaker on an English iPhone must
+                // compose in French unless their keyboard says otherwise.
                 if let kbd = UITextInputMode.activeInputModes.first?.primaryLanguage {
                     let code = String(kbd.prefix(2))
                     if LanguageOption.defaults.contains(where: { $0.code == code }) {
                         composerState.selectedLanguage = code
                     }
-                } else if let sysLang = Locale.current.language.languageCode?.identifier,
-                          LanguageOption.defaults.contains(where: { $0.code == sysLang }) {
-                    composerState.selectedLanguage = sysLang
+                } else if let userLang = AuthManager.shared.currentUser?
+                            .preferredContentLanguages.first,
+                          LanguageOption.defaults.contains(where: { $0.code == userLang }) {
+                    composerState.selectedLanguage = userLang
                 }
                 if messageText.isEmpty, let draft = DraftStore.shared.load(for: viewModel.conversationId) {
                     messageText = draft.text

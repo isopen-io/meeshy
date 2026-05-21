@@ -4,12 +4,38 @@ import os
 
 // MARK: - Certificate Pinning
 
+private let pinLogger = Logger(subsystem: "me.meeshy.sdk", category: "tls-pinning")
+
 final class CertificatePinningDelegate: NSObject, URLSessionDelegate, Sendable {
+
+    private let pinSetProvider: @Sendable () -> Set<String>
+    private let pinnedHostProvider: @Sendable () -> String
+
+    /// Production initializer — reads pins + host from ``MeeshyConfig``.
+    override convenience init() {
+        self.init(
+            pinSetProvider: { MeeshyConfig.shared.certificatePins },
+            pinnedHostProvider: {
+                URL(string: MeeshyConfig.shared.apiBaseURL)?.host ?? "gate.meeshy.me"
+            }
+        )
+    }
+
+    /// Designated initializer — exposed so tests can supply deterministic
+    /// providers and assert pin-set wiring.
+    init(
+        pinSetProvider: @escaping @Sendable () -> Set<String>,
+        pinnedHostProvider: @escaping @Sendable () -> String
+    ) {
+        self.pinSetProvider = pinSetProvider
+        self.pinnedHostProvider = pinnedHostProvider
+    }
+
     func urlSession(
         _ session: URLSession,
         didReceive challenge: URLAuthenticationChallenge
     ) async -> (URLSession.AuthChallengeDisposition, URLCredential?) {
-        let pinnedHost = URL(string: MeeshyConfig.shared.apiBaseURL)?.host ?? "gate.meeshy.me"
+        let pinnedHost = pinnedHostProvider()
         guard let serverTrust = challenge.protectionSpace.serverTrust,
               challenge.protectionSpace.host == pinnedHost else {
             return (.performDefaultHandling, nil)
@@ -20,10 +46,25 @@ final class CertificatePinningDelegate: NSObject, URLSessionDelegate, Sendable {
 
         var error: CFError?
         guard SecTrustEvaluateWithError(serverTrust, &error) else {
+            pinLogger.fault("TLS chain rejected for \(pinnedHost, privacy: .public) — system validation failed")
             return (.cancelAuthenticationChallenge, nil)
         }
 
-        return (.useCredential, URLCredential(trust: serverTrust))
+        let pinSet = pinSetProvider()
+        let chain = (SecTrustCopyCertificateChain(serverTrust) as? [SecCertificate]) ?? []
+        switch CertificatePinning.evaluate(chain: chain, against: pinSet) {
+        case .unconfigured:
+            // Backward-compatible: no pins → behave like the previous delegate.
+            return (.useCredential, URLCredential(trust: serverTrust))
+        case .matched:
+            return (.useCredential, URLCredential(trust: serverTrust))
+        case .mismatch:
+            pinLogger.fault("SPKI pin mismatch for \(pinnedHost, privacy: .public) — refusing to connect (no chain cert matched \(pinSet.count, privacy: .public) pins)")
+            return (.cancelAuthenticationChallenge, nil)
+        case .chainUnreadable:
+            pinLogger.fault("SPKI pin check could not read chain for \(pinnedHost, privacy: .public) — refusing to connect")
+            return (.cancelAuthenticationChallenge, nil)
+        }
     }
 }
 

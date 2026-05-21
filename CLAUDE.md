@@ -329,9 +329,13 @@ Always use `./apps/ios/meeshy.sh`:
 ### Test Credentials
 Stored out-of-tree in `apps/ios/fastlane/.env` (gitignored). The
 fastlane `release` lane reads `DEMO_USER` / `DEMO_PASSWORD` from
-there and forwards them to App Review. Ask the team for the values
-or pull from the production password manager — never inline them
-in this file again.
+there and forwards them to App Review. CI injects the same vars from
+GitHub Actions secrets (see `.github/workflows/ios-release.yml`).
+Ask the team for the values or pull from the production password
+manager — never inline them in this file again.
+
+See `apps/ios/fastlane/SECRETS.md` for the full list of ENV vars
+required by the fastlane lanes.
 
 ### Redis Rate Limit Reset
 ```bash
