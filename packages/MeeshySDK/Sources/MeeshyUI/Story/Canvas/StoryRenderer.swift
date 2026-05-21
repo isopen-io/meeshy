@@ -350,9 +350,17 @@ extension StoryRenderer {
             let routingKey = (!bgVideo.postMediaId.isEmpty)
                 ? bgVideo.postMediaId
                 : (bgVideo.mediaURL ?? "")
+            // `mute` reste à `false` au niveau du renderer : c'est l'état
+            // initial souhaité (la vidéo de fond porte de l'audio que le
+            // viewer DOIT entendre par défaut). Le mute global de la sidebar
+            // est ensuite propagé par le canvas via
+            // `StoryBackgroundLayer.isMuted` à chaque toggle, donc l'état
+            // dynamique reste géré in place sans recréer le layer. Avant cette
+            // correction `mute: true` était hardcodé ici, ce qui silenciait
+            // toutes les vidéos de fond quels que soient les réglages user.
             return .video(postMediaId: routingKey,
                           looping: bgVideo.loop ?? true,
-                          mute: true,
+                          mute: false,
                           thumbHash: bgVideo.thumbHash)
         }
         // Image background object or slide.mediaURL

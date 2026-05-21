@@ -697,6 +697,7 @@ public final class StoryCanvasUIView: UIView {
         // nouvelles layers consommeront `isMuted` via leur propre
         // `attachPlayer()` au moment du re-stamping.
         forEachMediaLayer { $0.isMuted = context.mute }
+        backgroundLayer.isMuted = context.mute
         rebuildLayers()
         // The context carries `postMediaURLResolver` / `preferredLanguages`,
         // both inputs to audio URL resolution. A context swap (e.g. `.empty`
@@ -1043,11 +1044,13 @@ public final class StoryCanvasUIView: UIView {
         }
 
         // Re-stamp l'état mute global sur les media layers fraîchement
-        // (re-)attachées. `StoryRenderer.renderItem` n'a pas accès à
-        // `isAudioMuted` au moment de créer le layer ; sans cette passe, une
-        // vidéo attachée après que l'utilisateur a tapé Mute en sidebar
-        // jouerait son audio jusqu'au prochain toggle.
+        // (re-)attachées + sur le background layer. `StoryRenderer.renderItem`
+        // et `StoryRenderer.renderBackground` n'ont pas accès à `isAudioMuted`
+        // au moment de créer le layer ; sans cette passe, une vidéo (foreground
+        // OU background) attachée après que l'utilisateur a tapé Mute en
+        // sidebar jouerait son audio jusqu'au prochain toggle.
         forEachMediaLayer { $0.isMuted = isAudioMuted }
+        backgroundLayer.isMuted = isAudioMuted
 
         // Prune le cache des layers dont l'id n'est plus présent dans la
         // slide (élément supprimé) — libère les AVPlayer associés.
@@ -1565,12 +1568,14 @@ public final class StoryCanvasUIView: UIView {
         isAudioMuted = true
         audioMixer.setMute(true)
         forEachMediaLayer { $0.isMuted = true }
+        backgroundLayer.isMuted = true
     }
 
     @objc private func handleComposerUnmute() {
         isAudioMuted = false
         audioMixer.setMute(false)
         forEachMediaLayer { $0.isMuted = false }
+        backgroundLayer.isMuted = false
     }
 
     @objc private func handleWillResignActive() {

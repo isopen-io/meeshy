@@ -54,6 +54,21 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     public private(set) nonisolated(unsafe) var kind: Kind = .solidColor(.black)
     public private(set) nonisolated(unsafe) var transform3D: BackgroundTransform = BackgroundTransform()
 
+    /// Reflète l'état mute global du reader (bouton Mute / Son de la sidebar).
+    /// Le canvas (`StoryCanvasUIView`) synchronise cette propriété à chaque
+    /// `handleComposerMute()` / `handleComposerUnmute()` et au moment du
+    /// `setReaderContext` pour propager le toggle au player vidéo de fond
+    /// sans recréer la layer. Avant cette propriété, le renderer hardcodait
+    /// `mute: true` à l'attach, donc l'audio des vidéos de fond restait
+    /// inaccessible quelle que soit l'intention de l'utilisateur.
+    @MainActor
+    public var isMuted: Bool = false {
+        didSet {
+            guard oldValue != isMuted else { return }
+            avPlayer?.isMuted = isMuted
+        }
+    }
+
     nonisolated(unsafe) var contentLayer: CALayer?
     nonisolated(unsafe) var avPlayer: AVPlayer?
     nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
@@ -302,7 +317,26 @@ extension StoryBackgroundLayer {
         } else {
             self.avPlayer = AVPlayer(playerItem: item)
         }
-        self.avPlayer?.isMuted = mute
+        // Le paramètre `mute` reste pris en compte pour compat avec les call
+        // sites existants (renderer), mais on respecte aussi l'état dynamique
+        // `self.isMuted` mis à jour par le canvas. Le OR garantit que si l'un
+        // OU l'autre demande mute, le player démarre silencieux ; le toggle
+        // unmute du sidebar passera ensuite par `isMuted.didSet`.
+        self.avPlayer?.isMuted = mute || self.isMuted
+        // Volume explicite (l'AVPlayer démarre à 1.0 mais soyons déterministes
+        // pour les paths de re-attach via cache LRU).
+        self.avPlayer?.volume = 1.0
+        // Defensive : assurer la catégorie `.playback` avant de jouer. La
+        // session est normalement déjà `.playback` (via `StoryMediaCoordinator
+        // .activate` sync depuis `onAppear`), mais le re-attach peut intervenir
+        // entre un retour foreground et l'activation `MediaSessionCoordinator`
+        // — sans cette ligne, la vidéo joue sous `.ambient` et reste silencieuse
+        // en mode silent (simulator OU device avec switch).
+        let session = AVAudioSession.sharedInstance()
+        if session.category != .playback {
+            try? session.setCategory(.playback, mode: .default, options: [.mixWithOthers, .duckOthers])
+            try? session.setActive(true)
+        }
         let pl = AVPlayerLayer(player: avPlayer)
         pl.frame = bounds
         pl.videoGravity = .resizeAspectFill
