@@ -285,7 +285,14 @@ final class StoryViewModelTests: XCTestCase {
     }
 
     func test_socketStoryCreated_createsNewGroupForNewAuthor() async {
-        let existingItem = makeStoryItem(id: "existing-story")
+        // Anchor both timestamps explicitly so the test asserts ordering by
+        // the Instagram-style sort (hasUnviewed → latestStory desc), not by
+        // the legacy "always insert at 0" rule. Bob posts a story timestamped
+        // AFTER alice's existing one — so Bob must land at index 0.
+        let existingItem = makeStoryItem(
+            id: "existing-story",
+            createdAt: Date(timeIntervalSince1970: 1_000_000)
+        )
         let existingGroup = makeStoryGroup(userId: "author-1", username: "alice", stories: [existingItem])
         sut.storyGroups = [existingGroup]
 
@@ -295,14 +302,18 @@ final class StoryViewModelTests: XCTestCase {
             id: "new-author-story",
             content: "From new author",
             authorId: "author-2",
-            authorUsername: "bob"
+            authorUsername: "bob",
+            createdAt: "2026-12-01T12:00:00.000Z"
         )
         mockSocket.storyCreated.send(newStoryPost)
 
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertEqual(sut.storyGroups.count, 2, "New author should create a new group")
-        XCTAssertEqual(sut.storyGroups[0].id, "author-2", "New group should be inserted at index 0")
+        XCTAssertEqual(
+            sut.storyGroups[0].id, "author-2",
+            "Bob's group sits at index 0 because his latest story (Dec 2026) is more recent than alice's (Jan 1970)"
+        )
     }
 
     func test_socketStoryCreated_deduplicatesExistingStory() async {
@@ -427,10 +438,13 @@ final class StoryViewModelTests: XCTestCase {
         sut.subscribeToSocketEvents()
 
         // Mark Alice's only story as viewed → alice.hasUnviewed flips to false,
-        // bob is still unviewed → bob takes the front slot.
-        mockSocket.storyViewed.send(SocketStoryViewedData(
-            storyId: "alice-1", viewerId: "me", viewerUsername: "me", viewCount: 1
-        ))
+        // bob is still unviewed → bob takes the front slot. `SocketStoryViewedData`
+        // is a `Decodable`-only struct (no public memberwise init), so we
+        // synthesize it via the JSON path the live socket would actually use.
+        let viewedData: SocketStoryViewedData = JSONStub.decode("""
+        {"storyId":"alice-1","viewerId":"me","viewerUsername":"me","viewCount":1}
+        """)
+        mockSocket.storyViewed.send(viewedData)
         try? await Task.sleep(nanoseconds: 100_000_000)
 
         XCTAssertTrue(sut.storyGroups[0].id == "bob",
