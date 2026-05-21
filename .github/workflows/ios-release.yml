@@ -81,9 +81,10 @@ jobs:
           FASTLANE_ITC_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           # App Store review demo account — never commit these values.
           # The release lane refuses to run without them.
-          ASC_DEMO_USER: ${{ secrets.ASC_DEMO_USER }}
-          ASC_DEMO_PASSWORD: ${{ secrets.ASC_DEMO_PASSWORD }}
-          ASC_REVIEW_NOTES: ${{ secrets.ASC_REVIEW_NOTES }}
+          # See apps/ios/fastlane/SECRETS.md.
+          DEMO_USER: ${{ secrets.DEMO_USER }}
+          DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+          DEMO_REVIEW_NOTES: ${{ secrets.DEMO_REVIEW_NOTES }}
         run: |
           cd apps/ios
           bundle exec fastlane ${{ steps.lane.outputs.lane }} skip_tests:true skip_metadata:true skip_screenshots:true

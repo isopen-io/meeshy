@@ -327,9 +327,15 @@ Always use `./apps/ios/meeshy.sh`:
 ```
 
 ### Test Credentials
-Test account credentials are stored as CI secrets (`ASC_DEMO_USER`, `ASC_DEMO_PASSWORD`)
-and in your local secret manager. They are intentionally NOT committed to the repository.
-Ask a maintainer or check your team password manager for current values.
+Stored out-of-tree in `apps/ios/fastlane/.env` (gitignored). The
+fastlane `release` lane reads `DEMO_USER` / `DEMO_PASSWORD` from
+there and forwards them to App Review. CI injects the same vars from
+GitHub Actions secrets (see `.github/workflows/ios-release.yml`).
+Ask the team for the values or pull from the production password
+manager — never inline them in this file again.
+
+See `apps/ios/fastlane/SECRETS.md` for the full list of ENV vars
+required by the fastlane lanes.
 
 ### Redis Rate Limit Reset
 ```bash

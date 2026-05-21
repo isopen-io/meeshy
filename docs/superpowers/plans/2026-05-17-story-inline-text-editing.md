@@ -951,7 +951,7 @@ Run: `./apps/ios/meeshy.sh run` (laisser tourner pour le stream de logs).
 
 - [ ] **Step 2: Parcours de validation**
 
-Se connecter (`atabeth` / `pD5p1ir9uxLUf2X2FpNE`), ouvrir le composer de stories, puis vérifier :
+Se connecter (`atabeth` / `<DEMO_PASSWORD — see apps/ios/fastlane/.env>`), ouvrir le composer de stories, puis vérifier :
 1. Ajouter un texte → taper dessus → le texte s'édite **en place**, le reste de la story reste visible (pas de voile sombre).
 2. La barre d'outils est dockée juste au-dessus du clavier.
 3. Placer un texte en bas du canvas → l'éditer → le canvas se décale vers le haut, le texte reste visible.

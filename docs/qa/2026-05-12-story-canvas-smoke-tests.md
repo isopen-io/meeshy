@@ -8,7 +8,7 @@
 
 - Simulator iPhone 16 Pro (UDID `30BFD3A6-C80B-489D-825E-5D14D6FCCAB5`)
 - Build via `./apps/ios/meeshy.sh run` (le build inclut le merge Plan B + StoryBackdropCapture + glass UI chromes)
-- Credentials de test : **atabeth** / `pD5p1ir9uxLUf2X2FpNE`
+- Credentials de test : **atabeth** / `<DEMO_PASSWORD — see apps/ios/fastlane/.env>`
 - Connexion gateway active sur `gate.meeshy.me` (ou local 3000)
 
 ## Pré-test : sanity check de boot

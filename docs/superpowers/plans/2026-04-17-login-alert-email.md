@@ -515,7 +515,7 @@ If local: start gateway via `cd services/gateway && pnpm dev`.
 ```bash
 curl -X POST https://gate.meeshy.me/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"username":"atabeth","password":"pD5p1ir9uxLUf2X2FpNE"}'
+  -d '{"username":"atabeth","password":"<DEMO_PASSWORD — see apps/ios/fastlane/.env>"}'
 ```
 
 Check the email inbox for the enriched login alert with device info, location, map, previous session, and revoke button.

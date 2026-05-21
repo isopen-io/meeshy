@@ -31,12 +31,20 @@ platform :ios do
     value
   end
 
+  # App Review demo account.
+  #
+  # Local dev: populate `apps/ios/fastlane/.env` (gitignored). The dotenv gem
+  # bundled with fastlane auto-loads that file when fastlane runs from this
+  # directory, so DEMO_USER / DEMO_PASSWORD show up as ENV.
+  # CI: GitHub Actions injects DEMO_USER / DEMO_PASSWORD as secrets (see
+  # .github/workflows/ios-release.yml).
+  # Either way, the `release` lane refuses to ship a build without them.
   def app_review_credentials
     {
-      demo_user: require_env("ASC_DEMO_USER"),
-      demo_password: require_env("ASC_DEMO_PASSWORD"),
-      notes: ENV["ASC_REVIEW_NOTES"] ||
-             "Demo credentials provided via App Store Connect secrets. Test messaging, social feed, stories, voice/video calls, and translation."
+      demo_user: require_env("DEMO_USER"),
+      demo_password: require_env("DEMO_PASSWORD"),
+      notes: ENV["DEMO_REVIEW_NOTES"] ||
+             "Use these credentials to log in and test all features: messaging, social feed, stories, voice/video calls, and translation."
     }
   end
 

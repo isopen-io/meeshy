@@ -757,7 +757,7 @@ Expected: suite verte (incluant `DiskCacheStoreAdoptionTests` + `OptimisticAttac
 
 - [ ] **Step 4.3 : Smoke visuel — adoption optimiste**
 
-Lancer l'app, login `atabeth` / `pD5p1ir9uxLUf2X2FpNE`.
+Lancer l'app, login `atabeth` / `<DEMO_PASSWORD — see apps/ios/fastlane/.env>`.
 
 **Scénario 1 : envoi audio**
 1. Ouvrir une conversation, enregistrer un audio (15s)

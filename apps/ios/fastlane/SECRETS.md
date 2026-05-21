@@ -21,14 +21,18 @@ Provide either `ASC_KEY_CONTENT` (CI) or `ASC_KEY_FILEPATH` (local) — not both
 
 | Variable             | Purpose                                      |
 |----------------------|----------------------------------------------|
-| `ASC_DEMO_USER`      | App Store reviewer demo username.            |
-| `ASC_DEMO_PASSWORD`  | App Store reviewer demo password.            |
-| `ASC_REVIEW_NOTES`   | (Optional) Custom notes for App Review.      |
+| `DEMO_USER`          | App Store reviewer demo username.            |
+| `DEMO_PASSWORD`      | App Store reviewer demo password.            |
+| `DEMO_REVIEW_NOTES`  | (Optional) Custom notes for App Review.      |
 
 These credentials grant App Review access to a fully functioning account.
 **Rotate them after any suspected exposure** (e.g. they previously lived in
-the Fastfile and `CLAUDE.md` — both have been purged in this branch but the
-secrets remain in git history and must be considered compromised).
+the Fastfile and `CLAUDE.md` — both have been purged but the leaked values
+remain in git history and must be considered compromised).
+
+Locally, populate them in `apps/ios/fastlane/.env` (gitignored). The dotenv
+gem bundled with fastlane auto-loads that file when fastlane runs from this
+directory.
 
 ## CI configuration
 
@@ -41,15 +45,15 @@ repository Settings → Secrets and variables → Actions panel.
 The recommended approach is a `.env` file ignored by git:
 
 ```
-# apps/ios/.env (gitignored)
-export ASC_KEY_ID=...
-export ASC_ISSUER_ID=...
-export ASC_KEY_FILEPATH="$HOME/.appstoreconnect/AuthKey_XXXX.p8"
-export ASC_DEMO_USER=...
-export ASC_DEMO_PASSWORD=...
-export MATCH_PASSWORD=...
+# apps/ios/fastlane/.env (gitignored — auto-loaded by fastlane's dotenv gem)
+ASC_KEY_ID=...
+ASC_ISSUER_ID=...
+ASC_KEY_FILEPATH=/Users/<you>/.appstoreconnect/AuthKey_XXXX.p8
+DEMO_USER=...
+DEMO_PASSWORD=...
+MATCH_PASSWORD=...
 ```
 
-Then `source apps/ios/.env` before invoking Fastlane.
-
-Confirm `apps/ios/.env` is listed in `.gitignore` before saving secrets there.
+The dotenv format does NOT use `export`. Confirm `apps/ios/fastlane/.env`
+is covered by `.gitignore` before saving secrets there (the root `.env*`
+glob already covers it).
