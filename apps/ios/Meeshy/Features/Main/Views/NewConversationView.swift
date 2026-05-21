@@ -54,7 +54,12 @@ struct NewConversationView: View {
         .adaptiveOnChange(of: searchQuery) { _, newValue in
             viewModel.search(query: newValue)
         }
-        .onChange(of: viewModel.createdConversation) { _, conversation in
+        // Deployment target is iOS 16; the two-argument
+        // `onChange(of:initial:_:)` shape is iOS 17+. Use `adaptiveOnChange`
+        // (MeeshyUI/Compatibility/AdaptiveOnChange.swift) which backports the
+        // `(oldValue, newValue)` signature to iOS 16 — same call site is
+        // already used 7 lines above for `searchQuery`.
+        .adaptiveOnChange(of: viewModel.createdConversation) { _, conversation in
             guard let conversation else { return }
             HapticFeedback.success()
             dismiss()
@@ -69,7 +74,7 @@ struct NewConversationView: View {
             }
             viewModel.consumeCreatedConversation()
         }
-        .onChange(of: viewModel.errorMessage) { _, message in
+        .adaptiveOnChange(of: viewModel.errorMessage) { _, message in
             guard message != nil else { return }
             HapticFeedback.error()
         }
