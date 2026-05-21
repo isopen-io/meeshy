@@ -50,11 +50,21 @@ public enum CertificatePinning {
               let keySize = attrs[kSecAttrKeySizeInBits as String] as? Int
         else { return nil }
 
+        // `kSecAttrKeyType*` are imported as `CFString`; Swift 6 rejects
+        // `as String` coercions used as `case` patterns ("expression pattern
+        // of type 'CFString' cannot match values of type 'String'"). Binding
+        // them to `let` constants above the switch turns each arm into an
+        // identifier pattern that compiles and keeps the same matching
+        // semantics — `keyType` is already a `String` via the `as? String`
+        // cast at the call site.
+        let rsaType = kSecAttrKeyTypeRSA as String
+        let ecType = kSecAttrKeyTypeECSECPrimeRandom as String
+
         switch (keyType, keySize) {
-        case (kSecAttrKeyTypeRSA as String, 2048): return rsa2048Header
-        case (kSecAttrKeyTypeRSA as String, 4096): return rsa4096Header
-        case (kSecAttrKeyTypeECSECPrimeRandom as String, 256): return ec256Header
-        case (kSecAttrKeyTypeECSECPrimeRandom as String, 384): return ec384Header
+        case (rsaType, 2048): return rsa2048Header
+        case (rsaType, 4096): return rsa4096Header
+        case (ecType, 256): return ec256Header
+        case (ecType, 384): return ec384Header
         default: return nil
         }
     }
