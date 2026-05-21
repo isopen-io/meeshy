@@ -105,14 +105,14 @@
 
 ## Phase 3 — Data flow integrity & Prisme Linguistique
 
-### [P3.1] Coalescing des paginations `loadOlder` / `loadNewer`
-- **Cible** : `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift`, `FeedViewModel.swift`
-- **Plan** :
-  - [ ] Test : `ConversationViewModelTests.test_concurrentLoadOlder_emitsOnlyOneRequest`
-  - [ ] Ajouter `private var inflightCursors: Set<String>` (cursor ou pageId selon API)
-  - [ ] `loadOlder()` guard early-return si cursor déjà en vol
-  - [ ] Pareil pour `loadNewer`
-- **Bonus** : ajouter un debounce 200ms côté UI pour absorber les `.onAppear` rapides
+### [P3.1] Coalescing des paginations `loadOlder` / `loadNewer` ✅
+- **Statut** : **VALIDÉ — déjà coalescé**, par le double mécanisme MainActor + boolean guard.
+- **Preuves** :
+  - `FeedViewModel.loadMoreIfNeeded:171` → `guard !isLoadingMore`. Sur MainActor le booléen est lu/écrit sans race.
+  - `ConversationViewModel.loadOlderMessages:1223` → `guard !isLoadingOlder, !isLoadingInitial` + debounce 200ms via `lastOlderPaginationTime`.
+  - `prefetchingComments: Set<String>` coalesce le prefetch des commentaires (`FeedViewModel.swift:37`).
+- **Plan livré (regression test)** :
+  - [x] `test_loadMoreIfNeeded_concurrentCalls_makeExactlyOneAPIRequest` — 5 calls concurrents → 1 seule requête API. Pin le contrat pour les refactors futurs.
 
 ### [P3.2] Purger `Locale.current` pour résolution de contenu
 - **Cible** : 4 sites identifiés (`ConversationView.swift:339, 346, 353, 397, 725`, `RegistrationViewModel.swift:146, 180, 187`)
