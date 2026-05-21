@@ -472,8 +472,11 @@ export class MessageHandler {
         (where) => this.prisma.conversation.findUnique({ where, select: { id: true, identifier: true } })
       );
 
-      // Récupérer traductions et stats en parallèle
-      const [translations, stats] = await Promise.allSettled([
+      // Récupérer traductions et déclencher le calcul des stats en parallèle.
+      // Les stats ne sont plus embarquées dans le payload message:new — elles
+      // sont diffusées via l'event dédié `conversation:stats`. L'appel
+      // updateOnNewMessage reste pour son side-effect (cache stats).
+      const [translations] = await Promise.allSettled([
         this._getMessageTranslations(message.id),
         conversationStatsService.updateOnNewMessage(
           this.prisma,
@@ -486,8 +489,7 @@ export class MessageHandler {
       const messagePayload: unknown = this._buildMessagePayload(
         message,
         normalizedId,
-        translations.status === 'fulfilled' ? translations.value : [],
-        stats.status === 'fulfilled' ? stats.value : null
+        translations.status === 'fulfilled' ? translations.value : []
       );
 
       // Enrichir avec les détails du forward si applicable
@@ -836,8 +838,7 @@ export class MessageHandler {
   private _buildMessagePayload(
     message: Message,
     conversationId: string,
-    translations: unknown[],
-    stats: unknown
+    translations: unknown[]
   ): unknown {
     // Build a backward-compatible sender object from Participant
     const senderParticipant = (message as unknown as Record<string, unknown>).sender as Record<string, unknown> | undefined;
@@ -892,7 +893,6 @@ export class MessageHandler {
         ciphertext: message.encryptedContent,
         ...(typeof message.encryptionMetadata === 'object' && message.encryptionMetadata ? message.encryptionMetadata : {})
       } : undefined,
-      meta: { conversationStats: stats }
     };
   }
 

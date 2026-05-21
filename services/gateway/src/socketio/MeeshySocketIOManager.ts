@@ -1230,11 +1230,12 @@ export class MeeshySocketIOManager {
       // car le message en base peut contenir l'identifier au lieu de l'ObjectId
       (message as any).conversationId = normalizedId;
       
-      // OPTIMISATION: Récupérer les traductions et les stats en parallèle (non-bloquant)
-      // Les stats seront envoyées séparément si elles prennent du temps
+      // OPTIMISATION: Récupérer les traductions et déclencher le calcul des stats
+      // en parallèle. Les stats ne sont plus embarquées dans le payload
+      // message:new — elles sont diffusées via l'event dédié `conversation:stats`.
+      // L'appel reste pour son side-effect (update du cache stats).
       let messageTranslations: any[] = [];
-      let updatedStats: any = null;
-      
+
       // Lancer les 2 requêtes en parallèle
       const [translationsResult, statsResult] = await Promise.allSettled([
         // Récupérer les traductions existantes du message (format JSON)
@@ -1275,10 +1276,8 @@ export class MeeshySocketIOManager {
         messageTranslations = translationsResult.value;
       }
 
-      if (statsResult.status === 'fulfilled') {
-        updatedStats = statsResult.value;
-      } else {
-        logger.warn(`⚠️ [PERF] Stats non disponibles, broadcast sans stats`);
+      if (statsResult.status !== 'fulfilled') {
+        logger.warn(`⚠️ [PERF] Calcul stats échoué (non-bloquant), cache non rafraîchi`);
       }
 
       // Construire le payload de message pour broadcast - compatible avec les types existants
@@ -1345,9 +1344,6 @@ export class MeeshySocketIOManager {
             lastName: (message as any).replyTo.sender.user?.lastName || '',
           } : undefined
         } : undefined,
-        meta: {
-          conversationStats: updatedStats
-        }
       };
 
       // DEBUG: Log pour vérifier les attachments et metadata
