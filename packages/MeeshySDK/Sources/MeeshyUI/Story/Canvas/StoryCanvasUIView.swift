@@ -1988,7 +1988,12 @@ public final class StoryCanvasUIView: UIView {
     /// Textes et stickers comptent comme foreground (cohérent avec le modèle
     /// de couches : tout ce qui n'est pas un bg media bloque la manipulation
     /// du bg).
-    private func updateManipulationLayer() {
+    ///
+    /// `forceEmit` force le call de `onManipulationLayerChanged` même si la
+    /// valeur n'a pas changé — utilisé après (re)assignation du callback
+    /// pour resync SwiftUI quand le bootstrap initial a pu rater le coche
+    /// (callback nil au moment de l'init, race avec @State).
+    private func updateManipulationLayer(forceEmit: Bool = false) {
         let medias = slide.effects.mediaObjects ?? []
         let hasBg = medias.contains(where: { $0.isBackground == true })
             || slide.effects.resolvedBackgroundMedia != nil
@@ -1999,9 +2004,19 @@ public final class StoryCanvasUIView: UIView {
         if hasFg { new = .foreground }
         else if hasBg { new = .background }
         else { new = .canvas }
-        guard new != currentManipulationLayer else { return }
+        let changed = new != currentManipulationLayer
         currentManipulationLayer = new
-        onManipulationLayerChanged?(new)
+        if changed || forceEmit {
+            onManipulationLayerChanged?(new)
+        }
+    }
+
+    /// Force la propagation de la couche courante (sans recompute) — appelée
+    /// par le `UIViewRepresentable` après (re)assignation du callback côté
+    /// SwiftUI pour garantir que le chip indicator reflète bien la couche
+    /// active dès la première frame, et après chaque body eval.
+    public func emitCurrentManipulationLayer() {
+        onManipulationLayerChanged?(currentManipulationLayer)
     }
 
     /// Résout l'id de l'élément manipulable courant pour un gesture qui

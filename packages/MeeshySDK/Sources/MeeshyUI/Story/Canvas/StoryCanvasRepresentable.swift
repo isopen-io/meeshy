@@ -49,10 +49,11 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onInlineTextEditEnded = onInlineTextEditEnded
         view.onManipulationLayerChanged = onManipulationLayerChanged
         // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
-        // poussée à un callback alors `nil`. On notifie une fois ici pour
-        // amorcer l'état SwiftUI.
+        // poussée au callback (nil à ce moment). On force l'émission après
+        // une frame pour que le chip indicator reflète bien la couche
+        // courante dès le premier rendu SwiftUI.
         DispatchQueue.main.async {
-            onManipulationLayerChanged?(view.currentManipulationLayer)
+            view.emitCurrentManipulationLayer()
         }
         return view
     }
@@ -65,6 +66,17 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onItemDoubleTapped = onItemDoubleTapped
         uiView.onItemDuplicated = onItemDuplicated
         uiView.onManipulationLayerChanged = onManipulationLayerChanged
+        // Re-emit la couche courante après chaque body eval (deferred via
+        // async pour ne pas muter le @State pendant la phase d'update
+        // SwiftUI). SwiftUI dédupe les writes égaux côté @State, donc le
+        // coût est nul quand la valeur ne change pas. Indispensable parce
+        // que le bootstrap async unique du `makeUIView` peut perdre la
+        // course avec un premier re-render — et l'indicator restait
+        // scotché sur `.canvas` même quand `currentManipulationLayer` était
+        // passé à `.foreground` côté UIKit. Cf. spec § 4.4.
+        DispatchQueue.main.async { [weak uiView] in
+            uiView?.emitCurrentManipulationLayer()
+        }
 
         // Skip de synchronisation pendant un geste actif : UIKit possède la
         // vérité de `slide`, propager une re-écriture parent provoquerait un
