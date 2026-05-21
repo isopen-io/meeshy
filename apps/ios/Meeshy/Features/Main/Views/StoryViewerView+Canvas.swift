@@ -306,6 +306,7 @@ struct StoryCardView: View {
                                       preloadedVideoURLs: preloadedVideoURLs,
                                       preloadedAudioURLs: preloadedAudioURLs)
                     .id("out-\(outgoing.id)")
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                     .opacity(outgoingOpacity)
                     .scaleEffect(closingScale)
                     .allowsHitTesting(false)
@@ -322,6 +323,11 @@ struct StoryCardView: View {
                                       onContentReady: { isContentReady = true },
                                       onContentProgress: { p in slideContentProgress = p })
                     .id(story.id)
+                    // Force the reader to the canvas size — UIViewRepresentable
+                    // can otherwise report an intrinsic size that drifts with
+                    // foreground media natural dimensions and pushes the
+                    // sidebar/composer beyond the viewport.
+                    .frame(width: geometry.size.width, height: geometry.size.height)
                     .opacity(contentOpacity)
                     .offset(y: textSlideOffset)
                     .scaleEffect(openingScale)
@@ -481,6 +487,15 @@ struct StoryCardView: View {
             }
 
             // === Layer 8: Right action sidebar — centered vertically, right side ===
+            // The sidebar is bounded between the header strip (top) and the
+            // composer strip (bottom) so its action buttons never slide
+            // off-screen on small iPhones (SE, mini). The sidebar itself
+            // ships a `ViewThatFits` fallback that switches to a vertical
+            // scroller when the bounded height is still too small for the
+            // full button stack.
+            let topReserved: CGFloat = topInset + 100   // progress bars + header
+            let bottomReserved: CGFloat = geometry.safeAreaInsets.bottom + (isOwnStory ? 56 : 96)
+            let sidebarMaxHeight = max(180, geometry.size.height - topReserved - bottomReserved)
             HStack {
                 Spacer()
                 StoryActionSidebarView(
@@ -512,8 +527,11 @@ struct StoryCardView: View {
                     pauseTimer: pauseTimer,
                     loadStoryComments: loadStoryComments
                 )
+                    .frame(maxHeight: sidebarMaxHeight)
                     .padding(.trailing, 6)
             }
+            .padding(.top, topReserved)
+            .padding(.bottom, bottomReserved)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
 
             // === Layer 9: Big reaction emoji overlay (dramatic burst + float) ===
@@ -640,6 +658,18 @@ struct StoryCardView: View {
                 .zIndex(150)
             }
         }
+        // Lock the entire story canvas (background + reader + overlays +
+        // sidebar + composer) to EXACTLY the viewport size we were handed
+        // in `geometry`. Without this, any child with an intrinsic size
+        // bigger than the proposed size — a long translated text line, a
+        // foreground media at natural pixel size, a 100pt big-reaction
+        // emoji during animation — silently grows the enclosing ZStack
+        // and pushes the right-side action sidebar (and bottom composer)
+        // off-screen, making them untappable. `.clipped()` discards
+        // anything that still tries to draw past the bounds rather than
+        // letting it leak into adjacent UI.
+        .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
+        .clipped()
         // Délai de grâce du spinner : à chaque changement de slide on remet
         // `showSlowLoader` à false, puis on ne l'arme qu'après 200 ms. Si le
         // média devient prêt avant (cache disque / préchauffe prefetcher), le
@@ -781,8 +811,14 @@ struct StoryViewerContentView: View {
 
             GeometryReader { geometry in
                 ZStack {
-                    // The story card with all transforms layered
+                    // The story card with all transforms layered.
+                    // Pin to geometry size BEFORE applying scale/clip — the
+                    // story canvas itself (`StoryCardView`) hard-frames its
+                    // body, and we double-down here so neither the
+                    // `scaleEffect` nor any unexpected intrinsic content
+                    // size can leak beyond the viewport's actual bounds.
                     makeStoryCard(geometry)
+                        .frame(width: geometry.size.width, height: geometry.size.height)
                         .scaleEffect(cardScale * (1.0 - slideProgress * 0.08))
                         .clipShape(RoundedRectangle(cornerRadius: cardCornerRadius + slideProgress * 16, style: .continuous))
                         .opacity(cardOpacity)

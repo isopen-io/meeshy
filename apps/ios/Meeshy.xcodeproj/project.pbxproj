@@ -64,6 +64,7 @@
 		7797E2B5166F5EDAF70FAB38 /* FeedSocketHandler.swift in Sources */ = {isa = PBXBuildFile; fileRef = 27B604508315DF24C24B5BD8 /* FeedSocketHandler.swift */; };
 		79D7E73605F1F2D22F0CA4F3 /* TextPostCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = 81F428B4BBE411144826BD5F /* TextPostCell.swift */; };
 		7E4ACB96705AA96ECDF87640 /* DependencyContainer.swift in Sources */ = {isa = PBXBuildFile; fileRef = DEFC47F367886DA4FF305C8D /* DependencyContainer.swift */; };
+		DLAY0001000100010001BLD1 /* DeviceLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = DLAY0001000100010001REF1 /* DeviceLayout.swift */; };
 		7FCC2F965C3421351E49E5E0 /* UserStatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3D8B8C79D3A388D45C5B5EEF /* UserStatsView.swift */; };
 		81D7463D392AC72672A45647 /* AudioBubbleCell.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2A08DB67EE64A4EEE71EBC /* AudioBubbleCell.swift */; };
 		82C6C143D1C7470481A1B2FE /* ConversationListView+Rows.swift in Sources */ = {isa = PBXBuildFile; fileRef = 583B6F0C56A44AA8A68F517A /* ConversationListView+Rows.swift */; };
@@ -809,6 +810,7 @@
 		HPSU00100000000001F00 /* HapticSurfacing.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HapticSurfacing.swift; sourceTree = "<group>"; };
 		IC3900000000001F39 /* IncomingCallView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = IncomingCallView.swift; sourceTree = "<group>"; };
 		IDSC0001000100010001REF1 /* ImageDownsamplingConfig.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageDownsamplingConfig.swift; sourceTree = "<group>"; };
+		DLAY0001000100010001REF1 /* DeviceLayout.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = DeviceLayout.swift; sourceTree = "<group>"; };
 		IDSC0001000100010002REF1 /* ImageDownsamplingTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ImageDownsamplingTests.swift; sourceTree = "<group>"; };
 		IMSFT001000100010001000 /* MessageSendFlowTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageSendFlowTests.swift; sourceTree = "<group>"; };
 		INVFS0000000003F01 /* InviteFriendsSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteFriendsSheet.swift; sourceTree = "<group>"; };
@@ -1155,6 +1157,7 @@
 			children = (
 				DEFC47F367886DA4FF305C8D /* DependencyContainer.swift */,
 				IDSC0001000100010001REF1 /* ImageDownsamplingConfig.swift */,
+				DLAY0001000100010001REF1 /* DeviceLayout.swift */,
 			);
 			path = Core;
 			sourceTree = "<group>";
@@ -2343,6 +2346,7 @@
 				3030AF23EF81FAEF5970931A /* CrashlyticsReporter.swift in Sources */,
 				7E4ACB96705AA96ECDF87640 /* DependencyContainer.swift in Sources */,
 				IDSC0001000100010001BLD1 /* ImageDownsamplingConfig.swift in Sources */,
+				DLAY0001000100010001BLD1 /* DeviceLayout.swift in Sources */,
 				4A2C3C40E1AC07C9F9EDD570 /* CommentStore.swift in Sources */,
 				A09DDAFA06FAFA1D6FBC4ED8 /* FeedStore.swift in Sources */,
 				BC20CA996A5E2D0E46BB3F06 /* MessageStore.swift in Sources */,

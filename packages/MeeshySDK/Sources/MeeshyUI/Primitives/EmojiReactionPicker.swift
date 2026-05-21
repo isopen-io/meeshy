@@ -283,14 +283,19 @@ public struct EmojiFullPickerSheet: View {
     @State private var dragOffset: CGFloat = 0
 
     private let minHeight: CGFloat = 340
-    private let maxHeight: CGFloat = UIScreen.main.bounds.height * 0.85
 
     public init(style: Style = .dark, onReact: ((String) -> Void)? = nil, onDismiss: (() -> Void)? = nil) {
         self.style = style; self.onReact = onReact; self.onDismiss = onDismiss
     }
 
-    private var currentHeight: CGFloat {
-        min(max(sheetHeight - dragOffset, minHeight), maxHeight)
+    private func maxHeight(for containerHeight: CGFloat) -> CGFloat {
+        // On large screens (iPad) cap the picker to avoid towering above
+        // the message it reacts to.
+        min(containerHeight * 0.85, 620)
+    }
+
+    private func currentHeight(for containerHeight: CGFloat) -> CGFloat {
+        min(max(sheetHeight - dragOffset, minHeight), maxHeight(for: containerHeight))
     }
 
     public var body: some View {
@@ -302,13 +307,14 @@ public struct EmojiFullPickerSheet: View {
                     categoryTabs
                     emojiGrid
                 }
-                .frame(height: currentHeight)
-                .frame(maxWidth: .infinity)
+                .frame(height: currentHeight(for: geo.size.height))
+                .frame(maxWidth: min(geo.size.width, 560))
                 .background(sheetBackground)
                 .clipShape(RoundedRectangle(cornerRadius: 24, style: .continuous))
                 .gesture(sheetDragGesture)
                 .transition(.move(edge: .bottom))
             }
+            .frame(maxWidth: .infinity)
         }
         .ignoresSafeArea()
     }

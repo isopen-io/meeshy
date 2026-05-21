@@ -1314,7 +1314,13 @@ public struct StoryComposerView: View {
         }
         let toolbarHeight: CGFloat = 132   // barre bulles + marge (ajuster au visuel)
         let margin: CGFloat = 24
-        let screenHeight = UIScreen.main.bounds.height
+        // Use the active window's height (NOT UIScreen.main.bounds.height),
+        // so split-screen / Stage Manager / iPad multitasking report the
+        // window the composer actually lives in instead of the full display.
+        let screenHeight = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first?.windows.first(where: { $0.isKeyWindow })?.bounds.height
+            ?? UIScreen.main.bounds.height
         let textCenterY = canvasNaturalFrame.minY
             + CGFloat(textObj.y) * canvasNaturalFrame.height
         let visibleBottom = screenHeight - keyboardHeight - toolbarHeight - margin

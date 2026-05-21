@@ -64,6 +64,7 @@ struct ConversationListView: View {
     var selectedConversationId: String? = nil
 
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     // Lecture directe sans @ObservedObject — évite que chaque changement de thème ou de verrou
     // force un re-render complet de la liste (centaines de rows). Les valeurs sont lues
     // lors des refreshs naturels (scroll, interaction).
@@ -217,9 +218,15 @@ struct ConversationListView: View {
 
     @ViewBuilder
     private func sectionConversations(_ conversations: [Conversation]) -> some View {
-        // rowWidth = (screenWidth - sectionPadding) - innerPadding - avatar - badge - spacing
-        // sectionPadding: 16+16=32 applied by caller; innerPadding: 32; avatar: 52; badge: 28; spacing: 24
-        let rowWidth = UIScreen.main.bounds.width - 32 - 32 - 52 - 28 - 24
+        // rowWidth derives from the actual containing column width (iPad
+        // left column is much narrower than `UIScreen.main.bounds.width`)
+        // minus innerPadding(32) + avatar(52) + badge(28) + spacing(24).
+        // On iPad the column ratio is roughly 0.38 of the screen, so we
+        // clamp to that floor explicitly to avoid text overflow.
+        let baseWidth = horizontalSizeClass == .regular
+            ? min(UIScreen.main.bounds.width * 0.42, 520)
+            : UIScreen.main.bounds.width - 32
+        let rowWidth = max(120, baseWidth - 32 - 52 - 28 - 24)
         LazyVStack(spacing: 6) {
             ForEach(conversations, id: \.id) { conversation in
                 conversationRow(for: conversation, rowWidth: rowWidth)
