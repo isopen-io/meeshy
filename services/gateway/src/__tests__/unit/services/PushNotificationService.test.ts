@@ -23,18 +23,27 @@ const mockFirebaseMessagingSend = jest.fn();
 const mockFirebaseInitializeApp = jest.fn();
 const mockFirebaseCredentialCert = jest.fn().mockReturnValue({});
 
+// Shared shape for both default and named-export sides of the mock.
+// Production uses `import * as admin from 'firebase-admin'` (or `import admin
+// from 'firebase-admin'`) and then accesses `admin.apps`, `admin.initializeApp`,
+// `admin.credential`, `admin.messaging()`. Under ts-jest's CJS interop, those
+// land on the top-level namespace, not on `.default`, so we expose both.
+const mockFirebaseMessagingFactory = jest.fn(() => ({
+  send: mockFirebaseMessagingSend,
+}));
+const firebaseAdminMockShape = {
+  apps: [],
+  initializeApp: mockFirebaseInitializeApp,
+  credential: {
+    cert: mockFirebaseCredentialCert,
+  },
+  messaging: mockFirebaseMessagingFactory,
+};
+
 jest.mock('firebase-admin', () => ({
   __esModule: true,
-  default: {
-    apps: [],
-    initializeApp: mockFirebaseInitializeApp,
-    credential: {
-      cert: mockFirebaseCredentialCert,
-    },
-    messaging: jest.fn(() => ({
-      send: mockFirebaseMessagingSend,
-    })),
-  },
+  default: firebaseAdminMockShape,
+  ...firebaseAdminMockShape,
 }));
 
 // APNS mock
@@ -68,15 +77,18 @@ jest.mock('@parse/node-apn', () => ({
 // File system mock
 const mockExistsSync = jest.fn();
 const mockReadFileSync = jest.fn();
+const mockStatSync = jest.fn().mockReturnValue({ isFile: () => true });
 
 jest.mock('fs', () => ({
   __esModule: true,
   default: {
     existsSync: mockExistsSync,
     readFileSync: mockReadFileSync,
+    statSync: mockStatSync,
   },
   existsSync: mockExistsSync,
   readFileSync: mockReadFileSync,
+  statSync: mockStatSync,
 }));
 
 // Path mock
@@ -168,19 +180,12 @@ describe('PushNotificationService', () => {
     // Reset module cache to get fresh config
     jest.resetModules();
 
-    // Re-apply mocks after module reset
+    // Re-apply mocks after module reset. Mirror the top-level mock shape so
+    // both `admin.X` and `admin.default.X` resolve under ts-jest CJS interop.
     jest.doMock('firebase-admin', () => ({
       __esModule: true,
-      default: {
-        apps: [],
-        initializeApp: mockFirebaseInitializeApp,
-        credential: {
-          cert: mockFirebaseCredentialCert,
-        },
-        messaging: jest.fn(() => ({
-          send: mockFirebaseMessagingSend,
-        })),
-      },
+      default: firebaseAdminMockShape,
+      ...firebaseAdminMockShape,
     }));
 
     jest.doMock('@parse/node-apn', () => ({
@@ -198,9 +203,11 @@ describe('PushNotificationService', () => {
       default: {
         existsSync: mockExistsSync,
         readFileSync: mockReadFileSync,
+        statSync: mockStatSync,
       },
       existsSync: mockExistsSync,
       readFileSync: mockReadFileSync,
+      statSync: mockStatSync,
     }));
 
     jest.doMock('path', () => ({
@@ -754,6 +761,119 @@ describe('PushNotificationService', () => {
 
       expect(result).toHaveLength(1);
       expect(result[0].success).toBe(true);
+    });
+
+    it('should propagate subtitle to APNs alert for group/global conversations', async () => {
+      // RED: this test currently fails because PushNotificationPayload has no
+      // `subtitle` field and sendViaAPNS never sets notification.alert.subtitle.
+      // Once the gateway is fixed to forward subtitle, iOS will display it
+      // natively between title and body on lock-screen banners, even when
+      // INSendMessageIntent.donate rewrites the title for Communication
+      // Notifications (the subtitle survives the rewrite).
+      mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'com.test.app' },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      await service.sendToUser({
+        userId: 'user-123',
+        payload: {
+          title: 'meeshy sama',
+          subtitle: 'Meeshy Global',
+          body: '3 mois de chantier intense, voici le récap !',
+        } as any,
+      });
+
+      expect(mockApnsProviderSend).toHaveBeenCalled();
+      const notification = mockApnsProviderSend.mock.calls.at(-1)?.[0];
+      expect(notification.alert).toEqual(expect.objectContaining({
+        title: 'meeshy sama',
+        subtitle: 'Meeshy Global',
+        body: '3 mois de chantier intense, voici le récap !',
+      }));
+    });
+
+    it('should omit subtitle from APNs alert when not provided (direct messages)', async () => {
+      mockApnsProviderSend.mockResolvedValue({ sent: [{ device: 'apns-token-123' }], failed: [] });
+
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_APNS_PUSH: 'true',
+        APNS_KEY_ID: 'test-key-id',
+        APNS_TEAM_ID: 'test-team-id',
+        APNS_KEY_PATH: '/path/to/key.p8',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'token-1', token: 'apns-token-123', type: 'apns', platform: 'ios', bundleId: 'com.test.app' },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      await service.sendToUser({
+        userId: 'user-123',
+        payload: {
+          title: 'Alice',
+          body: 'Hey!',
+        },
+      });
+
+      const notification = mockApnsProviderSend.mock.calls.at(-1)?.[0];
+      expect(notification.alert.subtitle).toBeUndefined();
+    });
+
+    it('should propagate subtitle to FCM iOS alert via apns.payload.aps.alert.subtitle', async () => {
+      // Firebase Admin requires the credentials file to exist and be parseable
+      mockExistsSync.mockReturnValue(true);
+      mockReadFileSync.mockReturnValue(JSON.stringify({
+        type: 'service_account',
+        project_id: 'meeshy-test',
+        private_key: 'fake',
+        client_email: 'test@meeshy-test.iam.gserviceaccount.com',
+      }));
+      mockFirebaseMessagingSend.mockResolvedValue('message-id-123');
+
+      const { PushNotificationService } = await getServiceWithEnv({
+        ENABLE_PUSH_NOTIFICATIONS: 'true',
+        ENABLE_FCM_PUSH: 'true',
+        FIREBASE_ADMIN_CREDENTIALS_PATH: '/fake/creds.json',
+      });
+      const service = new PushNotificationService(mockPrisma as any);
+
+      mockPrisma.pushToken.findMany.mockResolvedValue([
+        { id: 'token-1', token: 'fcm-token-123', type: 'fcm', platform: 'ios' },
+      ]);
+      mockPrisma.pushToken.update.mockResolvedValue({});
+
+      await service.sendToUser({
+        userId: 'user-123',
+        payload: {
+          title: 'meeshy sama',
+          subtitle: 'Meeshy Global',
+          body: '3 mois de chantier intense',
+        } as any,
+      });
+
+      const sentMessage = mockFirebaseMessagingSend.mock.calls.at(-1)?.[0];
+      // For iOS via FCM, the canonical place for subtitle is
+      // `apns.payload.aps.alert.subtitle` (overrides the flat top-level
+      // `notification.title/body` which doesn't carry subtitle).
+      expect(sentMessage?.apns?.payload?.aps?.alert).toEqual(expect.objectContaining({
+        title: 'meeshy sama',
+        subtitle: 'Meeshy Global',
+        body: '3 mois de chantier intense',
+      }));
     });
   });
 
