@@ -610,6 +610,10 @@ extension StoryViewerView {
     }
 
     /// Restart timer AND clear manual pause (e.g., after drag->transition).
+    /// Changement de slide ou sortie de transition : on repart en lecture.
+    /// `isPaused = false` désarme automatiquement le toggle long-press
+    /// (source de vérité unique) et déclenche `.storyPlayerResume` côté
+    /// canvas via `.adaptiveOnChange(of: isPaused)` dans `StoryViewerView`.
     private func restartTimer() {
         isPaused = false
         startTimer()
@@ -746,11 +750,18 @@ extension StoryViewerView {
         return effective
     }
 
-    /// Manual pause — only for direct gesture holds (long press, drag).
+    /// Manual pause — only for direct gesture holds (long press, drag) and
+    /// programmatic flows (sheet present, etc.). Source de vérité unique
+    /// du toggle long-press : `isPaused = true` ⇒ timer arrêté + post de
+    /// `.storyPlayerPause` au canvas via l'observer `.onChange(of: isPaused)`
+    /// dans `StoryViewerView` → bg vidéo + audios + effets gelés ensemble.
     func pauseTimer() { isPaused = true }
 
-    /// Manual resume — only for ending gesture holds.
-    func resumeTimer() { isPaused = false }
+    /// Manual resume — réveille le timer et toute la story (canvas inclus
+    /// via la notification `.storyPlayerResume` postée par l'observer).
+    func resumeTimer() {
+        isPaused = false
+    }
 
     // MARK: - Initial Action (Phase F — notification entry point)
 

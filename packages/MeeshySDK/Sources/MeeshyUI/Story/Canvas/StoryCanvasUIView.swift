@@ -20,6 +20,15 @@ public extension Notification.Name {
     static let storyComposerMuteCanvas = Notification.Name("storyComposerMuteCanvas")
     /// Posted by the composer to restore canvas audio after muting.
     static let storyComposerUnmuteCanvas = Notification.Name("storyComposerUnmuteCanvas")
+    /// Posted by the viewer when the user toggles the story to a paused state
+    /// (long-press toggle). The canvas pauses ALL media playback —
+    /// background video, foreground videos and audio engine — so the story
+    /// freezes as a single unit alongside the progress-bar timer.
+    static let storyPlayerPause = Notification.Name("storyPlayerPause")
+    /// Posted by the viewer when the user toggles the story back to playing
+    /// (tap on a paused story). Mirrors `storyPlayerPause` — the canvas
+    /// resumes background video, foreground videos and audio engine together.
+    static let storyPlayerResume = Notification.Name("storyPlayerResume")
     /// Posted by the timeline when playback starts inside the composer.
     static let timelineDidStartPlaying = Notification.Name("timelineDidStartPlaying")
     /// Posted by the timeline when playback stops inside the composer.
@@ -375,6 +384,7 @@ public final class StoryCanvasUIView: UIView {
         setupGesturesAll()
         observeAppLifecycle()
         observeMuteNotifications()
+        observeStoryPlayerNotifications()
         // Single-owner audio registry: registering the reader mixer lets a
         // second reader surface (viewer + composer preview mounted together)
         // stop this engine before starting its own (RC4.6).
@@ -1624,6 +1634,77 @@ public final class StoryCanvasUIView: UIView {
         for id in toMute { audioMixer.setMute(true, for: id) }
         for id in toUnmute { audioMixer.setMute(false, for: id) }
         lastAppliedMutedSet = next
+    }
+
+    /// Listens to viewer-level pause/resume notifications (`.storyPlayerPause`
+    /// / `.storyPlayerResume`) emitted when the user toggles the story with
+    /// a long-press. The story progress-bar timer in `StoryViewerView` and
+    /// this canvas form a single playback unit: pausing the timer pauses
+    /// every media here (bg video, foreground videos, audio mixer, effect
+    /// display-link), exactly like pausing a video player.
+    private func observeStoryPlayerNotifications() {
+        let nc = NotificationCenter.default
+        nc.addObserver(self,
+                       selector: #selector(handleStoryPlayerPause),
+                       name: .storyPlayerPause,
+                       object: nil)
+        nc.addObserver(self,
+                       selector: #selector(handleStoryPlayerResume),
+                       name: .storyPlayerResume,
+                       object: nil)
+    }
+
+    /// `true` while the story is paused via the viewer-level long-press
+    /// toggle. Distinct from `isAudioMuted` (which controls volume only) —
+    /// `isPlaybackPaused` freezes every clock-driven surface so the story
+    /// stops as a unit (the « long-press = stop comme une vidéo »
+    /// requirement).
+    private var isPlaybackPaused: Bool = false
+
+    @objc private func handleStoryPlayerPause() {
+        setStoryPlaybackPaused(true)
+    }
+
+    @objc private func handleStoryPlayerResume() {
+        setStoryPlaybackPaused(false)
+    }
+
+    /// Single entry point for the viewer-level pause/resume toggle. Pauses
+    /// (or resumes) **every** media surface this canvas owns:
+    /// - the background video (`backgroundLayer.isPlaybackActive`)
+    /// - every foreground `AVPlayer` (`forEachAVPlayer`)
+    /// - the foreground+background audio engine (`audioMixer.pause/play`)
+    /// - the keyframe effects clock (`stopPlayback`/`startPlayback`)
+    ///
+    /// Idempotent — re-applying the same state is cheap (early-return).
+    /// Gated on `.play` because pause has no meaning in edit / preview modes.
+    private func setStoryPlaybackPaused(_ paused: Bool) {
+        guard mode == .play else { return }
+        guard isPlaybackPaused != paused else { return }
+        isPlaybackPaused = paused
+
+        if paused {
+            // Freeze every media clock.
+            forEachAVPlayer { $0.pause() }
+            backgroundLayer.isPlaybackActive = false
+            audioMixer.pause()
+            // Effects / keyframe animation clock — invalidating the
+            // display link freezes the current frame without dropping
+            // any layer state (resume re-attaches a fresh CADisplayLink).
+            stopPlayback()
+        } else {
+            // Resume everything together. `startPlayback()` re-arms the
+            // CADisplayLink and flips `backgroundLayer.isPlaybackActive`
+            // back to true (which restarts the bg video player). The
+            // foreground players and the audio mixer are restarted from
+            // their last position via the same path
+            // `handleDidBecomeActive` uses for app-foregrounding.
+            startPlayback()
+            forEachAVPlayer { $0.play() }
+            if window != nil, !completionFired {
+                startAudioPlayback()
+            }
+        }
     }
 
     @objc private func handleComposerMute() {

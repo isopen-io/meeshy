@@ -371,6 +371,18 @@ struct StoryViewerView: View {
                 isPresented = false
             }
         }
+        // Long-press toggle : `isPaused` est la source de vérité unique.
+        // Quand l'utilisateur fait un long-press (overlay gestuel), il
+        // passe à `true` ; le tap suivant le remet à `false`. On notifie
+        // ici le canvas (vidéo BG + foreground + audio + effets) pour que
+        // toute la story s'arrête ou redémarre **ensemble** — "comme une
+        // vidéo" (cf. spec long-press).
+        .adaptiveOnChange(of: isPaused) { _, paused in
+            NotificationCenter.default.post(
+                name: paused ? .storyPlayerPause : .storyPlayerResume,
+                object: nil
+            )
+        }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
             isContentReady = false
             refreshPrefetchWindowAndTimer()
@@ -830,6 +842,7 @@ struct StoryViewerView: View {
             storyDrafts: $storyDrafts,
             chromeVisible: $chromeVisible,
             isFullscreenStorySession: $isFullscreenStorySession,
+            isPausedBinding: $isPaused,
             keyboard: keyboard,
             triggerStoryReaction: { triggerStoryReaction($0) },
             pauseTimer: { pauseTimer() },
