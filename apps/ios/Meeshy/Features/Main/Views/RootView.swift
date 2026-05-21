@@ -324,6 +324,11 @@ struct RootView: View {
             // Connect Socket.IO early so the backend knows we're online
             MessageSocketManager.shared.connect()
             statusViewModel.subscribeToSocketEvents()
+            // Sans cet appel, le SDK reçoit bien `story:created` /
+            // `story:updated` / `story:deleted` mais personne n'est sink'é
+            // sur les publishers de SocialSocketManager → les stories des
+            // amis n'arrivent jamais dans `storyGroups` en temps réel.
+            storyViewModel.subscribeToSocketEvents()
 
             // Start SyncEngine socket relay
             await ConversationSyncEngine.shared.startSocketRelay()
