@@ -108,7 +108,16 @@ struct ComposerBottomBand: View {
                         showAudioDocumentPicker: $showAudioDocumentPicker,
                         showVoiceRecorderSheet: $showVoiceRecorderSheet,
                         onBack: onBackFromToolPanel,
-                        onSwitchTool: { other in viewModel.selectTool(other) },
+                        // Délègue à `onTapTile` qui est l'unique chemin de
+                        // commutation d'éditeur (cf. `ComposerControlsLayer`) :
+                        //   .timeline → `viewModel.isTimelineVisible = true`
+                        //   sinon     → `bandStateMachine.tapTile(tool)` +
+                        //               `viewModel.selectTool(tool)`
+                        // Sans ce relai, le chip ne changerait QUE
+                        // `viewModel.activeTool` — le BandStateMachine
+                        // resterait sur `.toolPanel(.media)` et le panel
+                        // ne switcherait pas visuellement.
+                        onSwitchTool: onTapTile,
                         onEditMedia: onEditMedia,
                         onEditText: onEditText,
                         onDeleteText: onDeleteText,

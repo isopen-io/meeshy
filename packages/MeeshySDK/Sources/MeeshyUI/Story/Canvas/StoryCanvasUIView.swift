@@ -179,7 +179,12 @@ public final class StoryCanvasUIView: UIView {
     /// (only `currentTime` advances), so the same captured texture is reused
     /// across the full slide duration — turning the worst case 60 Hz
     /// `CARenderer.render()` loop into a single capture per slide.
-    private var slideContentRevision: UInt64 = 0
+    /// Compteur incrémenté à chaque `slide.didSet` (révision sémantique
+    /// du contenu). Utilisé en interne pour le caching renderer et en
+    /// test pour vérifier qu'une mutation déclenche un nombre prévisible
+    /// de `didSet` (régression perf : la triple mutation directe via
+    /// subscript en faisait exploser le compte).
+    internal var slideContentRevision: UInt64 = 0
     private var lastCapturedRevision: UInt64?
     private var lastCapturedSize: CGSize?
 
@@ -1987,19 +1992,14 @@ public final class StoryCanvasUIView: UIView {
     /// Recalcule `currentManipulationLayer` à partir du contenu de la slide.
     /// Textes et stickers comptent comme foreground (cohérent avec le modèle
     /// de couches : tout ce qui n'est pas un bg media bloque la manipulation
-    /// du bg).
-    ///
-    /// `forceEmit` force le call de `onManipulationLayerChanged` même si la
-    /// valeur n'a pas changé — utilisé après (re)assignation du callback
-    /// pour resync SwiftUI quand le bootstrap initial a pu rater le coche
-    /// (callback nil au moment de l'init, race avec @State).
-    private func updateManipulationLayer(forceEmit: Bool = false) {
+    /// du bg). N'émet via `onManipulationLayerChanged` que si la valeur a
+    /// effectivement changé — pour les re-emissions « défensives »
+    /// (bootstrap, resync SwiftUI), utiliser `emitCurrentManipulationLayer()`.
+    private func updateManipulationLayer() {
         let new = Self.resolveManipulationLayer(for: slide.effects)
-        let changed = new != currentManipulationLayer
+        guard new != currentManipulationLayer else { return }
         currentManipulationLayer = new
-        if changed || forceEmit {
-            onManipulationLayerChanged?(new)
-        }
+        onManipulationLayerChanged?(new)
     }
 
     /// Résolution pure de la couche manipulable à partir des effets d'une
@@ -2352,6 +2352,12 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     /// le z-order de rendu, et on réordonne aussi le tableau pour rester
     /// cohérent avec l'inspecteur.
     ///
+    /// **Perf** : chaque mutation passe par une copie locale puis UNE
+    /// réassignation au `slide`. Mutations directes via subscript (`.foo[i]
+    /// = ...`) ou `remove/append` sur la propriété déclencheraient
+    /// `slide.didSet` plusieurs fois — donc `rebuildLayers()` plusieurs
+    /// fois par tap — visible jitter sur les devices lents.
+    ///
     /// `internal` plutôt que `private` pour symétrie avec `sendToBack(id:)`
     /// et pour permettre les tests sans simuler un tap UIKit.
     internal func bringForegroundToFront(id: String) {
@@ -2359,11 +2365,13 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
 
         // Texte
         if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }) {
-            guard slide.effects.textObjects[idx].zIndex < topZ
-                  || idx != slide.effects.textObjects.count - 1 else { return }
-            slide.effects.textObjects[idx].zIndex = topZ
-            let item = slide.effects.textObjects.remove(at: idx)
-            slide.effects.textObjects.append(item)
+            var texts = slide.effects.textObjects
+            guard texts[idx].zIndex < topZ
+                  || idx != texts.count - 1 else { return }
+            texts[idx].zIndex = topZ
+            let item = texts.remove(at: idx)
+            texts.append(item)
+            slide.effects.textObjects = texts
             onItemModified?(slide)
             return
         }

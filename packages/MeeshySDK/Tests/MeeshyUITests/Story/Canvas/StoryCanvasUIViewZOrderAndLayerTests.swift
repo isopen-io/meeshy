@@ -127,6 +127,53 @@ final class StoryCanvasUIViewZOrderAndLayerTests: XCTestCase {
         XCTAssertEqual(stickers.last?.id, "s1")
     }
 
+    func test_bringForegroundToFront_text_triggersOnlyOneSlideDidSet() {
+        var effects = StoryEffects()
+        effects.textObjects = [
+            makeText(id: "t1", zIndex: 1),
+            makeText(id: "t2", zIndex: 2)
+        ]
+        let canvas = makeCanvas(slide: makeSlide(effects: effects))
+        let before = canvas.slideContentRevision
+
+        canvas.bringForegroundToFront(id: "t1")
+
+        // Régression : sans copie locale, la triple mutation directe via
+        // subscript (`text[i].zIndex = …` + `remove` + `append`)
+        // déclenchait `slide.didSet` 3 fois — donc 3 `rebuildLayers()`
+        // par tap. Avec la copie locale, un seul write au `slide.effects.
+        // textObjects = local` ⇒ une seule incrémentation de la révision.
+        XCTAssertEqual(canvas.slideContentRevision - before, 1)
+    }
+
+    func test_bringForegroundToFront_sticker_triggersOnlyOneSlideDidSet() {
+        var effects = StoryEffects()
+        effects.stickerObjects = [
+            makeSticker(id: "s1", zIndex: 1),
+            makeSticker(id: "s2", zIndex: 2)
+        ]
+        let canvas = makeCanvas(slide: makeSlide(effects: effects))
+        let before = canvas.slideContentRevision
+
+        canvas.bringForegroundToFront(id: "s1")
+
+        XCTAssertEqual(canvas.slideContentRevision - before, 1)
+    }
+
+    func test_bringForegroundToFront_media_triggersOnlyOneSlideDidSet() {
+        var effects = StoryEffects()
+        effects.mediaObjects = [
+            makeMedia(id: "a", zIndex: 1),
+            makeMedia(id: "b", zIndex: 2)
+        ]
+        let canvas = makeCanvas(slide: makeSlide(effects: effects))
+        let before = canvas.slideContentRevision
+
+        canvas.bringForegroundToFront(id: "a")
+
+        XCTAssertEqual(canvas.slideContentRevision - before, 1)
+    }
+
     func test_bringForegroundToFront_noopWhenAlreadyTopAndLast() {
         var effects = StoryEffects()
         effects.mediaObjects = [
