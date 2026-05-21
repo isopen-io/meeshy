@@ -152,6 +152,18 @@ class ConversationViewModel: ObservableObject {
     /// Last unread message from another user (set only via socket, cleared on scroll-to-bottom)
     @Published var lastUnreadMessage: Message?
 
+    /// Snapshot of the current conversation's unread count. Initialised
+    /// from `initialUnreadCount`, then dropped to 0 when the user reads
+    /// (markAsRead). Combined with `syncEngine.totalConversationsUnread`
+    /// to derive `otherConversationsUnread`.
+    @Published private(set) var currentConversationUnreadCount: Int = 0
+
+    /// Total unread across every OTHER conversation (excludes this one).
+    /// Drives the cross-conversation pill stuck next to the back button.
+    /// Always clamped ≥ 0 — never negative even when our local snapshot
+    /// of the current conv is briefly stale relative to the aggregate.
+    @Published private(set) var otherConversationsUnread: Int = 0
+
     /// Updated by the MessageListViewController's scroll delegate via the
     /// `onNearBottomChanged` callback. Drives the anticipatory prefetch:
     /// when the user is NOT near the bottom (scrolling up into history),
@@ -673,6 +685,18 @@ class ConversationViewModel: ObservableObject {
         subscribeToMessageStore()
         subscribeToQueueReconciliation()
         subscribeToLanguagePreferenceChanges()
+        // Cross-conversation unread aggregator powers the back-button pill.
+        // Seed `currentConversationUnreadCount` BEFORE wiring the CombineLatest
+        // so the initial `totalConversationsUnread` value (delivered as soon
+        // as the sink subscribes — CurrentValueSubject semantics) is reduced
+        // against the right baseline.
+        currentConversationUnreadCount = unreadCount
+        Publishers.CombineLatest(syncEngine.totalConversationsUnread, $currentConversationUnreadCount)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] total, current in
+                self?.otherConversationsUnread = max(0, total - current)
+            }
+            .store(in: &cancellables)
         if let session = anonymousSession {
             APIClient.shared.anonymousSessionToken = session.sessionToken
             MessageSocketManager.shared.connectAnonymous(sessionToken: session.sessionToken)
@@ -2248,6 +2272,11 @@ class ConversationViewModel: ObservableObject {
 
     func markAsRead() {
         let convId = conversationId
+        // 0. Drop our snapshot of the current conv's unread to 0 so the
+        // CombineLatest pipeline driving `otherConversationsUnread` no
+        // longer subtracts a stale count — without this, the back-button
+        // pill briefly under-shoots while the SDK aggregator catches up.
+        currentConversationUnreadCount = 0
         // 1. Update cache immediately (local-first) — survives reloadFromCache()
         Task { await ConversationSyncEngine.shared.markConversationReadLocally(convId) }
         // 2. Notify ConversationListViewModel to clear badge in current @Published state
