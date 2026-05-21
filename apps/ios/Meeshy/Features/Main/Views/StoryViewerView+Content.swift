@@ -511,9 +511,14 @@ extension StoryViewerView {
 
     /// State-driven pause: the timer checks ALL active UI states each tick
     /// instead of relying on paired pauseTimer/resumeTimer event calls.
-    /// `isPaused` is ONLY for direct user gestures (long press, drag).
+    ///
+    /// - `isPaused` : pauses du timer pour sheets, drag-to-dismiss, etc.
+    ///   (timer-only — le canvas continue à jouer).
+    /// - `isLongPressPaused` : toggle long-press utilisateur (timer + canvas
+    ///   gelés ensemble via `.storyPlayerPause`).
     private var shouldPauseTimer: Bool {
         isPaused
+        || isLongPressPaused
         || isComposerEngaged
         || hasComposerContent
         || showEmojiStrip
@@ -610,12 +615,14 @@ extension StoryViewerView {
     }
 
     /// Restart timer AND clear manual pause (e.g., after drag->transition).
-    /// Changement de slide ou sortie de transition : on repart en lecture.
-    /// `isPaused = false` désarme automatiquement le toggle long-press
-    /// (source de vérité unique) et déclenche `.storyPlayerResume` côté
-    /// canvas via `.adaptiveOnChange(of: isPaused)` dans `StoryViewerView`.
+    /// Changement de slide ou sortie de transition : on repart en lecture
+    /// fraîche. On désarme **les deux** drapeaux de pause :
+    /// - `isPaused` (timer-only)
+    /// - `isLongPressPaused` (long-press latch — déclenche `.storyPlayerResume`
+    ///   au canvas si on était latched-paused au moment du changement).
     private func restartTimer() {
         isPaused = false
+        isLongPressPaused = false
         startTimer()
     }
 
@@ -750,15 +757,17 @@ extension StoryViewerView {
         return effective
     }
 
-    /// Manual pause — only for direct gesture holds (long press, drag) and
-    /// programmatic flows (sheet present, etc.). Source de vérité unique
-    /// du toggle long-press : `isPaused = true` ⇒ timer arrêté + post de
-    /// `.storyPlayerPause` au canvas via l'observer `.onChange(of: isPaused)`
-    /// dans `StoryViewerView` → bg vidéo + audios + effets gelés ensemble.
+    /// Manual pause — sheets, drag-to-dismiss, composer engaged, etc.
+    /// **Timer-only** : le canvas (vidéo BG, audios, effets) continue à
+    /// jouer. Cela évite un blip audible au cycle pause/resume rapide
+    /// d'un drag de transition. Le toggle long-press passe par
+    /// `isLongPressPaused` (qui, lui, freeze le canvas via notification).
     func pauseTimer() { isPaused = true }
 
-    /// Manual resume — réveille le timer et toute la story (canvas inclus
-    /// via la notification `.storyPlayerResume` postée par l'observer).
+    /// Manual resume — symétrique de `pauseTimer()`. N'inverse pas le
+    /// long-press latch (`isLongPressPaused`) : si l'utilisateur a stoppé
+    /// la story via long-press puis ouvert une sheet, la fermeture de la
+    /// sheet ne doit pas relancer la story automatiquement.
     func resumeTimer() {
         isPaused = false
     }

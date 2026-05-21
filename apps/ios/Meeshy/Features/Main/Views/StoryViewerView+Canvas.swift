@@ -32,11 +32,11 @@ import MeeshyUI
 struct StoryGestureOverlayView: View {
     let geometry: GeometryProxy
     let isComposerEngaged: Bool
-    /// **Source de vérité unique** : état de pause utilisateur. Le long-press
-    /// le bascule à `true` ; le tap suivant le remet à `false`. Le parent
-    /// fait écouter ce drapeau au timer (via `shouldPauseTimer`) et au
-    /// player vidéo (via notifications `.storyPlayerPause` / `.storyPlayerResume`).
-    @Binding var isPaused: Bool
+    /// **Source de vérité du toggle long-press**. Le hold confirmé le pose
+    /// à `true`, le tap suivant le remet à `false`. Le parent observe ce
+    /// drapeau pour gater le timer (`shouldPauseTimer`) ET poster les
+    /// notifications canvas (`.storyPlayerPause` / `.storyPlayerResume`).
+    @Binding var isLongPressPaused: Bool
     let onDismissComposer: () -> Void
     let onPrevious: () -> Void
     let onNext: () -> Void
@@ -69,10 +69,17 @@ struct StoryGestureOverlayView: View {
     /// Annulée si le doigt bouge trop, est relâché tôt, ou si le composer
     /// devient engaged en cours de geste.
     @State private var holdArmingTask: Task<Void, Never>? = nil
-    /// `true` si le touch courant est le tap de reprise : `isPaused` était
-    /// `true` au touch-down, on l'a remis à `false`, et le release doit
-    /// être consommé (pas de nav, pas de hold).
+    /// `true` si le touch courant est le tap de reprise : `isLongPressPaused`
+    /// était `true` au touch-down, on l'a remis à `false`, et le release
+    /// doit être consommé (pas de nav, pas de hold).
     @State private var isResumingTap: Bool = false
+
+    /// Surveille les transitions d'état de la scène pour annuler un hold
+    /// armé si l'app passe inactive (incoming call, lock, app-switcher) —
+    /// sinon `Task.sleep(200ms)` continue à courir et au retour foreground
+    /// la Task fire, posant `isLongPressPaused = true` sans cause visible
+    /// pour l'utilisateur.
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         Color.clear
@@ -104,25 +111,39 @@ struct StoryGestureOverlayView: View {
                             holdActive = false
                             holdArmingTask?.cancel()
 
-                            if isPaused {
+                            let ctx = StoryGestureContext(
+                                holdActive: false,
+                                isPaused: isLongPressPaused,
+                                isResumingTap: false,
+                                isComposerEngaged: isComposerEngaged
+                            )
+                            switch StoryGestureDecisions.decideTouchDown(context: ctx) {
+                            case .resumeFromPause:
                                 // Story en pause via long-press précédent.
                                 // Ce tap REPREND la lecture — pas de hold,
                                 // pas de nav au release.
                                 isResumingTap = true
-                                isPaused = false
+                                isLongPressPaused = false
                                 onChromeVisibilityChange(!isFullscreenStorySession)
                                 HapticFeedback.light()
-                            } else {
+                            case .none:
                                 // Story en lecture : arme le long-press.
                                 isResumingTap = false
                                 holdArmingTask = Task { @MainActor in
                                     try? await Task.sleep(for: .milliseconds(Int(holdThresholdSeconds * 1000)))
                                     if Task.isCancelled { return }
                                     if isComposerEngaged { return }
+                                    // Garde contre le wake-up Task après un
+                                    // backgrounding : si l'app est sortie
+                                    // de foreground pendant l'attente, on
+                                    // ne déclenche pas un freeze invisible.
+                                    guard UIApplication.shared.applicationState == .active else { return }
                                     holdActive = true
-                                    isPaused = true
+                                    isLongPressPaused = true
                                     onChromeVisibilityChange(isFullscreenStorySession)
                                 }
+                            default:
+                                break  // touchDown ne produit pas d'autres actions
                             }
                         } else {
                             // ===== DRAG IN PROGRESS =====
@@ -137,7 +158,7 @@ struct StoryGestureOverlayView: View {
                                     // la pause** — l'utilisateur swipe, on
                                     // rend la main au drag parent.
                                     holdActive = false
-                                    isPaused = false
+                                    isLongPressPaused = false
                                     onChromeVisibilityChange(!isFullscreenStorySession)
                                 }
                                 // Drag pendant un tap de reprise : la
@@ -152,38 +173,55 @@ struct StoryGestureOverlayView: View {
                             holdArmingTask?.cancel()
                             holdArmingTask = nil
                         }
-                        guard !isComposerEngaged else {
+                        let elapsed = touchStartTime.map { Date().timeIntervalSince($0) } ?? 0
+                        let ctx = StoryGestureContext(
+                            holdActive: holdActive,
+                            isPaused: isLongPressPaused,
+                            isResumingTap: isResumingTap,
+                            isComposerEngaged: isComposerEngaged
+                        )
+                        switch StoryGestureDecisions.decideTouchUp(
+                            context: ctx,
+                            touchStartX: value.startLocation.x,
+                            halfWidth: geometry.size.width / 2,
+                            elapsed: elapsed,
+                            holdThreshold: holdThresholdSeconds
+                        ) {
+                        case .dismissComposer:
                             onDismissComposer()
-                            return
-                        }
-                        if isResumingTap {
-                            // Tap de reprise — pas de nav.
+                        case .none:
+                            // Tap de reprise OU race rare seuil-franchi-sans-hold.
+                            // Dans les deux cas, on consomme les flags transients
+                            // et on ne navigue pas.
                             isResumingTap = false
-                            return
-                        }
-                        if holdActive {
-                            // Long-press confirmé : la story reste en
-                            // pause (`isPaused = true` déjà posé par la
-                            // Task). Pas de nav, pas de reprise auto.
+                        case .confirmLongPressPause:
+                            // Hold confirmé : la story reste en pause
+                            // (`isLongPressPaused = true` déjà posé par
+                            // la Task). Pas de nav, pas de reprise auto.
                             holdActive = false
                             HapticFeedback.medium()
-                            return
-                        }
-                        let elapsed = touchStartTime.map { Date().timeIntervalSince($0) } ?? 0
-                        if elapsed >= holdThresholdSeconds {
-                            // Race rare : seuil franchi sans que la Task
-                            // hold n'ait posé `holdActive`. On évite la nav.
-                            return
-                        }
-                        // Tap court → navigation prev/next selon la moitié.
-                        let halfWidth = geometry.size.width / 2
-                        if value.startLocation.x < halfWidth {
+                        case .navigatePrevious:
                             onPrevious()
-                        } else {
+                        case .navigateNext:
                             onNext()
+                        case .resumeFromPause:
+                            break  // décidé au touchDown, pas au touchUp
                         }
                     }
             )
+            // Annule un hold armé si la scène devient inactive — évite que
+            // `Task.sleep(200ms)` continue à courir en background et fire au
+            // retour foreground, paus​ant la story sans cause visible.
+            .adaptiveOnChange(of: scenePhase) { _, newPhase in
+                if newPhase != .active {
+                    holdArmingTask?.cancel()
+                    holdArmingTask = nil
+                    if holdActive {
+                        holdActive = false
+                        isLongPressPaused = false
+                    }
+                }
+            }
             // Exclude the bottom composer zone from tap targets
             .padding(.bottom, 120 + geometry.safeAreaInsets.bottom)
     }
@@ -466,12 +504,13 @@ struct StoryCardView: View {
     /// inversée par rapport au mode normal). Binding car le toggle vit dans
     /// le hamburger menu, qui est rendu par le header — qui le mute donc.
     @Binding var isFullscreenStorySession: Bool
-    /// État de pause **utilisateur** de la story (single source of truth).
-    /// Driver unique du long-press toggle : long-press → `true`, tap suivant
-    /// → `false`. Le timer (`shouldPauseTimer`) et le player de background
-    /// vidéo observent ce drapeau via notifications (`storyPlayerPause` /
-    /// `storyPlayerResume`) émises depuis `StoryViewerView+Content`.
-    @Binding var isPausedBinding: Bool
+    /// État de pause **long-press uniquement**. Bascule à `true` quand le
+    /// hold ≥ 200 ms est confirmé, à `false` au prochain tap. Distinct de
+    /// `isPaused` (qui couvre toutes les pauses du timer — sheets, drag,
+    /// composer engaged). Le parent observe ce drapeau et poste les
+    /// notifications canvas (`.storyPlayerPause` / `.storyPlayerResume`)
+    /// uniquement sur ses transitions — pas sur celles de `isPaused`.
+    @Binding var isLongPressPaused: Bool
 
     @ObservedObject var keyboard: KeyboardObserver
 
@@ -658,7 +697,7 @@ struct StoryCardView: View {
             StoryGestureOverlayView(
                 geometry: geometry,
                 isComposerEngaged: isComposerEngaged,
-                isPaused: $isPausedBinding,
+                isLongPressPaused: $isLongPressPaused,
                 onDismissComposer: dismissComposer,
                 onPrevious: goToPrevious,
                 onNext: goToNext,

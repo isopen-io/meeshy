@@ -100,6 +100,14 @@ struct StoryViewerView: View {
     /// and the centered loading spinner.
     @State var isContentReady: Bool = false // internal for cross-file extension access
     @State var isPaused = false // internal for cross-file extension access
+    /// Spécifique au toggle long-press : `true` UNIQUEMENT entre le hold
+    /// confirmé (200 ms) et le tap suivant de reprise. Distinct de `isPaused`,
+    /// qui couvre **toutes** les pauses du timer (sheets, drag-to-dismiss,
+    /// composer engaged…). Le notification au canvas (`storyPlayerPause` /
+    /// `storyPlayerResume`) n'est postée QUE quand ce drapeau bascule —
+    /// sinon ouvrir une sheet ou drag pour dismiss freezerait la vidéo BG
+    /// et l'audio mixer (blip audible au play/pause rapide).
+    @State var isLongPressPaused = false // internal for cross-file extension access
     @State var isGlobalMuted = false // internal for cross-file extension access
     /// Audio-track presence for the current slide's foreground videos, keyed by
     /// `StoryMediaObject.id`. Populated by `refreshVideoAudioTrackPresence()` —
@@ -371,13 +379,15 @@ struct StoryViewerView: View {
                 isPresented = false
             }
         }
-        // Long-press toggle : `isPaused` est la source de vérité unique.
-        // Quand l'utilisateur fait un long-press (overlay gestuel), il
-        // passe à `true` ; le tap suivant le remet à `false`. On notifie
-        // ici le canvas (vidéo BG + foreground + audio + effets) pour que
-        // toute la story s'arrête ou redémarre **ensemble** — "comme une
-        // vidéo" (cf. spec long-press).
-        .adaptiveOnChange(of: isPaused) { _, paused in
+        // Long-press toggle UNIQUEMENT — pas les autres pauses du timer.
+        //
+        // Sheets, drag-to-dismiss, composer engaged… mutent `isPaused`
+        // (timer-only). Si on postait `.storyPlayerPause` dessus, chaque
+        // ouverture/fermeture de sheet ferait un cycle pause/play sur
+        // l'audio mixer et la vidéo BG — blip audible. Le canvas ne se
+        // freeze comme une vidéo que quand l'utilisateur le demande
+        // explicitement via long-press.
+        .adaptiveOnChange(of: isLongPressPaused) { _, paused in
             NotificationCenter.default.post(
                 name: paused ? .storyPlayerPause : .storyPlayerResume,
                 object: nil
@@ -842,7 +852,7 @@ struct StoryViewerView: View {
             storyDrafts: $storyDrafts,
             chromeVisible: $chromeVisible,
             isFullscreenStorySession: $isFullscreenStorySession,
-            isPausedBinding: $isPaused,
+            isLongPressPaused: $isLongPressPaused,
             keyboard: keyboard,
             triggerStoryReaction: { triggerStoryReaction($0) },
             pauseTimer: { pauseTimer() },

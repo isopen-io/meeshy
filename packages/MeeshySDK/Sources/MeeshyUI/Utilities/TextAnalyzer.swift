@@ -98,7 +98,17 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else {
             sentiment = .neutral
-            if !isLanguageLocked { language = nil; languageConfidence = 0 }
+            // Texte vidé → on libère **aussi** le verrou de détection
+            // (sauf si l'utilisateur a sélectionné une langue à la main —
+            // `languageOverride` reste prioritaire). Sans ça, après un
+            // message envoyé + verrou posé à 10 mots, la prochaine frappe
+            // démarrerait avec `isLanguageLocked = true` et la détection
+            // serait morte jusqu'au rebuild du composer.
+            if languageOverride == nil {
+                language = nil
+                languageConfidence = 0
+                isLanguageLocked = false
+            }
             return
         }
 

@@ -1674,9 +1674,16 @@ public final class StoryCanvasUIView: UIView {
     /// - the background video (`backgroundLayer.isPlaybackActive`)
     /// - every foreground `AVPlayer` (`forEachAVPlayer`)
     /// - the foreground+background audio engine (`audioMixer.pause/play`)
-    /// - the keyframe effects clock (`stopPlayback`/`startPlayback`)
+    /// - the keyframe effects clock (`displayLink.isPaused`)
     ///
-    /// Idempotent — re-applying the same state is cheap (early-return).
+    /// **Soft pause** : on ne **détruit pas** le `CADisplayLink` ni les
+    /// players — on les met juste en `isPaused = true` / pause. Cela
+    /// évite un rebuild coûteux à chaque cycle pause/resume (1 frame de
+    /// stutter mesurable au Time Profiler) et préserve les buffers audio
+    /// déjà schedulés par `audioMixer`. La destruction reste réservée à
+    /// `stopPlayback()` (changement de slide, dismiss du viewer).
+    ///
+    /// Idempotent — re-applying the same state est cheap (early-return).
     /// Gated on `.play` because pause has no meaning in edit / preview modes.
     private func setStoryPlaybackPaused(_ paused: Bool) {
         guard mode == .play else { return }
@@ -1684,22 +1691,17 @@ public final class StoryCanvasUIView: UIView {
         isPlaybackPaused = paused
 
         if paused {
-            // Freeze every media clock.
+            // Freeze every media clock — mais ON GARDE le displayLink et
+            // les players vivants pour un resume instantané.
             forEachAVPlayer { $0.pause() }
             backgroundLayer.isPlaybackActive = false
             audioMixer.pause()
-            // Effects / keyframe animation clock — invalidating the
-            // display link freezes the current frame without dropping
-            // any layer state (resume re-attaches a fresh CADisplayLink).
-            stopPlayback()
+            displayLink?.isPaused = true
         } else {
-            // Resume everything together. `startPlayback()` re-arms the
-            // CADisplayLink and flips `backgroundLayer.isPlaybackActive`
-            // back to true (which restarts the bg video player). The
-            // foreground players and the audio mixer are restarted from
-            // their last position via the same path
-            // `handleDidBecomeActive` uses for app-foregrounding.
-            startPlayback()
+            // Resume in place. Réveille le displayLink et les players
+            // depuis leur dernière position — pas de re-init coûteuse.
+            displayLink?.isPaused = false
+            backgroundLayer.isPlaybackActive = true
             forEachAVPlayer { $0.play() }
             if window != nil, !completionFired {
                 startAudioPlayback()

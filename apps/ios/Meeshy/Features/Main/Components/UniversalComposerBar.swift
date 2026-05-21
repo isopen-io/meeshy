@@ -554,20 +554,20 @@ struct UniversalComposerBar: View {
         }
         // Détection de langue en temps réel (Prisme Linguistique).
         //
-        // `TextAnalyzer` ré-évalue à chaque frappe pendant les 10 premiers
-        // mots, puis verrouille. On observe `language` + `languageConfidence`
-        // pour adopter la langue détectée DÈS qu'elle franchit le seuil de
-        // 86 % de confiance (cf. `ComposerLanguageResolver.confidenceFloor`).
-        // Tant qu'aucune langue n'a atteint 86 %, le pill et la langue
-        // envoyée restent sur le défaut « fr ». Au verrou (10 mots), on
-        // arrête simplement la détection — la dernière langue à ≥ 86 %
-        // (ou « fr » si rien n'a passé) est définitive pour ce message.
+        // `TextAnalyzer.performAnalysis` mute `language` ET `languageConfidence`
+        // dans le **même** `DispatchQueue.main.async` — observer la confiance
+        // seule suffit (elle change toujours en même temps que la langue).
+        // Évite un double-fire de `applyDetectedLanguage` par cycle de
+        // détection.
         //
-        // Sélection manuelle (override via le menu) : prioritaire, propagée
-        // immédiatement quelle que soit la confiance.
-        .adaptiveOnChange(of: textAnalyzer.language?.code) { _, _ in
-            applyDetectedLanguage()
-        }
+        // Adoption au seuil 86 % (`ComposerLanguageResolver.confidenceFloor`).
+        // Tant qu'aucune langue n'a atteint 86 %, le pill et la langue
+        // envoyée restent sur le défaut « fr ». À 10 mots, le détecteur se
+        // verrouille — la dernière langue à ≥ 86 % (ou « fr » si rien) est
+        // définitive pour ce message.
+        //
+        // Override manuel (menu) : prioritaire, propagé immédiatement
+        // (force=true) quelle que soit la confiance.
         .adaptiveOnChange(of: textAnalyzer.languageConfidence) { _, _ in
             applyDetectedLanguage()
         }
@@ -579,9 +579,12 @@ struct UniversalComposerBar: View {
             notifyContentChange()
             textAnalyzer.analyze(text: newValue)
             // Texte vidé : on retombe sur le défaut (« fr ») pour que la
-            // prochaine frappe parte d'un état propre — sinon le pill reste
-            // figé sur la dernière langue détectée pour un message terminé.
-            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // prochaine frappe parte d'un état propre. **Sauf** si la
+            // langue a été choisie à la main (override) — dans ce cas on
+            // respecte le choix utilisateur même quand le champ se vide,
+            // sinon le pill afficherait EN (override) mais on enverrait FR.
+            if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+               textAnalyzer.languageOverride == nil {
                 let defaultLanguage = DefaultComposerLanguage.resolve()
                 if currentLanguage != defaultLanguage {
                     currentLanguage = defaultLanguage
