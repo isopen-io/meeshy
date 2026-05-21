@@ -26,9 +26,11 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// un tap explicite.
     public let messageNotificationReceived = PassthroughSubject<String, Never>()
 
-    private static let persistedTokenKey = "com.meeshy.push.deviceToken"
-    private static let lastRegisteredTokenKey = "com.meeshy.push.lastRegisteredToken"
-    private static let lastRegisteredAtKey = "com.meeshy.push.lastRegisteredAt"
+    /// Keys exposed at type level so they can be reused by tests writing to
+    /// the same UserDefaults suite without re-stringifying the namespace.
+    static let persistedTokenKey = "com.meeshy.push.deviceToken"
+    static let lastRegisteredTokenKey = "com.meeshy.push.lastRegisteredToken"
+    static let lastRegisteredAtKey = "com.meeshy.push.lastRegisteredAt"
 
     /// Cooldown applique a l'enregistrement APNs sur le backend. Sans ce
     /// throttle, un cold start declenche typiquement DEUX POSTs successifs
@@ -36,11 +38,22 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     /// recu par iOS), qui sont strictement identiques. Au-dela du cooldown
     /// on accepte de re-poster, car le serveur peut avoir perdu l'association
     /// (changement de compte sur le meme device, p.ex.).
-    private static let registrationCooldown: TimeInterval = 300
+    static let registrationCooldown: TimeInterval = 300
 
-    private override init() {
+    /// Injectable so tests can supply an isolated suite instead of
+    /// polluting `UserDefaults.standard` (a shared mutable singleton on
+    /// iOS Simulator). The production shared instance still uses
+    /// `.standard` via the convenience init.
+    private let userDefaults: UserDefaults
+
+    override private convenience init() {
+        self.init(userDefaults: .standard)
+    }
+
+    init(userDefaults: UserDefaults) {
+        self.userDefaults = userDefaults
         super.init()
-        deviceToken = UserDefaults.standard.string(forKey: Self.persistedTokenKey)
+        deviceToken = userDefaults.string(forKey: Self.persistedTokenKey)
     }
 
     // MARK: - APNs Environment
@@ -94,7 +107,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
     public func registerDeviceToken(_ tokenData: Data) {
         let token = tokenData.map { String(format: "%02.2hhx", $0) }.joined()
         self.deviceToken = token
-        UserDefaults.standard.set(token, forKey: Self.persistedTokenKey)
+        userDefaults.set(token, forKey: Self.persistedTokenKey)
         logger.info("APNs device token received (\(token.prefix(8))...)")
 
         Task {
@@ -137,7 +150,7 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         }
 
         deviceToken = nil
-        UserDefaults.standard.removeObject(forKey: Self.persistedTokenKey)
+        userDefaults.removeObject(forKey: Self.persistedTokenKey)
     }
 
     // MARK: - Notification Handling
@@ -209,8 +222,8 @@ public final class PushNotificationManager: NSObject, ObservableObject {
         // (native callback firing right after) — both posted the same token
         // back-to-back, generating duplicate 10s+ POSTs in the slow-request log.
         let now = Date()
-        let lastToken = UserDefaults.standard.string(forKey: Self.lastRegisteredTokenKey)
-        let lastAt = UserDefaults.standard.object(forKey: Self.lastRegisteredAtKey) as? Date
+        let lastToken = userDefaults.string(forKey: Self.lastRegisteredTokenKey)
+        let lastAt = userDefaults.object(forKey: Self.lastRegisteredAtKey) as? Date
         if lastToken == token,
            let lastAt,
            now.timeIntervalSince(lastAt) < Self.registrationCooldown {
@@ -230,8 +243,8 @@ public final class PushNotificationManager: NSObject, ObservableObject {
                 endpoint: "/users/register-device-token",
                 body: request
             )
-            UserDefaults.standard.set(token, forKey: Self.lastRegisteredTokenKey)
-            UserDefaults.standard.set(now, forKey: Self.lastRegisteredAtKey)
+            userDefaults.set(token, forKey: Self.lastRegisteredTokenKey)
+            userDefaults.set(now, forKey: Self.lastRegisteredAtKey)
             logger.info("Device token registered with backend (env=\(Self.apnsEnvironment))")
         } catch {
             logger.error("Failed to register device token: \(error.localizedDescription)")
