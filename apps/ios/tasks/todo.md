@@ -22,15 +22,19 @@
   - [ ] (user) Rotater le password Apple côté ASC + ajouter les secrets GitHub
 - **Tests** : N/A (config)
 
-### [P1.2] VoIP token : UserDefaults → Keychain
+### [P1.2] VoIP token : UserDefaults → Keychain ✅
 - **Cible** : `apps/ios/Meeshy/Features/Main/Services/VoIPPushManager.swift:303-326`
 - **Plan** :
-  - [ ] Test rouge : `VoIPPushManagerTests.test_persistVoIPToken_writesToKeychainNotUserDefaults`
-  - [ ] Créer protocole `VoIPTokenStoring` (avec `read() / write(token:) / clear()`)
-  - [ ] Impl par défaut utilisant `KeychainManager.shared` avec key `voip.deviceToken` + `kSecAttrAccessibleAfterFirstUnlock` (token doit être accessible en background)
-  - [ ] Migration douce : si UserDefaults contient déjà un token, le déplacer vers Keychain et supprimer
-  - [ ] Test : `MockVoIPTokenStore` injectable
-- **Risque** : background push doit pouvoir lire le token → `AccessibleAfterFirstUnlock`, pas `WhenUnlockedThisDeviceOnly`
+  - [x] Test rouge : `VoIPPushManagerTests.test_voipToken_isNeverWrittenToUserDefaults` (+ 2 autres)
+  - [x] Créer protocole `VoIPTokenStoring` dans `packages/MeeshySDK/.../Security/VoIPTokenStore.swift`
+  - [x] Impl `KeychainVoIPTokenStore` avec key `voip.registeredDevice` + `kSecAttrAccessibleAfterFirstUnlockThisDeviceOnly` (hérité de KeychainManager)
+  - [x] Migration douce : `migrateFromUserDefaultsIfNeeded()` idempotent, purge UserDefaults systématiquement
+  - [x] DI dans `VoIPPushManager(tokenStore:)` avec default = `KeychainVoIPTokenStore()`
+  - [x] `MockVoIPTokenStore` injectable (apps/ios/MeeshyTests/Mocks/)
+  - [x] Tests SDK : `packages/MeeshySDK/Tests/.../Security/VoIPTokenStoreTests.swift` (6 tests, skip auto si Keychain sans entitlement)
+- **⚠️ Action utilisateur requise (Xcode)** :
+  - Drag-drop `apps/ios/MeeshyTests/Mocks/MockVoIPTokenStore.swift` dans le target MeeshyTests via Xcode (les .swift Tests dans le SDK sont pris en compte automatiquement par SPM, mais le bundle MeeshyTests utilise des refs explicites dans project.pbxproj)
+- **Risque** : background push doit pouvoir lire le token → `AccessibleAfterFirstUnlock` ✅ (KeychainManager.save l'utilise par défaut)
 
 ### [P1.3] Vérifier la chaîne APNs `requestAuthorization` + `registerForRemoteNotifications`
 - **Cible** : `apps/ios/Meeshy/AppDelegate.swift`, `MeeshyApp.swift`, `PushNotificationManager`
