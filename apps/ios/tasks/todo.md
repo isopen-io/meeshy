@@ -58,14 +58,20 @@
   - [x] Documentation opérateur : `apps/ios/Documentation/CERTIFICATE_PINNING.md` avec procédure openssl + stratégie de rotation
 - **⚠️ Action utilisateur requise** : calculer les 2 pins (leaf actuel + backup) puis les mettre dans `MeeshyApp.init()` ou via une future ressource bundle. Tant que `certificatePins` reste vide, le comportement est strictement identique à avant (pas de régression).
 
-### [P1.5] Supprimer `fatalError` au boot
+### [P1.5] Supprimer `fatalError` au boot ✅
 - **Cible** : `apps/ios/Meeshy/Core/DependencyContainer.swift:39`
 - **Plan** :
-  - [ ] Test : DI doit pouvoir reporter un échec sans crash
-  - [ ] Refactor : `DependencyContainer` expose `initializationError: Error?` + DB devient lazy / retry
-  - [ ] Au boot : si DB KO → afficher une `RecoveryView` (réinit, contact support) au lieu de crash
-  - [ ] Garde-fou : log via `os.Logger` + Crashlytics `recordError` pour visibilité
-- **Risque** : touche le chemin de boot → tester sur appareil avant merge
+  - [x] Refactor : `openWithRecovery()` essaie d'ouvrir, sur échec quarantine `*.corrupted.{ts}` + WAL/SHM + retry, dernier recours `:memory:`
+  - [x] `DatabaseInitDiagnostics` struct exposée via `initDiagnostics` pour visibilité Crashlytics
+  - [x] AppDelegate forward les diagnostics au crash reporter après Firebase init
+  - [x] `quarantineCorruptDatabase()` propre (gère absence du main file, nettoie sidecars)
+  - [x] Le `fatalError("Failed to initialize database: ...")` est supprimé. Seul un `preconditionFailure` reste dans le cas réellement impossible (`:memory:` qui échoue deux fois) — avec le message d'erreur GRDB réel cette fois, pas un opaque "Failed to initialize database".
+  - [x] 4 tests :
+    - `test_openWithRecovery_validPath_returnsPoolWithoutRecovery`
+    - `test_openWithRecovery_corruptedFile_quarantinesAndRecovers`
+    - `test_quarantineCorruptDatabase_cleansWALAndSHMSidecars`
+    - `test_quarantineCorruptDatabase_handlesMissingMainFileGracefully`
+- **Risque** : le chemin happy n'est pas affecté (la première ouverture réussit, recovery silencieux). En cas de corruption, l'utilisateur ne perd que son cache local de messages (les messages sont re-fetchables depuis le gateway).
 
 ---
 
