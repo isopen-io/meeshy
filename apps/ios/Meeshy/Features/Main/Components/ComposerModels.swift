@@ -122,6 +122,52 @@ enum DefaultComposerLanguage {
 }
 
 // ============================================================================
+// MARK: - Composer Language Resolver
+// ============================================================================
+
+/// Pure helper that decides which language code the composer should switch
+/// to given the current state (current code, manual override, detected code,
+/// detection confidence). Extracted from `UniversalComposerBar` so the
+/// real-time language detection logic is unit-testable in isolation.
+///
+/// Resolution order :
+/// 1. **Manual override** (`languageOverride` in `TextAnalyzer`) wins — the
+///    user picked a language in the menu or picker sheet.
+/// 2. **Detected language** propagates if confidence ≥ floor, or if `force`
+///    is `true` (analyzer transitioned to locked, override changed, etc.).
+/// 3. Below the confidence floor the helper returns `nil` — pill stays
+///    where it was (no flicker on 2-3 char noise).
+enum ComposerLanguageResolver {
+    /// Confidence threshold below which the detected language is considered
+    /// noise and **not** propagated to the composer's `currentLanguage`.
+    ///
+    /// Spec (May 2026) : 0.86. La détection ré-évalue à chaque frappe
+    /// pendant les 10 premiers mots, et on n'adopte la langue détectée que
+    /// si `NLLanguageRecognizer` la donne avec ≥ 86 % de confiance. En
+    /// dessous, la langue reste sur le défaut « fr » — c'est-à-dire qu'un
+    /// utilisateur qui tape « ok » ou « lol » envoie son message tagué
+    /// français tant que le détecteur n'a pas un signal franc.
+    static let confidenceFloor: Double = 0.86
+
+    /// Returns the next language code to apply, or `nil` if `current`
+    /// already wins (no change needed).
+    static func resolve(
+        current: String,
+        override: String?,
+        detected: String?,
+        confidence: Double,
+        force: Bool
+    ) -> String? {
+        if let override {
+            return override == current ? nil : override
+        }
+        guard let detected else { return nil }
+        if !force && confidence < confidenceFloor { return nil }
+        return detected == current ? nil : detected
+    }
+}
+
+// ============================================================================
 // MARK: - Keyboard Observer
 // ============================================================================
 

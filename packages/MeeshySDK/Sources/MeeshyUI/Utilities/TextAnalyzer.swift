@@ -85,7 +85,12 @@ public class TextAnalyzer: ObservableObject, @unchecked Sendable {
     /// Word count threshold: once the user has typed this many words,
     /// lock the detected language and stop re-analyzing. Until then the
     /// detector keeps re-interpreting the language on every keystroke.
-    private let wordCountThreshold = 18
+    ///
+    /// Spec (May 2026) : 10 mots. Avant le seuil, on ré-évalue à chaque
+    /// frappe ; au seuil, on fige la langue qui a été détectée à ≥ 86 %
+    /// (cf. `ComposerLanguageResolver.confidenceFloor`). Si rien n'a
+    /// atteint 86 %, la langue reste sur le défaut `fr`.
+    private let wordCountThreshold = 10
 
     public func analyze(text: String) {
         debounceTimer?.invalidate()
