@@ -165,6 +165,14 @@ class ConversationViewModel: ObservableObject {
     /// nil value means user chose "show original audio"
     @Published var activeAudioLanguageOverrides: [String: String?] = [:]
 
+    /// B2 (Prisme Linguistique) — monotonically increasing counter bumped
+    /// every time the viewer's preferred-content languages change (user
+    /// edits `systemLanguage` / `regionalLanguage` / `customDestinationLanguage`
+    /// in Settings). Consumers (e.g., `MessageListViewController`) observe
+    /// this signal to re-snapshot bubbles so the previously-resolved
+    /// translation is replaced with the one matching the new preference.
+    @Published var preferredLanguageRevision: Int = 0
+
     /// Active live location sessions in this conversation
     @Published var activeLiveLocations: [ActiveLiveLocation] = []
 
@@ -884,6 +892,12 @@ class ConversationViewModel: ObservableObject {
                 // the old `_cachedPreferredLanguages` / `_cachedPreferredLanguagesUserId`
                 // pair was collapsed into a single Equatable cache slot.
                 self?._cachedLanguagePreferences = nil
+                // B2 (Prisme Linguistique) — bump the revision so any
+                // subscriber that selected a translation based on the
+                // previous preferred languages can re-resolve. Without
+                // this, the bubble keeps showing the old translation
+                // until a new translation event arrives.
+                self?.preferredLanguageRevision &+= 1
             }
             .store(in: &cancellables)
     }

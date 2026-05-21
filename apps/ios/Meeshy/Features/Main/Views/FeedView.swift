@@ -104,17 +104,23 @@ struct FeedView: View {
                 postLikeDelta[postId, default: 0] += 1
             }
             do {
-                if wasLiked {
-                    _ = try await SocialSocketManager.shared.removePostReaction(
-                        postId: postId, emoji: StoryViewerView.heartEmoji
-                    )
-                } else {
-                    _ = try await SocialSocketManager.shared.addPostReaction(
-                        postId: postId, emoji: StoryViewerView.heartEmoji
-                    )
+                // A6 — hard timeout so the heart-in-flight set never leaks
+                // if SocialSocketManager hangs (no server reply, dead
+                // socket, etc.). 12s matches the typical APIClient
+                // requestTimeout while leaving slack for socket round-trip.
+                try await withTaskTimeout(seconds: 12) {
+                    if wasLiked {
+                        _ = try await SocialSocketManager.shared.removePostReaction(
+                            postId: postId, emoji: StoryViewerView.heartEmoji
+                        )
+                    } else {
+                        _ = try await SocialSocketManager.shared.addPostReaction(
+                            postId: postId, emoji: StoryViewerView.heartEmoji
+                        )
+                    }
                 }
             } catch {
-                // Rollback optimistic update on failure
+                // Rollback optimistic update on failure (incl. TaskTimeoutError)
                 if wasLiked {
                     postLikedIds.insert(postId)
                     postLikeDelta[postId, default: 0] += 1

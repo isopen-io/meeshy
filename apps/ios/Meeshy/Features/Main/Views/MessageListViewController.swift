@@ -621,7 +621,11 @@ final class MessageListViewController: UIViewController {
             vm.$messageTranslations.map { _ in () }.eraseToAnyPublisher(),
             vm.$messageTranscriptions.map { _ in () }.eraseToAnyPublisher(),
             vm.$messageTranslatedAudios.map { _ in () }.eraseToAnyPublisher(),
-            vm.$activeTranslationOverrides.map { _ in () }.eraseToAnyPublisher()
+            vm.$activeTranslationOverrides.map { _ in () }.eraseToAnyPublisher(),
+            // B2 — preferred-language change triggers a full bubble
+            // re-resolution so the previously selected translation is
+            // swapped for the one matching the new language preferences.
+            vm.$preferredLanguageRevision.map { _ in () }.eraseToAnyPublisher()
         )
         .dropFirst() // skip the @Published initial emission
         .debounce(for: .milliseconds(80), scheduler: DispatchQueue.main)

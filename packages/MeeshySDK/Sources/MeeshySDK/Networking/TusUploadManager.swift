@@ -172,7 +172,22 @@ public actor TusUploadManager {
         let patchURL: URL
         var offset: Int64
 
-        if let cp = resumed,
+        // E4 — TUS sessions expire server-side after ~24h (gateway GC). A
+        // checkpoint older than that points at a URL that will 404/410 on
+        // PATCH, which currently triggers the `TusResumeRetriableError`
+        // catch path and a new POST — wasting the partial upload bytes.
+        // Pre-emptively dropping the stale checkpoint keeps the
+        // "fresh POST" path symmetric and avoids one round-trip of
+        // observable failure noise.
+        let checkpointMaxAge: TimeInterval = 22 * 60 * 60 // 22h — leave 2h slack vs gateway 24h GC
+        let isCheckpointStale = (resumed?.updatedAt).map { Date().timeIntervalSince($0) > checkpointMaxAge } ?? false
+        if isCheckpointStale {
+            Self.logger.info("TUS checkpoint \(checkpointKey, privacy: .public) older than \(Int(checkpointMaxAge), privacy: .public)s — restarting upload")
+            await store.delete(checkpointKey: checkpointKey)
+        }
+
+        if !isCheckpointStale,
+           let cp = resumed,
            let url = URL(string: cp.uploadURL, relativeTo: baseURL),
            cp.fileSize == fileSize {
             Self.logger.info("Resuming TUS upload at offset \(cp.byteOffset, privacy: .public) of \(fileSize, privacy: .public) (\(fileName, privacy: .public))")

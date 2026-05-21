@@ -895,24 +895,84 @@ public struct StorySlide: Identifiable, Codable, Sendable {
 }
 
 extension StorySlide {
-    /// Effective slide duration that completes any background looping video to a full repetition.
+    /// Deterministic total slide duration covering every element on the timeline.
     ///
-    /// If a media object has `isBackground == true && loop == true`, the slide
-    /// duration is rounded up to the next integer multiple of that video's
-    /// duration so the loop never freezes on a partial cycle (Section 3.6 of the
-    /// Story Canvas Fidelity spec). Otherwise returns the static `duration`.
+    /// Computed as the max of :
+    /// 1. The user-authored `slide.duration` (acts as the floor — the author
+    ///    can still pin a minimum length, e.g. for a static text-only slide).
+    /// 2. For every foreground media : `startTime + (duration ?? intrinsicDuration ?? 0)`.
+    /// 3. For every non-looped background media : same formula (a non-looping
+    ///    background video that runs past the user-set duration extends the
+    ///    slide so its tail isn't cut).
+    /// 4. For every non-looped audio (foreground or background) :
+    ///    `startTime + duration`.
+    /// 5. For every text object that declares an explicit `duration` :
+    ///    `startTime + duration`. (`duration == nil` means "permanent" — already
+    ///    covered by the slide-length floor.)
+    /// 6. For every clip transition : `start + duration` (implicit via the
+    ///    bounding media end-times — kept explicit for forward-compat).
+    ///
+    /// The result is then rounded UP to a full repetition of any looping
+    /// background video so the loop never freezes on a partial cycle (Section
+    /// 3.6 of the Story Canvas Fidelity spec).
+    ///
+    /// Use this everywhere a "story length" is needed — exporter, playhead,
+    /// progress bar, audio mixer fade envelope, AVPlayer composition.
+    /// `effectiveSlideDuration()` is now a thin alias kept for binary compat.
+    public func computedTotalDuration() -> TimeInterval {
+        var bound = duration
+
+        for media in effects.mediaObjects ?? [] {
+            // Looped background video is handled in the rounding step below —
+            // it intentionally doesn't extend the bound here (the user-set
+            // slide.duration is the authoritative target for looped content).
+            if media.isBackground && media.loop { continue }
+            let start = media.startTime ?? 0
+            let dur = media.duration ?? media.intrinsicDuration ?? 0
+            if dur > 0 { bound = max(bound, start + dur) }
+        }
+
+        for audio in effects.audioPlayerObjects ?? [] {
+            if audio.loop == true { continue }
+            let start = Double(audio.startTime ?? 0)
+            guard let dur = audio.duration, dur > 0 else { continue }
+            bound = max(bound, start + Double(dur))
+        }
+
+        for text in effects.textObjects {
+            let start = text.startTime ?? 0
+            guard let dur = text.duration, dur > 0 else { continue }
+            bound = max(bound, start + dur)
+        }
+
+        for transition in effects.clipTransitions ?? [] {
+            // Transitions span between two clips; their tail extends the
+            // implied end-time of the `toClip`, which is already counted via
+            // the media bound above. Kept defensive in case a transition is
+            // longer than its bounding clips for any reason.
+            bound = max(bound, Double(transition.duration))
+        }
+
+        if let loopMedia = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop }),
+           let videoDuration = loopMedia.duration, videoDuration > 0 {
+            let repetitions = ceil(bound / videoDuration)
+            bound = max(bound, repetitions * videoDuration)
+        }
+
+        return bound
+    }
+
+    /// Effective slide duration that completes any background looping video to a full repetition.
     ///
     /// Examples:
     ///   slide=12s, video=5s → 15s (3 repetitions)
     ///   slide=12s, video=6s → 12s (exact 2 repetitions)
+    ///
+    /// Now an alias for `computedTotalDuration()`, which covers every element
+    /// on the slide — not just looped backgrounds. Kept as a function rather
+    /// than removed so out-of-tree callers (tests, fixtures) keep compiling.
     public func effectiveSlideDuration() -> TimeInterval {
-        let base = duration
-        guard let loopMedia = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop }),
-              let videoDuration = loopMedia.duration, videoDuration > 0 else {
-            return base
-        }
-        let repetitions = ceil(base / videoDuration)
-        return repetitions * videoDuration
+        computedTotalDuration()
     }
 }
 
@@ -1405,6 +1465,25 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
     }
+
+    /// A5 — returns `true` when the story has aged past its visibility window.
+    ///
+    /// Resolution order:
+    /// 1. If `expiresAt` is set and is `<= now`, the story is expired.
+    /// 2. Otherwise, fall back to the product rule of "stories live 24h" and
+    ///    consider the story expired when `createdAt + 24h <= now`.
+    ///
+    /// Used by the viewer to skip past stale stories the cache may have
+    /// surfaced (cache TTL > 24h is intentional so we don't redownload
+    /// avatars/text on every cold start, but the *content* must not be
+    /// rendered).
+    public func isExpired(at now: Date = Date()) -> Bool {
+        if let explicit = expiresAt {
+            return explicit <= now
+        }
+        let twentyFourHoursAfterCreation = createdAt.addingTimeInterval(24 * 60 * 60)
+        return twentyFourHoursAfterCreation <= now
+    }
 }
 
 // MARK: - Story Group
@@ -1686,7 +1765,12 @@ public struct TimelineProject: Codable, Sendable {
 
     public init(from slide: StorySlide) {
         self.slideId = slide.id
-        self.slideDuration = Float(slide.duration)
+        // Use the deterministic computed length so the timeline ruler,
+        // playhead range and progress bar cover every element — not just
+        // the user-typed slide.duration. Without this, a foreground video
+        // longer than slide.duration would have its tail unreachable by the
+        // scrub bar and clipped on playback / export.
+        self.slideDuration = Float(slide.computedTotalDuration())
         self.mediaObjects = slide.effects.mediaObjects ?? []
         self.audioPlayerObjects = slide.effects.audioPlayerObjects ?? []
         self.textObjects = slide.effects.textObjects
@@ -1698,7 +1782,19 @@ public struct TimelineProject: Codable, Sendable {
         // collections must round-trip to a slide with `nil` collections, not
         // `[]`, so `TimelineProject(from: slide).apply(to: &slide)` is a true
         // no-op when the slide had `nil` collections to begin with.
-        slide.duration = TimeInterval(slideDuration)
+        //
+        // `slide.duration` is treated as the user-authored MINIMUM length
+        // (the floor). The editor's working `slideDuration` reflects the
+        // computed total (covering every element), and we only push it back
+        // when it EXCEEDS the current `slide.duration` — i.e. when the user
+        // dragged an element past the original end. We never SHRINK the
+        // authored floor here; deletions/trims that reduce the computed
+        // total naturally show up via `computedTotalDuration()` without
+        // wiping the floor the user set.
+        let projectDuration = TimeInterval(slideDuration)
+        if projectDuration > slide.duration {
+            slide.duration = projectDuration
+        }
         slide.effects.mediaObjects = mediaObjects.isEmpty ? nil : mediaObjects
         slide.effects.audioPlayerObjects = audioPlayerObjects.isEmpty ? nil : audioPlayerObjects
         slide.effects.textObjects = textObjects

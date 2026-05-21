@@ -280,6 +280,10 @@ struct ConversationListView: View {
             typingUsername: conversationViewModel.typingUsernames[conversation.id],
             isSelected: selectedConversationId == conversation.id,
             draftSummary: conversationViewModel.draftSummaries[conversation.id],
+            // B1 (Prisme Linguistique) — resolved once at row creation
+            // time. Re-evaluates when AuthManager publishes a new currentUser
+            // because the parent body re-runs on @Published changes.
+            preferredContentLanguages: AuthManager.shared.currentUser?.preferredContentLanguages ?? [],
             cachedPreviewMessages: conversationViewModel.previewMessages[conversation.id] ?? [],
             leadingActions: leadingSwipeActions(for: conversation),
             trailingActions: trailingSwipeActions(for: conversation),

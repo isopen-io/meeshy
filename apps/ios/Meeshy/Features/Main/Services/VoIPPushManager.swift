@@ -19,8 +19,11 @@ final class VoIPPushManager: NSObject, ObservableObject {
     /// times out before our ack; two deliveries with the same callId would
     /// produce two `reportNewIncomingCall` with different UUIDs and CallKit
     /// would render two incoming-call cards for the same call.
-    private var recentlyReportedCallIds: [String] = []
-    private static let dedupRingSize = 12
+    ///
+    /// A4 — switched from `[String]` to `VoIPDedupRing` (timestamped) so a
+    /// jittery network burst of 13+ retries within the dedup TTL no longer
+    /// evicts genuine entries and resurfaces phantom cards.
+    fileprivate var dedupRing = VoIPDedupRing()
 
     /// Audit P2-CC-1 — pending token to register once the user is logged in.
     /// Without this, a VoIP token delivered before login completes was
@@ -161,7 +164,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
         // need a phantom-call report to keep PushKit happy when the dedup
         // ring already covers the callId, because PushKit demands a call
         // report per delivery. Use a phantom that ends immediately.
-        let alreadyReported = MainActor.assumeIsolated { Self.shared.recentlyReportedCallIds.contains(callId) }
+        let alreadyReported = MainActor.assumeIsolated { Self.shared.dedupRing.contains(callId, now: Date()) }
         if alreadyReported {
             logger.info("VoIP push duplicate detected (callId=\(callId)) — phantom-acking")
             let phantomUUID = UUID()
@@ -175,10 +178,7 @@ extension VoIPPushManager: PKPushRegistryDelegate {
             return
         }
         MainActor.assumeIsolated {
-            Self.shared.recentlyReportedCallIds.append(callId)
-            if Self.shared.recentlyReportedCallIds.count > Self.dedupRingSize {
-                Self.shared.recentlyReportedCallIds.removeFirst(Self.shared.recentlyReportedCallIds.count - Self.dedupRingSize)
-            }
+            Self.shared.dedupRing.insert(callId, now: Date())
         }
 
         let callerUserId = data["callerUserId"] as? String ?? ""

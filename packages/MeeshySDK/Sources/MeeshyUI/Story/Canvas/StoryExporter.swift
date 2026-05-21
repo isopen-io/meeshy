@@ -72,7 +72,12 @@ public enum StoryExporter {
                               languages: [String] = [],
                               progress: (@Sendable (Double) -> Void)? = nil) async throws {
         let composition = AVMutableComposition()
-        let effective = slide.effectiveSlideDuration()
+        // Use the deterministic total duration so every element on the slide
+        // (text, foreground media, audio, transitions) is fully covered by
+        // the MP4. `effectiveSlideDuration` used to only account for looped
+        // background videos, which meant a 14s foreground video on a slide
+        // whose user-set duration was 12s got truncated to 12s of footage.
+        let effective = slide.computedTotalDuration()
         let totalDuration = CMTime(seconds: effective, preferredTimescale: 600)
 
         // Asset référence du background video — capturée pour pouvoir
