@@ -156,14 +156,20 @@ final class VoIPPushManagerTests: XCTestCase {
             legacy: VoIPTokenRecord(token: legacyToken, at: Date(timeIntervalSince1970: 1_000))
         )
 
-        _ = VoIPPushManager(tokenStore: store)
+        // Keep a strong reference until the assertions run.
+        // ``VoIPPushManager.init`` spawns ``Task { [weak self] ... }`` to
+        // perform the one-shot migration. Discarding the SUT with `_ =`
+        // releases it before that task fires and ``guard let self else {
+        // return }`` short-circuits the call to
+        // ``migrateFromUserDefaultsIfNeeded()`` entirely — the bounded
+        // polling fix in 9065f3a2 was treating a timing symptom of this
+        // ownership bug, not its cause.
+        let sut = VoIPPushManager(tokenStore: store)
 
-        // The migration runs in a detached `Task` inside `init`. The original
-        // 50ms fixed sleep was unreliable on the fastlane release lane where
-        // the simulator gets less CPU — the test would flake roughly once
-        // per CI run with `migrateCallCount == 0`. Poll for up to 2 s
-        // instead, exiting as soon as the migration lands. Passing cases
-        // still wake within a few ms; only slow runs pay the full budget.
+        // The migration runs in a detached `Task` inside `init`. Poll up
+        // to 2 s, exiting as soon as the migration lands. Fast runs wake
+        // within a few ms; only the genuinely slow simulator pays the
+        // full budget.
         let deadline = Date().addingTimeInterval(2.0)
         while store.migrateCallCount < 1, Date() < deadline {
             try await Task.sleep(nanoseconds: 20_000_000)
@@ -171,6 +177,7 @@ final class VoIPPushManagerTests: XCTestCase {
 
         XCTAssertGreaterThanOrEqual(store.migrateCallCount, 1)
         XCTAssertEqual(store.snapshot()?.token, legacyToken)
+        withExtendedLifetime(sut) {}
     }
 
     /// Idempotence guard: when the keychain already holds a matching token
