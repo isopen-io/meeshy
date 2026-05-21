@@ -36,14 +36,15 @@
   - Drag-drop `apps/ios/MeeshyTests/Mocks/MockVoIPTokenStore.swift` dans le target MeeshyTests via Xcode (les .swift Tests dans le SDK sont pris en compte automatiquement par SPM, mais le bundle MeeshyTests utilise des refs explicites dans project.pbxproj)
 - **Risque** : background push doit pouvoir lire le token → `AccessibleAfterFirstUnlock` ✅ (KeychainManager.save l'utilise par défaut)
 
-### [P1.3] Vérifier la chaîne APNs `requestAuthorization` + `registerForRemoteNotifications`
-- **Cible** : `apps/ios/Meeshy/AppDelegate.swift`, `MeeshyApp.swift`, `PushNotificationManager`
-- **Plan** :
-  - [ ] Lecture exhaustive de la chaîne d'appels au démarrage
-  - [ ] Si manquant : ajouter `UNUserNotificationCenter.current().requestAuthorization(options:)` + `application.registerForRemoteNotifications()` au bon endroit
-  - [ ] Vérifier que `didRegisterForRemoteNotificationsWithDeviceToken` → POST token vers gateway
-  - [ ] Test : `PushNotificationManagerTests.test_didRegister_sendsTokenToBackend`
-- **Note** : si déjà présent, downgrade ce ticket à « validation OK » dans le commit
+### [P1.3] Vérifier la chaîne APNs `requestAuthorization` + `registerForRemoteNotifications` ✅
+- **Statut** : **VALIDÉ — l'audit était trop prudent**. La chaîne existe et fonctionne.
+- **Preuves vérifiées** :
+  - Onboarding : `OnboardingView.swift:511-521` → `requestAuthorization([.alert, .badge, .sound])`
+  - Boot post-auth : `MeeshyApp.swift:304` + `MeeshyApp.swift:414` → `requestPushPermissionIfNeeded()` qui appelle `pushManager.requestPermission()` → `UIApplication.shared.registerForRemoteNotifications()`
+  - Token receipt : `AppDelegate.swift:88-95` → `PushNotificationManager.shared.registerDeviceToken(deviceToken)`
+  - Backend POST : `PushNotificationManager.swift:200-239` → `/users/register-device-token` avec cooldown idempotence
+- **Test ajouté** : `test_registerDeviceToken_setsPublishedTokenAndPersistsHex` pin l'invariant pour les refactos futurs.
+- **Note** : APNs token vit en UserDefaults (`com.meeshy.push.deviceToken`) — moins critique qu'un VoIP token (routing identifier, pas credential), Apple ne demande pas le Keychain.
 
 ### [P1.4] Public key pinning sur `APIClient`
 - **Cible** : `packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient.swift:7-27`

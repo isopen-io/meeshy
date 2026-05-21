@@ -111,4 +111,33 @@ final class PushNotificationManagerTests: XCTestCase {
         c.cancel()
         XCTAssertTrue(received.isEmpty)
     }
+
+    // MARK: - registerDeviceToken (P1.3 — APNs registration chain)
+
+    /// Regression test for the AppDelegate
+    /// `didRegisterForRemoteNotificationsWithDeviceToken` → manager chain.
+    /// The audit previously suspected APNs registration was missing in code;
+    /// this test pins the actual contract so any future refactor that breaks
+    /// the chain (e.g. forgets to flip `@Published deviceToken`, or stops
+    /// persisting for `reRegisterTokenIfNeeded`) fails loudly.
+    @MainActor
+    func test_registerDeviceToken_setsPublishedTokenAndPersistsHex() {
+        let sut = PushNotificationManager.shared
+        let persistKey = "com.meeshy.push.deviceToken"
+        let previousToken = UserDefaults.standard.string(forKey: persistKey)
+        defer {
+            if let previousToken {
+                UserDefaults.standard.set(previousToken, forKey: persistKey)
+            } else {
+                UserDefaults.standard.removeObject(forKey: persistKey)
+            }
+        }
+        UserDefaults.standard.removeObject(forKey: persistKey)
+
+        let tokenData = Data([0xDE, 0xAD, 0xBE, 0xEF, 0x01, 0x02, 0x03, 0x04])
+        sut.registerDeviceToken(tokenData)
+
+        XCTAssertEqual(sut.deviceToken, "deadbeef01020304")
+        XCTAssertEqual(UserDefaults.standard.string(forKey: persistKey), "deadbeef01020304")
+    }
 }
