@@ -18,6 +18,13 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// `.foreground`). Le composer abonne ce callback à un `@State` qui pilote
     /// le `CanvasLayerIndicator` (chip row).
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
+    /// External playhead position (seconds, slide-local) that drives the
+    /// canvas render time while the composer is in `.edit` mode. When this
+    /// changes the canvas renders the slide at that exact time, so the
+    /// timeline progress bar and the live canvas stay locked together — the
+    /// user scrubs the playhead and the canvas updates frame-by-frame. `nil`
+    /// means "don't drive" (canvas keeps its own time = 0).
+    public var previewTime: Double?
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
@@ -26,7 +33,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 editingTextId: String? = nil,
                 onInlineTextChanged: ((String, String) -> Void)? = nil,
                 onInlineTextEditEnded: ((String) -> Void)? = nil,
-                onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil) {
+                onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil,
+                previewTime: Double? = nil) {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
@@ -35,6 +43,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.onInlineTextChanged = onInlineTextChanged
         self.onInlineTextEditEnded = onInlineTextEditEnded
         self.onManipulationLayerChanged = onManipulationLayerChanged
+        self.previewTime = previewTime
     }
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
@@ -89,6 +98,13 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         // semantically identical to avoid redundant `rebuildLayers()` calls.
         if !Self.slidesEqualForCanvas(uiView.slide, slide) {
             uiView.slide = slide
+        }
+        // Forward the external playhead position into the canvas so the
+        // timeline scrub drives the rendered frame. `setPreviewScrubTime`
+        // is a no-op in `.play` mode (the displayLink owns the clock there)
+        // and clamps internally, so this is safe to call on every update.
+        if let t = previewTime {
+            uiView.setPreviewScrubTime(t)
         }
         uiView.onInlineTextChanged = onInlineTextChanged
         uiView.onInlineTextEditEnded = onInlineTextEditEnded

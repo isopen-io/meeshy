@@ -815,7 +815,7 @@ public final class StoryCanvasUIView: UIView {
             if scheduledFresh {
                 audioMixer.applyDefaultBackgroundEnvelope(
                     originHost: origin,
-                    slideDuration: slide.effectiveSlideDuration()
+                    slideDuration: slide.computedTotalDuration()
                 )
             }
         } catch {
@@ -1804,7 +1804,7 @@ public final class StoryCanvasUIView: UIView {
     @objc private func displayLinkTick(_ link: CADisplayLink) {
         let dt = link.targetTimestamp - link.timestamp
         let nextSeconds = CMTimeGetSeconds(currentTime) + dt
-        let effectiveDuration = slide.effectiveSlideDuration()
+        let effectiveDuration = slide.computedTotalDuration()
         let clamped = min(nextSeconds, effectiveDuration)
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
         // Publie le playhead pour les overlays SwiftUI (chip audio
@@ -1829,7 +1829,7 @@ public final class StoryCanvasUIView: UIView {
     /// Test-only seam: simulate a displayLink tick at a specific timestamp
     /// to validate completion logic without spinning a real CADisplayLink.
     public func simulateTickAt(seconds: Double) {
-        let effectiveDuration = slide.effectiveSlideDuration()
+        let effectiveDuration = slide.computedTotalDuration()
         currentTime = CMTime(seconds: seconds, preferredTimescale: 600_000)
         rebuildLayers()
         if !completionFired,
@@ -1838,6 +1838,30 @@ public final class StoryCanvasUIView: UIView {
             completionFired = true
             readerContext.onCompletion?()
         }
+    }
+
+    /// Drives the canvas to render the slide at an arbitrary playhead
+    /// position while staying in `.edit` mode. Used by the composer to keep
+    /// the canvas in sync with the timeline editor's playhead — when the
+    /// user scrubs the timeline, every CALayer (text, foreground media,
+    /// keyframe-animated items) snaps to its rendered state at that exact
+    /// time, so the canvas and the progress bar share one source of truth.
+    ///
+    /// No-op while `mode == .play` — the active `displayLink` owns the
+    /// clock there and any external write would race the next tick.
+    /// Clamps to `[0, computedTotalDuration]` so callers can't drive past
+    /// the end of the slide.
+    public func setPreviewScrubTime(_ seconds: Double) {
+        guard mode == .edit else { return }
+        let clamped = max(0, min(seconds, slide.computedTotalDuration()))
+        // Short-circuit on identical values — `updateUIView` fires on every
+        // SwiftUI body re-eval (selection, mode toggle, picker open, etc.),
+        // and rebuildLayers is expensive (CALayer tree teardown). 0.5ms
+        // tolerance matches a sub-frame motion and keeps the canvas idle
+        // when the timeline isn't actually scrubbing.
+        if abs(currentTime.seconds - clamped) < 0.0005 { return }
+        currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
+        rebuildLayers()
     }
 
     // MARK: - ProMotion edit-mode link

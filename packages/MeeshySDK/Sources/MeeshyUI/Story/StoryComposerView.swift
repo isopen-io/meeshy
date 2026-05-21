@@ -136,6 +136,15 @@ public struct StoryComposerView: View {
     /// callback `onManipulationLayerChanged` du `StoryComposerCanvasView`.
     @State private var manipulationLayer: CanvasManipulationLayer = .canvas
 
+    /// Mirror of `viewModel.timelineViewModel.currentTime` used to drive the
+    /// canvas's `previewTime` while the timeline sheet is open. SwiftUI
+    /// doesn't auto-observe nested ObservableObjects (the timeline VM is a
+    /// property on the composer VM), so we bridge its publisher through this
+    /// `@State` via `.onReceive` below. The canvas snaps to this time
+    /// frame-by-frame, keeping the progress bar and the rendered slide in
+    /// lock-step. `nil` means the canvas keeps its internal clock.
+    @State private var timelinePreviewTime: Double?
+
     // MARK: - Publication
 
     @State private var publishTask: Task<Void, Never>?
@@ -430,7 +439,27 @@ public struct StoryComposerView: View {
                 .modifier(StoryTimelinePresentationStyle())
         }
         .adaptiveOnChange(of: viewModel.isTimelineVisible) { _, isVisible in
-            if isVisible { viewModel.loadCurrentSlideIntoTimeline() }
+            if isVisible {
+                viewModel.loadCurrentSlideIntoTimeline()
+                // Seed the canvas-preview clock with the timeline's current
+                // playhead so the first frame after open is already correct.
+                timelinePreviewTime = Double(viewModel.timelineViewModel.currentTime)
+            } else {
+                // Drop the bridge when the sheet closes so the canvas reverts
+                // to its own clock (idle at 0 in `.edit` mode).
+                timelinePreviewTime = nil
+            }
+        }
+        // Bridge the nested timelineViewModel's currentTime publisher into
+        // our local @State. SwiftUI doesn't auto-observe nested
+        // ObservableObjects, so without this `.onReceive` the canvas would
+        // miss every tick after the first one. The publisher emits at 60 Hz
+        // during playback and once per scrub gesture, which is cheap — we
+        // only forward when the timeline sheet is open to avoid driving
+        // canvas rebuilds while it's idle.
+        .onReceive(viewModel.timelineViewModel.$currentTime) { time in
+            guard viewModel.isTimelineVisible else { return }
+            timelinePreviewTime = Double(time)
         }
         .sheet(isPresented: $showFilterSheet) {
             NavigationStack {
@@ -1165,7 +1194,16 @@ public struct StoryComposerView: View {
             },
             onManipulationLayerChanged: { layer in
                 manipulationLayer = layer
-            }
+            },
+            // While the timeline sheet is open, forward its playhead time so
+            // the canvas frames advance with the user's scrub. When the sheet
+            // is closed we pass nil and the canvas keeps its own clock
+            // (display-link in `.play`, idle at 0 in `.edit`). The bridge
+            // from `timelineViewModel.$currentTime` lives in `.onReceive`
+            // on the body so SwiftUI re-renders this representable with a
+            // fresh value every time the timeline publishes a new tick —
+            // SwiftUI does NOT auto-observe nested ObservableObjects.
+            previewTime: viewModel.isTimelineVisible ? timelinePreviewTime : nil
         )
         .allowsHitTesting(!viewModel.isDrawingActive)
         .overlay {

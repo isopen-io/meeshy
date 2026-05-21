@@ -252,15 +252,35 @@ public final class TimelineViewModel: ObservableObject {
     private func applyClipPosition(clipId: String, newStartTime: Float) {
         if let i = project.mediaObjects.firstIndex(where: { $0.id == clipId }) {
             project.mediaObjects[i].startTime = Double(newStartTime)
+            extendSlideDurationIfNeeded(
+                elementEnd: newStartTime + Float(project.mediaObjects[i].duration ?? 0)
+            )
             return
         }
         if let i = project.audioPlayerObjects.firstIndex(where: { $0.id == clipId }) {
             project.audioPlayerObjects[i].startTime = newStartTime
+            extendSlideDurationIfNeeded(
+                elementEnd: newStartTime + (project.audioPlayerObjects[i].duration ?? 0)
+            )
             return
         }
         if let i = project.textObjects.firstIndex(where: { $0.id == clipId }) {
             project.textObjects[i].startTime = Double(newStartTime)
+            extendSlideDurationIfNeeded(
+                elementEnd: newStartTime + Float(project.textObjects[i].duration ?? 0)
+            )
         }
+    }
+
+    /// Auto-extends the working `project.slideDuration` when an element is
+    /// dragged past the current playable range. Without this, the playhead
+    /// (which clamps at `slideDuration`) couldn't reach the element's tail
+    /// after the drop and the ruler / clip lane wouldn't visualise it. The
+    /// computed total duration handles persistence — this is the live in-edit
+    /// equivalent so the editor follows the user's intent in real time.
+    private func extendSlideDurationIfNeeded(elementEnd: Float) {
+        guard elementEnd.isFinite, elementEnd > project.slideDuration else { return }
+        project.slideDuration = elementEnd
     }
 
     private func mapSnapKind(_ kind: SnapCandidate.Kind?) -> ClipSelectionState.ActiveDrag.SnappedKind? {
