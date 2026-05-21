@@ -41,6 +41,30 @@ class PostDetailViewModel: ObservableObject {
         self.postService = postService
         self.languageProvider = languageProvider
         self.offlineQueue = offlineQueue
+        observePreferredLanguageChanges()
+    }
+
+    /// B2 / B4 (Prisme Linguistique) — keep the displayed post in sync
+    /// with the user's preferred-content languages. When the user edits
+    /// systemLanguage / regionalLanguage / customDestinationLanguage in
+    /// Settings, the loaded post's `translatedContent` flips without a
+    /// re-fetch (the `translations` dict carries every available language).
+    private func observePreferredLanguageChanges() {
+        AuthManager.shared.currentUserPublisher
+            .removeDuplicates { old, new in
+                old?.systemLanguage == new?.systemLanguage
+                && old?.regionalLanguage == new?.regionalLanguage
+                && old?.customDestinationLanguage == new?.customDestinationLanguage
+            }
+            .dropFirst()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                let langs = self.preferredLanguages
+                if let current = self.post {
+                    self.post = current.resolved(preferredLanguages: langs)
+                }
+            }
+            .store(in: &cancellables)
     }
 
     /// Wire persistence store for GRDB-backed comments.

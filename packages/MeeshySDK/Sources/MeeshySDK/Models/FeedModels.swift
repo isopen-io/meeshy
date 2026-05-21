@@ -327,6 +327,39 @@ public struct FeedPost: Identifiable, Sendable {
     public var displayContent: String { translatedContent ?? content }
     public var availableLanguages: [String] { Array(translations?.keys ?? [String: PostTranslation]().keys) }
 
+    /// B2 / B4 (Prisme Linguistique) — recomputes `translatedContent` for
+    /// the supplied preferred-language chain WITHOUT requiring the source
+    /// `APIPost`. Used by ViewModels (Feed, PostDetail) when the user
+    /// changes their preferred-content languages mid-session: the stored
+    /// `translations` dict is enough to flip the rendered language, no
+    /// re-fetch needed.
+    ///
+    /// Honours the Prisme rules:
+    /// - if `originalLanguage` is among `preferredLanguages`, the original
+    ///   content is canonical (translatedContent = nil);
+    /// - otherwise return the first translation matching a preferred
+    ///   language;
+    /// - never fall back to an arbitrary translation if none matches.
+    public func resolved(preferredLanguages: [String]) -> FeedPost {
+        guard let dict = translations, !dict.isEmpty else { return self }
+        let preferred = preferredLanguages.filter { !$0.isEmpty }.map { $0.lowercased() }
+        if let original = originalLanguage?.lowercased(), preferred.contains(original) {
+            var copy = self
+            copy.translatedContent = nil
+            return copy
+        }
+        for lang in preferred {
+            if let hit = dict.first(where: { $0.key.lowercased() == lang }) {
+                var copy = self
+                copy.translatedContent = hit.value.text
+                return copy
+            }
+        }
+        var copy = self
+        copy.translatedContent = nil
+        return copy
+    }
+
     public init(id: String = UUID().uuidString, author: String, authorId: String = "", authorUsername: String? = nil,
                 authorAvatarURL: String? = nil,
                 type: String? = nil, content: String, timestamp: Date = Date(), likes: Int = 0,
