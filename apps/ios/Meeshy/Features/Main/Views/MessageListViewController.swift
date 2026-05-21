@@ -3,6 +3,7 @@ import SwiftUI
 import Combine
 import MeeshySDK
 import MeeshyUI
+import os
 
 final class MessageListViewController: UIViewController {
 
@@ -649,6 +650,7 @@ final class MessageListViewController: UIViewController {
         // window, the parent ViewModel will trigger a `loadWindow(around:)`
         // which repopulates the store. The store observer reapplies the
         // snapshot, then this method runs again with the message visible.
+        Logger.messages.debug("scrollToMessage requested target=\(localId, privacy: .public)")
         onScrollToMessage?(localId)
 
         // Items are inserted reversed (newest first) for the inverted
@@ -659,7 +661,15 @@ final class MessageListViewController: UIViewController {
         guard let index = snapshot.itemIdentifiers.firstIndex(where: {
             if case .message(let id) = $0 { return id == localId }
             return false
-        }) else { return }
+        }) else {
+            // Not in the current snapshot — `onScrollToMessage` was just
+            // asked to load it. When the store observer reapplies the
+            // snapshot, the second pass through `scrollToMessage` (driven
+            // by `scrollState.scrollToMessageId`) will find it. If it
+            // doesn't, the log below will show the gap during diagnostic.
+            Logger.messages.debug("scrollToMessage target=\(localId, privacy: .public) NOT in snapshot — relying on parent jump path")
+            return
+        }
 
         let indexPath = IndexPath(item: index, section: 0)
         collectionView.scrollToItem(at: indexPath, at: .centeredVertically, animated: true)

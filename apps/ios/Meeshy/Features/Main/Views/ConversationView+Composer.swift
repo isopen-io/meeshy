@@ -352,14 +352,14 @@ extension ConversationView {
     }
 
     func composerReplyAttachmentIcon(_ type: String) -> String {
-        switch type {
-        case "image": return "photo"
-        case "video": return "video"
-        case "audio": return "waveform"
-        case "file": return "doc"
-        case "location": return "mappin"
-        default: return "paperclip"
-        }
+        // Route through the SDK's canonical AttachmentKind (single
+        // source of truth — see `AttachmentKind.swift`) instead of the
+        // duplicated switch this method used to embed. Two-step fallback
+        // so cached payloads carrying raw MIME (`"image/jpeg"`) still
+        // resolve correctly until the next SDK round-trip rewrites
+        // them as short kinds.
+        if let exact = AttachmentKind(rawValue: type) { return exact.sfSymbolName }
+        return AttachmentKind(mimeType: type).sfSymbolName
     }
 
     // MARK: - Rich Attachment Preview for Reply Banner
