@@ -1405,6 +1405,25 @@ public struct StoryItem: Identifiable, Codable, Sendable {
         self.translations = translations; self.backgroundAudio = backgroundAudio
         self.reactionCount = reactionCount; self.commentCount = commentCount
     }
+
+    /// A5 — returns `true` when the story has aged past its visibility window.
+    ///
+    /// Resolution order:
+    /// 1. If `expiresAt` is set and is `<= now`, the story is expired.
+    /// 2. Otherwise, fall back to the product rule of "stories live 24h" and
+    ///    consider the story expired when `createdAt + 24h <= now`.
+    ///
+    /// Used by the viewer to skip past stale stories the cache may have
+    /// surfaced (cache TTL > 24h is intentional so we don't redownload
+    /// avatars/text on every cold start, but the *content* must not be
+    /// rendered).
+    public func isExpired(at now: Date = Date()) -> Bool {
+        if let explicit = expiresAt {
+            return explicit <= now
+        }
+        let twentyFourHoursAfterCreation = createdAt.addingTimeInterval(24 * 60 * 60)
+        return twentyFourHoursAfterCreation <= now
+    }
 }
 
 // MARK: - Story Group
