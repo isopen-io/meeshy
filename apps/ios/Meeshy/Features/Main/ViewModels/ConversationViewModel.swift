@@ -2747,34 +2747,21 @@ class ConversationViewModel: ObservableObject {
         activeAudioLanguageOverrides[messageId] = language
     }
 
-    private var _cachedPreferredLanguages: [String]?
-    private var _cachedPreferredLanguagesUserId: String?
+    private var _cachedLanguagePreferences: ConversationLanguagePreferences?
 
+    /// Ordered language priority used by `preferredTranslation(for:)`.
+    /// Extracted into ``ConversationLanguagePreferences`` (P4.2 step 1)
+    /// so the resolution can be unit-tested without spinning up a full
+    /// ViewModel + AuthManager + cached message graph. The cache is keyed
+    /// on the source `MeeshyUser` rather than just userId so a profile
+    /// edit (system/regional language change) is picked up immediately.
     private var preferredLanguages: [String] {
-        let userId = currentUserId
-        if let cached = _cachedPreferredLanguages, _cachedPreferredLanguagesUserId == userId {
-            return cached
+        let prefs = ConversationLanguagePreferences(user: authManager.currentUser)
+        if _cachedLanguagePreferences == prefs, let cached = _cachedLanguagePreferences {
+            return cached.resolved
         }
-        let user = authManager.currentUser
-        var preferred: [String] = []
-        // 1. Primary language (systemLanguage) — highest priority
-        if let sys = user?.systemLanguage, !preferred.contains(where: { $0.lowercased() == sys.lowercased() }) {
-            preferred.append(sys)
-        }
-        // 2. Secondary language (regionalLanguage)
-        if let reg = user?.regionalLanguage, !preferred.contains(where: { $0.lowercased() == reg.lowercased() }) {
-            preferred.append(reg)
-        }
-        // 3. Custom destination language (lowest auto-priority)
-        if let custom = user?.customDestinationLanguage, !preferred.contains(where: { $0.lowercased() == custom.lowercased() }) {
-            preferred.append(custom)
-        }
-        // NOTE: Device locale (Locale.current) is NOT added here — it is the UI interface
-        // language, not the user's content language preference. Content languages are
-        // systemLanguage (primary) and regionalLanguage (secondary) configured in-app.
-        _cachedPreferredLanguages = preferred
-        _cachedPreferredLanguagesUserId = userId
-        return preferred
+        _cachedLanguagePreferences = prefs
+        return prefs.resolved
     }
 
     func preferredTranslation(for messageId: String) -> MessageTranslation? {
