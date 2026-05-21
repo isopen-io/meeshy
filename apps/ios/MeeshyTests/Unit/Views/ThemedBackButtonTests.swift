@@ -1,4 +1,7 @@
 import XCTest
+import SwiftUI
+import MeeshySDK
+import MeeshyUI
 @testable import Meeshy
 
 /// Pure-logic tests for the cross-conversation unread pill embedded in
@@ -44,5 +47,19 @@ final class ThemedBackButtonTests: XCTestCase {
     /// Defensive: negative counts are nonsense but must never render a pill.
     func test_showsUnread_negativeCount_isFalse() {
         XCTAssertFalse(ThemedBackButton.showsUnread(unreadCount: -5, compactMode: false))
+    }
+
+    // MARK: - Badge background color (dark/light parity with the list)
+
+    /// The badge MUST delegate its background color to
+    /// `MeeshyColors.unreadBadgeBackground(isDark:)`. Pinning that here
+    /// guards against drift: the same red-light / red-dark pair the
+    /// conversation list row badge uses must be applied here.
+    func test_badgeBackgroundColor_lightMode_matchesSemanticError() {
+        XCTAssertEqual(MeeshyColors.unreadBadgeBackground(isDark: false), MeeshyColors.error)
+    }
+
+    func test_badgeBackgroundColor_darkMode_matchesSemanticErrorDark() {
+        XCTAssertEqual(MeeshyColors.unreadBadgeBackground(isDark: true), MeeshyColors.errorDark)
     }
 }

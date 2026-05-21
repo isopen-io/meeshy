@@ -9,10 +9,13 @@ struct ThemedBackButton: View {
     let color: String
     var compactMode: Bool = false
     /// Total unread messages across every OTHER conversation. Rendered as
-    /// a glass pill stuck to the right of the chevron (iMessage pattern).
-    /// `0` hides the pill entirely; `≥ 100` clamps to "99+".
+    /// a red iOS-style notification badge sitting to the right of the
+    /// chevron glass circle (iMessage pattern).
+    /// `0` hides the badge entirely; `≥ 100` clamps to "99+".
     var unreadCount: Int = 0
     let action: () -> Void
+
+    @Environment(\.colorScheme) private var colorScheme
     @State private var isPressed = false
 
     // MARK: - Pure formatting helpers (exposed for unit tests)
@@ -45,6 +48,12 @@ struct ThemedBackButton: View {
         )
     }
 
+    private var badgeBackground: Color {
+        // Source of truth: same red-light / red-dark pair the
+        // ConversationListHelpers row badge uses (vie MeeshyColors).
+        MeeshyColors.unreadBadgeBackground(isDark: colorScheme == .dark)
+    }
+
     var body: some View {
         Button(action: {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) { isPressed = true }
@@ -62,17 +71,35 @@ struct ThemedBackButton: View {
                     .frame(width: 40, height: 40)
 
                 if showsPill {
-                    // Vertical separator between chevron and count
+                    // Vertical separator between chevron and red pill —
+                    // tinted with the conversation accent so it picks up
+                    // the surrounding glass-capsule mood instead of
+                    // looking like a hardcoded grey divider.
                     Rectangle()
                         .fill(Color(hex: color).opacity(0.35))
-                        .frame(width: 1, height: 20)
+                        .frame(width: 1, height: 22)
+                        .padding(.trailing, 6)
 
+                    // Red pill — the eye-catcher. Sits INSIDE the outer
+                    // glass capsule, hugged by 6-pt padding on each side
+                    // so the capsule still reads as a single back-button
+                    // affordance. Dark/light parity with the conversation
+                    // list row badge via MeeshyColors.unreadBadgeBackground.
                     Text(Self.displayedUnread(unreadCount))
-                        .font(.system(size: 13, weight: .bold, design: .rounded))
-                        .foregroundStyle(gradientFill)
-                        .padding(.horizontal, 10)
-                        .frame(minWidth: 24, minHeight: 40)
+                        .font(.system(size: 12, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .fixedSize(horizontal: true, vertical: false)
+                        .padding(.horizontal, 8)
+                        .frame(minWidth: 22, minHeight: 22)
+                        .background(
+                            Capsule()
+                                .fill(badgeBackground)
+                                .shadow(color: badgeBackground.opacity(0.4), radius: 3, y: 1)
+                        )
+                        .padding(.trailing, 6)
                         .accessibilityHidden(true)
+                        .transition(.scale.combined(with: .opacity))
                 }
             }
             .background(
