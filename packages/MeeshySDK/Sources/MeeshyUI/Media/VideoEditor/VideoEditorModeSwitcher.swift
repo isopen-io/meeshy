@@ -56,7 +56,7 @@ public struct VideoEditorModeSwitcher: View, Equatable {
             }
             .padding(.horizontal, 12)
             .padding(.vertical, 6)
-            .frame(minWidth: 76)
+            .frame(minWidth: 72)
             .foregroundStyle(foreground(isActive: isActive))
             .background(
                 Capsule().fill(
