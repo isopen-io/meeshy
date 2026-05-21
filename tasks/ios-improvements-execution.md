@@ -22,22 +22,21 @@
 
 ### PHASE A — Quick wins (sécurité + cleanups, ~1-3h chacun)
 
-- [ ] **A1** : `ActiveSessionsViewModel` manquant → créer VM + tests RED (l'écran référence un VM inexistant)
-- [ ] **A2** : Anonymous session Keychain `WhenUnlockedThisDeviceOnly` → `AfterFirstUnlockThisDeviceOnly` (NSE peut décoder push lock-screen)
-- [ ] **A3** : `AudioRecorderManager.startRecording` fuite AVAudioSession si init throw
-- [ ] **A4** : VoIP `recentlyReportedCallIds` ring sans timestamps (anti phantom-call)
-- [ ] **A5** : Story expiration 24h check au viewer `onAppear`
-- [ ] **A6** : Heart-in-flight Set jamais clearé si network timeout (`FeedView`, `FeedCommentsSheet`)
-- [ ] **A7** : `OptimisticAttachmentAdopter` cleanup URLs temp sur échec/cancel
-- [ ] **A8** : `OutboxFlusher` cleanup fichier audio sur `.exhausted` (fuite disque)
+- [x] **A1** : `ActiveSessionsViewModel` extracted vers `ViewModels/` + 6 tests (rapport avait sur-déclaré : le VM existait, mais inline). Pattern MVVM aligné.
+- [x] **A2** : Anonymous session Keychain `AfterFirstUnlockThisDeviceOnly` — NSE peut décoder push lock-screen
+- [x] **A3** : `AudioRecorderManager.startRecording` fuite AVAudioSession corrigée via `deactivateAudioSessionAfterFailure`
+- [x] **A4** : VoIP `VoIPDedupRing` timestamped (TTL 30s, capacity 24) + 8 tests
+- [x] **A5** : Story expiration 24h check au viewer `onAppear` + `StoryItem.isExpired(at:)` SDK + 8 tests
+- [x] **A6** : `withTaskTimeout` helper 12s protège heart-in-flight (FeedView + FeedCommentsSheet)
+- [x] **A7+A8** : `OutboxFlusher.cleanupLocalFiles` sur `.applied` et `.exhausted` (fusionnés)
 
 ### PHASE B — Prisme Linguistique (correctness contenu, ~2-3h chacun)
 
-- [ ] **B1** : `lastMessagePreview` traduit dans liste conversations (`ThemedConversationRow.swift:436`)
-- [ ] **B2** : Retraduction auto au changement langue préférée (observer `AuthManager` dans `ConversationViewModel`)
-- [ ] **B3** : Hard-press preview applique Prisme (`ConversationListHelpers.swift:231-239`)
-- [ ] **B4** : `PostDetailView` re-render au changement langue préférée
-- [ ] **B5** : `CommentListView` UIKit reçoit `preferredLanguages` + applique trad
+- [x] **B1** : `lastMessagePreview` traduit dans liste conversations — `MeeshyConversation.lastMessageTranslations` + `resolvedLastMessagePreview` + 10 tests
+- [x] **B2** : Retraduction auto messages au changement langue (`preferredLanguageRevision` + `MessageListViewController` subscribe)
+- [ ] **B3** : Hard-press preview applique Prisme — **DEFERRED** (nécessite extension `MeeshyMessage.translations: [String:String]` SDK-side, hors scope)
+- [x] **B4** : `PostDetailView` et `FeedView` re-resolvent au changement langue (`FeedPost.resolved(preferredLanguages:)` + observePreferredLanguageChanges)
+- [ ] **B5** : `CommentListView` UIKit reçoit `preferredLanguages` — **DEFERRED** (refactor UIKit bridge majeur)
 
 ### PHASE C — Real-time hardening (~2-4h chacun)
 
