@@ -108,6 +108,7 @@ struct ComposerBottomBand: View {
                         showAudioDocumentPicker: $showAudioDocumentPicker,
                         showVoiceRecorderSheet: $showVoiceRecorderSheet,
                         onBack: onBackFromToolPanel,
+                        onSwitchTool: { other in viewModel.selectTool(other) },
                         onEditMedia: onEditMedia,
                         onEditText: onEditText,
                         onDeleteText: onDeleteText,
