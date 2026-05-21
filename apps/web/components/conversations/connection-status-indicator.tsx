@@ -1,59 +1,32 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { cn } from '@/lib/utils';
 import { meeshySocketIOService } from '@/services/meeshy-socketio.service';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
 
 interface ConnectionStatusIndicatorProps {
   className?: string;
 }
 
-export function ConnectionStatusIndicator({ 
+export function ConnectionStatusIndicator({
   className
 }: ConnectionStatusIndicatorProps) {
-  const [connectionStatus, setConnectionStatus] = useState<{
-    isConnected: boolean;
-    hasSocket: boolean;
-  }>({ isConnected: false, hasSocket: false });
-  const [isReconnecting, setIsReconnecting] = useState(false);
+  const { isOnline, isSocketConnected, hasSocket } = useConnectionStatus();
+  const [manualReconnecting, setManualReconnecting] = useState(false);
 
-  // Surveiller l'état de connexion
-  useEffect(() => {
-    const checkConnection = () => {
-      const diagnostics = meeshySocketIOService.getConnectionDiagnostics();
-      const newStatus = {
-        isConnected: diagnostics.isConnected,
-        hasSocket: diagnostics.hasSocket
-      };
-      
-      setConnectionStatus(newStatus);
-      
-      // Déterminer si en reconnexion (a un socket mais pas connecté)
-      setIsReconnecting(newStatus.hasSocket && !newStatus.isConnected);
-    };
+  // En reconnexion : pas en ligne au sens réseau OU socket en attente de reprise
+  const isReconnecting =
+    manualReconnecting || (isOnline && hasSocket && !isSocketConnected);
 
-    // Vérification initiale
-    checkConnection();
-
-    // Vérifier toutes les secondes
-    const interval = setInterval(checkConnection, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  // Fonction de reconnexion manuelle
   const handleReconnect = () => {
-    setIsReconnecting(true);
+    setManualReconnecting(true);
     meeshySocketIOService.reconnect();
-    
-    // Arrêter l'animation de reconnexion après 3 secondes
-    setTimeout(() => {
-      setIsReconnecting(false);
-    }, 3000);
+    setTimeout(() => setManualReconnecting(false), 3000);
   };
 
   // Ne rien afficher si tout est OK
-  if (connectionStatus.isConnected) {
+  if (isOnline && isSocketConnected) {
     return null;
   }
 
@@ -83,4 +56,3 @@ export function ConnectionStatusIndicator({
     </button>
   );
 }
-

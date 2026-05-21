@@ -2,13 +2,13 @@
 
 import { useState, useEffect, memo, useCallback } from 'react';
 import { WifiOff, RefreshCcw, X } from 'lucide-react';
-import { useNetworkStatus } from '@/hooks/use-network-status';
+import { useConnectionStatus } from '@/hooks/use-connection-status';
 import { useI18n } from '@/hooks/useI18n';
 import { Button } from '@/components/ui/button';
 import { activateWaitingServiceWorker } from '@/utils/service-worker';
 
 export const SystemStatusBanner = memo(function SystemStatusBanner() {
-  const isOnline = useNetworkStatus();
+  const { isOnline } = useConnectionStatus();
   const { t } = useI18n('common');
   const [updateRegistration, setUpdateRegistration] = useState<ServiceWorkerRegistration | null>(null);
   const [dismissedUpdate, setDismissedUpdate] = useState(false);
