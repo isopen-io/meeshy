@@ -593,7 +593,18 @@ public final class VideoEditorViewModel: ObservableObject {
     }
 
     private func installTimeObserver() {
-        let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
+        // 16.67 ms ≈ 60 Hz. Avant, on tournait à 50 ms (20 Hz), ce qui
+        // saccadait visiblement le filmstrip pendant la lecture (le
+        // playhead est pinned au centre, donc c'est la BANDE qui glisse,
+        // et 20 Hz produit des « sauts » de plusieurs pixels par tick).
+        // À 60 Hz on glisse aussi vite que le compositor video sort des
+        // frames — perceptuellement fluide.
+        //
+        // Sur ProMotion (120 Hz), AVFoundation peut quand même cantonner
+        // les callbacks à ~60 Hz selon la charge — c'est un plafond, pas
+        // un plancher. Le coût marginal vs 20 Hz est négligeable (un
+        // dispatch main par frame, vs un toutes les 3 frames).
+        let interval = CMTime(value: 1, timescale: 60)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             let seconds = max(0, time.seconds)
             Task { @MainActor in self?.handleTimeUpdate(seconds) }
@@ -602,6 +613,10 @@ public final class VideoEditorViewModel: ObservableObject {
 
     private func handleTimeUpdate(_ seconds: Double) {
         guard !isScrubbing else { return }
+        // Diff-guard : ne pousse la valeur que si elle change réellement
+        // (utile au tick d'enchaînement de seek où AVFoundation rappelle
+        // parfois avec la même valeur, ce qui inflate les re-renders).
+        guard abs(playheadTime - seconds) > 0.001 else { return }
         playheadTime = seconds
     }
 
