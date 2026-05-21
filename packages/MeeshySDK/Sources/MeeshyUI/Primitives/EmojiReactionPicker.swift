@@ -281,6 +281,12 @@ public struct EmojiFullPickerSheet: View {
     @State private var reactedEmoji: String?
     @State private var sheetHeight: CGFloat = 340
     @State private var dragOffset: CGFloat = 0
+    /// Dernière hauteur du conteneur lue dans le `GeometryReader` du body.
+    /// Captée ici parce que `sheetDragGesture` et `dismiss()` tournent en
+    /// dehors du scope du `GeometryReader` (computed properties) et ont
+    /// besoin de `maxHeight(for: containerHeight)` pour borner `sheetHeight`
+    /// / `dragOffset` proprement sur iPhone comme iPad.
+    @State private var containerHeight: CGFloat = 340
 
     private let minHeight: CGFloat = 340
 
@@ -315,6 +321,10 @@ public struct EmojiFullPickerSheet: View {
                 .transition(.move(edge: .bottom))
             }
             .frame(maxWidth: .infinity)
+            .onAppear { containerHeight = geo.size.height }
+            .adaptiveOnChange(of: geo.size.height) { _, newValue in
+                containerHeight = newValue
+            }
         }
         .ignoresSafeArea()
     }
@@ -398,7 +408,7 @@ public struct EmojiFullPickerSheet: View {
                     if dy > 100 || velocity > 300 {
                         if sheetHeight > minHeight + 50 { sheetHeight = minHeight }
                         else { dismiss(); return }
-                    } else if dy < -80 || velocity < -300 { sheetHeight = maxHeight }
+                    } else if dy < -80 || velocity < -300 { sheetHeight = maxHeight(for: containerHeight) }
                     dragOffset = 0
                 }
             }
@@ -412,7 +422,7 @@ public struct EmojiFullPickerSheet: View {
     }
 
     private func dismiss() {
-        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragOffset = maxHeight }
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragOffset = maxHeight(for: containerHeight) }
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { onDismiss?() }
     }
 }
