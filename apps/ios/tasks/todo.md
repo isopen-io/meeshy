@@ -77,15 +77,20 @@
 
 ## Phase 2 — Reliability real-time
 
-### [P2.1] Buffer + replay des emits Socket.IO pendant disconnect
+### [P2.1] Buffer + replay des emits Socket.IO pendant disconnect ✅
 - **Cible** : `packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift`
-- **Plan** :
-  - [ ] Test rouge : `MessageSocketManagerTests.test_emit_whileDisconnected_buffersAndReplaysOnReconnect`
-  - [ ] Introduire `private var pendingEmits: [PendingEmit]` actor-isolated
-  - [ ] Sur déco : enqueue avec timestamp + max-age (30s par défaut, ack-required only)
-  - [ ] Sur `connect` : flush FIFO, drop ceux trop vieux, log compteur
-  - [ ] Coordonner avec `OfflineQueue` existant pour ne pas double-emit
-- **Note** : ne pas buffer les events broadcast (typing, presence) — uniquement les actions utilisateur idempotentes via `clientMessageId`
+- **Constat re-vérifié** :
+  - `joinedConversations` est DÉJÀ replay-on-reconnect (ligne 1669-1674) — pas de gap pour les joins
+  - `message:send` passe par `OfflineQueue` + REST fallback — déjà couvert
+  - `typing:start/stop` est ephémère → ne doit PAS être bufferisé (stale = inutile)
+  - **Vrai gap : `requestTranslation`** — action utilisateur explicite, aucun auto-retry, drop silencieux si offline
+- **Plan livré** :
+  - [x] `PendingTranslationRequest` struct + buffer borné (50 items, TTL 60s)
+  - [x] Dedup par `(messageId, targetLanguage)` — re-tap rafraîchit l'entrée existante
+  - [x] Cap from front : oldest dropped (les plus utiles sont les plus récents)
+  - [x] `flushBufferedTranslationRequests(now:)` testable, appelé depuis `.connect` après re-join rooms
+  - [x] 4 tests : buffering, dedup, drop-stale, cap+drop-oldest
+- **Scope volontairement étroit** : pas de framework générique parce qu'il n'y a qu'un seul vrai consommateur. Si d'autres événements émergent, l'extension est mécanique.
 
 ### [P2.2] Re-auth socket sur token refresh
 - **Cible** : `MessageSocketManager.swift`, `SocialSocketManager.swift`, `AuthManager.swift`
