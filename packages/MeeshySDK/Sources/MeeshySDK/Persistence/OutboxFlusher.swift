@@ -62,6 +62,14 @@ public actor OutboxFlusher {
     private let baseBackoff: TimeInterval
     private let maxBackoff: TimeInterval
     private let onOutcome: (@Sendable (OutboxOutcome) -> Void)?
+    /// BW1 — optional gate so the flusher can short-circuit when the device
+    /// is offline. Without it, a long airplane-mode session burns through
+    /// every pending row's `maxAttempts` retries inside the URLSession
+    /// timeout window — battery + (when service returns) noisy logs. The
+    /// `Sendable` closure form lets call-sites inject the live `Network
+    /// ConditionMonitor.shared.isOnline` getter from MainActor without the
+    /// SDK Persistence layer importing UIKit/SwiftUI.
+    private let isNetworkReachable: @Sendable () async -> Bool
 
     public init(
         pool: any DatabaseWriter,
@@ -69,7 +77,8 @@ public actor OutboxFlusher {
         maxAttempts: Int = 5,
         baseBackoff: TimeInterval = 2,
         maxBackoff: TimeInterval = 30,
-        onOutcome: (@Sendable (OutboxOutcome) -> Void)? = nil
+        onOutcome: (@Sendable (OutboxOutcome) -> Void)? = nil,
+        isNetworkReachable: @escaping @Sendable () async -> Bool = { true }
     ) {
         self.pool = pool
         self.dispatcher = dispatcher
@@ -77,9 +86,17 @@ public actor OutboxFlusher {
         self.baseBackoff = baseBackoff
         self.maxBackoff = maxBackoff
         self.onOutcome = onOutcome
+        self.isNetworkReachable = isNetworkReachable
     }
 
     /// Draine les records `.pending` dont le `nextAttemptAt` est échu.
+    ///
+    /// BW1 — Si `isNetworkReachable()` retourne `false`, le flush
+    /// court-circuite (aucun fetch GRDB, aucun dispatch). Cela évite de
+    /// brûler les `maxAttempts` retries en mode avion / 1G saturé, qui
+    /// se mangent toute la batterie pendant le timeout URLSession (60s
+    /// par défaut). Le re-flush est déclenché automatiquement par
+    /// `OutboxRetryScheduler` au retour réseau (transition online).
     ///
     /// Retourne le `nextAttemptAt` le plus proche parmi les records encore
     /// `.pending` mais différés dans le futur (échec récent → backoff), ou
@@ -88,6 +105,11 @@ public actor OutboxFlusher {
     /// de cycle de vie de l'app (boot / premier plan / enqueue / BGTask).
     @discardableResult
     public func flush() async -> Date? {
+        // BW1 — bandwidth gate. Re-arm later via the same earliestDeferred
+        // path; the OutboxRetryScheduler also re-fires on NWPath transitions
+        // so the round-trip is bounded.
+        guard await isNetworkReachable() else { return nil }
+
         let now = Date()
         let pending: [OutboxRecord] = (try? await pool.read { db in
             try OutboxRecord

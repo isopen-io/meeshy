@@ -128,6 +128,10 @@ final class BackgroundTransitionCoordinator: BackgroundTransitioning {
                 dispatcher: OutboxDispatcher(),
                 onOutcome: { @Sendable outcome in
                     Task { await OfflineQueue.shared.publishOutcome(outcome) }
+                },
+                // BW1 — bandwidth gate (cf. MeeshyApp boot flusher).
+                isNetworkReachable: { @Sendable in
+                    await MainActor.run { NetworkConditionMonitor.shared.isOnline }
                 }
             )
             let nextRetry = await flusher.flush()
