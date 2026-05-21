@@ -1,0 +1,165 @@
+# iOS Hardening Plan — Critical + High priority items
+
+> **Branche** : `claude/analyze-ios-weaknesses-3aXOc`
+> **Stratégie** : un commit par phase, push fréquents. TDD strict sur tout nouveau code.
+> **Périmètre** : 13 items (5 critiques + 8 élevés) issus de `apps/ios/tasks/IOS_WEAKNESSES_AUDIT.md`.
+
+## Avertissement environnement
+- Env Linux : impossible d'exécuter `xcodebuild` / XCTest. Les tests sont **écrits** mais leur exécution doit se faire sur macOS via `./apps/ios/meeshy.sh test`.
+- Je m'appuie sur lectures croisées + cohérence des types pour minimiser les bugs de compilation.
+
+---
+
+## Phase 1 — Sécurité hardening (Critique)
+
+### [P1.1] Retirer les credentials démo App Store + ENV vars
+- **Cible** : `apps/ios/fastlane/Fastfile:189-191` + `CLAUDE.md` (Test Credentials section)
+- **Action** :
+  - [ ] Remplacer `demo_user: "atabeth"` par `ENV["ASC_DEMO_USER"]` (idem password)
+  - [ ] Mettre à jour `.github/workflows/ios-release.yml` pour injecter les ENV
+  - [ ] Retirer le bloc `Test Credentials` de `CLAUDE.md` (remplacer par mention « stockés en secret CI »)
+  - [ ] Documenter dans `apps/ios/fastlane/README.md` quels ENV sont requis
+  - [ ] User doit rotater le password Apple côté ASC ensuite
+- **Tests** : N/A (config)
+
+### [P1.2] VoIP token : UserDefaults → Keychain
+- **Cible** : `apps/ios/Meeshy/Features/Main/Services/VoIPPushManager.swift:303-326`
+- **Plan** :
+  - [ ] Test rouge : `VoIPPushManagerTests.test_persistVoIPToken_writesToKeychainNotUserDefaults`
+  - [ ] Créer protocole `VoIPTokenStoring` (avec `read() / write(token:) / clear()`)
+  - [ ] Impl par défaut utilisant `KeychainManager.shared` avec key `voip.deviceToken` + `kSecAttrAccessibleAfterFirstUnlock` (token doit être accessible en background)
+  - [ ] Migration douce : si UserDefaults contient déjà un token, le déplacer vers Keychain et supprimer
+  - [ ] Test : `MockVoIPTokenStore` injectable
+- **Risque** : background push doit pouvoir lire le token → `AccessibleAfterFirstUnlock`, pas `WhenUnlockedThisDeviceOnly`
+
+### [P1.3] Vérifier la chaîne APNs `requestAuthorization` + `registerForRemoteNotifications`
+- **Cible** : `apps/ios/Meeshy/AppDelegate.swift`, `MeeshyApp.swift`, `PushNotificationManager`
+- **Plan** :
+  - [ ] Lecture exhaustive de la chaîne d'appels au démarrage
+  - [ ] Si manquant : ajouter `UNUserNotificationCenter.current().requestAuthorization(options:)` + `application.registerForRemoteNotifications()` au bon endroit
+  - [ ] Vérifier que `didRegisterForRemoteNotificationsWithDeviceToken` → POST token vers gateway
+  - [ ] Test : `PushNotificationManagerTests.test_didRegister_sendsTokenToBackend`
+- **Note** : si déjà présent, downgrade ce ticket à « validation OK » dans le commit
+
+### [P1.4] Public key pinning sur `APIClient`
+- **Cible** : `packages/MeeshySDK/Sources/MeeshySDK/Networking/APIClient.swift:7-27`
+- **Plan** :
+  - [ ] Test rouge : `CertificatePinningDelegateTests.test_pin_rejectsValidCertWithDifferentSPKI`
+  - [ ] Étendre `CertificatePinningDelegate` :
+    - Charger SHA-256 SPKI hashes embedded dans le bundle (ressource `gate.meeshy.me.spki.json`)
+    - Au handshake, extraire la SPKI du cert leaf, hasher SHA-256, comparer à la liste
+    - Garder pin **multi-clé** (clé courante + clé de rotation/backup) pour permettre rotation sans rebuild
+  - [ ] Si liste vide → fallback au pinning actuel (backward compat)
+  - [ ] Documenter la procédure de rotation dans `decisions.md`
+
+### [P1.5] Supprimer `fatalError` au boot
+- **Cible** : `apps/ios/Meeshy/Core/DependencyContainer.swift:39`
+- **Plan** :
+  - [ ] Test : DI doit pouvoir reporter un échec sans crash
+  - [ ] Refactor : `DependencyContainer` expose `initializationError: Error?` + DB devient lazy / retry
+  - [ ] Au boot : si DB KO → afficher une `RecoveryView` (réinit, contact support) au lieu de crash
+  - [ ] Garde-fou : log via `os.Logger` + Crashlytics `recordError` pour visibilité
+- **Risque** : touche le chemin de boot → tester sur appareil avant merge
+
+---
+
+## Phase 2 — Reliability real-time
+
+### [P2.1] Buffer + replay des emits Socket.IO pendant disconnect
+- **Cible** : `packages/MeeshySDK/Sources/MeeshySDK/Sockets/MessageSocketManager.swift`
+- **Plan** :
+  - [ ] Test rouge : `MessageSocketManagerTests.test_emit_whileDisconnected_buffersAndReplaysOnReconnect`
+  - [ ] Introduire `private var pendingEmits: [PendingEmit]` actor-isolated
+  - [ ] Sur déco : enqueue avec timestamp + max-age (30s par défaut, ack-required only)
+  - [ ] Sur `connect` : flush FIFO, drop ceux trop vieux, log compteur
+  - [ ] Coordonner avec `OfflineQueue` existant pour ne pas double-emit
+- **Note** : ne pas buffer les events broadcast (typing, presence) — uniquement les actions utilisateur idempotentes via `clientMessageId`
+
+### [P2.2] Re-auth socket sur token refresh
+- **Cible** : `MessageSocketManager.swift`, `SocialSocketManager.swift`, `AuthManager.swift`
+- **Plan** :
+  - [ ] Test : `MessageSocketManagerTests.test_tokenRefresh_reconnectsWithNewToken`
+  - [ ] `AuthManager` publie un `tokenDidRefresh` (Combine `PassthroughSubject<String, Never>`)
+  - [ ] Socket managers s'abonnent et soit :
+    - réémettent un `auth:refresh` côté serveur si l'API gateway le supporte (à vérifier)
+    - soit déconnectent proprement + reconnectent avec le nouveau token (fallback générique)
+  - [ ] Sur 401 reçu via socket ack → triggers `AuthManager.refreshIfNeeded()`
+- **Préreq** : confirmer que le gateway accepte `auth:refresh` ou exige reconnect (audit gateway si besoin)
+
+---
+
+## Phase 3 — Data flow integrity & Prisme Linguistique
+
+### [P3.1] Coalescing des paginations `loadOlder` / `loadNewer`
+- **Cible** : `apps/ios/Meeshy/Features/Main/ViewModels/ConversationViewModel.swift`, `FeedViewModel.swift`
+- **Plan** :
+  - [ ] Test : `ConversationViewModelTests.test_concurrentLoadOlder_emitsOnlyOneRequest`
+  - [ ] Ajouter `private var inflightCursors: Set<String>` (cursor ou pageId selon API)
+  - [ ] `loadOlder()` guard early-return si cursor déjà en vol
+  - [ ] Pareil pour `loadNewer`
+- **Bonus** : ajouter un debounce 200ms côté UI pour absorber les `.onAppear` rapides
+
+### [P3.2] Purger `Locale.current` pour résolution de contenu
+- **Cible** : 4 sites identifiés (`ConversationView.swift:339, 346, 353, 397, 725`, `RegistrationViewModel.swift:146, 180, 187`)
+- **Plan** :
+  - [ ] Test : `LanguageResolverTests.test_resolveContentLanguage_ignoresDeviceLocale`
+  - [ ] Créer `ContentLanguageResolver` (struct pure) dans `MeeshySDK/Utils/` qui implémente l'ordre `systemLanguage > regionalLanguage > customDestinationLanguage > "fr"` (cf. CLAUDE.md ligne 38)
+  - [ ] Remplacer toutes les utilisations de `Locale.current` pour résolution **de contenu** (pas UI)
+  - [ ] Pour le `DateFormatter` dans ConversationView : utiliser `preferredContentLocale()` qui lit AuthManager.currentUser
+  - [ ] Pour `RegistrationViewModel` : laisser auto-suggestion mais préciser `editable: true` et ne pas écraser un choix explicite
+
+---
+
+## Phase 4 — Architectural cleanup (Élevé, gros)
+
+### [P4.1] Retirer les appels `APIClient.shared` depuis les Views
+- **Cibles** : `NewConversationView.swift`, `SharePickerView.swift`, `ThreadView.swift`, `StoryViewerView+Canvas.swift`
+- **Plan par vue** (pattern identique) :
+  - [ ] Créer un `*ViewModel` (ou réutiliser celui existant) avec dépendance protocolaire injectée
+  - [ ] Déplacer les appels API
+  - [ ] Garantir cache-first si applicable
+  - [ ] Tests : un par flow critique (search users, send shared message, load thread, react to story)
+
+### [P4.2] Split `ConversationViewModel.swift` (3028 lignes, 42 @Published)
+- **Stratégie** : éviter le big-bang. Approche par extraction de composants cohérents :
+  - [ ] Extraire `ConversationStateContainer` (struct avec les 42 @Published groupés en `loadingState`, `composerState`, `messagesState`, `overlaysState`)
+  - [ ] Extraire `ConversationTranslationCoordinator` (toute la logique d'overrides translation/audio)
+  - [ ] Extraire `ConversationPresenceCoordinator` (typing, live location)
+  - [ ] Extraire `ConversationMessageSender` (sending, retry, optimistic updates)
+  - [ ] Garder `ConversationViewModel` comme façade orchestrant ces 4 sous-composants
+  - [ ] Tests : un par sous-composant
+- **Risque** : énorme — à séquencer en sous-commits par sous-composant pour faciliter le review
+
+### [P4.3] Éliminer les scripts Ruby de maintenance pbxproj
+- **Cibles** : 20 scripts `apps/ios/*.rb`
+- **Plan** :
+  - [ ] Vérifier que `project.yml` (XcodeGen) couvre tous les targets actuellement gérés par ces scripts
+  - [ ] Ajouter au `project.yml` les targets manquants : MeeshyContextMenu, MeeshyIntents, MeeshyShareExtension (s'ils ne sont pas déjà)
+  - [ ] Régénérer le `.pbxproj` via XcodeGen et comparer
+  - [ ] Si diff acceptable : supprimer les 20 scripts Ruby + ajouter `xcodegen generate` comme step dans `meeshy.sh`
+  - [ ] Ajouter check CI : `git diff --exit-code project.pbxproj` après `xcodegen generate` doit être vide
+- **Risque** : peut casser le build s'il y a des subtilités non capturées dans `project.yml`. Doit être testé sur macOS.
+
+---
+
+## Phase 5 — Accessibilité
+
+### [P5.1] A11y baseline sur composants chat critiques
+- **Cible** : `ThemedMessageBubble`, `BubbleStandardLayout`, `MeeshyAvatar`, `ConversationRow`, boutons sans label
+- **Plan** :
+  - [ ] Tests via accessibility audit (XCUITest pour VoiceOver flow critique)
+  - [ ] Ajouter `.accessibilityLabel`, `.accessibilityValue`, `.accessibilityHint` aux cellules de chat
+  - [ ] Remplacer `.font(.system(size: X))` par fonts sémantiques dans `Contacts/`
+  - [ ] Audit Dynamic Type : forcer XXXL en preview, vérifier que rien ne casse
+- **Note** : périmètre limité aux écrans à fort trafic ; le rest passera en phase ultérieure
+
+---
+
+## Exécution
+
+Chaque phase = 1 ou plusieurs commits. Après chaque commit :
+1. Self-review : « est-ce que ça rapproche de la perfection perf/UX/sécurité ? »
+2. Mise à jour de ce todo (case cochée)
+3. Push
+
+Fin : récapitulatif final dans `tasks/todo.md` avec section « Review » comme demandé par CLAUDE.md.
