@@ -54,7 +54,12 @@ public final class StoryReaderPlayheadState: ObservableObject {
 
     public static let shared = StoryReaderPlayheadState()
 
-    @Published public private(set) var elapsedSeconds: TimeInterval = 0
+    /// `nil` = aucun tick reçu depuis le dernier `reset()` (slide qui démarre,
+    /// ou canvas en `.edit`). Sinon, dernière valeur publiée par le
+    /// `CADisplayLink`. Distinguer `nil` d'un `0` légitime permet aux consumers
+    /// de basculer proprement vers un fallback sans recourir à un sentinel
+    /// `> 0` ambigu (le canvas démarre légitimement à 0 sur chaque slide).
+    @Published public private(set) var elapsedSeconds: TimeInterval?
 
     /// Seuil minimum entre deux publications (≈ 30 Hz).
     public static let quantum: TimeInterval = 1.0 / 30.0
@@ -63,14 +68,18 @@ public final class StoryReaderPlayheadState: ObservableObject {
 
     public func publish(_ seconds: TimeInterval) {
         let next = max(0, seconds)
-        if abs(next - elapsedSeconds) >= Self.quantum {
+        if let current = elapsedSeconds {
+            if abs(next - current) >= Self.quantum {
+                elapsedSeconds = next
+            }
+        } else {
             elapsedSeconds = next
         }
     }
 
     public func reset() {
-        guard elapsedSeconds != 0 else { return }
-        elapsedSeconds = 0
+        guard elapsedSeconds != nil else { return }
+        elapsedSeconds = nil
     }
 }
 
@@ -83,8 +92,13 @@ public final class StoryReaderPlayheadState: ObservableObject {
 /// - `.composer` : drag actif (commit `x`/`y` au release pour éviter le
 ///   scintillement des vues observant le VM à chaque tick), tap = sélection.
 /// - `.reader`  : pas de drag, tap absorbé pour bloquer la navigation
-///   gauche/droite entre slides (le caller décide de l'action — typiquement
-///   toggle mute global).
+///   gauche/droite entre slides. L'overlay parent gère l'état mute.
+///
+/// **Leaf view pure** — pas d'`@ObservedObject` sur des singletons. `isUserMuted`
+/// est un input primitif `let`, l'observateur de la registry vit dans
+/// `AudioForegroundReaderOverlay`. Conforme à la règle CLAUDE.md
+/// "Zero Unnecessary Re-render" : la chip ne se ré-évalue que si ses inputs
+/// `Equatable` changent (id, position, mute, sélection).
 @MainActor
 public struct AudioForegroundChip: View {
 
@@ -97,25 +111,25 @@ public struct AudioForegroundChip: View {
     public let canvasSize: CGSize
     public let mode: Mode
     public let isSelected: Bool
+    public let isUserMuted: Bool
     public let onDragEnd: () -> Void
     public let onTap: () -> Void
 
     @GestureState private var dragOffset: CGSize = .zero
     @Environment(\.colorScheme) private var colorScheme
-    /// Observée uniquement en mode reader — pilote l'icône `waveform.slash`
-    /// quand l'utilisateur a coupé cette piste depuis le chip.
-    @ObservedObject private var muteRegistry = StoryReaderAudioMuteRegistry.shared
 
     public init(audioObject: Binding<StoryAudioPlayerObject>,
                 canvasSize: CGSize,
                 mode: Mode = .composer,
                 isSelected: Bool = false,
+                isUserMuted: Bool = false,
                 onDragEnd: @escaping () -> Void = {},
                 onTap: @escaping () -> Void = {}) {
         self._audioObject = audioObject
         self.canvasSize = canvasSize
         self.mode = mode
         self.isSelected = isSelected
+        self.isUserMuted = isUserMuted
         self.onDragEnd = onDragEnd
         self.onTap = onTap
     }
@@ -141,7 +155,9 @@ public struct AudioForegroundChip: View {
             // dans un layer ZStack au-dessus du `StoryGestureOverlayView`, donc
             // la navigation gauche/droite ne se déclenche pas.
             .onTapGesture(perform: onTap)
-            .accessibilityLabel("Audio foreground")
+            .accessibilityLabel(accessibilityTitle)
+            .accessibilityValue(accessibilityValueLabel)
+            .accessibilityHint(accessibilityHintLabel)
             .accessibilityAddTraits(.isButton)
     }
 
@@ -178,12 +194,6 @@ public struct AudioForegroundChip: View {
         }
     }
 
-    /// `isUserMuted` ne s'applique qu'au mode reader (la registry n'a pas de
-    /// sens pour les audios en cours d'édition côté composer).
-    private var isUserMuted: Bool {
-        mode == .reader && muteRegistry.isMuted(audioObject.id)
-    }
-
     private var iconName: String {
         isUserMuted ? "waveform.slash" : "waveform"
     }
@@ -192,6 +202,28 @@ public struct AudioForegroundChip: View {
         isSelected
             ? MeeshyColors.indigo400
             : (colorScheme == .dark ? Color.white.opacity(0.25) : MeeshyColors.indigo950.opacity(0.18))
+    }
+
+    // MARK: Accessibility strings
+
+    private var accessibilityTitle: String { "Audio foreground" }
+
+    private var accessibilityValueLabel: String {
+        switch mode {
+        case .composer:
+            return isSelected ? "Sélectionné" : "Non sélectionné"
+        case .reader:
+            return isUserMuted ? "Coupé" : "Actif"
+        }
+    }
+
+    private var accessibilityHintLabel: String {
+        switch mode {
+        case .composer:
+            return "Double tap pour sélectionner. Faites glisser pour déplacer."
+        case .reader:
+            return "Double tap pour couper ou activer cette piste audio."
+        }
     }
 
     private var dragGesture: some Gesture {
@@ -255,21 +287,21 @@ public struct AudioForegroundReaderOverlay: View {
 
     public let foregroundAudios: [StoryAudioPlayerObject]
     public let slideDuration: TimeInterval
-    /// Fallback utilisé uniquement si le canvas n'a pas (encore) publié de
-    /// playhead — typiquement avant la première frame du `displayLink`.
-    /// Une fois `StoryReaderPlayheadState.elapsedSeconds > 0`, ce paramètre
-    /// est ignoré.
-    public let fallbackElapsedTime: TimeInterval
+    /// Fallback utilisé uniquement quand `StoryReaderPlayheadState.elapsedSeconds`
+    /// est `nil` (aucun tick reçu — slide qui démarre, ou canvas en `.edit`).
+    /// `nil` ici → on traite comme `0` (chip visible si la fenêtre couvre 0).
+    public let fallbackElapsedTime: TimeInterval?
     /// Hook optionnel pour le caller (haptic supplémentaire, logging, …).
     /// L'overlay gère lui-même le toggle dans `StoryReaderAudioMuteRegistry`
     /// — `StoryCanvasUIView` souscrit à la registry et applique au mixer.
     public let onTap: ((StoryAudioPlayerObject) -> Void)?
 
     @ObservedObject private var playhead = StoryReaderPlayheadState.shared
+    @ObservedObject private var muteRegistry = StoryReaderAudioMuteRegistry.shared
 
     public init(foregroundAudios: [StoryAudioPlayerObject],
                 slideDuration: TimeInterval,
-                fallbackElapsedTime: TimeInterval = 0,
+                fallbackElapsedTime: TimeInterval? = nil,
                 onTap: ((StoryAudioPlayerObject) -> Void)? = nil) {
         self.foregroundAudios = foregroundAudios
         self.slideDuration = slideDuration
@@ -285,6 +317,7 @@ public struct AudioForegroundReaderOverlay: View {
                     canvasSize: geo.size,
                     mode: .reader,
                     isSelected: false,
+                    isUserMuted: muteRegistry.isMuted(audio.id),
                     onTap: {
                         HapticFeedback.light()
                         StoryReaderAudioMuteRegistry.shared.toggle(audio.id)
@@ -293,27 +326,40 @@ public struct AudioForegroundReaderOverlay: View {
                 )
             }
         }
+        // Quand l'overlay disparaît (viewer fermé), reset les états partagés
+        // pour ne pas fuiter vers le prochain cycle (re-entry rapide sur la
+        // même story sinon le mute persiste).
+        .onDisappear {
+            StoryReaderAudioMuteRegistry.shared.clear()
+            StoryReaderPlayheadState.shared.reset()
+        }
     }
 
-    /// Playhead effectif : le clock canvas dès qu'il a commencé à publier,
-    /// sinon le fallback fourni par le caller (typiquement
-    /// `progress × duration` côté SwiftUI viewer).
+    /// Playhead effectif : le clock canvas dès qu'un tick a été publié,
+    /// sinon le fallback fourni par le caller, sinon `0`.
     private var elapsedTime: TimeInterval {
-        playhead.elapsedSeconds > 0 ? playhead.elapsedSeconds : fallbackElapsedTime
+        playhead.elapsedSeconds ?? fallbackElapsedTime ?? 0
     }
 
-    /// Filtre :
-    /// - exclut les audios background (le bg n'a pas de chip visuel — il joue
-    ///   en boucle sur toute la slide).
-    /// - garde ceux dont la fenêtre `start..end` contient `elapsedTime`.
-    ///   `start` par défaut = 0, `end` par défaut = `slideDuration`.
     private var visibleAudios: [StoryAudioPlayerObject] {
-        let now = elapsedTime
-        return foregroundAudios.filter { audio in
+        Self.visibleAudios(in: foregroundAudios,
+                           elapsed: elapsedTime,
+                           slideDuration: slideDuration)
+    }
+
+    /// Filtre pur (extrait pour tests).
+    /// - Exclut les audios background (le bg n'a pas de chip visuel — il joue
+    ///   en boucle sur toute la slide).
+    /// - Garde ceux dont la fenêtre `[start, end]` contient `elapsed`.
+    ///   `start` par défaut = `0`, `end` par défaut = `slideDuration`.
+    public static func visibleAudios(in audios: [StoryAudioPlayerObject],
+                                     elapsed: TimeInterval,
+                                     slideDuration: TimeInterval) -> [StoryAudioPlayerObject] {
+        audios.filter { audio in
             guard audio.isBackground != true else { return false }
             let start = Double(audio.startTime ?? 0)
             let end = audio.duration.map { start + Double($0) } ?? slideDuration
-            return now >= start && now <= end
+            return elapsed >= start && elapsed <= end
         }
     }
 }
