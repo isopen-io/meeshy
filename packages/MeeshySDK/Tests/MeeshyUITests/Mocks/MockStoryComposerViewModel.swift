@@ -70,6 +70,7 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
     var loadedImages: [String: UIImage] = [:]
     var loadedVideoURLs: [String: URL] = [:]
     var loadedAudioURLs: [String: URL] = [:]
+    var loadedVideoCaptions: [String: StoryVideoCaptionMetadata] = [:]
     var mediaAspectRatios: [String: CGFloat] = [:]
 
     var _setAspectRatioCalls: Int = 0
@@ -440,6 +441,7 @@ final class MockStoryComposerViewModel: StoryComposerProviding {
         loadedImages = [:]
         loadedVideoURLs = [:]
         loadedAudioURLs = [:]
+        loadedVideoCaptions = [:]
         isTimelineVisible = false
         timelinePlaybackTime = 0
         isTimelinePlaying = false

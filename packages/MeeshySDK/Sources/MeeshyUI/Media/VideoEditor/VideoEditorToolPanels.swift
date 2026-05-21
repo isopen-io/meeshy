@@ -669,11 +669,30 @@ struct RotateController: View {
 
 // MARK: - Filter Controller
 
+/// Filter chooser — tiles show the **current video frame with each filter
+/// applied** instead of an abstract SF icon. The user gets a real preview
+/// of what they'd be picking, exactly like Photos / Instagram / CapCut.
+///
+/// Implementation : a single representative frame (middle of the filmstrip)
+/// is run through every `VideoFilterPreset.ciFilterName` ONCE when the
+/// controller appears. The cache survives across rebuilds of this
+/// controller — only the source frame changing invalidates it.
 struct FilterController: View {
     @ObservedObject var viewModel: VideoEditorViewModel
     @Environment(\.theme) private var theme
+    @StateObject private var previewCache = VideoFilterPreviewCache()
 
     private var accent: Color { Color(hex: viewModel.accentColor) }
+
+    /// Picks the source frame to feed into the filter pipeline. Middle of
+    /// the filmstrip when available — it's typically the most
+    /// representative frame and avoids the dark frame artifact common at
+    /// the start/end of recordings.
+    private var sourceFrame: UIImage? {
+        let strip = viewModel.filmstrip
+        guard !strip.isEmpty else { return nil }
+        return strip[strip.count / 2]
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -685,32 +704,64 @@ struct FilterController: View {
             .padding(.vertical, 2)
         }
         .padding(.bottom, 4)
+        .onAppear { refreshPreviewsIfNeeded() }
+        .adaptiveOnChange(of: viewModel.filmstrip.count) { _, _ in
+            refreshPreviewsIfNeeded()
+        }
     }
 
+    private func refreshPreviewsIfNeeded() {
+        guard let source = sourceFrame else { return }
+        previewCache.populate(from: source, version: viewModel.filmstrip.count)
+    }
+
+    @ViewBuilder
     private func filterTile(_ preset: VideoFilterPreset) -> some View {
         let isActive = viewModel.document.filter == preset
-        return Button {
+        Button {
             viewModel.setFilter(preset)
         } label: {
             VStack(spacing: 5) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(accent.opacity(isActive ? 0.3 : 0.12))
-                    Image(systemName: preset.iconName)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(isActive ? accent : theme.textSecondary)
-                }
-                .frame(width: 56, height: 56)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(accent, lineWidth: isActive ? 2 : 0)
-                )
+                tileThumbnail(preset, isActive: isActive)
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(accent, lineWidth: isActive ? 2 : 0)
+                    )
                 Text(preset.displayName)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(isActive ? theme.textPrimary : theme.textMuted)
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(preset.displayName)
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+
+    @ViewBuilder
+    private func tileThumbnail(_ preset: VideoFilterPreset, isActive: Bool) -> some View {
+        if let preview = previewCache.preview(for: preset) {
+            // Live preview : frame de la vidéo passée au CIFilter du preset.
+            Image(uiImage: preview)
+                .resizable()
+                .scaledToFill()
+                .overlay(
+                    isActive
+                        ? Color.clear
+                        : Color.black.opacity(0.15)
+                )
+        } else {
+            // Filmstrip pas encore prêt : on retombe sur l'icône SF pour ne
+            // pas laisser un tile noir le temps de l'extraction des frames.
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(accent.opacity(isActive ? 0.3 : 0.12))
+                Image(systemName: preset.iconName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(isActive ? accent : theme.textSecondary)
+            }
+        }
     }
 }
 
