@@ -7,6 +7,13 @@ import MeeshySDK
 /// scrubs, pinching zooms. Each `VideoSegment` renders as a thumbnail block
 /// sized to its edited duration; in Pro mode blocks are selectable and
 /// dividers mark the cuts.
+///
+/// **Tool overlays** (Mai 2026) : la timeline accueille désormais
+/// directement les contrôles contextuels selon l'outil actif (`viewModel.panel`)
+/// — fini la duplication d'une seconde timeline dans le panneau du bas :
+/// - `.trim` → brackets in/out + zones dimmées sur les bords coupés.
+/// - `.split` en Pro → ligne de coupe centrale + bouton tap inline.
+/// - autres outils → pas d'overlay (timeline standard).
 struct VideoEditorTimeline: View {
     @ObservedObject var viewModel: VideoEditorViewModel
     @Environment(\.theme) private var theme
@@ -15,20 +22,27 @@ struct VideoEditorTimeline: View {
     private let trackHeight: CGFloat = 58
     private let minZoom: CGFloat = 0.5
     private let maxZoom: CGFloat = 5.0
+    /// Largeur visuelle d'un bracket d'in/out (poignée draggable).
+    private let bracketWidth: CGFloat = 14
 
     @State private var scrubAnchor: Double?
     @State private var zoomAnchor: CGFloat?
     @State private var lastSnapBoundary: Double?
+    /// Anchor pris au touchDown d'un bracket. Stocké en TEMPS SOURCE
+    /// (`settingInPoint` / `settingOutPoint` parlent source), distinct du
+    /// scrub qui agit en temps edité.
+    @State private var bracketAnchorSource: Double?
 
     private var accent: Color { Color(hex: viewModel.accentColor) }
     private var pixelsPerSecond: CGFloat { basePixelsPerSecond * viewModel.timelineZoom }
+    private var isTrimActive: Bool { viewModel.panel.activeTool == .trim }
+    private var isSplitActive: Bool { viewModel.panel.activeTool == .split && viewModel.mode.isPro }
 
     var body: some View {
         GeometryReader { geo in
             let viewport = geo.size.width
             let centerX = viewport / 2
             let duration = viewModel.editedDuration
-            let contentWidth = CGFloat(duration) * pixelsPerSecond
             let leadingX = centerX - CGFloat(viewModel.playheadTime) * pixelsPerSecond
 
             ZStack(alignment: .topLeading) {
@@ -40,9 +54,15 @@ struct VideoEditorTimeline: View {
                     .frame(height: trackHeight)
                     .offset(y: 22)
 
+                if isTrimActive {
+                    trimOverlay(leadingX: leadingX, duration: duration)
+                        .offset(y: 22)
+                        .transition(.opacity)
+                }
+
                 edgeFades(viewport: viewport)
 
-                playhead(centerX: centerX)
+                playhead(centerX: centerX, accentTint: isSplitActive)
 
                 timeReadout(centerX: centerX, viewport: viewport)
             }
@@ -55,6 +75,7 @@ struct VideoEditorTimeline: View {
             .accessibilityValue(formatTime(viewModel.playheadTime))
         }
         .frame(height: trackHeight + 44)
+        .animation(.easeInOut(duration: 0.15), value: isTrimActive)
     }
 
     // MARK: - Segment strip
@@ -165,23 +186,122 @@ struct VideoEditorTimeline: View {
 
     // MARK: - Playhead
 
-    private func playhead(centerX: CGFloat) -> some View {
+    /// Center-pinned playhead. When `accentTint == true` (split tool actif
+    /// en Pro), affiche un trait scissor pour signaler qu'un tap immédiat
+    /// coupera la timeline ici.
+    private func playhead(centerX: CGFloat, accentTint: Bool) -> some View {
         ZStack {
             Rectangle()
                 .fill(accent)
-                .frame(width: 2)
+                .frame(width: accentTint ? 2.5 : 2)
                 .shadow(color: accent.opacity(0.6), radius: 3)
             VStack {
-                Circle()
-                    .fill(accent)
-                    .frame(width: 11, height: 11)
-                    .overlay(Circle().stroke(.white.opacity(0.85), lineWidth: 1.5))
+                ZStack {
+                    Circle()
+                        .fill(accent)
+                        .frame(width: 12, height: 12)
+                        .overlay(Circle().stroke(.white.opacity(0.85), lineWidth: 1.5))
+                    if accentTint {
+                        Image(systemName: "scissors")
+                            .font(.system(size: 7, weight: .black))
+                            .foregroundStyle(.white)
+                    }
+                }
                 Spacer()
             }
         }
         .frame(width: 16)
         .position(x: centerX, y: (trackHeight + 44) / 2)
         .allowsHitTesting(false)
+    }
+
+    // MARK: - Trim overlay (in/out brackets + dimmed tails)
+
+    /// Renders the trim handles **on the main timeline** while the Trim
+    /// tool is active. The brackets are anchored to source `inPoint` /
+    /// `outPoint` (which in Simple mode are also the first/last segment
+    /// boundaries), and drag delta is converted via `pixelsPerSecond` —
+    /// identical scale to the scrub gesture so 1 px = 1 px = 1 frame at the
+    /// current zoom.
+    ///
+    /// In Pro mode with multiple segments, the global trim still acts on
+    /// the **outer** in/out only (first segment.start, last segment.end).
+    /// Per-segment trim lives in the Split tool (merge / remove segment).
+    @ViewBuilder
+    private func trimOverlay(leadingX: CGFloat, duration: Double) -> some View {
+        // Source-time bounds → edited-time positions on the timeline.
+        // The first segment's start and the last segment's end map
+        // directly to the timeline's 0 and `duration` since
+        // `playbackDuration` is computed from them.
+        let leftEditedTime: Double = 0
+        let rightEditedTime: Double = duration
+        let leftX = leadingX + CGFloat(leftEditedTime) * pixelsPerSecond
+        let rightX = leadingX + CGFloat(rightEditedTime) * pixelsPerSecond
+
+        ZStack(alignment: .topLeading) {
+            // Selected window outline.
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(accent, lineWidth: 2)
+                .frame(width: max(0, rightX - leftX), height: trackHeight)
+                .offset(x: leftX)
+                .allowsHitTesting(false)
+
+            // Left bracket — drag changes the source in-point.
+            trimBracket(systemImage: "chevron.compact.left")
+                .position(x: leftX, y: trackHeight / 2)
+                .gesture(trimDrag(isLeft: true))
+
+            // Right bracket — drag changes the source out-point.
+            trimBracket(systemImage: "chevron.compact.right")
+                .position(x: rightX, y: trackHeight / 2)
+                .gesture(trimDrag(isLeft: false))
+        }
+    }
+
+    private func trimBracket(systemImage: String) -> some View {
+        RoundedRectangle(cornerRadius: 5, style: .continuous)
+            .fill(accent)
+            .frame(width: bracketWidth, height: trackHeight + 8)
+            .overlay(
+                Image(systemName: systemImage)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(.white)
+            )
+            .shadow(color: .black.opacity(0.35), radius: 3)
+    }
+
+    /// Drag gesture for an in/out bracket. The pixel delta is converted to
+    /// a **source-time** delta via `pixelsPerSecond` (the scrub scale) ×
+    /// the segment's speed factor, so the bracket sticks to the user's
+    /// finger no matter the zoom or playback speed.
+    private func trimDrag(isLeft: Bool) -> some Gesture {
+        let doc = viewModel.document
+        let segmentSpeed = isLeft
+            ? (doc.segments.first?.speed ?? 1)
+            : (doc.segments.last?.speed ?? 1)
+
+        return DragGesture(minimumDistance: 1)
+            .onChanged { value in
+                if bracketAnchorSource == nil {
+                    bracketAnchorSource = isLeft ? doc.inPoint : doc.outPoint
+                    viewModel.pause()
+                    HapticFeedback.light()
+                }
+                let anchor = bracketAnchorSource ?? 0
+                // Drag → edited-time delta → source-time delta (× speed).
+                let editedDelta = Double(value.translation.width / pixelsPerSecond)
+                let sourceDelta = editedDelta * segmentSpeed
+                let target = anchor + sourceDelta
+                let updated = isLeft
+                    ? doc.settingInPoint(target)
+                    : doc.settingOutPoint(target)
+                viewModel.preview(updated)
+            }
+            .onEnded { _ in
+                bracketAnchorSource = nil
+                viewModel.commitPreview()
+                HapticFeedback.medium()
+            }
     }
 
     private func edgeFades(viewport: CGFloat) -> some View {
