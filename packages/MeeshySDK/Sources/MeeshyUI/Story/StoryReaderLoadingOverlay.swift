@@ -79,14 +79,29 @@ public struct StoryReaderLoadingOverlay: View {
             }
 
             if showSpinner {
-                VStack(spacing: 8) {
-                    ProgressView()
-                        .progressViewStyle(.circular)
-                        .tint(.white.opacity(0.85))
-                    Text("\(Int((progress.isFinite ? progress : 0) * 100))%")
-                        .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.white.opacity(0.75))
+                // Indicateur central — frame explicite 100×100 sur le cercle
+                // pour éviter que `.background(Circle())` inscrive un disque
+                // déformé autour du bounding-box vertical du `VStack` (qui
+                // rendait spinner et % désaxés et collés en bas). Avec un
+                // `ZStack` aligné par défaut, le `VStack` reste centré dans
+                // le cercle, et le spacing 12pt entre le spinner et le %
+                // garantit une vraie respiration visuelle (pas de chevauchement
+                // sur les variants de spinner iOS qui prennent plus de hauteur
+                // en mode large dynamic type).
+                ZStack {
+                    Circle()
+                        .fill(Color.black.opacity(0.35))
+                    VStack(spacing: 12) {
+                        ProgressView()
+                            .progressViewStyle(.circular)
+                            .tint(.white)
+                            .scaleEffect(1.4)
+                        Text("\(Int((progress.isFinite ? progress : 0) * 100))%")
+                            .font(.caption.monospacedDigit())
+                            .foregroundStyle(.white.opacity(0.85))
+                    }
                 }
+                .frame(width: 100, height: 100)
                 .transition(.opacity)
             }
         }

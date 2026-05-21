@@ -352,23 +352,17 @@ struct StoryCardView: View {
 
     @ObservedObject var keyboard: KeyboardObserver
 
-    /// Temporise l'apparition du spinner de chargement. Il ne s'affiche que si
-    /// le média de la slide n'est toujours pas prêt après un court délai de
-    /// grâce (voir le `.task` en bas du `body`). Une slide déjà vue — ou
-    /// préchauffée par le prefetcher — devient prête avant ce délai, donc
-    /// revisiter une slide ne flashe jamais de loader.
-    @State private var showSlowLoader = false
-
     /// Fraction `[0, 1]` de contenu de la slide active disponible localement.
-    /// Pilote `StoryReaderLoadingOverlay` (ThumbHash bg + spinner + %) qui
-    /// remplace le binaire `isContentReady`/`showSlowLoader` pour un loader
-    /// progressif (cf. spec stories-video-layers-text-sprint § 3.D).
+    /// Pilote `StoryReaderLoadingOverlay` (ThumbHash bg + spinner + %) — seul
+    /// loader actif (l'ancien `ProgressView` blanc redondant a été retiré).
+    /// Cf. spec stories-video-layers-text-sprint § 3.D.
     @State private var slideContentProgress: Double = 0
 
-    /// Gate d'affichage de l'overlay de chargement : activé seulement après
-    /// 200 ms si le contenu n'est toujours pas prêt. Évite le flash de
-    /// l'overlay (ThumbHash bg flouté + spinner) quand la slide est déjà en
-    /// cache et se rend instantanément. Identique au pattern `showSlowLoader`.
+    /// Gate d'affichage du spinner + % à l'intérieur de l'overlay. La
+    /// backdrop ThumbHash, elle, est rendue immédiatement (cache-first).
+    /// Activé seulement après 200 ms si la slide n'a pas progressé — évite
+    /// que l'utilisateur voie spinner+% flasher sur un cache hit qui se
+    /// rend instantanément.
     @State private var showProgressOverlay: Bool = false
 
     // Closures — actions on the parent view
@@ -467,28 +461,6 @@ struct StoryCardView: View {
                     .allowsHitTesting(false)
                     .transition(.opacity)
                 }
-            }
-
-            // === Loading spinner — shown only for genuinely slow loads ===
-            // Gated par `isContentReady` ET `showSlowLoader` : le loader
-            // n'apparaît que si le média n'est pas prêt après le délai de grâce
-            // (voir le `.task` en bas du `body`). Un hit cache devient prêt
-            // avant — donc revisiter une slide ne flashe jamais de spinner.
-            // `.allowsHitTesting(false)` keeps tap-to-advance working.
-            if currentStory != nil && !isContentReady && showSlowLoader {
-                ProgressView()
-                    .progressViewStyle(.circular)
-                    .tint(.white)
-                    .scaleEffect(1.4)
-                    .padding(20)
-                    .background(
-                        Circle()
-                            .fill(Color.black.opacity(0.35))
-                    )
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .allowsHitTesting(false)
-                    .accessibilityHidden(true)
-                    .transition(.opacity)
             }
 
             // === Voice caption overlay (transcription voix) ===
@@ -848,25 +820,19 @@ struct StoryCardView: View {
         // letting it leak into adjacent UI.
         .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
         .clipped()
-        // Délai de grâce du spinner : à chaque changement de slide on remet
-        // `showSlowLoader` à false, puis on ne l'arme qu'après 200 ms. Si le
-        // média devient prêt avant (cache disque / préchauffe prefetcher), le
-        // spinner n'est jamais affiché — la slide apparaît instantanément.
+        // Délai de grâce du spinner+% : on n'arme `showProgressOverlay` qu'au
+        // bout de 200 ms si la slide est sous 20 % de progression. La backdrop
+        // ThumbHash, elle, est rendue immédiatement par
+        // `StoryReaderLoadingOverlay` quand `slideContentProgress < 0.95` —
+        // garantit un placeholder cache-first sans flasher d'indicateur de
+        // chargement sur les slides qui se rendent instantanément.
         .task(id: currentStory?.id) {
-            showSlowLoader = false
             showProgressOverlay = false
-            // Reset le loader granulaire à 0 à chaque changement de slide.
-            // Le canvas émettra la progression réelle dès que ses assets
-            // commenceront à se résoudre.
             slideContentProgress = 0
             try? await Task.sleep(for: .milliseconds(200))
             guard !Task.isCancelled else { return }
-            // Délai écoulé : si la slide est toujours sous le seuil 20%, on
-            // monte le loader overlay (ThumbHash + spinner). Sinon (cache hit
-            // / slide statique), on ne montre rien — rendu instantané.
             if slideContentProgress < 0.20 {
                 withAnimation(.easeIn(duration: 0.2)) {
-                    showSlowLoader = true
                     showProgressOverlay = true
                 }
             }
