@@ -2319,10 +2319,24 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
     /// que l'élément manipulé soit immédiatement le plus en avant. No-op pour
     /// le background media (les bg restent toujours derrière les fg via le
     /// filtre de `StoryRenderer.collectItems`).
+    /// Ramène l'élément touché au premier plan visuel.
+    ///
+    /// **Important** : le rendu canvas (`StoryRenderer.render`) trie les
+    /// éléments par `zIndex` (pas par leur ordre dans les arrays).
+    /// Réordonner uniquement les tableaux (`remove + append`) ne suffisait
+    /// donc pas — le visuel ne bougeait pas alors que les listes de
+    /// l'inspecteur (qui lisent l'ordre du tableau) reflétaient bien le
+    /// mouvement. On assigne maintenant `nextTopZ()` à l'élément pour piloter
+    /// le z-order de rendu, et on réordonne aussi le tableau pour rester
+    /// cohérent avec l'inspecteur.
     private func bringForegroundToFront(id: String) {
+        let topZ = nextTopZ()
+
         // Texte
-        if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }),
-           idx != slide.effects.textObjects.count - 1 {
+        if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }) {
+            guard slide.effects.textObjects[idx].zIndex < topZ
+                  || idx != slide.effects.textObjects.count - 1 else { return }
+            slide.effects.textObjects[idx].zIndex = topZ
             let item = slide.effects.textObjects.remove(at: idx)
             slide.effects.textObjects.append(item)
             onItemModified?(slide)
@@ -2331,8 +2345,10 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         // Media foreground (skip si bg)
         if var medias = slide.effects.mediaObjects,
            let idx = medias.firstIndex(where: { $0.id == id }),
-           medias[idx].isBackground == false,
-           idx != medias.count - 1 {
+           medias[idx].isBackground == false {
+            guard medias[idx].zIndex < topZ
+                  || idx != medias.count - 1 else { return }
+            medias[idx].zIndex = topZ
             let item = medias.remove(at: idx)
             medias.append(item)
             slide.effects.mediaObjects = medias
@@ -2341,8 +2357,10 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         }
         // Sticker
         if var stickers = slide.effects.stickerObjects,
-           let idx = stickers.firstIndex(where: { $0.id == id }),
-           idx != stickers.count - 1 {
+           let idx = stickers.firstIndex(where: { $0.id == id }) {
+            guard stickers[idx].zIndex < topZ
+                  || idx != stickers.count - 1 else { return }
+            stickers[idx].zIndex = topZ
             let item = stickers.remove(at: idx)
             stickers.append(item)
             slide.effects.stickerObjects = stickers
