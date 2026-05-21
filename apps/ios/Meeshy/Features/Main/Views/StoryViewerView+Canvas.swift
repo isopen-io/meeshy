@@ -460,8 +460,8 @@ struct StoryCardView: View {
                !audios.isEmpty {
                 AudioForegroundReaderOverlay(
                     foregroundAudios: audios,
-                    elapsedTime: TimeInterval(progress) * currentSlideDuration,
-                    slideDuration: currentSlideDuration
+                    slideDuration: currentSlideDuration,
+                    fallbackElapsedTime: TimeInterval(progress) * currentSlideDuration
                 )
                 .allowsHitTesting(!isComposerEngaged)
             }

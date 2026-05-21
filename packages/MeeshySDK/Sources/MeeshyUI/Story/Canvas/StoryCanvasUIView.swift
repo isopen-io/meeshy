@@ -91,6 +91,9 @@ public final class StoryCanvasUIView: UIView {
                 // ids d'audio et démarre nécessairement « son audible ».
                 StoryReaderAudioMuteRegistry.shared.clear()
                 lastAppliedMutedSet.removeAll()
+                // Reset le playhead — la nouvelle slide repart de 0 et le
+                // displayLinkTick reprendra à publier.
+                StoryReaderPlayheadState.shared.reset()
                 reconfigureAudioForPlayback()
                 startAudioPlayback()
             }
@@ -1606,6 +1609,9 @@ public final class StoryCanvasUIView: UIView {
         let effectiveDuration = slide.effectiveSlideDuration()
         let clamped = min(nextSeconds, effectiveDuration)
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
+        // Publie le playhead pour les overlays SwiftUI (chip audio
+        // foreground). Auto-throttle à ~30 Hz dans la state.
+        StoryReaderPlayheadState.shared.publish(clamped)
         rebuildLayers()
         if clamped >= effectiveDuration {
             stopPlayback()

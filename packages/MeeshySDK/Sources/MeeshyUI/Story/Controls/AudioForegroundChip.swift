@@ -38,6 +38,42 @@ public final class StoryReaderAudioMuteRegistry: ObservableObject {
     }
 }
 
+/// Playhead courant du reader (en secondes, relatif à l'origine de la
+/// slide). Source de vérité unique : la `currentTime` du
+/// `StoryCanvasUIView` en mode `.play`, alimentée par son `CADisplayLink`
+/// — c'est le même clock qui pilote le rendu (keyframes texte, fades,
+/// scheduling audio host-time). Bien plus précis que la `progress` (0..1)
+/// du timer SwiftUI qui ignore le temps réel d'arrivée des médias.
+///
+/// Throttling : on ne re-publie que si le delta dépasse `quantum` (33 ms,
+/// soit ~30 Hz). Suffisant pour gater la fenêtre `startTime..end` du
+/// `AudioForegroundReaderOverlay` sans déclencher 60 re-renders/sec sur
+/// les vues observatrices.
+@MainActor
+public final class StoryReaderPlayheadState: ObservableObject {
+
+    public static let shared = StoryReaderPlayheadState()
+
+    @Published public private(set) var elapsedSeconds: TimeInterval = 0
+
+    /// Seuil minimum entre deux publications (≈ 30 Hz).
+    public static let quantum: TimeInterval = 1.0 / 30.0
+
+    public init() {}
+
+    public func publish(_ seconds: TimeInterval) {
+        let next = max(0, seconds)
+        if abs(next - elapsedSeconds) >= Self.quantum {
+            elapsedSeconds = next
+        }
+    }
+
+    public func reset() {
+        guard elapsedSeconds != 0 else { return }
+        elapsedSeconds = 0
+    }
+}
+
 /// Chip glass affichant un audio foreground sur le canvas.
 ///
 /// Capsule `.ultraThinMaterial` + icône audio + onde sinusoïdale animée.
@@ -211,20 +247,26 @@ struct AudioForegroundSineWave: View {
 public struct AudioForegroundReaderOverlay: View {
 
     public let foregroundAudios: [StoryAudioPlayerObject]
-    public let elapsedTime: TimeInterval
     public let slideDuration: TimeInterval
+    /// Fallback utilisé uniquement si le canvas n'a pas (encore) publié de
+    /// playhead — typiquement avant la première frame du `displayLink`.
+    /// Une fois `StoryReaderPlayheadState.elapsedSeconds > 0`, ce paramètre
+    /// est ignoré.
+    public let fallbackElapsedTime: TimeInterval
     /// Hook optionnel pour le caller (haptic supplémentaire, logging, …).
     /// L'overlay gère lui-même le toggle dans `StoryReaderAudioMuteRegistry`
     /// — `StoryCanvasUIView` souscrit à la registry et applique au mixer.
     public let onTap: ((StoryAudioPlayerObject) -> Void)?
 
+    @ObservedObject private var playhead = StoryReaderPlayheadState.shared
+
     public init(foregroundAudios: [StoryAudioPlayerObject],
-                elapsedTime: TimeInterval,
                 slideDuration: TimeInterval,
+                fallbackElapsedTime: TimeInterval = 0,
                 onTap: ((StoryAudioPlayerObject) -> Void)? = nil) {
         self.foregroundAudios = foregroundAudios
-        self.elapsedTime = elapsedTime
         self.slideDuration = slideDuration
+        self.fallbackElapsedTime = fallbackElapsedTime
         self.onTap = onTap
     }
 
@@ -246,17 +288,25 @@ public struct AudioForegroundReaderOverlay: View {
         }
     }
 
+    /// Playhead effectif : le clock canvas dès qu'il a commencé à publier,
+    /// sinon le fallback fourni par le caller (typiquement
+    /// `progress × duration` côté SwiftUI viewer).
+    private var elapsedTime: TimeInterval {
+        playhead.elapsedSeconds > 0 ? playhead.elapsedSeconds : fallbackElapsedTime
+    }
+
     /// Filtre :
     /// - exclut les audios background (le bg n'a pas de chip visuel — il joue
     ///   en boucle sur toute la slide).
     /// - garde ceux dont la fenêtre `start..end` contient `elapsedTime`.
     ///   `start` par défaut = 0, `end` par défaut = `slideDuration`.
     private var visibleAudios: [StoryAudioPlayerObject] {
-        foregroundAudios.filter { audio in
+        let now = elapsedTime
+        return foregroundAudios.filter { audio in
             guard audio.isBackground != true else { return false }
             let start = Double(audio.startTime ?? 0)
             let end = audio.duration.map { start + Double($0) } ?? slideDuration
-            return elapsedTime >= start && elapsedTime <= end
+            return now >= start && now <= end
         }
     }
 }
