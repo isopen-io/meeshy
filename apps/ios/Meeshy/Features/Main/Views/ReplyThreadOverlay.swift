@@ -93,15 +93,16 @@ struct ReplyThreadOverlay: View {
     private func loadThreadFromAPI() async {
         isLoading = true
         loadError = nil
+        let user = AuthManager.shared.currentUser
         do {
-            let response: APIResponse<ThreadData> = try await APIClient.shared.request(
-                endpoint: "/conversations/\(conversationId)/threads/\(parentMessageId)"
+            let result = try await ReplyThreadLoader().loadThread(
+                conversationId: conversationId,
+                parentMessageId: parentMessageId,
+                currentUserId: user?.id ?? "",
+                currentUsername: user?.username
             )
-            let data = response.data
-            let userId = AuthManager.shared.currentUser?.id ?? ""
-            let username = AuthManager.shared.currentUser?.username
-            parentMessage = data.parent.toMessage(currentUserId: userId, currentUsername: username)
-            replies = data.replies.map { $0.toMessage(currentUserId: userId, currentUsername: username) }
+            parentMessage = result.parent
+            replies = result.replies
         } catch {
             Logger.messages.error("Failed to load thread: \(error.localizedDescription)")
             loadError = "Impossible de charger la discussion"
