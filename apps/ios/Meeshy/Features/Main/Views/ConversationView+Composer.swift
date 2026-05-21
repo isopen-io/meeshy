@@ -31,7 +31,9 @@ extension ConversationView {
             replyBanner: composerState.pendingReplyReference != nil && composerState.editingMessageId == nil
                 ? AnyView(composerReplyBanner(composerState.pendingReplyReference!))
                 : nil,
-            customAttachmentsPreview: (!composerState.pendingAttachments.isEmpty || composerState.isLoadingMedia)
+            customAttachmentsPreview: (!composerState.pendingAttachments.isEmpty
+                                        || !composerState.preparingAttachments.isEmpty
+                                        || composerState.isLoadingMedia)
                 ? AnyView(pendingAttachmentsRow)
                 : nil,
             isEditMode: composerState.editingMessageId != nil,
@@ -492,6 +494,11 @@ extension ConversationView {
     var pendingAttachmentsPreview: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
+                ForEach(composerState.preparingAttachments) { prep in
+                    AttachmentLoadingTile(prep: prep) {
+                        cancelPreparation(prep)
+                    }
+                }
                 ForEach(composerState.pendingAttachments) { attachment in
                     attachmentPreviewTile(attachment)
                 }
@@ -596,6 +603,15 @@ extension ConversationView {
                 .lineLimit(1)
                 .frame(width: 60)
         }
+    }
+
+    // MARK: - Preparation Cancellation
+    func cancelPreparation(_ prep: PreparingAttachment) {
+        // Mark the in-flight prep as failed so any waiter resumes immediately
+        // and the observation task drops it from `preparingAttachments`. The
+        // Task spawned inside `AttachmentPreparationService` keeps running but
+        // can no longer write back because the handle is gone from state.
+        composerState.preparingAttachments.removeAll { $0.id == prep.id }
     }
 
     // MARK: - Attachment Preview Tap Handler
