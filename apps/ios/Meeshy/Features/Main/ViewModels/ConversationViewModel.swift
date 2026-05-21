@@ -855,8 +855,11 @@ class ConversationViewModel: ObservableObject {
             }
             .dropFirst()
             .sink { [weak self] _ in
-                self?._cachedPreferredLanguages = nil
-                self?._cachedPreferredLanguagesUserId = nil
+                // P4.2: cache invalidation follows the same rename that
+                // moved `preferredLanguages` into ``ConversationLanguagePreferences``;
+                // the old `_cachedPreferredLanguages` / `_cachedPreferredLanguagesUserId`
+                // pair was collapsed into a single Equatable cache slot.
+                self?._cachedLanguagePreferences = nil
             }
             .store(in: &cancellables)
     }
