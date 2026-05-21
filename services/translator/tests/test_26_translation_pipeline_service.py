@@ -367,6 +367,191 @@ class TestPipelineResult:
 
 
 # ============================================================================
+# TEST PIPELINE RESULT ROUNDTRIP (REGRESSION: translationId kwarg crash)
+# ============================================================================
+
+class TestPipelineResultRoundtrip:
+    """
+    Regression tests for the production crash:
+        TypeError: PipelineResult.__init__() got an unexpected keyword argument 'translationId'
+
+    Root cause: _process_job stored result.to_dict() (Gateway format with camelCase keys)
+    into job.result, then translate_sync rebuilt the dataclass via
+    `PipelineResult(**job.result)`, but the dataclass __init__ only accepts the internal
+    snake_case fields (job_id, original_text, ...).
+
+    Fix: keep job.result in Gateway format for the ZMQ publish path (voice_translation_completed),
+    but stash the original PipelineResult instance in a private TranslationJob field so
+    translate_sync can return it without round-tripping through kwargs.
+    """
+
+    def test_to_dict_output_breaks_kwargs_constructor(self):
+        """Gateway-format dict (to_dict()) MUST crash when fed back as kwargs.
+
+        This locks the symptom we observed in prod and prevents anyone from
+        reintroducing `PipelineResult(**job.result)` after job.result was set
+        from `to_dict()`.
+        """
+        from services.translation_pipeline_service import PipelineResult
+
+        result = PipelineResult(
+            job_id="job_repro",
+            original_text="Hello",
+            original_language="en",
+            translations={
+                "fr": {
+                    "translated_text": "Salut",
+                    "duration_ms": 1000,
+                    "voice_cloned": True,
+                    "voice_quality": 0.9,
+                }
+            },
+            voice_cloned=True,
+            processing_time_ms=42,
+        )
+
+        gateway_dict = result.to_dict()
+        # Sanity: Gateway format uses camelCase + translationId (NOT job_id).
+        assert "translationId" in gateway_dict
+        assert "job_id" not in gateway_dict
+
+        with pytest.raises(TypeError) as exc_info:
+            PipelineResult(**gateway_dict)
+        assert "translationId" in str(exc_info.value)
+
+    def test_pipeline_result_kwargs_compat_with_asdict(self):
+        """asdict(PipelineResult) MUST round-trip cleanly via the kwargs constructor."""
+        from dataclasses import asdict
+        from services.translation_pipeline_service import PipelineResult
+
+        original = PipelineResult(
+            job_id="job_round",
+            original_text="Hello",
+            original_language="en",
+            original_duration_ms=3000,
+            transcription_confidence=0.95,
+            translations={"fr": {"translated_text": "Salut"}},
+            voice_cloned=True,
+            voice_quality=0.92,
+            voice_model_version=1,
+            processing_time_ms=42,
+        )
+
+        stored = asdict(original)
+        restored = PipelineResult(**stored)
+
+        assert restored.job_id == original.job_id
+        assert restored.original_text == original.original_text
+        assert restored.original_language == original.original_language
+        assert restored.translations == original.translations
+        assert restored.voice_cloned == original.voice_cloned
+        assert restored.voice_quality == original.voice_quality
+        assert restored.processing_time_ms == original.processing_time_ms
+
+    def test_translation_job_carries_pipeline_result_reference(self):
+        """TranslationJob exposes a private `_pipeline_result` slot so translate_sync can
+        return the original PipelineResult without rebuilding it from a Gateway-format dict.
+        """
+        from services.translation_pipeline_service import (
+            TranslationJob,
+            JobStatus,
+            JobPriority,
+            PipelineResult,
+        )
+
+        job = TranslationJob(
+            id="job_xyz",
+            user_id="u_1",
+            audio_base64=None,
+            target_languages=["fr"],
+            source_language="en",
+            status=JobStatus.PROCESSING,
+            priority=JobPriority.NORMAL,
+        )
+
+        # _pipeline_result must exist as a field (default None), not blow up on access.
+        assert hasattr(job, "_pipeline_result")
+        assert job._pipeline_result is None
+
+        # Assigning a PipelineResult must round-trip identically.
+        pr = PipelineResult(job_id=job.id, original_text="hi")
+        job._pipeline_result = pr
+        assert job._pipeline_result is pr
+
+    @pytest.mark.asyncio
+    async def test_translate_sync_returns_pipeline_result_from_private_ref(
+        self, reset_singleton, temp_audio_dir
+    ):
+        """translate_sync must return the PipelineResult stored in `_pipeline_result`,
+        not crash by feeding the Gateway-format job.result back through kwargs.
+        """
+        from services.translation_pipeline_service import (
+            TranslationPipelineService,
+            TranslationJob,
+            JobStatus,
+            JobPriority,
+            PipelineResult,
+        )
+
+        service = TranslationPipelineService(
+            max_concurrent_jobs=1,
+            audio_output_dir=temp_audio_dir,
+        )
+
+        # Stub a completed job WITHOUT running the actual ML pipeline. This is
+        # what _process_job is responsible for setting up in production.
+        pr = PipelineResult(
+            job_id="stub_job",
+            original_text="bonjour",
+            original_language="fr",
+            translations={
+                "en": {
+                    "translated_text": "hello",
+                    "duration_ms": 500,
+                    "voice_cloned": False,
+                    "voice_quality": 0.0,
+                }
+            },
+            processing_time_ms=1234,
+        )
+
+        job = TranslationJob(
+            id="stub_job",
+            user_id="u_1",
+            audio_base64=None,
+            target_languages=["en"],
+            source_language="fr",
+            status=JobStatus.COMPLETED,
+            priority=JobPriority.NORMAL,
+        )
+        job.result = pr.to_dict()           # Gateway format (what ZMQ publishes)
+        job._pipeline_result = pr           # Private ref (used by translate_sync)
+        job.completed_at = datetime.now()
+
+        async with service._jobs_lock:
+            service._jobs[job.id] = job
+
+        # Bypass submit_job by patching it to return our pre-completed job.
+        async def fake_submit_job(**_kwargs):
+            return job
+
+        service.submit_job = fake_submit_job  # type: ignore[assignment]
+
+        returned = await service.translate_sync(
+            user_id="u_1",
+            audio_path="/tmp/does_not_matter.wav",
+            target_languages=["en"],
+            source_language="fr",
+        )
+
+        assert isinstance(returned, PipelineResult)
+        assert returned.job_id == pr.job_id
+        assert returned.original_text == pr.original_text
+        assert returned.translations == pr.translations
+        assert returned.processing_time_ms == pr.processing_time_ms
+
+
+# ============================================================================
 # TEST TRANSLATION PIPELINE SERVICE - SINGLETON
 # ============================================================================
 
