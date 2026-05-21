@@ -235,6 +235,38 @@ public final class ReaderAudioMixer {
         (isMuted || entry.isUserMuted) ? 0 : entry.targetVolume
     }
 
+    // MARK: - Playhead
+
+    /// Temps écoulé depuis l'origine `t = 0` de la slide en cours, en
+    /// secondes. Calculé contre `playbackStartHostTime` qui partage le même
+    /// référentiel `mach_absolute_time()` que les `AVAudioTime` utilisés pour
+    /// scheduler les buffers — c'est donc *le clock audio réel* (sample-
+    /// accurate, identique à celui qu'utilise le moteur).
+    ///
+    /// Retourne `nil` quand aucune slide ne joue (`playbackStartHostTime` nil
+    /// après `teardown()` / `stop()`, ou avant le premier `play(...)`).
+    public var slideElapsedSeconds: TimeInterval? {
+        guard let start = playbackStartHostTime, isPlaying else { return nil }
+        // `delaySeconds(forHostTime:relativeTo:)` retourne `target - relativeTo`
+        // si positif, sinon `0`. On l'utilise à l'envers (now = target, start
+        // = relativeTo) pour obtenir l'écoulé.
+        return Self.delaySeconds(forHostTime: mach_absolute_time(), relativeTo: start)
+    }
+
+    /// Position de lecture sample-accurate d'un clip particulier (en
+    /// secondes, relative au début du fichier audio). Lit
+    /// `AVAudioPlayerNode.playerTime(forNodeTime:)` qui est l'API canonique
+    /// Apple pour obtenir le temps réel de lecture. Retourne `nil` si le clip
+    /// n'a pas encore commencé à rendre (pas de `lastRenderTime`).
+    public func clipElapsedSeconds(for audioId: String) -> TimeInterval? {
+        guard let entry = entries[audioId],
+              let nodeTime = entry.node.lastRenderTime,
+              let playerTime = entry.node.playerTime(forNodeTime: nodeTime),
+              playerTime.sampleRate > 0
+        else { return nil }
+        return Double(playerTime.sampleTime) / playerTime.sampleRate
+    }
+
     // MARK: - Lifecycle
 
     public func shutdown() {

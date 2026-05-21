@@ -1613,8 +1613,14 @@ public final class StoryCanvasUIView: UIView {
         let clamped = min(nextSeconds, effectiveDuration)
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
         // Publie le playhead pour les overlays SwiftUI (chip audio
-        // foreground). Auto-throttle à ~30 Hz dans la state.
-        StoryReaderPlayheadState.shared.publish(clamped)
+        // foreground). Préfère le clock audio réel du mixer
+        // (`slideElapsedSeconds`) quand une slide est en lecture audio —
+        // c'est le même référentiel host-time que les `AVAudioTime` qui
+        // schedulent les buffers, donc sample-accurate. Fallback sur le
+        // `clamped` du displayLink pour les slides sans audio (texte,
+        // image statique). Auto-throttle à ~30 Hz dans la state.
+        let publishedTime = audioMixer.slideElapsedSeconds ?? clamped
+        StoryReaderPlayheadState.shared.publish(min(publishedTime, effectiveDuration))
         rebuildLayers()
         if clamped >= effectiveDuration {
             stopPlayback()
