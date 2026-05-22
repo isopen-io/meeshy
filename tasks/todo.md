@@ -9,35 +9,39 @@ Each phase is independently deployable unless flagged otherwise. Tick boxes as w
 
 ---
 
-## Phase 0 — Preparation (~0.5j, not deployable solo)
+## Phase 0 — Preparation (~0.5j, not deployable solo) ✅
 
-- [ ] Add `version Int @default(0)` to `UserConversationPreferences` in `packages/shared/prisma/schema.prisma:1773-1822`
-- [ ] Generate Prisma migration locally (do NOT run on prod yet)
-- [ ] In `packages/shared/types/socketio-events.ts` (around line 237) add event constants:
-  - [ ] `USER_PREFERENCES_REORDERED = 'user:preferences-reordered'`
-  - [ ] `CATEGORY_CREATED = 'category:created'`
-  - [ ] `CATEGORY_UPDATED = 'category:updated'`
-  - [ ] `CATEGORY_DELETED = 'category:deleted'`
-  - [ ] `CATEGORIES_REORDERED = 'categories:reordered'`
-- [ ] Define matching `ServerEvents` payload types (mirror `UserPreferencesUpdatedEvent`, include `version` field where relevant)
-- [ ] Create `services/gateway/src/utils/socket-broadcast.ts` with `broadcastToUser(fastify, userId, event, payload)` helper (per design §8.2)
-- [ ] Write failing vitest tests for each of the 7 endpoints in `services/gateway/__tests__/` — assert emission shape (currently RED)
+- [x] Add `version Int @default(0)` to `UserConversationPreferences` in `packages/shared/prisma/schema.prisma:1773-1822`
+- [x] Generate Prisma migration locally (do NOT run on prod yet) — MongoDB schema, no SQL migration needed; field is non-breaking (existing docs read as default `0`)
+- [x] In `packages/shared/types/socketio-events.ts` (around line 237) add event constants:
+  - [x] `USER_PREFERENCES_REORDERED = 'user:preferences-reordered'`
+  - [x] `CATEGORY_CREATED = 'category:created'`
+  - [x] `CATEGORY_UPDATED = 'category:updated'`
+  - [x] `CATEGORY_DELETED = 'category:deleted'`
+  - [x] `CATEGORIES_REORDERED = 'categories:reordered'`
+- [x] Define matching `ServerEvents` payload types (`UserPreferencesUpdatedEventData` upgraded to discriminated union: user-level `{userId, category}` + new conversation-scoped `{userId, conversationId, version, reset, preferences}`)
+- [x] Create `services/gateway/src/utils/socket-broadcast.ts` with `broadcastToUser(fastify, userId, event, payload)` helper (per design §8.2)
+- [x] Write failing jest tests for endpoints in `services/gateway/src/__tests__/` — RED (3 in conversation-preferences-broadcast.test.ts, 4 in category-broadcast.test.ts, plus 5 GREEN helper tests in socket-broadcast.test.ts)
 
-## Phase 1 — Gateway emissions (~0.5j, **deployable solo**, non-breaking)
+## Phase 1 — Gateway emissions (~0.5j, **deployable solo**, non-breaking) ✅
 
 In `services/gateway/src/routes/conversation-preferences.ts`:
-- [ ] `PUT /user-preferences/conversations/:id` — Prisma upsert with `version: { increment: 1 }`; emit `USER_PREFERENCES_UPDATED` with full payload + version
-- [ ] `DELETE /user-preferences/conversations/:id` — emit `{ conversationId, reset: true, version: 0 }`
-- [ ] `POST /user-preferences/conversations/reorder` — emit `USER_PREFERENCES_REORDERED { updates }`
+- [x] `PUT /user-preferences/conversations/:id` — Prisma upsert with `version: { increment: 1 }`; emit `USER_PREFERENCES_UPDATED` with full payload + version
+- [x] `DELETE /user-preferences/conversations/:id` — emit `{ conversationId, reset: true, version: 0 }`
+- [x] `POST /user-preferences/conversations/reorder` — emit `USER_PREFERENCES_REORDERED { updates }`
 
 In the categories route file (`/me/preferences/categories`):
-- [ ] `POST` — emit `CATEGORY_CREATED`
-- [ ] `PATCH /:id` — emit `CATEGORY_UPDATED`
-- [ ] `DELETE /:id` — emit `CATEGORY_DELETED`
-- [ ] `POST /reorder` — emit `CATEGORIES_REORDERED`
-- [ ] Phase 0 tests now GREEN
-- [ ] Total diff ≈ 66 added lines / ≈ 7 modified
-- [ ] Deploy on staging first; verify with a manual `socket.on()` listener
+- [x] `POST` — emit `CATEGORY_CREATED`
+- [x] `PATCH /:id` — emit `CATEGORY_UPDATED`
+- [x] `DELETE /:id` — emit `CATEGORY_DELETED`
+- [x] `POST /reorder` — emit `CATEGORIES_REORDERED`
+- [x] Phase 0 tests now GREEN (12/12 across the 3 broadcast suites)
+- [x] Total diff: ~110 lines across gateway + shared (event constants + payload types + 2 route files + helper)
+- [ ] Deploy on staging first; verify with a manual `socket.on()` listener — _pending sysadmin action_
+
+### Web compatibility shim (Phase 1 side-effect)
+- [x] Widened `MeeshySocketIOService.onPreferencesUpdated` / `SocketIOOrchestrator.onPreferencesUpdated` listener type to the new union
+- [x] `use-socket-cache-sync.ts` narrows on `'category' in data` before invalidating React Query cache; conversation-scoped variant is currently ignored (consumed iOS-side in later phases; web wiring deferred)
 
 ## Phase 2 — SDK Models (~0.5j, deployable, rétro-compat)
 

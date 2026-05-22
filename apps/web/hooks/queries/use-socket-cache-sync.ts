@@ -557,9 +557,15 @@ export function useSocketCacheSync(options: UseSocketCacheSyncOptions = {}) {
     const unsubscribeAudioTranslation = meeshySocketIOService.onAudioTranslation(handleAudioTranslation);
     const unsubscribeAttachmentStatus = meeshySocketIOService.onAttachmentStatusUpdated(handleAttachmentStatusUpdated);
     const unsubscribePreferences = meeshySocketIOService.onPreferencesUpdated((data) => {
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.preferences.category(data.category),
-      });
+      // The event is a union: user-level (has `category`) vs conversation-scoped
+      // (has `conversationId`). Web cache invalidation here only cares about the
+      // user-level variant; the conversation-scoped variant is consumed by the
+      // new ConversationStore (iOS first; web wiring lands in a later phase).
+      if ('category' in data) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.preferences.category(data.category),
+        });
+      }
     });
     const unsubscribeJoined = meeshySocketIOService.onConversationJoined(handleConversationJoined);
     const unsubscribeLeft = meeshySocketIOService.onConversationLeft(handleConversationLeft);
