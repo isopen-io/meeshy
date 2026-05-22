@@ -140,7 +140,12 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
     }
 
     public func createStory(content: String?, storyEffects: StoryEffects?, visibility: String = "PUBLIC", originalLanguage: String? = nil, mediaIds: [String]? = nil, repostOfId: String? = nil) async throws -> APIPost {
-        let body = CreateStoryRequest(content: content, storyEffects: storyEffects, visibility: visibility, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId)
+        // Strip composer-local `file://` paths from mediaObjects before the
+        // payload hits the wire — they only resolve in the author's sandbox
+        // and break the canvas for every reader (cf. StoryEffects+Sanitization
+        // and StoryMediaLayer.swift:132-134).
+        let sanitizedEffects = storyEffects?.sanitizedForServerPublish()
+        let body = CreateStoryRequest(content: content, storyEffects: sanitizedEffects, visibility: visibility, originalLanguage: originalLanguage, mediaIds: mediaIds, repostOfId: repostOfId)
         let response: APIResponse<APIPost> = try await api.post(endpoint: "/posts", body: body)
         return response.data
     }
