@@ -438,14 +438,11 @@ actor MediaCompressor {
         }
 
         // Codec check via les format descriptions de la track.
+        // Sous iOS 16+, le typed getter `.formatDescriptions` retourne
+        // directement `[CMFormatDescription]` — pas besoin de downcast.
         let formats = try await videoTrack.load(.formatDescriptions)
         guard let firstFormat = formats.first else { return nil }
-        // `formatDescriptions` sur AVAssetTrack est typé `[Any]` parce
-        // que c'est cross-source (vidéo / audio / texte) — un downcast
-        // vers `CMFormatDescription` est nécessaire avant d'utiliser
-        // les helpers Core Media (`CMFormatDescriptionGetMediaSubType`).
-        let formatDesc = firstFormat as! CMFormatDescription
-        let codec = CMFormatDescriptionGetMediaSubType(formatDesc)
+        let codec = CMFormatDescriptionGetMediaSubType(firstFormat)
         let isModernCodec = (codec == kCMVideoCodecType_HEVC) || (codec == kCMVideoCodecType_H264)
         guard isModernCodec else { return nil }
 
