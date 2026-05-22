@@ -81,6 +81,12 @@ public struct APIConversationPreferences: Codable, Sendable {
     public var reaction: String?
     public var customName: String?
     public var mentionsOnly: Bool?
+    /// Monotonic version for optimistic-concurrency resolution
+    /// (`incoming.version <= local -> drop`). Populated by the gateway
+    /// in Phase 1 of the unification refactor. Optional for backward
+    /// compatibility with pre-Phase-1 server responses and old cache
+    /// rows; the Store treats `nil` as version 0.
+    public var version: Int?
 
     public init(
         isPinned: Bool? = nil,
@@ -91,7 +97,8 @@ public struct APIConversationPreferences: Codable, Sendable {
         categoryId: String? = nil,
         reaction: String? = nil,
         customName: String? = nil,
-        mentionsOnly: Bool? = nil
+        mentionsOnly: Bool? = nil,
+        version: Int? = nil
     ) {
         self.isPinned = isPinned
         self.isMuted = isMuted
@@ -102,6 +109,7 @@ public struct APIConversationPreferences: Codable, Sendable {
         self.reaction = reaction
         self.customName = customName
         self.mentionsOnly = mentionsOnly
+        self.version = version
     }
 }
 
