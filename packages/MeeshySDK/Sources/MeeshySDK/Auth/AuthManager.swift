@@ -101,7 +101,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Private
 
     private let keychain = KeychainManager.shared
-    internal var authService = AuthService.shared
+    /// Backed by the protocol type so tests can inject a stub conforming
+    /// to `AuthServiceProviding` without subclassing the production
+    /// `final` `AuthService`.
+    internal var authService: AuthServiceProviding = AuthService.shared
 
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
     private var tokenRefreshTask: Task<String, Error>?
@@ -204,7 +207,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         twoFactorToken = nil
 
         do {
-            let data = try await authService.login(username: username, password: password)
+            let data = try await authService.login(username: username, password: password, rememberDevice: true)
             if data.requires2FA == true {
                 self.requires2FA = true
                 self.twoFactorToken = data.twoFactorToken
@@ -277,7 +280,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         errorMessage = nil
 
         do {
-            try await authService.requestMagicLink(email: email)
+            _ = try await authService.requestMagicLink(email: email, deviceFingerprint: nil)
             isLoading = false
             return true
         } catch let error as APIError {
@@ -501,7 +504,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         currentlyAuthenticated && currentActiveUserId == newUserId
     }
 
-    private func applySession(token: String, sessionToken: String?, user: MeeshyUser) {
+    internal func applySession(token: String, sessionToken: String?, user: MeeshyUser) {
         let userId = user.id
         // Capture BEFORE we mutate state. If we were already authenticated
         // when applySession runs, this is a token rotation (refresh) — the

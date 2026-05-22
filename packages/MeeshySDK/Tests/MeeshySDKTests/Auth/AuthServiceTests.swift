@@ -36,7 +36,9 @@ final class AuthServiceTests: XCTestCase {
             user: makeUser(),
             token: token,
             sessionToken: sessionToken,
-            expiresIn: expiresIn
+            expiresIn: expiresIn,
+            requires2FA: nil,
+            twoFactorToken: nil
         )
     }
 
@@ -52,7 +54,7 @@ final class AuthServiceTests: XCTestCase {
         XCTAssertEqual(result.token, "tok123")
         XCTAssertEqual(result.sessionToken, "sess456")
         XCTAssertEqual(result.expiresIn, 3600)
-        XCTAssertEqual(result.user.username, "testuser")
+        XCTAssertEqual(result.user?.username, "testuser")
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/login")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
@@ -122,7 +124,7 @@ final class AuthServiceTests: XCTestCase {
         let result = try await service.register(request: request)
 
         XCTAssertEqual(result.token, "newtoken")
-        XCTAssertEqual(result.user.id, "user1")
+        XCTAssertEqual(result.user?.id, "user1")
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/register")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
@@ -266,7 +268,7 @@ final class AuthServiceTests: XCTestCase {
         let result = try await service.validateMagicLink(token: "abc-magic-token")
 
         XCTAssertEqual(result.token, "magic-token")
-        XCTAssertEqual(result.user.username, "testuser")
+        XCTAssertEqual(result.user?.username, "testuser")
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/magic-link/validate")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
@@ -544,7 +546,7 @@ final class AuthServiceTests: XCTestCase {
         let result = try await service.refreshToken("old-token", sessionToken: "session-abc")
 
         XCTAssertEqual(result.token, "refreshed-token")
-        XCTAssertEqual(result.user.username, "testuser")
+        XCTAssertEqual(result.user?.username, "testuser")
         XCTAssertEqual(mock.requestCount, 1)
         XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/refresh")
         XCTAssertEqual(mock.lastRequest?.method, "POST")
