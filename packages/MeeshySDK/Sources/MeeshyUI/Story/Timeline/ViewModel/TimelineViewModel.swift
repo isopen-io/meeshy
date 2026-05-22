@@ -181,7 +181,11 @@ public final class TimelineViewModel: ObservableObject {
 
     public func dragClipMoved(rawTime: Float, snapCandidates: [SnapCandidate]) {
         guard var drag = selection.activeDrag else { return }
-        let snapResult = snapEngine.snap(rawTime: rawTime,
+        // Quantize to ms-precision BEFORE snap so the snap engine sees the
+        // user-grade-resolution time. Mirrors the precision of the inspector
+        // start/duration fields (3 decimal places, 0.001s steps).
+        let quantizedRaw = (rawTime * 1000).rounded() / 1000
+        let snapResult = snapEngine.snap(rawTime: quantizedRaw,
                                          candidates: snapCandidates,
                                          disabled: !isSnapEnabled)
         drag.currentStartTime = snapResult.snappedTime

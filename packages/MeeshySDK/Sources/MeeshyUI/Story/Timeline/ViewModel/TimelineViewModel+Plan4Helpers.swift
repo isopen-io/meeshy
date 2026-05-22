@@ -129,6 +129,81 @@ extension TimelineViewModel {
         return nil
     }
 
+    // MARK: - Precise start / duration (ms-grade inspector edits)
+
+    /// Sets the start time of a clip to a precise value, quantised to
+    /// millisecond resolution. Wraps the value in a `MoveClipCommand` so it
+    /// integrates with the undo / redo stack alongside drag commits, and
+    /// reuses `dragClipMoved`'s auto-extend invariant so the playable range
+    /// follows the new clip tail.
+    ///
+    /// Negative values are clamped to zero. Non-finite or no-op values are
+    /// rejected silently so callers can pipe a `TextField` commit through
+    /// without prevalidation.
+    public func setClipStartTime(id: String, startTime: Float) {
+        guard startTime.isFinite else { return }
+        guard let kind = clipKind(forId: id),
+              let currentStart = clipStartTime(id: id) else { return }
+        let quantised = (max(0, startTime) * 1000).rounded() / 1000
+        guard abs(quantised - currentStart) >= 0.0005 else { return }
+        let cmd = MoveClipCommand(
+            clipId: id, kind: kind,
+            oldStartTime: currentStart,
+            newStartTime: quantised
+        )
+        do {
+            try cmd.apply(to: &project)
+            commandStack.push(.moveClip(cmd))
+            // Mirror `applyClipPosition`'s auto-extend contract: if the new
+            // tail exceeds the current slide duration, push it out so the
+            // playhead can reach the clip and the canvas progress bar shows
+            // the right ceiling.
+            if let duration = clipDuration(id: id) {
+                let elementEnd = quantised + duration
+                if elementEnd.isFinite, elementEnd > project.slideDuration {
+                    project.slideDuration = elementEnd
+                }
+            }
+            scheduleEngineReconfigure()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    /// Sets the duration of a clip to a precise value, quantised to
+    /// millisecond resolution. Wraps the change in a `TrimClipCommand`
+    /// (same envelope as a right-handle drag) so the undo stack is uniform
+    /// with the gesture flow. Also auto-extends `project.slideDuration` when
+    /// the new tail exceeds the current ceiling, mirroring drag behaviour.
+    ///
+    /// Values ≤ 0 or non-finite are rejected silently (would crash the
+    /// player on `insertTimeRange`). No-op edits are also rejected so the
+    /// command stack does not accumulate noise from idle commits.
+    public func setClipDuration(id: String, duration: Float) {
+        guard duration.isFinite, duration > 0 else { return }
+        guard let kind = clipKind(forId: id),
+              let currentStart = clipStartTime(id: id),
+              let currentDuration = clipDuration(id: id) else { return }
+        let quantised = (duration * 1000).rounded() / 1000
+        guard abs(quantised - currentDuration) >= 0.0005 else { return }
+        let cmd = TrimClipCommand(
+            clipId: id, kind: kind,
+            oldStartTime: currentStart, oldDuration: currentDuration,
+            newStartTime: currentStart, newDuration: quantised
+        )
+        do {
+            try cmd.apply(to: &project)
+            commandStack.push(.trimClip(cmd))
+            let elementEnd = currentStart + quantised
+            if elementEnd.isFinite, elementEnd > project.slideDuration {
+                project.slideDuration = elementEnd
+            }
+            scheduleEngineReconfigure()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     // MARK: - Clip property mutations (used by ClipInspector callbacks)
 
     public func setClipVolume(id: String, volume: Float) {
