@@ -30,6 +30,7 @@ struct MessageOverlayMenu: View {
     var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
     var onDeleteAttachment: ((String) -> Void)?
+    var onShowThread: (() -> Void)?
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -695,6 +696,12 @@ struct MessageOverlayMenu: View {
             id: "reply", icon: "arrowshape.turn.up.left.fill",
             label: "Repondre", color: "4ECDC4",
             handler: { dismissThen { onReply?() } }
+        ))
+
+        actions.append(MessageAction(
+            id: "thread", icon: "bubble.left.and.bubble.right.fill",
+            label: "Discussion", color: "F39C12",
+            handler: { dismissThen { onShowThread?() } }
         ))
 
         if hasText {

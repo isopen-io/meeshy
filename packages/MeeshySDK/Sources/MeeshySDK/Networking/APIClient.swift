@@ -318,6 +318,7 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         queryItems: [URLQueryItem]?,
         headers: [String: String]?
     ) async throws -> T {
+        var hasRefreshedOn401 = false
         guard var components = URLComponents(string: "\(baseURL)\(endpoint)") else {
             throw MeeshyError.server(statusCode: 0, message: "URL invalide")
         }
@@ -325,6 +326,10 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
         if let queryItems, !queryItems.isEmpty {
             components.queryItems = queryItems
         }
+
+        // We declare isRefreshOrAuth and shouldAttemptRefresh here because they are needed for both proactive and reactive refresh
+        let isRefreshOrAuth = endpoint == "/auth/refresh" || endpoint.hasPrefix("/auth/login") || endpoint.hasPrefix("/auth/register") || endpoint.hasPrefix("/auth/magic-link")
+        let shouldAttemptRefresh = !isRefreshOrAuth
 
         guard let url = components.url else {
             throw MeeshyError.server(statusCode: 0, message: "URL invalide")
@@ -346,6 +351,15 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
             urlRequest.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
         } else if let token = anonymousSessionToken {
             urlRequest.setValue(token, forHTTPHeaderField: "X-Session-Token")
+        }
+
+        if let token = authToken, shouldAttemptRefresh && AuthManager.isTokenExpired(token, now: Date()) {
+            do {
+                let freshToken = try await AuthManager.shared.refreshSession()
+                urlRequest.setValue("Bearer \(freshToken)", forHTTPHeaderField: "Authorization")
+            } catch {
+                throw MeeshyError.auth(.sessionExpired)
+            }
         }
 
         if let body {
@@ -405,10 +419,36 @@ public final class APIClient: APIClientProviding, @unchecked Sendable {
                     let errorMsg = errBody?.message ?? errBody?.error
 
                     if statusCode == 401 {
-                        Task { @MainActor in
-                            AuthManager.shared.handleUnauthorized()
+                        if shouldAttemptRefresh && !hasRefreshedOn401 {
+                            hasRefreshedOn401 = true
+                            do {
+                                let freshToken = try await AuthManager.shared.refreshSession(force: true)
+                                urlRequest.setValue("Bearer \(freshToken)", forHTTPHeaderField: "Authorization")
+                                let (retryData, retryResponse) = try await session.data(for: urlRequest)
+                                guard let retryHTTPResponse = retryResponse as? HTTPURLResponse else {
+                                    throw MeeshyError.server(statusCode: 0, message: "Aucune donnee recue")
+                                }
+                                let retryStatusCode = retryHTTPResponse.statusCode
+                                if (200...299).contains(retryStatusCode) {
+                                    let result = try decoder.decode(T.self, from: retryData)
+                                    return result
+                                } else {
+                                    if retryStatusCode == 401 {
+                                        await AuthManager.shared.handleUnauthorized()
+                                        throw MeeshyError.auth(.sessionExpired)
+                                    }
+                                    let retryErrBody = try? decoder.decode(ErrorBody.self, from: retryData)
+                                    let retryErrorMsg = retryErrBody?.message ?? retryErrBody?.error
+                                    throw MeeshyError.server(statusCode: retryStatusCode, message: retryErrorMsg ?? "Erreur après rafraichissement")
+                                }
+                            } catch {
+                                await AuthManager.shared.handleUnauthorized()
+                                throw MeeshyError.auth(.sessionExpired)
+                            }
+                        } else {
+                            await AuthManager.shared.handleUnauthorized()
+                            throw MeeshyError.auth(.sessionExpired)
                         }
-                        throw MeeshyError.auth(.sessionExpired)
                     }
 
                     if statusCode == 403 {

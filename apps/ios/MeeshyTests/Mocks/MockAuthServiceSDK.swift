@@ -7,6 +7,7 @@ final class MockAuthServiceSDK: AuthServiceProviding, @unchecked Sendable {
     // MARK: - Stubbing
 
     var loginResult: Result<LoginResponseData, Error> = .failure(NSError(domain: "test", code: 0))
+    var completeLoginWith2FAResult: Result<LoginResponseData, Error> = .failure(NSError(domain: "test", code: 0))
     var registerResult: Result<LoginResponseData, Error> = .failure(NSError(domain: "test", code: 0))
     var verifyEmailResult: Result<Void, Error> = .success(())
     var verifyEmailWithCodeResult: Result<Void, Error> = .success(())
@@ -24,6 +25,9 @@ final class MockAuthServiceSDK: AuthServiceProviding, @unchecked Sendable {
     // MARK: - Call Tracking
 
     var loginCallCount = 0
+    var completeLoginWith2FACallCount = 0
+    var lastCompleteLoginWith2FAToken: String?
+    var lastCompleteLoginWith2FACode: String?
     var registerCallCount = 0
     var verifyEmailCallCount = 0
     var verifyEmailWithCodeCallCount = 0
@@ -47,6 +51,15 @@ final class MockAuthServiceSDK: AuthServiceProviding, @unchecked Sendable {
     nonisolated func login(username: String, password: String, rememberDevice: Bool) async throws -> LoginResponseData {
         await MainActor.run { loginCallCount += 1 }
         return try await MainActor.run { try loginResult.get() }
+    }
+
+    nonisolated func completeLoginWith2FA(twoFactorToken: String, code: String) async throws -> LoginResponseData {
+        await MainActor.run {
+            completeLoginWith2FACallCount += 1
+            lastCompleteLoginWith2FAToken = twoFactorToken
+            lastCompleteLoginWith2FACode = code
+        }
+        return try await MainActor.run { try completeLoginWith2FAResult.get() }
     }
 
     nonisolated func register(request: RegisterRequest) async throws -> LoginResponseData {
@@ -129,6 +142,9 @@ final class MockAuthServiceSDK: AuthServiceProviding, @unchecked Sendable {
 
     func reset() {
         loginCallCount = 0
+        completeLoginWith2FACallCount = 0
+        lastCompleteLoginWith2FAToken = nil
+        lastCompleteLoginWith2FACode = nil
         registerCallCount = 0
         verifyEmailCallCount = 0
         verifyEmailWithCodeCallCount = 0

@@ -671,4 +671,36 @@ final class AuthServiceTests: XCTestCase {
 
         XCTAssertEqual(mock.requestCount, 1)
     }
+
+    // MARK: - completeLoginWith2FA
+
+    func testCompleteLoginWith2FASuccess() async throws {
+        let loginData = makeLoginResponseData(token: "token2fa")
+        let response = APIResponse(success: true, data: loginData, error: nil)
+        mock.stub("/auth/login/2fa", result: response)
+
+        let result = try await service.completeLoginWith2FA(twoFactorToken: "2fa-token-xyz", code: "654321")
+
+        XCTAssertEqual(result.token, "token2fa")
+        XCTAssertEqual(mock.requestCount, 1)
+        XCTAssertEqual(mock.lastRequest?.endpoint, "/auth/login/2fa")
+        XCTAssertEqual(mock.lastRequest?.method, "POST")
+    }
+
+    func testCompleteLoginWith2FAFailure() async {
+        mock.errorToThrow = MeeshyError.auth(.invalidCredentials)
+
+        do {
+            _ = try await service.completeLoginWith2FA(twoFactorToken: "2fa-token-xyz", code: "000000")
+            XCTFail("Expected error to be thrown")
+        } catch let error as MeeshyError {
+            if case .auth(.invalidCredentials) = error {
+                // expected
+            } else {
+                XCTFail("Expected MeeshyError.auth(.invalidCredentials), got \(error)")
+            }
+        } catch {
+            XCTFail("Expected error to be MeeshyError, got \(error)")
+        }
+    }
 }

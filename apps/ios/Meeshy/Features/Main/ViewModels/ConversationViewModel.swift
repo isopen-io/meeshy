@@ -8,7 +8,7 @@ import os
 
 // MARK: - Real-time Translation Type (text translations, not in SDK)
 
-struct MessageTranslation: Identifiable {
+struct MessageTranslation: Identifiable, Equatable {
     let id: String
     let messageId: String
     let sourceLanguage: String

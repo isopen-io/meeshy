@@ -543,13 +543,11 @@ struct ConversationListView: View {
 
     private var mainContent: some View {
         mainContentZStack
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: conversationViewModel.selectedFilter)
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: expandedSections)
             .adaptiveOnChange(of: isScrollingDown) { wasHidden, isHidden in
                 if !wasHidden && isHidden { showSearchOverlay = false }
             }
             .onAppear {
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
             }
             .task {
                 print("[DIAG] ConversationListView.task ENTERED")
@@ -568,15 +566,15 @@ struct ConversationListView: View {
             }
             .adaptiveOnChange(of: conversationViewModel.groupedConversations.isEmpty) { _, isEmpty in
                 if isEmpty && isScrollingDown {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                    withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
                 }
             }
             .adaptiveOnChange(of: conversationViewModel.selectedFilter) { _, _ in
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
             }
             .adaptiveOnChange(of: feedIsVisible) { wasVisible, isVisible in
                 if wasVisible && !isVisible {
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { isScrollingDown = false }
+                    withAnimation(.easeOut(duration: 0.25)) { isScrollingDown = false }
                 }
             }
             .overlay {
@@ -769,8 +767,8 @@ struct ConversationListView: View {
             // Hide on scroll down
             .offset(y: isScrollingDown ? 150 : 0)
             .opacity(isScrollingDown ? 0 : 1)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: isScrollingDown)
-            .animation(.spring(response: 0.35, dampingFraction: 0.8), value: showSearchOverlay)
+            .animation(.easeOut(duration: 0.25), value: isScrollingDown)
+            .animation(.easeOut(duration: 0.25), value: showSearchOverlay)
         }
         // Layer 3: Collapsible header overlay — pinned to top, respects safe area
         .overlay(alignment: .top) {

@@ -186,7 +186,7 @@ struct ContactsListTab: View {
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(name), \(isOnline ? "en ligne" : "hors ligne")")
-        .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.filteredFriends.count)
+        .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.filteredFriends.count)
     }
 
     // MARK: - Empty State

@@ -184,19 +184,38 @@ actor MediaCompressor {
             throw CompressionError.noVideoTrack
         }
 
-        let sourceSize = try await videoTrack.naturalDisplaySize()
-        let targetSize = fitSize(sourceSize, within: context.maxVideoResolution)
+        // **Le writer encode les pixel buffers RAW** (orientation sensor),
+        // pas l'image displayée — la rotation est appliquée en metadata via
+        // `videoInput.transform`. Donc les dims du writer doivent matcher
+        // les dims des sample buffers source, sinon l'encoder force-rescale
+        // entre deux ratios incompatibles (ex. 1920×1080 raw → 1080×1920
+        // demandé = stretch 16:9 → 9:16). C'était la régression du
+        // 2026-04-30 quand `naturalDisplaySize()` a remplacé `naturalSize`.
+        //
+        // Le budget `maxVideoResolution` reste exprimé côté display (1080×
+        // 1920 pour story portrait), donc on fait le fit en coordonnées
+        // display puis on swap back en raw pour le writer.
+        let rawSourceSize = try await videoTrack.load(.naturalSize)
+        let transform = try await videoTrack.load(.preferredTransform)
+        let isPortraitDisplay = abs(transform.b) == 1 && abs(transform.c) == 1
+        let displaySourceSize = isPortraitDisplay
+            ? CGSize(width: rawSourceSize.height, height: rawSourceSize.width)
+            : rawSourceSize
+        let targetDisplaySize = fitSize(displaySourceSize, within: context.maxVideoResolution)
+        let targetRawSize = isPortraitDisplay
+            ? CGSize(width: targetDisplaySize.height, height: targetDisplaySize.width)
+            : targetDisplaySize
+
         let nominalFrameRate = try await videoTrack.load(.nominalFrameRate)
         let targetFPS = min(nominalFrameRate, 30)
-        let transform = try await videoTrack.load(.preferredTransform)
 
         let useHEVC = VTIsHardwareDecodeSupported(kCMVideoCodecType_HEVC)
         let codecType: AVVideoCodecType = useHEVC ? .hevc : .h264
 
         let videoSettings: [String: Any] = [
             AVVideoCodecKey: codecType,
-            AVVideoWidthKey: Int(targetSize.width),
-            AVVideoHeightKey: Int(targetSize.height),
+            AVVideoWidthKey: Int(targetRawSize.width),
+            AVVideoHeightKey: Int(targetRawSize.height),
             AVVideoCompressionPropertiesKey: [
                 AVVideoAverageBitRateKey: context.videoBitRate,
                 AVVideoExpectedSourceFrameRateKey: targetFPS,
@@ -279,7 +298,7 @@ actor MediaCompressor {
             throw writer.error ?? CompressionError.exportSessionFailed
         }
 
-        Self.logger.info("Video compressed: \(codecType == .hevc ? "HEVC" : "H.264", privacy: .public) \(Int(targetSize.width))x\(Int(targetSize.height)) @ \(context.videoBitRate / 1000)kbps")
+        Self.logger.info("Video compressed: \(codecType == .hevc ? "HEVC" : "H.264", privacy: .public) \(Int(targetDisplaySize.width))x\(Int(targetDisplaySize.height)) display (\(Int(targetRawSize.width))x\(Int(targetRawSize.height)) raw) @ \(context.videoBitRate / 1000)kbps")
 
         return outputURL
     }
