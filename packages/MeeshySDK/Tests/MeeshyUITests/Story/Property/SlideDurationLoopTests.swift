@@ -40,4 +40,44 @@ struct SlideDurationLoopTests {
         let slide = StoryFixtures.loopVideoSlide(videoDurationSec: 15.0, staticBase: 12.0)
         #expect(slide.effectiveSlideDuration() == 15.0)
     }
+
+    // MARK: - B1: sticker bounds extend the total duration
+
+    /// A sticker that fires at `startTime=8` for `duration=2` on a slide
+    /// whose user-set `duration` is only 5s must extend the slide to 10s
+    /// — otherwise the export truncates the sticker's tail.
+    @Test("sticker startTime+duration extends bound past slide.duration")
+    func test_computedTotalDuration_includesStickerEndTime() {
+        let sticker = StorySticker(
+            id: UUID().uuidString,
+            emoji: "🔥",
+            x: 0.5, y: 0.5,
+            startTime: 8.0,
+            duration: 2.0
+        )
+        var effects = StoryEffects()
+        effects.stickerObjects = [sticker]
+        let slide = StorySlide(id: UUID().uuidString,
+                               effects: effects,
+                               duration: 5.0,
+                               order: 0)
+        let result = slide.computedTotalDuration()
+        #expect(abs(result - 10.0) < 0.001,
+                "Expected 10.0 (sticker tail at 8+2), got \(result)")
+    }
+
+    // MARK: - B2: empty-slide floor
+
+    /// An entirely empty slide with `duration=0` must still floor to 0.5s —
+    /// AVFoundation rejects zero-length compositions.
+    @Test("empty slide with duration=0 floors to 0.5s minimum")
+    func test_computedTotalDuration_emptySlide_returnsFloor() {
+        let slide = StorySlide(id: UUID().uuidString,
+                               effects: StoryEffects(),
+                               duration: 0.0,
+                               order: 0)
+        let result = slide.computedTotalDuration()
+        #expect(result >= 0.5,
+                "Expected at least 0.5s floor, got \(result)")
+    }
 }

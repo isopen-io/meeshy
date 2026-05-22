@@ -919,6 +919,11 @@ extension StorySlide {
     /// Use this everywhere a "story length" is needed — exporter, playhead,
     /// progress bar, audio mixer fade envelope, AVPlayer composition.
     /// `effectiveSlideDuration()` is now a thin alias kept for binary compat.
+    ///
+    /// Note: `fadeOut` (text/sticker) is intentionally NOT added to the bound —
+    /// fade-out runs INSIDE the `[start, start+duration]` window per the SDK
+    /// rendering contract, so the element is already visible until exactly
+    /// `start+duration`. Adding fadeOut here would double-count the tail.
     public func computedTotalDuration() -> TimeInterval {
         var bound = duration
 
@@ -945,6 +950,12 @@ extension StorySlide {
             bound = max(bound, start + dur)
         }
 
+        for sticker in effects.stickerObjects ?? [] {
+            let start = sticker.startTime ?? 0
+            guard let dur = sticker.duration, dur > 0 else { continue }
+            bound = max(bound, start + dur)
+        }
+
         for transition in effects.clipTransitions ?? [] {
             // Transitions span between two clips; their tail extends the
             // implied end-time of the `toClip`, which is already counted via
@@ -958,6 +969,12 @@ extension StorySlide {
             let repetitions = ceil(bound / videoDuration)
             bound = max(bound, repetitions * videoDuration)
         }
+
+        // Guard against 0-duration exports for entirely empty slides — AVFoundation
+        // rejects zero-length compositions and the synthetic transparent substrate
+        // needs at least one full frame. 0.5s is the minimum that produces a stable
+        // MP4 across all iOS versions we support.
+        bound = max(bound, 0.5)
 
         return bound
     }
