@@ -1,4 +1,5 @@
 import Foundation
+import os
 
 extension StoryEffects {
 
@@ -7,13 +8,20 @@ extension StoryEffects {
     /// supprimée. Le `postMediaId` (lien CDN via `data.media[]`) reste seul
     /// vecteur autorisé pour résoudre l'asset côté lecteur.
     ///
-    /// Le composer iOS écrit un `file://` local sur `StoryMediaObject.mediaURL`
-    /// pendant l'édition (cf. `StoryComposerViewModel.setMediaURL`) pour que
-    /// le canvas preview puisse charger l'asset depuis le sandbox de l'auteur.
-    /// Sans nettoyage avant le `POST /posts`, ce path local est persisté en
-    /// base et resservi tel quel aux lecteurs — qui ne peuvent jamais le
-    /// résoudre depuis leur propre sandbox. Symptôme : canvas vide à
-    /// l'ouverture de la story chez les amis (incident 2026-05-22, story
+    /// **Le contract attendu** : le call-site (ViewModel) doit avoir flippé
+    /// `mediaURL` du `file://` local de l'auteur vers l'URL CDN
+    /// (`TusUploadResult.fileUrl`) après l'upload TUS. Si cette fonction
+    /// trouve encore un `file://` ici, c'est un bug d'amont — on logge un
+    /// warning + on nullifie pour ne pas polluer la base.
+    ///
+    /// Origine : le composer iOS écrit un `file://` local sur
+    /// `StoryMediaObject.mediaURL` pendant l'édition (cf.
+    /// `StoryComposerViewModel.setMediaURL`) pour que le canvas preview
+    /// puisse charger l'asset depuis le sandbox de l'auteur. Sans flip
+    /// après upload, ce path local est persisté en base et resservi tel
+    /// quel aux lecteurs — qui ne peuvent jamais le résoudre depuis leur
+    /// propre sandbox. Symptôme : canvas vide à l'ouverture de la story
+    /// chez les amis (incident 2026-05-22, story
     /// `6a10128bd884010643facd33`).
     ///
     /// Le contract est posé dans `StoryMediaLayer.swift:132-134` :
@@ -29,6 +37,9 @@ extension StoryEffects {
         if let medias = copy.mediaObjects {
             copy.mediaObjects = medias.map { media in
                 guard let raw = media.mediaURL, Self.isLocalFileURL(raw) else { return media }
+                Self.logger.error(
+                    "Sanitizer caught local file:// mediaURL on StoryMediaObject id=\(media.id, privacy: .public) postMediaId=\(media.postMediaId, privacy: .public) — call-site forgot to flip to CDN URL after upload. Nullifying."
+                )
                 var stripped = media
                 stripped.mediaURL = nil
                 return stripped
@@ -43,4 +54,6 @@ extension StoryEffects {
     private static func isLocalFileURL(_ raw: String) -> Bool {
         raw.lowercased().hasPrefix("file:")
     }
+
+    private static let logger = Logger(subsystem: "com.meeshy.sdk", category: "story-publish-sanitizer")
 }
