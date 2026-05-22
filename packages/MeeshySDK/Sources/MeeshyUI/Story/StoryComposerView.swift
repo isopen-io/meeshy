@@ -422,12 +422,9 @@ public struct StoryComposerView: View {
             }
             .presentationDetents([.medium])
         }
-        .sheet(isPresented: $viewModel.isTimelineVisible,
-               onDismiss: { viewModel.commitTimelineToCurrentSlide() }) {
-            TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
-                .presentationDetents([.fraction(0.45), .large])
-                .presentationDragIndicator(.visible)
-                .modifier(StoryTimelinePresentationStyle())
+        .fullScreenCover(isPresented: $viewModel.isTimelineVisible,
+                         onDismiss: { viewModel.commitTimelineToCurrentSlide() }) {
+            timelineFullscreenContent
         }
         .adaptiveOnChange(of: viewModel.isTimelineVisible) { _, isVisible in
             if isVisible { viewModel.loadCurrentSlideIntoTimeline() }
@@ -1296,6 +1293,107 @@ public struct StoryComposerView: View {
         // V2 timeline editor is the product — no feature-flag gating since the
         // app has not yet shipped to a userbase that requires backwards-compat.
         TimelineContainerSwitcher(viewModel: viewModel.timelineViewModel)
+    }
+
+    // MARK: - Timeline Fullscreen Edit Mode
+
+    /// Hosts the timeline editor in a TRUE full-screen takeover (not a sheet).
+    /// Top: a thin nav bar with a Done button that closes the cover. Body: a
+    /// vertical split with a placeholder canvas preview (~35%) and the
+    /// `TimelineContainerSwitcher` in fullscreen-edit mode (~65%, inspector
+    /// pinned at the bottom). Replaces the previous bottom-sheet detent which
+    /// only exposed ~45% of the screen for editing.
+    @ViewBuilder
+    private var timelineFullscreenContent: some View {
+        ZStack {
+            (colorScheme == .dark
+                ? MeeshyColors.indigo950.opacity(0.95)
+                : MeeshyColors.indigo50)
+                .ignoresSafeArea()
+
+            VStack(spacing: 0) {
+                timelineFullscreenNavBar
+                GeometryReader { proxy in
+                    let previewHeight = proxy.size.height * 0.35
+                    VStack(spacing: 0) {
+                        timelineFullscreenPreview
+                            .frame(height: previewHeight)
+                        TimelineContainerSwitcher(
+                            viewModel: viewModel.timelineViewModel,
+                            isFullscreenEdit: true
+                        )
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    }
+                }
+            }
+        }
+        .ignoresSafeArea(edges: .bottom)
+    }
+
+    private var timelineFullscreenNavBar: some View {
+        HStack(spacing: 12) {
+            Text(String(localized: "story.composer.timeline.fullscreen.title",
+                        defaultValue: "Édition timeline",
+                        bundle: .module))
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
+            Spacer(minLength: 0)
+            Button {
+                viewModel.isTimelineVisible = false
+            } label: {
+                Text(String(localized: "story.composer.timeline.fullscreen.done",
+                            defaultValue: "Fermer",
+                            bundle: .module))
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo700)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule()
+                            .fill((colorScheme == .dark
+                                   ? Color.white
+                                   : MeeshyColors.indigo700).opacity(0.12))
+                    )
+            }
+            .accessibilityLabel(String(localized: "story.composer.timeline.fullscreen.done",
+                                       defaultValue: "Fermer",
+                                       bundle: .module))
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 12)
+        .background(
+            (colorScheme == .dark ? Color.black : Color.white).opacity(0.35)
+        )
+    }
+
+    /// Lightweight canvas preview for the fullscreen edit mode. Avoids
+    /// embedding the live `StoryComposerCanvasView` because it owns gesture
+    /// state + drawing overlay that should not be re-rooted under the cover;
+    /// instead we render a static slide thumbnail mirroring the design of
+    /// `SlideMiniPreview`. The 1080×1920 aspect ratio is preserved via
+    /// `.aspectRatio(9/16, contentMode: .fit)`.
+    @ViewBuilder
+    private var timelineFullscreenPreview: some View {
+        let slide = viewModel.currentSlide
+        ZStack {
+            SlideMiniPreview(
+                effects: slide.effects,
+                bgImage: viewModel.slideImages[slide.id],
+                drawingData: viewModel.drawingData,
+                loadedImages: viewModel.loadedImages,
+                index: viewModel.currentSlideIndex
+            )
+            .aspectRatio(9.0 / 16.0, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke((colorScheme == .dark ? Color.white : MeeshyColors.indigo950)
+                        .opacity(0.12), lineWidth: 0.5)
+            )
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+        }
+        .frame(maxWidth: .infinity)
     }
 
 
