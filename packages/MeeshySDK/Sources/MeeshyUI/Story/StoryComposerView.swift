@@ -142,7 +142,12 @@ public struct StoryComposerView: View {
 
     // MARK: - Canvas viewport (pinch-to-zoom + drag-to-pan when zoomed)
 
-    @GestureState private var viewportPinchDelta: CGFloat = 1.0
+    /// Échelle éphémère du viewport pendant un pinch 3-doigts. Driven
+    /// par le callback `onCanvasZoomScaleChanged` du canvas UIKit ; remis à
+    /// 1.0 à `.ended`/`.cancelled`. Anciennement `@GestureState` lié au
+    /// `MagnificationGesture` SwiftUI 2-doigts qui entrait en conflit avec
+    /// le pinch d'élément.
+    @State private var viewportPinchDelta: CGFloat = 1.0
     @GestureState private var viewportDragDelta: CGSize = .zero
 
     /// Canvas gestures disabled only during drawing (PKCanvasView needs exclusive touch control).
@@ -155,22 +160,6 @@ public struct StoryComposerView: View {
     /// Pan always available when zoomed — uses high minimumDistance to avoid accidental triggers
     private var isPanEnabled: Bool {
         viewModel.isCanvasZoomed
-    }
-
-    private var viewportPinchGesture: some Gesture {
-        // MagnificationGesture (iOS 13+) au lieu de MagnifyGesture (iOS 17+).
-        // `value` est directement le CGFloat (pas via .magnification).
-        MagnificationGesture()
-            .updating($viewportPinchDelta) { value, state, _ in
-                state = value
-            }
-            .onEnded { value in
-                let newScale = min(4.0, max(0.5, viewModel.canvasScale * value))
-                withAnimation(.spring(response: 0.2)) {
-                    viewModel.canvasScale = newScale
-                    if newScale <= 1.0 { viewModel.canvasOffset = .zero }
-                }
-            }
     }
 
     private var viewportDragGesture: some Gesture {
@@ -1128,7 +1117,11 @@ public struct StoryComposerView: View {
                 x: viewModel.canvasOffset.width + viewportDragDelta.width,
                 y: viewModel.canvasOffset.height + viewportDragDelta.height
             )
-            .gesture(isCanvasGestureEnabled ? viewportPinchGesture : nil)
+            // Le pinch viewport (zoom canvas) est maintenant un pinch 3 doigts
+            // géré par `ThreeFingerPinchGestureRecognizer` côté UIKit, routé
+            // via `onCanvasZoomScaleChanged`. Sans ça, l'ancien
+            // `MagnificationGesture` SwiftUI 2-doigts firait en parallèle du
+            // pinch d'élément UIKit → tout le canvas scalait.
             .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
             .overlay { mediaLoadingOverlay }
             .overlay(alignment: .topTrailing) { canvasZoomResetButton }
@@ -1224,6 +1217,27 @@ public struct StoryComposerView: View {
             },
             onManipulationLayerChanged: { layer in
                 manipulationLayer = layer
+            },
+            onCanvasZoomScaleChanged: { scale, state in
+                // Pinch 3-doigts piloté par UIKit (cf. `ThreeFingerPinchGestureRecognizer`).
+                // On remplace l'ancien `MagnificationGesture` SwiftUI 2-doigts
+                // qui firait en parallèle du pinch d'élément et faisait scaler
+                // tout le canvas en même temps que l'élément.
+                switch state {
+                case .began, .changed:
+                    viewportPinchDelta = scale
+                case .ended:
+                    let newScale = min(4.0, max(0.5, viewModel.canvasScale * scale))
+                    withAnimation(.spring(response: 0.2)) {
+                        viewModel.canvasScale = newScale
+                        if newScale <= 1.0 { viewModel.canvasOffset = .zero }
+                    }
+                    viewportPinchDelta = 1.0
+                case .cancelled, .failed:
+                    viewportPinchDelta = 1.0
+                default:
+                    break
+                }
             }
         )
         .allowsHitTesting(!viewModel.isDrawingActive)

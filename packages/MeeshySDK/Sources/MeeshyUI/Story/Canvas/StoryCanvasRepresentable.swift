@@ -18,6 +18,10 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
     /// `.foreground`). Le composer abonne ce callback à un `@State` qui pilote
     /// le `CanvasLayerIndicator` (chip row).
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
+    /// Notifié pendant un pinch à 3 doigts sur le canvas. Pilote
+    /// `canvasScale` + l'overlay éphémère `viewportPinchDelta` côté
+    /// composer. Le composer applique son propre clamp + commit à `.ended`.
+    public var onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)?
 
     public init(slide: Binding<StorySlide>,
                 onItemTapped: ((String, StoryCanvasUIView.CanvasItemKind) -> Void)? = nil,
@@ -26,7 +30,8 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
                 editingTextId: String? = nil,
                 onInlineTextChanged: ((String, String) -> Void)? = nil,
                 onInlineTextEditEnded: ((String) -> Void)? = nil,
-                onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil) {
+                onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)? = nil,
+                onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)? = nil) {
         self._slide = slide
         self.onItemTapped = onItemTapped
         self.onItemDoubleTapped = onItemDoubleTapped
@@ -35,6 +40,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         self.onInlineTextChanged = onInlineTextChanged
         self.onInlineTextEditEnded = onInlineTextEditEnded
         self.onManipulationLayerChanged = onManipulationLayerChanged
+        self.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
     }
 
     public func makeUIView(context: Context) -> StoryCanvasUIView {
@@ -48,6 +54,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         view.onInlineTextChanged = onInlineTextChanged
         view.onInlineTextEditEnded = onInlineTextEditEnded
         view.onManipulationLayerChanged = onManipulationLayerChanged
+        view.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         // Bootstrap : la couche initiale calculée par `init` n'a pas pu être
         // poussée au callback (nil à ce moment). On force l'émission après
         // une frame pour que le chip indicator reflète bien la couche
@@ -66,6 +73,7 @@ public struct StoryComposerCanvasView: UIViewRepresentable {
         uiView.onItemDoubleTapped = onItemDoubleTapped
         uiView.onItemDuplicated = onItemDuplicated
         uiView.onManipulationLayerChanged = onManipulationLayerChanged
+        uiView.onCanvasZoomScaleChanged = onCanvasZoomScaleChanged
         // Re-emit la couche courante après chaque body eval (deferred via
         // async pour ne pas muter le @State pendant la phase d'update
         // SwiftUI). SwiftUI dédupe les writes égaux côté @State, donc le
