@@ -279,4 +279,26 @@ final class UserServiceTests: XCTestCase {
             XCTFail("Expected MeeshyError, got \(type(of: error))")
         }
     }
+
+    // MARK: - UpdateProfileRequest Language Validation
+
+    func testUpdateProfileRequestLanguageValidation() {
+        // Valid ISO 639-1 code (e.g. "fr", "en")
+        let request1 = UpdateProfileRequest(systemLanguage: "fr", regionalLanguage: "en-US", customDestinationLanguage: "  ES ")
+        XCTAssertEqual(request1.systemLanguage, "fr")
+        XCTAssertEqual(request1.regionalLanguage, "en")
+        XCTAssertEqual(request1.customDestinationLanguage, "es")
+
+        // Invalid ISO 639-1 code
+        let request2 = UpdateProfileRequest(systemLanguage: "invalid", regionalLanguage: "xx-YY", customDestinationLanguage: "")
+        XCTAssertNil(request2.systemLanguage)
+        XCTAssertNil(request2.regionalLanguage)
+        XCTAssertNil(request2.customDestinationLanguage)
+
+        // Nil values
+        let request3 = UpdateProfileRequest(systemLanguage: nil, regionalLanguage: nil, customDestinationLanguage: nil)
+        XCTAssertNil(request3.systemLanguage)
+        XCTAssertNil(request3.regionalLanguage)
+        XCTAssertNil(request3.customDestinationLanguage)
+    }
 }

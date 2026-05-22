@@ -561,7 +561,7 @@ struct FeedPostCard: View {
                 }
             }
             .disabled(isHeartInFlight)
-            .animation(.spring(response: 0.3, dampingFraction: 0.5), value: effectiveIsLiked)
+            .animation(.easeOut(duration: 0.2), value: effectiveIsLiked)
             .accessibilityLabel("\(effectiveLikeCount) j'aime")
 
             Spacer()

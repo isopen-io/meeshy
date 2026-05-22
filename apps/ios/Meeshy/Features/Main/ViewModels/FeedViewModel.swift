@@ -27,6 +27,13 @@ class FeedViewModel: ObservableObject {
     private let api: APIClientProviding
     private let limit = 20
     private var cancellables = Set<AnyCancellable>()
+    /// Subscriptions owned by `subscribeToSocketEvents()` only — kept
+    /// separate from the general `cancellables` set so the
+    /// `cancellables.isEmpty` guard isn't tripped by init-time
+    /// subscriptions like `observePreferredLanguageChanges()`. The
+    /// `unsubscribeFromSocketEvents()` removes only this set so the
+    /// language-change observer keeps living across socket re-subscribes.
+    private var socketCancellables = Set<AnyCancellable>()
     private let socialSocket: SocialSocketProviding
     private let postService: PostServiceProviding
     private let languageProvider: LanguageProviding
@@ -52,6 +59,32 @@ class FeedViewModel: ObservableObject {
         self.socialSocket = socialSocket
         self.postService = postService
         self.languageProvider = languageProvider
+        observePreferredLanguageChanges()
+    }
+
+    /// B2 (Prisme Linguistique) — when the viewer's preferred-content
+    /// languages change mid-session (Settings edit), re-resolve every
+    /// already-mapped FeedPost. The `translations` dict stored on each
+    /// post is enough; no network re-fetch is needed.
+    ///
+    /// Observed on `AuthManager.shared.currentUserPublisher` (the canonical
+    /// source-of-truth — `LanguageProviding` is reactive too but exposes
+    /// no publisher). Distinct duplicate filter avoids spurious work on
+    /// unrelated `currentUser` mutations (e.g. avatar change).
+    private func observePreferredLanguageChanges() {
+        AuthManager.shared.currentUserPublisher
+            .removeDuplicates { old, new in
+                old?.systemLanguage == new?.systemLanguage
+                && old?.regionalLanguage == new?.regionalLanguage
+                && old?.customDestinationLanguage == new?.customDestinationLanguage
+            }
+            .dropFirst()
+            .sink { [weak self] _ in
+                guard let self else { return }
+                let langs = self.preferredLanguages
+                self.posts = self.posts.map { $0.resolved(preferredLanguages: langs) }
+            }
+            .store(in: &cancellables)
     }
 
     /// Wire persistence store and socket handler for GRDB-backed feed.
@@ -525,7 +558,7 @@ class FeedViewModel: ObservableObject {
     // MARK: - Socket.IO Real-Time Updates
 
     func subscribeToSocketEvents() {
-        guard cancellables.isEmpty else { return }
+        guard socketCancellables.isEmpty else { return }
         socialSocket.connect()
 
         // --- post:created ---
@@ -540,7 +573,7 @@ class FeedViewModel: ObservableObject {
                     self.debouncedCacheSave()
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // --- post:updated ---
         socialSocket.postUpdated
@@ -556,7 +589,7 @@ class FeedViewModel: ObservableObject {
                     self.debouncedCacheSave()
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // --- post:deleted ---
         socialSocket.postDeleted
@@ -565,7 +598,7 @@ class FeedViewModel: ObservableObject {
                 self?.posts.removeAll { $0.id == postId }
                 self?.debouncedCacheSave()
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // --- post:liked ---
         socialSocket.postLiked
@@ -575,7 +608,7 @@ class FeedViewModel: ObservableObject {
                 self.posts[index].likes = data.likeCount
                 self.debouncedCacheSave()
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // --- post:unliked ---
         socialSocket.postUnliked
@@ -585,7 +618,7 @@ class FeedViewModel: ObservableObject {
                 self.posts[index].likes = data.likeCount
                 self.debouncedCacheSave()
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // --- post:bookmarked ---
         socialSocket.postBookmarked
@@ -593,7 +626,7 @@ class FeedViewModel: ObservableObject {
             .sink { [weak self] _ in
                 self?.debouncedCacheSave()
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // --- post:reposted ---
         socialSocket.postReposted
@@ -607,7 +640,7 @@ class FeedViewModel: ObservableObject {
                     self.debouncedCacheSave()
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // --- comment:added ---
         socialSocket.commentAdded
@@ -627,7 +660,7 @@ class FeedViewModel: ObservableObject {
                 }
                 self.posts[index].commentCount = data.commentCount
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // --- comment:deleted ---
         socialSocket.commentDeleted
@@ -636,7 +669,7 @@ class FeedViewModel: ObservableObject {
                 guard let self, let index = self.posts.firstIndex(where: { $0.id == data.postId }) else { return }
                 self.posts[index].commentCount = data.commentCount
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // --- post:translation-updated ---
         socialSocket.postTranslationUpdated
@@ -661,7 +694,7 @@ class FeedViewModel: ObservableObject {
                 }
                 self.posts[index] = post
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
 
         // --- comment:translation-updated ---
         socialSocket.commentTranslationUpdated
@@ -678,11 +711,11 @@ class FeedViewModel: ObservableObject {
                     }
                 }
             }
-            .store(in: &cancellables)
+            .store(in: &socketCancellables)
     }
 
     func unsubscribeFromSocketEvents() {
-        cancellables.removeAll()
+        socketCancellables.removeAll()
         socialSocket.unsubscribeFeed()
         feedSocketHandler?.disarm()
     }

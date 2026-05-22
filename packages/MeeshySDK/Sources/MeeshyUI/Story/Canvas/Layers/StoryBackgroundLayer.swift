@@ -93,6 +93,17 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
     nonisolated(unsafe) var avPlayerLooper: AVPlayerLooper?
 
+    /// `true` quand `configure(kind:)` a stampé `contentLayer.contents` avec
+    /// une image FINALE (warm L1 cache hit OU bytes téléchargés via HTTP),
+    /// pas juste un placeholder ThumbHash. Lu par
+    /// `StoryCanvasUIView.scheduleContentReadyEvaluation(.image)` pour
+    /// court-circuiter le KVO observer : quand le NSCache rend la même
+    /// instance UIImage entre le warm-hit synchrone et le re-stamp async,
+    /// `contents` ne change pas d'identité et l'observer ne fire jamais —
+    /// d'où le loader infini à 0% sur les stories image (régression du
+    /// commit a60f636b5 / 2026-05-20).
+    @MainActor public private(set) var hasFinalContentStamped: Bool = false
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -100,6 +111,7 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     public required nonisolated init?(coder: NSCoder) {
         fatalError("StoryBackgroundLayer does not support NSCoder")
     }
+
 }
 
 // MARK: - Configure
@@ -149,6 +161,11 @@ extension StoryBackgroundLayer {
         avPlayerLayer = nil
         avPlayerLooper = nil
         contentLayer = nil
+        // Reset readiness flag — sera re-armé par les fast-paths (warm hit /
+        // HTTP load) en `case .image`. Couleur / gradient n'utilisent pas ce
+        // flag (ils ont leur propre chemin `.solidColor` / `.gradient` dans
+        // `scheduleContentReadyEvaluation`).
+        hasFinalContentStamped = false
 
         switch kind {
         case .solidColor(let color):
@@ -187,6 +204,7 @@ extension StoryBackgroundLayer {
                let cached = CacheCoordinator.warmedImage(for: warm.absoluteString)?.cgImage {
                 img.contents = cached
                 hasVisual = true
+                hasFinalContentStamped = true
             }
 
             // Synchronous thumbHash placeholder (si pas de hit cache chaud).
@@ -197,12 +215,16 @@ extension StoryBackgroundLayer {
                 hasVisual = true
             }
 
-            // backgroundColor noir UNIQUEMENT si aucun visuel placeholder n'est
-            // disponible — sinon le ThumbHash ou le bitmap chaud couvre déjà
-            // la totalité du frame, le noir serait une couche perdue (parfois
-            // visible 1-2 frames pendant un re-layout). Quand un placeholder
-            // existe on garde transparent ; sinon noir.
-            backgroundColor = hasVisual ? UIColor.clear.cgColor : UIColor.black.cgColor
+            // Toujours `.clear` : le parent (`StoryCanvasUIView` lui-même
+            // déjà `.clear`, qui laisse voir le composer ou le viewer
+            // derrière) porte le fond cinéma. Avant ce changement on posait
+            // un `.black` cgColor en fallback "aucun visuel" ; pendant les
+            // transitions (slide change, rebuildLayers pendant un edit /
+            // validation d'élément) cette couche flashait NOIR ~1 frame
+            // avant que le bitmap réel arrive — exactement le scintillement
+            // décrit par l'utilisateur. Garder `.clear` rend la couche
+            // muette pendant la latence d'async ; le parent reste visible.
+            backgroundColor = UIColor.clear.cgColor
 
             // Charge le bitmap réel par-dessus le placeholder thumbHash.
             // Trois sources, dans l'ordre : (1) cache image fourni par le
@@ -225,11 +247,12 @@ extension StoryBackgroundLayer {
             let imageCacheReader = imageCache
             let urlResolver = resolver
             if directURL != nil || imageCacheReader != nil || urlResolver != nil {
-                Task { @MainActor [weak img] in
+                Task { @MainActor [weak self, weak img] in
                     // (1) Fast-path cache (preview / disque).
                     if let imageCacheReader,
                        let cached = await imageCacheReader.cachedImage(for: postMediaId) {
                         img?.contents = cached.cgImage
+                        self?.hasFinalContentStamped = true
                         return
                     }
                     // (2) URL directe embarquée, sinon (3) resolver distant.
@@ -238,10 +261,12 @@ extension StoryBackgroundLayer {
                         if let data = try? Data(contentsOf: url),
                            let uiImage = UIImage(data: data) {
                             img?.contents = uiImage.cgImage
+                            self?.hasFinalContentStamped = true
                         }
                     } else if let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString),
                               let uiImage = UIImage(data: data) {
                         img?.contents = uiImage.cgImage
+                        self?.hasFinalContentStamped = true
                     }
                 }
                 break
@@ -253,8 +278,12 @@ extension StoryBackgroundLayer {
                 return resolver?(postMediaId)
             }()
             guard let remoteURL = resolvedURL else {
-                // No URL at all → black floor (rien à afficher).
-                backgroundColor = UIColor.black.cgColor
+                // Pas d'URL : on laisse le layer transparent, le parent
+                // (composer / viewer) porte le fond. Évite un flash noir
+                // pendant qu'une vidéo de fond async se résout (le
+                // resolver peut retourner nil 1-2 frames le temps que le
+                // postMediaId soit enregistré côté cache).
+                backgroundColor = UIColor.clear.cgColor
                 break
             }
 
@@ -273,8 +302,9 @@ extension StoryBackgroundLayer {
             }
 
             // Cache miss : placeholder ThumbHash dans un sublayer si dispo,
-            // sinon backgroundColor noir (seulement ici, fallback strict).
-            var placeholderApplied = false
+            // sinon on garde le layer transparent (le parent porte le fond
+            // cinéma — ne JAMAIS forcer un `.black` ici, ça provoque le
+            // flash NOIR transitoire pendant les rebuildLayers).
             if let hash = thumbHash,
                let placeholderImage = ThumbHashDecoder.decodeIfAvailable(hash) {
                 let placeholder = CALayer()
@@ -284,9 +314,8 @@ extension StoryBackgroundLayer {
                 placeholder.masksToBounds = true
                 addSublayer(placeholder)
                 contentLayer = placeholder
-                placeholderApplied = true
             }
-            backgroundColor = placeholderApplied ? UIColor.clear.cgColor : UIColor.black.cgColor
+            backgroundColor = UIColor.clear.cgColor
 
             // Précache async puis play. AVPlayerLayer s'ajoute par-dessus
             // le placeholder, qui disparaît visuellement quand la vidéo joue.

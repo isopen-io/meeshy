@@ -107,14 +107,20 @@ struct BubbleQuotedReply: View, Equatable {
                         BubbleStoryReplyPreview(reply: reply, previewColor: previewColor)
                     } else {
                         HStack(spacing: 5) {
-                            if let attType = reply.attachmentType {
-                                Image(systemName: BubbleQuotedReply.replyAttachmentIcon(attType))
+                            let attachmentKind = BubbleQuotedReply.resolveAttachmentKind(reply.attachmentType)
+                            if let kind = attachmentKind {
+                                Image(systemName: kind.sfSymbolName)
                                     .font(.system(size: 10, weight: .medium))
                                     .foregroundColor(previewColor)
                             }
 
+                            // Empty preview text + attachment → use the kind's
+                            // localized short label ("Photo", "Vidéo", ...)
+                            // instead of the hardcoded "Media" fallback that
+                            // surfaced before the AttachmentKind plumbing fix.
+                            let fallback = attachmentKind?.shortLabel ?? "Media"
                             MessageTextRenderer.render(
-                                reply.previewText.isEmpty ? "Media" : reply.previewText,
+                                reply.previewText.isEmpty ? fallback : reply.previewText,
                                 fontSize: 12, color: previewColor,
                                 mentionColor: mentionTint, accentColor: previewColor,
                                 mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
@@ -157,17 +163,25 @@ struct BubbleQuotedReply: View, Equatable {
         }
     }
 
-    // MARK: - Attachment icon helper (was: replyAttachmentIcon)
+    // MARK: - Attachment kind resolution
 
-    static func replyAttachmentIcon(_ type: String) -> String {
-        switch type {
-        case "image": return "photo"
-        case "video": return "video"
-        case "audio": return "waveform"
-        case "file": return "doc"
-        case "location": return "mappin"
-        default: return "paperclip"
-        }
+    /// Decodes `ReplyReference.attachmentType` to the canonical
+    /// `AttachmentKind` (single source of truth — see
+    /// `AttachmentKind.swift`).
+    ///
+    /// Two-step fallback for forward-compat with any cached payload that
+    /// still carries the raw MIME (`"image/jpeg"`) instead of the short
+    /// kind rawValue (`"image"`):
+    ///   1. try `AttachmentKind(rawValue:)` — new payloads
+    ///   2. fall back to `AttachmentKind(mimeType:)` — legacy / cached
+    ///
+    /// Returns `nil` only when the input is `nil`. Unknown values still
+    /// resolve to `.other` (paperclip + "Fichier") so the UI never shows
+    /// an unlabeled glyph.
+    static func resolveAttachmentKind(_ type: String?) -> AttachmentKind? {
+        guard let type, !type.isEmpty else { return nil }
+        if let exact = AttachmentKind(rawValue: type) { return exact }
+        return AttachmentKind(mimeType: type)
     }
 }
 

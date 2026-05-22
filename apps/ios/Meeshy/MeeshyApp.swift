@@ -266,6 +266,12 @@ struct MeeshyApp: App {
                             dispatcher: OutboxDispatcher(),
                             onOutcome: { @Sendable outcome in
                                 Task { await OfflineQueue.shared.publishOutcome(outcome) }
+                            },
+                            // BW1 — skip flushing while offline so retries
+                            // do not burn through 60s URLSession timeouts ×
+                            // 5 maxAttempts in airplane mode.
+                            isNetworkReachable: { @Sendable in
+                                await MainActor.run { NetworkConditionMonitor.shared.isOnline }
                             }
                         )
                         let nextRetry = await flusher.flush()

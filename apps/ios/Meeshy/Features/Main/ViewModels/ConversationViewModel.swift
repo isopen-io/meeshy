@@ -8,7 +8,7 @@ import os
 
 // MARK: - Real-time Translation Type (text translations, not in SDK)
 
-struct MessageTranslation: Identifiable {
+struct MessageTranslation: Identifiable, Equatable {
     let id: String
     let messageId: String
     let sourceLanguage: String
@@ -111,6 +111,25 @@ class ConversationViewModel: ObservableObject {
     /// the user knows fresher data is on its way without seeing a blocking
     /// spinner (cache-first + stale-while-revalidate discipline).
     @Published var isRevalidating = false
+
+    /// Canonical projection of the 4 message-loading booleans above into
+    /// a single mutually-exclusive `ConversationLoadingPhase`. Views and
+    /// future refactors should prefer reading this over the booleans —
+    /// the boolean state-machine is preserved as the source of truth for
+    /// now (additive migration, M2 follow-up to PR #280), but the
+    /// invariants (`loadingInitial` excludes `loadingOlder`, etc.) are
+    /// expressible only on the enum side. The `hasObservedAnyData` flag
+    /// distinguishes `.idle` (cold-open) from `.loaded` (finished load).
+    var paginationPhase: ConversationLoadingPhase {
+        ConversationLoadingPhase.derive(
+            isLoadingInitial: isLoadingInitial,
+            isLoadingOlder: isLoadingOlder,
+            isLoadingNewer: isLoadingNewer,
+            isRevalidating: isRevalidating,
+            hasObservedAnyData: !messages.isEmpty
+        )
+    }
+
     /// Message ids whose `messageService.edit` round-trip is in flight. The
     /// bubble renders a "Enregistrement…" indicator next to the "Modifie"
     /// badge while the set contains its id so the user never wonders if
@@ -145,6 +164,14 @@ class ConversationViewModel: ObservableObject {
     /// Manual audio language override per message (user selected a language in Language tab for audio)
     /// nil value means user chose "show original audio"
     @Published var activeAudioLanguageOverrides: [String: String?] = [:]
+
+    /// B2 (Prisme Linguistique) — monotonically increasing counter bumped
+    /// every time the viewer's preferred-content languages change (user
+    /// edits `systemLanguage` / `regionalLanguage` / `customDestinationLanguage`
+    /// in Settings). Consumers (e.g., `MessageListViewController`) observe
+    /// this signal to re-snapshot bubbles so the previously-resolved
+    /// translation is replaced with the one matching the new preference.
+    @Published var preferredLanguageRevision: Int = 0
 
     /// Active live location sessions in this conversation
     @Published var activeLiveLocations: [ActiveLiveLocation] = []
@@ -865,6 +892,12 @@ class ConversationViewModel: ObservableObject {
                 // the old `_cachedPreferredLanguages` / `_cachedPreferredLanguagesUserId`
                 // pair was collapsed into a single Equatable cache slot.
                 self?._cachedLanguagePreferences = nil
+                // B2 (Prisme Linguistique) — bump the revision so any
+                // subscriber that selected a translation based on the
+                // previous preferred languages can re-resolve. Without
+                // this, the bubble keeps showing the old translation
+                // until a new translation event arrives.
+                self?.preferredLanguageRevision &+= 1
             }
             .store(in: &cancellables)
     }

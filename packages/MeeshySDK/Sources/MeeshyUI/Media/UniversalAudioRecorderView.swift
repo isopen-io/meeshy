@@ -86,6 +86,15 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
                 )
             }
         }
+        .onChange(of: recorder.isRecording) { isRecording in
+            if !isRecording {
+                if recordedURL == nil, let url = recorder.recordedFileURL, recorder.duration >= settings.minimumDuration {
+                    recordedURL = url
+                    showPreview = true
+                    HapticFeedback.success()
+                }
+            }
+        }
     }
 
     // MARK: - Background
@@ -314,6 +323,7 @@ public struct UniversalAudioRecorderView<Recorder: AudioRecordingProviding>: Vie
         AVAudioSession.sharedInstance().requestRecordPermission { granted in
             Task { @MainActor in
                 guard granted else { return }
+                recorder.configure(with: settings)
                 recorder.startRecording()
                 HapticFeedback.medium()
             }

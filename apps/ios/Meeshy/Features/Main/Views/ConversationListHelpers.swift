@@ -24,7 +24,9 @@ struct SectionHeaderView: View {
                 isTapped = true
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
-                isTapped = false
+                withAnimation(.spring(response: 0.25, dampingFraction: 0.6)) {
+                    isTapped = false
+                }
             }
             onToggle()
         }) {
@@ -48,7 +50,6 @@ struct SectionHeaderView: View {
                         .foregroundColor(Color(hex: section.color))
                         .scaleEffect(isTapped ? 1.15 : 1.0)
                 }
-                .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isTapped)
 
                 // Section name
                 Text(section.name)
@@ -66,7 +67,6 @@ struct SectionHeaderView: View {
                             .fill(Color(hex: section.color).opacity(isDropTarget ? 0.4 : (isDark ? 0.2 : 0.15)))
                     )
                     .scaleEffect(isTapped ? 1.1 : 1.0)
-                    .animation(.spring(response: 0.25, dampingFraction: 0.6), value: isTapped)
 
                 Spacer()
 
@@ -84,7 +84,7 @@ struct SectionHeaderView: View {
                     .foregroundColor(Color(hex: section.color))
                     .opacity(isDropTarget ? 0.5 : 1)
                     .rotationEffect(.degrees(isExpanded ? 90 : 0))
-                    .animation(.spring(response: 0.3, dampingFraction: 0.65), value: isExpanded)
+                    .animation(.easeOut(duration: 0.2), value: isExpanded)
             }
             .padding(.vertical, 10)
             .padding(.horizontal, 12)
@@ -101,8 +101,8 @@ struct SectionHeaderView: View {
                     )
             )
             .contentShape(Rectangle())
-            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDropTarget)
-            .animation(.easeInOut(duration: 0.3), value: isExpanded)
+            .animation(.easeOut(duration: 0.2), value: isDropTarget)
+            .animation(.easeOut(duration: 0.2), value: isExpanded)
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -353,7 +353,6 @@ struct ThemedCommunityCard: View, Equatable {
         .frame(width: 130, height: 110)
         .clipShape(RoundedRectangle(cornerRadius: 16))
         .scaleEffect(isPressed ? 0.95 : 1)
-        .animation(.spring(response: 0.25, dampingFraction: 0.65), value: isPressed)
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.spring(response: 0.2, dampingFraction: 0.6)) {
@@ -419,7 +418,7 @@ struct ThemedFilterChip: View {
                 )
         }
         .scaleEffect(isSelected ? 1.05 : 1)
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+        .animation(.easeOut(duration: 0.2), value: isSelected)
     }
 }
 

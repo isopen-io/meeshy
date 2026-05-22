@@ -48,6 +48,12 @@ struct FeedView: View {
     @State var pendingMediaFiles: [String: URL] = [:]
     @State var pendingThumbnails: [String: UIImage] = [:]
     @State var pendingAudioURL: URL?
+
+    /// In-flight preparations rendered as loading tiles in the attachments
+    /// row. Each entry is promoted to `pendingAttachments` once it reaches
+    /// `.ready`. Source-of-truth pipeline:
+    /// `AttachmentPreparationService` (apps/ios/.../Services).
+    @State var preparingAttachments: [PreparingAttachment] = []
     @State var showPhotoPicker = false
     @State var selectedPhotoItems: [PhotosPickerItem] = []
     @State var showCamera = false
@@ -98,17 +104,23 @@ struct FeedView: View {
                 postLikeDelta[postId, default: 0] += 1
             }
             do {
-                if wasLiked {
-                    _ = try await SocialSocketManager.shared.removePostReaction(
-                        postId: postId, emoji: StoryViewerView.heartEmoji
-                    )
-                } else {
-                    _ = try await SocialSocketManager.shared.addPostReaction(
-                        postId: postId, emoji: StoryViewerView.heartEmoji
-                    )
+                // A6 — hard timeout so the heart-in-flight set never leaks
+                // if SocialSocketManager hangs (no server reply, dead
+                // socket, etc.). 12s matches the typical APIClient
+                // requestTimeout while leaving slack for socket round-trip.
+                try await withTaskTimeout(seconds: 12) {
+                    if wasLiked {
+                        _ = try await SocialSocketManager.shared.removePostReaction(
+                            postId: postId, emoji: StoryViewerView.heartEmoji
+                        )
+                    } else {
+                        _ = try await SocialSocketManager.shared.addPostReaction(
+                            postId: postId, emoji: StoryViewerView.heartEmoji
+                        )
+                    }
                 }
             } catch {
-                // Rollback optimistic update on failure
+                // Rollback optimistic update on failure (incl. TaskTimeoutError)
                 if wasLiked {
                     postLikedIds.insert(postId)
                     postLikeDelta[postId, default: 0] += 1
@@ -740,7 +752,7 @@ struct FeedView: View {
                 }
 
                 // Pending attachments preview
-                if !pendingAttachments.isEmpty || isLoadingMedia {
+                if !pendingAttachments.isEmpty || !preparingAttachments.isEmpty || isLoadingMedia {
                     feedPendingAttachmentsRow
                 }
 

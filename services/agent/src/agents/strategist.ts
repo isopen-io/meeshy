@@ -725,7 +725,15 @@ export function createStrategistNode(llm: LlmProvider) {
       console.error('[Strategist] Error:', error);
       return {
         interventionPlan: { shouldIntervene: false, reason: 'Strategist error', interventions: [] } satisfies InterventionPlan,
-        _traceInputTokens: 0, _traceOutputTokens: 0, _traceModel: 'error', _traceExtra: { decision: 'error' },
+        _traceInputTokens: 0,
+        _traceOutputTokens: 0,
+        _traceModel: 'error',
+        _traceExtra: {
+          decision: 'error',
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorCode: (error as any)?.code ?? 'UNKNOWN',
+          errorStack: error instanceof Error ? error.stack : undefined,
+        },
       };
     }
   };

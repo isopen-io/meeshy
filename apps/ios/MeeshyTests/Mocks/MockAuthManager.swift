@@ -20,6 +20,8 @@ final class MockAuthManager: AuthManaging {
     var errorMessage: String?
     var savedAccounts: [SavedAccount] = []
     var authToken: String?
+    var requires2FA: Bool = false
+    var twoFactorToken: String?
 
     // MARK: - Call Tracking
 
@@ -38,6 +40,10 @@ final class MockAuthManager: AuthManaging {
     var handleUnauthorizedCallCount = 0
     var removeSavedAccountCallCount = 0
     var lastRemovedSavedAccountUserId: String?
+    var completeLoginWith2FACallCount = 0
+    var completeLoginWith2FACodes: [String] = []
+    var refreshSessionCallCount = 0
+    var refreshSessionForceParams: [Bool] = []
 
     // MARK: - Stubbed Results
 
@@ -45,8 +51,24 @@ final class MockAuthManager: AuthManaging {
     var passwordResetResult: Bool = true
     var loginError: String?
     var registerError: String?
+    var refreshSessionResult: String = "mock-fresh-token"
+    var refreshSessionError: Error?
 
     // MARK: - Protocol Methods
+
+    func completeLoginWith2FA(code: String) async {
+        completeLoginWith2FACallCount += 1
+        completeLoginWith2FACodes.append(code)
+    }
+
+    func refreshSession(force: Bool) async throws -> String {
+        refreshSessionCallCount += 1
+        refreshSessionForceParams.append(force)
+        if let error = refreshSessionError {
+            throw error
+        }
+        return refreshSessionResult
+    }
 
     func login(username: String, password: String) async {
         loginCallCount += 1
@@ -162,6 +184,8 @@ final class MockAuthManager: AuthManaging {
         errorMessage = nil
         savedAccounts = []
         authToken = nil
+        requires2FA = false
+        twoFactorToken = nil
         loginCallCount = 0
         loginCredentials.removeAll()
         registerCallCount = 0
@@ -177,6 +201,12 @@ final class MockAuthManager: AuthManaging {
         handleUnauthorizedCallCount = 0
         removeSavedAccountCallCount = 0
         lastRemovedSavedAccountUserId = nil
+        completeLoginWith2FACallCount = 0
+        completeLoginWith2FACodes.removeAll()
+        refreshSessionCallCount = 0
+        refreshSessionForceParams.removeAll()
+        refreshSessionResult = "mock-fresh-token"
+        refreshSessionError = nil
         magicLinkResult = true
         passwordResetResult = true
         loginError = nil

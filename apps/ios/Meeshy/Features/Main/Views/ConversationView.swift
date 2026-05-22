@@ -103,6 +103,13 @@ struct ConversationComposerState {
     var pendingMediaFiles: [String: URL] = [:]
     var pendingThumbnails: [String: UIImage] = [:]
     var isLoadingMedia = false
+
+    /// In-flight attachment preparations (decompression → compression →
+    /// thumbnailing → ThumbHash). Each entry renders an `AttachmentLoadingTile`
+    /// in the composer tray until it transitions to `.ready`, at which point
+    /// the result is moved into `pendingAttachments`/`pendingMediaFiles`/
+    /// `pendingThumbnails` and the handle is dropped from this array.
+    var preparingAttachments: [PreparingAttachment] = []
     
     // Pickers
     var showPhotoPicker = false
@@ -625,6 +632,13 @@ struct ConversationView: View {
             }
             .overlay { overlayMenuContent }
             .overlay { replyThreadOverlayContent }
+            .sheet(isPresented: $overlayState.showReplyThread) {
+                if let parentId = overlayState.replyThreadParentId,
+                   let parent = viewModel.messages.first(where: { $0.id == parentId }) {
+                    ThreadView(parentMessage: parent, conversationId: viewModel.conversationId)
+                        .environmentObject(statusViewModel)
+                }
+            }
             .withStatusBubble()
     }
 
@@ -1278,7 +1292,10 @@ struct ConversationView: View {
         if composerState.showOptions {
             expandedHeaderTitleAndTags
         } else {
-            Spacer()
+            HStack {
+                Spacer()
+                expandedHeaderSearchButton
+            }
         }
     }
 
@@ -1372,19 +1389,8 @@ struct ConversationView: View {
 
     @ViewBuilder
     private var replyThreadOverlayContent: some View {
-        if overlayState.showReplyThread, let parentId = overlayState.replyThreadParentId {
-            ReplyThreadOverlay(
-                conversationId: viewModel.conversationId,
-                parentMessageId: parentId,
-                accentColor: accentColor,
-                isDark: isDark,
-                allMessages: viewModel.messages,
-                translationResolver: { messageId in
-                    viewModel.preferredTranslation(for: messageId)?.translatedContent
-                },
-                isPresented: $overlayState.showReplyThread
-            )
-        }
+        // Deactivated in favor of ThreadView sheet presentation
+        EmptyView()
     }
 
     // MARK: - Overlay Menu Content (extracted to help type-checker)
@@ -1446,6 +1452,10 @@ struct ConversationView: View {
                 },
                 onDeleteAttachment: { attachmentId in
                     Task { await viewModel.deleteAttachment(messageId: msg.id, attachmentId: attachmentId) }
+                },
+                onShowThread: {
+                    overlayState.replyThreadParentId = msg.id
+                    overlayState.showReplyThread = true
                 }
             )
             .transition(.opacity).zIndex(999)

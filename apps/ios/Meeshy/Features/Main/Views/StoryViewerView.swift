@@ -318,6 +318,11 @@ struct StoryViewerView: View {
             if initialStoryIndex > 0, currentGroupIndex < groups.count {
                 currentStoryIndex = min(initialStoryIndex, groups[currentGroupIndex].stories.count - 1)
             }
+            // A5 — skip past stories whose 24h visibility window has elapsed.
+            // Cache TTL > 24h is intentional (avoid redownloading avatars)
+            // but the *content* must not be rendered once expired. If no
+            // non-expired story remains in the current group, dismiss.
+            skipExpiredStoriesIfNeeded()
             StoryMediaCoordinator.shared.activate {
                 // No-op : ne PAS forcer `isGlobalMuted = true` ici. Cette
                 // closure est invoquée par `PlaybackCoordinator` chaque fois
@@ -394,6 +399,7 @@ struct StoryViewerView: View {
             )
         }
         .adaptiveOnChange(of: currentStoryIndex) { oldValue, _ in
+            skipExpiredStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory = currentGroup.flatMap { group in
@@ -402,6 +408,7 @@ struct StoryViewerView: View {
             transitionPostRoom(from: previousStory, to: currentStory)
         }
         .adaptiveOnChange(of: currentGroupIndex) { oldValue, _ in
+            skipExpiredStoriesIfNeeded()
             isContentReady = false
             refreshPrefetchWindowAndTimer()
             let previousStory: StoryItem? = (oldValue >= 0 && oldValue < groups.count &&
@@ -685,6 +692,40 @@ struct StoryViewerView: View {
 
     /// Direct repost-as-post action wired to the kebab menu's "Republier en
     /// post" item. Mirrors the share-button repost UX (C.1) but skips the
+    /// A5 — advance past stories whose 24h visibility window has elapsed.
+    ///
+    /// The cache TTL is intentionally longer than 24h (avoids redownloading
+    /// avatars + metadata on cold start), so the viewer may receive expired
+    /// stories from the local store. We skip them here rather than filter
+    /// at the tray level — the tray must keep showing the user's ring for
+    /// UX continuity, but rendering an expired story (deleted server-side
+    /// by the GC job) would 404 on reactions and confuse the user.
+    ///
+    /// Behavior:
+    /// - advance `currentStoryIndex` to the first non-expired story in the
+    ///   current group (forward only — never go back to an unexpired one);
+    /// - if every remaining story in the group is expired, dismiss the
+    ///   viewer (the user is opening an empty ring).
+    private func skipExpiredStoriesIfNeeded() {
+        let now = Date()
+        guard currentGroupIndex < groups.count else { return }
+        let group = groups[currentGroupIndex]
+        guard !group.stories.isEmpty else { return }
+
+        var idx = currentStoryIndex
+        while idx < group.stories.count, group.stories[idx].isExpired(at: now) {
+            idx += 1
+        }
+        if idx >= group.stories.count {
+            // Whole tail of the group is expired — close.
+            isPresented = false
+            return
+        }
+        if idx != currentStoryIndex {
+            currentStoryIndex = idx
+        }
+    }
+
     /// composer — fires `PostService.repost` immediately with no content and
     /// Transitions the Socket.IO post room subscription from `oldStory` to `newStory`.
     /// The old.id != new.id check makes redundant calls (e.g. double-fire from both

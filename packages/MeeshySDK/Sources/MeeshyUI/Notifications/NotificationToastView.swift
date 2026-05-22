@@ -22,18 +22,11 @@ public struct NotificationToastView: View {
         event.senderDisplayName ?? event.senderUsername ?? event.title ?? "Meeshy"
     }
 
-    private var authorInitials: String {
-        let name = authorName
-        let parts = name.split(separator: " ")
-        if parts.count >= 2 {
-            return "\(parts[0].prefix(1))\(parts[1].prefix(1))".uppercased()
-        }
-        return String(name.prefix(2)).uppercased()
-    }
-
-    private var authorColor: Color {
-        let hex = DynamicColorGenerator.colorForName(event.senderId ?? authorName)
-        return Color(hex: hex)
+    private var authorAccentHex: String {
+        // Deterministic from senderId (stable across re-renders + matches
+        // the bubble's sender color) so the avatar fallback gradient
+        // looks the same as the bubble's sender chip.
+        DynamicColorGenerator.colorForName(event.senderId ?? authorName)
     }
 
     // MARK: - Body text
@@ -62,15 +55,18 @@ public struct NotificationToastView: View {
     public var body: some View {
         Button { onTap?() } label: {
             HStack(spacing: 10) {
-                // Author avatar (initials circle)
-                Circle()
-                    .fill(authorColor)
-                    .frame(width: 36, height: 36)
-                    .overlay(
-                        Text(authorInitials)
-                            .font(.system(size: 13, weight: .bold))
-                            .foregroundColor(.white)
-                    )
+                // Author avatar — uses the SDK's canonical MeeshyAvatar so
+                // we honour the uploaded photo when present (via
+                // CachedAvatarImage with disk caching) and fall back to
+                // the deterministic initials circle when not. The
+                // previous implementation hard-coded the initials path
+                // and ignored `event.senderAvatar` entirely.
+                MeeshyAvatar(
+                    name: authorName,
+                    context: .notification,
+                    accentColor: authorAccentHex,
+                    avatarURL: event.senderAvatar
+                )
 
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {

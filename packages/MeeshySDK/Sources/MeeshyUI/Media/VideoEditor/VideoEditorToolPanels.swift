@@ -245,147 +245,152 @@ struct EditorSliderRow: View {
 
 // MARK: - Trim Controller
 
+/// Bottom-band controller for the Trim tool.
+///
+/// **Design** : pas de filmstrip ici — la timeline principale (au-dessus
+/// de la vidéo) accueille les **brackets in/out** et la zone dimmée
+/// pendant que cet outil est actif. Ce panneau ne fournit que :
+/// - le rappel numérique (début / durée / fin)
+/// - 2 boutons « pose ici » qui ancrent in/out à la position de lecture
+///   (le bouton équivalent à un drag fin sur les handles de la timeline)
+/// - un bouton de remise à zéro
+///
+/// Garder le couple `bracketsOnTimeline` + `controlsHere` évite la
+/// double-timeline que reprochait l'audit : la filmstrip qui doublonnait
+/// sous la vidéo + dans le panneau a été supprimée.
 struct TrimController: View {
     @ObservedObject var viewModel: VideoEditorViewModel
     @Environment(\.theme) private var theme
 
-    @State private var startAnchor: Double?
-    @State private var endAnchor: Double?
-
     private var accent: Color { Color(hex: viewModel.accentColor) }
-    private let handleWidth: CGFloat = 16
+    private var doc: VideoEditDocument { viewModel.document }
+    private var trimDuration: Double { max(0, doc.outPoint - doc.inPoint) }
+    private var canTrimStartHere: Bool {
+        playheadAsSourceTime.map { $0 < doc.outPoint - VideoEditLimits.minSegmentDuration } ?? false
+    }
+    private var canTrimEndHere: Bool {
+        playheadAsSourceTime.map { $0 > doc.inPoint + VideoEditLimits.minSegmentDuration } ?? false
+    }
+    /// Convertit la position de lecture (temps edité) en temps source —
+    /// nécessaire car `settingInPoint` / `settingOutPoint` prennent du
+    /// source time, alors que `playheadTime` est en temps edité.
+    private var playheadAsSourceTime: Double? {
+        doc.locate(editedTime: viewModel.playheadTime).map { $0.sourceTime }
+    }
 
     var body: some View {
-        VStack(spacing: 8) {
-            GeometryReader { geo in
-                let width = geo.size.width
-                let duration = max(0.1, viewModel.document.sourceDuration)
-                let inPoint = viewModel.document.inPoint
-                let outPoint = viewModel.document.outPoint
-                let startX = CGFloat(inPoint / duration) * width
-                let endX = CGFloat(outPoint / duration) * width
+        VStack(spacing: 10) {
+            readout
 
-                ZStack(alignment: .leading) {
-                    filmstrip
-                        .frame(width: width, height: 52)
-                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-
-                    dimmed(width: startX, height: 52).offset(x: 0)
-                    dimmed(width: width - endX, height: 52).offset(x: endX)
-
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(accent, lineWidth: 2)
-                        .frame(width: max(0, endX - startX), height: 52)
-                        .offset(x: startX)
-
-                    handle(systemImage: "chevron.compact.left")
-                        .position(x: startX, y: 26)
-                        .gesture(startDrag(width: width, duration: duration))
-
-                    handle(systemImage: "chevron.compact.right")
-                        .position(x: endX, y: 26)
-                        .gesture(endDrag(width: width, duration: duration))
+            HStack(spacing: 8) {
+                anchorButton(
+                    title: "Début ici",
+                    systemImage: "arrow.right.to.line",
+                    enabled: canTrimStartHere
+                ) {
+                    guard let src = playheadAsSourceTime else { return }
+                    viewModel.apply(doc.settingInPoint(src))
+                    HapticFeedback.medium()
                 }
-            }
-            .frame(height: 52)
 
-            HStack {
-                trimLabel("Début", value: viewModel.document.inPoint)
-                Spacer()
-                Text("Durée \(timeString(viewModel.document.outPoint - viewModel.document.inPoint))")
-                    .font(.system(size: 11, weight: .semibold, design: .monospaced))
-                    .foregroundStyle(accent)
-                Spacer()
-                trimLabel("Fin", value: viewModel.document.outPoint)
+                anchorButton(
+                    title: "Fin ici",
+                    systemImage: "arrow.left.to.line",
+                    enabled: canTrimEndHere
+                ) {
+                    guard let src = playheadAsSourceTime else { return }
+                    viewModel.apply(doc.settingOutPoint(src))
+                    HapticFeedback.medium()
+                }
+
+                resetButton
+            }
+
+            if !viewModel.mode.isPro {
+                Text("Astuce : poignées disponibles sur la timeline principale.")
+                    .font(.system(size: 10))
+                    .foregroundStyle(theme.textMuted)
+                    .frame(maxWidth: .infinity, alignment: .center)
             }
         }
         .padding(.bottom, 4)
     }
 
-    private var filmstrip: some View {
-        GeometryReader { geo in
-            let strip = viewModel.filmstrip
-            if strip.isEmpty {
-                theme.backgroundTertiary
-            } else {
-                HStack(spacing: 0) {
-                    ForEach(0..<strip.count, id: \.self) { i in
-                        Image(uiImage: strip[i])
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: geo.size.width / CGFloat(strip.count), height: geo.size.height)
-                            .clipped()
-                    }
-                }
-            }
+    private var readout: some View {
+        HStack(spacing: 14) {
+            readoutCell(label: "Début", value: doc.inPoint)
+            readoutDivider
+            readoutCell(label: "Durée", value: trimDuration, color: accent)
+            readoutDivider
+            readoutCell(label: "Fin", value: doc.outPoint)
         }
+        .frame(maxWidth: .infinity)
     }
 
-    private func dimmed(width: CGFloat, height: CGFloat) -> some View {
-        Rectangle()
-            .fill(.black.opacity(0.55))
-            .frame(width: max(0, width), height: height)
-    }
-
-    private func handle(systemImage: String) -> some View {
-        RoundedRectangle(cornerRadius: 5, style: .continuous)
-            .fill(accent)
-            .frame(width: handleWidth, height: 56)
-            .overlay(
-                Image(systemName: systemImage)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
-            )
-            .shadow(color: .black.opacity(0.3), radius: 3)
-    }
-
-    private func startDrag(width: CGFloat, duration: Double) -> some Gesture {
-        DragGesture(minimumDistance: 1)
-            .onChanged { value in
-                if startAnchor == nil {
-                    startAnchor = viewModel.document.inPoint
-                    viewModel.pause()
-                }
-                let anchor = startAnchor ?? 0
-                let delta = Double(value.translation.width / width) * duration
-                let newStart = anchor + delta
-                viewModel.preview(viewModel.document.settingInPoint(newStart))
-            }
-            .onEnded { _ in
-                startAnchor = nil
-                viewModel.commitPreview()
-                HapticFeedback.light()
-            }
-    }
-
-    private func endDrag(width: CGFloat, duration: Double) -> some Gesture {
-        DragGesture(minimumDistance: 1)
-            .onChanged { value in
-                if endAnchor == nil {
-                    endAnchor = viewModel.document.outPoint
-                    viewModel.pause()
-                }
-                let anchor = endAnchor ?? duration
-                let delta = Double(value.translation.width / width) * duration
-                let newEnd = anchor + delta
-                viewModel.preview(viewModel.document.settingOutPoint(newEnd))
-            }
-            .onEnded { _ in
-                endAnchor = nil
-                viewModel.commitPreview()
-                HapticFeedback.light()
-            }
-    }
-
-    private func trimLabel(_ title: String, value: Double) -> some View {
-        VStack(spacing: 1) {
-            Text(title)
+    private func readoutCell(label: String, value: Double, color: Color? = nil) -> some View {
+        VStack(spacing: 2) {
+            Text(label)
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(theme.textMuted)
             Text(timeString(value))
-                .font(.system(size: 11, weight: .semibold, design: .monospaced))
+                .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                .foregroundStyle(color ?? theme.textPrimary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+
+    private var readoutDivider: some View {
+        Rectangle()
+            .fill(theme.textMuted.opacity(0.25))
+            .frame(width: 1, height: 22)
+    }
+
+    private func anchorButton(title: String, systemImage: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: systemImage)
+                    .font(.system(size: 11, weight: .semibold))
+                Text(title)
+                    .font(.system(size: 12, weight: .semibold))
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(enabled
+                          ? AnyShapeStyle(MeeshyColors.brandGradient)
+                          : AnyShapeStyle(accent.opacity(0.15)))
+            )
+            .foregroundStyle(enabled ? Color.white : theme.textMuted)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+    }
+
+    private var resetButton: some View {
+        Button {
+            // Remet le segment unique sur la source complète. En Pro avec
+            // plusieurs segments, on n'agit que sur les bornes de
+            // l'ensemble — l'outil dédié pour défaire un split est dans
+            // le panneau Diviser (merge).
+            viewModel.apply(
+                doc
+                    .settingInPoint(0)
+                    .settingOutPoint(doc.sourceDuration)
+            )
+            HapticFeedback.light()
+        } label: {
+            Image(systemName: "arrow.counterclockwise")
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 42, height: 38)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(accent.opacity(0.15))
+                )
                 .foregroundStyle(theme.textPrimary)
         }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Réinitialiser")
     }
 
     private func timeString(_ seconds: Double) -> String {
@@ -664,11 +669,30 @@ struct RotateController: View {
 
 // MARK: - Filter Controller
 
+/// Filter chooser — tiles show the **current video frame with each filter
+/// applied** instead of an abstract SF icon. The user gets a real preview
+/// of what they'd be picking, exactly like Photos / Instagram / CapCut.
+///
+/// Implementation : a single representative frame (middle of the filmstrip)
+/// is run through every `VideoFilterPreset.ciFilterName` ONCE when the
+/// controller appears. The cache survives across rebuilds of this
+/// controller — only the source frame changing invalidates it.
 struct FilterController: View {
     @ObservedObject var viewModel: VideoEditorViewModel
     @Environment(\.theme) private var theme
+    @StateObject private var previewCache = VideoFilterPreviewCache()
 
     private var accent: Color { Color(hex: viewModel.accentColor) }
+
+    /// Picks the source frame to feed into the filter pipeline. Middle of
+    /// the filmstrip when available — it's typically the most
+    /// representative frame and avoids the dark frame artifact common at
+    /// the start/end of recordings.
+    private var sourceFrame: UIImage? {
+        let strip = viewModel.filmstrip
+        guard !strip.isEmpty else { return nil }
+        return strip[strip.count / 2]
+    }
 
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -680,32 +704,64 @@ struct FilterController: View {
             .padding(.vertical, 2)
         }
         .padding(.bottom, 4)
+        .onAppear { refreshPreviewsIfNeeded() }
+        .adaptiveOnChange(of: viewModel.filmstrip.count) { _, _ in
+            refreshPreviewsIfNeeded()
+        }
     }
 
+    private func refreshPreviewsIfNeeded() {
+        guard let source = sourceFrame else { return }
+        previewCache.populate(from: source, version: viewModel.filmstrip.count)
+    }
+
+    @ViewBuilder
     private func filterTile(_ preset: VideoFilterPreset) -> some View {
         let isActive = viewModel.document.filter == preset
-        return Button {
+        Button {
             viewModel.setFilter(preset)
         } label: {
             VStack(spacing: 5) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .fill(accent.opacity(isActive ? 0.3 : 0.12))
-                    Image(systemName: preset.iconName)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundStyle(isActive ? accent : theme.textSecondary)
-                }
-                .frame(width: 56, height: 56)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10, style: .continuous)
-                        .strokeBorder(accent, lineWidth: isActive ? 2 : 0)
-                )
+                tileThumbnail(preset, isActive: isActive)
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                            .strokeBorder(accent, lineWidth: isActive ? 2 : 0)
+                    )
                 Text(preset.displayName)
                     .font(.system(size: 10, weight: .medium))
                     .foregroundStyle(isActive ? theme.textPrimary : theme.textMuted)
             }
         }
         .buttonStyle(.plain)
+        .accessibilityLabel(preset.displayName)
+        .accessibilityAddTraits(isActive ? [.isSelected] : [])
+    }
+
+    @ViewBuilder
+    private func tileThumbnail(_ preset: VideoFilterPreset, isActive: Bool) -> some View {
+        if let preview = previewCache.preview(for: preset) {
+            // Live preview : frame de la vidéo passée au CIFilter du preset.
+            Image(uiImage: preview)
+                .resizable()
+                .scaledToFill()
+                .overlay(
+                    isActive
+                        ? Color.clear
+                        : Color.black.opacity(0.15)
+                )
+        } else {
+            // Filmstrip pas encore prêt : on retombe sur l'icône SF pour ne
+            // pas laisser un tile noir le temps de l'extraction des frames.
+            ZStack {
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .fill(accent.opacity(isActive ? 0.3 : 0.12))
+                Image(systemName: preset.iconName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(isActive ? accent : theme.textSecondary)
+            }
+        }
     }
 }
 

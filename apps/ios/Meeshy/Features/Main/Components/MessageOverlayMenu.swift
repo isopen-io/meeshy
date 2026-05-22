@@ -30,6 +30,7 @@ struct MessageOverlayMenu: View {
     var onReport: ((String, String?) -> Void)?
     var onDelete: (() -> Void)?
     var onDeleteAttachment: ((String) -> Void)?
+    var onShowThread: (() -> Void)?
 
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
@@ -697,6 +698,12 @@ struct MessageOverlayMenu: View {
             handler: { dismissThen { onReply?() } }
         ))
 
+        actions.append(MessageAction(
+            id: "thread", icon: "bubble.left.and.bubble.right.fill",
+            label: "Discussion", color: "F39C12",
+            handler: { dismissThen { onShowThread?() } }
+        ))
+
         if hasText {
             actions.append(MessageAction(
                 id: "copy", icon: "doc.on.doc.fill",
@@ -816,6 +823,8 @@ private struct PreviewAudioPlayer: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(player.isPlaying ? "Mettre en pause" : "Lire l'audio")
+                .accessibilityHint("Audio de \(player.timeLabel(totalDuration: attachment.duration))")
 
                 VStack(alignment: .leading, spacing: 2) {
                     Text(attachment.originalName.isEmpty ? "Audio" : attachment.originalName)
@@ -861,6 +870,7 @@ private struct PreviewAudioPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Reculer de 5 secondes")
 
                 Slider(
                     value: Binding(
@@ -870,6 +880,8 @@ private struct PreviewAudioPlayer: View {
                     in: 0...1
                 )
                 .tint(accent)
+                .accessibilityLabel("Position de lecture")
+                .accessibilityValue("\(player.percentInt) %")
 
                 // Pourcentage d'avancement
                 Text("\(player.percentInt)%")
@@ -878,6 +890,7 @@ private struct PreviewAudioPlayer: View {
                     .frame(minWidth: 36)
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.15), value: player.percentInt)
+                    .accessibilityHidden(true)
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
@@ -885,6 +898,7 @@ private struct PreviewAudioPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Avancer de 5 secondes")
             }
         }
         .padding(.horizontal, 12)
@@ -943,6 +957,7 @@ private struct PreviewVideoPlayer: View {
                             )
                     }
                     .buttonStyle(.plain)
+                    .accessibilityLabel("Lire la vidéo")
                 }
             }
             .clipShape(UnevenRoundedRectangle(topLeadingRadius: 14, bottomLeadingRadius: 0, bottomTrailingRadius: 0, topTrailingRadius: 14))
@@ -980,6 +995,7 @@ private struct PreviewVideoPlayer: View {
                     }
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(player.isPlaying ? "Mettre la vidéo en pause" : "Lire la vidéo")
 
                 Button { player.skip(seconds: -5) } label: {
                     Image(systemName: "gobackward.5")
@@ -987,6 +1003,7 @@ private struct PreviewVideoPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Reculer de 5 secondes")
 
                 Text("\(player.percentInt)%")
                     .font(.system(size: 10, weight: .heavy, design: .monospaced))
@@ -994,6 +1011,7 @@ private struct PreviewVideoPlayer: View {
                     .frame(minWidth: 32)
                     .contentTransition(.numericText())
                     .animation(.easeInOut(duration: 0.15), value: player.percentInt)
+                    .accessibilityHidden(true)
 
                 Button { player.skip(seconds: 5) } label: {
                     Image(systemName: "goforward.5")
@@ -1001,6 +1019,7 @@ private struct PreviewVideoPlayer: View {
                         .foregroundColor(theme.textMuted)
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("Avancer de 5 secondes")
 
                 Spacer()
 

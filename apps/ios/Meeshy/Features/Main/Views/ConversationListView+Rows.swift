@@ -31,6 +31,11 @@ struct ConversationRowItem<Menu: View>: View {
     let typingUsername: String?
     let isSelected: Bool
     let draftSummary: DraftSummary?
+    /// B1 (Prisme Linguistique) — viewer preferred languages used to
+    /// resolve the last-message preview translation. Passed once from
+    /// the list (`AuthManager.currentUser?.preferredContentLanguages`)
+    /// instead of read per-row to keep the row equatable.
+    let preferredContentLanguages: [String]
     let cachedPreviewMessages: [Message]
     let leadingActions: [SwipeAction]
     let trailingActions: [SwipeAction]
@@ -65,7 +70,8 @@ struct ConversationRowItem<Menu: View>: View {
                 moodStatus: moodStatus,
                 typingUsername: typingUsername,
                 isSelected: isSelected,
-                draftSummary: draftSummary
+                draftSummary: draftSummary,
+                preferredContentLanguages: preferredContentLanguages
             )
             .equatable()
             .contentShape(Rectangle())

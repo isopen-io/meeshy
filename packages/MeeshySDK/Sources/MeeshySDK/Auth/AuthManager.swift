@@ -1,5 +1,6 @@
 import Foundation
 import Combine
+import os
 
 // MARK: - Profile Snapshot
 
@@ -29,6 +30,9 @@ public protocol AuthManaging: AnyObject {
     var savedAccounts: [SavedAccount] { get }
     var authToken: String? { get }
     var currentUserPublisher: AnyPublisher<MeeshyUser?, Never> { get }
+    var requires2FA: Bool { get }
+    var twoFactorToken: String? { get }
+    func completeLoginWith2FA(code: String) async
     func login(username: String, password: String) async
     func register(request: RegisterRequest) async
     func requestMagicLink(email: String) async -> Bool
@@ -37,6 +41,8 @@ public protocol AuthManaging: AnyObject {
     func logout()
     func checkExistingSession() async
     func handleUnauthorized()
+    @discardableResult
+    func refreshSession(force: Bool) async throws -> String
     func removeSavedAccount(userId: String)
 
     /// Applies up to three profile field changes locally, without any
@@ -69,6 +75,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
     @Published public var currentUser: MeeshyUser?
     @Published public var isLoading = false
     @Published public var errorMessage: String?
+    @Published public var requires2FA = false
+    @Published public var twoFactorToken: String?
     /// All accounts that have saved credentials on this device, sorted by most recently active.
     @Published public var savedAccounts: [SavedAccount] = []
 
@@ -93,10 +101,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Private
 
     private let keychain = KeychainManager.shared
-    private let authService = AuthService.shared
+    /// Backed by the protocol type so tests can inject a stub conforming
+    /// to `AuthServiceProviding` without subclassing the production
+    /// `final` `AuthService`.
+    internal var authService: AuthServiceProviding = AuthService.shared
 
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
-    private var isRefreshing = false
+    private var tokenRefreshTask: Task<String, Error>?
 
     // Legacy global keys kept only for one-time migration
     private let legacyTokenKey = "meeshy_auth_token"
@@ -147,18 +158,44 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     /// Returns true if the stored JWT is expired (with 30s margin).
     /// Decodes the payload inline to read `exp`.
+    ///
+    /// D2 — every "malformed → expired" branch now logs a structured
+    /// reason so the next time a user complains about a silent logout
+    /// we can trace whether the JWT was truncated, base64-corrupted,
+    /// or just missing `exp`. Returning `true` is the safe default
+    /// (forces refresh) but the silence was actively hurting support.
     public var isCurrentTokenExpired: Bool {
-        guard let token = authToken else { return true }
+        Self.isTokenExpired(authToken, now: Date())
+    }
+
+    /// D2 — pure decoder so tests can probe every branch without driving
+    /// the singleton's Keychain/UserDefaults state. Returns `true` for
+    /// every malformed input (safe default) and logs the reason so a
+    /// silent-logout report can be traced.
+    nonisolated public static func isTokenExpired(_ token: String?, now: Date) -> Bool {
+        guard let token else { return true }
         let parts = token.split(separator: ".")
-        guard parts.count == 3 else { return true }
+        guard parts.count == 3 else {
+            Logger.auth.warning("JWT structurally invalid (parts=\(parts.count)); treating as expired")
+            return true
+        }
         var base64 = String(parts[1])
             .replacingOccurrences(of: "-", with: "+")
             .replacingOccurrences(of: "_", with: "/")
         while base64.count % 4 != 0 { base64.append("=") }
-        guard let data = Data(base64Encoded: base64),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let exp = json["exp"] as? TimeInterval else { return true }
-        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < Date()
+        guard let data = Data(base64Encoded: base64) else {
+            Logger.auth.warning("JWT payload base64 decode failed; treating as expired")
+            return true
+        }
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            Logger.auth.warning("JWT payload not JSON; treating as expired")
+            return true
+        }
+        guard let exp = json["exp"] as? TimeInterval else {
+            Logger.auth.warning("JWT payload missing `exp` claim; treating as expired")
+            return true
+        }
+        return Date(timeIntervalSince1970: exp).addingTimeInterval(-30) < now
     }
 
     // MARK: - Login
@@ -166,10 +203,45 @@ public final class AuthManager: ObservableObject, AuthManaging {
     public func login(username: String, password: String) async {
         isLoading = true
         errorMessage = nil
+        requires2FA = false
+        twoFactorToken = nil
 
         do {
-            let data = try await authService.login(username: username, password: password)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
+            let data = try await authService.login(username: username, password: password, rememberDevice: true)
+            if data.requires2FA == true {
+                self.requires2FA = true
+                self.twoFactorToken = data.twoFactorToken
+            } else if let token = data.token, let user = data.user {
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
+        } catch let error as APIError {
+            errorMessage = error.errorDescription
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    public func completeLoginWith2FA(code: String) async {
+        guard let twoFactorToken = twoFactorToken else {
+            errorMessage = "Session 2FA expirée ou invalide"
+            return
+        }
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let data = try await authService.completeLoginWith2FA(twoFactorToken: twoFactorToken, code: code)
+            if let token = data.token, let user = data.user {
+                self.requires2FA = false
+                self.twoFactorToken = nil
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -187,7 +259,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         do {
             let data = try await authService.register(request: request)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
+            if let token = data.token, let user = data.user {
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -204,7 +280,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         errorMessage = nil
 
         do {
-            try await authService.requestMagicLink(email: email)
+            _ = try await authService.requestMagicLink(email: email, deviceFingerprint: nil)
             isLoading = false
             return true
         } catch let error as APIError {
@@ -223,7 +299,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         do {
             let data = try await authService.validateMagicLink(token: token)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
+            if let token = data.token, let user = data.user {
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -262,7 +342,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
             return
         }
 
-        Task { await authService.logout() }
+        // D5 — drive the server-side logout with retries (network blip
+        // should not leave the session live on the gateway).
+        Task { await self.performServerLogoutWithRetries() }
 
         keychain.delete(forKey: tokenKey(for: userId))
         keychain.delete(forKey: sessionTokenKey(for: userId))
@@ -274,6 +356,38 @@ public final class AuthManager: ObservableObject, AuthManaging {
         currentUser = nil
         isAuthenticated = false
         APIClient.shared.authToken = nil
+
+        // D3 — wipe every cached store so a subsequent login (same device,
+        // different user) cannot momentarily render the previous user's
+        // conversations / friends / profiles. `CacheCoordinator.reset()`
+        // also tears down lifecycle subscriptions so the next login starts
+        // from a clean slate. Best-effort: the local logout already
+        // succeeded above, so a cache reset failure here cannot block UX.
+        Task {
+            await CacheCoordinator.shared.reset()
+        }
+    }
+
+    /// D5 — best-effort server logout with bounded retries. Returns once
+    /// the server has acked OR after 3 attempts (10s total) have failed.
+    /// The local logout state is already gone by the time this runs, so
+    /// failures are tolerated — the worst case is the gateway sees the
+    /// next request, fails token verification, and lazily kills the
+    /// session.
+    private func performServerLogoutWithRetries() async {
+        let delays: [TimeInterval] = [0, 1, 5] // total ≈ 6s wall-clock
+        for delay in delays {
+            if delay > 0 {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            }
+            do {
+                try await authService.logoutThrowing()
+                return
+            } catch {
+                Logger.auth.warning("Server logout attempt failed: \(error.localizedDescription)")
+            }
+        }
+        Logger.auth.error("Server logout exhausted retries — session may linger on gateway")
     }
 
     // MARK: - Remove Saved Account
@@ -333,10 +447,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // race in and trip the 401 path. With the gateway's sliding-window
         // semantics this also extends the session another 365 days, so an
         // active user is renewed indefinitely.
-        if isCurrentTokenExpired, let sessionToken = sessionToken {
-            isRefreshing = true
-            await attemptTokenRefresh(token: token, sessionToken: sessionToken, userId: userId)
-            isRefreshing = false
+        if isCurrentTokenExpired, let _ = sessionToken {
+            _ = try? await refreshSession(force: false)
         }
 
         // Background revalidation (stale-while-revalidate for the user
@@ -364,27 +476,16 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Handle 401 (called from APIClient during active session)
 
     public func handleUnauthorized() {
-        guard !isRefreshing else { return }
         guard let userId = activeUserId else {
             // No active user at all — nothing to refresh, no state to clear.
             return
         }
 
-        // The gateway needs a parseable JWT to extract the userId for the
-        // trusted-session lookup (sessionToken alone isn't enough). In normal
-        // flow, login/refresh always store the JWT and sessionToken together,
-        // so a missing JWT means keychain corruption — surface re-auth.
-        guard let token = keychain.load(forKey: tokenKey(for: userId)) else {
-            requireReauthentication(userId: userId)
-            return
-        }
-
-        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
-
-        isRefreshing = true
-        Task {
-            await attemptTokenRefresh(token: token, sessionToken: sessionToken, userId: userId)
-            isRefreshing = false
+        // D1 — guard against concurrent refreshes by invoking refreshSession(force: true)
+        // asynchronously. Since refreshSession uses tokenRefreshTask to serialize,
+        // multiple concurrent calls to handleUnauthorized() will safely share the same refresh task.
+        Task { [weak self] in
+            _ = try? await self?.refreshSession(force: true)
         }
     }
 
@@ -403,7 +504,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         currentlyAuthenticated && currentActiveUserId == newUserId
     }
 
-    private func applySession(token: String, sessionToken: String?, user: MeeshyUser) {
+    internal func applySession(token: String, sessionToken: String?, user: MeeshyUser) {
         let userId = user.id
         // Capture BEFORE we mutate state. If we were already authenticated
         // when applySession runs, this is a token rotation (refresh) — the
@@ -502,26 +603,53 @@ public final class AuthManager: ObservableObject, AuthManaging {
         self.updateSavedAccountActivity(from: user)
     }
 
-    private func attemptTokenRefresh(token: String, sessionToken: String?, userId: String) async {
-        do {
-            let data = try await authService.refreshToken(token, sessionToken: sessionToken)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
-        } catch let error as MeeshyError {
-            switch error {
-            case .auth:
-                // The server refuses both the JWT and the sessionToken — the
-                // session is genuinely invalid (revoked / expired beyond the
-                // sliding window / account disabled). Surface the re-auth
-                // screen; saved account is kept so it's still one-tap.
-                requireReauthentication(userId: userId)
-            case .network, .server, .message, .media, .forbidden, .unknown:
-                // Transient or scoped (resource 403) — preserve session,
-                // the next 401 will retry the refresh.
-                break
-            }
-        } catch {
-            // Cancellation / unknown — preserve session.
+    @discardableResult
+    public func refreshSession(force: Bool = false) async throws -> String {
+        if let task = tokenRefreshTask {
+            return try await task.value
         }
+
+        guard let userId = activeUserId else {
+            throw MeeshyError.auth(.sessionExpired)
+        }
+
+        guard let token = keychain.load(forKey: tokenKey(for: userId)) else {
+            requireReauthentication(userId: userId)
+            throw MeeshyError.auth(.sessionExpired)
+        }
+        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
+
+        // If not forcing AND token is not expired, return current token
+        if !force && !Self.isTokenExpired(token, now: Date()) {
+            return token
+        }
+
+        let task = Task<String, Error> { [weak self] in
+            guard let self = self else { throw CancellationError() }
+            do {
+                let data = try await self.authService.refreshToken(token, sessionToken: sessionToken)
+                guard let newToken = data.token, let newUser = data.user else {
+                    throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+                }
+                await self.applySession(token: newToken, sessionToken: data.sessionToken, user: newUser)
+                return newToken
+            } catch let error as MeeshyError {
+                if case .auth = error {
+                    await self.requireReauthentication(userId: userId)
+                }
+                throw error
+            } catch {
+                throw error
+            }
+        }
+
+        tokenRefreshTask = task
+
+        defer {
+            tokenRefreshTask = nil
+        }
+
+        return try await task.value
     }
 
     // MARK: - Saved Accounts persistence
@@ -532,7 +660,20 @@ public final class AuthManager: ObservableObject, AuthManaging {
             savedAccounts = []
             return
         }
-        savedAccounts = accounts.sorted { $0.lastActiveAt > $1.lastActiveAt }
+        // D4 — sort with a stable secondary key (`id`). When two accounts
+        // share the same `lastActiveAt` (rare but possible across rapid
+        // automated logins or sub-millisecond switches) the prior code
+        // could produce a different ordering on each cold start because
+        // Swift's `sorted(by:)` only guarantees stability since 5.0 and
+        // even then only for the *exact same input order*; the input is
+        // a Decodable dict-roundtripped Array whose order isn't
+        // contractually stable.
+        savedAccounts = accounts.sorted { a, b in
+            if a.lastActiveAt != b.lastActiveAt {
+                return a.lastActiveAt > b.lastActiveAt
+            }
+            return a.id < b.id
+        }
     }
 
     private func persistSavedAccounts() {

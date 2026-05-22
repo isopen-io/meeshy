@@ -264,4 +264,93 @@ final class StoryCanvasUIViewZOrderAndLayerTests: XCTestCase {
         XCTAssertEqual(received.last, .foreground)
         XCTAssertEqual(canvas.currentManipulationLayer, .foreground)
     }
+
+    // MARK: - resolveManipulationTarget bg fallback
+
+    /// Pin the UX décidée 2026-05-22 : en mode `.foreground` (au moins un
+    /// foreground posé), un pinch / drag sur une zone vide doit retomber
+    /// sur le bg media — sinon le fond devient figé dès qu'on pose un texte.
+    func test_resolveManipulationTarget_foregroundMode_fallsBackToBackgroundWhenNoForegroundHit() {
+        var effects = StoryEffects()
+        // BG image qui couvre toute la slide + sticker minuscule au centre.
+        effects.mediaObjects = [
+            makeMedia(id: "bg", isBackground: true, zIndex: 0)
+        ]
+        effects.stickerObjects = [makeSticker(id: "sticker", zIndex: 1)]
+        let canvas = makeCanvas(slide: makeSlide(effects: effects))
+        // Couche calculée à init = .foreground (le sticker compte comme fg).
+        XCTAssertEqual(canvas.currentManipulationLayer, .foreground)
+
+        // Touche en (0, 0) — coin haut-gauche, là où le sticker (au centre)
+        // n'est jamais. Foreground hit-test rate, fallback bg doit kick in.
+        let target = canvas.resolveManipulationTarget(at: CGPoint(x: 5, y: 5))
+
+        XCTAssertEqual(target, "bg",
+            "Fallback bg manquant : sans foreground sous le doigt, on doit pouvoir manipuler le bg.")
+    }
+
+    func test_resolveManipulationTarget_foregroundMode_foregroundUnderTouchTakesPriority() {
+        var effects = StoryEffects()
+        effects.mediaObjects = [makeMedia(id: "bg", isBackground: true, zIndex: 0)]
+        // Sticker positionné explicitement au centre (default x=0.5, y=0.5).
+        effects.stickerObjects = [makeSticker(id: "sticker", zIndex: 1)]
+        let canvas = makeCanvas(slide: makeSlide(effects: effects))
+        // Le hit-test repose sur les CALayers construits par `rebuildLayers()`
+        // qui s'exécute dans `layoutSubviews`. Sans frame attachée à une window
+        // ou layout forcé, les layers du sticker ne sont pas en place et le
+        // hit-test ne retournerait jamais le sticker.
+        canvas.layoutIfNeeded()
+
+        // Tap au centre — le sticker (z=1) est sous le doigt → priorité fg.
+        let centerX = canvas.bounds.midX
+        let centerY = canvas.bounds.midY
+        let target = canvas.resolveManipulationTarget(at: CGPoint(x: centerX, y: centerY))
+
+        XCTAssertEqual(target, "sticker",
+            "Le foreground sous le doigt doit gagner sur le fallback bg.")
+    }
+
+    func test_resolveManipulationTarget_canvasMode_returnsNil() {
+        let canvas = makeCanvas(slide: makeSlide(effects: StoryEffects())) // .canvas
+        let target = canvas.resolveManipulationTarget(at: CGPoint(x: 100, y: 100))
+        XCTAssertNil(target, "Mode `.canvas` doit absorber tous les gestures (rien à manipuler).")
+    }
+
+    func test_resolveManipulationTarget_backgroundMode_returnsBgRegardlessOfLocation() {
+        var effects = StoryEffects()
+        effects.mediaObjects = [makeMedia(id: "bg", isBackground: true)]
+        let canvas = makeCanvas(slide: makeSlide(effects: effects))
+        XCTAssertEqual(canvas.currentManipulationLayer, .background)
+
+        // N'importe où sur le canvas → toujours le bg.
+        XCTAssertEqual(canvas.resolveManipulationTarget(at: CGPoint(x: 5, y: 5)), "bg")
+        XCTAssertEqual(canvas.resolveManipulationTarget(at: CGPoint(x: 200, y: 400)), "bg")
+    }
+
+    // MARK: - ThreeFingerPinchGestureRecognizer.averageDistance (pure)
+
+    func test_threeFingerPinch_averageDistance_threePointsCentered() {
+        // 3 points formant un triangle équilatéral centré → distance moyenne
+        // au centroïde = rayon du cercle circonscrit (≈ 1.0 pour ce triangle).
+        let points: [CGPoint] = [
+            CGPoint(x: 0, y: 1),
+            CGPoint(x: -sqrt(3)/2, y: -0.5),
+            CGPoint(x: sqrt(3)/2, y: -0.5)
+        ]
+        let dist = ThreeFingerPinchGestureRecognizer.averageDistance(points: points)
+        XCTAssertEqual(dist, 1.0, accuracy: 0.001)
+    }
+
+    func test_threeFingerPinch_averageDistance_emptyReturnsZero() {
+        XCTAssertEqual(ThreeFingerPinchGestureRecognizer.averageDistance(points: []), 0)
+    }
+
+    func test_threeFingerPinch_averageDistance_scalesLinearlyWithSpread() {
+        let small: [CGPoint] = [CGPoint(x: 0, y: 1), CGPoint(x: -1, y: -1), CGPoint(x: 1, y: -1)]
+        let large: [CGPoint] = [CGPoint(x: 0, y: 2), CGPoint(x: -2, y: -2), CGPoint(x: 2, y: -2)]
+        let dSmall = ThreeFingerPinchGestureRecognizer.averageDistance(points: small)
+        let dLarge = ThreeFingerPinchGestureRecognizer.averageDistance(points: large)
+        // Doubler les écarts double la distance moyenne au centroïde.
+        XCTAssertEqual(dLarge / dSmall, 2.0, accuracy: 0.001)
+    }
 }

@@ -31,6 +31,13 @@ struct ThemedConversationRow: View {
     /// la ligne affiche « Brouillon : … » au lieu de l'aperçu du dernier
     /// message.
     var draftSummary: DraftSummary? = nil
+    /// B1 (Prisme Linguistique) — viewer's preferred content languages,
+    /// passed by `ConversationListView` from `AuthManager.currentUser?
+    /// .preferredContentLanguages`. Used to resolve `lastMessagePreview`
+    /// through `MeeshyConversation.resolvedLastMessagePreview(...)`.
+    /// Falls back to the raw preview if the conversation has no
+    /// translations attached (e.g., gateway not yet providing them).
+    var preferredContentLanguages: [String] = []
 
     private var accentColor: String { conversation.accentColor }
 
@@ -211,8 +218,8 @@ struct ThemedConversationRow: View {
         )
         .scaleEffect(isDragging ? 1.02 : 1.0)
         .opacity(isDragging ? 0.8 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isDragging)
-        .animation(.spring(response: 0.35, dampingFraction: 0.82), value: isSelected)
+        .animation(.easeOut(duration: 0.15), value: isDragging)
+        .animation(.easeOut(duration: 0.2), value: isSelected)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(conversationAccessibilityLabel)
         .accessibilityValue(conversation.unreadCount > 0 ? "\(conversation.unreadCount) messages non lus" : "")
@@ -433,7 +440,9 @@ struct ThemedConversationRow: View {
                     attachmentIcon(for: attachments[0].mimeType)
                         .font(.system(size: 11))
                 }
-                Text(conversation.lastMessagePreview ?? "")
+                // B1 — apply Prisme Linguistique. Falls back to the raw
+                // preview when no translations are attached.
+                Text(conversation.resolvedLastMessagePreview(preferredLanguages: preferredContentLanguages) ?? "")
                     .font(.system(size: 13))
                     .foregroundColor(textSecondary)
                     .lineLimit(1)
@@ -570,7 +579,8 @@ extension ThemedConversationRow: @MainActor Equatable {
         lhs.moodStatus?.id == rhs.moodStatus?.id &&
         lhs.presenceState == rhs.presenceState &&
         lhs.isSelected == rhs.isSelected &&
-        lhs.draftSummary == rhs.draftSummary
+        lhs.draftSummary == rhs.draftSummary &&
+        lhs.preferredContentLanguages == rhs.preferredContentLanguages
     }
 }
 

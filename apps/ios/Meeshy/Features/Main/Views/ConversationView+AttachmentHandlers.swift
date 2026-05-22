@@ -399,56 +399,15 @@ extension ConversationView {
     // MARK: - Attachment Handlers
     func handlePhotoSelection(_ items: [PhotosPickerItem]) {
         guard !items.isEmpty else { return }
-        let itemsCopy = items
         composerState.selectedPhotoItems.removeAll()
-        composerState.isLoadingMedia = true
         HapticFeedback.light()
-
-        Task {
-            for item in itemsCopy {
-                let isVideo = item.supportedContentTypes.contains { $0.conforms(to: .movie) }
-
-                if isVideo {
-                    if let movieData = try? await item.loadTransferable(type: Data.self) {
-                        let rawName = "video_raw_\(UUID().uuidString).mp4"
-                        let rawURL = FileManager.default.temporaryDirectory.appendingPathComponent(rawName)
-                        try? movieData.write(to: rawURL)
-
-                        let compressedURL: URL
-                        do {
-                            compressedURL = try await MediaCompressor.shared.compressVideo(rawURL)
-                            try? FileManager.default.removeItem(at: rawURL)
-                        } catch {
-                            compressedURL = rawURL
-                        }
-
-                        await MainActor.run {
-                            handleCameraVideo(compressedURL)
-                        }
-                    }
-                } else {
-                    if let imageData = try? await item.loadTransferable(type: Data.self),
-                       let uiImage = UIImage(data: imageData) {
-                        await MainActor.run {
-                            handleCameraCapture(uiImage)
-                        }
-                    }
-                }
-            }
-            await MainActor.run { composerState.isLoadingMedia = false }
-        }
-    }
-
-    func generateVideoThumbnail(url: URL) async -> UIImage? {
-        let asset = AVAsset(url: url)
-        let generator = AVAssetImageGenerator(asset: asset)
-        generator.appliesPreferredTrackTransform = true
-        generator.maximumSize = CGSize(width: 200, height: 200)
-        do {
-            let cgImage = try generator.copyCGImage(at: .zero, actualTime: nil)
-            return UIImage(cgImage: cgImage)
-        } catch {
-            return nil
+        for item in items {
+            let prep = AttachmentPreparationService.shared.preparePhotosPickerItem(
+                item,
+                context: .message,
+                accentColor: accentColor
+            )
+            trackPreparation(prep)
         }
     }
 
@@ -517,61 +476,50 @@ extension ConversationView {
     }
 
     func handleCameraVideo(_ url: URL) {
-        Task {
-            let compressedURL: URL
-            do {
-                compressedURL = try await MediaCompressor.shared.compressVideo(url)
-                try? FileManager.default.removeItem(at: url)
-            } catch {
-                compressedURL = url
-            }
-
-            let fileSize = getFileSize(compressedURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(
-                id: attachmentId,
-                fileName: compressedURL.lastPathComponent,
-                originalName: compressedURL.lastPathComponent,
-                mimeType: "video/mp4",
-                fileSize: fileSize,
-                fileUrl: compressedURL.absoluteString,
-                thumbnailColor: "FF6B6B"
-            )
-
-            let thumb = await generateVideoThumbnail(url: compressedURL)
-            await MainActor.run {
-                composerState.pendingMediaFiles[attachmentId] = compressedURL
-                if let thumb { composerState.pendingThumbnails[attachmentId] = thumb }
-                composerState.pendingAttachments.append(attachment)
-                HapticFeedback.success()
-            }
-        }
+        let prep = AttachmentPreparationService.shared.prepareVideo(
+            sourceURL: url,
+            deleteSourceAfterCompression: true,
+            context: .message,
+            accentColor: "FF6B6B"
+        )
+        trackPreparation(prep)
     }
 
     func handleCameraCapture(_ image: UIImage) {
-        Task {
-            let result = await MediaCompressor.shared.compressImage(image)
-            let fileName = "camera_\(UUID().uuidString).\(result.fileExtension)"
-            let tempURL = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
-            try? result.data.write(to: tempURL)
-            let attachmentId = UUID().uuidString
-            let attachment = MessageAttachment(
-                id: attachmentId,
-                fileName: fileName,
-                originalName: fileName,
-                mimeType: result.mimeType,
-                fileSize: result.data.count,
-                fileUrl: tempURL.absoluteString,
-                width: Int(image.size.width),
-                height: Int(image.size.height),
-                thumbnailColor: accentColor
-            )
-            await MainActor.run {
-                composerState.pendingMediaFiles[attachmentId] = tempURL
-                composerState.pendingThumbnails[attachmentId] = image
-                composerState.pendingAttachments.append(attachment)
+        let prep = AttachmentPreparationService.shared.prepareImage(
+            image,
+            context: .message,
+            accentColor: accentColor
+        )
+        trackPreparation(prep)
+    }
+
+    /// Wire a `PreparingAttachment` into the composer:
+    /// 1. Append the in-flight handle so the tray shows a loading tile.
+    /// 2. Observe the handle and, when it reaches `.ready`, promote the
+    ///    result into the legacy pending dicts the send pipeline already
+    ///    knows how to consume. `.failed` simply drops the tile + toasts.
+    func trackPreparation(_ prep: PreparingAttachment) {
+        composerState.preparingAttachments.append(prep)
+        observePreparation(prep)
+    }
+
+    private func observePreparation(_ prep: PreparingAttachment) {
+        Task { @MainActor [prep] in
+            let result = await prep.awaitCompletion()
+            switch result {
+            case .success(let prepared):
+                composerState.pendingMediaFiles[prepared.attachment.id] = prepared.fileURL
+                if let thumb = prep.thumbnail {
+                    composerState.pendingThumbnails[prepared.attachment.id] = thumb
+                }
+                composerState.pendingAttachments.append(prepared.attachment)
                 HapticFeedback.success()
+            case .failure(.preparationFailed(let message)):
+                HapticFeedback.error()
+                ToastManager.shared.showError(message)
             }
+            composerState.preparingAttachments.removeAll { $0.id == prep.id }
         }
     }
 

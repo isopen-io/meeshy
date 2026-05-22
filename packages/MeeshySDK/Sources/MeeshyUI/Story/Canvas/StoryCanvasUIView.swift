@@ -257,6 +257,12 @@ public final class StoryCanvasUIView: UIView {
     private var rotationRecognizer: UIRotationGestureRecognizer!
     private var singleTapRecognizer: UITapGestureRecognizer!
     private var doubleTapRecognizer: UITapGestureRecognizer!
+    /// Pinch à 3 doigts dédié au zoom du viewport (canvas entier). Séparé du
+    /// `pinchRecognizer` 2-doigts qui agit sur un élément/fond : sans cette
+    /// séparation, un pinch sur un élément faisait aussi scaler le conteneur
+    /// SwiftUI (`.scaleEffect(canvasScale)`) parce que les deux gestures
+    /// firent en parallèle.
+    private var canvasZoomPinchRecognizer: ThreeFingerPinchGestureRecognizer!
 
     // MARK: - Drawing mode (Phase 3 Task 3.4)
 
@@ -295,6 +301,14 @@ public final class StoryCanvasUIView: UIView {
     /// mettre à jour l'indicateur visuel (chip row) et / ou bloquer des
     /// commandes inadéquates pour la couche courante.
     public var onManipulationLayerChanged: ((CanvasManipulationLayer) -> Void)?
+
+    /// Notifié pendant un pinch à 3 doigts (zoom du viewport). Le composer
+    /// SwiftUI s'y abonne pour piloter `canvasScale` + l'overlay éphémère
+    /// `viewportPinchDelta` sans avoir besoin d'un `MagnificationGesture`
+    /// SwiftUI parallèle (qui réagissait à un pinch 2-doigts sur un
+    /// élément). Le `scale` est cumulatif depuis `.began` ; le composer
+    /// applique son propre clamp + commit à `.ended`.
+    public var onCanvasZoomScaleChanged: ((CGFloat, UIGestureRecognizer.State) -> Void)?
 
     // MARK: - Audio
 
@@ -815,7 +829,7 @@ public final class StoryCanvasUIView: UIView {
             if scheduledFresh {
                 audioMixer.applyDefaultBackgroundEnvelope(
                     originHost: origin,
-                    slideDuration: slide.effectiveSlideDuration()
+                    slideDuration: slide.computedTotalDuration()
                 )
             }
         } catch {
@@ -1349,6 +1363,21 @@ public final class StoryCanvasUIView: UIView {
                 self?.backgroundDidBecomeReady()
             }
         case .image:
+            // Fast-path warm hit : si le `StoryBackgroundLayer` a déjà stampé
+            // une image FINALE (warm L1 cache hit synchrone), le KVO observer
+            // ne firerait jamais — quand le NSCache renvoie la même instance
+            // UIImage entre le warm-hit et le re-stamp async, `contents` ne
+            // change pas d'identité de référence. On fire `backgroundDidBecomeReady()`
+            // directement, sans installer l'observer. Régression introduite
+            // par a60f636b5 (2026-05-20) — sans ce shortcut, le loader reste
+            // à 0% indéfiniment sur les stories image dès que le cache est
+            // warmed (prefetcher ou première vue).
+            if backgroundLayer.hasFinalContentStamped {
+                DispatchQueue.main.async { [weak self] in
+                    self?.backgroundDidBecomeReady()
+                }
+                break
+            }
             thumbHashPlaceholderRef = backgroundLayer.contentLayer?.contents.map { $0 as AnyObject }
             // If the real bytes already landed synchronously (warm L1 cache),
             // we still want to honor the contract: fire on the next runloop
@@ -1804,7 +1833,7 @@ public final class StoryCanvasUIView: UIView {
     @objc private func displayLinkTick(_ link: CADisplayLink) {
         let dt = link.targetTimestamp - link.timestamp
         let nextSeconds = CMTimeGetSeconds(currentTime) + dt
-        let effectiveDuration = slide.effectiveSlideDuration()
+        let effectiveDuration = slide.computedTotalDuration()
         let clamped = min(nextSeconds, effectiveDuration)
         currentTime = CMTime(seconds: clamped, preferredTimescale: 600_000)
         // Publie le playhead pour les overlays SwiftUI (chip audio
@@ -1829,7 +1858,7 @@ public final class StoryCanvasUIView: UIView {
     /// Test-only seam: simulate a displayLink tick at a specific timestamp
     /// to validate completion logic without spinning a real CADisplayLink.
     public func simulateTickAt(seconds: Double) {
-        let effectiveDuration = slide.effectiveSlideDuration()
+        let effectiveDuration = slide.computedTotalDuration()
         currentTime = CMTime(seconds: seconds, preferredTimescale: 600_000)
         rebuildLayers()
         if !completionFired,
@@ -1839,6 +1868,7 @@ public final class StoryCanvasUIView: UIView {
             readerContext.onCompletion?()
         }
     }
+
 
     // MARK: - ProMotion edit-mode link
 
@@ -1874,7 +1904,11 @@ public final class StoryCanvasUIView: UIView {
         // qu'un double-tap déclenche deux fois le format panel (open puis
         // open-via-double). Pattern UIKit standard.
         singleTapRecognizer.require(toFail: doubleTapRecognizer)
-        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer] {
+        canvasZoomPinchRecognizer = ThreeFingerPinchGestureRecognizer(
+            target: self,
+            action: #selector(handleCanvasZoomPinch(_:))
+        )
+        for recognizer: UIGestureRecognizer in [panRecognizer, pinchRecognizer, rotationRecognizer, singleTapRecognizer, doubleTapRecognizer, canvasZoomPinchRecognizer] {
             recognizer.delegate = self
             addGestureRecognizer(recognizer)
         }
@@ -1918,10 +1952,19 @@ public final class StoryCanvasUIView: UIView {
 
     @objc private func handlePinch(_ recognizer: UIPinchGestureRecognizer) {
         guard mode == .edit else { return }
+        // Garde-fou : ce recognizer est dédié au pinch 2 doigts (élément ou
+        // fond). Si trois doigts sont posés, c'est le `canvasZoomPinch` qui
+        // doit prendre la main — on annule pour éviter le double zoom
+        // (élément ET viewport).
+        if recognizer.numberOfTouches >= 3 {
+            recognizer.state = .cancelled
+            return
+        }
         switch recognizer.state {
         case .began:
             // Routage par couche : `.canvas` absorbe (recognizer cancelled),
-            // `.background` cible le bg media, `.foreground` hit-teste les fg.
+            // `.background` cible le bg media, `.foreground` hit-teste les fg
+            // (avec fallback bg si le doigt ne touche aucun foreground).
             guard let id = resolveManipulationTarget(at: recognizer.location(in: self)) else {
                 recognizer.state = .cancelled
                 return
@@ -1941,6 +1984,13 @@ public final class StoryCanvasUIView: UIView {
         default:
             break
         }
+    }
+
+    /// Pinch à 3 doigts → relaie l'échelle au composer pour piloter le zoom
+    /// du viewport. Ne mute pas la slide (le viewport est un état SwiftUI).
+    @objc private func handleCanvasZoomPinch(_ recognizer: ThreeFingerPinchGestureRecognizer) {
+        guard mode == .edit else { return }
+        onCanvasZoomScaleChanged?(recognizer.scale, recognizer.state)
     }
 
     @objc private func handleRotation(_ recognizer: UIRotationGestureRecognizer) {
@@ -2220,21 +2270,35 @@ public final class StoryCanvasUIView: UIView {
     /// vient de commencer. Retourne `nil` si la couche active est `.canvas`
     /// (gesture absorbé), ou si le hit-test n'a rien trouvé de manipulable
     /// pour la couche courante.
-    private func resolveManipulationTarget(at location: CGPoint) -> String? {
+    ///
+    /// Règle `.foreground` : si un foreground est sous le doigt, il prend la
+    /// priorité ; sinon on retombe sur le background media (s'il existe).
+    /// Sans ce fallback le fond devenait figé dès qu'on posait un texte /
+    /// sticker — frustrant pour recadrer une image de fond.
+    internal func resolveManipulationTarget(at location: CGPoint) -> String? {
         switch currentManipulationLayer {
         case .canvas:
             return nil
         case .background:
-            // En `.background`, peu importe où l'utilisateur touche, c'est le
-            // bg qui est manipulé. Résout le bg media (flag explicite ou
-            // résolution legacy via `resolvedBackgroundMedia`).
-            if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground == true }) {
-                return bg.id
-            }
-            return slide.effects.resolvedBackgroundMedia?.id
+            return resolveBackgroundMediaId()
         case .foreground:
-            return hitTestForegroundItem(at: location)
+            if let fgId = hitTestForegroundItem(at: location) {
+                return fgId
+            }
+            // Pas de foreground sous le doigt → on manipule le bg s'il existe
+            // pour permettre le recadrage du fond même quand des éléments
+            // sont déjà posés (cf. spec UX décidée 2026-05-22).
+            return resolveBackgroundMediaId()
         }
+    }
+
+    /// Résolution unique du bg media : préfère le flag explicite
+    /// `isBackground == true`, retombe sur `resolvedBackgroundMedia`.
+    private func resolveBackgroundMediaId() -> String? {
+        if let bg = slide.effects.mediaObjects?.first(where: { $0.isBackground == true }) {
+            return bg.id
+        }
+        return slide.effects.resolvedBackgroundMedia?.id
     }
 
     // MARK: - Slide mutation helpers
@@ -2673,10 +2737,121 @@ extension StoryCanvasUIView: UIGestureRecognizerDelegate {
     /// Pinch + rotation are allowed simultaneously (natural two-finger transform).
     /// Pan is exclusive — running it alongside pinch/rotation would corrupt the
     /// snapshot-based deltas (drag uses translation, others use scale/rotation).
+    /// Le `canvasZoomPinchRecognizer` (3 doigts) est exclusif vis-à-vis du
+    /// `pinchRecognizer` (2 doigts) pour éviter qu'un pinch sur élément
+    /// scale aussi le viewport.
     public func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
                                    shouldRecognizeSimultaneouslyWith other: UIGestureRecognizer) -> Bool {
         let isPanA = gestureRecognizer === panRecognizer
         let isPanB = other === panRecognizer
-        return !(isPanA || isPanB)
+        if isPanA || isPanB { return false }
+        let isCanvasZoomA = gestureRecognizer === canvasZoomPinchRecognizer
+        let isCanvasZoomB = other === canvasZoomPinchRecognizer
+        if isCanvasZoomA || isCanvasZoomB { return false }
+        return true
+    }
+}
+
+// MARK: - ThreeFingerPinchGestureRecognizer
+
+/// Custom recognizer qui détecte un pinch à exactement 3 doigts. Utilisé
+/// par `StoryCanvasUIView` pour le zoom du viewport — l'API standard
+/// `UIPinchGestureRecognizer` est verrouillée à 2 doigts, ce qui entrait
+/// en collision avec le pinch d'élément (mêmes 2 doigts, deux gestures
+/// firent en parallèle → l'élément ET le canvas scalent).
+///
+/// Géométrie : `scale` est calculé comme le ratio entre la distance moyenne
+/// actuelle des touches au centroïde et la distance moyenne à l'instant de
+/// `.began`. Comportement équivalent à `UIPinchGestureRecognizer.scale`
+/// mais sur N touches.
+///
+/// État :
+/// - `.possible` → tant que moins de 3 doigts ne sont pas posés
+/// - `.began` → 3ᵉ doigt posé, distance initiale capturée
+/// - `.changed` → mouvement d'un des 3 doigts (recalcule `scale`)
+/// - `.ended` → un doigt levé (passe à <3) après `.began/.changed`
+/// - `.failed` → 4ᵉ doigt posé avant `.began` (on n'accepte que 3 doigts)
+/// - `.cancelled` → touchesCancelled (interruption système)
+final class ThreeFingerPinchGestureRecognizer: UIGestureRecognizer {
+    /// Échelle cumulée depuis `.began`. Reset à 1.0 dans `reset()`.
+    private(set) var scale: CGFloat = 1.0
+    private var initialAverageDistance: CGFloat = 0
+
+    private static let requiredTouches: Int = 3
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesBegan(touches, with: event)
+        let count = numberOfTouches
+        if count < Self.requiredTouches {
+            // Pas encore assez de doigts — on reste `.possible`.
+            return
+        }
+        if count > Self.requiredTouches {
+            // Trop de doigts : ce recognizer cible exactement 3.
+            state = .failed
+            return
+        }
+        // count == 3 → capture la distance initiale et lance `.began`.
+        initialAverageDistance = Self.averageDistanceFromCentroid(of: self)
+        if state == .possible {
+            state = .began
+        }
+    }
+
+    override func touchesMoved(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesMoved(touches, with: event)
+        guard numberOfTouches == Self.requiredTouches,
+              initialAverageDistance > 0 else { return }
+        let current = Self.averageDistanceFromCentroid(of: self)
+        scale = current / initialAverageDistance
+        if state == .began || state == .changed {
+            state = .changed
+        }
+    }
+
+    override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesEnded(touches, with: event)
+        guard numberOfTouches < Self.requiredTouches else { return }
+        if state == .began || state == .changed {
+            state = .ended
+        } else {
+            state = .failed
+        }
+    }
+
+    override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent) {
+        super.touchesCancelled(touches, with: event)
+        state = .cancelled
+    }
+
+    override func reset() {
+        super.reset()
+        scale = 1.0
+        initialAverageDistance = 0
+    }
+
+    /// Pure helper — extrait `static` pour permettre les tests sans monter
+    /// un environnement UITouch (testé via `Self.averageDistance(...)`).
+    /// Retourne 0 si moins d'une touche ou pas de view attachée.
+    private static func averageDistanceFromCentroid(of recognizer: UIGestureRecognizer) -> CGFloat {
+        guard let view = recognizer.view, recognizer.numberOfTouches > 0 else { return 0 }
+        let count = recognizer.numberOfTouches
+        let points = (0..<count).map { recognizer.location(ofTouch: $0, in: view) }
+        return Self.averageDistance(points: points)
+    }
+
+    /// Version pure pour les tests — calcule la distance moyenne d'un set
+    /// de points au centroïde. Retourne 0 si moins d'un point.
+    static func averageDistance(points: [CGPoint]) -> CGFloat {
+        guard !points.isEmpty else { return 0 }
+        let cx = points.reduce(0) { $0 + $1.x } / CGFloat(points.count)
+        let cy = points.reduce(0) { $0 + $1.y } / CGFloat(points.count)
+        let centroid = CGPoint(x: cx, y: cy)
+        let totalDist = points.reduce(CGFloat(0)) { acc, p in
+            let dx = p.x - centroid.x
+            let dy = p.y - centroid.y
+            return acc + sqrt(dx * dx + dy * dy)
+        }
+        return totalDist / CGFloat(points.count)
     }
 }

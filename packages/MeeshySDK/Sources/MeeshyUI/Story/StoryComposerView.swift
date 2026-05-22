@@ -142,7 +142,12 @@ public struct StoryComposerView: View {
 
     // MARK: - Canvas viewport (pinch-to-zoom + drag-to-pan when zoomed)
 
-    @GestureState private var viewportPinchDelta: CGFloat = 1.0
+    /// Échelle éphémère du viewport pendant un pinch 3-doigts. Driven
+    /// par le callback `onCanvasZoomScaleChanged` du canvas UIKit ; remis à
+    /// 1.0 à `.ended`/`.cancelled`. Anciennement `@GestureState` lié au
+    /// `MagnificationGesture` SwiftUI 2-doigts qui entrait en conflit avec
+    /// le pinch d'élément.
+    @State private var viewportPinchDelta: CGFloat = 1.0
     @GestureState private var viewportDragDelta: CGSize = .zero
 
     /// Canvas gestures disabled only during drawing (PKCanvasView needs exclusive touch control).
@@ -155,22 +160,6 @@ public struct StoryComposerView: View {
     /// Pan always available when zoomed — uses high minimumDistance to avoid accidental triggers
     private var isPanEnabled: Bool {
         viewModel.isCanvasZoomed
-    }
-
-    private var viewportPinchGesture: some Gesture {
-        // MagnificationGesture (iOS 13+) au lieu de MagnifyGesture (iOS 17+).
-        // `value` est directement le CGFloat (pas via .magnification).
-        MagnificationGesture()
-            .updating($viewportPinchDelta) { value, state, _ in
-                state = value
-            }
-            .onEnded { value in
-                let newScale = min(4.0, max(0.5, viewModel.canvasScale * value))
-                withAnimation(.spring(response: 0.2)) {
-                    viewModel.canvasScale = newScale
-                    if newScale <= 1.0 { viewModel.canvasOffset = .zero }
-                }
-            }
     }
 
     private var viewportDragGesture: some Gesture {
@@ -492,9 +481,62 @@ public struct StoryComposerView: View {
                 url: item.url,
                 context: .story,
                 onComplete: { result in
-                    viewModel.loadedVideoURLs[item.elementId] = result.url
-                    let thumbnail = Self.generateVideoThumbnail(url: result.url)
+                    // 1. **Écrase le fichier cache** par la version éditée.
+                    //    Le caller a stocké `item.url` (path original cached
+                    //    dans le composer tmp) → on remplace son contenu par
+                    //    `result.url` (output du `VideoExportPipeline`).
+                    //    Bénéfices :
+                    //    - L'URL reste **identique** : AVPlayer items, thumb
+                    //      caches keyés par URL n'invalident pas → 0 reload.
+                    //    - Pas d'orphelin temp : `result.url` est consommé.
+                    //    Fallback : si le move échoue (cross-volume, perm),
+                    //    on garde simplement `result.url` (le comportement
+                    //    pré-fix).
+                    let destinationURL = item.url
+                    let cachedURL: URL
+                    if result.url != destinationURL {
+                        do {
+                            try? FileManager.default.removeItem(at: destinationURL)
+                            try FileManager.default.moveItem(at: result.url, to: destinationURL)
+                            cachedURL = destinationURL
+                        } catch {
+                            // Move impossible → on conserve result.url tel
+                            // quel. Le map pointera dessus, le contenu sera
+                            // valide. L'ancien item.url reste sur disque
+                            // jusqu'à l'éviction tmp système.
+                            cachedURL = result.url
+                        }
+                    } else {
+                        cachedURL = destinationURL
+                    }
+                    viewModel.loadedVideoURLs[item.elementId] = cachedURL
+
+                    // 2. Refresh la vignette pour qu'elle reflète la frame
+                    //    courante du clip édité (utilisée par le composer
+                    //    tray, l'export et le placeholder).
+                    let thumbnail = Self.generateVideoThumbnail(url: cachedURL)
                     if let thumbnail { viewModel.loadedImages[item.elementId] = thumbnail }
+
+                    // 3. Si l'utilisateur a transcrit la piste audio, on
+                    //    propage les sous-titres comme **metadata** de la
+                    //    vidéo cached (cf. spec : « sauvegardé comme une
+                    //    metadata de la vidéo lors de la validation pour
+                    //    remplacer la vidéo originellement chargé »).
+                    //    Le renderer story peut les overlay au rendu sans
+                    //    avoir besoin de re-transcrire.
+                    if !result.captions.isEmpty || result.transcriptionText != nil {
+                        viewModel.loadedVideoCaptions[item.elementId] = StoryVideoCaptionMetadata(
+                            captions: result.captions,
+                            transcriptionText: result.transcriptionText,
+                            languageCode: result.captionLanguageCode
+                        )
+                    } else {
+                        // L'utilisateur a effacé / pas transcrit — purge la
+                        // metadata pour ne pas réutiliser celle d'un
+                        // précédent edit du même element.
+                        viewModel.loadedVideoCaptions.removeValue(forKey: item.elementId)
+                    }
+
                     editingElementVideo = nil
                 },
                 onCancel: { editingElementVideo = nil }
@@ -1075,7 +1117,11 @@ public struct StoryComposerView: View {
                 x: viewModel.canvasOffset.width + viewportDragDelta.width,
                 y: viewModel.canvasOffset.height + viewportDragDelta.height
             )
-            .gesture(isCanvasGestureEnabled ? viewportPinchGesture : nil)
+            // Le pinch viewport (zoom canvas) est maintenant un pinch 3 doigts
+            // géré par `ThreeFingerPinchGestureRecognizer` côté UIKit, routé
+            // via `onCanvasZoomScaleChanged`. Sans ça, l'ancien
+            // `MagnificationGesture` SwiftUI 2-doigts firait en parallèle du
+            // pinch d'élément UIKit → tout le canvas scalait.
             .gesture(isCanvasGestureEnabled && isPanEnabled ? viewportDragGesture : nil)
             .overlay { mediaLoadingOverlay }
             .overlay(alignment: .topTrailing) { canvasZoomResetButton }
@@ -1150,6 +1196,12 @@ public struct StoryComposerView: View {
                     if let url = viewModel.loadedVideoURLs[oldId] {
                         viewModel.loadedVideoURLs[newId] = url
                     }
+                    // Captions duplicate together with the video — sinon le
+                    // clone perdrait ses sous-titres et l'utilisateur devrait
+                    // re-transcrire alors qu'il duplique exprès.
+                    if let captions = viewModel.loadedVideoCaptions[oldId] {
+                        viewModel.loadedVideoCaptions[newId] = captions
+                    }
                 }
             },
             editingTextId: viewModel.textEditingMode.activeTextId,
@@ -1165,6 +1217,27 @@ public struct StoryComposerView: View {
             },
             onManipulationLayerChanged: { layer in
                 manipulationLayer = layer
+            },
+            onCanvasZoomScaleChanged: { scale, state in
+                // Pinch 3-doigts piloté par UIKit (cf. `ThreeFingerPinchGestureRecognizer`).
+                // On remplace l'ancien `MagnificationGesture` SwiftUI 2-doigts
+                // qui firait en parallèle du pinch d'élément et faisait scaler
+                // tout le canvas en même temps que l'élément.
+                switch state {
+                case .began, .changed:
+                    viewportPinchDelta = scale
+                case .ended:
+                    let newScale = min(4.0, max(0.5, viewModel.canvasScale * scale))
+                    withAnimation(.spring(response: 0.2)) {
+                        viewModel.canvasScale = newScale
+                        if newScale <= 1.0 { viewModel.canvasOffset = .zero }
+                    }
+                    viewportPinchDelta = 1.0
+                case .cancelled, .failed:
+                    viewportPinchDelta = 1.0
+                default:
+                    break
+                }
             }
         )
         .allowsHitTesting(!viewModel.isDrawingActive)

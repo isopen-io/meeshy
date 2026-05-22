@@ -1,4 +1,5 @@
 import type { LlmProvider, LlmChatParams, LlmChatResponse } from './types';
+import { env } from '../env';
 
 type RetryConfig = {
   maxRetries: number;
@@ -7,9 +8,9 @@ type RetryConfig = {
 };
 
 const DEFAULT_RETRY_CONFIG: RetryConfig = {
-  maxRetries: 2,
-  baseDelayMs: 1000,
-  timeoutMs: 30_000,
+  maxRetries: env.LLM_MAX_RETRIES,
+  baseDelayMs: env.LLM_BASE_DELAY_MS,
+  timeoutMs: env.LLM_TIMEOUT_MS,
 };
 
 function sleep(ms: number): Promise<void> {

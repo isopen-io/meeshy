@@ -462,7 +462,7 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         logger.info("Foreground notification: type=\(type) conversation=\(conversationId ?? "-")")
 
         if let conversationId, conversationId == activeConversationId {
-            completionHandler([.sound])
+            completionHandler([])
             return
         }
 

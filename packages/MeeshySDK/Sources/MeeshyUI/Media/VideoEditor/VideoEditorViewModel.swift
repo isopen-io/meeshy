@@ -61,6 +61,13 @@ public final class VideoEditorViewModel: ObservableObject {
 
     @Published public private(set) var filmstrip: [UIImage] = []
 
+    /// Waveform samples extracted **once** from the source asset's audio
+    /// track at load time. Cached on disk + in-memory by `WaveformCache`,
+    /// so the second open of the editor on the same file is free.
+    /// Each entry is a normalised amplitude in `0...1`. Empty when the
+    /// asset has no audio track (silent video).
+    @Published public private(set) var audioWaveform: [Float] = []
+
     @Published public private(set) var transcription: TranscriptionPhase = .idle
     @Published public private(set) var exportPhase: ExportPhase = .idle
 
@@ -136,6 +143,10 @@ public final class VideoEditorViewModel: ObservableObject {
         isReady = true
         play()
         Task { [weak self] in await self?.loadFilmstrip() }
+        // L'extraction waveform tourne en parallèle de la filmstrip — les
+        // deux pipelines lisent le même asset (frames vs samples audio)
+        // mais via deux passes AVAssetReader disjointes.
+        Task { [weak self] in await self?.loadAudioWaveform() }
     }
 
     public func teardown() {
@@ -593,7 +604,18 @@ public final class VideoEditorViewModel: ObservableObject {
     }
 
     private func installTimeObserver() {
-        let interval = CMTime(seconds: 0.05, preferredTimescale: 600)
+        // 16.67 ms ≈ 60 Hz. Avant, on tournait à 50 ms (20 Hz), ce qui
+        // saccadait visiblement le filmstrip pendant la lecture (le
+        // playhead est pinned au centre, donc c'est la BANDE qui glisse,
+        // et 20 Hz produit des « sauts » de plusieurs pixels par tick).
+        // À 60 Hz on glisse aussi vite que le compositor video sort des
+        // frames — perceptuellement fluide.
+        //
+        // Sur ProMotion (120 Hz), AVFoundation peut quand même cantonner
+        // les callbacks à ~60 Hz selon la charge — c'est un plafond, pas
+        // un plancher. Le coût marginal vs 20 Hz est négligeable (un
+        // dispatch main par frame, vs un toutes les 3 frames).
+        let interval = CMTime(value: 1, timescale: 60)
         timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
             let seconds = max(0, time.seconds)
             Task { @MainActor in self?.handleTimeUpdate(seconds) }
@@ -602,6 +624,10 @@ public final class VideoEditorViewModel: ObservableObject {
 
     private func handleTimeUpdate(_ seconds: Double) {
         guard !isScrubbing else { return }
+        // Diff-guard : ne pousse la valeur que si elle change réellement
+        // (utile au tick d'enchaînement de seek où AVFoundation rappelle
+        // parfois avec la même valeur, ce qui inflate les re-renders).
+        guard abs(playheadTime - seconds) > 0.001 else { return }
         playheadTime = seconds
     }
 
@@ -647,6 +673,35 @@ public final class VideoEditorViewModel: ObservableObject {
         )
         guard !frames.isEmpty else { return }
         filmstrip = frames
+    }
+
+    // MARK: Audio waveform
+
+    /// Extracts the audio waveform from the source asset's audio track and
+    /// caches it. The samples drive the waveform strip rendered under the
+    /// filmstrip in `VideoEditorTimeline`.
+    ///
+    /// **Cache** — `WaveformCache` keys by filename + sample count, with
+    /// L1 in-memory + L2 on-disk. Reopening the same file (composer
+    /// re-entry, post-rebuild, etc.) returns the cached samples instantly
+    /// without re-running the AVAssetReader pass.
+    ///
+    /// **Bar count** — 240 bars gives ~ 1 bar / 4 pt of timeline at the
+    /// default zoom (a 12 s clip is ~ 700 pt wide). High enough to
+    /// represent peaks without aliasing, low enough that the Canvas draw
+    /// is essentially free.
+    ///
+    /// **Silent clips** — `WaveformCache.samples(from:)` returns `[]` if
+    /// the asset has no audio track; the timeline renderer no-ops on that
+    /// (early-return on `samples.isEmpty`) so the UI stays clean.
+    private func loadAudioWaveform() async {
+        guard let samples = try? await WaveformCache.shared.samples(
+            from: sourceURL,
+            count: 240
+        ) else {
+            return
+        }
+        audioWaveform = samples
     }
 
     // MARK: Banners / errors

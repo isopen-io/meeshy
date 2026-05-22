@@ -116,6 +116,36 @@ public actor DiskCacheStore: ReadableCacheStore {
         }
         memoryCache.setObject(CacheBox(data), forKey: fileKey as NSString, cost: data.count)
         fileTimestamps[fileKey] = Date()
+
+        // E1 — auto-trigger eviction when the latest write may have
+        // pushed the cache over `CachePolicy.storageLocation.maxBytes`.
+        // Before this guard, `evictOverBudget()` was only callable from
+        // outside (memory-warning, BGProcessingTask) so a heavy user
+        // could grow the disk cache to 2GB+ before any cleanup fired.
+        //
+        // Cheap heuristic: skip the LRU scan when `data.count` alone is
+        // well under the budget — most writes won't trip it. We still
+        // tax once per N writes (`autoEvictionWriteCounter`) so even
+        // small writes accumulating past budget eventually reconcile.
+        await runBudgetEvictionIfNeeded(latestWriteSize: data.count)
+    }
+
+    /// E1 — bookkeeping counter so we don't scan the whole cache on
+    /// every write. The scan still runs:
+    /// - immediately when the latest write is itself > 1/10th of the
+    ///   budget (one big video would otherwise blow past the cap before
+    ///   the next checkpoint);
+    /// - once every `Self.autoEvictionEveryNWrites` writes regardless.
+    private var autoEvictionWriteCounter: Int = 0
+    private static let autoEvictionEveryNWrites: Int = 32
+
+    private func runBudgetEvictionIfNeeded(latestWriteSize: Int) async {
+        guard case .disk(_, let maxBytes) = policy.storageLocation else { return }
+        autoEvictionWriteCounter &+= 1
+        let bigWrite = latestWriteSize > maxBytes / 10
+        let periodic = autoEvictionWriteCounter % Self.autoEvictionEveryNWrites == 0
+        guard bigWrite || periodic else { return }
+        await evictOverBudget()
     }
 
     // MARK: - Adoption (PR B — optimistic local file → canonical cache key)
@@ -256,6 +286,26 @@ public actor DiskCacheStore: ReadableCacheStore {
     }
 
     // MARK: - Eviction
+
+    /// E1 — current on-disk byte total, scanned via the file manager.
+    /// Exposed `public` for tests and for diagnostics surfaces (a future
+    /// "Cache size: X MB" row in Settings). Synchronous filesystem walk
+    /// inside the actor, so a no-op when called from outside the actor
+    /// context.
+    public func estimatedDiskBytes() async -> Int {
+        guard let enumerator = fileManager.enumerator(
+            at: baseDirectory,
+            includingPropertiesForKeys: [.fileSizeKey],
+            options: [.skipsHiddenFiles]
+        ) else { return 0 }
+        var total = 0
+        while let fileURL = enumerator.nextObject() as? URL {
+            if let size = (try? fileURL.resourceValues(forKeys: [.fileSizeKey]))?.fileSize {
+                total += size
+            }
+        }
+        return total
+    }
 
     public func evictExpired() async {
         guard let enumerator = fileManager.enumerator(at: baseDirectory, includingPropertiesForKeys: [.contentModificationDateKey, .fileSizeKey], options: [.skipsHiddenFiles]) else { return }

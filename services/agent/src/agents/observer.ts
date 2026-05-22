@@ -276,7 +276,12 @@ export function createObserverNode(llm: LlmProvider) {
         _traceInputTokens: 0,
         _traceOutputTokens: 0,
         _traceModel: 'error',
-        _traceExtra: { error: true },
+        _traceExtra: {
+          error: true,
+          errorMessage: error instanceof Error ? error.message : String(error),
+          errorCode: (error as any)?.code ?? 'UNKNOWN',
+          errorStack: error instanceof Error ? error.stack : undefined,
+        },
       };
     }
   };

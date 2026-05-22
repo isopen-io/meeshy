@@ -485,6 +485,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         token: token, uploadContext: "story"
                     )
                     mediaObjects[i].postMediaId = result.id
+                    mediaObjects[i].mediaURL = result.fileUrl
                     foregroundMediaIds.append(result.id)
                 } else if obj.kind == .image, let uiImage = loadedImages[obj.id] {
                     let fgThumbHash = uiImage.toThumbHash()
@@ -498,6 +499,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                         token: token, uploadContext: "story", thumbHash: fgThumbHash
                     )
                     mediaObjects[i].postMediaId = result.id
+                    mediaObjects[i].mediaURL = result.fileUrl
                     foregroundMediaIds.append(result.id)
                 }
             }
@@ -816,6 +818,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                             token: token, uploadContext: "story"
                         )
                         mediaObjects[i].postMediaId = result.id
+                        mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
                     } else if obj.kind == .image, let uiImage = upload.loadedImages[obj.id] {
                         let fgThumbHash = uiImage.toThumbHash()
@@ -829,6 +832,7 @@ class StoryViewModel: ObservableObject, StoryPublishExecutor {
                             token: token, uploadContext: "story", thumbHash: fgThumbHash
                         )
                         mediaObjects[i].postMediaId = result.id
+                        mediaObjects[i].mediaURL = result.fileUrl
                         foregroundMediaIds.append(result.id)
                     }
                     mediaIdx += 1

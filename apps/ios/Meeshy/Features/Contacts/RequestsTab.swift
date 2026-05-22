@@ -171,7 +171,7 @@ struct RequestsTab: View {
         .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
         .transition(.opacity.combined(with: .move(edge: .trailing)))
-        .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.receivedRequests.count)
+        .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.receivedRequests.count)
     }
 
     // MARK: - Sent List
@@ -245,7 +245,7 @@ struct RequestsTab: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
         .accessibilityElement(children: .combine)
-        .animation(.spring(response: 0.4, dampingFraction: 0.8).delay(Double(index) * 0.04), value: viewModel.sentRequests.count)
+        .animation(.easeOut(duration: 0.2).delay(Double(index) * 0.02), value: viewModel.sentRequests.count)
     }
 
     // MARK: - Empty State
