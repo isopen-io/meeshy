@@ -579,7 +579,8 @@ extension ThemedConversationRow: @MainActor Equatable {
         lhs.moodStatus?.id == rhs.moodStatus?.id &&
         lhs.presenceState == rhs.presenceState &&
         lhs.isSelected == rhs.isSelected &&
-        lhs.draftSummary == rhs.draftSummary
+        lhs.draftSummary == rhs.draftSummary &&
+        lhs.preferredContentLanguages == rhs.preferredContentLanguages
     }
 }
 

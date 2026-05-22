@@ -2,6 +2,7 @@ import Foundation
 
 public protocol AuthServiceProviding: Sendable {
     func login(username: String, password: String, rememberDevice: Bool) async throws -> LoginResponseData
+    func completeLoginWith2FA(twoFactorToken: String, code: String) async throws -> LoginResponseData
     func register(request: RegisterRequest) async throws -> LoginResponseData
     func requestMagicLink(email: String, deviceFingerprint: String?) async throws -> Int
     func validateMagicLink(token: String) async throws -> LoginResponseData
@@ -47,6 +48,16 @@ public final class AuthService: AuthServiceProviding, @unchecked Sendable {
     public func login(username: String, password: String, rememberDevice: Bool = true) async throws -> LoginResponseData {
         let body = LoginRequest(username: username, password: password, rememberDevice: rememberDevice)
         let response: APIResponse<LoginResponseData> = try await api.post(endpoint: "/auth/login", body: body)
+        return response.data
+    }
+
+    public func completeLoginWith2FA(twoFactorToken: String, code: String) async throws -> LoginResponseData {
+        struct TwoFactorLoginRequest: Encodable {
+            let twoFactorToken: String
+            let code: String
+        }
+        let body = TwoFactorLoginRequest(twoFactorToken: twoFactorToken, code: code)
+        let response: APIResponse<LoginResponseData> = try await api.post(endpoint: "/auth/login/2fa", body: body)
         return response.data
     }
 

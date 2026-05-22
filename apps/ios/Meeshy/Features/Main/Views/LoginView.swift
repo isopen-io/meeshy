@@ -23,6 +23,7 @@ struct LoginView: View {
     @State private var showRegister = false
     @State private var showForgotPassword = false
     @State private var showMagicLink = false
+    @State private var twoFactorCode = ""
 
     // Environment selector
     @State private var selectedEnv: MeeshyConfig.ServerEnvironment = MeeshyConfig.shared.selectedEnvironment
@@ -31,7 +32,7 @@ struct LoginView: View {
 
     @FocusState private var focusedField: Field?
 
-    private enum Field { case username, password, accountPassword, customHost }
+    private enum Field { case username, password, accountPassword, customHost, twoFactorCode }
 
     private var isDark: Bool { theme.mode.isDark }
     private var showPicker: Bool { !authManager.savedAccounts.isEmpty && !showNormalLogin }
@@ -108,7 +109,9 @@ struct LoginView: View {
                     .padding(.bottom, 48)
                     .accessibilityAddTraits(.isHeader)
 
-                if showPicker {
+                if authManager.requires2FA {
+                    twoFactorSection
+                } else if showPicker {
                     accountPickerSection
                 } else {
                     normalLoginSection
@@ -621,6 +624,91 @@ struct LoginView: View {
         guard let account = selectedAccount else { return }
         Task {
             await authManager.login(username: account.username, password: accountPassword)
+        }
+    }
+
+    private var twoFactorSection: some View {
+        VStack(spacing: MeeshySpacing.lg) {
+            Text("Double Facteur")
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundColor(theme.textPrimary)
+                .padding(.bottom, MeeshySpacing.xs)
+
+            Text("Entrez le code de vérification à 6 chiffres généré par votre application d'authentification.")
+                .font(.system(size: MeeshyFont.subheadSize, weight: .medium))
+                .foregroundColor(theme.textMuted)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, MeeshySpacing.md)
+                .padding(.bottom, MeeshySpacing.md)
+
+            // Code Input
+            HStack(spacing: MeeshySpacing.md) {
+                Image(systemName: "key.fill")
+                    .foregroundColor(Color(hex: "8B5CF6").opacity(0.7))
+                    .frame(width: 20)
+                    .accessibilityHidden(true)
+                TextField("Code de vérification", text: $twoFactorCode)
+                    .keyboardType(.numberPad)
+                    .focused($focusedField, equals: .twoFactorCode)
+                    .foregroundColor(theme.textPrimary)
+                    .submitLabel(.go)
+                    .onSubmit { attempt2FALogin() }
+                    .accessibilityLabel("Code de vérification double facteur")
+            }
+            .padding(.horizontal, MeeshySpacing.lg)
+            .padding(.vertical, MeeshySpacing.md + 2)
+            .background(
+                RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                    .fill(theme.inputBackground)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: MeeshyRadius.md)
+                            .stroke(
+                                focusedField == .twoFactorCode
+                                    ? Color(hex: "8B5CF6").opacity(0.6)
+                                    : theme.inputBorder.opacity(0.3),
+                                lineWidth: 1
+                            )
+                    )
+            )
+            .bounceOnFocus(focusedField == .twoFactorCode)
+
+            errorRow
+
+            // Action Buttons
+            VStack(spacing: MeeshySpacing.sm) {
+                loginButton(action: attempt2FALogin, disabled: twoFactorCode.count < 6)
+                
+                Button {
+                    HapticFeedback.light()
+                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                        authManager.requires2FA = false
+                        authManager.twoFactorToken = nil
+                        twoFactorCode = ""
+                    }
+                } label: {
+                    Text("Annuler")
+                        .font(.system(size: MeeshyFont.subheadSize, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, MeeshySpacing.md)
+                }
+                .bounceOnTap(scale: 0.94)
+            }
+        }
+        .padding(.horizontal, MeeshySpacing.xxxl)
+        .opacity(showFields ? 1 : 0)
+        .offset(y: showFields ? 0 : 30)
+        .onAppear {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+                focusedField = .twoFactorCode
+            }
+        }
+    }
+
+    private func attempt2FALogin() {
+        focusedField = nil
+        Task {
+            await authManager.completeLoginWith2FA(code: twoFactorCode)
         }
     }
 }

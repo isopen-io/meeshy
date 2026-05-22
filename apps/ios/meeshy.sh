@@ -16,11 +16,15 @@ DERIVED_DATA="Build"
 # Xcode GUI SPM package cache — avoids re-cloning on slow networks
 # Auto-detected: finds the latest Meeshy DerivedData with SourcePackages
 XCODE_PKG_CACHE=""
-for _dd in ~/Library/Developer/Xcode/DerivedData/Meeshy-*/SourcePackages; do
-    if [ -d "$_dd/checkouts/GRDB.swift" ]; then
-        XCODE_PKG_CACHE="$_dd"
-    fi
-done
+if [ -d "./SourcePackages/checkouts/GRDB.swift" ]; then
+    XCODE_PKG_CACHE="./SourcePackages"
+else
+    for _dd in ~/Library/Developer/Xcode/DerivedData/Meeshy-*/SourcePackages; do
+        if [ -d "$_dd/checkouts/GRDB.swift" ]; then
+            XCODE_PKG_CACHE="$_dd"
+        fi
+    done
+fi
 LOG_DIR="logs"
 TEST_OUTPUT_DIR="test-results"
 
@@ -1071,12 +1075,19 @@ do_test() {
 
     mkdir -p "$TEST_OUTPUT_DIR"
 
+    local pkg_flags=()
+    if [ -n "$XCODE_PKG_CACHE" ] && [ -d "$XCODE_PKG_CACHE" ]; then
+        pkg_flags=(-clonedSourcePackagesDirPath "$XCODE_PKG_CACHE")
+    fi
+
     log "Running unit tests..."
     xcodebuild test \
         -project "$PROJECT" \
         -scheme "$SCHEME" \
         -destination "$destination" \
         -configuration Debug \
+        -derivedDataPath "$DERIVED_DATA" \
+        "${pkg_flags[@]}" \
         -enableCodeCoverage "$([ "$COVERAGE" = true ] && echo YES || echo NO)" \
         -resultBundlePath "$TEST_OUTPUT_DIR/unit-tests.xcresult" \
         -only-testing:MeeshyTests \
@@ -1091,6 +1102,8 @@ do_test() {
             -scheme "$SCHEME" \
             -destination "$destination" \
             -configuration Debug \
+            -derivedDataPath "$DERIVED_DATA" \
+            "${pkg_flags[@]}" \
             -resultBundlePath "$TEST_OUTPUT_DIR/ui-tests.xcresult" \
             -only-testing:MeeshyUITests \
             2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi || true

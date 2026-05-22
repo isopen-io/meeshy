@@ -30,6 +30,9 @@ public protocol AuthManaging: AnyObject {
     var savedAccounts: [SavedAccount] { get }
     var authToken: String? { get }
     var currentUserPublisher: AnyPublisher<MeeshyUser?, Never> { get }
+    var requires2FA: Bool { get }
+    var twoFactorToken: String? { get }
+    func completeLoginWith2FA(code: String) async
     func login(username: String, password: String) async
     func register(request: RegisterRequest) async
     func requestMagicLink(email: String) async -> Bool
@@ -70,6 +73,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
     @Published public var currentUser: MeeshyUser?
     @Published public var isLoading = false
     @Published public var errorMessage: String?
+    @Published public var requires2FA = false
+    @Published public var twoFactorToken: String?
     /// All accounts that have saved credentials on this device, sorted by most recently active.
     @Published public var savedAccounts: [SavedAccount] = []
 
@@ -97,7 +102,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
     private let authService = AuthService.shared
 
     /// Prevents concurrent refresh loops when APIClient fires multiple 401s.
-    private var isRefreshing = false
+    private var refreshTask: Task<Void, Never>?
 
     // Legacy global keys kept only for one-time migration
     private let legacyTokenKey = "meeshy_auth_token"
@@ -193,10 +198,45 @@ public final class AuthManager: ObservableObject, AuthManaging {
     public func login(username: String, password: String) async {
         isLoading = true
         errorMessage = nil
+        requires2FA = false
+        twoFactorToken = nil
 
         do {
             let data = try await authService.login(username: username, password: password)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
+            if data.requires2FA == true {
+                self.requires2FA = true
+                self.twoFactorToken = data.twoFactorToken
+            } else if let token = data.token, let user = data.user {
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
+        } catch let error as APIError {
+            errorMessage = error.errorDescription
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+
+        isLoading = false
+    }
+
+    public func completeLoginWith2FA(code: String) async {
+        guard let twoFactorToken = twoFactorToken else {
+            errorMessage = "Session 2FA expirée ou invalide"
+            return
+        }
+        isLoading = true
+        errorMessage = nil
+
+        do {
+            let data = try await authService.completeLoginWith2FA(twoFactorToken: twoFactorToken, code: code)
+            if let token = data.token, let user = data.user {
+                self.requires2FA = false
+                self.twoFactorToken = nil
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -214,7 +254,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         do {
             let data = try await authService.register(request: request)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
+            if let token = data.token, let user = data.user {
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -250,7 +294,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         do {
             let data = try await authService.validateMagicLink(token: token)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
+            if let token = data.token, let user = data.user {
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
         } catch let error as APIError {
             errorMessage = error.errorDescription
         } catch {
@@ -395,9 +443,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // semantics this also extends the session another 365 days, so an
         // active user is renewed indefinitely.
         if isCurrentTokenExpired, let sessionToken = sessionToken {
-            isRefreshing = true
-            await attemptTokenRefresh(token: token, sessionToken: sessionToken, userId: userId)
-            isRefreshing = false
+            guard refreshTask == nil else { return }
+            let task = Task { [weak self] in
+                await self?.attemptTokenRefresh(token: token, sessionToken: sessionToken, userId: userId)
+                self?.refreshTask = nil
+            }
+            refreshTask = task
+            await task.value
         }
 
         // Background revalidation (stale-while-revalidate for the user
@@ -425,9 +477,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Handle 401 (called from APIClient during active session)
 
     public func handleUnauthorized() {
-        guard !isRefreshing else { return }
+        guard refreshTask == nil else { return }
         guard let userId = activeUserId else {
             // No active user at all — nothing to refresh, no state to clear.
+            // But clear token to be safe.
             return
         }
 
@@ -444,16 +497,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         // D1 — guard against concurrent refreshes. `@MainActor` already
         // serializes consecutive `handleUnauthorized()` calls so the
-        // `guard !isRefreshing` above is sufficient, but we lift the flag
-        // reset into a `defer` so a future refactor that introduces
-        // mid-await cancellation can't leave the flag stuck `true` (which
-        // would silently block every subsequent 401 from ever triggering
-        // a refresh).
-        isRefreshing = true
-        Task { [weak self] in
-            defer { Task { @MainActor [weak self] in self?.isRefreshing = false } }
+        // `guard !isRefreshing` check or setting `refreshTask` synchronously
+        // is sufficient.
+        let task = Task { [weak self] in
             await self?.attemptTokenRefresh(token: token, sessionToken: sessionToken, userId: userId)
+            self?.refreshTask = nil
         }
+        refreshTask = task
     }
 
     // MARK: - Internal session helpers
@@ -573,7 +623,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
     private func attemptTokenRefresh(token: String, sessionToken: String?, userId: String) async {
         do {
             let data = try await authService.refreshToken(token, sessionToken: sessionToken)
-            applySession(token: data.token, sessionToken: data.sessionToken, user: data.user)
+            if let token = data.token, let user = data.user {
+                applySession(token: token, sessionToken: data.sessionToken, user: user)
+            } else {
+                throw MeeshyError.server(statusCode: 0, message: "Response missing token/user data")
+            }
         } catch let error as MeeshyError {
             switch error {
             case .auth:
