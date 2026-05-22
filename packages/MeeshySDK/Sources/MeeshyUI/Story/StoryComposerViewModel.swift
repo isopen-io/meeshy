@@ -1439,6 +1439,61 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
         slideImages[currentSlide.id]
     }
 
+    // MARK: - Export bridge
+
+    /// Returns a copy of `slide` ready to be passed to `StoryExporter.export`.
+    ///
+    /// The composer stores background images in `slideImages[slide.id]` (a
+    /// separate `[String: UIImage]` dict, NOT in `effects.mediaObjects`). The
+    /// exporter — which has no knowledge of the composer's view-model state —
+    /// only knows how to resolve a background from `mediaObjects` or
+    /// `slide.mediaURL`. This bridge writes the in-memory `UIImage` to a temp
+    /// file as JPEG (quality 0.9) and returns a slide copy with `mediaURL`
+    /// pointing at that file, so the exporter's `resolveBackgroundImage`
+    /// fallback can pick it up.
+    ///
+    /// Idempotent: if the slide already has an `isBackground` image
+    /// mediaObject, returns `(slide, nil)` unchanged (caller skips cleanup).
+    ///
+    /// The original slide is NEVER mutated. The caller is responsible for
+    /// invoking `cleanupExportSlide(at:)` after the export completes (or
+    /// fails) to remove the temp file.
+    ///
+    /// - Parameter slide: source slide from `self.slides`.
+    /// - Returns: tuple of `(slide, tempURL)`. `tempURL` is non-nil only when
+    ///   a temp file was written; pass it to `cleanupExportSlide(at:)`.
+    public func slideForExport(_ slide: StorySlide) -> (slide: StorySlide, tempURL: URL?) {
+        let alreadyHasBackgroundImage = slide.effects.mediaObjects?.contains(where: {
+            $0.isBackground && $0.kind == .image
+        }) ?? false
+        if alreadyHasBackgroundImage {
+            return (slide, nil)
+        }
+        guard let image = slideImages[slide.id] else {
+            return (slide, nil)
+        }
+        guard let data = image.jpegData(compressionQuality: 0.9) else {
+            return (slide, nil)
+        }
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("meeshy-export-bg-\(slide.id)-\(UUID().uuidString).jpg")
+        do {
+            try data.write(to: tempURL, options: .atomic)
+        } catch {
+            return (slide, nil)
+        }
+        var copy = slide
+        copy.mediaURL = tempURL.absoluteString
+        return (copy, tempURL)
+    }
+
+    /// Cleans up a temp file produced by `slideForExport(_:)`. Safe to call
+    /// with `nil` (no-op). Idempotent: missing files are silently ignored.
+    public func cleanupExportSlide(at tempURL: URL?) {
+        guard let tempURL else { return }
+        try? FileManager.default.removeItem(at: tempURL)
+    }
+
     // MARK: - Reset
     // Note: Draft persistence is handled by StoryComposerView via StoryDraftStore — not by the ViewModel.
 

@@ -352,20 +352,55 @@ public final class StoryAVCompositor: NSObject, nonisolated AVVideoCompositing, 
     /// Resolves the bitmap for a slide whose background is an image. Looks
     /// for the first `mediaObjects` entry with `isBackground == true &&
     /// kind == .image`. Tries the local file URL first (composer in-memory
-    /// case) then falls back to `mediaURL` as a file path. Returns `nil` if
-    /// the image can't be loaded — caller leaves the substrate untouched.
+    /// case) then falls back to `mediaURL` as a file path. If no
+    /// `isBackground` media object exists, falls back to `slide.mediaURL`
+    /// — this is the published-story path, where `StoryItem.toRenderableSlide`
+    /// surfaces the post's primary image via `slide.mediaURL` without
+    /// injecting a synthetic mediaObject. The renderer
+    /// (`StoryRenderer.renderBackground`) has the symmetric fallback, so
+    /// without this the exported MP4 would be black while the live canvas
+    /// shows the image. Returns `nil` if no source resolves — caller leaves
+    /// the substrate untouched.
+    ///
+    /// Remote (http/https) URLs are resolved via
+    /// `CacheCoordinator.imageLocalFileURL` (synchronous, nonisolated disk
+    /// lookup). The exporter MUST NOT make network calls — callers must
+    /// pre-warm the cache (the live viewer always does this before the user
+    /// can trigger an export, so the file is on disk by the time we look).
     @MainActor
     private static func resolveBackgroundImage(for slide: StorySlide) -> UIImage? {
-        guard let bg = slide.effects.mediaObjects?.first(where: {
+        if let bg = slide.effects.mediaObjects?.first(where: {
             $0.isBackground && $0.kind == .image
-        }) else { return nil }
-        if let urlString = bg.mediaURL,
-           let url = URL(string: urlString),
-           url.isFileURL,
+        }) {
+            if let image = loadImage(fromURLString: bg.mediaURL) {
+                return image
+            }
+        }
+        // Published-story fallback: `slide.mediaURL` is the canonical source
+        // when `StoryItem.toRenderableSlide` is the entry point (it does not
+        // inject a mediaObject). Without this branch, exported published
+        // stories would render with a black background.
+        if let image = loadImage(fromURLString: slide.mediaURL) {
+            return image
+        }
+        return nil
+    }
+
+    /// Loads a `UIImage` from a URL string, trying in order: file URL,
+    /// raw filesystem path, then disk-cached remote URL (via
+    /// `CacheCoordinator.imageLocalFileURL`). Pure I/O — no network.
+    @MainActor
+    private static func loadImage(fromURLString urlString: String?) -> UIImage? {
+        guard let urlString, !urlString.isEmpty else { return nil }
+        if let url = URL(string: urlString), url.isFileURL,
            let image = UIImage(contentsOfFile: url.path) {
             return image
         }
-        if let path = bg.mediaURL, let image = UIImage(contentsOfFile: path) {
+        if let image = UIImage(contentsOfFile: urlString) {
+            return image
+        }
+        if let cachedURL = CacheCoordinator.imageLocalFileURL(for: urlString),
+           let image = UIImage(contentsOfFile: cachedURL.path) {
             return image
         }
         return nil
