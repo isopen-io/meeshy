@@ -33,15 +33,27 @@ public struct ProTimelineView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private let previewSlot: (() -> AnyView)?
+    /// When `true`, the inspector is laid out as a permanent bottom strip
+    /// rather than a floating overlay. Used by the composer's full-screen
+    /// edit mode (`StoryComposerView.timelineFullscreenContent`) where the
+    /// screen real-estate is dedicated to editing — an always-visible
+    /// inspector beats the popover here because the empty space otherwise
+    /// goes wasted, and a missing inspector confuses users about where to
+    /// type a precise start / duration.
+    private let isFullscreenEdit: Bool
 
     public init(viewModel: TimelineViewModel,
+                isFullscreenEdit: Bool = false,
                 @ViewBuilder previewSlot: @escaping () -> some View) {
         self.viewModel = viewModel
+        self.isFullscreenEdit = isFullscreenEdit
         self.previewSlot = { AnyView(previewSlot()) }
     }
 
-    public init(viewModel: TimelineViewModel) {
+    public init(viewModel: TimelineViewModel,
+                isFullscreenEdit: Bool = false) {
         self.viewModel = viewModel
+        self.isFullscreenEdit = isFullscreenEdit
         self.previewSlot = nil
     }
 
@@ -296,8 +308,15 @@ public struct ProTimelineView: View {
             transportRow
             rulerRow
             tracksScroll
+            if isFullscreenEdit {
+                inspectorStrip
+            }
         }
-        .overlay(alignment: .bottomTrailing) { inspectorOverlay }
+        .overlay(alignment: .bottomTrailing) {
+            // In fullscreen mode the inspector lives in the VStack instead of
+            // as an overlay, so suppress the overlay branch entirely.
+            if !isFullscreenEdit { inspectorOverlay }
+        }
     }
 
     /// Landscape / iPad — preview left (~30%), timeline right (~70%) with the
@@ -305,13 +324,20 @@ public struct ProTimelineView: View {
     /// so it doesn't overlap the timeline tracks.
     private var regularLayout: some View {
         GeometryReader { proxy in
-            HStack(spacing: 0) {
-                previewColumn
-                    .frame(width: proxy.size.width * Self.previewWidthFraction)
-                regularTimelineColumn
-                    .frame(width: proxy.size.width * (1 - Self.previewWidthFraction))
+            VStack(spacing: 0) {
+                HStack(spacing: 0) {
+                    previewColumn
+                        .frame(width: proxy.size.width * Self.previewWidthFraction)
+                    regularTimelineColumn
+                        .frame(width: proxy.size.width * (1 - Self.previewWidthFraction))
+                }
+                if isFullscreenEdit {
+                    inspectorStrip
+                }
             }
-            .overlay(alignment: .bottomLeading) { inspectorOverlay }
+            .overlay(alignment: .bottomLeading) {
+                if !isFullscreenEdit { inspectorOverlay }
+            }
         }
     }
 
@@ -464,12 +490,108 @@ public struct ProTimelineView: View {
                 viewModel.setClipBackground(id: clipId, isBackground: bg)
             },
             onAddKeyframe: { viewModel.addKeyframeAtPlayhead() },
-            onDelete: { viewModel.deleteClip(id: clipId) }
+            onDelete: { viewModel.deleteClip(id: clipId) },
+            onStartTimeChanged: { [viewModel] newStart in
+                viewModel.setClipStartTime(id: clipId, startTime: newStart)
+            },
+            onDurationChanged: { [viewModel] newDuration in
+                viewModel.setClipDuration(id: clipId, duration: newDuration)
+            }
         )
         .padding(12)
         .transition(.opacity)
         .animation(reduceMotion ? .none : .easeInOut(duration: 0.15),
                    value: viewModel.selection.selectedClipId)
+    }
+
+    /// Fixed-height inspector strip used in fullscreen edit mode. Always
+    /// rendered (even with no selection) so the bottom of the screen has a
+    /// consistent affordance — an empty-state hint replaces the inspector
+    /// when nothing is selected. Synthetic clips (e.g. background image
+    /// lane) still fall back to the hint since their inspector would expose
+    /// destructive controls that have no effect.
+    @ViewBuilder
+    private var inspectorStrip: some View {
+        let kind = Self.resolveSelectionKind(viewModel: viewModel)
+        Group {
+            switch kind {
+            case .clip(let snapshot) where Self.shouldShowClipInspector(viewModel: viewModel):
+                clipInspectorEmbed(snapshot: snapshot)
+            case .keyframe(let snapshot, let clipId):
+                keyframeInspectorOverlay(snapshot: snapshot, clipId: clipId)
+            case .transition(let snapshot):
+                transitionInspectorOverlay(snapshot: snapshot)
+            default:
+                inspectorEmptyState
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .frame(minHeight: 180, alignment: .top)
+        .background(
+            (colorScheme == .dark
+                ? MeeshyColors.indigo950.opacity(0.35)
+                : MeeshyColors.indigo50.opacity(0.45))
+                .ignoresSafeArea(edges: .bottom)
+        )
+        .overlay(alignment: .top) {
+            Rectangle()
+                .fill((colorScheme == .dark ? Color.white : MeeshyColors.indigo950).opacity(0.10))
+                .frame(height: 0.5)
+        }
+        .animation(reduceMotion ? .none : .easeInOut(duration: 0.15),
+                   value: viewModel.selection.selectedClipId)
+    }
+
+    /// Embedded variant of the clip inspector for the fullscreen edit strip.
+    /// Uses `.sheet` presentation so the inspector renders flush (max width,
+    /// no rounded popover background) with the strip rather than as a glass
+    /// popover card.
+    @ViewBuilder
+    private func clipInspectorEmbed(snapshot: ClipInspector.ClipSnapshot) -> some View {
+        let clipId = snapshot.id
+        ClipInspector(
+            presentation: .sheet,
+            clip: snapshot,
+            onVolumeChanged: { [viewModel] volume in
+                viewModel.setClipVolume(id: clipId, volume: volume)
+            },
+            onFadeInChanged: { [viewModel] fadeIn in
+                viewModel.setClipFadeIn(id: clipId, fadeIn: fadeIn)
+            },
+            onFadeOutChanged: { [viewModel] fadeOut in
+                viewModel.setClipFadeOut(id: clipId, fadeOut: fadeOut)
+            },
+            onLoopToggled: { [viewModel] loop in
+                viewModel.setClipLoop(id: clipId, isLooping: loop)
+            },
+            onBackgroundToggled: { [viewModel] bg in
+                viewModel.setClipBackground(id: clipId, isBackground: bg)
+            },
+            onAddKeyframe: { viewModel.addKeyframeAtPlayhead() },
+            onDelete: { viewModel.deleteClip(id: clipId) },
+            onStartTimeChanged: { [viewModel] newStart in
+                viewModel.setClipStartTime(id: clipId, startTime: newStart)
+            },
+            onDurationChanged: { [viewModel] newDuration in
+                viewModel.setClipDuration(id: clipId, duration: newDuration)
+            }
+        )
+    }
+
+    private var inspectorEmptyState: some View {
+        VStack(spacing: 6) {
+            Image(systemName: "hand.tap")
+                .font(.system(size: 22, weight: .regular))
+                .foregroundStyle(.tertiary)
+            Text(String(localized: "story.timeline.inspector.empty",
+                        defaultValue: "Sélectionnez un clip pour éditer",
+                        bundle: .module))
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding(.horizontal, 24)
     }
 
     @ViewBuilder

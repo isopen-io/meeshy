@@ -12,15 +12,24 @@ public struct TimelineContainerSwitcher: View {
     @Environment(\.colorScheme) private var colorScheme
 
     private let previewSlot: (() -> AnyView)?
+    /// Forwarded to `ProTimelineView`. When `true`, the Pro container shows a
+    /// fixed bottom inspector strip instead of a floating overlay — used by
+    /// the composer's fullscreen edit mode. Has no effect on the Quick
+    /// container (which already lives in a bottom sheet).
+    private let isFullscreenEdit: Bool
 
     public init(viewModel: TimelineViewModel,
+                isFullscreenEdit: Bool = false,
                 @ViewBuilder previewSlot: @escaping () -> some View) {
         self.viewModel = viewModel
+        self.isFullscreenEdit = isFullscreenEdit
         self.previewSlot = { AnyView(previewSlot()) }
     }
 
-    public init(viewModel: TimelineViewModel) {
+    public init(viewModel: TimelineViewModel,
+                isFullscreenEdit: Bool = false) {
         self.viewModel = viewModel
+        self.isFullscreenEdit = isFullscreenEdit
         self.previewSlot = nil
     }
 
@@ -61,9 +70,12 @@ public struct TimelineContainerSwitcher: View {
             }
         case .pro:
             if let previewSlot {
-                ProTimelineView(viewModel: viewModel, previewSlot: previewSlot)
+                ProTimelineView(viewModel: viewModel,
+                                isFullscreenEdit: isFullscreenEdit,
+                                previewSlot: previewSlot)
             } else {
-                ProTimelineView(viewModel: viewModel)
+                ProTimelineView(viewModel: viewModel,
+                                isFullscreenEdit: isFullscreenEdit)
             }
         }
     }
