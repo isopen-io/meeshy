@@ -908,8 +908,8 @@ public struct StoryComposerView: View {
             .opacity(pickerSelectedTool == nil ? 1 : 0)
             .scaleEffect(pickerSelectedTool == nil ? 1 : 0.95)
 
-            // 4 tiles in a 2-column grid fit comfortably without scrolling.
-            // The grid sizes to its content (~190pt) so the picker stays at
+            // 6 tiles in a 2-column grid fit comfortably.
+            // The grid sizes to its content so the picker stays at
             // the bottom and leaves ≥ 80 % of the screen for the top bar +
             // canvas pastel preview, per the empty-state UX brief.
             LazyVGrid(
@@ -926,8 +926,19 @@ public struct StoryComposerView: View {
                                       defaultValue: "Médias",
                                       bundle: .module),
                         subtitle: String(localized: "story.composer.empty.tile.media.sub",
-                                         defaultValue: "Photos, vidéos, audio",
+                                         defaultValue: "Photos, vidéos",
                                          bundle: .module)
+                    )
+                    largeToolTile(
+                        .audio,
+                        icon: "music.note",
+                        title: String(localized: "story.composer.empty.tile.son",
+                                      defaultValue: "Son",
+                                      bundle: .module),
+                        subtitle: String(localized: "story.composer.empty.tile.son.sub",
+                                         defaultValue: "Musique, voix",
+                                         bundle: .module),
+                        specialCategory: .son
                     )
                     largeToolTile(
                         .text,
@@ -950,13 +961,23 @@ public struct StoryComposerView: View {
                                          bundle: .module)
                     )
                 largeToolTile(
-                    .texture,
-                    icon: "paintpalette.fill",
-                    title: String(localized: "story.composer.empty.tile.texture",
-                                  defaultValue: "Fond",
+                    .filters,
+                    icon: "camera.filters",
+                    title: String(localized: "story.composer.empty.tile.filters",
+                                  defaultValue: "Effets",
                                   bundle: .module),
-                    subtitle: String(localized: "story.composer.empty.tile.texture.sub",
-                                     defaultValue: "Couleur, dégradé",
+                    subtitle: String(localized: "story.composer.empty.tile.filters.sub",
+                                     defaultValue: "Filtres visuels",
+                                     bundle: .module)
+                )
+                largeToolTile(
+                    .timeline,
+                    icon: "clock",
+                    title: String(localized: "story.composer.empty.tile.timeline",
+                                  defaultValue: "Timeline",
+                                  bundle: .module),
+                    subtitle: String(localized: "story.composer.empty.tile.timeline.sub",
+                                     defaultValue: "Montage et durée",
                                      bundle: .module)
                 )
             }
@@ -1004,7 +1025,8 @@ public struct StoryComposerView: View {
         _ tool: StoryToolMode,
         icon: String,
         title: String,
-        subtitle: String
+        subtitle: String,
+        specialCategory: BandCategory? = nil
     ) -> some View {
         let accent = tileAccent(for: tool)
         let isSelected = pickerSelectedTool == tool
@@ -1044,7 +1066,7 @@ public struct StoryComposerView: View {
                 // so controls appear immediately when the empty-state picker
                 // transitions out. Without this, the band stayed .hidden and
                 // the user had to manually tap a FAB to reveal controls.
-                bandStateMachine.tapFAB(tool.bandCategory)
+                bandStateMachine.tapFAB(specialCategory ?? tool.bandCategory)
                 bandStateMachine.tapTile(tool)
                 pickerSelectedTool = nil
             }
@@ -1237,6 +1259,11 @@ public struct StoryComposerView: View {
                     viewportPinchDelta = 1.0
                 default:
                     break
+                }
+            },
+            onBackgroundTapped: {
+                withAnimation(.spring(response: 0.3)) {
+                    areFabsVisible.toggle()
                 }
             }
         )

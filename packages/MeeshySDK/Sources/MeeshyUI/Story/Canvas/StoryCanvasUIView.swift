@@ -372,6 +372,9 @@ public final class StoryCanvasUIView: UIView {
     /// Notifié quand l'édition se termine (textId).
     public var onInlineTextEditEnded: ((String) -> Void)?
 
+    /// Notifié lors d'un tap sur le fond (zone vide) du canvas.
+    public var onBackgroundTapped: (() -> Void)?
+
     // MARK: - Init
 
     public init(slide: StorySlide, mode: RenderMode = .edit) {
@@ -1924,7 +1927,11 @@ public final class StoryCanvasUIView: UIView {
             // place → sortie de l'édition (déclencheur nº2 de la spec). `endEditing`
             // résigne le `StoryInlineTextEditor`, ce qui déclenche
             // `textViewDidEndEditing` → `onInlineTextEditEnded`.
-            if inlineEditingTextId != nil { endEditing(true) }
+            if inlineEditingTextId != nil {
+                endEditing(true)
+            } else {
+                onBackgroundTapped?()
+            }
             return
         }
         // Sémantique tactile : le tap simple ramène l'élément touché au

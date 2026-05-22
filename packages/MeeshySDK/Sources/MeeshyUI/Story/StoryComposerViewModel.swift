@@ -7,22 +7,20 @@ import PencilKit
 // MARK: - Tool Modes
 
 public nonisolated enum StoryToolMode: String, CaseIterable, Sendable {
-    // Contenu
-    case media      // Images, videos, audio (foreground + background)
+    case media
+    case audio
     case drawing
     case text
-    case texture    // Background color, patterns
-    // Effets
     case filters
     case timeline
+    case texture
 
-    // Legacy alias for code that still references .photo or .audio
+    // Legacy alias
     static let photo: StoryToolMode = .media
-    static let audio: StoryToolMode = .media
 
     var tab: StoryTab {
         switch self {
-        case .media, .drawing, .text, .texture: return .contenu
+        case .media, .audio, .drawing, .text, .texture: return .contenu
         case .filters, .timeline: return .effets
         }
     }

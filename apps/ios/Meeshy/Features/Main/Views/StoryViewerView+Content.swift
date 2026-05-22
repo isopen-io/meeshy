@@ -679,6 +679,18 @@ extension StoryViewerView {
             if let dur = obj.duration {
                 maxDuration = max(maxDuration, startOffset + dur)
             }
+
+            // Extension dynamique basée sur la longueur du texte (Section 5 de la review)
+            // Les textes longs de plus de 30 mots devraient rajouter 1 seconde de plus à la story
+            // pour chaque 6 mots supplémentaire.
+            let words = obj.text.split(separator: " ").count
+            if words > 30 {
+                let extraWords = words - 30
+                let extraSeconds = Double(extraWords) / 6.0
+                // L'extension s'applique sur la durée de base du slide (floor)
+                let base = effects?.slideDuration.map { Double($0) } ?? 12.0
+                maxDuration = max(maxDuration, base + extraSeconds)
+            }
         }
 
         // Background loop periods — collected here as a separate signal because

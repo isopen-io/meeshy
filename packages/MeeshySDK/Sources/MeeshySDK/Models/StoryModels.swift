@@ -922,6 +922,18 @@ extension StorySlide {
     public func computedTotalDuration() -> TimeInterval {
         var bound = duration
 
+        // Extension dynamique basée sur la longueur du texte (Section 5 de la review)
+        // Les textes longs de plus de 30 mots devraient rajouter 1 seconde de plus à la story
+        // pour chaque 6 mots supplémentaire.
+        for text in effects.textObjects {
+            let words = text.text.split(separator: " ").count
+            if words > 30 {
+                let extraWords = words - 30
+                let extraSeconds = Double(extraWords) / 6.0
+                bound = max(bound, duration + extraSeconds)
+            }
+        }
+
         for media in effects.mediaObjects ?? [] {
             // Looped background video is handled in the rounding step below —
             // it intentionally doesn't extend the bound here (the user-set
