@@ -1363,6 +1363,21 @@ public final class StoryCanvasUIView: UIView {
                 self?.backgroundDidBecomeReady()
             }
         case .image:
+            // Fast-path warm hit : si le `StoryBackgroundLayer` a déjà stampé
+            // une image FINALE (warm L1 cache hit synchrone), le KVO observer
+            // ne firerait jamais — quand le NSCache renvoie la même instance
+            // UIImage entre le warm-hit et le re-stamp async, `contents` ne
+            // change pas d'identité de référence. On fire `backgroundDidBecomeReady()`
+            // directement, sans installer l'observer. Régression introduite
+            // par a60f636b5 (2026-05-20) — sans ce shortcut, le loader reste
+            // à 0% indéfiniment sur les stories image dès que le cache est
+            // warmed (prefetcher ou première vue).
+            if backgroundLayer.hasFinalContentStamped {
+                DispatchQueue.main.async { [weak self] in
+                    self?.backgroundDidBecomeReady()
+                }
+                break
+            }
             thumbHashPlaceholderRef = backgroundLayer.contentLayer?.contents.map { $0 as AnyObject }
             // If the real bytes already landed synchronously (warm L1 cache),
             // we still want to honor the contract: fire on the next runloop
