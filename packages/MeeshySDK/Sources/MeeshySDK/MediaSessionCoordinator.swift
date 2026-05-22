@@ -38,6 +38,7 @@ public actor MediaSessionCoordinator {
 
     private var activationCount = 0
     private var observersInstalled = false
+    nonisolated(unsafe) private var observerTokens: [any NSObjectProtocol] = []
 
     /// Non-isolated Combine subject so observers can subscribe from any
     /// context without hopping into the actor; the subject itself is
@@ -45,6 +46,13 @@ public actor MediaSessionCoordinator {
     public nonisolated(unsafe) let events = PassthroughSubject<Event, Never>()
 
     private init() {}
+
+    deinit {
+        let center = NotificationCenter.default
+        for token in observerTokens {
+            center.removeObserver(token)
+        }
+    }
 
     /// Active AVAudioSession pour le rôle demandé.
     public func request(role: AudioRole) async throws {
@@ -101,7 +109,7 @@ public actor MediaSessionCoordinator {
 
         let center = NotificationCenter.default
 
-        center.addObserver(
+        let t1 = center.addObserver(
             forName: AVAudioSession.interruptionNotification,
             object: nil,
             queue: .main
@@ -110,8 +118,9 @@ public actor MediaSessionCoordinator {
             let event = Self.parseInterruption(notification)
             Task { await self.forward(event) }
         }
+        observerTokens.append(t1)
 
-        center.addObserver(
+        let t2 = center.addObserver(
             forName: AVAudioSession.routeChangeNotification,
             object: nil,
             queue: .main
@@ -120,6 +129,7 @@ public actor MediaSessionCoordinator {
             let event = Self.parseRouteChange(notification)
             Task { await self.forward(event) }
         }
+        observerTokens.append(t2)
     }
 
     private func forward(_ event: Event?) {
@@ -156,7 +166,11 @@ public actor MediaSessionCoordinator {
         }
         switch reason {
         case .oldDeviceUnavailable:
-            return .routeChangedOldDeviceUnavailable
+            if let previousRoute = info[AVAudioSessionRouteChangePreviousRouteKey] as? AVAudioSessionRouteDescription,
+               !previousRoute.outputs.isEmpty {
+                return .routeChangedOldDeviceUnavailable
+            }
+            return .routeChangedOther
         default:
             return .routeChangedOther
         }

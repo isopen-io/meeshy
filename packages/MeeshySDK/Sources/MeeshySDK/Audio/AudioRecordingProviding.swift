@@ -13,6 +13,7 @@ public protocol AudioRecordingProviding: AnyObject, ObservableObject {
     var audioLevels: [CGFloat] { get }
     var recordedFileURL: URL? { get }
 
+    func configure(with settings: AudioRecordingSettings)
     func startRecording()
     @discardableResult func stopRecording() -> URL?
     func cancelRecording()

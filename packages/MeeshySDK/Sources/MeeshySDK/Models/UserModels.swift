@@ -9,12 +9,28 @@ public struct UpdateProfileRequest: Encodable {
     public var regionalLanguage: String?
     public var customDestinationLanguage: String?
 
+    private static func validateLanguageCode(_ code: String?) -> String? {
+        guard let code = code?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() else {
+            return nil
+        }
+        // Extract 2-letter base language code if it's formatted as "fr-FR" or similar
+        let baseCode = String(code.split(separator: "-").first ?? "")
+        guard !baseCode.isEmpty, LanguageData.info(for: baseCode) != nil else {
+            return nil
+        }
+        return baseCode
+    }
+
     public init(firstName: String? = nil, lastName: String? = nil, displayName: String? = nil,
                 bio: String? = nil, systemLanguage: String? = nil, regionalLanguage: String? = nil,
                 customDestinationLanguage: String? = nil) {
-        self.firstName = firstName; self.lastName = lastName; self.displayName = displayName
-        self.bio = bio; self.systemLanguage = systemLanguage; self.regionalLanguage = regionalLanguage
-        self.customDestinationLanguage = customDestinationLanguage
+        self.firstName = firstName
+        self.lastName = lastName
+        self.displayName = displayName
+        self.bio = bio
+        self.systemLanguage = Self.validateLanguageCode(systemLanguage)
+        self.regionalLanguage = Self.validateLanguageCode(regionalLanguage)
+        self.customDestinationLanguage = Self.validateLanguageCode(customDestinationLanguage)
     }
 }
 

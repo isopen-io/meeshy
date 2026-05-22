@@ -15,6 +15,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     @State private var wavePhase: CGFloat = 0
     @State private var phaseTimer: Timer?
     @State private var errorMessage: String?
+    @State private var hasCompleted = false
 
     private let maxDuration: TimeInterval = 60
 
@@ -103,6 +104,11 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
         .onDisappear {
             stopPhaseTimer()
         }
+        .onChange(of: recorder.isRecording) { isRecording in
+            if !isRecording {
+                stopRecording()
+            }
+        }
     }
 
     // MARK: - Waveform
@@ -150,6 +156,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
 
     private func startRecording() {
         guard !recorder.isRecording else { return }
+        hasCompleted = false
 
         // `requestRecordPermission` invokes its completion on the
         // `com.avaudiosession.tccserver` queue. Hopping back via
@@ -165,6 +172,7 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
                     return
                 }
                 errorMessage = nil
+                recorder.configure(with: .story)
                 recorder.startRecording()
                 HapticFeedback.medium()
 
@@ -180,13 +188,20 @@ public struct StoryVoiceRecorder<Recorder: AudioRecordingProviding>: View {
     }
 
     private func stopRecording() {
-        guard recorder.isRecording else { return }
-        let capturedDuration = recorder.duration
-        guard let url = recorder.stopRecording() else { return }
+        guard !hasCompleted else { return }
+        hasCompleted = true
+
+        let url: URL?
+        if recorder.isRecording {
+            url = recorder.stopRecording()
+        } else {
+            url = recorder.recordedFileURL
+        }
+
         stopPhaseTimer()
         HapticFeedback.success()
 
-        if capturedDuration > 0.5 {
+        if let url, recorder.duration > 0.5 {
             onRecordComplete(url)
         }
     }
