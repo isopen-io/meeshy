@@ -100,10 +100,12 @@ describe('conversation-preferences routes — socket emissions (Phase 1 contract
 
     expect(res.statusCode).toBe(200);
 
-    // Prisma upsert was called with version increment
+    // Prisma upsert was called with version increment on update, and with
+    // an explicit version: 1 on create (so the first emitted version is >= 1,
+    // preventing clients from confusing a fresh row with the schema default 0).
     const upsertCall = prisma.userConversationPreferences.upsert.mock.calls[0]?.[0] as any;
     expect(upsertCall?.update?.version).toEqual({ increment: 1 });
-    expect(upsertCall?.create?.version).toBeUndefined(); // create uses default (0)
+    expect(upsertCall?.create?.version).toBe(1);
 
     // Socket emission to user room with full payload + version
     expect(env.rooms).toContain(ROOMS.user(TEST_USER_ID));
@@ -123,7 +125,9 @@ describe('conversation-preferences routes — socket emissions (Phase 1 contract
     });
   });
 
-  it('DELETE /user-preferences/conversations/:id emits USER_PREFERENCES_UPDATED with reset:true', async () => {
+  it('DELETE /user-preferences/conversations/:id emits USER_PREFERENCES_UPDATED with reset:true and version > local', async () => {
+    // Simulate a row that has already been edited a few times.
+    prisma.userConversationPreferences.findUnique.mockResolvedValue({ version: 7 } as any);
     prisma.userConversationPreferences.delete.mockResolvedValue({} as any);
 
     const res = await env.app.inject({
@@ -139,9 +143,26 @@ describe('conversation-preferences routes — socket emissions (Phase 1 contract
       userId: TEST_USER_ID,
       conversationId: TEST_CONV_ID,
       reset: true,
-      version: 0,
+      // Must be strictly greater than the previous row version so clients
+      // applying `incoming.version <= local -> drop` don't silently discard
+      // the reset on every multi-device tab/app.
+      version: 8,
       preferences: null,
     });
+  });
+
+  it('DELETE on a never-customized conversation still emits version >= 1', async () => {
+    prisma.userConversationPreferences.findUnique.mockResolvedValue(null);
+    prisma.userConversationPreferences.delete.mockResolvedValue({} as any);
+
+    const res = await env.app.inject({
+      method: 'DELETE',
+      url: `/user-preferences/conversations/${TEST_CONV_ID}`,
+    });
+
+    expect(res.statusCode).toBe(200);
+    const emission = env.emits.find((e) => e.event === SERVER_EVENTS.USER_PREFERENCES_UPDATED);
+    expect(emission?.payload).toMatchObject({ reset: true, version: 1, preferences: null });
   });
 
   it('POST /user-preferences/reorder emits USER_PREFERENCES_REORDERED with updates', async () => {

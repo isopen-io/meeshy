@@ -42,7 +42,9 @@ export function resolveSocketIO(fastify: FastifyInstance): SocketIOLike | null {
  * Multi-device delivery is automatic via Socket.IO room fanout.
  *
  * Returns `true` if the broadcast was dispatched, `false` if the
- * Socket.IO layer was unavailable (call site can stay silent).
+ * Socket.IO layer was unavailable. Both failure modes (no IO, emit
+ * throw) are logged at `warn` so a missed broadcast is correlatable
+ * with the originating REST request.
  */
 export function broadcastToUser(
   fastify: FastifyInstance,
@@ -51,11 +53,15 @@ export function broadcastToUser(
   payload: unknown,
 ): boolean {
   const io = resolveSocketIO(fastify);
-  if (!io) return false;
+  if (!io) {
+    fastify.log.warn({ userId, event }, 'broadcastToUser: Socket.IO layer unavailable');
+    return false;
+  }
   try {
     io.to(ROOMS.user(userId)).emit(event, payload);
     return true;
-  } catch {
+  } catch (error) {
+    fastify.log.warn({ userId, event, err: error }, 'broadcastToUser: emit failed');
     return false;
   }
 }

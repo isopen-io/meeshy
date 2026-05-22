@@ -497,7 +497,13 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
           create: {
             userId,
             conversationId,
-            ...updateData
+            ...updateData,
+            // First-ever upsert starts at version 1 (not the schema default 0).
+            // This keeps every broadcast `version >= 1`, so the DELETE/reset
+            // payload (which carries version = existingRow.version + 1) is
+            // never misinterpreted as a stale "no-op create" event by clients
+            // applying the documented `incoming.version <= local -> drop` rule.
+            version: 1,
           },
           update: {
             ...updateData,
@@ -574,6 +580,16 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const userId = authContext.userId;
         const { conversationId } = request.params;
 
+        // Read the existing version BEFORE deletion so we can broadcast a
+        // strictly-greater version. Otherwise clients applying the documented
+        // `incoming.version <= local -> drop` rule would silently discard
+        // every reset for users with any prior pin/mute history.
+        const existing = await fastify.prisma.userConversationPreferences.findUnique({
+          where: { userId_conversationId: { userId, conversationId } },
+          select: { version: true },
+        });
+        const resetVersion = (existing?.version ?? 0) + 1;
+
         await fastify.prisma.userConversationPreferences.delete({
           where: {
             userId_conversationId: {
@@ -586,7 +602,7 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const resetPayload: UserPreferencesConversationUpdatedEventData = {
           userId,
           conversationId,
-          version: 0,
+          version: resetVersion,
           reset: true,
           preferences: null,
         };

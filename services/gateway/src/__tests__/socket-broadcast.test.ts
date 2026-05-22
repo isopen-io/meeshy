@@ -16,7 +16,10 @@ const makeFakeIO = () => {
 };
 
 const makeFastify = (handler: unknown): FastifyInstance =>
-  ({ socketIOHandler: handler } as unknown as FastifyInstance);
+  ({
+    socketIOHandler: handler,
+    log: { warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn() },
+  } as unknown as FastifyInstance);
 
 describe('broadcastToUser', () => {
   test('emits to the user-scoped room when manager.io is present', () => {
@@ -50,12 +53,16 @@ describe('broadcastToUser', () => {
     expect(fake.emit).toHaveBeenCalledWith(SERVER_EVENTS.CATEGORY_CREATED, { foo: 1 });
   });
 
-  test('returns false (no throw) when socket layer is absent', () => {
+  test('returns false (no throw) and logs a warning when socket layer is absent', () => {
     const fastify = makeFastify(undefined);
     expect(broadcastToUser(fastify, 'u', SERVER_EVENTS.CATEGORY_DELETED, {})).toBe(false);
+    expect((fastify.log.warn as jest.Mock)).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u', event: SERVER_EVENTS.CATEGORY_DELETED }),
+      expect.stringContaining('Socket.IO layer unavailable'),
+    );
   });
 
-  test('swallows emit errors and returns false', () => {
+  test('swallows emit errors, returns false, and logs the failure', () => {
     const fastify = makeFastify({
       getManager: () => ({
         io: {
@@ -68,6 +75,10 @@ describe('broadcastToUser', () => {
       }),
     });
     expect(broadcastToUser(fastify, 'u', 'x', {})).toBe(false);
+    expect((fastify.log.warn as jest.Mock)).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'u', event: 'x', err: expect.any(Error) }),
+      expect.stringContaining('emit failed'),
+    );
   });
 
   test('resolveSocketIO returns null without handler', () => {
