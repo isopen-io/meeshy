@@ -54,12 +54,22 @@ public struct ClipInspector: View {
     public let onBackgroundToggled: (Bool) -> Void
     public let onAddKeyframe: () -> Void
     public let onDelete: () -> Void
+    /// Precise-edit hook for the clip's start time. Default no-op so legacy
+    /// call sites stay source-compatible; the fullscreen edit wiring binds
+    /// this to `TimelineViewModel.setClipStartTime(id:startTime:)`.
+    public let onStartTimeChanged: (Float) -> Void
+    /// Precise-edit hook for the clip's duration. Default no-op so legacy
+    /// call sites stay source-compatible; the fullscreen edit wiring binds
+    /// this to `TimelineViewModel.setClipDuration(id:duration:)`.
+    public let onDurationChanged: (Float) -> Void
 
     @State private var volume: Float
     @State private var fadeIn: Float
     @State private var fadeOut: Float
     @State private var loop: Bool
     @State private var background: Bool
+    @State private var startText: String
+    @State private var durationText: String
 
     public init(presentation: InspectorPresentation,
                 clip: ClipSnapshot,
@@ -69,7 +79,9 @@ public struct ClipInspector: View {
                 onLoopToggled: @escaping (Bool) -> Void,
                 onBackgroundToggled: @escaping (Bool) -> Void,
                 onAddKeyframe: @escaping () -> Void,
-                onDelete: @escaping () -> Void) {
+                onDelete: @escaping () -> Void,
+                onStartTimeChanged: @escaping (Float) -> Void = { _ in },
+                onDurationChanged: @escaping (Float) -> Void = { _ in }) {
         self.presentation = presentation
         self.clip = clip
         self.onVolumeChanged = onVolumeChanged
@@ -79,11 +91,44 @@ public struct ClipInspector: View {
         self.onBackgroundToggled = onBackgroundToggled
         self.onAddKeyframe = onAddKeyframe
         self.onDelete = onDelete
+        self.onStartTimeChanged = onStartTimeChanged
+        self.onDurationChanged = onDurationChanged
         _volume = State(initialValue: clip.volume)
         _fadeIn = State(initialValue: clip.fadeInDuration)
         _fadeOut = State(initialValue: clip.fadeOutDuration)
         _loop = State(initialValue: clip.isLooping)
         _background = State(initialValue: clip.isBackground)
+        _startText = State(initialValue: Self.formatPreciseSeconds(clip.startTime))
+        _durationText = State(initialValue: Self.formatPreciseSeconds(clip.duration))
+    }
+
+    // MARK: - Precise-edit helpers
+
+    /// Formats a seconds value with up to three decimals, stripping trailing
+    /// zeros so a 2.000 value reads as "2" but a 2.347 keeps its precision.
+    /// Locale-neutral (always "." separator) so the parser round-trips.
+    public static func formatPreciseSeconds(_ seconds: Float) -> String {
+        let clamped = max(0, seconds)
+        let raw = String(format: "%.3f", clamped)
+        // Trim trailing zeros + dangling decimal point.
+        if raw.contains(".") {
+            let trimmed = raw.reversed().drop(while: { $0 == "0" })
+            let withoutTrailingDot = String(trimmed.drop(while: { $0 == "." }))
+            return withoutTrailingDot.isEmpty ? "0" : String(withoutTrailingDot.reversed())
+        }
+        return raw
+    }
+
+    /// Parses a user-entered string (decimal-pad keyboard, possibly with "," in
+    /// some locales) into a non-negative `Float`. Returns nil for malformed
+    /// input so the caller can revert the field to its prior value.
+    public static func parsePreciseSeconds(_ text: String) -> Float? {
+        let normalised = text.replacingOccurrences(of: ",", with: ".")
+            .trimmingCharacters(in: .whitespaces)
+        guard !normalised.isEmpty,
+              let value = Float(normalised),
+              value.isFinite, value >= 0 else { return nil }
+        return value
     }
 
     // MARK: - Test helpers
@@ -174,6 +219,8 @@ public struct ClipInspector: View {
             fadeOut = newClip.fadeOutDuration
             loop = newClip.isLooping
             background = newClip.isBackground
+            startText = Self.formatPreciseSeconds(newClip.startTime)
+            durationText = Self.formatPreciseSeconds(newClip.duration)
         }
     }
 
@@ -194,28 +241,85 @@ public struct ClipInspector: View {
     }
 
     private var metadataRow: some View {
-        HStack(spacing: 24) {
-            metadataField(
+        HStack(spacing: 16) {
+            precisionField(
                 title: String(localized: "story.timeline.inspector.start", bundle: .module),
-                value: Self.formatTime(seconds: clip.startTime)
+                text: $startText,
+                lastKnownGood: Self.formatPreciseSeconds(clip.startTime),
+                onCommit: { value in onStartTimeChanged(value) }
             )
-            metadataField(
+            precisionField(
                 title: String(localized: "story.timeline.inspector.duration", bundle: .module),
-                value: Self.formatTime(seconds: clip.duration)
+                text: $durationText,
+                lastKnownGood: Self.formatPreciseSeconds(clip.duration),
+                onCommit: { value in
+                    // Duration must be strictly positive — a 0 commit is the
+                    // same kind of "invalid" as a malformed string, so the
+                    // commit handler reverts the field.
+                    guard value > 0 else { return }
+                    onDurationChanged(value)
+                },
+                requiresPositive: true
             )
+            Spacer(minLength: 0)
         }
     }
 
-    private func metadataField(title: String, value: String) -> some View {
+    /// Editable seconds field with ms-precision (3 decimals). Reverts the
+    /// bound text to `lastKnownGood` when the user submits a malformed or
+    /// out-of-range value, so the inspector never holds a value the model
+    /// has rejected. `onCommit` is only invoked with a parsed, validated
+    /// `Float`.
+    @ViewBuilder
+    private func precisionField(title: String,
+                                text: Binding<String>,
+                                lastKnownGood: String,
+                                onCommit: @escaping (Float) -> Void,
+                                requiresPositive: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(title.uppercased())
                 .font(.system(size: 9, weight: .semibold))
                 .foregroundStyle(.secondary)
-            Text(value)
-                .font(.system(.body, design: .monospaced))
+            HStack(spacing: 4) {
+                TextField("", text: text)
+                    .keyboardType(.decimalPad)
+                    .font(.system(.body, design: .monospaced))
+                    .multilineTextAlignment(.trailing)
+                    .frame(maxWidth: 80)
+                    .onSubmit { commitPrecisionField(text: text,
+                                                    lastKnownGood: lastKnownGood,
+                                                    requiresPositive: requiresPositive,
+                                                    onCommit: onCommit) }
+                    .submitLabel(.done)
+                Text("s")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(MeeshyColors.indigo500.opacity(0.10))
+            )
         }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(title) \(value)")
+        .accessibilityLabel("\(title) \(text.wrappedValue) seconds")
+    }
+
+    private func commitPrecisionField(text: Binding<String>,
+                                      lastKnownGood: String,
+                                      requiresPositive: Bool,
+                                      onCommit: (Float) -> Void) {
+        guard let parsed = Self.parsePreciseSeconds(text.wrappedValue) else {
+            text.wrappedValue = lastKnownGood
+            return
+        }
+        if requiresPositive, parsed <= 0 {
+            text.wrappedValue = lastKnownGood
+            return
+        }
+        onCommit(parsed)
+        text.wrappedValue = Self.formatPreciseSeconds(parsed)
     }
 
     private var volumeSlider: some View {
