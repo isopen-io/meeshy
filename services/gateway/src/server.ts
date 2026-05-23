@@ -55,6 +55,7 @@ import { userRoutes } from './routes/users';
 import meRoutes from './routes/me';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
 import communityPreferencesRoutes from './routes/community-preferences';
+import conversationEncryptionRoutes from './routes/conversation-encryption';
 import signalProtocolRoutes from './routes/signal-protocol';
 import { translationRoutes } from './routes/translation-non-blocking';
 import { translationRoutes as translationBlockingRoutes } from './routes/translation';
@@ -985,6 +986,10 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register community preferences routes with /api prefix
     await this.server.register(communityPreferencesRoutes, { prefix: API_PREFIX });
+
+    // Register conversation encryption routes with /api prefix
+    // (enable + read encryption mode toggle: e2ee / server / hybrid)
+    await this.server.register(conversationEncryptionRoutes, { prefix: API_PREFIX });
 
     // Register Signal Protocol routes for E2EE key generation
     await this.server.register(signalProtocolRoutes, { prefix: API_PREFIX });
