@@ -52,6 +52,7 @@ public struct VideoPlayerOverlayControls: View {
             .padding(.top, isFullscreen ? 12 : 6)
             .padding(.bottom, isFullscreen ? 12 : 24)
         }
+        .buttonStyle(BouncyControlButtonStyle())
     }
 
     // MARK: - Scrim Gradients
@@ -131,6 +132,12 @@ public struct VideoPlayerOverlayControls: View {
                 Image(systemName: "gobackward.10")
                     .font(.system(size: isFullscreen ? 24 : 18, weight: .semibold))
                     .foregroundColor(.white)
+                    .frame(width: isFullscreen ? 40 : 32, height: isFullscreen ? 40 : 32)
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .overlay(Circle().fill(accent.opacity(0.18)))
+                    )
             }
 
             Button {
@@ -140,7 +147,10 @@ public struct VideoPlayerOverlayControls: View {
                 let size: CGFloat = isFullscreen ? 56 : 42
                 ZStack {
                     Circle()
-                        .fill(Color.white.opacity(0.2))
+                        .fill(.ultraThinMaterial)
+                        .frame(width: size, height: size)
+                    Circle()
+                        .fill(accent.opacity(0.45))
                         .frame(width: size, height: size)
 
                     Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
@@ -157,6 +167,12 @@ public struct VideoPlayerOverlayControls: View {
                 Image(systemName: "goforward.10")
                     .font(.system(size: isFullscreen ? 24 : 18, weight: .semibold))
                     .foregroundColor(.white)
+                    .frame(width: isFullscreen ? 40 : 32, height: isFullscreen ? 40 : 32)
+                    .background(
+                        Circle()
+                            .fill(.ultraThinMaterial)
+                            .overlay(Circle().fill(accent.opacity(0.18)))
+                    )
             }
         }
     }
@@ -223,5 +239,19 @@ public struct VideoPlayerOverlayControls: View {
             )
         }
         .frame(height: isFullscreen ? 14 : 12)
+    }
+}
+
+/// Spring-driven press feedback for video overlay controls: a quick bounce
+/// + slight opacity dip on touch-down, snappy release. Applied at the
+/// `VideoPlayerOverlayControls` root via `.buttonStyle(...)` so every
+/// nested `Button` inherits the same tactile language without each call
+/// site having to re-implement it.
+private struct BouncyControlButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.86 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }
