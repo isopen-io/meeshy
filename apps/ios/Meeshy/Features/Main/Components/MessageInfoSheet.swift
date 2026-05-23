@@ -227,7 +227,7 @@ struct MessageInfoSheet: View {
             timelineStep(
                 icon: "checkmark",
                 iconColor: theme.textMuted,
-                label: "Envoye",
+                label: String(localized: "message-detail.views.sent", defaultValue: "Envoye", bundle: .main),
                 timestamp: timeFormatter.string(from: sentTimestamp),
                 isActive: true,
                 hasNextStep: true
@@ -240,7 +240,7 @@ struct MessageInfoSheet: View {
             timelineStep(
                 icon: "checkmark.circle",
                 iconColor: isDelivered ? Color(hex: "8E8E93") : theme.textMuted.opacity(0.3),
-                label: "Distribue",
+                label: String(localized: "message-detail.views.delivered", defaultValue: "Distribue", bundle: .main),
                 timestamp: deliveredTimestamp.map { timeFormatter.string(from: $0) },
                 isActive: isDelivered,
                 hasNextStep: true
@@ -253,7 +253,7 @@ struct MessageInfoSheet: View {
             timelineStep(
                 icon: "checkmark.circle.fill",
                 iconColor: isRead ? Color(hex: "34B7F1") : theme.textMuted.opacity(0.3),
-                label: "Lu",
+                label: String(localized: "message-detail.views.read", defaultValue: "Lu", bundle: .main),
                 timestamp: readTimestamp.map { timeFormatter.string(from: $0) },
                 isActive: isRead,
                 hasNextStep: false
@@ -297,7 +297,7 @@ struct MessageInfoSheet: View {
                         .font(.system(size: 11, weight: .medium, design: .monospaced))
                         .foregroundColor(isActive ? theme.textSecondary : theme.textMuted)
                 } else {
-                    Text("En attente")
+                    Text(String(localized: "common.pending", defaultValue: "En attente", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(theme.textMuted.opacity(0.6))
                         .italic()
@@ -337,7 +337,7 @@ struct MessageInfoSheet: View {
 
     private var messagePreview: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("Contenu")
+            Text(String(localized: "message-info.content", defaultValue: "Contenu", bundle: .main))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
 
@@ -369,7 +369,7 @@ struct MessageInfoSheet: View {
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(2)
                     } else {
-                        Text("Message vide")
+                        Text(String(localized: "message-info.empty", defaultValue: "Message vide", bundle: .main))
                             .font(.system(size: 13))
                             .foregroundColor(theme.textMuted)
                             .italic()
@@ -384,7 +384,7 @@ struct MessageInfoSheet: View {
                 HStack(spacing: 4) {
                     Image(systemName: "pencil")
                         .font(.system(size: 10))
-                    Text("Modifie")
+                    Text(String(localized: "message-info.edited", defaultValue: "Modifie", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundColor(theme.textMuted)
@@ -477,7 +477,7 @@ struct MessageInfoSheet: View {
                 .background(sectionBackground)
             } else if !receipts.isEmpty {
                 VStack(alignment: .leading, spacing: 10) {
-                    Text("Participants")
+                    Text(String(localized: "message-info.participants", defaultValue: "Participants", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
 
@@ -505,7 +505,7 @@ struct MessageInfoSheet: View {
                                             .font(.system(size: 10))
                                             .foregroundColor(theme.textMuted)
                                     } else {
-                                        Text("En attente")
+                                        Text(String(localized: "common.pending", defaultValue: "En attente", bundle: .main))
                                             .font(.system(size: 10))
                                             .foregroundColor(theme.textMuted)
                                             .italic()
