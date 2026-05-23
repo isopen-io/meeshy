@@ -30,7 +30,7 @@ struct StarredMessagesView: View {
                                     Button(role: .destructive) {
                                         store.remove(messageId: snapshot.id)
                                     } label: {
-                                        Label("Retirer des favoris", systemImage: "star.slash")
+                                        Label(String(localized: "starred.messages.remove", defaultValue: "Retirer des favoris", bundle: .main), systemImage: "star.slash")
                                     }
                                 }
                         }
@@ -40,7 +40,7 @@ struct StarredMessagesView: View {
                 }
             }
         }
-        .navigationTitle("Messages favoris")
+        .navigationTitle(String(localized: "starred.messages.title", defaultValue: "Messages favoris", bundle: .main))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             if !store.snapshots.isEmpty {

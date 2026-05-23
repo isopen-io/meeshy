@@ -65,7 +65,7 @@ struct ShareLinksView: View {
 
             Spacer()
 
-            Text("Liens de partage")
+            Text(String(localized: "share.links.title", defaultValue: "Liens de partage", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -88,9 +88,9 @@ struct ShareLinksView: View {
 
     private func shareLinkStatsOverview(_ stats: MyShareLinkStats) -> some View {
         HStack(spacing: 12) {
-            shareLinkStatCard("\(stats.totalLinks)", label: "Liens", icon: "link")
-            shareLinkStatCard("\(stats.activeLinks)", label: "Actifs", icon: "checkmark.circle.fill")
-            shareLinkStatCard("\(stats.totalUses)", label: "Rejoints", icon: "person.fill.badge.plus")
+            shareLinkStatCard("\(stats.totalLinks)", label: String(localized: "share.links.stats.total", defaultValue: "Liens", bundle: .main), icon: "link")
+            shareLinkStatCard("\(stats.activeLinks)", label: String(localized: "share.links.stats.active", defaultValue: "Actifs", bundle: .main), icon: "checkmark.circle.fill")
+            shareLinkStatCard("\(stats.totalUses)", label: String(localized: "share.links.stats.joined", defaultValue: "Rejoints", bundle: .main), icon: "person.fill.badge.plus")
         }
     }
 
@@ -120,7 +120,7 @@ struct ShareLinksView: View {
 
     private var linksSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("MES LIENS")
+            Text(String(localized: "share.links.my_links", defaultValue: "MES LIENS", bundle: .main))
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
                 .kerning(0.8)
@@ -149,10 +149,10 @@ struct ShareLinksView: View {
             Image(systemName: "link.badge.plus")
                 .font(.system(size: 40))
                 .foregroundColor(Color(hex: "08D9D6").opacity(0.6))
-            Text("Aucun lien de partage")
+            Text(String(localized: "share.links.empty.title", defaultValue: "Aucun lien de partage", bundle: .main))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
-            Text("Créez un lien pour inviter des personnes dans une conversation")
+            Text(String(localized: "share.links.empty.subtitle", defaultValue: "Créez un lien pour inviter des personnes dans une conversation", bundle: .main))
                 .font(.system(size: 13))
                 .foregroundColor(theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -178,7 +178,7 @@ struct ShareLinksView: View {
                     .foregroundColor(theme.textPrimary)
                     .lineLimit(1)
                 HStack(spacing: 6) {
-                    Text("\(link.currentUses) rejoints")
+                    Text("\(link.currentUses) \(String(localized: "share.links.joined_label", defaultValue: "rejoints", bundle: .main))")
                         .font(.system(size: 12))
                         .foregroundColor(Color(hex: "08D9D6"))
                     if let conv = link.conversationTitle {

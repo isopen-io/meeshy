@@ -79,11 +79,11 @@ struct MessageInfoSheet: View {
     private var attachmentTypeLabel: String? {
         guard let attachment = message.attachments.first else { return nil }
         switch attachment.type {
-        case .image: return "Photo"
-        case .video: return "Video"
-        case .audio: return "Message vocal"
-        case .file: return attachment.originalName.isEmpty ? "Fichier" : attachment.originalName
-        case .location: return "Position"
+        case .image: return String(localized: "attachment.kind.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.kind.video", defaultValue: "Video", bundle: .main)
+        case .audio: return String(localized: "message-info.voice-message", defaultValue: "Message vocal", bundle: .main)
+        case .file: return attachment.originalName.isEmpty ? String(localized: "attachment.kind.file", defaultValue: "Fichier", bundle: .main) : attachment.originalName
+        case .location: return String(localized: "attachment.kind.location", defaultValue: "Position", bundle: .main)
         }
     }
 
@@ -158,7 +158,7 @@ struct MessageInfoSheet: View {
 
     private var headerBar: some View {
         HStack {
-            Text("Infos du message")
+            Text(String(localized: "message-info.title", defaultValue: "Infos du message", bundle: .main))
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
