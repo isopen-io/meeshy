@@ -41,16 +41,16 @@ struct AboutView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Retour")
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
-            Text("A propos")
+            Text(String(localized: "about.title", defaultValue: "A propos", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -98,7 +98,7 @@ struct AboutView: View {
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Version \(appVersion) (\(buildNumber))")
+            Text(String(localized: "about.version", defaultValue: "Version \(appVersion) (\(buildNumber))", bundle: .main))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -111,12 +111,12 @@ struct AboutView: View {
 
     private var informationsSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Informations", icon: "info.circle.fill", color: accentColor)
+            sectionHeader(title: String(localized: "about.section.informations", defaultValue: "Informations", bundle: .main), icon: "info.circle.fill", color: accentColor)
 
             VStack(spacing: 0) {
-                infoRow(icon: "apple.logo", title: "Plateforme", value: "iOS \(UIDevice.current.systemVersion)", color: accentColor)
-                infoRow(icon: "shippingbox.fill", title: "Bundle ID", value: Bundle.main.bundleIdentifier ?? "me.meeshy.app", color: accentColor)
-                infoRow(icon: "wrench.and.screwdriver.fill", title: "SDK Version", value: "1.0.0", color: accentColor)
+                infoRow(icon: "apple.logo", title: String(localized: "about.info.platform", defaultValue: "Plateforme", bundle: .main), value: "iOS \(UIDevice.current.systemVersion)", color: accentColor)
+                infoRow(icon: "shippingbox.fill", title: String(localized: "about.info.bundleId", defaultValue: "Bundle ID", bundle: .main), value: Bundle.main.bundleIdentifier ?? "me.meeshy.app", color: accentColor)
+                infoRow(icon: "wrench.and.screwdriver.fill", title: String(localized: "about.info.sdkVersion", defaultValue: "SDK Version", bundle: .main), value: "1.0.0", color: accentColor)
             }
             .background(sectionBackground(tint: accentColor))
         }
@@ -126,10 +126,10 @@ struct AboutView: View {
 
     private var descriptionSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Description", icon: "text.quote", color: "9B59B6")
+            sectionHeader(title: String(localized: "about.section.description", defaultValue: "Description", bundle: .main), icon: "text.quote", color: "9B59B6")
 
             VStack(alignment: .leading, spacing: 8) {
-                Text("Meeshy est une plateforme de messagerie en temps reel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.")
+                Text(String(localized: "about.description.body", defaultValue: "Meeshy est une plateforme de messagerie en temps reel haute performance avec traduction multilingue, clonage vocal et chiffrement de bout en bout.", bundle: .main))
                     .font(.system(size: 14, weight: .regular))
                     .foregroundColor(theme.textPrimary)
                     .lineSpacing(4)
@@ -144,14 +144,14 @@ struct AboutView: View {
 
     private var fonctionnalitesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Fonctionnalites", icon: "star.fill", color: "F8B500")
+            sectionHeader(title: String(localized: "about.section.features", defaultValue: "Fonctionnalites", bundle: .main), icon: "star.fill", color: "F8B500")
 
             VStack(spacing: 0) {
-                featureRow(title: "Chiffrement bout en bout", icon: "lock.shield.fill")
-                featureRow(title: "Traduction temps reel", icon: "globe")
-                featureRow(title: "Clonage vocal", icon: "waveform")
-                featureRow(title: "Themes personnalisables", icon: "paintbrush.fill")
-                featureRow(title: "Synchronisation cloud", icon: "cloud.fill")
+                featureRow(title: String(localized: "about.feature.encryption", defaultValue: "Chiffrement bout en bout", bundle: .main), icon: "lock.shield.fill")
+                featureRow(title: String(localized: "about.feature.translation", defaultValue: "Traduction temps reel", bundle: .main), icon: "globe")
+                featureRow(title: String(localized: "about.feature.voiceCloning", defaultValue: "Clonage vocal", bundle: .main), icon: "waveform")
+                featureRow(title: String(localized: "about.feature.themes", defaultValue: "Themes personnalisables", bundle: .main), icon: "paintbrush.fill")
+                featureRow(title: String(localized: "about.feature.cloudSync", defaultValue: "Synchronisation cloud", bundle: .main), icon: "cloud.fill")
             }
             .background(sectionBackground(tint: "F8B500"))
         }
@@ -161,12 +161,12 @@ struct AboutView: View {
 
     private var liensSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Liens", icon: "link", color: "4ECDC4")
+            sectionHeader(title: String(localized: "about.section.links", defaultValue: "Liens", bundle: .main), icon: "link", color: "4ECDC4")
 
             VStack(spacing: 0) {
-                linkRow(icon: "globe", title: "Site web", url: "https://meeshy.me", color: "4ECDC4")
-                linkRow(icon: "at", title: "Twitter / X", url: "https://twitter.com/meeshy", color: "4ECDC4")
-                linkRow(icon: "chevron.left.forwardslash.chevron.right", title: "GitHub", url: "https://github.com/meeshy", color: "4ECDC4")
+                linkRow(icon: "globe", title: String(localized: "about.link.website", defaultValue: "Site web", bundle: .main), url: "https://meeshy.me", color: "4ECDC4")
+                linkRow(icon: "at", title: String(localized: "about.link.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: "4ECDC4")
+                linkRow(icon: "chevron.left.forwardslash.chevron.right", title: String(localized: "about.link.github", defaultValue: "GitHub", bundle: .main), url: "https://github.com/meeshy", color: "4ECDC4")
             }
             .background(sectionBackground(tint: "4ECDC4"))
         }
@@ -175,7 +175,7 @@ struct AboutView: View {
     // MARK: - Copyright
 
     private var copyrightSection: some View {
-        Text("2024-2026 Meeshy. Tous droits reserves.")
+        Text(String(localized: "about.copyright", defaultValue: "2024-2026 Meeshy. Tous droits reserves.", bundle: .main))
             .font(.system(size: 12, weight: .medium))
             .foregroundColor(theme.textMuted)
             .frame(maxWidth: .infinity)
@@ -275,6 +275,6 @@ struct AboutView: View {
             .padding(.vertical, 10)
         }
         .accessibilityLabel(title)
-        .accessibilityHint("Ouvre \(title) dans Safari")
+        .accessibilityHint(String(localized: "about.link.hint", defaultValue: "Ouvre \(title) dans Safari", bundle: .main))
     }
 }

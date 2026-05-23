@@ -114,7 +114,7 @@ struct StatusBubbleOverlay: View {
 
             // "via @username" for republished statuses
             if let via = status.viaUsername {
-                Text("via @\(via)")
+                Text(String(localized: "status.bubble.via", defaultValue: "via @\(via)", bundle: .main))
                     .font(.system(size: 11))
                     .foregroundColor(theme.textMuted)
             }
@@ -129,7 +129,7 @@ struct StatusBubbleOverlay: View {
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.2.squarepath")
                             .font(.system(size: 11))
-                        Text("Republier")
+                        Text(String(localized: "status.bubble.republish", defaultValue: "Republier", bundle: .main))
                             .font(.system(size: 12, weight: .medium))
                     }
                     .foregroundColor(MeeshyColors.indigo400)

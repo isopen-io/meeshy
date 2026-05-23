@@ -118,7 +118,7 @@ extension StoryViewerView {
             .padding(.horizontal, 24)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: compositeAlignment(position: position, align: align))
             .offset(y: offsetY)
-            .accessibilityLabel("Texte de la story: \(content)")
+            .accessibilityLabel(String(localized: "story.viewer.a11y.storyText", defaultValue: "Texte de la story: \(content)", bundle: .main))
     }
 
     private func fontForStyle(_ style: String, sizeOverride: CGFloat? = nil) -> Font {
@@ -1051,7 +1051,7 @@ struct StoryViewersSheet: View {
                     )
                 } else {
                     List {
-                        Section(header: Text("\(viewers.count) Vues")
+                        Section(header: Text(String(localized: "story.viewer.viewsCount", defaultValue: "\(viewers.count) Vues", bundle: .main))
                             .font(.headline)
                             .foregroundColor(.primary)
                             .textCase(nil)
@@ -1065,11 +1065,11 @@ struct StoryViewersSheet: View {
                     .scrollContentBackground(.hidden)
                 }
             }
-            .navigationTitle("Vues")
+            .navigationTitle(String(localized: "story.viewer.views.title", defaultValue: "Vues", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Fermer") {
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) {
                         dismiss()
                     }
                     .font(.system(size: 16, weight: .bold))
@@ -1212,7 +1212,7 @@ struct StoryCommentsOverlayView: View {
             VStack(spacing: 0) {
                 // Header
                 HStack {
-                    Text("\(storyCommentCount) commentaire\(storyCommentCount > 1 ? "s" : "")")
+                    Text(String(localized: "story.viewer.commentsCount", defaultValue: "\(storyCommentCount) commentaire\(storyCommentCount > 1 ? "s" : "")", bundle: .main))
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.white)
 
@@ -1309,10 +1309,10 @@ struct StoryCommentsOverlayView: View {
                                     Image(systemName: "bubble.left.and.bubble.right")
                                         .font(.system(size: 28))
                                         .foregroundColor(.white.opacity(0.3))
-                                    Text("Pas encore de commentaires")
+                                    Text(String(localized: "story.viewer.comments.empty", defaultValue: "Pas encore de commentaires", bundle: .main))
                                         .font(.system(size: 13, weight: .semibold))
                                         .foregroundColor(.white.opacity(0.5))
-                                    Text("Soyez le premier \u{00E0} commenter !")
+                                    Text(String(localized: "story.viewer.comments.beFirst", defaultValue: "Soyez le premier \u{00E0} commenter !", bundle: .main))
                                         .font(.system(size: 11))
                                         .foregroundColor(.white.opacity(0.3))
                                 }
@@ -1390,7 +1390,7 @@ struct StoryCommentsOverlayView: View {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
                                     .font(.system(size: 9, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
-                                Text("R\u{00E9}ponse \u{00E0} \(reply.author)")
+                                Text(String(localized: "story.viewer.replyTo", defaultValue: "R\u{00E9}ponse \u{00E0} \(reply.author)", bundle: .main))
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(Color(hex: reply.authorColor))
                             }
@@ -1841,7 +1841,7 @@ struct StoryCommentRowView: View, Equatable {
                 HStack(spacing: 3) {
                     Image(systemName: "arrowshape.turn.up.left")
                         .font(.system(size: 11, weight: .semibold))
-                    Text("R\u{00E9}pondre")
+                    Text(String(localized: "story.viewer.reply", defaultValue: "R\u{00E9}pondre", bundle: .main))
                         .font(.system(size: 10.5, weight: .semibold))
                 }
                 .foregroundColor(.white.opacity(0.6))
@@ -1965,8 +1965,8 @@ struct StoryProgressBarsView: View {
             }
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("Story \(currentIndex + 1) sur \(group?.stories.count ?? 0)")
-        .accessibilityValue("\(Int(progress * 100)) pourcent")
+        .accessibilityLabel(String(localized: "story.viewer.a11y.position", defaultValue: "Story \(currentIndex + 1) sur \(group?.stories.count ?? 0)", bundle: .main))
+        .accessibilityValue(String(localized: "story.viewer.a11y.percent", defaultValue: "\(Int(progress * 100)) pourcent", bundle: .main))
     }
 
     private func width(for index: Int, totalWidth: CGFloat) -> CGFloat {

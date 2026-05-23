@@ -26,12 +26,12 @@ struct BlockedTab: View {
             }
         }
         .task { await viewModel.loadBlocked() }
-        .alert("Debloquer ?", isPresented: Binding(
+        .alert(String(localized: "contacts.blocked.unblock-title", defaultValue: "Debloquer ?", bundle: .main), isPresented: Binding(
             get: { unblockTarget != nil },
             set: { if !$0 { unblockTarget = nil } }
         )) {
-            Button("Annuler", role: .cancel) { unblockTarget = nil }
-            Button("Debloquer", role: .destructive) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { unblockTarget = nil }
+            Button(String(localized: "contacts.blocked.unblock", defaultValue: "Debloquer", bundle: .main), role: .destructive) {
                 if let user = unblockTarget {
                     Task { await viewModel.unblock(userId: user.id) }
                 }
@@ -39,7 +39,7 @@ struct BlockedTab: View {
             }
         } message: {
             if let user = unblockTarget {
-                Text("Debloquer \(user.name) ?")
+                Text(String(format: String(localized: "contacts.blocked.unblock-message", defaultValue: "Debloquer %@ ?", bundle: .main), user.name))
             }
         }
     }
@@ -84,7 +84,7 @@ struct BlockedTab: View {
             Button {
                 unblockTarget = user
             } label: {
-                Text("Debloquer")
+                Text(String(localized: "contacts.blocked.unblock", defaultValue: "Debloquer", bundle: .main))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(MeeshyColors.warning)
                     .padding(.horizontal, 12)
@@ -93,7 +93,7 @@ struct BlockedTab: View {
                         Capsule().stroke(MeeshyColors.warning.opacity(0.3), lineWidth: 1)
                     )
             }
-            .accessibilityLabel("Debloquer \(user.name)")
+            .accessibilityLabel(String(format: String(localized: "contacts.blocked.unblock-a11y", defaultValue: "Debloquer %@", bundle: .main), user.name))
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -110,7 +110,7 @@ struct BlockedTab: View {
                 .font(.system(size: 48, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
                 .accessibilityHidden(true)
-            Text("Aucun utilisateur bloque")
+            Text(String(localized: "contacts.blocked.empty", defaultValue: "Aucun utilisateur bloque", bundle: .main))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textMuted)
             Spacer()

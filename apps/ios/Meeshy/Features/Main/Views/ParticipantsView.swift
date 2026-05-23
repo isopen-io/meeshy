@@ -75,7 +75,7 @@ struct ParticipantsView: View {
                     .padding(.bottom, 40)
                 }
             }
-            .navigationTitle("Membres")
+            .navigationTitle(String(localized: "participants.title", defaultValue: "Membres", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
@@ -87,7 +87,7 @@ struct ParticipantsView: View {
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(theme.textPrimary)
                     }
-                    .accessibilityLabel("Retour")
+                    .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                 }
 
                 if canManageMembers {
@@ -99,12 +99,12 @@ struct ParticipantsView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "plus")
                                     .font(.system(size: 12, weight: .bold))
-                                Text("Ajouter")
+                                Text(String(localized: "participants.add", defaultValue: "Ajouter", bundle: .main))
                                     .font(.system(size: 13, weight: .semibold))
                             }
                             .foregroundColor(accent)
                         }
-                        .accessibilityLabel("Ajouter un membre")
+                        .accessibilityLabel(String(localized: "participants.add.a11y", defaultValue: "Ajouter un membre", bundle: .main))
                     }
                 }
             }
@@ -155,47 +155,49 @@ struct ParticipantsView: View {
                 }
                 .presentationDetents([.medium, .large])
             }
-            .alert("Retirer ce membre ?", isPresented: Binding(
+            .alert(String(localized: "participants.remove.title", defaultValue: "Retirer ce membre ?", bundle: .main), isPresented: Binding(
                 get: { confirmRemoveUserId != nil },
                 set: { if !$0 { confirmRemoveUserId = nil } }
             )) {
-                Button("Annuler", role: .cancel) { confirmRemoveUserId = nil }
-                Button("Retirer", role: .destructive) {
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { confirmRemoveUserId = nil }
+                Button(String(localized: "participants.remove.confirm", defaultValue: "Retirer", bundle: .main), role: .destructive) {
                     if let userId = confirmRemoveUserId {
                         Task { await removeParticipant(userId: userId) }
                     }
                 }
             } message: {
-                Text("Cette personne ne pourra plus acceder a la conversation.")
+                Text(String(localized: "participants.remove.message", defaultValue: "Cette personne ne pourra plus acceder a la conversation.", bundle: .main))
             }
-            .alert("Changer le role ?", isPresented: Binding(
+            .alert(String(localized: "participants.role.title", defaultValue: "Changer le role ?", bundle: .main), isPresented: Binding(
                 get: { roleChangeTarget != nil },
                 set: { if !$0 { roleChangeTarget = nil } }
             )) {
-                Button("Annuler", role: .cancel) { roleChangeTarget = nil }
-                Button("Confirmer") {
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { roleChangeTarget = nil }
+                Button(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main)) {
                     if let target = roleChangeTarget {
                         Task { await changeRole(userId: target.userId, newRole: target.newRole) }
                     }
                 }
             } message: {
                 if let target = roleChangeTarget {
-                    Text("Passer ce membre en \(roleDisplayLabel(target.newRole)) ?")
+                    let roleLabel = roleDisplayLabel(target.newRole)
+                    let prefix = String(localized: "participants.role.message_prefix", defaultValue: "Passer ce membre en", bundle: .main)
+                    Text("\(prefix) \(roleLabel) ?")
                 }
             }
-            .alert("Quitter le groupe ?", isPresented: $confirmLeave) {
-                Button("Annuler", role: .cancel) {}
-                Button("Quitter", role: .destructive) {
+            .alert(String(localized: "participants.leave.title", defaultValue: "Quitter le groupe ?", bundle: .main), isPresented: $confirmLeave) {
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+                Button(String(localized: "participants.leave.confirm", defaultValue: "Quitter", bundle: .main), role: .destructive) {
                     Task { await leaveGroup() }
                 }
             } message: {
-                Text("Vous ne pourrez plus voir les messages de ce groupe.")
+                Text(String(localized: "participants.leave.message", defaultValue: "Vous ne pourrez plus voir les messages de ce groupe.", bundle: .main))
             }
-            .alert(String(localized: "Erreur", defaultValue: "Erreur"), isPresented: Binding(
+            .alert(String(localized: "common.error", defaultValue: "Erreur", bundle: .main), isPresented: Binding(
                 get: { errorMessage != nil },
                 set: { if !$0 { errorMessage = nil } }
             )) {
-                Button("OK") { errorMessage = nil }
+                Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main)) { errorMessage = nil }
             } message: {
                 if let errorMessage {
                     Text(errorMessage)
@@ -213,7 +215,7 @@ struct ParticipantsView: View {
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(accent)
 
-            Text("\(participants.count) membre\(participants.count > 1 ? "s" : "")")
+            Text("\(participants.count) \(participants.count > 1 ? String(localized: "participants.members_plural", defaultValue: "membres", bundle: .main) : String(localized: "participants.members_singular", defaultValue: "membre", bundle: .main))")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
@@ -249,7 +251,7 @@ struct ParticipantsView: View {
                                 Button(role: .destructive) {
                                     confirmRemoveUserId = participant.userId ?? participant.id
                                 } label: {
-                                    Label("Retirer", systemImage: "person.badge.minus")
+                                    Label(String(localized: "participants.remove.short", defaultValue: "Retirer", bundle: .main), systemImage: "person.badge.minus")
                                 }
                             }
                         }
@@ -290,7 +292,7 @@ struct ParticipantsView: View {
 
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(isCurrentUser ? "\(participant.name) (vous)" : participant.name)
+                    Text(isCurrentUser ? "\(participant.name) (\(String(localized: "participants.you", defaultValue: "vous", bundle: .main)))" : participant.name)
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
@@ -314,7 +316,7 @@ struct ParticipantsView: View {
 
             if let joinedAt = participant.joinedAt {
                 VStack(alignment: .trailing, spacing: 1) {
-                    Text("Depuis")
+                    Text(String(localized: "participants.since", defaultValue: "Depuis", bundle: .main))
                         .font(.system(size: 9, weight: .medium))
                         .foregroundColor(theme.textMuted)
                     Text(shortDate(joinedAt))
@@ -353,28 +355,28 @@ struct ParticipantsView: View {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MODERATOR")
                     } label: {
-                        Label("Promouvoir Moderateur", systemImage: "shield.fill")
+                        Label(String(localized: "participants.promote.moderator", defaultValue: "Promouvoir Moderateur", bundle: .main), systemImage: "shield.fill")
                     }
                 }
                 if targetRole != .admin {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "ADMIN")
                     } label: {
-                        Label("Promouvoir Admin", systemImage: "crown.fill")
+                        Label(String(localized: "participants.promote.admin", defaultValue: "Promouvoir Admin", bundle: .main), systemImage: "crown.fill")
                     }
                 }
                 if targetRole == .admin {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MODERATOR")
                     } label: {
-                        Label("Retrograder en Moderateur", systemImage: "shield")
+                        Label(String(localized: "participants.demote.moderator", defaultValue: "Retrograder en Moderateur", bundle: .main), systemImage: "shield")
                     }
                 }
                 if targetRole == .moderator || targetRole == .admin {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MEMBER")
                     } label: {
-                        Label("Retrograder en Membre", systemImage: "person.fill")
+                        Label(String(localized: "participants.demote.member", defaultValue: "Retrograder en Membre", bundle: .main), systemImage: "person.fill")
                     }
                 }
                 Divider()
@@ -384,19 +386,19 @@ struct ParticipantsView: View {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MODERATOR")
                     } label: {
-                        Label("Promouvoir Moderateur", systemImage: "shield.fill")
+                        Label(String(localized: "participants.promote.moderator", defaultValue: "Promouvoir Moderateur", bundle: .main), systemImage: "shield.fill")
                     }
                 }
                 Button {
                     roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "ADMIN")
                 } label: {
-                    Label("Promouvoir Admin", systemImage: "crown.fill")
+                    Label(String(localized: "participants.promote.admin", defaultValue: "Promouvoir Admin", bundle: .main), systemImage: "crown.fill")
                 }
                 if targetRole == .moderator {
                     Button {
                         roleChangeTarget = (userId: participant.userId ?? participant.id, newRole: "MEMBER")
                     } label: {
-                        Label("Retrograder en Membre", systemImage: "person.fill")
+                        Label(String(localized: "participants.demote.member", defaultValue: "Retrograder en Membre", bundle: .main), systemImage: "person.fill")
                     }
                 }
                 Divider()
@@ -407,7 +409,7 @@ struct ParticipantsView: View {
             Button(role: .destructive) {
                 confirmRemoveUserId = participant.userId ?? participant.id
             } label: {
-                Label("Retirer du groupe", systemImage: "person.badge.minus")
+                Label(String(localized: "participants.remove.from_group", defaultValue: "Retirer du groupe", bundle: .main), systemImage: "person.badge.minus")
             }
         }
     }
@@ -422,7 +424,7 @@ struct ParticipantsView: View {
             HStack(spacing: 8) {
                 Image(systemName: "rectangle.portrait.and.arrow.right")
                     .font(.system(size: 14, weight: .semibold))
-                Text("Quitter le groupe")
+                Text(String(localized: "participants.leave_group", defaultValue: "Quitter le groupe", bundle: .main))
                     .font(.system(size: 14, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.error)
@@ -435,7 +437,7 @@ struct ParticipantsView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 24)
-        .accessibilityLabel("Quitter le groupe")
+        .accessibilityLabel(String(localized: "participants.leave_group", defaultValue: "Quitter le groupe", bundle: .main))
     }
 
     // MARK: - Empty State
@@ -443,7 +445,7 @@ struct ParticipantsView: View {
     private var emptyState: some View {
         EmptyStateView(
             icon: "person.2.slash",
-            title: "Aucun membre",
+            title: String(localized: "participants.empty", defaultValue: "Aucun membre", bundle: .main),
             subtitle: ""
         )
         .padding(.top, 60)
@@ -515,10 +517,11 @@ struct ParticipantsView: View {
 
     private func relativeTime(from date: Date) -> String {
         let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return "A l'instant" }
-        if interval < 3600 { return "Il y a \(Int(interval / 60))min" }
-        if interval < 86400 { return "Il y a \(Int(interval / 3600))h" }
-        if interval < 604800 { return "Il y a \(Int(interval / 86400))j" }
+        if interval < 60 { return String(localized: "participants.relative.now", defaultValue: "A l'instant", bundle: .main) }
+        let agoPrefix = String(localized: "participants.relative.ago", defaultValue: "Il y a", bundle: .main)
+        if interval < 3600 { return "\(agoPrefix) \(Int(interval / 60))min" }
+        if interval < 86400 { return "\(agoPrefix) \(Int(interval / 3600))h" }
+        if interval < 604800 { return "\(agoPrefix) \(Int(interval / 86400))j" }
         return Self.shortDateFormatter.string(from: date)
     }
 
@@ -592,7 +595,7 @@ struct ParticipantsView: View {
         } catch {
             Logger.participants.error("Failed to remove participant: \(error.localizedDescription)")
             HapticFeedback.error()
-            errorMessage = "Impossible de retirer ce membre."
+            errorMessage = String(localized: "participants.remove.failed", defaultValue: "Impossible de retirer ce membre.", bundle: .main)
         }
     }
 

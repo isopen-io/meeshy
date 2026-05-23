@@ -301,7 +301,7 @@ fileprivate struct BubbleGridCell: View {
                 .padding(6)
                 Spacer()
             }
-            .accessibilityLabel(Text("\(attachment.viewOnceCount) vue\(attachment.viewOnceCount > 1 ? "s" : "")"))
+            .accessibilityLabel(Text(String(localized: "bubble.media.a11y.viewCount", defaultValue: "\(attachment.viewOnceCount) vue\(attachment.viewOnceCount > 1 ? "s" : "")", bundle: .main)))
         }
     }
 
@@ -473,19 +473,19 @@ private struct AttachmentBlurOverlayView: View {
                     .font(.system(size: 16, weight: .medium))
                     .foregroundStyle(.white)
 
-                Text(isViewOnce ? "Voir une fois" : "Contenu masque")
+                Text(isViewOnce ? String(localized: "bubble.media.viewOnce", defaultValue: "Voir une fois", bundle: .main) : String(localized: "bubble.media.masked", defaultValue: "Contenu masque", bundle: .main))
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white)
 
-                Text("Maintenir pour voir")
+                Text(String(localized: "bubble.media.holdToView", defaultValue: "Maintenir pour voir", bundle: .main))
                     .font(.system(size: 9))
                     .foregroundStyle(.white.opacity(0.7))
             }
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
-        .accessibilityLabel(isViewOnce ? "Media a voir une fois" : "Media masque")
-        .accessibilityHint("Maintenir pour reveler le contenu")
+        .accessibilityLabel(isViewOnce ? String(localized: "bubble.media.a11y.viewOnce", defaultValue: "Media a voir une fois", bundle: .main) : String(localized: "bubble.media.a11y.masked", defaultValue: "Media masque", bundle: .main))
+        .accessibilityHint(String(localized: "bubble.media.a11y.holdToReveal", defaultValue: "Maintenir pour reveler le contenu", bundle: .main))
         .onLongPressGesture(minimumDuration: 0.3) {
             onReveal()
         }

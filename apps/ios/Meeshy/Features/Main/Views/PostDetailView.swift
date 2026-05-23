@@ -231,7 +231,7 @@ struct PostDetailView: View {
             Button {
                 Task { await viewModel.loadMoreComments(postId) }
             } label: {
-                Text("Charger plus")
+                Text(String(localized: "feed.post.detail.load_more", defaultValue: "Charger plus", bundle: .main))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo500)
             }
@@ -394,12 +394,12 @@ struct PostDetailView: View {
                 Button {
                     HapticFeedback.light()
                 } label: {
-                    Label("Copier le lien", systemImage: "link")
+                    Label(String(localized: "feed.post.detail.copy_link", defaultValue: "Copier le lien", bundle: .main), systemImage: "link")
                 }
                 Button(role: .destructive) {
                     HapticFeedback.light()
                 } label: {
-                    Label("Signaler", systemImage: "exclamationmark.triangle")
+                    Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -429,7 +429,7 @@ struct PostDetailView: View {
                     onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                     onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
                     contextMenuItems: [
-                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                        AvatarContextMenuItem(label: String(localized: "feed.post.detail.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
                             selectedProfileUser = .from(feedPost: post)
                         }
                     ]

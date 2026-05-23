@@ -30,11 +30,11 @@ struct AffiliateCreateView: View {
                 .padding(.horizontal, 16)
                 .padding(.top, 16)
             }
-            .navigationTitle("Nouveau lien")
+            .navigationTitle(String(localized: "affiliate.create.title", defaultValue: "Nouveau lien", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { dismiss() }
+                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
                         .foregroundColor(Color(hex: accentColor))
                 }
             }
@@ -46,11 +46,11 @@ struct AffiliateCreateView: View {
     private var formSection: some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Nom du lien")
+                Text(String(localized: "affiliate.create.name.label", defaultValue: "Nom du lien", bundle: .main))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
 
-                TextField("Ex: Invitation Twitter", text: $name)
+                TextField(String(localized: "affiliate.create.name.placeholder", defaultValue: "Ex: Invitation Twitter", bundle: .main), text: $name)
                     .font(.system(size: 14))
                     .padding(12)
                     .background(
@@ -64,11 +64,11 @@ struct AffiliateCreateView: View {
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text("Utilisations max (optionnel)")
+                Text(String(localized: "affiliate.create.maxUses.label", defaultValue: "Utilisations max (optionnel)", bundle: .main))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
 
-                TextField("Illimite", text: $maxUses)
+                TextField(String(localized: "affiliate.create.maxUses.placeholder", defaultValue: "Illimite", bundle: .main), text: $maxUses)
                     .font(.system(size: 14))
                     .keyboardType(.numberPad)
                     .padding(12)
@@ -105,7 +105,7 @@ struct AffiliateCreateView: View {
                     Image(systemName: "link.badge.plus")
                         .font(.system(size: 16, weight: .semibold))
                 }
-                Text("Creer le lien")
+                Text(String(localized: "affiliate.create.button", defaultValue: "Creer le lien", bundle: .main))
                     .font(.system(size: 15, weight: .semibold))
             }
             .foregroundColor(.white)
@@ -141,7 +141,7 @@ struct AffiliateCreateView: View {
             onCreate?(token)
             dismiss()
         } catch {
-            errorMessage = "Erreur lors de la creation"
+            errorMessage = String(localized: "affiliate.create.error", defaultValue: "Erreur lors de la creation", bundle: .main)
             HapticFeedback.error()
         }
         isCreating = false

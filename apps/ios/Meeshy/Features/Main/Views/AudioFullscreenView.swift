@@ -628,7 +628,7 @@ private struct AudioFullscreenPage: View {
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(.white.opacity(0.25))
 
-            Text("Aucune transcription")
+            Text(String(localized: "audio.fullscreen.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(.white.opacity(0.4))
 
@@ -644,7 +644,7 @@ private struct AudioFullscreenPage: View {
                         Image(systemName: "waveform.and.mic")
                             .font(.system(size: 13, weight: .semibold))
                     }
-                    Text("Transcrire")
+                    Text(String(localized: "audio.fullscreen.transcription.action", defaultValue: "Transcrire", bundle: .main))
                         .font(.system(size: 13, weight: .bold))
                 }
                 .foregroundColor(.white)
@@ -691,7 +691,7 @@ private struct AudioFullscreenPage: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 6) {
                     languagePill(flag: originalFlag, code: "orig",
-                                 label: LanguageDisplay.from(code: message.originalLanguage)?.name ?? "Original",
+                                 label: LanguageDisplay.from(code: message.originalLanguage)?.name ?? String(localized: "audio.fullscreen.language.original", defaultValue: "Original", bundle: .main),
                                  isSelected: selectedLanguage == "orig")
 
                     ForEach(translatedAudios, id: \.id) { audio in
@@ -797,11 +797,11 @@ private struct AudioFullscreenPage: View {
                     }
                 }
             }
-            .navigationTitle("Langues")
+            .navigationTitle(String(localized: "audio.fullscreen.languages.title", defaultValue: "Langues", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Fermer") { showLanguagePicker = false }
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { showLanguagePicker = false }
                 }
             }
         }

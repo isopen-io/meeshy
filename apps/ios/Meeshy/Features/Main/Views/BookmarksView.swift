@@ -25,7 +25,7 @@ struct BookmarksView: View {
                             onReport: { postId in
                                 Task {
                                     try? await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
-                                    ToastManager.shared.showSuccess("Signalement envoye")
+                                    ToastManager.shared.showSuccess(String(localized: "bookmarks.report.success", defaultValue: "Signalement envoye", bundle: .main))
                                 }
                             }
                         )

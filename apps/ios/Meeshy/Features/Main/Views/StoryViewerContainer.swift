@@ -83,7 +83,7 @@ struct StoryViewerContainer: View {
                 ProgressView()
                     .tint(.white)
                     .scaleEffect(1.3)
-                Text("Loading...")
+                Text(String(localized: "story.viewer.loading", defaultValue: "Loading...", bundle: .main))
                     .foregroundColor(.white.opacity(0.6))
                     .font(.subheadline)
             }
@@ -99,11 +99,11 @@ struct StoryViewerContainer: View {
                     .font(.system(size: 38, weight: .regular))
                     .foregroundColor(.white.opacity(0.8))
 
-                Text("Story introuvable")
+                Text(String(localized: "story.viewer.notFound.title", defaultValue: "Story introuvable", bundle: .main))
                     .foregroundColor(.white)
                     .font(.headline)
 
-                Text("Impossible de charger cette story. Reessayez ou fermez.")
+                Text(String(localized: "story.viewer.notFound.description", defaultValue: "Impossible de charger cette story. Reessayez ou fermez.", bundle: .main))
                     .multilineTextAlignment(.center)
                     .foregroundColor(.white.opacity(0.6))
                     .font(.footnote)
@@ -113,7 +113,7 @@ struct StoryViewerContainer: View {
                     Button {
                         Task { await retryFetch(uid: uid) }
                     } label: {
-                        Text("Reessayer")
+                        Text(String(localized: "story.viewer.retry", defaultValue: "Reessayer", bundle: .main))
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(.black)
                             .padding(.horizontal, 20)
@@ -124,7 +124,7 @@ struct StoryViewerContainer: View {
                     Button {
                         isPresented = false
                     } label: {
-                        Text("Fermer")
+                        Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(.white)
                             .padding(.horizontal, 20)
