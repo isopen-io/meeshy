@@ -349,11 +349,18 @@ struct PostDetailView: View {
             viewModel.subscribeToSocket(postId)
             // Join the post room for real-time reaction events (single focused post).
             SocialSocketManager.shared.joinPostRoom(postId: postId)
+            // Anti-spam banner: declare this post as "currently visible" so
+            // NotificationManager can drop in-app banners about it (the user
+            // already sees the content live).
+            NotificationManager.shared.activePostId = postId
             // Record view when post detail is opened
             try? await PostService.shared.viewPost(postId: postId, duration: nil)
         }
         .onDisappear {
             SocialSocketManager.shared.leavePostRoom(postId: postId)
+            if NotificationManager.shared.activePostId == postId {
+                NotificationManager.shared.activePostId = nil
+            }
         }
         .adaptiveOnChange(of: viewModel.post) { _, updatedPost in
             // Re-seed when post loads from network (stale → fresh). Preserve

@@ -100,7 +100,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
     // MARK: - Private
 
-    private let keychain = KeychainManager.shared
+    private let keychain: any KeychainStoring
+    private let userDefaults: UserDefaults
+    private let groupDefaults: UserDefaults?
+
     /// Backed by the protocol type so tests can inject a stub conforming
     /// to `AuthServiceProviding` without subclassing the production
     /// `final` `AuthService`.
@@ -117,7 +120,15 @@ public final class AuthManager: ObservableObject, AuthManaging {
     private let activeUserIdUDKey = "meeshy_active_user_id"
     private let savedAccountsUDKey = "meeshy_saved_accounts"
 
-    private init() {}
+    private init(
+        keychain: any KeychainStoring = KeychainManager.shared,
+        userDefaults: UserDefaults = .standard,
+        groupDefaults: UserDefaults? = UserDefaults(suiteName: "group.me.meeshy.apps")
+    ) {
+        self.keychain = keychain
+        self.userDefaults = userDefaults
+        self.groupDefaults = groupDefaults
+    }
 
     // MARK: - Namespaced keys
 
@@ -129,10 +140,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Active user
 
     private var activeUserId: String? {
-        get { UserDefaults.standard.string(forKey: activeUserIdUDKey) }
+        get { keychain.load(forKey: activeUserIdUDKey, account: nil) }
         set {
-            UserDefaults.standard.set(newValue, forKey: activeUserIdUDKey)
-            UserDefaults(suiteName: "group.me.meeshy.apps")?.set(newValue, forKey: activeUserIdUDKey)
+            if let value = newValue {
+                try? keychain.save(value, forKey: activeUserIdUDKey, account: nil)
+            } else {
+                keychain.delete(forKey: activeUserIdUDKey, account: nil)
+            }
+            groupDefaults?.set(newValue, forKey: activeUserIdUDKey)
         }
     }
 
@@ -141,14 +156,14 @@ public final class AuthManager: ObservableObject, AuthManaging {
     public var authToken: String? {
         get {
             guard let userId = activeUserId else { return nil }
-            return keychain.load(forKey: tokenKey(for: userId))
+            return keychain.load(forKey: tokenKey(for: userId), account: nil)
         }
         set {
             guard let userId = activeUserId else { return }
             if let value = newValue {
-                try? keychain.save(value, forKey: tokenKey(for: userId))
+                try? keychain.save(value, forKey: tokenKey(for: userId), account: nil)
             } else {
-                keychain.delete(forKey: tokenKey(for: userId))
+                keychain.delete(forKey: tokenKey(for: userId), account: nil)
             }
             APIClient.shared.authToken = newValue
         }
@@ -346,10 +361,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
         // should not leave the session live on the gateway).
         Task { await self.performServerLogoutWithRetries() }
 
-        keychain.delete(forKey: tokenKey(for: userId))
-        keychain.delete(forKey: sessionTokenKey(for: userId))
-        keychain.delete(forKey: userKey(for: userId))
-        UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
+        keychain.delete(forKey: tokenKey(for: userId), account: nil)
+        keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
+        keychain.delete(forKey: userKey(for: userId), account: nil)
+        keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
 
         activeUserId = nil
@@ -393,10 +408,10 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Remove Saved Account
 
     public func removeSavedAccount(userId: String) {
-        keychain.delete(forKey: tokenKey(for: userId))
-        keychain.delete(forKey: sessionTokenKey(for: userId))
-        keychain.delete(forKey: userKey(for: userId))
-        UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
+        keychain.delete(forKey: tokenKey(for: userId), account: nil)
+        keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
+        keychain.delete(forKey: userKey(for: userId), account: nil)
+        keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         removeFromSavedAccounts(userId: userId)
 
         if activeUserId == userId {
@@ -415,7 +430,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
 
         guard let userId = activeUserId else { return }
 
-        guard let token = keychain.load(forKey: tokenKey(for: userId)) else {
+        guard let token = keychain.load(forKey: tokenKey(for: userId), account: nil) else {
             // Keychain empty for this user. Saved accounts stay intact so
             // re-login is one tap, but we have no session to restore.
             activeUserId = nil
@@ -423,19 +438,19 @@ public final class AuthManager: ObservableObject, AuthManaging {
             return
         }
 
-        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
+        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId), account: nil)
 
         // Show cached user immediately — authenticate from cache before any
         // network call so the UI never blanks on app launch. If the cached
         // JSON is corrupt or stale (schema migration etc.) we drop the entry
         // so the next launch starts clean and the background revalidation
         // below repopulates it from the server.
-        if let userJSON = keychain.load(forKey: userKey(for: userId)),
+        if let userJSON = keychain.load(forKey: userKey(for: userId), account: nil),
            let userData = userJSON.data(using: .utf8) {
             if let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) {
                 currentUser = user
             } else {
-                keychain.delete(forKey: userKey(for: userId))
+                keychain.delete(forKey: userKey(for: userId), account: nil)
             }
         }
 
@@ -518,12 +533,13 @@ public final class AuthManager: ObservableObject, AuthManaging {
             newUserId: userId
         )
 
-        try? keychain.save(token, forKey: tokenKey(for: userId))
+        try? keychain.save(token, forKey: tokenKey(for: userId), account: nil)
         if let sessionToken = sessionToken, !sessionToken.isEmpty {
-            try? keychain.save(sessionToken, forKey: sessionTokenKey(for: userId))
+            try? keychain.save(sessionToken, forKey: sessionTokenKey(for: userId), account: nil)
         }
         saveUserToKeychain(user, userId: userId)
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: tokenDateUDKey(for: userId))
+        let now = String(Date().timeIntervalSince1970)
+        try? keychain.save(now, forKey: tokenDateUDKey(for: userId), account: nil)
 
         activeUserId = userId
         APIClient.shared.authToken = token
@@ -546,9 +562,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
     /// to false so the UI can prompt for re-login. The saved account is
     /// preserved — the user just needs to enter their password again.
     private func requireReauthentication(userId: String) {
-        keychain.delete(forKey: tokenKey(for: userId))
-        keychain.delete(forKey: sessionTokenKey(for: userId))
-        UserDefaults.standard.removeObject(forKey: tokenDateUDKey(for: userId))
+        keychain.delete(forKey: tokenKey(for: userId), account: nil)
+        keychain.delete(forKey: sessionTokenKey(for: userId), account: nil)
+        keychain.delete(forKey: tokenDateUDKey(for: userId), account: nil)
         activeUserId = nil
         currentUser = nil
         isAuthenticated = false
@@ -559,7 +575,7 @@ public final class AuthManager: ObservableObject, AuthManaging {
         let sanitized = sanitizeDataURIs(user)
         guard let encoded = try? JSONEncoder().encode(sanitized),
               let jsonString = String(data: encoded, encoding: .utf8) else { return }
-        try? keychain.save(jsonString, forKey: userKey(for: userId))
+        try? keychain.save(jsonString, forKey: userKey(for: userId), account: nil)
     }
 
     private func sanitizeDataURIs(_ user: MeeshyUser) -> MeeshyUser {
@@ -613,11 +629,11 @@ public final class AuthManager: ObservableObject, AuthManaging {
             throw MeeshyError.auth(.sessionExpired)
         }
 
-        guard let token = keychain.load(forKey: tokenKey(for: userId)) else {
+        guard let token = keychain.load(forKey: tokenKey(for: userId), account: nil) else {
             requireReauthentication(userId: userId)
             throw MeeshyError.auth(.sessionExpired)
         }
-        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId))
+        let sessionToken = keychain.load(forKey: sessionTokenKey(for: userId), account: nil)
 
         // If not forcing AND token is not expired, return current token
         if !force && !Self.isTokenExpired(token, now: Date()) {
@@ -655,7 +671,8 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Saved Accounts persistence
 
     private func loadSavedAccounts() {
-        guard let data = UserDefaults.standard.data(forKey: savedAccountsUDKey),
+        guard let json = keychain.load(forKey: savedAccountsUDKey, account: nil),
+              let data = json.data(using: .utf8),
               let accounts = try? JSONDecoder().decode([SavedAccount].self, from: data) else {
             savedAccounts = []
             return
@@ -677,8 +694,9 @@ public final class AuthManager: ObservableObject, AuthManaging {
     }
 
     private func persistSavedAccounts() {
-        guard let data = try? JSONEncoder().encode(savedAccounts) else { return }
-        UserDefaults.standard.set(data, forKey: savedAccountsUDKey)
+        guard let data = try? JSONEncoder().encode(savedAccounts),
+              let json = String(data: data, encoding: .utf8) else { return }
+        try? keychain.save(json, forKey: savedAccountsUDKey, account: nil)
     }
 
     private func upsertSavedAccount(from user: MeeshyUser) {
@@ -710,28 +728,49 @@ public final class AuthManager: ObservableObject, AuthManaging {
     // MARK: - Migration from legacy global keys (one-time, at first launch)
 
     private func migrateFromLegacyKeysIfNeeded() {
-        // First migrate any UserDefaults → Keychain entries
-        keychain.migrateFromUserDefaults(keys: [legacyTokenKey, legacyUserKey])
+        // 1. Migrate activeUserId from UserDefaults to Keychain
+        if let legacyActiveId = userDefaults.string(forKey: activeUserIdUDKey) {
+            if keychain.load(forKey: activeUserIdUDKey, account: nil) == nil {
+                try? keychain.save(legacyActiveId, forKey: activeUserIdUDKey, account: nil)
+            }
+            userDefaults.removeObject(forKey: activeUserIdUDKey)
+        }
 
-        // Only migrate if no active user is set yet
+        // 2. Migrate savedAccounts from UserDefaults to Keychain
+        if let legacyData = userDefaults.data(forKey: savedAccountsUDKey),
+           let legacyJson = String(data: legacyData, encoding: .utf8) {
+            if keychain.load(forKey: savedAccountsUDKey, account: nil) == nil {
+                try? keychain.save(legacyJson, forKey: savedAccountsUDKey, account: nil)
+            }
+            userDefaults.removeObject(forKey: savedAccountsUDKey)
+        }
+
+        // 3. First migrate any UserDefaults → Keychain entries
+        // (Uses the default keychain implementation's migration helper if available)
+        if let manager = keychain as? KeychainManager {
+            manager.migrateFromUserDefaults(keys: [legacyTokenKey, legacyUserKey])
+        }
+
+        // 4. Only migrate if no active user is set yet
         guard activeUserId == nil,
-              let token = keychain.load(forKey: legacyTokenKey),
-              let userJSON = keychain.load(forKey: legacyUserKey),
+              let token = keychain.load(forKey: legacyTokenKey, account: nil),
+              let userJSON = keychain.load(forKey: legacyUserKey, account: nil),
               let userData = userJSON.data(using: .utf8),
               let user = try? JSONDecoder().decode(MeeshyUser.self, from: userData) else {
             return
         }
 
         let userId = user.id
-        try? keychain.save(token, forKey: tokenKey(for: userId))
-        try? keychain.save(userJSON, forKey: userKey(for: userId))
+        try? keychain.save(token, forKey: tokenKey(for: userId), account: nil)
+        try? keychain.save(userJSON, forKey: userKey(for: userId), account: nil)
         // Use now as tokenSavedAt (we don't know the original date — within 1 year is safe)
-        UserDefaults.standard.set(Date().timeIntervalSince1970, forKey: tokenDateUDKey(for: userId))
+        let now = String(Date().timeIntervalSince1970)
+        try? keychain.save(now, forKey: tokenDateUDKey(for: userId), account: nil)
         activeUserId = userId
         upsertSavedAccount(from: user)
 
-        keychain.delete(forKey: legacyTokenKey)
-        keychain.delete(forKey: legacyUserKey)
+        keychain.delete(forKey: legacyTokenKey, account: nil)
+        keychain.delete(forKey: legacyUserKey, account: nil)
     }
 
     // MARK: - Local Profile Mutation (optimistic)

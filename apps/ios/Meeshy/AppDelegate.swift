@@ -452,16 +452,45 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
     ) {
         let userInfo = notification.request.content.userInfo
+        let convId = userInfo["conversationId"] as? String
+        let messageId = userInfo["messageId"] as? String
+
         Task { @MainActor in
             PushNotificationManager.shared.noteMessageActivity(userInfo: userInfo)
+
+            // Trigger real-time sync for foreground notifications so the DB
+            // and cache stay fresh even when the socket is lagging or the
+            // push arrived via a different path.
+            if let convId {
+                await withTaskGroup(of: Void.self) { group in
+                    group.addTask {
+                        await ConversationSyncEngine.shared.ensureMessages(for: convId)
+                    }
+                    group.addTask {
+                        await PushDeliveryReceiptService.shared.ack(
+                            conversationId: convId,
+                            messageId: messageId
+                        )
+                    }
+                }
+            }
         }
         let type = userInfo["type"] as? String ?? "unknown"
         let conversationId = userInfo["conversationId"] as? String
+        let postId = userInfo["postId"] as? String
         let activeConversationId = NotificationManager.shared.activeConversationId
+        let activePostId = NotificationManager.shared.activePostId
 
-        logger.info("Foreground notification: type=\(type) conversation=\(conversationId ?? "-")")
+        logger.info("Foreground notification: type=\(type) conversation=\(conversationId ?? "-") postId=\(postId ?? "-")")
 
+        // Muting logic: suppress the banner if the user is already viewing
+        // the relevant conversation or post.
         if let conversationId, conversationId == activeConversationId {
+            completionHandler([])
+            return
+        }
+
+        if let postId, postId == activePostId {
             completionHandler([])
             return
         }
