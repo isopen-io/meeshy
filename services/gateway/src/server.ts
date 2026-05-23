@@ -52,8 +52,6 @@ import { broadcastRoutes } from './routes/admin/broadcasts';
 import { adminPostRoutes } from './routes/admin/posts';
 import { agentAdminRoutes } from './routes/admin/agent';
 import { userRoutes } from './routes/users';
-// TODO: Migrer user-features vers UserPreferences + ConsentService
-// import userFeaturesRoutes from './routes/user-features';
 import meRoutes from './routes/me';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
 import communityPreferencesRoutes from './routes/community-preferences';
@@ -983,10 +981,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register push notification token routes (device registration for APNS/FCM/VoIP)
     await this.server.register(pushTokenRoutes, { prefix: API_PREFIX });
-
-    // Register user features routes with /api prefix (GDPR consents, feature toggles)
-    // TODO: Réactiver après migration vers UserPreferences + ConsentService
-    // await this.server.register(userFeaturesRoutes, { prefix: API_PREFIX });
 
     // Register conversation preferences routes with /api prefix
     await this.server.register(conversationPreferencesRoutes, { prefix: API_PREFIX });
