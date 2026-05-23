@@ -1083,7 +1083,7 @@ export class MessageTranslationService extends EventEmitter {
       );
 
       for (const ta of savedTranslatedAudios) {
-        logger.info(`   - ${ta.targetLanguage}: url="${ta.url || '⚠️ VIDE'}", path="${ta.path || '⚠️ VIDE'}"`);
+        logger.info(`   - ${ta.targetLanguage}: url="${ta.url || '⚠️ VIDE'}"`);
         this.emit('audioTranslationReady', {
           taskId: data.taskId,
           messageId: data.messageId,
