@@ -183,51 +183,57 @@ public struct InlineVideoPlayerView: View {
                 Circle()
                     .fill(Color(hex: accentColor).opacity(0.85))
                     .frame(width: 48, height: 48)
-                playButtonContent
+                // Always render the play icon as the primary affordance.
+                Image(systemName: "play.fill")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.white)
+                    .offset(x: 2)
+                // Overlay the download state on top — a small badge for
+                // needsDownload, a progress ring for downloading. The play
+                // tap streams the video regardless of cache state (AVPlayer
+                // can buffer over the network), so the badge is an
+                // *additional* signal, not a replacement of the play icon.
+                downloadStateOverlay
             }
             .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
         }
         .accessibilityLabel(accessibilityLabel)
-        .disabled(isDownloading)
-    }
-
-    private var isDownloading: Bool {
-        if case .downloading = availability { return true }
-        return false
     }
 
     @ViewBuilder
-    private var playButtonContent: some View {
+    private var downloadStateOverlay: some View {
         switch availability {
         case .ready:
-            Image(systemName: "play.fill")
-                .font(.system(size: 18, weight: .bold))
-                .foregroundColor(.white)
-                .offset(x: 2)
+            EmptyView()
         case .needsDownload:
-            VStack(spacing: 1) {
-                Image(systemName: "arrow.down.to.line")
-                    .font(.system(size: 16, weight: .bold))
+            // Bottom-right corner badge: download glyph + size hint.
+            VStack(spacing: 0) {
+                Spacer()
+                HStack(spacing: 0) {
+                    Spacer()
+                    HStack(spacing: 2) {
+                        Image(systemName: "arrow.down.to.line")
+                            .font(.system(size: 9, weight: .bold))
+                        if attachment.fileSize > 0 {
+                            Text(fmtSize(Int64(attachment.fileSize)))
+                                .font(.system(size: 8, weight: .semibold, design: .monospaced))
+                        }
+                    }
                     .foregroundColor(.white)
-                if attachment.fileSize > 0 {
-                    Text(fmtSize(Int64(attachment.fileSize)))
-                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
-                        .foregroundColor(.white.opacity(0.9))
+                    .padding(.horizontal, 4)
+                    .padding(.vertical, 2)
+                    .background(Capsule().fill(Color.black.opacity(0.6)))
                 }
             }
+            .frame(width: 56, height: 56)
+            .offset(x: 4, y: 4)
         case .downloading(let progress):
-            if progress > 0 {
-                Circle()
-                    .trim(from: 0, to: progress)
-                    .stroke(Color.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
-                    .rotationEffect(.degrees(-90))
-                    .frame(width: 28, height: 28)
-                    .animation(.linear(duration: 0.2), value: progress)
-            } else {
-                ProgressView()
-                    .tint(.white)
-                    .scaleEffect(0.8)
-            }
+            Circle()
+                .trim(from: 0, to: progress > 0 ? progress : 0.05)
+                .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
+                .rotationEffect(.degrees(-90))
+                .frame(width: 52, height: 52)
+                .animation(.linear(duration: 0.2), value: progress)
         }
     }
 
@@ -249,18 +255,15 @@ public struct InlineVideoPlayerView: View {
     // MARK: - Playback Actions
 
     private func handlePlayTap() {
-        switch availability {
-        case .ready:
-            startPlayback()
-        case .needsDownload:
-            // User action explicit -> trigger DL through the parent's policy-
-            // aware downloader. The parent (VideoMediaView, FeedPostCard, etc.)
-            // is responsible for instantiating an AttachmentDownloader.
+        // Always start inline playback. AVPlayer streams over the network
+        // when the file isn't cached; the download badge stays visible until
+        // the cached copy is complete. Tapping the play button while
+        // .needsDownload also kicks off the parent's downloader so the
+        // viewer ends up with an offline copy after the playback session.
+        if case .needsDownload = availability {
             onDownload?()
-            HapticFeedback.light()
-        case .downloading:
-            break
         }
+        startPlayback()
     }
 
     private func startPlayback() {
