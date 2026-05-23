@@ -133,6 +133,16 @@ export const SERVER_EVENTS = {
   CALL_SIGNAL: 'call:signal',
   CALL_MEDIA_TOGGLED: 'call:media-toggled',
   CALL_ERROR: 'call:error',
+  /**
+   * --- Call events RESERVED (no emitter yet) ---
+   * Declared for upcoming voice/video phases:
+   * - quality monitoring (CALL_QUALITY_ALERT, CALL_SCREEN_CAPTURE_ALERT)
+   * - in-call translation pipeline (CALL_TRANSLATED_SEGMENT,
+   *   CALL_TRANSLATION_REQUESTED/ENABLED, CALL_TRANSCRIPTION_RESULT)
+   * - state edge cases (CALL_MISSED, CALL_ALREADY_ANSWERED — iOS already
+   *   subscribes via MessageSocketManager but the gateway never emits)
+   * Keep names + types in sync until the emitters land.
+   */
   CALL_MISSED: 'call:missed',
   CALL_QUALITY_ALERT: 'call:quality-alert',
   CALL_TRANSLATED_SEGMENT: 'call:translated-segment',
@@ -178,7 +188,13 @@ export const SERVER_EVENTS = {
    */
   TRANSCRIPTION_READY: 'audio:transcription-ready',
 
-  // --- Message pinning ---
+  /**
+   * --- Message pinning (RESERVED — no emitter yet) ---
+   * Declared for future "pin message" feature. Gateway does not
+   * currently emit these and no client subscribes to them. Keep the
+   * constants + types in sync with the iOS roadmap so the feature
+   * can be wired without renaming.
+   */
   MESSAGE_PINNED: 'message:pinned',
   MESSAGE_UNPINNED: 'message:unpinned',
 
