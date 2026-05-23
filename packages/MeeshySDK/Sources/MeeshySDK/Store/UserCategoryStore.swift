@@ -288,8 +288,6 @@ struct DefaultUserCategoryWritingAdapter: UserCategoryWriting {
         let updates: [ReorderItem]
     }
 
-    private struct EmptyResponse: Decodable {}
-
     func listCategories() async throws -> [ConversationCategory] {
         try await PreferenceService.shared.getCategories()
     }
@@ -314,16 +312,26 @@ struct DefaultUserCategoryWritingAdapter: UserCategoryWriting {
     }
 
     func deleteCategory(id: String) async throws {
-        let _: APIResponse<EmptyResponse> = try await APIClient.shared.delete(
-            endpoint: "/me/preferences/categories/\(id)"
+        // Gateway returns `{ success, message }` with NO `data` key for
+        // this endpoint (see services/gateway/src/routes/me/preferences/categories.ts).
+        // `APIResponse<T>` requires `data` and would throw
+        // `DecodingError.keyNotFound`; route through `request<T>` with
+        // `SimpleAPIResponse` which accepts the response shape directly.
+        let _: SimpleAPIResponse = try await APIClient.shared.request(
+            endpoint: "/me/preferences/categories/\(id)",
+            method: "DELETE"
         )
     }
 
     func reorderCategories(_ updates: [(id: String, order: Int)]) async throws {
+        // Same response shape as DELETE — `{ success, message }`. Bypass
+        // the `APIResponse<T>` wrapper for the same reason.
         let body = ReorderBody(updates: updates.map { ReorderItem(categoryId: $0.id, order: $0.order) })
-        let _: APIResponse<EmptyResponse> = try await APIClient.shared.post(
+        let bodyData = try JSONEncoder().encode(body)
+        let _: SimpleAPIResponse = try await APIClient.shared.request(
             endpoint: "/me/preferences/categories/reorder",
-            body: body
+            method: "POST",
+            body: bodyData
         )
     }
 }
