@@ -47,7 +47,7 @@ struct UniversalComposerBar: View {
 
     // MARK: - Configuration
 
-    var placeholder: String = String(localized: "composer.placeholder.default", defaultValue: "Message...", bundle: .main)
+    var placeholder: String = "Message..."
     var accentColor: String = "08D9D6"
     var secondaryColor: String = "4ECDC4"
     var maxLength: Int? = nil

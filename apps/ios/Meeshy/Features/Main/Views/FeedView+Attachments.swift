@@ -482,14 +482,14 @@ struct FeedComposerSheet: View {
                     Button {
                         cleanupAndDismiss()
                     } label: {
-                        Text("Annuler")
+                        Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
 
                     Spacer()
 
-                    Text("Nouveau post")
+                    Text(String(localized: "feed.post.composer.title", defaultValue: "Nouveau post", bundle: .main))
                         .font(.system(size: 16, weight: .bold))
                         .foregroundColor(theme.textPrimary)
 
@@ -503,7 +503,7 @@ struct FeedComposerSheet: View {
                                 .tint(MeeshyColors.indigo300)
                                 .scaleEffect(0.8)
                         } else {
-                            Text("Publier")
+                            Text(String(localized: "feed.post.composer.publish", defaultValue: "Publier", bundle: .main))
                                 .font(.system(size: 15, weight: .bold))
                                 .foregroundColor(hasContent ? MeeshyColors.indigo300 : theme.textMuted)
                         }
@@ -531,19 +531,23 @@ struct FeedComposerSheet: View {
 
                         Menu {
                             Button { postVisibility = "PUBLIC" } label: {
-                                Label("Public", systemImage: "globe")
+                                Label(String(localized: "feed.post.visibility.public", defaultValue: "Public", bundle: .main), systemImage: "globe")
                             }
                             Button { postVisibility = "FRIENDS" } label: {
-                                Label("Amis", systemImage: "person.2")
+                                Label(String(localized: "feed.post.visibility.friends", defaultValue: "Amis", bundle: .main), systemImage: "person.2")
                             }
                             Button { postVisibility = "PRIVATE" } label: {
-                                Label("Priv\u{00E9}", systemImage: "lock")
+                                Label(String(localized: "feed.post.visibility.private", defaultValue: "Privé", bundle: .main), systemImage: "lock")
                             }
                         } label: {
                             HStack(spacing: 4) {
                                 Image(systemName: postVisibility == "PUBLIC" ? "globe" : postVisibility == "FRIENDS" ? "person.2" : "lock")
                                     .font(.system(size: 10))
-                                Text(postVisibility == "PUBLIC" ? "Public" : postVisibility == "FRIENDS" ? "Amis" : "Priv\u{00E9}")
+                                Text(postVisibility == "PUBLIC"
+                                    ? String(localized: "feed.post.visibility.public", defaultValue: "Public", bundle: .main)
+                                    : postVisibility == "FRIENDS"
+                                        ? String(localized: "feed.post.visibility.friends", defaultValue: "Amis", bundle: .main)
+                                        : String(localized: "feed.post.visibility.private", defaultValue: "Privé", bundle: .main))
                                     .font(.system(size: 12))
                             }
                             .foregroundColor(theme.textMuted)
@@ -557,7 +561,7 @@ struct FeedComposerSheet: View {
                 // Text editor
                 ZStack(alignment: .topLeading) {
                     if composerText.isEmpty {
-                        Text("Qu'avez-vous en t\u{00EA}te ?")
+                        Text(String(localized: "feed.post.composer.placeholder", defaultValue: "Qu'avez-vous en tête ?", bundle: .main))
                             .font(.system(size: 17))
                             .foregroundColor(theme.textMuted)
                             .padding(.horizontal, 16)

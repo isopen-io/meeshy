@@ -494,14 +494,14 @@ struct PostDetailView: View {
                     Text(truncation.text + "... ")
                         .font(.system(size: 16))
                         .foregroundColor(theme.textPrimary)
-                    + Text("voir plus")
+                    + Text(String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(Color(hex: accentColor))
                 } else if truncation.isTruncated && isTextExpanded {
                     Text(effectiveContent + " ")
                         .font(.system(size: 16))
                         .foregroundColor(theme.textPrimary)
-                    + Text("voir moins")
+                    + Text(String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(Color(hex: accentColor))
                 } else {
@@ -954,7 +954,7 @@ struct PostDetailView: View {
                         .foregroundColor(Color(hex: media.thumbnailColor))
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(media.fileName ?? "Document")
+                    Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
@@ -964,7 +964,7 @@ struct PostDetailView: View {
                         }
                         if let pages = media.pageCount {
                             Text("\u{2022}").foregroundColor(theme.textMuted)
-                            Text("\(pages) pages").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                            Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))").font(.system(size: 12)).foregroundColor(theme.textMuted)
                         }
                     }
                 }
@@ -991,7 +991,7 @@ struct PostDetailView: View {
                         .foregroundColor(Color(hex: media.thumbnailColor))
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(media.locationName ?? "Location")
+                    Text(media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                     if let lat = media.latitude, let lon = media.longitude {
@@ -1104,7 +1104,7 @@ struct PostDetailView: View {
 
     private var commentsHeader: some View {
         HStack(spacing: 8) {
-            Text("Commentaires")
+            Text(String(localized: "feed.post.detail.comments", defaultValue: "Commentaires", bundle: .main))
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 

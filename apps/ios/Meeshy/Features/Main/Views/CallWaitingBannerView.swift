@@ -40,7 +40,7 @@ struct CallWaitingBannerView: View {
                         Text(callerName)
                             .font(.headline)
                             .foregroundStyle(.white)
-                        Text("Appel entrant...")
+                        Text(String(localized: "call.waiting.incoming", defaultValue: "Appel entrant...", bundle: .main))
                             .font(.caption)
                             .foregroundStyle(.white.opacity(0.8))
                     }
@@ -51,27 +51,27 @@ struct CallWaitingBannerView: View {
                         dismiss()
                         onReject()
                     }) {
-                        Text("Refuser")
+                        Text(String(localized: "call.waiting.reject", defaultValue: "Refuser", bundle: .main))
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .background(.red, in: Capsule())
                     }
-                    .accessibilityLabel("Refuser l'appel de \(callerName)")
+                    .accessibilityLabel(String(localized: "call.waiting.reject.a11y", defaultValue: "Refuser l'appel de \(callerName)", bundle: .main))
 
                     Button(action: {
                         dismiss()
                         onEndAndAnswer()
                     }) {
-                        Text("Repondre")
+                        Text(String(localized: "call.waiting.answer", defaultValue: "Repondre", bundle: .main))
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(.white)
                             .padding(.horizontal, 16)
                             .padding(.vertical, 8)
                             .background(.green, in: Capsule())
                     }
-                    .accessibilityLabel("Raccrocher et repondre a \(callerName)")
+                    .accessibilityLabel(String(localized: "call.waiting.answer.a11y", defaultValue: "Raccrocher et repondre a \(callerName)", bundle: .main))
                 }
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
@@ -83,7 +83,7 @@ struct CallWaitingBannerView: View {
             .padding(.top, 8)
             .transition(.move(edge: .top).combined(with: .opacity))
             .accessibilityElement(children: .contain)
-            .accessibilityLabel("Appel entrant de \(callerName)")
+            .accessibilityLabel(String(localized: "call.waiting.banner.a11y", defaultValue: "Appel entrant de \(callerName)", bundle: .main))
             .onAppear {
                 scheduleAutoDismiss()
             }

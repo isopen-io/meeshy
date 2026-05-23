@@ -40,7 +40,7 @@ struct AttachmentLoadingTile: View {
                             )
                     }
                     .offset(x: 5, y: -5)
-                    .accessibilityLabel("Annuler le chargement")
+                    .accessibilityLabel(String(localized: "attachment.loading.cancel-a11y", defaultValue: "Annuler le chargement", bundle: .main))
                 }
             }
 
@@ -110,7 +110,7 @@ struct AttachmentLoadingTile: View {
             Image(systemName: "exclamationmark.triangle.fill")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundColor(.white)
-            Text("Erreur")
+            Text(String(localized: "attachment.loading.error", defaultValue: "Erreur", bundle: .main))
                 .font(.system(size: 8, weight: .semibold))
                 .foregroundColor(.white)
         }
@@ -135,22 +135,22 @@ struct AttachmentLoadingTile: View {
     private var label: String {
         if case .failed(let msg) = prep.stage, !msg.isEmpty { return msg }
         switch prep.kind {
-        case .image: return "Photo"
-        case .video: return "Vidéo"
-        case .audio: return "Audio"
-        case .file:  return "Fichier"
-        case .location: return "Position"
+        case .image: return String(localized: "attachment.kind.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.kind.video", defaultValue: "Vidéo", bundle: .main)
+        case .audio: return String(localized: "attachment.kind.audio", defaultValue: "Audio", bundle: .main)
+        case .file:  return String(localized: "attachment.kind.file", defaultValue: "Fichier", bundle: .main)
+        case .location: return String(localized: "attachment.kind.location", defaultValue: "Position", bundle: .main)
         }
     }
 
     private var stageLabel: String {
         switch prep.stage {
-        case .loading:      return "Chargement"
-        case .compressing:  return "Compression"
-        case .thumbnailing: return "Aperçu"
-        case .hashing:      return "Hash"
+        case .loading:      return String(localized: "attachment.stage.loading", defaultValue: "Chargement", bundle: .main)
+        case .compressing:  return String(localized: "attachment.stage.compressing", defaultValue: "Compression", bundle: .main)
+        case .thumbnailing: return String(localized: "attachment.stage.thumbnailing", defaultValue: "Aperçu", bundle: .main)
+        case .hashing:      return String(localized: "attachment.stage.hashing", defaultValue: "Hash", bundle: .main)
         case .ready:        return ""
-        case .failed:       return "Erreur"
+        case .failed:       return String(localized: "attachment.loading.error", defaultValue: "Erreur", bundle: .main)
         }
     }
 
