@@ -28,6 +28,9 @@ import type {
   ConversationParticipantResponse,
   CreateLinkData,
   MarkAsReadResponse,
+  EncryptionMode,
+  EncryptionStatus,
+  EnableEncryptionResult,
 } from './types';
 
 /**
@@ -84,6 +87,14 @@ export class ConversationsService {
    */
   async getConversationsWithUser(userId: string): Promise<Conversation[]> {
     return conversationsCrudService.getConversationsWithUser(userId);
+  }
+
+  async getEncryptionStatus(id: string): Promise<EncryptionStatus> {
+    return conversationsCrudService.getEncryptionStatus(id);
+  }
+
+  async enableEncryption(id: string, mode: EncryptionMode): Promise<EnableEncryptionResult> {
+    return conversationsCrudService.enableEncryption(id, mode);
   }
 
   // ===== MESSAGE OPERATIONS =====
@@ -211,4 +222,7 @@ export type {
   ConversationParticipantResponse,
   CreateLinkData,
   MarkAsReadResponse,
+  EncryptionMode,
+  EncryptionStatus,
+  EnableEncryptionResult,
 };
