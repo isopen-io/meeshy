@@ -169,38 +169,38 @@ struct SettingsView: View {
     }
 
     private var accountSection: some View {
-        settingsSection(title: "Compte", icon: "person.circle.fill", color: "9B59B6") {
+        settingsSection(title: String(localized: "settings.section.account", defaultValue: "Compte", bundle: .main), icon: "person.circle.fill", color: "9B59B6") {
             Button {
                 HapticFeedback.light()
                 showPrivacySettings = true
             } label: {
-                settingsRow(icon: "lock.fill", title: "Confidentialité", color: "E91E63") {
+                settingsRow(icon: "lock.fill", title: String(localized: "settings.privacy.title", defaultValue: "Confidentialité", bundle: .main), color: "E91E63") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Confidentialite")
-            .accessibilityHint("Ouvre les reglages de confidentialite")
+            .accessibilityLabel(String(localized: "settings.privacy.a11y", defaultValue: "Confidentialite", bundle: .main))
+            .accessibilityHint(String(localized: "settings.privacy.hint", defaultValue: "Ouvre les reglages de confidentialite", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showSecurity = true
             } label: {
-                settingsRow(icon: "shield.fill", title: "Sécurité", color: "3498DB") {
+                settingsRow(icon: "shield.fill", title: String(localized: "settings.security.title", defaultValue: "Sécurité", bundle: .main), color: "3498DB") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Securite")
-            .accessibilityHint("Ouvre les reglages de securite")
+            .accessibilityLabel(String(localized: "settings.security.a11y", defaultValue: "Securite", bundle: .main))
+            .accessibilityHint(String(localized: "settings.security.hint", defaultValue: "Ouvre les reglages de securite", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showBlockedUsers = true
             } label: {
-                settingsRow(icon: "lock.shield", title: "Utilisateurs bloques", color: "EF4444") {
+                settingsRow(icon: "lock.shield", title: String(localized: "settings.blocked_users", defaultValue: "Utilisateurs bloques", bundle: .main), color: "EF4444") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)

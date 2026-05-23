@@ -93,7 +93,7 @@ struct MemberManagementSection: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            TextField("Rechercher un membre...", text: $viewModel.memberSearchText)
+            TextField(String(localized: "member-management.search", defaultValue: "Rechercher un membre...", bundle: .main), text: $viewModel.memberSearchText)
                 .font(.system(size: 14, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
@@ -182,7 +182,7 @@ struct MemberManagementSection: View {
                         .frame(width: 32, height: 32)
                         .contentShape(Circle())
                 }
-                .accessibilityLabel("Options pour \(displayName)")
+                .accessibilityLabel(String(format: String(localized: "member-management.options-a11y", defaultValue: "Options pour %@", bundle: .main), displayName))
             }
         }
         .padding(.horizontal, 14)
@@ -199,7 +199,7 @@ struct MemberManagementSection: View {
                 HStack(spacing: 3) {
                     Image(systemName: "crown.fill")
                         .font(.system(size: 9))
-                    Text("Creator")
+                    Text(String(localized: "member-management.role.creator", defaultValue: "Creator", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundColor(Color(hex: "F8B500"))
@@ -208,7 +208,7 @@ struct MemberManagementSection: View {
                 HStack(spacing: 3) {
                     Image(systemName: "shield.fill")
                         .font(.system(size: 9))
-                    Text("Admin")
+                    Text(String(localized: "member-management.role.admin", defaultValue: "Admin", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundColor(Color(hex: "3B82F6"))
@@ -217,7 +217,7 @@ struct MemberManagementSection: View {
                 HStack(spacing: 3) {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 9))
-                    Text("Modérateur")
+                    Text(String(localized: "member-management.role.moderator", defaultValue: "Modérateur", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundColor(Color(hex: "4ECDC4"))
