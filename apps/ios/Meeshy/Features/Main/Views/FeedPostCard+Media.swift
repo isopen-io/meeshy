@@ -113,7 +113,8 @@ extension FeedPostCard {
                 ProgressiveCachedImage(
                     thumbHash: media.thumbHash,
                     thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url
+                    fullUrl: media.url,
+                    autoLoad: true
                 ) {
                     Color(hex: media.thumbnailColor).shimmer()
                 }
@@ -212,7 +213,8 @@ extension FeedPostCard {
         return ProgressiveCachedImage(
             thumbHash: media.thumbHash,
             thumbnailUrl: media.thumbnailUrl,
-            fullUrl: media.url
+            fullUrl: media.url,
+            autoLoad: true
         ) {
             Color(hex: media.thumbnailColor).shimmer()
         }

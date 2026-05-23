@@ -911,7 +911,8 @@ struct PostDetailView: View {
             ProgressiveCachedImage(
                 thumbHash: media.thumbHash,
                 thumbnailUrl: media.thumbnailUrl,
-                fullUrl: media.url
+                fullUrl: media.url,
+                autoLoad: true
             ) {
                 Color(hex: media.thumbnailColor).shimmer()
             }
@@ -1069,7 +1070,8 @@ struct PostDetailView: View {
             ProgressiveCachedImage(
                 thumbHash: media.thumbHash,
                 thumbnailUrl: media.thumbnailUrl,
-                fullUrl: media.url
+                fullUrl: media.url,
+                autoLoad: true
             ) {
                 Color(hex: media.thumbnailColor).shimmer()
             }

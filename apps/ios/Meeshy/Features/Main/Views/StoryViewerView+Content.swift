@@ -174,7 +174,8 @@ extension StoryViewerView {
                 ProgressiveCachedImage(
                     thumbHash: media.thumbHash,
                     thumbnailUrl: media.thumbnailUrl,
-                    fullUrl: media.url
+                    fullUrl: media.url,
+                    autoLoad: true
                 ) {
                     coloredMediaFallback(media: media)
                 }
