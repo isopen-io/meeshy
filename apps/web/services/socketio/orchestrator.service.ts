@@ -591,7 +591,9 @@ export class SocketIOOrchestrator {
     return this.presenceService.onUnreadUpdated(listener);
   }
 
-  onPreferencesUpdated(listener: (data: { userId: string; category: string }) => void): UnsubscribeFn {
+  onPreferencesUpdated(
+    listener: (data: import('@meeshy/shared/types/socketio-events').UserPreferencesUpdatedEventData) => void,
+  ): UnsubscribeFn {
     return this.preferencesSyncService.onPreferencesUpdated(listener);
   }
 
