@@ -157,16 +157,16 @@ public struct InlineVideoPlayerView: View {
         VStack {
             Spacer()
             HStack {
-                Spacer()
                 Text(formatted)
                     .font(.system(size: 11, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
                     .background(Capsule().fill(Color.black.opacity(0.6)))
+                Spacer()
             }
-            .padding(.trailing, 6)
-            .padding(.bottom, 28)
+            .padding(.leading, 8)
+            .padding(.bottom, 8)
         }
     }
 
@@ -177,64 +177,81 @@ public struct InlineVideoPlayerView: View {
             handlePlayTap()
         } label: {
             ZStack {
+                // Modern glass disc — translucent so the thumbnail beneath
+                // stays partially visible, with a subtle accent tint.
                 Circle()
                     .fill(.ultraThinMaterial)
-                    .frame(width: 56, height: 56)
+                    .frame(width: 64, height: 64)
                 Circle()
-                    .fill(Color(hex: accentColor).opacity(0.85))
-                    .frame(width: 48, height: 48)
-                // Always render the play icon as the primary affordance.
-                Image(systemName: "play.fill")
-                    .font(.system(size: 18, weight: .bold))
-                    .foregroundColor(.white)
-                    .offset(x: 2)
-                // Overlay the download state on top — a small badge for
-                // needsDownload, a progress ring for downloading. The play
-                // tap streams the video regardless of cache state (AVPlayer
-                // can buffer over the network), so the badge is an
-                // *additional* signal, not a replacement of the play icon.
-                downloadStateOverlay
+                    .fill(Color(hex: accentColor).opacity(0.55))
+                    .frame(width: 56, height: 56)
+
+                // Central content depends on availability.
+                playButtonContent
+
+                // Progress ring orbits the disc during download.
+                if case .downloading(let progress) = availability {
+                    Circle()
+                        .trim(from: 0, to: progress > 0 ? progress : 0.05)
+                        .stroke(Color.white, style: StrokeStyle(lineWidth: 3, lineCap: .round))
+                        .rotationEffect(.degrees(-90))
+                        .frame(width: 60, height: 60)
+                        .animation(.linear(duration: 0.2), value: progress)
+                }
             }
             .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
         }
         .accessibilityLabel(accessibilityLabel)
+        .disabled(isDownloading)
     }
 
     @ViewBuilder
-    private var downloadStateOverlay: some View {
+    private var playButtonContent: some View {
         switch availability {
         case .ready:
-            EmptyView()
+            // Modern semi-transparent play glyph — once the bytes are local
+            // the disc fades back so the artwork shows through.
+            Image(systemName: "play.fill")
+                .font(.system(size: 22, weight: .bold))
+                .foregroundColor(.white)
+                .offset(x: 2)
         case .needsDownload:
-            // Bottom-right corner badge: download glyph + size hint.
-            VStack(spacing: 0) {
-                Spacer()
-                HStack(spacing: 0) {
-                    Spacer()
-                    HStack(spacing: 2) {
-                        Image(systemName: "arrow.down.to.line")
-                            .font(.system(size: 9, weight: .bold))
-                        if attachment.fileSize > 0 {
-                            Text(fmtSize(Int64(attachment.fileSize)))
-                                .font(.system(size: 8, weight: .semibold, design: .monospaced))
-                        }
-                    }
+            // Download is the *only* affordance while bytes are missing:
+            // a clear arrow + the file weight stacked beneath it. No play
+            // icon — tapping must trigger the download, not playback.
+            VStack(spacing: 2) {
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: 22, weight: .bold))
                     .foregroundColor(.white)
-                    .padding(.horizontal, 4)
-                    .padding(.vertical, 2)
-                    .background(Capsule().fill(Color.black.opacity(0.6)))
+                if attachment.fileSize > 0 {
+                    Text(fmtSize(Int64(attachment.fileSize)))
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.9))
                 }
             }
-            .frame(width: 56, height: 56)
-            .offset(x: 4, y: 4)
         case .downloading(let progress):
-            Circle()
-                .trim(from: 0, to: progress > 0 ? progress : 0.05)
-                .stroke(Color.white, style: StrokeStyle(lineWidth: 2.5, lineCap: .round))
-                .rotationEffect(.degrees(-90))
-                .frame(width: 52, height: 52)
-                .animation(.linear(duration: 0.2), value: progress)
+            // Slot replaces the size hint with a live percentage so the
+            // ring + the text together communicate "X% downloaded".
+            VStack(spacing: 2) {
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white.opacity(0.6))
+                if progress > 0 {
+                    Text("\(Int(progress * 100))%")
+                        .font(.system(size: 10, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                } else {
+                    ProgressView()
+                        .tint(.white)
+                        .scaleEffect(0.6)
+                }
+            }
         }
+    }
+
+    private var isDownloading: Bool {
+        if case .downloading = availability { return true }
+        return false
     }
 
     private var accessibilityLabel: String {
@@ -255,15 +272,17 @@ public struct InlineVideoPlayerView: View {
     // MARK: - Playback Actions
 
     private func handlePlayTap() {
-        // Always start inline playback. AVPlayer streams over the network
-        // when the file isn't cached; the download badge stays visible until
-        // the cached copy is complete. Tapping the play button while
-        // .needsDownload also kicks off the parent's downloader so the
-        // viewer ends up with an offline copy after the playback session.
-        if case .needsDownload = availability {
+        switch availability {
+        case .ready:
+            startPlayback()
+        case .needsDownload:
+            // Tap is a download trigger — playback only unlocks once the
+            // bytes are on disk. The parent owns the AttachmentDownloader.
             onDownload?()
+            HapticFeedback.light()
+        case .downloading:
+            break
         }
-        startPlayback()
     }
 
     private func startPlayback() {

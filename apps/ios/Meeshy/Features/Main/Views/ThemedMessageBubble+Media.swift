@@ -236,6 +236,17 @@ fileprivate struct BubbleGridCell: View {
     }
 
     var body: some View {
+        if attachment.type == .video, !attachmentIsProtected || isRevealed {
+            videoBody
+        } else {
+            standardBody
+        }
+    }
+
+    /// Standard layout — image cells, protected/blurred video, or any future
+    /// media kind. Tap = fullscreen, DownloadBadge centred (no competing
+    /// play affordance underneath).
+    private var standardBody: some View {
         ZStack {
             Color.black
             mediaLayer
@@ -247,6 +258,27 @@ fileprivate struct BubbleGridCell: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: handleTap)
         .overlay { downloadBadgeOverlay }
+    }
+
+    /// Inline video player path. `VideoMediaView` owns the play affordance,
+    /// the download badge (corner pill via `InlineVideoPlayerView`), and the
+    /// fullscreen expand button surfaced by the overlay controls. The bubble
+    /// only forwards the expand callback so `fullscreenAttachment` is set
+    /// from the same single source of truth as the carousel/grid path.
+    private var videoBody: some View {
+        ZStack {
+            Color.black
+            VideoMediaView(
+                attachment: attachment,
+                accentColor: contactColor,
+                isDark: false,
+                onExpandFullscreen: { fullscreenAttachment = attachment }
+            )
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            overflowOverlay
+            viewCountBadge
+        }
+        .clipped()
     }
 
     // MARK: - Sub-Views (each returns `some View` but at one bounded depth)
