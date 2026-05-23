@@ -38,34 +38,44 @@ struct PostDetailView: View {
     /// Calls `POST /posts/:id/share?generateLink=true`, then dispatches the
     /// short URL to either the pasteboard or the system share sheet.
     /// `medium=share` UTM is attached by the gateway so analytics can split
-    /// "share via copy-link" from "share via system sheet" later.
+    /// "share via copy-link" from "share via system sheet" later. If the
+    /// mint fails (offline, rate-limit, gateway error) the call still
+    /// surfaces the raw post URL so the user is never stuck with nothing to
+    /// share — only the attribution analytics are skipped.
     private func mintShareLink(action: ShareLinkAction) async {
         guard let post = viewModel.post else { return }
-        do {
-            let result = try await PostService.shared.share(
-                postId: post.id,
-                platform: action == .copyToPasteboard ? "copy" : "system",
-                generateLink: true
-            )
-            guard let shortUrl = result.shortUrl, let url = URL(string: shortUrl) else {
-                ToastManager.shared.showError("Lien indisponible")
-                return
+        let trackingShortUrl: String? = await {
+            do {
+                let result = try await PostService.shared.share(
+                    postId: post.id,
+                    platform: action == .copyToPasteboard ? "copy" : "system",
+                    generateLink: true
+                )
+                return result.shortUrl
+            } catch {
+                return nil
             }
-            await MainActor.run {
-                switch action {
-                case .copyToPasteboard:
-                    UIPasteboard.general.string = shortUrl
-                    HapticFeedback.success()
-                    ToastManager.shared.show(
-                        String(localized: "feed.post.detail.copy_link.success", defaultValue: "Lien copié", bundle: .main)
-                    )
-                case .presentShareSheet:
-                    shareableLink = ShareableLink(url: url)
-                    HapticFeedback.light()
-                }
+        }()
+
+        let fallbackUrlString = "\(ShareableLink.webBaseURL)/v2/feeds/post/\(post.id)"
+        let resolvedString = trackingShortUrl ?? fallbackUrlString
+        guard let resolvedUrl = URL(string: resolvedString) else {
+            ToastManager.shared.showError("Lien indisponible")
+            return
+        }
+
+        await MainActor.run {
+            switch action {
+            case .copyToPasteboard:
+                UIPasteboard.general.string = resolvedString
+                HapticFeedback.success()
+                ToastManager.shared.show(
+                    String(localized: "feed.post.detail.copy_link.success", defaultValue: "Lien copié", bundle: .main)
+                )
+            case .presentShareSheet:
+                shareableLink = ShareableLink(url: resolvedUrl)
+                HapticFeedback.light()
             }
-        } catch {
-            ToastManager.shared.showError("Erreur lors du partage")
         }
     }
 

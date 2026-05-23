@@ -8,13 +8,26 @@ import MeeshyUI
 
 // MARK: - ShareableLink
 
-/// Identifiable wrapper around the freshly-minted post share URL so
+/// Identifiable wrapper around the freshly-minted post/story share URL so
 /// SwiftUI's `.sheet(item:)` can drive presentation directly. `URL` doesn't
 /// conform to `Identifiable`; wrapping is the lightest fix without leaking
 /// state booleans across the view tree.
 struct ShareableLink: Identifiable {
     let id = UUID()
     let url: URL
+
+    /// Public web origin posts/stories live on. Hardcoded to the production
+    /// host because an external share must always resolve from a third-party
+    /// network — a staging URL would dead-end for the recipient.
+    static let webBaseURL = "https://meeshy.me"
+
+    /// Raw post detail URL used as a graceful fallback when the gateway can't
+    /// mint a TrackingLink (offline, rate-limited, etc.). The recipient still
+    /// lands on the post; only the attribution analytics are skipped.
+    /// Mirrors the `originalUrl` the gateway uses when minting the link.
+    static func fallback(forPostId postId: String) -> ShareableLink? {
+        URL(string: "\(webBaseURL)/v2/feeds/post/\(postId)").map { ShareableLink(url: $0) }
+    }
 }
 
 // MARK: - Feed View
@@ -391,9 +404,13 @@ struct FeedView: View {
             },
             onShare: { postId in
                 Task {
+                    // Prefer the tracking link; fall back to the raw post URL
+                    // so an offline / failing-mint share never silently drops.
                     if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
                        let url = URL(string: shortUrl) {
                         shareableLink = ShareableLink(url: url)
+                    } else if let raw = ShareableLink.fallback(forPostId: postId) {
+                        shareableLink = raw
                     }
                 }
             },
