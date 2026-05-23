@@ -922,13 +922,19 @@ struct ConversationInfoSheet: View {
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("End-to-End Encryption")
+                        Text(String(localized: "conversation.encryption.menu.title",
+                                    defaultValue: "End-to-End Encryption",
+                                    bundle: .main))
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
 
                         Text(conversation.encryptionMode != nil
-                             ? "Chiffrement actif — \(conversation.encryptionMode?.uppercased() ?? "")"
-                             : "Conversation non chiffrée — appuyez pour activer")
+                             ? String(localized: "conversation.encryption.menu.active",
+                                      defaultValue: "Chiffrement actif — \(conversation.encryptionMode?.uppercased() ?? "")",
+                                      bundle: .main)
+                             : String(localized: "conversation.encryption.menu.inactive",
+                                      defaultValue: "Conversation non chiffrée — appuyez pour activer",
+                                      bundle: .main))
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
@@ -970,11 +976,15 @@ struct ConversationInfoSheet: View {
                         .frame(width: 24)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Chiffrement de bout en bout")
+                        Text(String(localized: "conversation.encryption.legacy.title",
+                                    defaultValue: "Chiffrement de bout en bout",
+                                    bundle: .main))
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
 
-                        Text("Appuyez pour vérifier le numéro de sécurité")
+                        Text(String(localized: "conversation.encryption.legacy.subtitle",
+                                    defaultValue: "Appuyez pour vérifier le numéro de sécurité",
+                                    bundle: .main))
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)

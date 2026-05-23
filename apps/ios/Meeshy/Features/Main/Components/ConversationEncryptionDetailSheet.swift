@@ -23,7 +23,9 @@ struct ConversationEncryptionDetailSheet: View {
                         HStack {
                             ProgressView()
                                 .controlSize(.small)
-                            Text("Chargement du statut…")
+                            Text(String(localized: "conversation.encryption.detail.loading",
+                                        defaultValue: "Chargement du statut…",
+                                        bundle: .main))
                                 .foregroundColor(.secondary)
                         }
                     }
@@ -41,11 +43,15 @@ struct ConversationEncryptionDetailSheet: View {
                     }
                 }
             }
-            .navigationTitle("Chiffrement")
+            .navigationTitle(String(localized: "conversation.encryption.detail.title",
+                                    defaultValue: "Chiffrement",
+                                    bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { dismiss() }
+                    Button(String(localized: "common.close",
+                                  defaultValue: "Fermer",
+                                  bundle: .main)) { dismiss() }
                 }
             }
             .task { await loadStatus() }
@@ -62,7 +68,9 @@ struct ConversationEncryptionDetailSheet: View {
                     .font(.title2)
                     .foregroundColor(.green)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Chiffrement actif")
+                    Text(String(localized: "conversation.encryption.detail.activeLabel",
+                                defaultValue: "Chiffrement actif",
+                                bundle: .main))
                         .font(.headline)
                     Text(modeLabel(mode))
                         .font(.subheadline)
@@ -73,13 +81,30 @@ struct ConversationEncryptionDetailSheet: View {
         }
 
         Section {
-            LabeledContent("Mode", value: modeLabel(mode))
+            LabeledContent(String(localized: "conversation.encryption.detail.modeLabel",
+                                  defaultValue: "Mode",
+                                  bundle: .main),
+                           value: modeLabel(mode))
             if let enabledAt = status.enabledAt {
-                LabeledContent("Activé le", value: enabledAt.formatted(date: .abbreviated, time: .shortened))
+                LabeledContent(String(localized: "conversation.encryption.detail.enabledOn",
+                                      defaultValue: "Activé le",
+                                      bundle: .main),
+                               value: enabledAt.formatted(date: .abbreviated, time: .shortened))
             }
-            LabeledContent("Traduction", value: status.canTranslate ? "Disponible" : "Désactivée")
+            LabeledContent(String(localized: "conversation.encryption.detail.translation",
+                                  defaultValue: "Traduction",
+                                  bundle: .main),
+                           value: status.canTranslate
+                                ? String(localized: "conversation.encryption.detail.translation.available",
+                                         defaultValue: "Disponible",
+                                         bundle: .main)
+                                : String(localized: "conversation.encryption.detail.translation.disabled",
+                                         defaultValue: "Désactivée",
+                                         bundle: .main))
         } header: {
-            Text("Détails")
+            Text(String(localized: "conversation.encryption.detail.detailsHeader",
+                        defaultValue: "Détails",
+                        bundle: .main))
         }
 
         Section {
@@ -87,14 +112,18 @@ struct ConversationEncryptionDetailSheet: View {
             HStack {
                 Image(systemName: "lock.fill")
                     .foregroundColor(.secondary)
-                Text("Chiffrement activé")
+                Text(String(localized: "conversation.encryption.detail.toggleEnabled",
+                            defaultValue: "Chiffrement activé",
+                            bundle: .main))
                 Spacer()
                 Toggle("", isOn: .constant(true))
                     .disabled(true)
                     .labelsHidden()
             }
         } footer: {
-            Text("Une fois activé, le chiffrement ne peut plus être désactivé pour cette conversation. C'est une protection contre les régressions de sécurité.")
+            Text(String(localized: "conversation.encryption.detail.immutabilityFooter",
+                        defaultValue: "Une fois activé, le chiffrement ne peut plus être désactivé pour cette conversation. C'est une protection contre les régressions de sécurité.",
+                        bundle: .main))
                 .font(.caption)
         }
     }
@@ -109,9 +138,13 @@ struct ConversationEncryptionDetailSheet: View {
                     .font(.title2)
                     .foregroundColor(.orange)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Conversation non chiffrée")
+                    Text(String(localized: "conversation.encryption.detail.inactiveLabel",
+                                defaultValue: "Conversation non chiffrée",
+                                bundle: .main))
                         .font(.headline)
-                    Text("Les messages sont stockés en clair côté serveur.")
+                    Text(String(localized: "conversation.encryption.detail.inactiveSubtitle",
+                                defaultValue: "Les messages sont stockés en clair côté serveur.",
+                                bundle: .main))
                         .font(.caption)
                         .foregroundColor(.secondary)
                 }
@@ -120,7 +153,10 @@ struct ConversationEncryptionDetailSheet: View {
         }
 
         Section {
-            Picker("Mode", selection: $selectedMode) {
+            Picker(String(localized: "conversation.encryption.detail.modeLabel",
+                          defaultValue: "Mode",
+                          bundle: .main),
+                   selection: $selectedMode) {
                 ForEach(E2EAPI.ConversationEncryptionMode.allCases, id: \.self) { mode in
                     VStack(alignment: .leading) {
                         Text(modeLabel(mode))
@@ -135,9 +171,13 @@ struct ConversationEncryptionDetailSheet: View {
             .pickerStyle(.inline)
             .disabled(isEnabling)
         } header: {
-            Text("Mode")
+            Text(String(localized: "conversation.encryption.detail.modeHeader",
+                        defaultValue: "Mode",
+                        bundle: .main))
         } footer: {
-            Text("L'activation est irréversible. Choisissez le mode adapté à vos besoins de traduction et de confidentialité.")
+            Text(String(localized: "conversation.encryption.detail.activationFooter",
+                        defaultValue: "L'activation est irréversible. Choisissez le mode adapté à vos besoins de traduction et de confidentialité.",
+                        bundle: .main))
                 .font(.caption)
         }
 
@@ -151,7 +191,9 @@ struct ConversationEncryptionDetailSheet: View {
                         ProgressView().tint(.white)
                     } else {
                         Image(systemName: "lock.fill")
-                        Text("Activer le chiffrement").fontWeight(.semibold)
+                        Text(String(localized: "conversation.encryption.detail.activate",
+                                    defaultValue: "Activer le chiffrement",
+                                    bundle: .main)).fontWeight(.semibold)
                     }
                     Spacer()
                 }
@@ -166,17 +208,35 @@ struct ConversationEncryptionDetailSheet: View {
 
     private func modeLabel(_ mode: E2EAPI.ConversationEncryptionMode) -> String {
         switch mode {
-        case .e2ee:   return "End-to-End (Signal)"
-        case .server: return "Serveur (AES-256-GCM)"
-        case .hybrid: return "Hybride (E2EE + Serveur)"
+        case .e2ee:
+            return String(localized: "conversation.encryption.mode.e2ee.label",
+                          defaultValue: "End-to-End (Signal)",
+                          bundle: .main)
+        case .server:
+            return String(localized: "conversation.encryption.mode.server.label",
+                          defaultValue: "Serveur (AES-256-GCM)",
+                          bundle: .main)
+        case .hybrid:
+            return String(localized: "conversation.encryption.mode.hybrid.label",
+                          defaultValue: "Hybride (E2EE + Serveur)",
+                          bundle: .main)
         }
     }
 
     private func modeDescription(_ mode: E2EAPI.ConversationEncryptionMode) -> String {
         switch mode {
-        case .e2ee:   return "Confidentialité maximale. La traduction automatique n'est pas possible."
-        case .server: return "Serveur protégé. La traduction reste disponible (recommandé)."
-        case .hybrid: return "Double couche. Plus lent, traduction conservée."
+        case .e2ee:
+            return String(localized: "conversation.encryption.mode.e2ee.description",
+                          defaultValue: "Confidentialité maximale. La traduction automatique n'est pas possible.",
+                          bundle: .main)
+        case .server:
+            return String(localized: "conversation.encryption.mode.server.description",
+                          defaultValue: "Serveur protégé. La traduction reste disponible (recommandé).",
+                          bundle: .main)
+        case .hybrid:
+            return String(localized: "conversation.encryption.mode.hybrid.description",
+                          defaultValue: "Double couche. Plus lent, traduction conservée.",
+                          bundle: .main)
         }
     }
 
