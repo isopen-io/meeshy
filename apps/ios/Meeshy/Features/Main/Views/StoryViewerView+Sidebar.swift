@@ -377,6 +377,41 @@ struct StoryHeaderView: View {
     @Binding var editAndRepostAsPostSource: RepostPostSourceWrapper?
     @Binding var showReportSheet: Bool
 
+    /// Holds the freshly-minted `meeshy.me/l/<token>` URL for the current
+    /// story share — the sheet at the end of `body` presents the system
+    /// share UI as soon as it's non-nil and clears it on dismiss.
+    @State private var shareableStoryLink: ShareableLink?
+
+    /// Mints a TrackingLink for the given story (gateway route is shared
+    /// with posts — a story IS a `PostType.STORY`), then surfaces the
+    /// `meeshy.me/l/<token>` URL through `shareableStoryLink` so the
+    /// system share sheet picks it up. Falls back to the raw URL when the
+    /// mint fails so the user always has something to share.
+    @MainActor
+    private func mintAndShareStory(_ storyId: String) async {
+        let fallback = makeStoryExternalShareURL(storyId)
+        do {
+            let result = try await PostService.shared.share(
+                postId: storyId,
+                platform: "system",
+                generateLink: true
+            )
+            if let shortUrl = result.shortUrl, let url = URL(string: shortUrl) {
+                shareableStoryLink = ShareableLink(url: url)
+                HapticFeedback.light()
+                return
+            }
+        } catch {
+            // intentional fall-through: try raw URL fallback
+        }
+        if let fallback {
+            shareableStoryLink = ShareableLink(url: fallback)
+            HapticFeedback.light()
+        } else {
+            ToastManager.shared.showError("Lien indisponible")
+        }
+    }
+
     let makeStoryExternalShareURL: (String) -> URL?
     let storyTimeRemaining: (Date) -> String
     let deleteCurrentStory: () -> Void
@@ -547,12 +582,12 @@ struct StoryHeaderView: View {
                     if isOwnStory {
                         // External share via system share sheet (Messages,
                         // Mail, other apps). Only for public stories.
-                        if story.isPublic, let externalShareURL = makeStoryExternalShareURL(story.id) {
-                            ShareLink(
-                                item: externalShareURL,
-                                subject: Text(String(localized: "story.viewer.share.subject", defaultValue: "Story de @\(group.username)", bundle: .main)),
-                                message: Text(String(localized: "story.viewer.share.message", defaultValue: "Regardez cette story sur Meeshy", bundle: .main))
-                            ) {
+                        // The link is minted on tap so the user always
+                        // shares a trackable `meeshy.me/l/<token>` URL.
+                        if story.isPublic {
+                            Button {
+                                Task { await mintAndShareStory(story.id) }
+                            } label: {
                                 Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
                             }
                             Divider()
@@ -593,14 +628,13 @@ struct StoryHeaderView: View {
                             // Pilier 18 SOTA — external share complement
                             // (Messages, Mail, other apps) alongside the
                             // internal SharePicker flow that lives elsewhere.
-                            if let externalShareURL = makeStoryExternalShareURL(story.id) {
-                                ShareLink(
-                                    item: externalShareURL,
-                                    subject: Text(String(localized: "story.viewer.share.subject", defaultValue: "Story de @\(group.username)", bundle: .main)),
-                                    message: Text(String(localized: "story.viewer.share.message", defaultValue: "Regardez cette story sur Meeshy", bundle: .main))
-                                ) {
-                                    Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
-                                }
+                            // Mint the TrackingLink on tap so the shared
+                            // URL is `meeshy.me/l/<token>` and the author
+                            // can track external opens.
+                            Button {
+                                Task { await mintAndShareStory(story.id) }
+                            } label: {
+                                Label(String(localized: "story.viewer.share.external", defaultValue: "Partager hors Meeshy", bundle: .main), systemImage: "square.and.arrow.up")
                             }
                         }
 
@@ -675,6 +709,11 @@ struct StoryHeaderView: View {
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
+        }
+        .sheet(item: $shareableStoryLink) { link in
+            // Trackable `meeshy.me/l/<token>` URL minted in
+            // `mintAndShareStory` — the author owns the analytics.
+            ShareSheet(activityItems: [link.url])
         }
     }
 }
