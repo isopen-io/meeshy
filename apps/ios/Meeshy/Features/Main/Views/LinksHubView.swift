@@ -50,7 +50,7 @@ struct LinksHubView: View {
 
             VStack(spacing: 0) {
                 CollapsibleHeader(
-                    title: "Mes liens",
+                    title: String(localized: "links.hub.title", defaultValue: "Mes liens", bundle: .main),
                     scrollOffset: scrollOffset,
                     onBack: { router.pop() },
                     titleColor: theme.textPrimary,

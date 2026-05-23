@@ -503,7 +503,7 @@ struct SecurityView: View {
                     HapticFeedback.light()
                     withAnimation { isEditingPhone = false; newPhone = ""; phoneError = nil }
                 } label: {
-                    Text("Annuler")
+                    Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, 16)
@@ -519,7 +519,7 @@ struct SecurityView: View {
                         if phoneLoading {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
-                        Text("Envoyer le code")
+                        Text(String(localized: "settings.security.phone.send_code", defaultValue: "Envoyer le code", bundle: .main))
                             .font(.system(size: 13, weight: .bold))
                     }
                     .foregroundColor(.white)
@@ -546,7 +546,7 @@ struct SecurityView: View {
                 Image(systemName: "ellipsis.message.fill")
                     .font(.system(size: 14))
                     .foregroundColor(MeeshyColors.success)
-                Text("Code envoye par SMS")
+                Text(String(localized: "settings.security.phone.code_sent", defaultValue: "Code envoye par SMS", bundle: .main))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(MeeshyColors.success)
             }
@@ -555,7 +555,7 @@ struct SecurityView: View {
             HStack(spacing: 12) {
                 fieldIcon("number", color: "818CF8")
 
-                TextField("Code a 6 chiffres", text: $phoneCode)
+                TextField(String(localized: "settings.security.phone.code_placeholder", defaultValue: "Code a 6 chiffres", bundle: .main), text: $phoneCode)
                     .font(.system(size: 16, weight: .semibold, design: .monospaced))
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.numberPad)
@@ -571,7 +571,7 @@ struct SecurityView: View {
                     HapticFeedback.light()
                     withAnimation { phoneSent = false; isEditingPhone = false; phoneCode = ""; newPhone = ""; phoneError = nil }
                 } label: {
-                    Text("Annuler")
+                    Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                         .padding(.horizontal, 16)
@@ -587,7 +587,7 @@ struct SecurityView: View {
                         if phoneVerifying {
                             ProgressView().scaleEffect(0.7).tint(.white)
                         }
-                        Text("Verifier")
+                        Text(String(localized: "common.verify", defaultValue: "Verifier", bundle: .main))
                             .font(.system(size: 13, weight: .bold))
                     }
                     .foregroundColor(.white)
@@ -615,7 +615,7 @@ struct SecurityView: View {
         let lockedCount = lockManager.lockedConversationIds.count
         let lockColor = "F87171"
         return VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Conversations verrouillées", icon: "lock.shield.fill", color: lockColor)
+            sectionHeader(title: String(localized: "settings.security.locked_conversations", defaultValue: "Conversations verrouillées", bundle: .main), icon: "lock.shield.fill", color: lockColor)
 
             VStack(spacing: 0) {
                 // Status row
@@ -623,10 +623,12 @@ struct SecurityView: View {
                     fieldIcon("lock.shield.fill", color: lockColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Master PIN")
+                        Text(String(localized: "settings.security.master_pin", defaultValue: "Master PIN", bundle: .main))
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(theme.textMuted)
-                        Text(hasMasterPIN ? "Configuré" : "Non configuré")
+                        Text(hasMasterPIN
+                             ? String(localized: "settings.security.configured", defaultValue: "Configuré", bundle: .main)
+                             : String(localized: "settings.security.not_configured", defaultValue: "Non configuré", bundle: .main))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(hasMasterPIN ? MeeshyColors.success : theme.textMuted)
                     }
@@ -636,7 +638,7 @@ struct SecurityView: View {
                     if hasMasterPIN {
                         HStack(spacing: 8) {
                             if lockedCount > 0 {
-                                Text("\(lockedCount) verrou(s)")
+                                Text("\(lockedCount) \(String(localized: "settings.security.locks", defaultValue: "verrou(s)", bundle: .main))")
                                     .font(.system(size: 11, weight: .semibold))
                                     .foregroundColor(MeeshyColors.error)
                                     .padding(.horizontal, 8)
@@ -662,7 +664,7 @@ struct SecurityView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "plus.circle.fill")
                                     .font(.system(size: 12))
-                                Text("Configurer")
+                                Text(String(localized: "settings.security.configure", defaultValue: "Configurer", bundle: .main))
                                     .font(.system(size: 13, weight: .semibold))
                             }
                             .foregroundColor(.white)
@@ -680,7 +682,7 @@ struct SecurityView: View {
                             HStack(spacing: 6) {
                                 Image(systemName: "pencil.circle.fill")
                                     .font(.system(size: 12))
-                                Text("Modifier")
+                                Text(String(localized: "common.edit", defaultValue: "Modifier", bundle: .main))
                                     .font(.system(size: 13, weight: .semibold))
                             }
                             .foregroundColor(MeeshyColors.error)
@@ -697,7 +699,7 @@ struct SecurityView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "lock.open.fill")
                                         .font(.system(size: 12))
-                                    Text("Déverrouiller tout (\(lockedCount))")
+                                    Text("\(String(localized: "settings.security.unlock_all", defaultValue: "Déverrouiller tout", bundle: .main)) (\(lockedCount))")
                                         .font(.system(size: 13, weight: .semibold))
                                 }
                                 .foregroundColor(.white)
@@ -715,7 +717,7 @@ struct SecurityView: View {
                                 HStack(spacing: 6) {
                                     Image(systemName: "trash.circle.fill")
                                         .font(.system(size: 12))
-                                    Text("Supprimer")
+                                    Text(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
                                         .font(.system(size: 13, weight: .semibold))
                                 }
                                 .foregroundColor(MeeshyColors.error)
@@ -915,13 +917,17 @@ struct SecurityView: View {
     }
 
     private func verificationBadge(verified: Bool) -> some View {
-        Text(verified ? "Verifie" : "Non verifie")
+        Text(verified
+             ? String(localized: "settings.security.verified", defaultValue: "Verifie", bundle: .main)
+             : String(localized: "settings.security.not_verified", defaultValue: "Non verifie", bundle: .main))
             .font(.system(size: 10, weight: .semibold))
             .foregroundColor(.white)
             .padding(.horizontal, 6)
             .padding(.vertical, 2)
             .background(Capsule().fill(verified ? MeeshyColors.success : MeeshyColors.warning))
-            .accessibilityLabel(verified ? "Verifie" : "Non verifie")
+            .accessibilityLabel(verified
+                                ? String(localized: "settings.security.verified", defaultValue: "Verifie", bundle: .main)
+                                : String(localized: "settings.security.not_verified", defaultValue: "Non verifie", bundle: .main))
     }
 
     // MARK: - Actions
@@ -944,7 +950,7 @@ struct SecurityView: View {
                 emailError = error.errorDescription
             } catch {
                 HapticFeedback.error()
-                emailError = "Une erreur est survenue"
+                emailError = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
             }
             emailLoading = false
         }
@@ -960,7 +966,7 @@ struct SecurityView: View {
                 startResendCooldown()
             } catch {
                 HapticFeedback.error()
-                emailError = "Impossible de renvoyer l'email"
+                emailError = String(localized: "settings.security.email.resend_failed", defaultValue: "Impossible de renvoyer l'email", bundle: .main)
             }
         }
     }
@@ -993,7 +999,7 @@ struct SecurityView: View {
                 phoneError = error.errorDescription
             } catch {
                 HapticFeedback.error()
-                phoneError = "Une erreur est survenue"
+                phoneError = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
             }
             phoneLoading = false
         }
@@ -1018,13 +1024,13 @@ struct SecurityView: View {
                 HapticFeedback.error()
                 switch error {
                 case .serverError(400, _):
-                    phoneError = "Code incorrect ou expire"
+                    phoneError = String(localized: "settings.security.phone.code_invalid", defaultValue: "Code incorrect ou expire", bundle: .main)
                 default:
                     phoneError = error.errorDescription
                 }
             } catch {
                 HapticFeedback.error()
-                phoneError = "Une erreur est survenue"
+                phoneError = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
             }
             phoneVerifying = false
         }

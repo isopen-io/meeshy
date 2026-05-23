@@ -405,11 +405,11 @@ struct WidgetPreviewView: View {
                     }
 
                     linkTypeCard(
-                        title: "Partage",
+                        title: String(localized: "widget.preview.share", defaultValue: "Partage", bundle: .main),
                         icon: "link.badge.plus",
                         color: "08D9D6",
-                        stat1: "\(shareStats?.totalLinks ?? 0) lien(s)",
-                        stat2: "\(shareStats?.totalUses ?? 0) rejoints"
+                        stat1: String(localized: "widget.preview.linkCountShare", defaultValue: "\(shareStats?.totalLinks ?? 0) lien(s)", bundle: .main),
+                        stat2: String(localized: "widget.preview.shareJoined", defaultValue: "\(shareStats?.totalUses ?? 0) rejoints", bundle: .main)
                     ) {
                         dismiss()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -418,11 +418,11 @@ struct WidgetPreviewView: View {
                     }
 
                     linkTypeCard(
-                        title: "Tracking",
+                        title: String(localized: "widget.preview.tracking", defaultValue: "Tracking", bundle: .main),
                         icon: "chart.bar.fill",
                         color: "A855F7",
-                        stat1: "\(trackingStats?.totalLinks ?? 0) lien(s)",
-                        stat2: "\(trackingStats?.totalClicks ?? 0) clics"
+                        stat1: String(localized: "widget.preview.linkCountTracking", defaultValue: "\(trackingStats?.totalLinks ?? 0) lien(s)", bundle: .main),
+                        stat2: String(localized: "widget.preview.trackingClicks", defaultValue: "\(trackingStats?.totalClicks ?? 0) clics", bundle: .main)
                     ) {
                         dismiss()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -431,11 +431,11 @@ struct WidgetPreviewView: View {
                     }
 
                     linkTypeCard(
-                        title: "Communaut\u{00e9}",
+                        title: String(localized: "widget.preview.community", defaultValue: "Communaut\u{00e9}", bundle: .main),
                         icon: "person.3.fill",
                         color: "F8B500",
-                        stat1: "\(communityLinks.count) groupe(s)",
-                        stat2: "\(communityLinks.reduce(0) { $0 + $1.memberCount }) membres"
+                        stat1: String(localized: "widget.preview.groupCount", defaultValue: "\(communityLinks.count) groupe(s)", bundle: .main),
+                        stat2: String(localized: "widget.preview.memberCount", defaultValue: "\(communityLinks.reduce(0) { $0 + $1.memberCount }) membres", bundle: .main)
                     ) {
                         dismiss()
                         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -520,10 +520,10 @@ struct WidgetPreviewView: View {
                 )
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Widgets Meeshy")
+                Text(String(localized: "widget.preview.widgetsTitle", defaultValue: "Widgets Meeshy", bundle: .main))
                     .font(.system(size: 14, weight: .bold))
                     .foregroundColor(theme.textPrimary)
-                Text("Ajoutez ces widgets a votre ecran d'accueil pour un acces rapide.")
+                Text(String(localized: "widget.preview.widgetsHint", defaultValue: "Ajoutez ces widgets a votre ecran d'accueil pour un acces rapide.", bundle: .main))
                     .font(.system(size: 12))
                     .foregroundColor(theme.textMuted)
                     .fixedSize(horizontal: false, vertical: true)

@@ -48,14 +48,14 @@ struct SettingsView: View {
         .sheet(isPresented: $showStats) { UserStatsView() }
         .sheet(isPresented: $showAffiliate) { AffiliateView() }
         .sheet(isPresented: $showDataExport) { DataExportView() }
-        .alert("Déconnexion", isPresented: $showLogoutConfirm) {
-            Button("Annuler", role: .cancel) { }
-            Button("Déconnexion", role: .destructive) {
+        .alert(String(localized: "settings.logout.title", defaultValue: "Déconnexion", bundle: .main), isPresented: $showLogoutConfirm) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
+            Button(String(localized: "settings.logout.title", defaultValue: "Déconnexion", bundle: .main), role: .destructive) {
                 authManager.logout()
                 MessageSocketManager.shared.disconnect()
             }
         } message: {
-            Text("Voulez-vous vraiment vous déconnecter ?")
+            Text(String(localized: "settings.logout.message", defaultValue: "Voulez-vous vraiment vous déconnecter ?", bundle: .main))
         }
         .sheet(isPresented: $showPrivacySettings) {
             PrivacySettingsView()
@@ -84,7 +84,7 @@ struct SettingsView: View {
 
     private var header: some View {
         CollapsibleHeader(
-            title: "Réglages",
+            title: String(localized: "settings.title", defaultValue: "Réglages", bundle: .main),
             scrollOffset: scrollOffset,
             onBack: { router.pop() },
             titleColor: theme.textPrimary,
@@ -145,7 +145,7 @@ struct SettingsView: View {
                 )
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(authManager.currentUser?.displayName ?? "Mon profil")
+                    Text(authManager.currentUser?.displayName ?? String(localized: "settings.my_profile", defaultValue: "Mon profil", bundle: .main))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                     Text("@\(authManager.currentUser?.username ?? "")")
@@ -165,7 +165,7 @@ struct SettingsView: View {
                     .fill(theme.inputBackground)
             )
         }
-        .accessibilityLabel("Mon profil")
+        .accessibilityLabel(String(localized: "settings.my_profile", defaultValue: "Mon profil", bundle: .main))
     }
 
     private var accountSection: some View {

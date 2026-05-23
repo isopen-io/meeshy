@@ -31,11 +31,11 @@ struct LocationPickerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Annuler") { dismiss() }
+                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }
                         .foregroundColor(Color(hex: accentColor))
                 }
                 ToolbarItem(placement: .principal) {
-                    Text("Choisir un lieu")
+                    Text(String(localized: "location.title", defaultValue: "Choisir un lieu", bundle: .main))
                         .font(.system(size: 16, weight: .bold))
                 }
             }
@@ -77,7 +77,7 @@ struct LocationPickerView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            TextField("Rechercher un lieu...", text: $searchText)
+            TextField(String(localized: "location.search-placeholder", defaultValue: "Rechercher un lieu...", bundle: .main), text: $searchText)
                 .font(.system(size: 14))
                 .textFieldStyle(.plain)
                 .autocorrectionDisabled()
@@ -136,7 +136,7 @@ struct LocationPickerView: View {
                             .background(Circle().fill(Color(hex: accentColor).opacity(0.1)))
 
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(item.name ?? "Lieu inconnu")
+                            Text(item.name ?? String(localized: "location.unknown", defaultValue: "Lieu inconnu", bundle: .main))
                                 .font(.system(size: 13, weight: .medium))
                                 .foregroundColor(theme.textPrimary)
                                 .lineLimit(1)
@@ -185,12 +185,12 @@ struct LocationPickerView: View {
                         HStack(spacing: 6) {
                             ProgressView()
                                 .scaleEffect(0.7)
-                            Text("Recherche de l'adresse...")
+                            Text(String(localized: "location.geocoding", defaultValue: "Recherche de l'adresse...", bundle: .main))
                                 .font(.system(size: 12))
                                 .foregroundColor(theme.textSecondary)
                         }
                     } else {
-                        Text("Deplacez la carte pour choisir")
+                        Text(String(localized: "location.move-prompt", defaultValue: "Deplacez la carte pour choisir", bundle: .main))
                             .font(.system(size: 12))
                             .foregroundColor(theme.textMuted)
                     }
@@ -217,7 +217,7 @@ struct LocationPickerView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "location.circle.fill")
                             .font(.system(size: 14))
-                        Text("Ma position")
+                        Text(String(localized: "location.my-position", defaultValue: "Ma position", bundle: .main))
                             .font(.system(size: 12, weight: .semibold))
                     }
                     .foregroundColor(Color(hex: accentColor))
@@ -242,7 +242,7 @@ struct LocationPickerView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "checkmark")
                             .font(.system(size: 14, weight: .bold))
-                        Text("Confirmer")
+                        Text(String(localized: "common.confirm", defaultValue: "Confirmer", bundle: .main))
                             .font(.system(size: 13, weight: .bold))
                     }
                     .foregroundColor(.white)

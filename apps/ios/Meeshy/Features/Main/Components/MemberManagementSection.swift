@@ -53,7 +53,8 @@ struct MemberManagementSection: View {
 
     private var headerTitle: String {
         let count = viewModel.totalMemberCount > 0 ? viewModel.totalMemberCount : viewModel.participants.count
-        return count > 0 ? "MEMBRES (\(count))" : "MEMBRES"
+        let base = String(localized: "member-management.title", defaultValue: "MEMBRES", bundle: .main)
+        return count > 0 ? "\(base) (\(count))" : base
     }
 
     // MARK: - Section Container

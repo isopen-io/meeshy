@@ -157,11 +157,11 @@ struct EffectsPickerView: View {
 
     private var activeEffectsSummary: some View {
         HStack {
-            Text("\(effects.flags.rawValue.nonzeroBitCount) effet(s) actif(s)")
+            Text(String(format: String(localized: "effects.active-count", defaultValue: "%d effet(s) actif(s)", bundle: .main), effects.flags.rawValue.nonzeroBitCount))
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
             Spacer()
-            Button("Tout effacer") {
+            Button(String(localized: "effects.clear-all", defaultValue: "Tout effacer", bundle: .main)) {
                 HapticFeedback.light()
                 effects = .none
             }
