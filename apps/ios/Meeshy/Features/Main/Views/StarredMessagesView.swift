@@ -49,7 +49,7 @@ struct StarredMessagesView: View {
                         Button(role: .destructive) {
                             store.clearAll()
                         } label: {
-                            Label("Tout retirer", systemImage: "star.slash.fill")
+                            Label(String(localized: "starred.messages.remove_all", defaultValue: "Tout retirer", bundle: .main), systemImage: "star.slash.fill")
                         }
                     } label: {
                         Image(systemName: "ellipsis.circle")
@@ -64,10 +64,10 @@ struct StarredMessagesView: View {
             Image(systemName: "star.circle")
                 .font(.system(size: 56, weight: .regular))
                 .foregroundStyle(MeeshyColors.indigo400)
-            Text("Aucun message favori")
+            Text(String(localized: "starred.messages.empty.title", defaultValue: "Aucun message favori", bundle: .main))
                 .font(.system(size: 17, weight: .semibold))
                 .foregroundStyle(theme.textPrimary)
-            Text("Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.")
+            Text(String(localized: "starred.messages.empty.subtitle", defaultValue: "Appuyez longuement sur un message et choisissez \"Ajouter aux favoris\" pour le retrouver ici.", bundle: .main))
                 .font(.system(size: 13))
                 .foregroundStyle(theme.textSecondary)
                 .multilineTextAlignment(.center)
@@ -108,7 +108,7 @@ private struct StarredRow: View {
                     Image(systemName: "star.fill")
                         .font(.system(size: 10, weight: .bold))
                         .foregroundStyle(MeeshyColors.warning)
-                    Text(snapshot.senderName ?? "Utilisateur")
+                    Text(snapshot.senderName ?? String(localized: "starred.messages.unknown_user", defaultValue: "Utilisateur", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(accent)
                     Spacer(minLength: 4)

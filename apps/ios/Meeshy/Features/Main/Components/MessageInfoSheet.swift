@@ -177,7 +177,7 @@ struct MessageInfoSheet: View {
                             .fill(theme.textMuted.opacity(0.12))
                     )
             }
-            .accessibilityLabel("Fermer")
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -196,11 +196,11 @@ struct MessageInfoSheet: View {
             )
 
             VStack(alignment: .leading, spacing: 3) {
-                Text(message.senderName ?? "Moi")
+                Text(message.senderName ?? String(localized: "common.me", defaultValue: "Moi", bundle: .main))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
 
-                Text("Envoye a \(dateFormatter.string(from: sentTimestamp))")
+                Text(String(format: String(localized: "message-info.sent-at", defaultValue: "Envoye a %@", bundle: .main), dateFormatter.string(from: sentTimestamp)))
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(theme.textSecondary)
             }
@@ -218,7 +218,7 @@ struct MessageInfoSheet: View {
     private var statusTimeline: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Section header
-            Text("Statut de livraison")
+            Text(String(localized: "message-info.delivery-status", defaultValue: "Statut de livraison", bundle: .main))
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(theme.textSecondary)
                 .padding(.bottom, 14)
