@@ -13,6 +13,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { useI18n } from '@/hooks/useI18n';
 import { conversationsService } from '@/services/conversations.service';
 import type {
   EncryptionMode,
@@ -24,29 +25,30 @@ interface ConversationEncryptionSectionProps {
   canEnable: boolean;
 }
 
-const MODE_LABELS: Record<EncryptionMode, { label: string; desc: string }> = {
-  e2ee: {
-    label: 'End-to-End (Signal)',
-    desc: 'Chiffrement de bout en bout. La traduction automatique n’est pas possible dans ce mode.',
-  },
-  server: {
-    label: 'Serveur (AES-256-GCM)',
-    desc: 'Chiffrement côté serveur. Compatible avec la traduction automatique.',
-  },
-  hybrid: {
-    label: 'Hybride (E2EE + Serveur)',
-    desc: 'Double couche. Plus lent mais maximaliste; la traduction reste possible.',
-  },
-};
-
 export function ConversationEncryptionSection({
   conversationId,
   canEnable,
 }: ConversationEncryptionSectionProps) {
+  const { t } = useI18n('conversations');
   const [status, setStatus] = useState<EncryptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [enabling, setEnabling] = useState(false);
   const [selectedMode, setSelectedMode] = useState<EncryptionMode>('server');
+
+  const modeMeta: Record<EncryptionMode, { label: string; desc: string }> = {
+    e2ee: {
+      label: t('conversationDetails.encryption.modes.e2eeLabel'),
+      desc: t('conversationDetails.encryption.modes.e2eeDescription'),
+    },
+    server: {
+      label: t('conversationDetails.encryption.modes.serverLabel'),
+      desc: t('conversationDetails.encryption.modes.serverDescription'),
+    },
+    hybrid: {
+      label: t('conversationDetails.encryption.modes.hybridLabel'),
+      desc: t('conversationDetails.encryption.modes.hybridDescription'),
+    },
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -78,10 +80,10 @@ export function ConversationEncryptionSection({
         enabledBy: result.enabledBy,
         canTranslate: result.mode !== 'e2ee',
       });
-      toast.success('Chiffrement activé sur cette conversation');
+      toast.success(t('conversationDetails.encryption.success'));
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Erreur inconnue';
-      toast.error(`Échec de l’activation : ${message}`);
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast.error(t('conversationDetails.encryption.error', { message }));
     } finally {
       setEnabling(false);
     }
@@ -91,12 +93,14 @@ export function ConversationEncryptionSection({
     return (
       <div className="flex items-center gap-2 p-3 text-sm text-muted-foreground">
         <Loader2 className="h-4 w-4 animate-spin" />
-        Lecture du statut de chiffrement…
+        {t('conversationDetails.encryption.statusLoading')}
       </div>
     );
   }
 
   if (!status) return null;
+
+  const inactiveNoticeHtml = t('conversationDetails.encryption.inactiveNotice');
 
   return (
     <motion.div
@@ -107,7 +111,7 @@ export function ConversationEncryptionSection({
     >
       <h3 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider flex items-center gap-2">
         <Shield className="h-4 w-4 flex-shrink-0" />
-        <span>Sécurité</span>
+        <span>{t('conversationDetails.encryption.title')}</span>
       </h3>
 
       <div className="p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 space-y-3">
@@ -117,32 +121,32 @@ export function ConversationEncryptionSection({
               <ShieldCheck className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
               <div className="space-y-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-sm font-semibold">Chiffrement actif</span>
+                  <span className="text-sm font-semibold">
+                    {t('conversationDetails.encryption.activeLabel')}
+                  </span>
                   <Badge variant="secondary" className="text-xs">
-                    {MODE_LABELS[status.mode].label}
+                    {modeMeta[status.mode].label}
                   </Badge>
                 </div>
-                <p className="text-xs text-muted-foreground">{MODE_LABELS[status.mode].desc}</p>
+                <p className="text-xs text-muted-foreground">{modeMeta[status.mode].desc}</p>
                 {status.enabledAt && (
                   <p className="text-[11px] text-muted-foreground">
-                    Activé le {new Date(status.enabledAt).toLocaleDateString()}
+                    {t('conversationDetails.encryption.enabledOn', {
+                      date: new Date(status.enabledAt).toLocaleDateString(),
+                    })}
                   </p>
                 )}
               </div>
             </div>
             <p className="text-[11px] text-muted-foreground italic border-t border-border/40 pt-2">
-              Une fois activé, le chiffrement ne peut plus être désactivé pour cette
-              conversation. C’est une protection contre les régressions de sécurité.
+              {t('conversationDetails.encryption.immutabilityNotice')}
             </p>
           </div>
         ) : (
           <div className="space-y-3">
             <div className="flex items-start gap-2 text-xs text-muted-foreground">
               <Info className="h-4 w-4 flex-shrink-0 mt-0.5" />
-              <span>
-                Cette conversation n’est pas chiffrée. L’activation est{' '}
-                <strong>irréversible</strong>.
-              </span>
+              <span dangerouslySetInnerHTML={{ __html: inactiveNoticeHtml }} />
             </div>
 
             {canEnable ? (
@@ -156,12 +160,12 @@ export function ConversationEncryptionSection({
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(Object.keys(MODE_LABELS) as EncryptionMode[]).map((m) => (
+                    {(Object.keys(modeMeta) as EncryptionMode[]).map((m) => (
                       <SelectItem key={m} value={m}>
                         <div className="flex flex-col text-left">
-                          <span className="font-medium">{MODE_LABELS[m].label}</span>
+                          <span className="font-medium">{modeMeta[m].label}</span>
                           <span className="text-[11px] text-muted-foreground">
-                            {MODE_LABELS[m].desc}
+                            {modeMeta[m].desc}
                           </span>
                         </div>
                       </SelectItem>
@@ -178,12 +182,12 @@ export function ConversationEncryptionSection({
                   {enabling ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Activation…
+                      {t('conversationDetails.encryption.activating')}
                     </>
                   ) : (
                     <>
                       <Shield className="h-4 w-4 mr-2" />
-                      Activer le chiffrement
+                      {t('conversationDetails.encryption.activate')}
                     </>
                   )}
                 </Button>
@@ -191,7 +195,7 @@ export function ConversationEncryptionSection({
             ) : (
               <div className="flex items-start gap-2 text-xs text-amber-700 dark:text-amber-300">
                 <AlertTriangle className="h-4 w-4 flex-shrink-0 mt-0.5" />
-                <span>Seul un modérateur ou administrateur peut activer le chiffrement.</span>
+                <span>{t('conversationDetails.encryption.cannotEnable')}</span>
               </div>
             )}
           </div>
