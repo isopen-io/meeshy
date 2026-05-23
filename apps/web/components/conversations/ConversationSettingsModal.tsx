@@ -1300,11 +1300,13 @@ export function ConversationSettingsModal({
                   </motion.div>
                 )}
 
-                {/* Section Sécurité (chiffrement par conversation) */}
-                <ConversationEncryptionSection
-                  conversationId={conversation.id}
-                  canEnable={isDirect || canAccessAdminSettings}
-                />
+                {/* Section Sécurité — réservée aux conversations directes */}
+                {isDirect && (
+                  <ConversationEncryptionSection
+                    conversationId={conversation.id}
+                    canEnable={true}
+                  />
+                )}
 
                 {/* Liens partagés - Groupes uniquement */}
                 {conversation.type !== 'direct' && (

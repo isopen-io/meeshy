@@ -46,7 +46,7 @@ export function ConversationEncryptionSection({
   const [status, setStatus] = useState<EncryptionStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [enabling, setEnabling] = useState(false);
-  const [selectedMode, setSelectedMode] = useState<EncryptionMode>('e2ee');
+  const [selectedMode, setSelectedMode] = useState<EncryptionMode>('server');
 
   useEffect(() => {
     let cancelled = false;
@@ -112,22 +112,28 @@ export function ConversationEncryptionSection({
 
       <div className="p-4 rounded-xl backdrop-blur-xl bg-white/60 dark:bg-gray-900/60 border border-white/30 dark:border-gray-700/40 space-y-3">
         {status.isEncrypted && status.mode ? (
-          <div className="flex items-start gap-3">
-            <ShieldCheck className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-            <div className="space-y-1 min-w-0">
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-sm font-semibold">Chiffrement actif</span>
-                <Badge variant="secondary" className="text-xs">
-                  {MODE_LABELS[status.mode].label}
-                </Badge>
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <ShieldCheck className="h-5 w-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+              <div className="space-y-1 min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-semibold">Chiffrement actif</span>
+                  <Badge variant="secondary" className="text-xs">
+                    {MODE_LABELS[status.mode].label}
+                  </Badge>
+                </div>
+                <p className="text-xs text-muted-foreground">{MODE_LABELS[status.mode].desc}</p>
+                {status.enabledAt && (
+                  <p className="text-[11px] text-muted-foreground">
+                    Activé le {new Date(status.enabledAt).toLocaleDateString()}
+                  </p>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground">{MODE_LABELS[status.mode].desc}</p>
-              {status.enabledAt && (
-                <p className="text-[11px] text-muted-foreground">
-                  Activé le {new Date(status.enabledAt).toLocaleDateString()}
-                </p>
-              )}
             </div>
+            <p className="text-[11px] text-muted-foreground italic border-t border-border/40 pt-2">
+              Une fois activé, le chiffrement ne peut plus être désactivé pour cette
+              conversation. C’est une protection contre les régressions de sécurité.
+            </p>
           </div>
         ) : (
           <div className="space-y-3">
