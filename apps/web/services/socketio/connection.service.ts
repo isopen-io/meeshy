@@ -1,7 +1,6 @@
 'use client';
 
 import { io } from 'socket.io-client';
-import { toast } from 'sonner';
 import { logger } from '@/utils/logger';
 import { getWebSocketUrl } from '@/lib/config';
 import { isJWTExpired } from '@/utils/auth';
@@ -16,11 +15,6 @@ import type {
   ConnectionStatus,
   ConnectionDiagnostics
 } from './types';
-
-import enTranslations from '@/locales/en';
-import frTranslations from '@/locales/fr';
-import ptTranslations from '@/locales/pt';
-import esTranslations from '@/locales/es';
 
 export class ConnectionService {
   private state: ConnectionState = {
@@ -89,17 +83,6 @@ export class ConnectionService {
         logger.warn('[Socket] status listener error', err as any);
       }
     }
-  }
-
-  private t(key: string): string {
-    const lang = typeof window !== 'undefined' ? localStorage.getItem('meeshy-language') || 'fr' : 'fr';
-    const bundle: any = lang === 'en' ? enTranslations : lang === 'pt' ? ptTranslations : lang === 'es' ? esTranslations : frTranslations;
-    const keys = key.split('.');
-    let value = bundle;
-    for (const k of keys) {
-      value = value?.[k];
-    }
-    return value || key;
   }
 
   initializeConnection(): TypedSocket | null {

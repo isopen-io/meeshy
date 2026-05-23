@@ -34,13 +34,13 @@ struct VoiceProfileManageView: View {
         .task {
             await viewModel.loadProfile()
         }
-        .alert("Supprimer le profil vocal", isPresented: $showDeleteConfirmation) {
-            Button("Annuler", role: .cancel) {}
-            Button("Supprimer", role: .destructive) {
+        .alert(String(localized: "voice.profile.deleteAlert.title", defaultValue: "Supprimer le profil vocal", bundle: .main), isPresented: $showDeleteConfirmation) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            Button(String(localized: "voice.profile.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
                 Task { await viewModel.deleteProfile() }
             }
         } message: {
-            Text("Cette action est irreversible. Toutes vos donnees vocales seront supprimees conformement au RGPD.")
+            Text(String(localized: "voice.profile.deleteAlert.message", defaultValue: "Cette action est irreversible. Toutes vos donnees vocales seront supprimees conformement au RGPD.", bundle: .main))
         }
         .sheet(isPresented: $showAddSamples) {
             addSamplesSheet
@@ -54,7 +54,7 @@ struct VoiceProfileManageView: View {
 
     private var header: some View {
         HStack {
-            Text("Profil vocal")
+            Text(String(localized: "voice.profile.title", defaultValue: "Profil vocal", bundle: .main))
                 .font(.system(size: 20, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
             Spacer()
@@ -100,11 +100,11 @@ struct VoiceProfileManageView: View {
                     )
                 )
 
-            Text("Aucun profil vocal")
+            Text(String(localized: "voice.profile.empty.title", defaultValue: "Aucun profil vocal", bundle: .main))
                 .font(.system(size: 22, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Creez un profil vocal pour que vos messages traduits conservent votre voix naturelle.")
+            Text(String(localized: "voice.profile.empty.description", defaultValue: "Creez un profil vocal pour que vos messages traduits conservent votre voix naturelle.", bundle: .main))
                 .font(.system(size: 15))
                 .multilineTextAlignment(.center)
                 .foregroundColor(theme.textSecondary)
@@ -117,7 +117,7 @@ struct VoiceProfileManageView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "plus.circle.fill")
                         .font(.system(size: 16))
-                    Text("Creer un profil vocal")
+                    Text(String(localized: "voice.profile.create", defaultValue: "Creer un profil vocal", bundle: .main))
                         .font(.system(size: 16, weight: .semibold))
                 }
                 .foregroundColor(.white)
@@ -187,7 +187,7 @@ struct VoiceProfileManageView: View {
                     Text("\(Int(quality * 100))%")
                         .font(.system(size: 18, weight: .bold, design: .monospaced))
                         .foregroundColor(Color(hex: accentColor))
-                    Text("Qualite")
+                    Text(String(localized: "voice.profile.quality", defaultValue: "Qualite", bundle: .main))
                         .font(.system(size: 10, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
@@ -205,11 +205,11 @@ struct VoiceProfileManageView: View {
 
     private func infoCard(_ profile: VoiceProfile) -> some View {
         VStack(spacing: 10) {
-            infoRow(label: "Echantillons", value: "\(profile.sampleCount)")
-            infoRow(label: "Duree totale", value: "\(profile.totalDurationSeconds) secondes")
-            infoRow(label: "Cree le", value: profile.createdAt.formatted(date: .abbreviated, time: .shortened))
+            infoRow(label: String(localized: "voice.profile.samples", defaultValue: "Echantillons", bundle: .main), value: "\(profile.sampleCount)")
+            infoRow(label: String(localized: "voice.profile.totalDuration", defaultValue: "Duree totale", bundle: .main), value: String(localized: "voice.profile.totalDuration.value", defaultValue: "\(profile.totalDurationSeconds) secondes", bundle: .main))
+            infoRow(label: String(localized: "voice.profile.createdAt", defaultValue: "Cree le", bundle: .main), value: profile.createdAt.formatted(date: .abbreviated, time: .shortened))
             if let lastUsed = profile.lastUsedAt {
-                infoRow(label: "Derniere utilisation", value: lastUsed.formatted(date: .abbreviated, time: .shortened))
+                infoRow(label: String(localized: "voice.profile.lastUsed", defaultValue: "Derniere utilisation", bundle: .main), value: lastUsed.formatted(date: .abbreviated, time: .shortened))
             }
         }
         .padding(16)
@@ -237,10 +237,10 @@ struct VoiceProfileManageView: View {
     private var cloningToggle: some View {
         HStack {
             VStack(alignment: .leading, spacing: 4) {
-                Text("Clonage vocal actif")
+                Text(String(localized: "voice.profile.cloningEnabled", defaultValue: "Clonage vocal actif", bundle: .main))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
-                Text("Les traductions audio utiliseront votre voix")
+                Text(String(localized: "voice.profile.cloningDescription", defaultValue: "Les traductions audio utiliseront votre voix", bundle: .main))
                     .font(.system(size: 12))
                     .foregroundColor(theme.textSecondary)
             }
@@ -267,7 +267,7 @@ struct VoiceProfileManageView: View {
     private var samplesSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("Echantillons vocaux")
+                Text(String(localized: "voice.profile.voiceSamples", defaultValue: "Echantillons vocaux", bundle: .main))
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
@@ -278,7 +278,7 @@ struct VoiceProfileManageView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
                             .font(.system(size: 12, weight: .semibold))
-                        Text("Ajouter")
+                        Text(String(localized: "voice.profile.add", defaultValue: "Ajouter", bundle: .main))
                             .font(.system(size: 13, weight: .semibold))
                     }
                     .foregroundColor(Color(hex: accentColor))
@@ -286,7 +286,7 @@ struct VoiceProfileManageView: View {
             }
 
             if viewModel.samples.isEmpty {
-                Text("Aucun echantillon disponible")
+                Text(String(localized: "voice.profile.noSamples", defaultValue: "Aucun echantillon disponible", bundle: .main))
                     .font(.system(size: 13))
                     .foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity)
@@ -350,7 +350,7 @@ struct VoiceProfileManageView: View {
             HStack(spacing: 8) {
                 Image(systemName: "trash.fill")
                     .font(.system(size: 14))
-                Text("Supprimer le profil vocal")
+                Text(String(localized: "voice.profile.deleteProfile", defaultValue: "Supprimer le profil vocal", bundle: .main))
                     .font(.system(size: 15, weight: .medium))
             }
             .foregroundColor(MeeshyColors.error)
@@ -372,7 +372,7 @@ struct VoiceProfileManageView: View {
                 theme.backgroundGradient.ignoresSafeArea()
 
                 VStack(spacing: 16) {
-                    Text("Ajouter des echantillons")
+                    Text(String(localized: "voice.profile.addSamples", defaultValue: "Ajouter des echantillons", bundle: .main))
                         .font(.system(size: 20, weight: .bold, design: .rounded))
                         .foregroundColor(theme.textPrimary)
                         .padding(.top, 16)
@@ -393,7 +393,7 @@ struct VoiceProfileManageView: View {
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("Fermer") { showAddSamples = false }
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { showAddSamples = false }
                 }
             }
         }

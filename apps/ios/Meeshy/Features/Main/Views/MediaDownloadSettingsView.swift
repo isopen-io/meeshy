@@ -41,16 +41,16 @@ struct MediaDownloadSettingsView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Retour")
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
-            Text("Telechargement auto")
+            Text(String(localized: "settings.media.download.title", defaultValue: "Telechargement auto", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -71,19 +71,19 @@ struct MediaDownloadSettingsView: View {
             VStack(spacing: 20) {
                 infoSection
                 policyPicker(
-                    title: "Images", icon: "photo.fill", color: "4ECDC4",
+                    title: String(localized: "settings.media.download.images", defaultValue: "Images", bundle: .main), icon: "photo.fill", color: "4ECDC4",
                     binding: $store.preferences.image
                 )
                 policyPicker(
-                    title: "Audio", icon: "waveform", color: "9B59B6",
+                    title: String(localized: "settings.media.download.audio", defaultValue: "Audio", bundle: .main), icon: "waveform", color: "9B59B6",
                     binding: $store.preferences.audio
                 )
                 policyPicker(
-                    title: "Traductions audio", icon: "character.bubble.fill", color: "F39C12",
+                    title: String(localized: "settings.media.download.audio_translation", defaultValue: "Traductions audio", bundle: .main), icon: "character.bubble.fill", color: "F39C12",
                     binding: $store.preferences.audioTranslation
                 )
                 policyPicker(
-                    title: "Video", icon: "play.rectangle.fill", color: "E74C3C",
+                    title: String(localized: "settings.media.download.video", defaultValue: "Video", bundle: .main), icon: "play.rectangle.fill", color: "E74C3C",
                     binding: $store.preferences.video
                 )
                 Spacer().frame(height: 40)
@@ -97,18 +97,18 @@ struct MediaDownloadSettingsView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Information", icon: "info.circle.fill", color: "6B7280")
+            sectionHeader(title: String(localized: "settings.media.download.info_header", defaultValue: "Information", bundle: .main), icon: "info.circle.fill", color: "6B7280")
 
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 12) {
                     fieldIcon("arrow.down.circle.fill", color: accentColor)
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Telechargement automatique")
+                        Text(String(localized: "settings.media.download.auto_title", defaultValue: "Telechargement automatique", bundle: .main))
                             .font(.system(size: 14, weight: .medium))
                             .foregroundColor(theme.textPrimary)
 
-                        Text("Choisissez quand telecharger automatiquement chaque type de media selon votre connexion.")
+                        Text(String(localized: "settings.media.download.auto_subtitle", defaultValue: "Choisissez quand telecharger automatiquement chaque type de media selon votre connexion.", bundle: .main))
                             .font(.system(size: 12, weight: .regular))
                             .foregroundColor(theme.textMuted)
                             .lineSpacing(2)
@@ -157,7 +157,7 @@ struct MediaDownloadSettingsView: View {
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("\(title), \(policy.shortLabel)")
-                    .accessibilityValue(binding.wrappedValue == policy ? "selectionne" : "")
+                    .accessibilityValue(binding.wrappedValue == policy ? String(localized: "common.selected", defaultValue: "selectionne", bundle: .main) : "")
 
                     if index != AutoDownloadPolicy.allCases.count - 1 {
                         Divider().padding(.leading, 54)

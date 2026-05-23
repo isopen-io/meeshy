@@ -1,11 +1,22 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
+import dynamic from 'next/dynamic';
 import { PersistQueryClientProvider } from '@tanstack/react-query-persist-client';
 import { createQueryClient } from '@/lib/react-query/query-client';
 import { indexedDbPersister } from '@/lib/react-query/persister';
 import { initSettingsSync, destroySettingsSync } from '@/lib/settings-sync';
+
+const ReactQueryDevtools =
+  process.env.NODE_ENV === 'production'
+    ? null
+    : dynamic(
+        () =>
+          import('@tanstack/react-query-devtools').then(
+            (m) => m.ReactQueryDevtools,
+          ),
+        { ssr: false },
+      );
 
 interface QueryProviderProps {
   children: React.ReactNode;
@@ -29,7 +40,9 @@ export function QueryProvider({ children }: QueryProviderProps) {
       }}
     >
       {children}
-      <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
+      {ReactQueryDevtools && (
+        <ReactQueryDevtools initialIsOpen={false} buttonPosition="bottom-left" />
+      )}
     </PersistQueryClientProvider>
   );
 }

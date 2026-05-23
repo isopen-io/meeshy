@@ -73,7 +73,7 @@ struct AddParticipantSheet: View {
 
     private var headerBar: some View {
         HStack {
-            Text("Ajouter un membre")
+            Text(String(localized: "participants.add.title", defaultValue: "Ajouter un membre", bundle: .main))
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -89,7 +89,7 @@ struct AddParticipantSheet: View {
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
             }
-            .accessibilityLabel("Fermer")
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -104,7 +104,7 @@ struct AddParticipantSheet: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            TextField("Rechercher un utilisateur...", text: $searchQuery)
+            TextField(String(localized: "participants.add.search-placeholder", defaultValue: "Rechercher un utilisateur...", bundle: .main), text: $searchQuery)
                 .font(.system(size: 15))
                 .foregroundColor(theme.textPrimary)
                 .focused($isSearchFocused)
@@ -123,7 +123,7 @@ struct AddParticipantSheet: View {
                         .font(.system(size: 16))
                         .foregroundColor(theme.textMuted)
                 }
-                .accessibilityLabel("Effacer la recherche")
+                .accessibilityLabel(String(localized: "common.clear-search", defaultValue: "Effacer la recherche", bundle: .main))
             }
         }
         .padding(.horizontal, 14)
@@ -201,7 +201,7 @@ struct AddParticipantSheet: View {
             Spacer()
 
             if isMember {
-                Text("Membre")
+                Text(String(localized: "participants.add.member", defaultValue: "Membre", bundle: .main))
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(theme.textMuted)
                     .padding(.horizontal, 10)
@@ -215,14 +215,14 @@ struct AddParticipantSheet: View {
                 Button {
                     Task { await addParticipant(userId: user.id) }
                 } label: {
-                    Text("Ajouter")
+                    Text(String(localized: "common.add", defaultValue: "Ajouter", bundle: .main))
                         .font(.system(size: 12, weight: .bold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
                         .background(Capsule().fill(accent))
                 }
-                .accessibilityLabel("Ajouter \(user.name)")
+                .accessibilityLabel(String(format: String(localized: "participants.add.add-a11y", defaultValue: "Ajouter %@", bundle: .main), user.name))
             }
         }
         .padding(.horizontal, 20)
@@ -238,7 +238,7 @@ struct AddParticipantSheet: View {
             Image(systemName: "person.badge.plus")
                 .font(.system(size: 32, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
-            Text("Recherchez par nom ou @pseudo")
+            Text(String(localized: "participants.add.prompt", defaultValue: "Recherchez par nom ou @pseudo", bundle: .main))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -253,7 +253,7 @@ struct AddParticipantSheet: View {
             Image(systemName: "person.slash")
                 .font(.system(size: 32, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
-            Text("Aucun utilisateur trouve")
+            Text(String(localized: "participants.add.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -330,7 +330,7 @@ struct AddParticipantSheet: View {
         } catch {
             Logger.participants.error("Failed to add participant: \(error.localizedDescription)")
             HapticFeedback.error()
-            errorMessage = "Impossible d'ajouter ce membre."
+            errorMessage = String(localized: "participants.add.error", defaultValue: "Impossible d'ajouter ce membre.", bundle: .main)
         }
 
         addingUserId = nil

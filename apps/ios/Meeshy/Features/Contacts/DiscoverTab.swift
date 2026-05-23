@@ -38,12 +38,12 @@ struct DiscoverTab: View {
 
     private var emailInviteCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Inviter par email", systemImage: "envelope.fill")
+            Label(String(localized: "contacts.discover.email.title", defaultValue: "Inviter par email", bundle: .main), systemImage: "envelope.fill")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             HStack(spacing: 10) {
-                TextField("Adresse email", text: $viewModel.emailText)
+                TextField(String(localized: "contacts.discover.email.placeholder", defaultValue: "Adresse email", bundle: .main), text: $viewModel.emailText)
                     .font(.system(size: 14))
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.emailAddress)
@@ -57,7 +57,7 @@ struct DiscoverTab: View {
                 Button {
                     Task { await viewModel.sendEmailInvitation() }
                 } label: {
-                    Text("Envoyer")
+                    Text(String(localized: "common.send", defaultValue: "Envoyer", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 14)
@@ -71,7 +71,7 @@ struct DiscoverTab: View {
                         )
                 }
                 .disabled(viewModel.emailText.isEmpty || viewModel.isSendingInvite)
-                .accessibilityLabel("Envoyer l'invitation par email")
+                .accessibilityLabel(String(localized: "contacts.discover.email.send-a11y", defaultValue: "Envoyer l'invitation par email", bundle: .main))
             }
         }
         .padding(14)
@@ -80,12 +80,12 @@ struct DiscoverTab: View {
 
     private var smsInviteCard: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Label("Inviter par SMS", systemImage: "message.fill")
+            Label(String(localized: "contacts.discover.sms.title", defaultValue: "Inviter par SMS", bundle: .main), systemImage: "message.fill")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
             HStack(spacing: 10) {
-                TextField("Numero de telephone", text: $viewModel.phoneText)
+                TextField(String(localized: "contacts.discover.sms.placeholder", defaultValue: "Numero de telephone", bundle: .main), text: $viewModel.phoneText)
                     .font(.system(size: 14))
                     .foregroundColor(theme.textPrimary)
                     .keyboardType(.phonePad)
@@ -98,10 +98,10 @@ struct DiscoverTab: View {
                     if MFMessageComposeViewController.canSendText() {
                         showSMSComposer = true
                     } else {
-                        ToastManager.shared.showError("SMS non disponible")
+                        ToastManager.shared.showError(String(localized: "contacts.discover.sms.unavailable", defaultValue: "SMS non disponible", bundle: .main))
                     }
                 } label: {
-                    Text("Envoyer")
+                    Text(String(localized: "common.send", defaultValue: "Envoyer", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
                         .padding(.horizontal, 14)
@@ -115,7 +115,7 @@ struct DiscoverTab: View {
                         )
                 }
                 .disabled(viewModel.phoneText.isEmpty)
-                .accessibilityLabel("Envoyer l'invitation par SMS")
+                .accessibilityLabel(String(localized: "contacts.discover.sms.send-a11y", defaultValue: "Envoyer l'invitation par SMS", bundle: .main))
             }
         }
         .padding(14)
@@ -130,13 +130,13 @@ struct DiscoverTab: View {
 
     private var importContactsButton: some View {
         Button {
-            ToastManager.shared.show("Bientot disponible", type: .success)
+            ToastManager.shared.show(String(localized: "common.coming-soon", defaultValue: "Bientot disponible", bundle: .main), type: .success)
             HapticFeedback.light()
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "person.crop.circle.badge.plus")
                     .font(.system(size: 16, weight: .medium))
-                Text("Importer mes contacts")
+                Text(String(localized: "contacts.discover.import", defaultValue: "Importer mes contacts", bundle: .main))
                     .font(.system(size: 14, weight: .semibold))
             }
             .foregroundColor(MeeshyColors.indigo500)
@@ -168,7 +168,7 @@ struct DiscoverTab: View {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 32, weight: .light))
                         .foregroundColor(theme.textMuted.opacity(0.4))
-                    Text("Aucun utilisateur trouve")
+                    Text(String(localized: "contacts.discover.no-results", defaultValue: "Aucun utilisateur trouve", bundle: .main))
                         .font(.system(size: 14, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
@@ -185,7 +185,7 @@ struct DiscoverTab: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            TextField("Rechercher un utilisateur Meeshy", text: $viewModel.searchQuery)
+            TextField(String(localized: "contacts.discover.search-placeholder", defaultValue: "Rechercher un utilisateur Meeshy", bundle: .main), text: $viewModel.searchQuery)
                 .font(.system(size: 14))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()

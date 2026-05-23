@@ -90,7 +90,7 @@ struct CallVideoView: View {
     var body: some View {
         Color.black
             .overlay(
-                Text("Video non disponible")
+                Text(String(localized: "call.video.unavailable", defaultValue: "Video non disponible", bundle: .main))
                     .foregroundColor(.white.opacity(0.4))
                     .font(.system(size: 14, weight: .medium))
             )

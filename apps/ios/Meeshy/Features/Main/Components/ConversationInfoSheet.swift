@@ -36,6 +36,7 @@ struct ConversationInfoSheet: View {
     @State private var showShareSheet = false
     @State private var showLeaveConfirmation = false
     @State private var showSecurityVerification = false
+    @State private var showEncryptionDetail = false
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-info")
 
@@ -113,26 +114,26 @@ struct ConversationInfoSheet: View {
             totalParticipants = conversation.memberCount
             await loadParticipants()
         }
-        .alert("Bloquer cet utilisateur", isPresented: $showBlockConfirm) {
-            Button("Annuler", role: .cancel) { }
-            Button("Bloquer", role: .destructive) {
+        .alert(String(localized: "conversation.info.block.title", defaultValue: "Bloquer cet utilisateur", bundle: .main), isPresented: $showBlockConfirm) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
+            Button(String(localized: "conversation.info.block.confirm", defaultValue: "Bloquer", bundle: .main), role: .destructive) {
                 blockOtherUser()
             }
         } message: {
-            Text("Vous ne recevrez plus de messages de \(conversation.name). Vous pourrez le debloquer dans les reglages.")
+            Text(String(format: String(localized: "conversation.info.block.message", defaultValue: "Vous ne recevrez plus de messages de %@. Vous pourrez le debloquer dans les reglages.", bundle: .main), conversation.name))
         }
         .onAppear {
             withAnimation(.spring(response: 0.5, dampingFraction: 0.8)) {
                 appearAnimation = true
             }
         }
-        .alert("Quitter la conversation", isPresented: $showLeaveConfirmation) {
-            Button("Annuler", role: .cancel) {}
-            Button("Quitter", role: .destructive) {
+        .alert(String(localized: "conversation.info.leave.title", defaultValue: "Quitter la conversation", bundle: .main), isPresented: $showLeaveConfirmation) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
+            Button(String(localized: "conversation.info.leave.confirm", defaultValue: "Quitter", bundle: .main), role: .destructive) {
                 Task { await leaveConversation() }
             }
         } message: {
-            Text("Vous ne recevrez plus de messages. Votre historique restera lisible.")
+            Text(String(localized: "conversation.info.leave.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .main))
         }
         .sheet(isPresented: $showSecurityVerification) {
             SecurityVerificationView(
@@ -173,7 +174,7 @@ struct ConversationInfoSheet: View {
 
     private var headerBar: some View {
         HStack {
-            Text("Conversation")
+            Text(String(localized: "conversation.info.header", defaultValue: "Conversation", bundle: .main))
                 .font(.system(size: 17, weight: .semibold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -187,7 +188,7 @@ struct ConversationInfoSheet: View {
                         .frame(width: 28, height: 28)
                         .background(Circle().fill(theme.textMuted.opacity(0.12)))
                 }
-                .accessibilityLabel("Reglages de la conversation")
+                .accessibilityLabel(String(localized: "conversation.info.settings-a11y", defaultValue: "Reglages de la conversation", bundle: .main))
             }
 
             Button {
@@ -200,7 +201,7 @@ struct ConversationInfoSheet: View {
                     .frame(width: 28, height: 28)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
             }
-            .accessibilityLabel("Fermer")
+            .accessibilityLabel(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
         }
         .padding(.horizontal, 20)
         .padding(.top, 16)
@@ -244,7 +245,7 @@ struct ConversationInfoSheet: View {
 
             muteIndicator
 
-            Text("Cree le \(dateFormatter.string(from: conversation.createdAt))")
+            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Cree le %@", bundle: .main), dateFormatter.string(from: conversation.createdAt)))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -291,7 +292,7 @@ struct ConversationInfoSheet: View {
             muteIndicator
                 .padding(.top, 6)
 
-            Text("Cree le \(dateFormatter.string(from: conversation.createdAt))")
+            Text(String(format: String(localized: "conversation.info.created-on", defaultValue: "Cree le %@", bundle: .main), dateFormatter.string(from: conversation.createdAt)))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .padding(.top, 6)
@@ -364,7 +365,7 @@ struct ConversationInfoSheet: View {
             HStack(spacing: 4) {
                 Image(systemName: "bell.slash.fill")
                     .font(.system(size: 10))
-                Text("Notifications desactivees")
+                Text(String(localized: "conversation.info.muted", defaultValue: "Notifications desactivees", bundle: .main))
                     .font(.system(size: 11, weight: .medium))
             }
             .foregroundColor(theme.textMuted)
@@ -390,7 +391,7 @@ struct ConversationInfoSheet: View {
                 } label: {
                     VStack(spacing: 6) {
                         HStack(spacing: 4) {
-                            Text(tab.rawValue)
+                            Text(tabLabel(for: tab))
                                 .font(.system(size: 13, weight: isSelected ? .bold : .medium))
 
                             if let label {
@@ -465,7 +466,7 @@ struct ConversationInfoSheet: View {
 
             // Member count
             HStack {
-                Text("\(participants.count) membre\(participants.count > 1 ? "s" : "")")
+                Text(String(format: String(localized: "conversation.info.members-count", defaultValue: "%d membre%@", bundle: .main), participants.count, participants.count > 1 ? "s" : ""))
                     .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundColor(theme.textMuted)
                 Spacer()
@@ -479,7 +480,7 @@ struct ConversationInfoSheet: View {
                 Image(systemName: "magnifyingglass")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(theme.textMuted)
-                TextField("Rechercher un membre...", text: $memberSearchQuery)
+                TextField(String(localized: "conversation.info.member-search", defaultValue: "Rechercher un membre...", bundle: .main), text: $memberSearchQuery)
                     .font(.system(size: 14))
                     .foregroundColor(theme.textPrimary)
                     .autocorrectionDisabled()
@@ -516,7 +517,7 @@ struct ConversationInfoSheet: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
             } else if filteredMembers.isEmpty {
-                emptyState(icon: "person.2.slash", text: memberSearchQuery.isEmpty ? "Aucun membre" : "Aucun resultat")
+                emptyState(icon: "person.2.slash", text: memberSearchQuery.isEmpty ? String(localized: "conversation.info.no-members", defaultValue: "Aucun membre", bundle: .main) : String(localized: "common.no-results", defaultValue: "Aucun resultat", bundle: .main))
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(filteredMembers) { participant in
@@ -649,7 +650,7 @@ struct ConversationInfoSheet: View {
     private var mediaSection: some View {
         VStack(spacing: 0) {
             if mediaAttachments.isEmpty {
-                emptyState(icon: "photo.on.rectangle.angled", text: "Aucun media partage")
+                emptyState(icon: "photo.on.rectangle.angled", text: String(localized: "conversation.info.no-media", defaultValue: "Aucun media partage", bundle: .main))
             } else {
                 let columns = [
                     GridItem(.flexible(), spacing: 2),
@@ -716,7 +717,7 @@ struct ConversationInfoSheet: View {
                     }
                     if pinned.count > 2 {
                         HStack(spacing: 4) {
-                            Text("Voir les \(pinned.count) messages epingles")
+                            Text(String(format: String(localized: "conversation.info.pinned.see-all", defaultValue: "Voir les %d messages epingles", bundle: .main), pinned.count))
                                 .font(.system(size: 11, weight: .semibold))
                                 .foregroundColor(accent)
                             Image(systemName: "chevron.right")
@@ -793,7 +794,7 @@ struct ConversationInfoSheet: View {
                 .padding(.top, 8)
             }
             .background(theme.backgroundPrimary)
-            .navigationTitle("Messages epingles")
+            .navigationTitle(String(localized: "conversation.info.pinned.title", defaultValue: "Messages epingles", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
@@ -883,7 +884,7 @@ struct ConversationInfoSheet: View {
         HStack(spacing: 12) {
             actionButton(
                 icon: "link.badge.plus",
-                label: "Partager",
+                label: String(localized: "common.share", defaultValue: "Partager", bundle: .main),
                 color: "4ECDC4",
                 isLoading: isCreatingShareLink
             ) {
@@ -892,7 +893,7 @@ struct ConversationInfoSheet: View {
 
             actionButton(
                 icon: "rectangle.portrait.and.arrow.right",
-                label: "Quitter",
+                label: String(localized: "conversation.info.leave.confirm", defaultValue: "Quitter", bundle: .main),
                 color: "FF6B6B"
             ) {
                 showLeaveConfirmation = true
@@ -908,7 +909,62 @@ struct ConversationInfoSheet: View {
 
     @ViewBuilder
     private var securitySection: some View {
-        if conversation.encryptionMode != nil {
+        if isDirect {
+            // Direct conversations: always expose End-to-End Encryption menu item
+            Button {
+                HapticFeedback.light()
+                showEncryptionDetail = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: conversation.encryptionMode != nil ? "lock.shield.fill" : "lock.shield")
+                        .font(.system(size: 16))
+                        .foregroundColor(conversation.encryptionMode != nil ? .green : Color(hex: accentColor))
+                        .frame(width: 24)
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(String(localized: "conversation.encryption.menu.title",
+                                    defaultValue: "End-to-End Encryption",
+                                    bundle: .main))
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(theme.textPrimary)
+
+                        Text(conversation.encryptionMode != nil
+                             ? String(localized: "conversation.encryption.menu.active",
+                                      defaultValue: "Chiffrement actif — \(conversation.encryptionMode?.uppercased() ?? "")",
+                                      bundle: .main)
+                             : String(localized: "conversation.encryption.menu.inactive",
+                                      defaultValue: "Conversation non chiffrée — appuyez pour activer",
+                                      bundle: .main))
+                            .font(.caption)
+                            .foregroundColor(theme.textMuted)
+                            .lineLimit(1)
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(theme.textMuted)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(isDark ? theme.textPrimary.opacity(0.05) : theme.textPrimary.opacity(0.03))
+                )
+            }
+            .padding(.horizontal, 20)
+            .padding(.bottom, 12)
+            .opacity(appearAnimation ? 1 : 0)
+            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appearAnimation)
+            .sheet(isPresented: $showEncryptionDetail) {
+                ConversationEncryptionDetailSheet(
+                    conversationId: conversation.id,
+                    accentColor: accentColor
+                )
+            }
+        } else if conversation.encryptionMode != nil {
+            // Groups: keep legacy safety-number verification entry when encryption is active
             Button {
                 HapticFeedback.light()
                 showSecurityVerification = true
@@ -918,20 +974,24 @@ struct ConversationInfoSheet: View {
                         .font(.system(size: 16))
                         .foregroundColor(Color(hex: "4ECDC4"))
                         .frame(width: 24)
-                    
+
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Chiffrement de bout en bout")
+                        Text(String(localized: "conversation.encryption.legacy.title",
+                                    defaultValue: "Chiffrement de bout en bout",
+                                    bundle: .main))
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(theme.textPrimary)
 
-                        Text("Appuyez pour vérifier le numéro de sécurité")
+                        Text(String(localized: "conversation.encryption.legacy.subtitle",
+                                    defaultValue: "Appuyez pour vérifier le numéro de sécurité",
+                                    bundle: .main))
                             .font(.caption)
                             .foregroundColor(theme.textMuted)
                             .lineLimit(1)
                     }
-                    
+
                     Spacer()
-                    
+
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
@@ -1015,7 +1075,7 @@ struct ConversationInfoSheet: View {
                 }
             }
         } catch {
-            ToastManager.shared.showError("Erreur lors de la creation du lien")
+            ToastManager.shared.showError(String(localized: "conversation.info.share.error", defaultValue: "Erreur lors de la creation du lien", bundle: .main))
         }
     }
 
@@ -1024,7 +1084,7 @@ struct ConversationInfoSheet: View {
             try await ConversationService.shared.leave(conversationId: conversation.id)
             dismiss()
         } catch {
-            ToastManager.shared.showError("Erreur lors du depart de la conversation")
+            ToastManager.shared.showError(String(localized: "conversation.info.leave.error", defaultValue: "Erreur lors du depart de la conversation", bundle: .main))
         }
     }
 
@@ -1043,14 +1103,23 @@ struct ConversationInfoSheet: View {
 
     private var conversationTypeLabel: String {
         switch conversation.type {
-        case .direct: return "Conversation privee"
-        case .group: return "Groupe"
-        case .public: return "Public"
-        case .global: return "Global"
-        case .community: return "Communaute"
-        case .channel: return "Canal"
-        case .bot: return "Bot"
-        case .broadcast: return "Broadcast"
+        case .direct: return String(localized: "conversation.type.direct", defaultValue: "Conversation privee", bundle: .main)
+        case .group: return String(localized: "conversation.type.group", defaultValue: "Groupe", bundle: .main)
+        case .public: return String(localized: "conversation.type.public", defaultValue: "Public", bundle: .main)
+        case .global: return String(localized: "conversation.type.global", defaultValue: "Global", bundle: .main)
+        case .community: return String(localized: "conversation.type.community", defaultValue: "Communaute", bundle: .main)
+        case .channel: return String(localized: "conversation.type.channel", defaultValue: "Canal", bundle: .main)
+        case .bot: return String(localized: "conversation.type.bot", defaultValue: "Bot", bundle: .main)
+        case .broadcast: return String(localized: "conversation.type.broadcast", defaultValue: "Broadcast", bundle: .main)
+        }
+    }
+
+    private func tabLabel(for tab: InfoTab) -> String {
+        switch tab {
+        case .members: return String(localized: "conversation.info.tab.members", defaultValue: "Membres", bundle: .main)
+        case .media: return String(localized: "conversation.info.tab.media", defaultValue: "Medias", bundle: .main)
+        case .plus: return String(localized: "conversation.info.tab.stats", defaultValue: "Stats", bundle: .main)
+        case .preferences: return String(localized: "conversation.info.tab.options", defaultValue: "Options", bundle: .main)
         }
     }
 
@@ -1069,8 +1138,8 @@ struct ConversationInfoSheet: View {
 
     private func roleBadgeLabel(_ role: String) -> String {
         switch role.lowercased() {
-        case "admin", "creator": return "Admin"
-        case "moderator": return "Mod"
+        case "admin", "creator": return String(localized: "conversation.role.admin", defaultValue: "Admin", bundle: .main)
+        case "moderator": return String(localized: "conversation.role.moderator", defaultValue: "Mod", bundle: .main)
         default: return role.capitalized
         }
     }
@@ -1095,20 +1164,20 @@ struct ConversationInfoSheet: View {
 
     private func attachmentLabel(_ type: MessageAttachment.AttachmentType) -> String {
         switch type {
-        case .image: return "Photo"
-        case .video: return "Video"
-        case .audio: return "Audio"
-        case .file: return "Fichier"
-        case .location: return "Position"
+        case .image: return String(localized: "attachment.kind.photo", defaultValue: "Photo", bundle: .main)
+        case .video: return String(localized: "attachment.kind.video", defaultValue: "Video", bundle: .main)
+        case .audio: return String(localized: "attachment.kind.audio", defaultValue: "Audio", bundle: .main)
+        case .file: return String(localized: "attachment.kind.file", defaultValue: "Fichier", bundle: .main)
+        case .location: return String(localized: "attachment.kind.location", defaultValue: "Position", bundle: .main)
         }
     }
 
     private func relativeTime(from date: Date) -> String {
         let interval = Date().timeIntervalSince(date)
-        if interval < 60 { return "A l'instant" }
-        if interval < 3600 { return "Il y a \(Int(interval / 60))min" }
-        if interval < 86400 { return "Il y a \(Int(interval / 3600))h" }
-        if interval < 604800 { return "Il y a \(Int(interval / 86400))j" }
+        if interval < 60 { return String(localized: "time.just-now", defaultValue: "A l'instant", bundle: .main) }
+        if interval < 3600 { return String(format: String(localized: "time.minutes-ago", defaultValue: "Il y a %dmin", bundle: .main), Int(interval / 60)) }
+        if interval < 86400 { return String(format: String(localized: "time.hours-ago", defaultValue: "Il y a %dh", bundle: .main), Int(interval / 3600)) }
+        if interval < 604800 { return String(format: String(localized: "time.days-ago", defaultValue: "Il y a %dj", bundle: .main), Int(interval / 86400)) }
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "fr_FR")
         formatter.dateFormat = "dd MMM"
@@ -1146,7 +1215,7 @@ struct ConversationInfoSheet: View {
                     Image(systemName: "exclamationmark.shield")
                         .font(.system(size: 13, weight: .semibold))
                 }
-                Text("Bloquer cet utilisateur")
+                Text(String(localized: "conversation.info.block.title", defaultValue: "Bloquer cet utilisateur", bundle: .main))
                     .font(.system(size: 13, weight: .semibold))
             }
             .foregroundColor(Color(hex: "EF4444"))
@@ -1164,7 +1233,7 @@ struct ConversationInfoSheet: View {
         .disabled(isBlocking)
         .padding(.horizontal, 20)
         .padding(.bottom, 12)
-        .accessibilityLabel("Bloquer \(conversation.name)")
+        .accessibilityLabel(String(format: String(localized: "conversation.info.block.a11y", defaultValue: "Bloquer %@", bundle: .main), conversation.name))
     }
 
     // MARK: - Block Action
@@ -1176,11 +1245,11 @@ struct ConversationInfoSheet: View {
             do {
                 try await blockService?.blockUser(userId: userId)
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess("Utilisateur bloque")
+                ToastManager.shared.showSuccess(String(localized: "conversation.info.block.success", defaultValue: "Utilisateur bloque", bundle: .main))
                 dismiss()
             } catch {
                 HapticFeedback.error()
-                ToastManager.shared.showError("Erreur lors du blocage")
+                ToastManager.shared.showError(String(localized: "conversation.info.block.error", defaultValue: "Erreur lors du blocage", bundle: .main))
                 Self.logger.error("Failed to block user: \(error.localizedDescription)")
             }
             isBlocking = false

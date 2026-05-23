@@ -53,7 +53,8 @@ struct MemberManagementSection: View {
 
     private var headerTitle: String {
         let count = viewModel.totalMemberCount > 0 ? viewModel.totalMemberCount : viewModel.participants.count
-        return count > 0 ? "MEMBRES (\(count))" : "MEMBRES"
+        let base = String(localized: "member-management.title", defaultValue: "MEMBRES", bundle: .main)
+        return count > 0 ? "\(base) (\(count))" : base
     }
 
     // MARK: - Section Container
@@ -92,7 +93,7 @@ struct MemberManagementSection: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(theme.textMuted)
 
-            TextField("Rechercher un membre...", text: $viewModel.memberSearchText)
+            TextField(String(localized: "member-management.search", defaultValue: "Rechercher un membre...", bundle: .main), text: $viewModel.memberSearchText)
                 .font(.system(size: 14, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .autocorrectionDisabled()
@@ -181,7 +182,7 @@ struct MemberManagementSection: View {
                         .frame(width: 32, height: 32)
                         .contentShape(Circle())
                 }
-                .accessibilityLabel("Options pour \(displayName)")
+                .accessibilityLabel(String(format: String(localized: "member-management.options-a11y", defaultValue: "Options pour %@", bundle: .main), displayName))
             }
         }
         .padding(.horizontal, 14)
@@ -198,7 +199,7 @@ struct MemberManagementSection: View {
                 HStack(spacing: 3) {
                     Image(systemName: "crown.fill")
                         .font(.system(size: 9))
-                    Text("Creator")
+                    Text(String(localized: "member-management.role.creator", defaultValue: "Creator", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundColor(Color(hex: "F8B500"))
@@ -207,7 +208,7 @@ struct MemberManagementSection: View {
                 HStack(spacing: 3) {
                     Image(systemName: "shield.fill")
                         .font(.system(size: 9))
-                    Text("Admin")
+                    Text(String(localized: "member-management.role.admin", defaultValue: "Admin", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundColor(Color(hex: "3B82F6"))
@@ -216,7 +217,7 @@ struct MemberManagementSection: View {
                 HStack(spacing: 3) {
                     Image(systemName: "checkmark.shield.fill")
                         .font(.system(size: 9))
-                    Text("Modérateur")
+                    Text(String(localized: "member-management.role.moderator", defaultValue: "Modérateur", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                 }
                 .foregroundColor(Color(hex: "4ECDC4"))
@@ -238,7 +239,7 @@ struct MemberManagementSection: View {
                 Image(systemName: "person.badge.plus")
                     .font(.system(size: 13, weight: .semibold))
 
-                Text("Ajouter un membre")
+                Text(String(localized: "participants.add.title", defaultValue: "Ajouter un membre", bundle: .main))
                     .font(.system(size: 14, weight: .semibold, design: .rounded))
             }
             .foregroundColor(sectionColor)
@@ -251,7 +252,7 @@ struct MemberManagementSection: View {
                 alignment: .top
             )
         }
-        .accessibilityLabel("Ajouter un membre a la conversation")
+        .accessibilityLabel(String(localized: "member-management.add-a11y", defaultValue: "Ajouter un membre a la conversation", bundle: .main))
     }
 
     // MARK: - Loading State
@@ -296,7 +297,7 @@ struct MemberManagementSection: View {
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
 
-            Text("Aucun membre trouvé")
+            Text(String(localized: "member-management.empty", defaultValue: "Aucun membre trouvé", bundle: .main))
                 .font(.system(size: 13, weight: .medium, design: .rounded))
                 .foregroundColor(theme.textMuted)
         }
@@ -333,7 +334,7 @@ struct MemberManagementSection: View {
 
         if currentUserRole == .creator && targetRole < .admin {
             actions.append(MemberAction(
-                label: "Promouvoir Admin",
+                label: String(localized: "member-management.action.promote-admin", defaultValue: "Promouvoir Admin", bundle: .main),
                 icon: "shield.fill",
                 isDestructive: false,
                 handler: { await viewModel.updateRole(participantId: participantId, newRole: "ADMIN") }
@@ -342,7 +343,7 @@ struct MemberManagementSection: View {
 
         if currentUserRole.hasMinimumRole(.admin) && targetRole == .member {
             actions.append(MemberAction(
-                label: "Promouvoir Modérateur",
+                label: String(localized: "member-management.action.promote-moderator", defaultValue: "Promouvoir Modérateur", bundle: .main),
                 icon: "checkmark.shield.fill",
                 isDestructive: false,
                 handler: { await viewModel.updateRole(participantId: participantId, newRole: "MODERATOR") }
@@ -351,7 +352,7 @@ struct MemberManagementSection: View {
 
         if currentUserRole > targetRole && targetRole > .member {
             actions.append(MemberAction(
-                label: "Rétrograder Membre",
+                label: String(localized: "member-management.action.demote-member", defaultValue: "Rétrograder Membre", bundle: .main),
                 icon: "person.fill",
                 isDestructive: false,
                 handler: { await viewModel.updateRole(participantId: participantId, newRole: "MEMBER") }
@@ -359,7 +360,7 @@ struct MemberManagementSection: View {
         }
 
         actions.append(MemberAction(
-            label: "Expulser",
+            label: String(localized: "member-management.action.expel", defaultValue: "Expulser", bundle: .main),
             icon: "person.fill.xmark",
             isDestructive: true,
             handler: { await viewModel.expelParticipant(participantId: participantId) }
@@ -367,7 +368,7 @@ struct MemberManagementSection: View {
 
         if currentUserRole.hasMinimumRole(.admin) {
             actions.append(MemberAction(
-                label: "Bannir",
+                label: String(localized: "member-management.action.ban", defaultValue: "Bannir", bundle: .main),
                 icon: "hand.raised.fill",
                 isDestructive: true,
                 handler: { await viewModel.banParticipant(userId: userId) }

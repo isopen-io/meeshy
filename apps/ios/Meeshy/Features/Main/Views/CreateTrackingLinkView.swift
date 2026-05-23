@@ -39,11 +39,11 @@ struct CreateTrackingLinkView: View {
                     .padding(.top, 20).padding(.bottom, 40)
                 }
             }
-            .navigationTitle("Nouveau lien de tracking")
+            .navigationTitle(String(localized: "tracking.link.create.title", defaultValue: "Nouveau lien de tracking", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("Annuler") { dismiss() }.foregroundColor(theme.textSecondary)
+                    Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main)) { dismiss() }.foregroundColor(theme.textSecondary)
                 }
             }
         }
@@ -51,9 +51,9 @@ struct CreateTrackingLinkView: View {
 
     private var formSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            formField("URL de destination *", placeholder: "https://meeshy.me", text: $destinationUrl)
+            formField(String(localized: "tracking.link.create.field.url", defaultValue: "URL de destination *", bundle: .main), placeholder: "https://meeshy.me", text: $destinationUrl)
                 .keyboardType(.URL).textInputAutocapitalization(.never)
-            formField("Nom interne", placeholder: "ex: Campagne Instagram", text: $name)
+            formField(String(localized: "tracking.link.create.field.name", defaultValue: "Nom interne", bundle: .main), placeholder: String(localized: "tracking.link.create.field.name.placeholder", defaultValue: "ex: Campagne Instagram", bundle: .main), text: $name)
         }
         .padding(.horizontal, 20)
     }
@@ -66,7 +66,7 @@ struct CreateTrackingLinkView: View {
                 }
             } label: {
                 HStack {
-                    Text("Paramètres UTM").font(.system(size: 14, weight: .medium))
+                    Text(String(localized: "tracking.link.create.utm.title", defaultValue: "Paramètres UTM", bundle: .main)).font(.system(size: 14, weight: .medium))
                         .foregroundColor(theme.textPrimary)
                     Spacer()
                     Image(systemName: showUtmFields ? "chevron.up" : "chevron.down")
@@ -77,9 +77,9 @@ struct CreateTrackingLinkView: View {
 
             if showUtmFields {
                 VStack(spacing: 10) {
-                    formField("Campaign", placeholder: "ex: summer_sale", text: $campaign)
-                    formField("Source", placeholder: "ex: instagram, email", text: $source)
-                    formField("Medium", placeholder: "ex: social, cpc, email", text: $medium)
+                    formField(String(localized: "tracking.link.create.utm.campaign", defaultValue: "Campaign", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.campaign.placeholder", defaultValue: "ex: summer_sale", bundle: .main), text: $campaign)
+                    formField(String(localized: "tracking.link.create.utm.source", defaultValue: "Source", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.source.placeholder", defaultValue: "ex: instagram, email", bundle: .main), text: $source)
+                    formField(String(localized: "tracking.link.create.utm.medium", defaultValue: "Medium", bundle: .main), placeholder: String(localized: "tracking.link.create.utm.medium.placeholder", defaultValue: "ex: social, cpc, email", bundle: .main), text: $medium)
                 }
                 .padding(.horizontal, 20)
                 .transition(.move(edge: .top).combined(with: .opacity))
@@ -89,16 +89,16 @@ struct CreateTrackingLinkView: View {
 
     private var tokenSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Token personnalisé (optionnel)")
+            Text(String(localized: "tracking.link.create.token.title", defaultValue: "Token personnalisé (optionnel)", bundle: .main))
                 .font(.system(size: 13, weight: .medium)).foregroundColor(theme.textSecondary)
-            TextField("ex: summer24 (6 chars min)", text: $customToken)
+            TextField(String(localized: "tracking.link.create.token.placeholder", defaultValue: "ex: summer24 (6 chars min)", bundle: .main), text: $customToken)
                 .padding(12)
                 .background(RoundedRectangle(cornerRadius: 10)
                     .fill(isDark ? Color.white.opacity(0.08) : Color.black.opacity(0.04)))
                 .foregroundColor(theme.textPrimary)
                 .textInputAutocapitalization(.never)
                 .autocorrectionDisabled()
-            Text("Laissez vide pour un token aléatoire")
+            Text(String(localized: "tracking.link.create.token.help", defaultValue: "Laissez vide pour un token aléatoire", bundle: .main))
                 .font(.system(size: 11)).foregroundColor(theme.textMuted)
         }
         .padding(.horizontal, 20)
@@ -109,7 +109,7 @@ struct CreateTrackingLinkView: View {
             if isCreating {
                 ProgressView().tint(.white)
             } else {
-                Text("Créer le lien").font(.system(size: 16, weight: .bold)).foregroundColor(.white)
+                Text(String(localized: "tracking.link.create.button", defaultValue: "Créer le lien", bundle: .main)).font(.system(size: 16, weight: .bold)).foregroundColor(.white)
             }
         }
         .frame(maxWidth: .infinity).padding(.vertical, 14)

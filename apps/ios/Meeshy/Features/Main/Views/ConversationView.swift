@@ -389,7 +389,7 @@ struct ConversationView: View {
             Spacer()
             Image(systemName: "person.badge.plus")
                 .font(.system(size: 10, weight: .semibold))
-            Text("conversation.joined_on \(Self.joinedDateFormatter.string(from: date))")
+            Text(String(localized: "conversation.view.joined_on", defaultValue: "Rejoint le \(Self.joinedDateFormatter.string(from: date))", bundle: .main))
                 .font(.system(size: 11, weight: .medium))
             Spacer()
         }
@@ -453,7 +453,7 @@ struct ConversationView: View {
                     .padding(8)
                     .background(Circle().fill(Color(hex: "4ECDC4").opacity(0.15)))
 
-                Text("Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire.")
+                Text(String(localized: "conversation.view.e2e_notice", defaultValue: "Les messages dans cette conversation sont chiffrés de bout en bout. Personne, pas même Meeshy, ne peut les lire.", bundle: .main))
                     .font(.system(size: 12))
                     .foregroundColor(.secondary)
                     .multilineTextAlignment(.center)
@@ -477,7 +477,7 @@ struct ConversationView: View {
         HStack(spacing: 8) {
             Image(systemName: "lock.fill")
                 .foregroundColor(.secondary)
-            Text("Cette conversation a ete fermee")
+            Text(String(localized: "conversation.view.closed", defaultValue: "Cette conversation a ete fermee", bundle: .main))
                 .font(.subheadline)
                 .foregroundColor(.secondary)
         }
@@ -528,7 +528,7 @@ struct ConversationView: View {
                 .fill(MeeshyColors.error.opacity(0.5))
                 .frame(height: 1)
                 .accessibilityHidden(true)
-            Text("Nouveaux messages")
+            Text(String(localized: "conversation.view.new_messages", defaultValue: "Nouveaux messages", bundle: .main))
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(MeeshyColors.error)
                 .lineLimit(1)
@@ -542,7 +542,7 @@ struct ConversationView: View {
         .id("unread_separator")
         .transition(.opacity)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Nouveaux messages non lus")
+        .accessibilityLabel(String(localized: "conversation.view.new_messages_unread", defaultValue: "Nouveaux messages non lus", bundle: .main))
         .accessibilityAddTraits(.isHeader)
     }
 
@@ -596,11 +596,11 @@ struct ConversationView: View {
             .sheet(isPresented: $composerState.showConversationInfo) {
                 if let conv = conversation { ConversationInfoSheet(conversation: conv, accentColor: accentColor, messages: viewModel.messages) }
             }
-            .alert("Action sélectionnée", isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
-                Button("OK") { composerState.actionAlert = nil }
+            .alert(String(localized: "conversation.view.action_selected", defaultValue: "Action sélectionnée", bundle: .main), isPresented: Binding(get: { composerState.actionAlert != nil }, set: { if !$0 { composerState.actionAlert = nil } })) {
+                Button(String(localized: "common.ok", defaultValue: "OK", bundle: .main)) { composerState.actionAlert = nil }
             } message: { Text(composerState.actionAlert ?? "") }
             .confirmationDialog(
-                "Supprimer ce message ?",
+                String(localized: "conversation.view.delete_message.title", defaultValue: "Supprimer ce message ?", bundle: .main),
                 isPresented: Binding(
                     get: { overlayState.deleteConfirmMessageId != nil },
                     set: { if !$0 { overlayState.deleteConfirmMessageId = nil } }
@@ -613,18 +613,18 @@ struct ConversationView: View {
                 // WhatsApp's "Delete for everyone" gating.
                 if let idx = viewModel.messageIndex(for: msgId),
                    viewModel.canDeleteForEveryone(viewModel.messages[idx]) {
-                    Button("Supprimer pour tout le monde", role: .destructive) {
+                    Button(String(localized: "conversation.view.delete_for_everyone", defaultValue: "Supprimer pour tout le monde", bundle: .main), role: .destructive) {
                         Task { await viewModel.deleteMessage(messageId: msgId, mode: .everyone) }
                         overlayState.deleteConfirmMessageId = nil
                     }
                 }
-                Button("Supprimer pour moi", role: .destructive) {
+                Button(String(localized: "conversation.view.delete_for_me", defaultValue: "Supprimer pour moi", bundle: .main), role: .destructive) {
                     Task { await viewModel.deleteMessage(messageId: msgId, mode: .local) }
                     overlayState.deleteConfirmMessageId = nil
                 }
-                Button("Annuler", role: .cancel) { overlayState.deleteConfirmMessageId = nil }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { overlayState.deleteConfirmMessageId = nil }
             } message: { _ in
-                Text("La suppression pour tout le monde est disponible pendant 2 h après l'envoi.")
+                Text(String(localized: "conversation.view.delete_for_everyone.hint", defaultValue: "La suppression pour tout le monde est disponible pendant 2 h après l'envoi.", bundle: .main))
             }
             .sheet(item: $composerState.forwardMessage) { msgToForward in
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
@@ -843,7 +843,7 @@ struct ConversationView: View {
         .padding(.bottom, composerHeight + 24)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Chargement des messages"))
+        .accessibilityLabel(Text(String(localized: "conversation.view.loading_messages", defaultValue: "Chargement des messages", bundle: .main)))
     }
 
     // MARK: - Body Content (extracted to help type-checker)
@@ -1173,7 +1173,7 @@ struct ConversationView: View {
                         .padding(.horizontal, 16)
                         .padding(.vertical, 8)
                     }
-                    .accessibilityLabel("Mentionner \(candidate.displayName)")
+                    .accessibilityLabel(String(localized: "conversation.view.mention", defaultValue: "Mentionner \(candidate.displayName)", bundle: .main))
                     if candidate.id != viewModel.mentionSuggestions.last?.id {
                         Divider()
                             .padding(.leading, 58)
@@ -1246,7 +1246,7 @@ struct ConversationView: View {
                     .frame(width: 32, height: 32)
                     .background(Circle().fill(theme.textMuted.opacity(0.12)))
             }
-            .accessibilityLabel("Fermer la conversation")
+            .accessibilityLabel(String(localized: "conversation.view.close", defaultValue: "Fermer la conversation", bundle: .main))
         }
         .padding(.horizontal, 16)
         .padding(.top, 12)
@@ -1308,7 +1308,7 @@ struct ConversationView: View {
                     expandedHeaderTitleLabel
                 }
                 .accessibilityLabel(conversation?.name ?? "Conversation")
-                .accessibilityHint("Ouvre les informations de la conversation")
+                .accessibilityHint(String(localized: "conversation.view.open_info", defaultValue: "Ouvre les informations de la conversation", bundle: .main))
 
                 Spacer(minLength: 4)
                 headerCallButtons.layoutPriority(1)
@@ -1349,7 +1349,7 @@ struct ConversationView: View {
                     .font(.system(size: 10, weight: .semibold))
                     .foregroundStyle(.white.opacity(0.85))
                     .adaptiveSymbolPulse()
-                    .accessibilityLabel("Actualisation en arriere-plan")
+                    .accessibilityLabel(String(localized: "conversation.view.refreshing_background", defaultValue: "Actualisation en arriere-plan", bundle: .main))
             }
         }
     }
@@ -1365,7 +1365,7 @@ struct ConversationView: View {
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(Color(hex: accentColor).opacity(0.15)))
         }
-        .accessibilityLabel("Rechercher dans la conversation")
+        .accessibilityLabel(String(localized: "conversation.view.search_in_conversation", defaultValue: "Rechercher dans la conversation", bundle: .main))
     }
 
     @ViewBuilder

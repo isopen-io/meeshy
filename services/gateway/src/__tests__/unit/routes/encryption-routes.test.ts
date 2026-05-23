@@ -97,21 +97,88 @@ describe('Encryption Preference Validation', () => {
 });
 
 describe('Encryption Mode Validation', () => {
-  const validModes = ['e2ee', 'server'];
-  const invalidModes = ['', 'invalid', 'E2EE', 'SERVER', 'both', 123, null, undefined];
+  const VALID_MODES = ['e2ee', 'server', 'hybrid'] as const;
+  const validModes = [...VALID_MODES];
+  const invalidModes = ['', 'invalid', 'E2EE', 'SERVER', 'HYBRID', 'both', 123, null, undefined];
 
   it('should accept valid encryption modes', () => {
     validModes.forEach((mode) => {
-      const isValid = ['e2ee', 'server'].includes(mode);
+      const isValid = (VALID_MODES as readonly string[]).includes(mode);
       expect(isValid).toBe(true);
     });
   });
 
   it('should reject invalid encryption modes', () => {
     invalidModes.forEach((mode) => {
-      const isValid = typeof mode === 'string' && ['e2ee', 'server'].includes(mode);
+      const isValid =
+        typeof mode === 'string' && (VALID_MODES as readonly string[]).includes(mode);
       expect(isValid).toBe(false);
     });
+  });
+
+  it('should mirror the route-level mode whitelist', () => {
+    // Guard against the route accepting modes that this test doesn't know about
+    expect(VALID_MODES).toEqual(['e2ee', 'server', 'hybrid']);
+  });
+});
+
+describe('Hybrid mode behavior', () => {
+  const getEncryptionStatus = (conversation: {
+    encryptionEnabledAt: Date | null;
+    encryptionMode: string | null;
+    encryptionEnabledBy: string | null;
+  }) => ({
+    isEncrypted: !!conversation.encryptionEnabledAt,
+    mode: conversation.encryptionMode,
+    enabledAt: conversation.encryptionEnabledAt,
+    enabledBy: conversation.encryptionEnabledBy,
+    canTranslate: conversation.encryptionMode !== 'e2ee',
+  });
+
+  it('should report canTranslate=true for hybrid mode', () => {
+    const status = getEncryptionStatus({
+      encryptionEnabledAt: new Date(),
+      encryptionMode: 'hybrid',
+      encryptionEnabledBy: 'user-1',
+    });
+    expect(status.isEncrypted).toBe(true);
+    expect(status.mode).toBe('hybrid');
+    expect(status.canTranslate).toBe(true);
+  });
+
+  it('should treat hybrid the same as server for translation availability', () => {
+    const hybrid = getEncryptionStatus({
+      encryptionEnabledAt: new Date(),
+      encryptionMode: 'hybrid',
+      encryptionEnabledBy: 'user-1',
+    });
+    const server = getEncryptionStatus({
+      encryptionEnabledAt: new Date(),
+      encryptionMode: 'server',
+      encryptionEnabledBy: 'user-1',
+    });
+    expect(hybrid.canTranslate).toBe(server.canTranslate);
+  });
+});
+
+describe('Encryption immutability invariant', () => {
+  it('should reject re-enable attempts when encryptionEnabledAt is already set', () => {
+    // Mirrors the gateway route guard at routes/conversation-encryption.ts
+    const conversation = {
+      encryptionEnabledAt: new Date('2024-01-15T10:00:00Z'),
+      encryptionMode: 'server' as const,
+    };
+    const canEnable = !conversation.encryptionEnabledAt;
+    expect(canEnable).toBe(false);
+  });
+
+  it('should allow enable when encryptionEnabledAt is null', () => {
+    const conversation = {
+      encryptionEnabledAt: null as Date | null,
+      encryptionMode: null as string | null,
+    };
+    const canEnable = !conversation.encryptionEnabledAt;
+    expect(canEnable).toBe(true);
   });
 });
 

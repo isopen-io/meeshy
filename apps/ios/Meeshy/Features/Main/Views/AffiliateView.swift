@@ -45,7 +45,7 @@ struct AffiliateView: View {
 
             Spacer()
 
-            Text("Parrainage")
+            Text(String(localized: "affiliate.title", defaultValue: "Parrainage", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -84,19 +84,19 @@ struct AffiliateView: View {
         HStack(spacing: 12) {
             affiliateStatCard(
                 value: "\(viewModel.tokens.count)",
-                label: "Liens",
+                label: String(localized: "affiliate.stat.links", defaultValue: "Liens", bundle: .main),
                 color: accentColor,
                 icon: "link"
             )
             affiliateStatCard(
                 value: "\(viewModel.tokens.reduce(0) { $0 + $1.referralCount })",
-                label: "Inscrits",
+                label: String(localized: "affiliate.stat.signups", defaultValue: "Inscrits", bundle: .main),
                 color: accentColor,
                 icon: "person.fill.checkmark"
             )
             affiliateStatCard(
                 value: "\(viewModel.tokens.reduce(0) { $0 + $1.clickCount })",
-                label: "Clics",
+                label: String(localized: "affiliate.stat.clicks", defaultValue: "Clics", bundle: .main),
                 color: accentColor,
                 icon: "cursorarrow.click"
             )
@@ -137,7 +137,7 @@ struct AffiliateView: View {
                 Image(systemName: "link.badge.plus")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
-                Text("MES LIENS")
+                Text(String(localized: "affiliate.section.myLinks", defaultValue: "MES LIENS", bundle: .main))
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: accentColor))
                     .tracking(1.2)
@@ -173,11 +173,11 @@ struct AffiliateView: View {
                 .font(.system(size: 36))
                 .foregroundColor(Color(hex: accentColor).opacity(0.4))
 
-            Text("Aucun lien de parrainage")
+            Text(String(localized: "affiliate.empty.title", defaultValue: "Aucun lien de parrainage", bundle: .main))
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Creez un lien pour inviter vos amis")
+            Text(String(localized: "affiliate.empty.subtitle", defaultValue: "Creez un lien pour inviter vos amis", bundle: .main))
                 .font(.system(size: 12))
                 .foregroundColor(theme.textMuted)
         }
@@ -202,12 +202,12 @@ struct AffiliateView: View {
                     .lineLimit(1)
 
                 HStack(spacing: 8) {
-                    Label("\(token.clickCount) clics", systemImage: "cursorarrow.click")
+                    Label(String(localized: "affiliate.token.clicks", defaultValue: "\(token.clickCount) clics", bundle: .main), systemImage: "cursorarrow.click")
                         .font(.system(size: 12))
                         .foregroundColor(theme.textMuted)
                     Text("·")
                         .foregroundColor(theme.textMuted)
-                    Label("\(token.referralCount) inscrit(s)", systemImage: "person.fill.checkmark")
+                    Label(String(localized: "affiliate.token.signups", defaultValue: "\(token.referralCount) inscrit(s)", bundle: .main), systemImage: "person.fill.checkmark")
                         .font(.system(size: 12))
                         .foregroundColor(Color(hex: "2ECC71"))
                 }

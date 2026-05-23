@@ -253,7 +253,7 @@ struct ConversationListHeaderOverlay: View {
                         HStack(spacing: 4) {
                             Image(systemName: "square.stack.fill")
                                 .font(.system(size: 13, weight: .semibold))
-                            Text("Feed")
+                            Text(String(localized: "conversation.list.feed", defaultValue: "Feed", bundle: .main))
                                 .font(.system(size: 13, weight: .semibold))
                         }
                         .foregroundStyle(
@@ -284,7 +284,7 @@ struct ConversationListHeaderOverlay: View {
                             .font(.system(size: 20, weight: .semibold))
                             .foregroundColor(MeeshyColors.indigo500)
                     }
-                    .accessibilityLabel("Creer un lien de partage")
+                    .accessibilityLabel(String(localized: "conversation.list.create_share_link", defaultValue: "Creer un lien de partage", bundle: .main))
 
                     Button {
                         onNewConversation?()
@@ -293,7 +293,7 @@ struct ConversationListHeaderOverlay: View {
                             .font(.system(size: 22, weight: .semibold))
                             .foregroundColor(MeeshyColors.indigo500)
                     }
-                    .accessibilityLabel("Nouvelle conversation")
+                    .accessibilityLabel(String(localized: "conversation.list.new_conversation", defaultValue: "Nouvelle conversation", bundle: .main))
 
                     if let onNotificationsTap {
                         Button {
@@ -315,7 +315,7 @@ struct ConversationListHeaderOverlay: View {
                                 }
                             }
                         }
-                        .accessibilityLabel("Notifications")
+                        .accessibilityLabel(String(localized: "conversation.list.notifications", defaultValue: "Notifications", bundle: .main))
                     }
 
                     if let onSettingsTap {
@@ -327,7 +327,7 @@ struct ConversationListHeaderOverlay: View {
                                 .font(.system(size: 18, weight: .semibold))
                                 .foregroundColor(MeeshyColors.indigo500)
                         }
-                        .accessibilityLabel("Reglages")
+                        .accessibilityLabel(String(localized: "conversation.list.settings", defaultValue: "Reglages", bundle: .main))
                     }
                 }
             }
@@ -502,7 +502,7 @@ struct ConversationListBottomBar: View {
                 .focused(isSearching)
                 .foregroundColor(theme.textPrimary)
                 .font(.system(size: 15))
-                .accessibilityLabel("Rechercher des conversations")
+                .accessibilityLabel(String(localized: "conversation.list.search_conversations", defaultValue: "Rechercher des conversations", bundle: .main))
 
             if !conversationViewModel.searchText.isEmpty {
                 Button {

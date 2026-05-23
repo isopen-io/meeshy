@@ -99,13 +99,13 @@ struct BubbleAttachmentView: View {
                                 .font(.system(size: 36))
                                 .foregroundColor(.white)
 
-                            Text("Position partagee")
+                            Text(String(localized: "bubble.attachment.locationShared", defaultValue: "Position partagee", bundle: .main))
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundColor(.white.opacity(0.9))
                         }
                     )
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("Position partagee")
+                    .accessibilityLabel(String(localized: "bubble.attachment.locationShared", defaultValue: "Position partagee", bundle: .main))
             }
         }
     }

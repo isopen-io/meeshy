@@ -51,13 +51,13 @@ struct ThreadView: View {
 
             Spacer()
 
-            Text("Discussion")
+            Text(String(localized: "thread.title", defaultValue: "Discussion", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
             Spacer()
 
-            Text("\(replies.count) reponses")
+            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
                 .font(.system(size: 12, weight: .medium))
                 .foregroundColor(theme.textMuted)
         }
@@ -124,7 +124,7 @@ struct ThreadView: View {
                 .fill(Color(hex: accentColor).opacity(0.3))
                 .frame(height: 1)
 
-            Text("\(replies.count) reponses")
+            Text(String(localized: "thread.repliesCount", defaultValue: "\(replies.count) reponses", bundle: .main))
                 .font(.system(size: 11, weight: .bold))
                 .foregroundColor(Color(hex: accentColor))
                 .padding(.horizontal, 8)
@@ -190,7 +190,7 @@ struct ThreadView: View {
             }
 
             HStack(spacing: 10) {
-                TextField("Repondre...", text: $replyText)
+                TextField(String(localized: "thread.reply.placeholder", defaultValue: "Repondre...", bundle: .main), text: $replyText)
                     .font(.system(size: 14))
                     .padding(.horizontal, 14)
                     .padding(.vertical, 10)

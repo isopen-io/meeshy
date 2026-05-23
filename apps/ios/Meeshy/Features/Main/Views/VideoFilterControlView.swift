@@ -27,7 +27,7 @@ struct VideoFilterControlView: View {
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundStyle(MeeshyColors.brandGradient)
 
-            Text("Filtres video")
+            Text(String(localized: "video.filter.title", defaultValue: "Filtres video", bundle: .main))
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(colorScheme == .dark ? .white : MeeshyColors.indigo950)
 
@@ -45,7 +45,7 @@ struct VideoFilterControlView: View {
         VStack(spacing: 12) {
             filterSlider(
                 icon: "thermometer.medium",
-                label: "Temperature",
+                label: String(localized: "video.filter.temperature", defaultValue: "Temperature", bundle: .main),
                 value: temperatureBinding,
                 range: 0...1,
                 neutral: 0.5
@@ -53,7 +53,7 @@ struct VideoFilterControlView: View {
 
             filterSlider(
                 icon: "sun.max",
-                label: "Luminosite",
+                label: String(localized: "video.filter.brightness", defaultValue: "Luminosite", bundle: .main),
                 value: $config.brightness,
                 range: -0.5...0.5,
                 neutral: 0
@@ -61,7 +61,7 @@ struct VideoFilterControlView: View {
 
             filterSlider(
                 icon: "circle.lefthalf.filled",
-                label: "Contraste",
+                label: String(localized: "video.filter.contrast", defaultValue: "Contraste", bundle: .main),
                 value: $config.contrast,
                 range: 0.5...1.5,
                 neutral: 1.0
@@ -69,7 +69,7 @@ struct VideoFilterControlView: View {
 
             filterSlider(
                 icon: "paintpalette",
-                label: "Saturation",
+                label: String(localized: "video.filter.saturation", defaultValue: "Saturation", bundle: .main),
                 value: $config.saturation,
                 range: 0...2,
                 neutral: 1.0
@@ -77,7 +77,7 @@ struct VideoFilterControlView: View {
 
             filterSlider(
                 icon: "plusminus.circle",
-                label: "Exposition",
+                label: String(localized: "video.filter.exposure", defaultValue: "Exposition", bundle: .main),
                 value: $config.exposure,
                 range: -1...1,
                 neutral: 0
@@ -129,7 +129,7 @@ struct VideoFilterControlView: View {
             HStack(spacing: 6) {
                 Image(systemName: "arrow.counterclockwise")
                     .font(.system(size: 12, weight: .semibold))
-                Text("Reinitialiser")
+                Text(String(localized: "video.filter.reinit", defaultValue: "Reinitialiser", bundle: .main))
                     .font(.system(size: 13, weight: .medium))
             }
             .foregroundColor(MeeshyColors.indigo500)

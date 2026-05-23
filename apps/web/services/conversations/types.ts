@@ -223,3 +223,20 @@ export interface BackendConversationData {
   lastMessage?: unknown;
   unreadCount?: unknown;
 }
+
+export type EncryptionMode = 'e2ee' | 'server' | 'hybrid';
+
+export interface EncryptionStatus {
+  isEncrypted: boolean;
+  mode: EncryptionMode | null;
+  enabledAt: string | null;
+  enabledBy: string | null;
+  canTranslate: boolean;
+}
+
+export interface EnableEncryptionResult {
+  conversationId: string;
+  mode: EncryptionMode;
+  enabledAt: string;
+  enabledBy: string;
+}

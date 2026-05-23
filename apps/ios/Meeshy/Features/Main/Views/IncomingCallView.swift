@@ -31,13 +31,15 @@ struct IncomingCallView: View {
                 .padding(.bottom, 32)
 
             // Caller name
-            Text(callManager.remoteUsername ?? "Inconnu")
+            Text(callManager.remoteUsername ?? String(localized: "call.incoming.unknown_caller", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(size: 30, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
                 .padding(.bottom, 8)
 
             // Call type label
-            Text(callManager.isVideoEnabled ? "Appel video entrant" : "Appel entrant")
+            Text(callManager.isVideoEnabled
+                ? String(localized: "call.incoming.video", defaultValue: "Appel video entrant", bundle: .main)
+                : String(localized: "call.incoming.audio", defaultValue: "Appel entrant", bundle: .main))
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(theme.textMuted)
                 .padding(.bottom, 12)
@@ -142,7 +144,9 @@ struct IncomingCallView: View {
         HStack(spacing: 6) {
             Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
                 .font(.system(size: 12, weight: .semibold))
-            Text(callManager.isVideoEnabled ? "Video" : "Audio")
+            Text(callManager.isVideoEnabled
+                ? String(localized: "call.incoming.badge.video", defaultValue: "Video", bundle: .main)
+                : String(localized: "call.incoming.badge.audio", defaultValue: "Audio", bundle: .main))
                 .font(.system(size: 13, weight: .semibold))
         }
         .foregroundColor(MeeshyColors.indigo400)
@@ -184,13 +188,13 @@ struct IncomingCallView: View {
                             .foregroundColor(.white)
                     }
 
-                    Text("Refuser")
+                    Text(String(localized: "call.incoming.decline", defaultValue: "Refuser", bundle: .main))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                 }
             }
             .pressable()
-            .accessibilityLabel("Refuser l'appel")
+            .accessibilityLabel(String(localized: "call.incoming.decline.label", defaultValue: "Refuser l'appel", bundle: .main))
 
             // Accept
             Button {
@@ -214,13 +218,13 @@ struct IncomingCallView: View {
                             .foregroundColor(.white)
                     }
 
-                    Text("Accepter")
+                    Text(String(localized: "call.incoming.accept", defaultValue: "Accepter", bundle: .main))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(MeeshyColors.success)
                 }
             }
             .pressable()
-            .accessibilityLabel("Accepter l'appel")
+            .accessibilityLabel(String(localized: "call.incoming.accept.label", defaultValue: "Accepter l'appel", bundle: .main))
         }
     }
 }

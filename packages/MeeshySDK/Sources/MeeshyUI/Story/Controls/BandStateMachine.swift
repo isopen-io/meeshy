@@ -3,14 +3,7 @@ import Foundation
 // MARK: - Category & ElementKind
 
 public nonisolated enum BandCategory: Equatable, Sendable {
-    case contenu, effets
-
-    public var swapped: BandCategory {
-        switch self {
-        case .contenu: return .effets
-        case .effets: return .contenu
-        }
-    }
+    case media, son, text, drawing, filters, timeline
 }
 
 public nonisolated enum BandElementKind: Equatable, Sendable {
@@ -21,14 +14,12 @@ public nonisolated enum BandElementKind: Equatable, Sendable {
 
 public nonisolated enum BandState: Equatable, Sendable {
     case hidden
-    case tiles(BandCategory)
     case toolPanel(StoryToolMode)
     case formatPanel(BandElementKind, elementId: String)
 
     public var activeCategory: BandCategory? {
         switch self {
         case .hidden, .formatPanel: return nil
-        case .tiles(let c): return c
         case .toolPanel(let t): return t.bandCategory
         }
     }
@@ -38,12 +29,26 @@ public nonisolated enum BandState: Equatable, Sendable {
 
 nonisolated extension StoryToolMode {
     /// Bridges the existing `StoryToolMode` enum to `BandCategory` for the new layer.
-    /// Kept separate from the existing `tab: StoryTab` property to avoid coupling
-    /// the legacy `ContextualToolbar` symbol (`StoryTab`) with the new layer.
     public var bandCategory: BandCategory {
         switch self {
-        case .media, .drawing, .text, .texture: return .contenu
-        case .filters, .timeline: return .effets
+        case .media, .texture: return .media
+        case .audio: return .son
+        case .drawing: return .drawing
+        case .text: return .text
+        case .filters: return .filters
+        case .timeline: return .timeline
+        }
+    }
+
+    /// Helper to convert category back to a default tool mode.
+    public static func from(category: BandCategory) -> StoryToolMode {
+        switch category {
+        case .media: return .media
+        case .son: return .audio
+        case .text: return .text
+        case .drawing: return .drawing
+        case .filters: return .filters
+        case .timeline: return .timeline
         }
     }
 }
@@ -52,18 +57,19 @@ nonisolated extension StoryToolMode {
 
 public nonisolated struct BandStateMachine: Equatable, Sendable {
     public private(set) var state: BandState = .hidden
-    private var lastCategoryBeforeFormat: BandCategory? = nil
 
     public init() {}
 
     public mutating func tapFAB(_ category: BandCategory) {
         switch state {
         case .hidden:
-            state = .tiles(category)
-        case .tiles(let current):
-            state = (current == category) ? .hidden : .tiles(category)
+            state = .toolPanel(StoryToolMode.from(category: category))
         case .toolPanel(let tool):
-            state = (tool.bandCategory == category) ? .hidden : .tiles(category)
+            if tool.bandCategory == category {
+                state = .hidden
+            } else {
+                state = .toolPanel(StoryToolMode.from(category: category))
+            }
         case .formatPanel:
             // Format panel takes precedence — tap on FAB does not interrupt it.
             break
@@ -76,7 +82,7 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
         case .formatPanel:
             break  // formatPanel takes precedence
         default:
-            state = .tiles(category)
+            state = .toolPanel(StoryToolMode.from(category: category))
         }
     }
 
@@ -84,34 +90,18 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
         switch state {
         case .hidden:
             break  // no-op
-        case .tiles:
+        case .toolPanel:
             state = .hidden
-        case .toolPanel(let tool):
-            state = .tiles(tool.bandCategory)
         case .formatPanel:
             closeFormatPanel()
         }
     }
 
     public mutating func swipeHorizontalOnBand() {
-        switch state {
-        case .tiles(let current):
-            state = .tiles(current.swapped)
-        case .hidden, .toolPanel, .formatPanel:
-            break  // explicitly no-op (collision with sliders / format controls)
-        }
+        // No horizontal swipe anymore as we removed categories
     }
 
     public mutating func openFormatPanel(_ kind: BandElementKind, id: String) {
-        // Save the current category if applicable, so closeFormatPanel can restore
-        switch state {
-        case .tiles(let c):
-            lastCategoryBeforeFormat = c
-        case .toolPanel(let t):
-            lastCategoryBeforeFormat = t.bandCategory
-        case .hidden, .formatPanel:
-            lastCategoryBeforeFormat = nil
-        }
         state = .formatPanel(kind, elementId: id)
     }
 
@@ -127,12 +117,7 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
     public mutating func closeFormatPanel() {
         switch state {
         case .formatPanel:
-            if let last = lastCategoryBeforeFormat {
-                state = .tiles(last)
-            } else {
-                state = .hidden
-            }
-            lastCategoryBeforeFormat = nil
+            state = .hidden
         default:
             break
         }
@@ -140,8 +125,8 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
 
     public mutating func backFromToolPanel() {
         switch state {
-        case .toolPanel(let tool):
-            state = .tiles(tool.bandCategory)
+        case .toolPanel:
+            state = .hidden
         default:
             break
         }
@@ -149,6 +134,5 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
 
     public mutating func reset() {
         state = .hidden
-        lastCategoryBeforeFormat = nil
     }
 }

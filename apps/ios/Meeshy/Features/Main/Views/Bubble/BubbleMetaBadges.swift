@@ -28,13 +28,13 @@ struct BubbleEditedIndicator: View, Equatable {
                     .font(.system(size: 8, weight: .semibold))
                     .rotationEffect(.degrees(isSaving ? 360 : 0))
                     .animation(.linear(duration: 1).repeatForever(autoreverses: false), value: isSaving)
-                Text("Enregistrement…")
+                Text(String(localized: "bubble.meta.saving", defaultValue: "Enregistrement…", bundle: .main))
                     .font(.system(size: 9, weight: .medium))
                     .italic()
             } else {
                 Image(systemName: "pencil")
                     .font(.system(size: 8, weight: .semibold))
-                Text("modifie")
+                Text(String(localized: "bubble.meta.edited", defaultValue: "modifie", bundle: .main))
                     .font(.system(size: 9, weight: .medium))
                     .italic()
                 if hasEditHistory {
@@ -65,14 +65,14 @@ struct BubblePinnedIndicator: View, Equatable {
                 .foregroundColor(MeeshyColors.pinnedBlue)
                 .rotationEffect(.degrees(45))
 
-            Text("Epingle")
+            Text(String(localized: "bubble.meta.pinned", defaultValue: "Epingle", bundle: .main))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(MeeshyColors.pinnedBlue)
         }
         .padding(.horizontal, 4)
         .padding(.bottom, 2)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Message epingle")
+        .accessibilityLabel(String(localized: "bubble.meta.pinned.a11y", defaultValue: "Message epingle", bundle: .main))
     }
 }
 
@@ -96,20 +96,20 @@ struct BubbleForwardedIndicator: View, Equatable {
 
             if let senderName {
                 if let conversationName {
-                    Text("Transf. de \(senderName) \u{2022} \(conversationName)")
+                    Text(String(localized: "bubble.meta.forwarded.fromConversation", defaultValue: "Transf. de \(senderName) \u{2022} \(conversationName)", bundle: .main))
                         .font(.system(size: 10))
                         .italic()
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                 } else {
-                    Text("Transf. de \(senderName)")
+                    Text(String(localized: "bubble.meta.forwarded.from", defaultValue: "Transf. de \(senderName)", bundle: .main))
                         .font(.system(size: 10))
                         .italic()
                         .foregroundColor(theme.textMuted)
                         .lineLimit(1)
                 }
             } else {
-                Text("Transfere")
+                Text(String(localized: "bubble.meta.forwarded", defaultValue: "Transfere", bundle: .main))
                     .font(.system(size: 10))
                     .italic()
                     .foregroundColor(theme.textMuted)
@@ -153,6 +153,6 @@ struct BubbleEphemeralBadge: View, Equatable {
                         .stroke(Color(hex: "FF6B6B").opacity(0.3), lineWidth: 0.5)
                 )
         )
-        .accessibilityLabel("Message ephemere, expire dans \(timerText)")
+        .accessibilityLabel(String(localized: "bubble.meta.ephemeral.a11y", defaultValue: "Message ephemere, expire dans \(timerText)", bundle: .main))
     }
 }

@@ -35,7 +35,7 @@ struct VideoFiltersPanel: View {
             Image(systemName: "camera.filters")
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(MeeshyColors.indigo400)
-            Text("Filtres video")
+            Text(String(localized: "video.filter.title", defaultValue: "Filtres video", bundle: .main))
                 .font(.system(size: 15, weight: .semibold, design: .rounded))
                 .foregroundColor(.primary)
             Spacer()
@@ -45,7 +45,7 @@ struct VideoFiltersPanel: View {
                     filterConfig.isEnabled = false
                     activePreset = .natural
                 } label: {
-                    Text("Reset")
+                    Text(String(localized: "video.filter.reset", defaultValue: "Reset", bundle: .main))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(MeeshyColors.error)
                 }
@@ -95,11 +95,11 @@ struct VideoFiltersPanel: View {
 
     private func presetLabel(_ preset: VideoFilterPreset) -> String {
         switch preset {
-        case .natural: return "Naturel"
-        case .warm: return "Chaud"
-        case .cool: return "Froid"
-        case .vivid: return "Vif"
-        case .muted: return "Doux"
+        case .natural: return String(localized: "video.filter.preset.natural", defaultValue: "Naturel", bundle: .main)
+        case .warm: return String(localized: "video.filter.preset.warm", defaultValue: "Chaud", bundle: .main)
+        case .cool: return String(localized: "video.filter.preset.cool", defaultValue: "Froid", bundle: .main)
+        case .vivid: return String(localized: "video.filter.preset.vivid", defaultValue: "Vif", bundle: .main)
+        case .muted: return String(localized: "video.filter.preset.muted", defaultValue: "Doux", bundle: .main)
         }
     }
 
@@ -114,7 +114,7 @@ struct VideoFiltersPanel: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(MeeshyColors.indigo400)
                     .frame(width: 18)
-                Text("Flou d'arriere-plan")
+                Text(String(localized: "video.filter.backgroundBlur", defaultValue: "Flou d'arriere-plan", bundle: .main))
                     .font(.system(size: 13, weight: .medium))
                 Spacer()
                 Toggle("", isOn: $filterConfig.backgroundBlurEnabled)
@@ -124,7 +124,7 @@ struct VideoFiltersPanel: View {
 
             if filterConfig.backgroundBlurEnabled {
                 HStack(spacing: 10) {
-                    Text("Rayon")
+                    Text(String(localized: "video.filter.radius", defaultValue: "Rayon", bundle: .main))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.secondary)
                         .frame(width: 55, alignment: .leading)
@@ -144,7 +144,7 @@ struct VideoFiltersPanel: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundColor(MeeshyColors.indigo400)
                     .frame(width: 18)
-                Text("Lissage peau")
+                Text(String(localized: "video.filter.skinSmoothing", defaultValue: "Lissage peau", bundle: .main))
                     .font(.system(size: 13, weight: .medium))
                 Spacer()
                 Toggle("", isOn: $filterConfig.skinSmoothingEnabled)
@@ -154,7 +154,7 @@ struct VideoFiltersPanel: View {
 
             if filterConfig.skinSmoothingEnabled {
                 HStack(spacing: 10) {
-                    Text("Intensite")
+                    Text(String(localized: "video.filter.intensity", defaultValue: "Intensite", bundle: .main))
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(.secondary)
                         .frame(width: 55, alignment: .leading)
@@ -181,7 +181,7 @@ struct VideoFiltersPanel: View {
             HStack(spacing: 6) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.system(size: 10))
-                Text("Performance reduite — certains filtres desactives")
+                Text(String(localized: "video.filter.performanceDegraded", defaultValue: "Performance reduite — certains filtres desactives", bundle: .main))
                     .font(.system(size: 11, weight: .medium))
             }
             .foregroundColor(MeeshyColors.warning)

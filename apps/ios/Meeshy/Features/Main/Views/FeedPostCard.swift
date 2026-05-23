@@ -148,7 +148,7 @@ struct FeedPostCard: View {
                             .foregroundColor(theme.textPrimary)
                             .lineLimit(nil)
 
-                        Text("voir moins")
+                        Text(String(localized: "feed.post.see_less", defaultValue: "voir moins", bundle: .main))
                             .font(.system(size: 15, weight: .medium))
                             .foregroundColor(theme.textMuted)
                             .onTapGesture {
@@ -163,7 +163,7 @@ struct FeedPostCard: View {
                             .lineLimit(nil)
 
                         if truncation.isTruncated {
-                            Text("voir plus")
+                            Text(String(localized: "feed.post.see_more", defaultValue: "voir plus", bundle: .main))
                                 .font(.system(size: 15, weight: .medium))
                                 .foregroundColor(theme.textMuted)
                                 .onTapGesture {
@@ -340,7 +340,7 @@ struct FeedPostCard: View {
                             Image(systemName: "arrow.2.squarepath")
                                 .font(.system(size: 10))
                                 .accessibilityHidden(true)
-                            Text("a republié")
+                            Text(String(localized: "feed.post.reposted", defaultValue: "a republié", bundle: .main))
                                 .font(.system(size: 11))
                         }
                         .foregroundColor(theme.textMuted)
@@ -395,26 +395,26 @@ struct FeedPostCard: View {
                     UIPasteboard.general.string = post.content
                     HapticFeedback.success()
                 } label: {
-                    Label("Copier le texte", systemImage: "doc.on.doc")
+                    Label(String(localized: "feed.post.copy_text", defaultValue: "Copier le texte", bundle: .main), systemImage: "doc.on.doc")
                 }
                 Button {
                     onShare?(post.id)
                     HapticFeedback.light()
                 } label: {
-                    Label("Partager", systemImage: "square.and.arrow.up")
+                    Label(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
                 }
                 Button {
                     onBookmark?(post.id)
                     HapticFeedback.light()
                 } label: {
-                    Label("Enregistrer", systemImage: "bookmark")
+                    Label(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main), systemImage: "bookmark")
                 }
                 if onPin != nil {
                     Button {
                         onPin?(post.id)
                         HapticFeedback.light()
                     } label: {
-                        Label("Epingler", systemImage: "pin")
+                        Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
                     }
                 }
                 if onDelete != nil {
@@ -423,7 +423,7 @@ struct FeedPostCard: View {
                         onDelete?(post.id)
                         HapticFeedback.medium()
                     } label: {
-                        Label("Supprimer", systemImage: "trash")
+                        Label(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), systemImage: "trash")
                     }
                 }
                 if onReport != nil {
@@ -432,7 +432,7 @@ struct FeedPostCard: View {
                         onReport?(post.id)
                         HapticFeedback.medium()
                     } label: {
-                        Label("Signaler", systemImage: "exclamationmark.triangle")
+                        Label(String(localized: "feed.post.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
                     }
                 }
             } label: {
@@ -441,8 +441,8 @@ struct FeedPostCard: View {
                     .foregroundColor(theme.textMuted)
                     .padding(8)
             }
-            .accessibilityLabel("Plus d'options")
-            .accessibilityHint("Ouvre le menu des actions")
+            .accessibilityLabel(String(localized: "feed.post.more_options", defaultValue: "Plus d'options", bundle: .main))
+            .accessibilityHint(String(localized: "feed.post.more_options.hint", defaultValue: "Ouvre le menu des actions", bundle: .main))
         }
     }
 
@@ -491,7 +491,7 @@ struct FeedPostCard: View {
                     }
                     .foregroundColor(theme.accentText(repost.authorColor).opacity(0.7))
                     .accessibilityElement(children: .combine)
-                    .accessibilityLabel("\(repost.likes) j'aime")
+                    .accessibilityLabel(String(localized: "feed.post.repost.likes_count", defaultValue: "\(repost.likes) j'aime", bundle: .main))
                 }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -507,8 +507,8 @@ struct FeedPostCard: View {
             )
         }
         .buttonStyle(PlainButtonStyle())
-        .accessibilityLabel("Publication originale de \(repost.author)")
-        .accessibilityHint("Ouvre la publication originale")
+        .accessibilityLabel(String(localized: "feed.post.original.label", defaultValue: "Publication originale de \(repost.author)", bundle: .main))
+        .accessibilityHint(String(localized: "feed.post.original.hint", defaultValue: "Ouvre la publication originale", bundle: .main))
     }
 
     // MARK: - Media Preview
@@ -562,7 +562,7 @@ struct FeedPostCard: View {
             }
             .disabled(isHeartInFlight)
             .animation(.easeOut(duration: 0.2), value: effectiveIsLiked)
-            .accessibilityLabel("\(effectiveLikeCount) j'aime")
+            .accessibilityLabel(String(localized: "feed.post.likes_count", defaultValue: "\(effectiveLikeCount) j'aime", bundle: .main))
 
             Spacer()
 
@@ -582,8 +582,8 @@ struct FeedPostCard: View {
                 }
                 .foregroundColor(showCommentsSheet ? theme.accentText(accentColor) : theme.textSecondary)
             }
-            .accessibilityLabel("\(post.commentCount) commentaires")
-            .accessibilityHint("Ouvre les commentaires")
+            .accessibilityLabel(String(localized: "feed.post.comments_count", defaultValue: "\(post.commentCount) commentaires", bundle: .main))
+            .accessibilityHint(String(localized: "feed.post.comments.hint", defaultValue: "Ouvre les commentaires", bundle: .main))
 
             Spacer()
 
@@ -596,11 +596,11 @@ struct FeedPostCard: View {
                     .font(.system(size: 17))
                     .foregroundColor(theme.textSecondary)
             }
-            .accessibilityLabel("Repartager")
+            .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
             .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
-                Button("Repartager") { onRepost?(post.id) }
-                Button("Citer") { onQuote?(post.id) }
-                Button("Annuler", role: .cancel) {}
+                Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(post.id) }
+                Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) { onQuote?(post.id) }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
             }
 
             Spacer()
@@ -614,7 +614,7 @@ struct FeedPostCard: View {
                     .font(.system(size: 17))
                     .foregroundColor(theme.textSecondary)
             }
-            .accessibilityLabel("Enregistrer")
+            .accessibilityLabel(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main))
 
             Spacer()
 
@@ -627,7 +627,7 @@ struct FeedPostCard: View {
                     .font(.system(size: 17))
                     .foregroundColor(theme.textSecondary)
             }
-            .accessibilityLabel("Partager")
+            .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
         }
         .padding(.top, 4)
     }
@@ -671,7 +671,7 @@ struct FeedPostCard: View {
                             }
                         }
 
-                        Text("Voir les \(post.comments.count) commentaires")
+                        Text(String(localized: "feed.post.view_comments", defaultValue: "Voir les \(post.comments.count) commentaires", bundle: .main))
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(theme.accentText(accentColor))
 
@@ -688,8 +688,8 @@ struct FeedPostCard: View {
             }
         }
         .buttonStyle(PlainButtonStyle())
-        .accessibilityLabel("Voir les \(post.comments.count) commentaires")
-        .accessibilityHint("Ouvre la liste des commentaires")
+        .accessibilityLabel(String(localized: "feed.post.view_comments", defaultValue: "Voir les \(post.comments.count) commentaires", bundle: .main))
+        .accessibilityHint(String(localized: "feed.post.view_comments.hint", defaultValue: "Ouvre la liste des commentaires", bundle: .main))
     }
 
     // MARK: - Top Comment Row
@@ -763,7 +763,7 @@ struct FeedPostCard: View {
                                 Image(systemName: "arrowshape.turn.up.left.fill")
                                     .font(.system(size: 10))
                                     .foregroundColor(theme.accentText(accentColor).opacity(0.7))
-                                Text("\(comment.replies) réponses")
+                                Text(String(localized: "feed.post.comment.replies_count", defaultValue: "\(comment.replies) réponses", bundle: .main))
                                     .font(.system(size: 11, weight: .medium))
                                     .foregroundColor(theme.textMuted)
                             }

@@ -371,11 +371,11 @@ private struct MyStoryButton: View {
                 }
             }
 
-            Text("Moi")
+            Text(String(localized: "story.tray.me", defaultValue: "Moi", bundle: .main))
                 .font(.system(size: 10, weight: .semibold))
                 .foregroundColor(.white.opacity(0.8))
         }
-        .accessibilityLabel(hasMyStory ? "Ma story" : "Changer mon mood")
+        .accessibilityLabel(hasMyStory ? String(localized: "story.tray.a11y.myStory", defaultValue: "Ma story", bundle: .main) : String(localized: "story.tray.a11y.changeMood", defaultValue: "Changer mon mood", bundle: .main))
     }
 }
 
@@ -434,10 +434,10 @@ private struct StoryUploadOverlay: View {
         .contextMenu {
             if isFailed {
                 Button { onRetry() } label: {
-                    Label("Reessayer", systemImage: "arrow.clockwise")
+                    Label(String(localized: "story.tray.retry", defaultValue: "Reessayer", bundle: .main), systemImage: "arrow.clockwise")
                 }
                 Button(role: .destructive) { onCancel() } label: {
-                    Label("Annuler", systemImage: "trash")
+                    Label(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), systemImage: "trash")
                 }
             }
         }

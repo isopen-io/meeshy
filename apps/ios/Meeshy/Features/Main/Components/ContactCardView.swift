@@ -40,7 +40,7 @@ struct ContactCardView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 2) {
-                        Text("Contact partage")
+                        Text(String(localized: "contact-card.shared", defaultValue: "Contact partage", bundle: .main))
                             .font(.system(size: 10, weight: .semibold))
                             .foregroundColor(Color(hex: accentColor).opacity(0.8))
                             .textCase(.uppercase)
@@ -109,8 +109,8 @@ struct ContactCardView: View {
         }
         .buttonStyle(.plain)
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Contact partage: \(contact.fullName)")
-        .accessibilityHint("Appuyer pour ouvrir le contact")
+        .accessibilityLabel(String(format: String(localized: "contact-card.a11y-label", defaultValue: "Contact partage: %@", bundle: .main), contact.fullName))
+        .accessibilityHint(String(localized: "contact-card.a11y-hint", defaultValue: "Appuyer pour ouvrir le contact", bundle: .main))
     }
 }
 

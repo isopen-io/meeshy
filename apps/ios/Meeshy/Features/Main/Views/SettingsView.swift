@@ -48,14 +48,14 @@ struct SettingsView: View {
         .sheet(isPresented: $showStats) { UserStatsView() }
         .sheet(isPresented: $showAffiliate) { AffiliateView() }
         .sheet(isPresented: $showDataExport) { DataExportView() }
-        .alert("Déconnexion", isPresented: $showLogoutConfirm) {
-            Button("Annuler", role: .cancel) { }
-            Button("Déconnexion", role: .destructive) {
+        .alert(String(localized: "settings.logout.title", defaultValue: "Déconnexion", bundle: .main), isPresented: $showLogoutConfirm) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
+            Button(String(localized: "settings.logout.title", defaultValue: "Déconnexion", bundle: .main), role: .destructive) {
                 authManager.logout()
                 MessageSocketManager.shared.disconnect()
             }
         } message: {
-            Text("Voulez-vous vraiment vous déconnecter ?")
+            Text(String(localized: "settings.logout.message", defaultValue: "Voulez-vous vraiment vous déconnecter ?", bundle: .main))
         }
         .sheet(isPresented: $showPrivacySettings) {
             PrivacySettingsView()
@@ -84,7 +84,7 @@ struct SettingsView: View {
 
     private var header: some View {
         CollapsibleHeader(
-            title: "Réglages",
+            title: String(localized: "settings.title", defaultValue: "Réglages", bundle: .main),
             scrollOffset: scrollOffset,
             onBack: { router.pop() },
             titleColor: theme.textPrimary,
@@ -145,7 +145,7 @@ struct SettingsView: View {
                 )
 
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(authManager.currentUser?.displayName ?? "Mon profil")
+                    Text(authManager.currentUser?.displayName ?? String(localized: "settings.my_profile", defaultValue: "Mon profil", bundle: .main))
                         .font(.system(size: 17, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                     Text("@\(authManager.currentUser?.username ?? "")")
@@ -165,70 +165,70 @@ struct SettingsView: View {
                     .fill(theme.inputBackground)
             )
         }
-        .accessibilityLabel("Mon profil")
+        .accessibilityLabel(String(localized: "settings.my_profile", defaultValue: "Mon profil", bundle: .main))
     }
 
     private var accountSection: some View {
-        settingsSection(title: "Compte", icon: "person.circle.fill", color: "9B59B6") {
+        settingsSection(title: String(localized: "settings.section.account", defaultValue: "Compte", bundle: .main), icon: "person.circle.fill", color: "9B59B6") {
             Button {
                 HapticFeedback.light()
                 showPrivacySettings = true
             } label: {
-                settingsRow(icon: "lock.fill", title: "Confidentialité", color: "E91E63") {
+                settingsRow(icon: "lock.fill", title: String(localized: "settings.privacy.title", defaultValue: "Confidentialité", bundle: .main), color: "E91E63") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Confidentialite")
-            .accessibilityHint("Ouvre les reglages de confidentialite")
+            .accessibilityLabel(String(localized: "settings.privacy.a11y", defaultValue: "Confidentialite", bundle: .main))
+            .accessibilityHint(String(localized: "settings.privacy.hint", defaultValue: "Ouvre les reglages de confidentialite", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showSecurity = true
             } label: {
-                settingsRow(icon: "shield.fill", title: "Sécurité", color: "3498DB") {
+                settingsRow(icon: "shield.fill", title: String(localized: "settings.security.title", defaultValue: "Sécurité", bundle: .main), color: "3498DB") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Securite")
-            .accessibilityHint("Ouvre les reglages de securite")
+            .accessibilityLabel(String(localized: "settings.security.a11y", defaultValue: "Securite", bundle: .main))
+            .accessibilityHint(String(localized: "settings.security.hint", defaultValue: "Ouvre les reglages de securite", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showBlockedUsers = true
             } label: {
-                settingsRow(icon: "lock.shield", title: "Utilisateurs bloques", color: "EF4444") {
+                settingsRow(icon: "lock.shield", title: String(localized: "settings.blocked_users", defaultValue: "Utilisateurs bloques", bundle: .main), color: "EF4444") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Utilisateurs bloques")
-            .accessibilityHint("Ouvre la liste des utilisateurs bloques")
+            .accessibilityLabel(String(localized: "settings.blocked_users", defaultValue: "Utilisateurs bloques", bundle: .main))
+            .accessibilityHint(String(localized: "settings.blocked_users.hint", defaultValue: "Ouvre la liste des utilisateurs bloques", bundle: .main))
 
             Button {
                 HapticFeedback.heavy()
                 showDeleteAccount = true
             } label: {
-                settingsRow(icon: "person.crop.circle.badge.minus", title: "Supprimer le compte", color: "EF4444") {
+                settingsRow(icon: "person.crop.circle.badge.minus", title: String(localized: "settings.delete_account", defaultValue: "Supprimer le compte", bundle: .main), color: "EF4444") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(Color(hex: "EF4444").opacity(0.6))
                 }
             }
-            .accessibilityLabel("Supprimer le compte")
-            .accessibilityHint("Ouvre la page de suppression de compte")
+            .accessibilityLabel(String(localized: "settings.delete_account", defaultValue: "Supprimer le compte", bundle: .main))
+            .accessibilityHint(String(localized: "settings.delete_account.hint", defaultValue: "Ouvre la page de suppression de compte", bundle: .main))
         }
     }
 
     // MARK: - Appearance Section
 
     private var appearanceSection: some View {
-        settingsSection(title: "Apparence", icon: "paintbrush.fill", color: "F8B500") {
-            settingsRow(icon: theme.preference.icon, title: "Thème", color: theme.preference.tintColor) {
+        settingsSection(title: String(localized: "settings.section.appearance", defaultValue: "Apparence", bundle: .main), icon: "paintbrush.fill", color: "F8B500") {
+            settingsRow(icon: theme.preference.icon, title: String(localized: "settings.theme", defaultValue: "Thème", bundle: .main), color: theme.preference.tintColor) {
                 HStack(spacing: 8) {
                     ForEach(ThemePreference.allCases, id: \.self) { pref in
                         Button {
@@ -253,14 +253,14 @@ struct SettingsView: View {
                                     .fill(theme.preference == pref ? Color(hex: pref.tintColor).opacity(0.15) : Color.clear)
                             )
                         }
-                        .accessibilityLabel("Theme \(pref.label)")
-                        .accessibilityValue(theme.preference == pref ? "selectionne" : "")
+                        .accessibilityLabel("\(String(localized: "settings.theme", defaultValue: "Thème", bundle: .main)) \(pref.label)")
+                        .accessibilityValue(theme.preference == pref ? String(localized: "common.selected", defaultValue: "selectionne", bundle: .main) : "")
                         .accessibilityAddTraits(theme.preference == pref ? .isSelected : [])
                     }
                 }
             }
 
-            settingsRow(icon: "globe", title: "Langue de l'interface", color: "4ECDC4") {
+            settingsRow(icon: "globe", title: String(localized: "settings.interface_language", defaultValue: "Langue de l'interface", bundle: .main), color: "4ECDC4") {
                 Picker("", selection: Binding(
                     get: { prefs.application.interfaceLanguage },
                     set: { val in prefs.updateApplication { $0.interfaceLanguage = val } }
@@ -282,129 +282,129 @@ struct SettingsView: View {
     // MARK: - Notifications Section
 
     private var notificationsSection: some View {
-        settingsSection(title: "Notifications", icon: "bell.fill", color: "FF6B6B") {
-            settingsRow(icon: "bell.badge.fill", title: "Notifications", color: "FF6B6B") {
+        settingsSection(title: String(localized: "settings.section.notifications", defaultValue: "Notifications", bundle: .main), icon: "bell.fill", color: "FF6B6B") {
+            settingsRow(icon: "bell.badge.fill", title: String(localized: "settings.notifications.title", defaultValue: "Notifications", bundle: .main), color: "FF6B6B") {
                 Toggle("", isOn: Binding(
                     get: { prefs.notification.pushEnabled },
                     set: { val in prefs.updateNotification { $0.pushEnabled = val } }
                 ))
                 .labelsHidden()
                 .tint(Color(hex: accentColor))
-                .accessibilityLabel("Notifications push")
-                .accessibilityValue(prefs.notification.pushEnabled ? "active" : "desactive")
+                .accessibilityLabel(String(localized: "settings.notif.push.a11y", defaultValue: "Notifications push", bundle: .main))
+                .accessibilityValue(prefs.notification.pushEnabled ? String(localized: "settings.value.active", defaultValue: "active", bundle: .main) : String(localized: "settings.value.disabled", defaultValue: "desactive", bundle: .main))
             }
 
-            settingsRow(icon: "speaker.wave.2.fill", title: "Sons", color: "4ECDC4") {
+            settingsRow(icon: "speaker.wave.2.fill", title: String(localized: "settings.notif.sounds", defaultValue: "Sons", bundle: .main), color: "4ECDC4") {
                 Toggle("", isOn: Binding(
                     get: { prefs.notification.soundEnabled },
                     set: { val in prefs.updateNotification { $0.soundEnabled = val } }
                 ))
                 .labelsHidden()
                 .tint(Color(hex: accentColor))
-                .accessibilityLabel("Sons de notification")
-                .accessibilityValue(prefs.notification.soundEnabled ? "active" : "desactive")
+                .accessibilityLabel(String(localized: "settings.notif.sounds.a11y", defaultValue: "Sons de notification", bundle: .main))
+                .accessibilityValue(prefs.notification.soundEnabled ? String(localized: "settings.value.active", defaultValue: "active", bundle: .main) : String(localized: "settings.value.disabled", defaultValue: "desactive", bundle: .main))
             }
 
-            settingsRow(icon: "iphone.radiowaves.left.and.right", title: "Vibrations", color: "9B59B6") {
+            settingsRow(icon: "iphone.radiowaves.left.and.right", title: String(localized: "settings.notif.vibrations", defaultValue: "Vibrations", bundle: .main), color: "9B59B6") {
                 Toggle("", isOn: Binding(
                     get: { prefs.notification.vibrationEnabled },
                     set: { val in prefs.updateNotification { $0.vibrationEnabled = val } }
                 ))
                 .labelsHidden()
                 .tint(Color(hex: accentColor))
-                .accessibilityLabel("Vibrations")
-                .accessibilityValue(prefs.notification.vibrationEnabled ? "active" : "desactive")
+                .accessibilityLabel(String(localized: "settings.notif.vibrations", defaultValue: "Vibrations", bundle: .main))
+                .accessibilityValue(prefs.notification.vibrationEnabled ? String(localized: "settings.value.active", defaultValue: "active", bundle: .main) : String(localized: "settings.value.disabled", defaultValue: "desactive", bundle: .main))
             }
 
             Button {
                 HapticFeedback.light()
                 showNotificationSettings = true
             } label: {
-                settingsRow(icon: "slider.horizontal.3", title: "Plus d'options", color: "FF6B6B") {
+                settingsRow(icon: "slider.horizontal.3", title: String(localized: "settings.notif.more_options", defaultValue: "Plus d'options", bundle: .main), color: "FF6B6B") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Plus d'options de notifications")
-            .accessibilityHint("Ouvre les reglages avances de notifications")
+            .accessibilityLabel(String(localized: "settings.notif.more_options.a11y", defaultValue: "Plus d'options de notifications", bundle: .main))
+            .accessibilityHint(String(localized: "settings.notif.more_options.hint", defaultValue: "Ouvre les reglages avances de notifications", bundle: .main))
         }
     }
 
     // MARK: - Data Section
 
     private var dataSection: some View {
-        settingsSection(title: "Donnees", icon: "externaldrive.fill", color: "E67E22") {
+        settingsSection(title: String(localized: "settings.section.data", defaultValue: "Donnees", bundle: .main), icon: "externaldrive.fill", color: "E67E22") {
             Button {
                 HapticFeedback.light()
                 showDataStorage = true
             } label: {
-                settingsRow(icon: "internaldrive.fill", title: "Stockage", color: "E67E22") {
+                settingsRow(icon: "internaldrive.fill", title: String(localized: "settings.storage", defaultValue: "Stockage", bundle: .main), color: "E67E22") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Stockage")
-            .accessibilityHint("Ouvre les parametres de stockage")
+            .accessibilityLabel(String(localized: "settings.storage", defaultValue: "Stockage", bundle: .main))
+            .accessibilityHint(String(localized: "settings.storage.hint", defaultValue: "Ouvre les parametres de stockage", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showMediaDownload = true
             } label: {
-                settingsRow(icon: "arrow.down.circle.fill", title: "Telechargement auto", color: "F39C12") {
+                settingsRow(icon: "arrow.down.circle.fill", title: String(localized: "settings.media.download.title", defaultValue: "Telechargement auto", bundle: .main), color: "F39C12") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Telechargement automatique")
-            .accessibilityHint("Ouvre les parametres de telechargement automatique des medias")
+            .accessibilityLabel(String(localized: "settings.media.download.a11y", defaultValue: "Telechargement automatique", bundle: .main))
+            .accessibilityHint(String(localized: "settings.media.download.hint", defaultValue: "Ouvre les parametres de telechargement automatique des medias", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showDataExport = true
             } label: {
-                settingsRow(icon: "square.and.arrow.up.fill", title: "Exporter mes donnees", color: "E67E22") {
+                settingsRow(icon: "square.and.arrow.up.fill", title: String(localized: "settings.export_data", defaultValue: "Exporter mes donnees", bundle: .main), color: "E67E22") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Exporter mes donnees")
-            .accessibilityHint("Ouvre la page d'export de donnees")
+            .accessibilityLabel(String(localized: "settings.export_data", defaultValue: "Exporter mes donnees", bundle: .main))
+            .accessibilityHint(String(localized: "settings.export_data.hint", defaultValue: "Ouvre la page d'export de donnees", bundle: .main))
         }
     }
 
     // MARK: - Voice Profile Section
 
     private var voiceProfileSection: some View {
-        settingsSection(title: "Profil vocal", icon: "waveform.and.mic", color: "A855F7") {
+        settingsSection(title: String(localized: "settings.section.voice", defaultValue: "Profil vocal", bundle: .main), icon: "waveform.and.mic", color: "A855F7") {
             Button {
                 HapticFeedback.light()
                 showVoiceProfileManage = true
             } label: {
-                settingsRow(icon: "waveform.circle.fill", title: "Gerer le profil vocal", color: "A855F7") {
+                settingsRow(icon: "waveform.circle.fill", title: String(localized: "settings.voice.manage", defaultValue: "Gerer le profil vocal", bundle: .main), color: "A855F7") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Gerer le profil vocal")
-            .accessibilityHint("Ouvre la gestion du profil vocal")
+            .accessibilityLabel(String(localized: "settings.voice.manage", defaultValue: "Gerer le profil vocal", bundle: .main))
+            .accessibilityHint(String(localized: "settings.voice.manage.hint", defaultValue: "Ouvre la gestion du profil vocal", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showVoiceProfileWizard = true
             } label: {
-                settingsRow(icon: "plus.circle.fill", title: "Creer un profil vocal", color: "2ECC71") {
+                settingsRow(icon: "plus.circle.fill", title: String(localized: "settings.voice.create", defaultValue: "Creer un profil vocal", bundle: .main), color: "2ECC71") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Creer un profil vocal")
-            .accessibilityHint("Lance l'assistant de creation de profil vocal")
+            .accessibilityLabel(String(localized: "settings.voice.create", defaultValue: "Creer un profil vocal", bundle: .main))
+            .accessibilityHint(String(localized: "settings.voice.create.hint", defaultValue: "Lance l'assistant de creation de profil vocal", bundle: .main))
         }
         .sheet(isPresented: $showVoiceProfileWizard) {
             VoiceProfileWizardView(accentColor: "A855F7")
@@ -417,146 +417,146 @@ struct SettingsView: View {
     // MARK: - Transcription Section
 
     private var transcriptionSection: some View {
-        settingsSection(title: "Transcription", icon: "text.quote", color: "4ECDC4") {
-            settingsRow(icon: "waveform", title: "Transcription automatique", color: "4ECDC4") {
+        settingsSection(title: String(localized: "settings.section.transcription", defaultValue: "Transcription", bundle: .main), icon: "text.quote", color: "4ECDC4") {
+            settingsRow(icon: "waveform", title: String(localized: "settings.transcription.auto", defaultValue: "Transcription automatique", bundle: .main), color: "4ECDC4") {
                 Toggle("", isOn: Binding(
                     get: { prefs.audio.autoTranscribeIncoming },
                     set: { val in prefs.updateAudio { $0.autoTranscribeIncoming = val } }
                 ))
                     .labelsHidden()
                     .tint(Color(hex: accentColor))
-                    .accessibilityLabel("Transcription automatique")
-                    .accessibilityValue(prefs.audio.autoTranscribeIncoming ? "active" : "desactive")
+                    .accessibilityLabel(String(localized: "settings.transcription.auto", defaultValue: "Transcription automatique", bundle: .main))
+                    .accessibilityValue(prefs.audio.autoTranscribeIncoming ? String(localized: "settings.value.active", defaultValue: "active", bundle: .main) : String(localized: "settings.value.disabled", defaultValue: "desactive", bundle: .main))
             }
 
-            settingsRow(icon: "info.circle", title: "Apple Speech (on-device)", color: "6B7280") {
+            settingsRow(icon: "info.circle", title: String(localized: "settings.transcription.engine", defaultValue: "Apple Speech (on-device)", bundle: .main), color: "6B7280") {
                 EmptyView()
             }
-            .accessibilityLabel("Moteur de transcription: Apple Speech sur l'appareil")
+            .accessibilityLabel(String(localized: "settings.transcription.engine.a11y", defaultValue: "Moteur de transcription: Apple Speech sur l'appareil", bundle: .main))
         }
     }
 
     // MARK: - Meeshy Tools Section
 
     private var meeshyToolsSection: some View {
-        settingsSection(title: "Outils", icon: "wrench.and.screwdriver.fill", color: "2ECC71") {
+        settingsSection(title: String(localized: "settings.section.tools", defaultValue: "Outils", bundle: .main), icon: "wrench.and.screwdriver.fill", color: "2ECC71") {
             Button {
                 HapticFeedback.light()
                 router.push(.starredMessages)
             } label: {
-                settingsRow(icon: "star.fill", title: "Messages favoris", color: "FBBF24") {
+                settingsRow(icon: "star.fill", title: String(localized: "settings.tools.starred", defaultValue: "Messages favoris", bundle: .main), color: "FBBF24") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Messages favoris")
-            .accessibilityHint("Ouvre la liste des messages mis en favoris")
+            .accessibilityLabel(String(localized: "settings.tools.starred", defaultValue: "Messages favoris", bundle: .main))
+            .accessibilityHint(String(localized: "settings.tools.starred.hint", defaultValue: "Ouvre la liste des messages mis en favoris", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showStats = true
             } label: {
-                settingsRow(icon: "chart.bar.fill", title: "Statistiques", color: "4ECDC4") {
+                settingsRow(icon: "chart.bar.fill", title: String(localized: "settings.tools.stats", defaultValue: "Statistiques", bundle: .main), color: "4ECDC4") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Statistiques")
-            .accessibilityHint("Ouvre les statistiques d'utilisation")
+            .accessibilityLabel(String(localized: "settings.tools.stats", defaultValue: "Statistiques", bundle: .main))
+            .accessibilityHint(String(localized: "settings.tools.stats.hint", defaultValue: "Ouvre les statistiques d'utilisation", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showAffiliate = true
             } label: {
-                settingsRow(icon: "link.badge.plus", title: "Parrainage", color: "2ECC71") {
+                settingsRow(icon: "link.badge.plus", title: String(localized: "settings.tools.affiliate", defaultValue: "Parrainage", bundle: .main), color: "2ECC71") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Parrainage")
-            .accessibilityHint("Ouvre le programme de parrainage")
+            .accessibilityLabel(String(localized: "settings.tools.affiliate", defaultValue: "Parrainage", bundle: .main))
+            .accessibilityHint(String(localized: "settings.tools.affiliate.hint", defaultValue: "Ouvre le programme de parrainage", bundle: .main))
         }
     }
 
     // MARK: - Support Section
 
     private var supportSection: some View {
-        settingsSection(title: "Aide", icon: "questionmark.circle.fill", color: "27AE60") {
+        settingsSection(title: String(localized: "settings.section.help", defaultValue: "Aide", bundle: .main), icon: "questionmark.circle.fill", color: "27AE60") {
             Button {
                 HapticFeedback.light()
                 showSupport = true
             } label: {
-                settingsRow(icon: "lifepreserver.fill", title: "Centre d'aide", color: "27AE60") {
+                settingsRow(icon: "lifepreserver.fill", title: String(localized: "settings.help_center", defaultValue: "Centre d'aide", bundle: .main), color: "27AE60") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Centre d'aide")
-            .accessibilityHint("Ouvre le centre d'aide et support")
+            .accessibilityLabel(String(localized: "settings.help_center", defaultValue: "Centre d'aide", bundle: .main))
+            .accessibilityHint(String(localized: "settings.help_center.hint", defaultValue: "Ouvre le centre d'aide et support", bundle: .main))
         }
     }
 
     // MARK: - About Section
 
     private var aboutSection: some View {
-        settingsSection(title: "A propos", icon: "info.circle.fill", color: "45B7D1") {
+        settingsSection(title: String(localized: "settings.section.about", defaultValue: "A propos", bundle: .main), icon: "info.circle.fill", color: "45B7D1") {
             Button {
                 HapticFeedback.light()
                 showAbout = true
             } label: {
-                settingsRow(icon: "info.circle.fill", title: "A propos de Meeshy", color: "45B7D1") {
+                settingsRow(icon: "info.circle.fill", title: String(localized: "settings.about.meeshy", defaultValue: "A propos de Meeshy", bundle: .main), color: "45B7D1") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("A propos de Meeshy")
-            .accessibilityHint("Ouvre la page a propos")
+            .accessibilityLabel(String(localized: "settings.about.meeshy", defaultValue: "A propos de Meeshy", bundle: .main))
+            .accessibilityHint(String(localized: "settings.about.hint", defaultValue: "Ouvre la page a propos", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showTerms = true
             } label: {
-                settingsRow(icon: "doc.text.fill", title: "Conditions d'utilisation", color: "45B7D1") {
+                settingsRow(icon: "doc.text.fill", title: String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main), color: "45B7D1") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Conditions d'utilisation")
-            .accessibilityHint("Ouvre les conditions d'utilisation")
+            .accessibilityLabel(String(localized: "settings.terms", defaultValue: "Conditions d'utilisation", bundle: .main))
+            .accessibilityHint(String(localized: "settings.terms.hint", defaultValue: "Ouvre les conditions d'utilisation", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showPrivacyPolicy = true
             } label: {
-                settingsRow(icon: "hand.raised.fill", title: "Politique de confidentialite", color: "45B7D1") {
+                settingsRow(icon: "hand.raised.fill", title: String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialite", bundle: .main), color: "45B7D1") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Politique de confidentialite")
-            .accessibilityHint("Ouvre la politique de confidentialite")
+            .accessibilityLabel(String(localized: "settings.privacy_policy", defaultValue: "Politique de confidentialite", bundle: .main))
+            .accessibilityHint(String(localized: "settings.privacy_policy.hint", defaultValue: "Ouvre la politique de confidentialite", bundle: .main))
 
             Button {
                 HapticFeedback.light()
                 showLicenses = true
             } label: {
-                settingsRow(icon: "checkmark.seal.fill", title: "Licences open source", color: "45B7D1") {
+                settingsRow(icon: "checkmark.seal.fill", title: String(localized: "settings.licenses", defaultValue: "Licences open source", bundle: .main), color: "45B7D1") {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 12, weight: .semibold))
                         .foregroundColor(theme.textMuted)
                 }
             }
-            .accessibilityLabel("Licences open source")
-            .accessibilityHint("Ouvre la liste des licences open source")
+            .accessibilityLabel(String(localized: "settings.licenses", defaultValue: "Licences open source", bundle: .main))
+            .accessibilityHint(String(localized: "settings.licenses.hint", defaultValue: "Ouvre la liste des licences open source", bundle: .main))
 
-            settingsRow(icon: "sparkles", title: "Version", color: "F8B500") {
+            settingsRow(icon: "sparkles", title: String(localized: "settings.version", defaultValue: "Version", bundle: .main), color: "F8B500") {
                 Text(Bundle.main.infoDictionary?["CFBundleShortVersionString"] as? String ?? "1.0.0")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(theme.textMuted)
@@ -574,7 +574,7 @@ struct SettingsView: View {
             HStack {
                 Image(systemName: "rectangle.portrait.and.arrow.forward")
                     .font(.system(size: 16, weight: .semibold))
-                Text("Déconnexion")
+                Text(String(localized: "settings.logout.title", defaultValue: "Déconnexion", bundle: .main))
                     .font(.system(size: 15, weight: .semibold))
             }
             .foregroundColor(Color(hex: "EF4444"))
@@ -589,8 +589,8 @@ struct SettingsView: View {
                     )
             )
         }
-        .accessibilityLabel("Deconnexion")
-        .accessibilityHint("Vous deconnecte de votre compte Meeshy")
+        .accessibilityLabel(String(localized: "settings.logout.a11y", defaultValue: "Deconnexion", bundle: .main))
+        .accessibilityHint(String(localized: "settings.logout.hint", defaultValue: "Vous deconnecte de votre compte Meeshy", bundle: .main))
     }
 
     // MARK: - Theme Sync

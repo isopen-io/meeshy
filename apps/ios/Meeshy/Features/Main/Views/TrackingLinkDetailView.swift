@@ -39,9 +39,9 @@ struct TrackingLinkDetailView: View {
         .navigationTitle(link.displayName)
         .navigationBarTitleDisplayMode(.inline)
         .task { await viewModel.load() }
-        .confirmationDialog("Supprimer ce lien ?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("Supprimer", role: .destructive) { deleteLink() }
-            Button("Annuler", role: .cancel) {}
+        .confirmationDialog(String(localized: "tracking.link.detail.confirmDelete", defaultValue: "Supprimer ce lien ?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button(String(localized: "tracking.link.detail.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) { deleteLink() }
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         }
     }
 
@@ -81,22 +81,22 @@ struct TrackingLinkDetailView: View {
 
     private var actionsBar: some View {
         HStack(spacing: 10) {
-            detailActionButton("Copier", icon: copiedFeedback ? "checkmark" : "doc.on.doc",
+            detailActionButton(String(localized: "tracking.link.detail.copy", defaultValue: "Copier", bundle: .main), icon: copiedFeedback ? "checkmark" : "doc.on.doc",
                                color: copiedFeedback ? "2ECC71" : "A855F7") {
                 UIPasteboard.general.string = link.shortUrl
                 HapticFeedback.success()
                 withAnimation { copiedFeedback = true }
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2) { withAnimation { copiedFeedback = false } }
             }
-            detailActionButton("Partager", icon: "square.and.arrow.up", color: "A855F7") {
+            detailActionButton(String(localized: "tracking.link.detail.share", defaultValue: "Partager", bundle: .main), icon: "square.and.arrow.up", color: "A855F7") {
                 guard let url = URL(string: link.shortUrl) else { return }
                 let av = UIActivityViewController(activityItems: [url], applicationActivities: nil)
                 presentVC(av)
             }
-            detailActionButton("QR Code", icon: "qrcode", color: "6366F1") {
+            detailActionButton(String(localized: "tracking.link.detail.qr", defaultValue: "QR Code", bundle: .main), icon: "qrcode", color: "6366F1") {
                 generateQRAndShare()
             }
-            detailActionButton("Supprimer", icon: "trash", color: "FF2E63") {
+            detailActionButton(String(localized: "tracking.link.detail.delete", defaultValue: "Supprimer", bundle: .main), icon: "trash", color: "FF2E63") {
                 showDeleteConfirm = true
             }
         }
@@ -120,15 +120,15 @@ struct TrackingLinkDetailView: View {
 
     private var mainStatsSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionTitle("STATISTIQUES")
+            sectionTitle(String(localized: "tracking.link.detail.stats.title", defaultValue: "STATISTIQUES", bundle: .main))
             HStack(spacing: 12) {
-                bigStatCard("\(link.totalClicks)", label: "Total clics", icon: "cursorarrow.click", color: "A855F7")
-                bigStatCard("\(link.uniqueClicks)", label: "Clics uniques", icon: "person.fill", color: "6366F1")
+                bigStatCard("\(link.totalClicks)", label: String(localized: "tracking.link.detail.stats.totalClicks", defaultValue: "Total clics", bundle: .main), icon: "cursorarrow.click", color: "A855F7")
+                bigStatCard("\(link.uniqueClicks)", label: String(localized: "tracking.link.detail.stats.uniqueClicks", defaultValue: "Clics uniques", bundle: .main), icon: "person.fill", color: "6366F1")
             }
             if let last = link.lastClickedAt {
                 HStack {
                     Image(systemName: "clock").foregroundColor(theme.textMuted)
-                    Text("Dernier clic : \(last.formatted(date: .abbreviated, time: .shortened))")
+                    Text(String(localized: "tracking.link.detail.lastClick", defaultValue: "Dernier clic : \(last.formatted(date: .abbreviated, time: .shortened))", bundle: .main))
                         .font(.system(size: 13)).foregroundColor(theme.textMuted)
                 }
                 .padding(.horizontal, 4)
@@ -153,15 +153,15 @@ struct TrackingLinkDetailView: View {
     // MARK: - Geo breakdown
 
     private var geoBreakdown: some View {
-        breakdownCard(title: "PAYS", icon: "globe", color: "08D9D6", items: viewModel.topCountries)
+        breakdownCard(title: String(localized: "tracking.link.detail.countries", defaultValue: "PAYS", bundle: .main), icon: "globe", color: "08D9D6", items: viewModel.topCountries)
     }
 
     // MARK: - Device breakdown
 
     private var deviceBreakdown: some View {
         VStack(spacing: 12) {
-            breakdownCard(title: "APPAREILS", icon: "iphone", color: "6366F1", items: viewModel.topDevices)
-            breakdownCard(title: "NAVIGATEURS", icon: "safari.fill", color: "2ECC71", items: viewModel.topBrowsers)
+            breakdownCard(title: String(localized: "tracking.link.detail.devices", defaultValue: "APPAREILS", bundle: .main), icon: "iphone", color: "6366F1", items: viewModel.topDevices)
+            breakdownCard(title: String(localized: "tracking.link.detail.browsers", defaultValue: "NAVIGATEURS", bundle: .main), icon: "safari.fill", color: "2ECC71", items: viewModel.topBrowsers)
         }
     }
 
@@ -172,7 +172,7 @@ struct TrackingLinkDetailView: View {
                 sectionTitle(title)
             }
             if items.isEmpty {
-                Text("Aucune donnée").font(.system(size: 13)).foregroundColor(theme.textMuted)
+                Text(String(localized: "tracking.link.detail.noData", defaultValue: "Aucune donnée", bundle: .main)).font(.system(size: 13)).foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .center).padding(.vertical, 8)
             } else {
                 VStack(spacing: 8) {
@@ -212,7 +212,7 @@ struct TrackingLinkDetailView: View {
             HStack {
                 Image(systemName: "list.bullet.clipboard").font(.system(size: 13))
                     .foregroundColor(Color(hex: "A855F7"))
-                sectionTitle("DERNIERS CLICS")
+                sectionTitle(String(localized: "tracking.link.detail.recentClicks", defaultValue: "DERNIERS CLICS", bundle: .main))
                 Spacer()
                 if viewModel.isLoadingMore { ProgressView().scaleEffect(0.7) }
             }
@@ -239,7 +239,7 @@ struct TrackingLinkDetailView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
                     if let country = click.country { Text(countryFlag(country)).font(.system(size: 16)) }
-                    Text(click.city ?? click.country ?? "Inconnu")
+                    Text(click.city ?? click.country ?? String(localized: "tracking.link.detail.unknown", defaultValue: "Inconnu", bundle: .main))
                         .font(.system(size: 13, weight: .medium)).foregroundColor(theme.textPrimary)
                     if let social = click.socialSource {
                         Text("· \(social)").font(.system(size: 12)).foregroundColor(Color(hex: "A855F7"))

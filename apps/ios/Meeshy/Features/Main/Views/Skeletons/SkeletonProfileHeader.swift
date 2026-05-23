@@ -36,7 +36,7 @@ struct SkeletonProfileHeader: View {
         }
         .padding(.horizontal, 16)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Chargement du profil"))
+        .accessibilityLabel(Text(String(localized: "skeleton.profile.loading", defaultValue: "Chargement du profil", bundle: .main)))
     }
 
     // MARK: - Sections

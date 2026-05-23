@@ -162,7 +162,7 @@ struct iPadLeftColumnHeader: View {
                     HStack(spacing: 6) {
                         Image(systemName: "square.stack.fill")
                             .font(.system(size: 14, weight: .semibold))
-                        Text("Feed")
+                        Text(String(localized: "root.ipad.feed", defaultValue: "Feed", bundle: .main))
                             .font(.system(size: 14, weight: .semibold))
                     }
                     .foregroundStyle(

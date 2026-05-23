@@ -17,6 +17,42 @@ import { logError } from '../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { CONVERSATION_PREFERENCES_DEFAULTS } from '../config/user-preferences-defaults';
 import { UnifiedAuthRequest } from '../middleware/auth';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type {
+  ConversationPreferencesPayload,
+  UserPreferencesConversationUpdatedEventData,
+  UserPreferencesReorderedEventData,
+} from '@meeshy/shared/types/socketio-events';
+import { broadcastToUser } from '../utils/socket-broadcast';
+
+interface ConversationPrefRow {
+  isPinned: boolean;
+  isMuted: boolean;
+  mentionsOnly: boolean;
+  isArchived: boolean;
+  tags: string[];
+  categoryId: string | null;
+  orderInCategory: number | null;
+  customName: string | null;
+  reaction: string | null;
+  deletedForUserAt: Date | null;
+  clearHistoryBefore: Date | null;
+  version: number;
+}
+
+const toPreferencesPayload = (row: ConversationPrefRow): ConversationPreferencesPayload => ({
+  isPinned: row.isPinned,
+  isMuted: row.isMuted,
+  mentionsOnly: row.mentionsOnly,
+  isArchived: row.isArchived,
+  tags: row.tags ?? [],
+  categoryId: row.categoryId,
+  orderInCategory: row.orderInCategory,
+  customName: row.customName,
+  reaction: row.reaction,
+  deletedForUserAt: row.deletedForUserAt ? row.deletedForUserAt.toISOString() : null,
+  clearHistoryBefore: row.clearHistoryBefore ? row.clearHistoryBefore.toISOString() : null,
+});
 
 interface ConversationPreferencesBody {
   isPinned?: boolean;
@@ -461,13 +497,31 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
           create: {
             userId,
             conversationId,
-            ...updateData
+            ...updateData,
+            // First-ever upsert starts at version 1 (not the schema default 0).
+            // This keeps every broadcast `version >= 1`, so the DELETE/reset
+            // payload (which carries version = existingRow.version + 1) is
+            // never misinterpreted as a stale "no-op create" event by clients
+            // applying the documented `incoming.version <= local -> drop` rule.
+            version: 1,
           },
-          update: updateData,
+          update: {
+            ...updateData,
+            version: { increment: 1 },
+          },
           include: {
             category: true
           }
         });
+
+        const eventPayload: UserPreferencesConversationUpdatedEventData = {
+          userId,
+          conversationId,
+          version: (preferences as unknown as ConversationPrefRow).version ?? 0,
+          reset: false,
+          preferences: toPreferencesPayload(preferences as unknown as ConversationPrefRow),
+        };
+        broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_UPDATED, eventPayload);
 
         reply.send({
           success: true,
@@ -526,6 +580,16 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
         const userId = authContext.userId;
         const { conversationId } = request.params;
 
+        // Read the existing version BEFORE deletion so we can broadcast a
+        // strictly-greater version. Otherwise clients applying the documented
+        // `incoming.version <= local -> drop` rule would silently discard
+        // every reset for users with any prior pin/mute history.
+        const existing = await fastify.prisma.userConversationPreferences.findUnique({
+          where: { userId_conversationId: { userId, conversationId } },
+          select: { version: true },
+        });
+        const resetVersion = (existing?.version ?? 0) + 1;
+
         await fastify.prisma.userConversationPreferences.delete({
           where: {
             userId_conversationId: {
@@ -534,6 +598,15 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
             }
           }
         });
+
+        const resetPayload: UserPreferencesConversationUpdatedEventData = {
+          userId,
+          conversationId,
+          version: resetVersion,
+          reset: true,
+          preferences: null,
+        };
+        broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_UPDATED, resetPayload);
 
         reply.send({
           success: true,
@@ -602,6 +675,15 @@ export default async function conversationPreferencesRoutes(fastify: FastifyInst
             })
           )
         );
+
+        const reorderPayload: UserPreferencesReorderedEventData = {
+          userId,
+          updates: updates.map(u => ({
+            conversationId: u.conversationId,
+            orderInCategory: u.orderInCategory,
+          })),
+        };
+        broadcastToUser(fastify, userId, SERVER_EVENTS.USER_PREFERENCES_REORDERED, reorderPayload);
 
         reply.send({
           success: true,
