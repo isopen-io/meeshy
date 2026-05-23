@@ -25,6 +25,49 @@ struct PostDetailView: View {
     @State private var commentEffects: MessageEffects = .none
     @State private var composerFocusTrigger: Bool = false
     @State private var isTextExpanded = false
+    /// Set once `PostService.share(... generateLink: true)` returns — the
+    /// `.sheet(item:)` further down presents the system share UI as soon
+    /// as this becomes non-nil and clears it on dismiss.
+    @State private var shareableLink: ShareableLink?
+
+    /// Which post action the user just triggered from the `…` menu. Both
+    /// "Copier le lien" and "Partager" call the same gateway endpoint;
+    /// only the post-success behaviour differs (pasteboard vs share sheet).
+    private enum ShareLinkAction { case copyToPasteboard, presentShareSheet }
+
+    /// Calls `POST /posts/:id/share?generateLink=true`, then dispatches the
+    /// short URL to either the pasteboard or the system share sheet.
+    /// `medium=share` UTM is attached by the gateway so analytics can split
+    /// "share via copy-link" from "share via system sheet" later.
+    private func mintShareLink(action: ShareLinkAction) async {
+        guard let post = viewModel.post else { return }
+        do {
+            let result = try await PostService.shared.share(
+                postId: post.id,
+                platform: action == .copyToPasteboard ? "copy" : "system",
+                generateLink: true
+            )
+            guard let shortUrl = result.shortUrl, let url = URL(string: shortUrl) else {
+                ToastManager.shared.showError("Lien indisponible")
+                return
+            }
+            await MainActor.run {
+                switch action {
+                case .copyToPasteboard:
+                    UIPasteboard.general.string = shortUrl
+                    HapticFeedback.success()
+                    ToastManager.shared.show(
+                        String(localized: "feed.post.detail.copy_link.success", defaultValue: "Lien copié", bundle: .main)
+                    )
+                case .presentShareSheet:
+                    shareableLink = ShareableLink(url: url)
+                    HapticFeedback.light()
+                }
+            }
+        } catch {
+            ToastManager.shared.showError("Erreur lors du partage")
+        }
+    }
 
     // Post reaction state — socket-driven, hoisted to this view (single-post context).
     // PostDetailView joins the post:{postId} room on appear and leaves on disappear,
@@ -359,6 +402,12 @@ struct PostDetailView: View {
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)
         }
+        .sheet(item: $shareableLink) { link in
+            // Same `meeshy.me/l/<token>` URL that "Copier le lien" copies —
+            // the gateway already recorded the share + minted the
+            // TrackingLink owned by the current user.
+            ShareSheet(activityItems: [link.url])
+        }
         .fullScreenCover(isPresented: $showFullscreenGallery) {
             if let post = displayPost {
                 let attachments = post.media
@@ -392,9 +441,14 @@ struct PostDetailView: View {
 
             Menu {
                 Button {
-                    HapticFeedback.light()
+                    Task { await mintShareLink(action: .copyToPasteboard) }
                 } label: {
                     Label(String(localized: "feed.post.detail.copy_link", defaultValue: "Copier le lien", bundle: .main), systemImage: "link")
+                }
+                Button {
+                    Task { await mintShareLink(action: .presentShareSheet) }
+                } label: {
+                    Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
                 }
                 Button(role: .destructive) {
                     HapticFeedback.light()

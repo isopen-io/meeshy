@@ -6,6 +6,17 @@ import MeeshySDK
 import MeeshyUI
 
 
+// MARK: - ShareableLink
+
+/// Identifiable wrapper around the freshly-minted post share URL so
+/// SwiftUI's `.sheet(item:)` can drive presentation directly. `URL` doesn't
+/// conform to `Identifiable`; wrapping is the lightest fix without leaking
+/// state booleans across the view tree.
+struct ShareableLink: Identifiable {
+    let id = UUID()
+    let url: URL
+}
+
 // MARK: - Feed View
 struct FeedView: View {
     @Environment(\.colorScheme) private var colorScheme
@@ -29,6 +40,10 @@ struct FeedView: View {
     @State var composerLanguage: String = DefaultComposerLanguage.resolve()
     @State var showComposerLanguagePicker = false
     @State private var headerScrollOffset: CGFloat = 0
+    /// Holds the freshly-minted `meeshy.me/l/<token>` URL when the user taps
+    /// the share button on a post — the `.sheet` further down presents the
+    /// system share UI as soon as this is non-nil and clears it on dismiss.
+    @State private var shareableLink: ShareableLink?
 
     // Post reaction state — hoisted to parent so socket events update all cards without
     // mutating FeedPost values (pure socket-driven path, mirrors FeedCommentsSheet pattern).
@@ -375,7 +390,12 @@ struct FeedView: View {
                 quoteTargetPost = viewModel.posts.first(where: { $0.id == postId })
             },
             onShare: { postId in
-                Task { await viewModel.sharePost(postId) }
+                Task {
+                    if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
+                       let url = URL(string: shortUrl) {
+                        shareableLink = ShareableLink(url: url)
+                    }
+                }
             },
             onBookmark: { postId in
                 Task { await viewModel.bookmarkPost(postId) }
@@ -872,6 +892,12 @@ struct FeedView: View {
                 showEmojiPicker = false
             }
             .presentationDetents([.medium, .large])
+        }
+        .sheet(item: $shareableLink) { link in
+            // System share sheet — paste/AirDrop/Messages/etc. all receive the
+            // `meeshy.me/l/<token>` URL so every external touchpoint funnels
+            // through the user's TrackingLink for attribution.
+            ShareSheet(activityItems: [link.url])
         }
         .adaptiveOnChange(of: selectedPhotoItems) { _, items in
             handleFeedPhotoSelection(items)

@@ -5,6 +5,7 @@ import type { Post } from '@meeshy/shared/types/post';
 import { UnifiedAuthRequest } from '../../middleware/auth';
 import { PostService } from '../../services/PostService';
 import { MediaService } from '../../services/MediaService';
+import { TrackingLinkService } from '../../services/TrackingLinkService';
 import type { OrphanMediaCleanupService } from '../../services/storage/OrphanMediaCleanupService';
 import { LikeSchema, RepostSchema, PostParams } from './types';
 import { sendSuccess, sendForbidden, sendUnauthorized, sendNotFound, sendInternalError } from '../../utils/response';
@@ -23,6 +24,7 @@ export function registerInteractionRoutes(
   // argument is the default — passed explicitly so the constructor chain
   // is readable.
   const postService = new PostService(prisma, new MediaService(), orphanCleanup);
+  const trackingLinkService = new TrackingLinkService(prisma);
 
   // POST /posts/:postId/like
   fastify.post('/posts/:postId/like', {
@@ -345,7 +347,20 @@ export function registerInteractionRoutes(
     }
   });
 
-  // POST /posts/:postId/share — Track a share
+  // POST /posts/:postId/share — Track a share, optionally mint a tracking link
+  //
+  // Body (all optional):
+  //   - platform: marketing tag forwarded to PostService.sharePost
+  //   - generateLink: when truthy, mint a TrackingLink owned by the caller so
+  //     they can paste an attributable `meeshy.me/l/<token>` URL into any
+  //     external share sheet. The link points at the post detail route on the
+  //     web frontend (`FRONTEND_URL`/v2/feeds/post/<postId>`); subsequent
+  //     redirects are counted into the existing `trackingLinkClick` analytics.
+  //
+  // Response always carries `{ shared, shareCount }`; if `generateLink` was
+  // requested the same payload also exposes `shortUrl` (absolute, ready for
+  // sharing) and `token` (6-char id) so the client can deep-link / display
+  // analytics later.
   fastify.post('/posts/:postId/share', {
     preValidation: [requiredAuth],
   }, async (request: FastifyRequest<{ Params: PostParams }>, reply: FastifyReply) => {
@@ -356,13 +371,43 @@ export function registerInteractionRoutes(
       }
 
       const { postId } = request.params;
-      const { platform } = (request.body as any) ?? {};
+      const body = (request.body as any) ?? {};
+      const platform: string | undefined = body.platform;
+      const generateLink: boolean = Boolean(body.generateLink);
+
       const post = await postService.sharePost(postId, authContext.registeredUser.id, platform);
       if (!post) {
         return sendNotFound(reply, 'Post not found', { code: 'POST_NOT_FOUND' });
       }
 
-      return sendSuccess(reply, { shared: true, shareCount: post.shareCount });
+      const payload: {
+        shared: boolean;
+        shareCount: number;
+        shortUrl?: string;
+        token?: string;
+      } = { shared: true, shareCount: post.shareCount };
+
+      if (generateLink) {
+        const baseUrl = (process.env.FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
+        try {
+          const link = await trackingLinkService.createTrackingLink({
+            originalUrl: `${baseUrl}/v2/feeds/post/${postId}`,
+            name: `Post ${postId.slice(0, 8)}`,
+            source: platform,
+            medium: 'share',
+            createdBy: authContext.registeredUser.id,
+          });
+          payload.token = link.token;
+          payload.shortUrl = `${baseUrl}${link.shortUrl}`;
+        } catch (linkError) {
+          // Tracking link failure must not roll back the share counter —
+          // surface the issue in logs and return the share-only payload so
+          // the client can fall back to the raw post URL.
+          fastify.log.error(`[POST /posts/:postId/share] tracking link mint failed: ${linkError}`);
+        }
+      }
+
+      return sendSuccess(reply, payload);
     } catch (error) {
       fastify.log.error(`[POST /posts/:postId/share] Error: ${error}`);
       return sendInternalError(reply, 'Internal server error', { code: 'INTERNAL_ERROR' });

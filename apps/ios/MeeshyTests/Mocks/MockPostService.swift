@@ -189,6 +189,18 @@ final class MockPostService: PostServiceProviding {
         try shareResult.get()
     }
 
+    func share(postId: String, platform: String?, generateLink: Bool) async throws -> PostShareResult {
+        shareCallCount += 1
+        lastSharePostId = postId
+        try shareResult.get()
+        return PostShareResult(
+            shared: true,
+            shareCount: 1,
+            shortUrl: generateLink ? "https://meeshy.me/l/mock123" : nil,
+            token: generateLink ? "mock123" : nil
+        )
+    }
+
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String,
                      originalLanguage: String?, mediaIds: [String]?,
                      repostOfId: String?) async throws -> APIPost {

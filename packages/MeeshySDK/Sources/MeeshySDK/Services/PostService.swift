@@ -1,5 +1,17 @@
 import Foundation
 
+// MARK: - Share Result
+
+/// Server payload returned by `POST /posts/:postId/share`. The counter is
+/// always populated; `shortUrl` and `token` are only present when the
+/// caller asked the gateway to mint a TrackingLink alongside the share.
+public struct PostShareResult: Decodable, Sendable {
+    public let shared: Bool
+    public let shareCount: Int
+    public let shortUrl: String?
+    public let token: String?
+}
+
 // MARK: - Protocol
 
 public protocol PostServiceProviding: Sendable {
@@ -18,6 +30,7 @@ public protocol PostServiceProviding: Sendable {
     func likeComment(postId: String, commentId: String) async throws
     func repost(postId: String, targetType: PostType?, content: String?, isQuote: Bool) async throws -> APIPost
     func share(postId: String) async throws
+    func share(postId: String, platform: String?, generateLink: Bool) async throws -> PostShareResult
     func createStory(content: String?, storyEffects: StoryEffects?, visibility: String, originalLanguage: String?, mediaIds: [String]?, repostOfId: String?) async throws -> APIPost
     func createWithType(_ type: PostType, content: String, visibility: String, moodEmoji: String?, storyEffects: StoryEffects?) async throws -> APIPost
     func requestTranslation(postId: String, targetLanguage: String) async throws
@@ -94,6 +107,29 @@ public final class PostService: PostServiceProviding, @unchecked Sendable {
 
     public func share(postId: String) async throws {
         let _: APIResponse<[String: String]> = try await api.request(endpoint: "/posts/\(postId)/share", method: "POST")
+    }
+
+    /// Records a share and (optionally) mints a TrackingLink. When
+    /// `generateLink` is `true` the response carries an absolute
+    /// `meeshy.me/l/<token>` URL the caller can hand to a system share
+    /// sheet — the gateway owns the link creation, the client only
+    /// surfaces the result. Counter-only callers can keep using
+    /// `share(postId:)`.
+    public func share(
+        postId: String,
+        platform: String? = nil,
+        generateLink: Bool = false
+    ) async throws -> PostShareResult {
+        var body: [String: Any] = [:]
+        if let platform { body["platform"] = platform }
+        if generateLink { body["generateLink"] = true }
+        let bodyData = try JSONSerialization.data(withJSONObject: body)
+        let response: APIResponse<PostShareResult> = try await api.request(
+            endpoint: "/posts/\(postId)/share",
+            method: "POST",
+            body: bodyData
+        )
+        return response.data
     }
 
     public func getBookmarks(cursor: String? = nil, limit: Int = 20) async throws -> PaginatedAPIResponse<[APIPost]> {

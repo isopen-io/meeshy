@@ -474,19 +474,39 @@ class FeedViewModel: ObservableObject {
         }
     }
 
-    func sharePost(_ postId: String, platform: String? = nil) async {
-        var body: [String: String] = [:]
+    /// Server-side payload returned by `POST /posts/:postId/share`. The
+    /// counter fields are always present; `shortUrl` + `token` are only
+    /// populated when the caller asked the gateway to mint a TrackingLink
+    /// for the share (so the user gets an attributable `meeshy.me/l/…`
+    /// URL to paste into any external share sheet).
+    struct PostSharePayload: Decodable {
+        let shared: Bool
+        let shareCount: Int
+        let shortUrl: String?
+        let token: String?
+    }
+
+    /// Records a share on `postId`. When `generateLink` is `true` the
+    /// gateway mints a `TrackingLink` owned by the current user and returns
+    /// the absolute short URL — returned here so the caller can immediately
+    /// hand it off to a `UIActivityViewController` / `ShareLink`.
+    @discardableResult
+    func sharePost(_ postId: String, platform: String? = nil, generateLink: Bool = false) async -> String? {
+        var body: [String: Any] = [:]
         if let platform { body["platform"] = platform }
+        if generateLink { body["generateLink"] = true }
 
         do {
             let bodyData = try JSONSerialization.data(withJSONObject: body)
-            let _: SimpleAPIResponse = try await api.request(
+            let response: APIResponse<PostSharePayload> = try await api.request(
                 endpoint: "/posts/\(postId)/share",
                 method: "POST",
                 body: bodyData
             )
+            return response.data.shortUrl
         } catch {
             ToastManager.shared.showError("Erreur lors du partage")
+            return nil
         }
     }
 
