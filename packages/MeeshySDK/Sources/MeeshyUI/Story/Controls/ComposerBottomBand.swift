@@ -38,7 +38,6 @@ struct ComposerBottomBand: View {
     private var stateKey: String {
         switch state {
         case .hidden: return "hidden"
-        case .tiles(let c): return "tiles-\(c)"
         case .toolPanel(let t): return "tool-\(t)"
         case .formatPanel(let k, let id): return "format-\(k)-\(id)"
         }
@@ -86,17 +85,6 @@ struct ComposerBottomBand: View {
                 switch state {
                 case .hidden:
                     EmptyView()
-                case .tiles(let category):
-                    ComposerTilesGrid(
-                        category: category,
-                        mediaCount: viewModel.currentEffects.mediaObjects?.count ?? 0,
-                        drawingCount: viewModel.drawingData != nil ? 1 : 0,
-                        textCount: viewModel.currentEffects.textObjects.count,
-                        audioCount: viewModel.currentEffects.audioPlayerObjects?.count ?? 0,
-                        filterCount: viewModel.selectedFilter != nil ? 1 : 0,
-                        timelineCount: viewModel.timelineHasCustomizations ? 1 : 0,
-                        onTapTile: onTapTile
-                    )
                 case .toolPanel(let tool):
                     ComposerToolPanelHost(
                         tool: tool,

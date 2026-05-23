@@ -92,6 +92,7 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     nonisolated(unsafe) var avPlayer: AVPlayer?
     nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
     nonisolated(unsafe) var avPlayerLooper: AVPlayerLooper?
+    private nonisolated(unsafe) var backgroundLoopObserver: NSObjectProtocol?
 
     /// `true` quand `configure(kind:)` a stampé `contentLayer.contents` avec
     /// une image FINALE (warm L1 cache hit OU bytes téléchargés via HTTP),
@@ -157,6 +158,10 @@ extension StoryBackgroundLayer {
         contentLayer?.removeFromSuperlayer()
         avPlayerLayer?.removeFromSuperlayer()
         avPlayer?.pause()
+        if let observer = backgroundLoopObserver {
+            NotificationCenter.default.removeObserver(observer)
+            backgroundLoopObserver = nil
+        }
         avPlayer = nil
         avPlayerLayer = nil
         avPlayerLooper = nil
@@ -400,6 +405,24 @@ extension StoryBackgroundLayer {
         // gaspiller le décodeur audio.
         if isPlaybackActive {
             self.avPlayer?.play()
+        }
+
+        // Background loop observer — ensures the video repeats until the slide
+        // duration is reached (Section 5 of the review). Background videos are
+        // authoritative for slide duration only when NOT looping; when looping,
+        // they must fill the user-defined duration.
+        if looping {
+            if let observer = backgroundLoopObserver {
+                NotificationCenter.default.removeObserver(observer)
+            }
+            backgroundLoopObserver = NotificationCenter.default.addObserver(
+                forName: .AVPlayerItemDidPlayToEndTime,
+                object: item,
+                queue: .main
+            ) { [weak self] _ in
+                self?.avPlayer?.seek(to: .zero)
+                self?.avPlayer?.play()
+            }
         }
     }
 
