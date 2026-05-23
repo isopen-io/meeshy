@@ -14,14 +14,12 @@ public nonisolated enum BandElementKind: Equatable, Sendable {
 
 public nonisolated enum BandState: Equatable, Sendable {
     case hidden
-    case tiles(BandCategory)
     case toolPanel(StoryToolMode)
     case formatPanel(BandElementKind, elementId: String)
 
     public var activeCategory: BandCategory? {
         switch self {
         case .hidden, .formatPanel: return nil
-        case .tiles(let c): return c
         case .toolPanel(let t): return t.bandCategory
         }
     }
@@ -31,8 +29,6 @@ public nonisolated enum BandState: Equatable, Sendable {
 
 nonisolated extension StoryToolMode {
     /// Bridges the existing `StoryToolMode` enum to `BandCategory` for the new layer.
-    /// Kept separate from the existing `tab: StoryTab` property to avoid coupling
-    /// the legacy `ContextualToolbar` symbol (`StoryTab`) with the new layer.
     public var bandCategory: BandCategory {
         switch self {
         case .media, .texture: return .media
@@ -74,7 +70,7 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
             } else {
                 state = .toolPanel(StoryToolMode.from(category: category))
             }
-        case .tiles, .formatPanel:
+        case .formatPanel:
             // Format panel takes precedence — tap on FAB does not interrupt it.
             break
         }
@@ -94,7 +90,7 @@ public nonisolated struct BandStateMachine: Equatable, Sendable {
         switch state {
         case .hidden:
             break  // no-op
-        case .tiles, .toolPanel:
+        case .toolPanel:
             state = .hidden
         case .formatPanel:
             closeFormatPanel()

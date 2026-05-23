@@ -881,6 +881,7 @@ public struct StoryComposerView: View {
     private func tileAccent(for tool: StoryToolMode) -> Color {
         switch tool {
         case .media:    return MeeshyColors.coral          // peachy red
+        case .audio:    return MeeshyColors.indigo400      // soft lavender
         case .text:     return MeeshyColors.indigo400      // soft lavender
         case .drawing:  return MeeshyColors.success        // mint green
         case .texture:  return MeeshyColors.warning        // butter yellow

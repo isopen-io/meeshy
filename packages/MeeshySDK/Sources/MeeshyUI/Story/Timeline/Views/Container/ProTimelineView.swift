@@ -7,7 +7,7 @@ public struct ProTimelineView: View {
 
     public static let previewWidthFraction: CGFloat = 0.30
 
-    public enum Section: Equatable, Hashable { case contenu, audio, effets }
+    public enum Section: Equatable, Hashable { case media, son, filters, timeline }
 
     public struct TrackGroup: Equatable {
         public let section: Section
@@ -49,28 +49,28 @@ public struct ProTimelineView: View {
 
     public static func resolveTrackGroups(project: TimelineProject) -> [TrackGroup] {
         let all = QuickTimelineView.resolveAllTracks(project: project)
-        let contenu = all.filter {
+        let media = all.filter {
             switch $0.kind {
             case .bgVideo, .video, .bgImage, .image: return true
             default: return false
             }
         }
-        let audio = all.filter {
+        let son = all.filter {
             switch $0.kind {
             case .bgAudio, .audio: return true
             default: return false
             }
         }
-        let effets = all.filter {
+        let filters = all.filter {
             switch $0.kind {
             case .text: return true
             default: return false
             }
         }
         return [
-            TrackGroup(section: .contenu, titleKey: "story.timeline.section.contenu", tracks: contenu),
-            TrackGroup(section: .audio,   titleKey: "story.timeline.section.audio",   tracks: audio),
-            TrackGroup(section: .effets,  titleKey: "story.timeline.section.effets",  tracks: effets)
+            TrackGroup(section: .media, titleKey: "story.composer.empty.tile.media", tracks: media),
+            TrackGroup(section: .son,   titleKey: "story.composer.empty.tile.son",   tracks: son),
+            TrackGroup(section: .filters,  titleKey: "story.composer.empty.tile.filters",  tracks: filters)
         ]
     }
 

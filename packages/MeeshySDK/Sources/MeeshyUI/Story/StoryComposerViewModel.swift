@@ -17,17 +17,6 @@ public nonisolated enum StoryToolMode: String, CaseIterable, Sendable {
 
     // Legacy alias
     static let photo: StoryToolMode = .media
-
-    var tab: StoryTab {
-        switch self {
-        case .media, .audio, .drawing, .text, .texture: return .contenu
-        case .filters, .timeline: return .effets
-        }
-    }
-}
-
-nonisolated enum StoryTab: String {
-    case contenu, effets
 }
 
 
@@ -354,7 +343,13 @@ public final class StoryComposerViewModel: StoryComposerProviding, ObservableObj
 
     @Published var activeTool: StoryToolMode?
 
-    var isContentToolActive: Bool { activeTool?.tab == .contenu }
+    var isContentToolActive: Bool {
+        guard let tool = activeTool else { return false }
+        switch tool {
+        case .media, .audio, .drawing, .text, .texture: return true
+        case .filters, .timeline: return false
+        }
+    }
 
     // MARK: - Drawing
 
