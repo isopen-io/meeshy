@@ -21,6 +21,14 @@ struct DownloadBadgeView: View {
     let attachment: MessageAttachment
     let accentColor: String
     let messageDeliveryStatus: Message.DeliveryStatus
+    /// When `true`, the badge renders as a small bottom-right corner pill
+    /// instead of a centred 56pt disc. Used for video cells where the
+    /// underlying thumbnail already owns the play affordance — the download
+    /// signal must NOT mask it, only sit alongside it. Images keep the
+    /// default centred layout: their underlying view has no competing
+    /// affordance, so the download icon is the clear primary action when
+    /// the bytes haven't arrived yet.
+    var compact: Bool = false
     var onShareFile: ((URL) -> Void)? = nil
 
     @StateObject private var downloader = AttachmentDownloader()
@@ -75,28 +83,10 @@ struct DownloadBadgeView: View {
         Button {
             downloader.start(attachment: attachment, onShare: onShareFile)
         } label: {
-            VStack(spacing: 6) {
-                ZStack {
-                    Circle()
-                        .fill(.ultraThinMaterial)
-                        .frame(width: 56, height: 56)
-                    Circle()
-                        .fill(accent.opacity(0.85))
-                        .frame(width: 48, height: 48)
-                    Image(systemName: "arrow.down.to.line")
-                        .font(.system(size: 22, weight: .bold))
-                        .foregroundColor(.white)
-                }
-                .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
-
-                if !totalSizeText.isEmpty {
-                    Text(totalSizeText)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(.white)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(Capsule().fill(.black.opacity(0.55)))
-                }
+            if compact {
+                compactIdleBadge
+            } else {
+                centredIdleBadge
             }
         }
         .task {
@@ -120,6 +110,59 @@ struct DownloadBadgeView: View {
                     break
                 }
             }
+        }
+    }
+
+    private var centredIdleBadge: some View {
+        VStack(spacing: 6) {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 56, height: 56)
+                Circle()
+                    .fill(accent.opacity(0.85))
+                    .frame(width: 48, height: 48)
+                Image(systemName: "arrow.down.to.line")
+                    .font(.system(size: 22, weight: .bold))
+                    .foregroundColor(.white)
+            }
+            .shadow(color: .black.opacity(0.3), radius: 8, y: 4)
+
+            if !totalSizeText.isEmpty {
+                Text(totalSizeText)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(.black.opacity(0.55)))
+            }
+        }
+    }
+
+    private var compactIdleBadge: some View {
+        VStack {
+            Spacer()
+            HStack {
+                Spacer()
+                HStack(spacing: 4) {
+                    Image(systemName: "arrow.down.to.line")
+                        .font(.system(size: 11, weight: .bold))
+                    if !totalSizeText.isEmpty {
+                        Text(totalSizeText)
+                            .font(.system(size: 10, weight: .semibold, design: .monospaced))
+                    }
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(
+                    Capsule().fill(.ultraThinMaterial)
+                        .overlay(Capsule().fill(accent.opacity(0.55)))
+                )
+                .shadow(color: .black.opacity(0.35), radius: 4, y: 2)
+            }
+            .padding(.trailing, 6)
+            .padding(.bottom, 6)
         }
     }
 

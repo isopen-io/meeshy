@@ -312,6 +312,7 @@ fileprivate struct BubbleGridCell: View {
                 attachment: attachment,
                 accentColor: contactColor,
                 messageDeliveryStatus: messageDeliveryStatus,
+                compact: attachment.type == .video,
                 onShareFile: { url in
                     shareURL = url
                     showShareSheet = true
