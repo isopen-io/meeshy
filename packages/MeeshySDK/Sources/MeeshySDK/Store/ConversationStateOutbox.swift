@@ -150,7 +150,7 @@ public actor ConversationStateOutbox {
     }
 
     private func hydrateOnInit() async {
-        let rows = (try? db.read { db -> [Row] in
+        let rows = (try? await db.read { db -> [Row] in
             try Row.fetchAll(db, sql: "SELECT * FROM conversation_outbox_tasks")
         }) ?? []
 
