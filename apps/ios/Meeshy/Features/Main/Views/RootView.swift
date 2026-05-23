@@ -743,9 +743,21 @@ struct RootView: View {
     // either matches because the dedicated screen still degrades gracefully
     // (`expired` empty state) for posts that no longer exist.
     private func isStoryNotification(_ ctx: NotificationNavContext, postId: String) -> Bool {
+        // High confidence: explicit type from notification metadata
         if ctx.postType?.uppercased() == "STORY" { return true }
-        if let cached = StoryService.shared.cachedPost(id: postId), cached.expiresAt != nil {
+        if ctx.postType?.uppercased() == "POST" || ctx.postType?.uppercased() == "STATUS" { return false }
+
+        // Medium confidence: explicit notification types that are story-only
+        switch ctx.type {
+        case .storyReaction, .storyNewComment, .friendStoryComment, .storyThreadReply, .friendNewStory:
             return true
+        default:
+            break
+        }
+
+        // Low confidence fallback: check cache if it has an expiry date
+        if let cached = StoryService.shared.cachedPost(id: postId) {
+            return cached.expiresAt != nil
         }
         return false
     }

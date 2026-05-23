@@ -27,6 +27,7 @@ public final class NotificationManager: ObservableObject {
 
     @Published public private(set) var currentToast: SocketNotificationEvent?
     @Published public private(set) var activeConversationId: String?
+    @Published public var activePostId: String?
 
     public let newNotificationReceived = PassthroughSubject<SocketNotificationEvent, Never>()
     public let notificationMarkedRead = PassthroughSubject<String, Never>()
@@ -143,8 +144,16 @@ public final class NotificationManager: ObservableObject {
 
     private func handleNewNotification(_ event: SocketNotificationEvent) {
         Logger.socket.info("[RT-DIAG] in-app notification received via SOCKET notification:new conv=\(event.conversationId ?? "none", privacy: .public) type=\(String(describing: event.notificationType), privacy: .public)")
+
+        // Muting logic: suppress the in-app toast if the user is already
+        // viewing the relevant content.
         if let convId = event.conversationId, convId == activeConversationId {
             Logger.socket.info("[RT-DIAG] in-app notification suppressed (conversation is active) conv=\(convId, privacy: .public)")
+            return
+        }
+
+        if let postId = event.postId, postId == activePostId {
+            Logger.socket.info("[RT-DIAG] in-app notification suppressed (post is active) postId=\(postId, privacy: .public)")
             return
         }
 
