@@ -137,18 +137,20 @@ struct ComposerToolPanelHost: View {
 
     private static func icon(for tool: StoryToolMode) -> String {
         switch tool {
-        case .media:    return "photo.on.rectangle.angled"
-        case .drawing:  return "scribble.variable"
+        case .media:    return "play.rectangle.fill"
+        case .audio:    return "music.note"
+        case .drawing:  return "pencil.tip"
         case .text:     return "textformat"
         case .texture:  return "paintpalette.fill"
         case .filters:  return "camera.filters"
-        case .timeline: return "timeline.selection"
+        case .timeline: return "clock"
         }
     }
 
     private static func title(for tool: StoryToolMode) -> String {
         switch tool {
         case .media:    return "Médias"
+        case .audio:    return "Son"
         case .drawing:  return "Dessin"
         case .text:     return "Texte"
         case .texture:  return "Fond"
@@ -161,7 +163,8 @@ struct ComposerToolPanelHost: View {
 
     private var panelHeight: CGFloat {
         switch tool {
-        case .media:    return 280
+        case .media:    return 220
+        case .audio:    return 220
         case .drawing:  return 140
         case .text:     return 280
         case .texture:  return 160
@@ -175,6 +178,8 @@ struct ComposerToolPanelHost: View {
         switch tool {
         case .media:
             mediaPanel
+        case .audio:
+            audioPanel
         case .drawing:
             drawingPanel
         case .text:
@@ -188,17 +193,11 @@ struct ComposerToolPanelHost: View {
         }
     }
 
-    // MARK: - Media Panel
+    // MARK: - Audio Panel
 
-    private var mediaPanel: some View {
+    private var audioPanel: some View {
         VStack(spacing: 10) {
-            // Add buttons
             HStack(spacing: 8) {
-                if viewModel.canAddMedia {
-                    PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
-                        MediaPillLabel(icon: "photo.on.rectangle.angled", text: String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module), destructive: false)
-                    }
-                }
                 if viewModel.canAddAudio {
                     Button { showAudioDocumentPicker = true } label: {
                         MediaPillLabel(icon: "waveform", text: String(localized: "story.composer.addAudioFile", defaultValue: "Audio", bundle: .module), destructive: false)
@@ -210,10 +209,6 @@ struct ComposerToolPanelHost: View {
                 Spacer()
             }
 
-            // Liste des audios attachés à la slide. Affiche cellule waveform +
-            // contrôles fg/bg/volume/delete. Liste séparée des médias visuels
-            // (image/vidéo) car les contraintes UX diffèrent (preview audio
-            // local indépendant du timeline engine).
             if let audios = viewModel.currentEffects.audioPlayerObjects, !audios.isEmpty {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 4) {
@@ -230,7 +225,23 @@ struct ComposerToolPanelHost: View {
                     }
                     .padding(.horizontal, 12)
                 }
-                .frame(maxHeight: 120)
+                .frame(maxHeight: 150)
+            }
+        }
+    }
+
+    // MARK: - Media Panel
+
+    private var mediaPanel: some View {
+        VStack(spacing: 10) {
+            // Add buttons
+            HStack(spacing: 8) {
+                if viewModel.canAddMedia {
+                    PhotosPicker(selection: $fgMediaItem, matching: .any(of: [.images, .videos])) {
+                        MediaPillLabel(icon: "photo.on.rectangle.angled", text: String(localized: "story.composer.addPhotoVideo", defaultValue: "Photo/Video", bundle: .module), destructive: false)
+                    }
+                }
+                Spacer()
             }
 
             // Liste des médias avec drag-to-reorder via long-press natif

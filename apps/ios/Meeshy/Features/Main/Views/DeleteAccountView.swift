@@ -32,13 +32,13 @@ struct DeleteAccountView: View {
                 }
             }
         }
-        .alert("Confirmation finale", isPresented: $showFinalAlert) {
-            Button("Annuler", role: .cancel) { }
-            Button("Supprimer", role: .destructive) {
+        .alert(String(localized: "account.delete.final.title", defaultValue: "Confirmation finale", bundle: .main), isPresented: $showFinalAlert) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) { }
+            Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
                 performDeletion()
             }
         } message: {
-            Text("Etes-vous absolument certain ? Cette action est irreversible.")
+            Text(String(localized: "account.delete.final.message", defaultValue: "Etes-vous absolument certain ? Cette action est irreversible.", bundle: .main))
         }
     }
 
@@ -53,16 +53,16 @@ struct DeleteAccountView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Retour")
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
-            Text("Supprimer le compte")
+            Text(String(localized: "account.delete.title", defaultValue: "Supprimer le compte", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(Color(hex: accentColor))
                 .accessibilityAddTraits(.isHeader)
@@ -109,22 +109,22 @@ struct DeleteAccountView: View {
                     .font(.system(size: 24))
                     .foregroundColor(Color(hex: accentColor))
 
-                Text("Action irreversible")
+                Text(String(localized: "account.delete.warning.title", defaultValue: "Action irreversible", bundle: .main))
                     .font(.system(size: 17, weight: .bold))
                     .foregroundColor(Color(hex: accentColor))
             }
 
-            Text("La suppression de votre compte entrainera la perte definitive de :")
+            Text(String(localized: "account.delete.warning.intro", defaultValue: "La suppression de votre compte entrainera la perte definitive de :", bundle: .main))
                 .font(.system(size: 14, weight: .medium))
                 .foregroundColor(theme.textPrimary)
                 .lineSpacing(2)
 
             VStack(alignment: .leading, spacing: 8) {
-                warningBullet("Toutes vos conversations")
-                warningBullet("Tous vos messages")
-                warningBullet("Tous vos medias partages")
-                warningBullet("Votre liste de contacts")
-                warningBullet("Vos preferences et parametres")
+                warningBullet(String(localized: "account.delete.warning.conversations", defaultValue: "Toutes vos conversations", bundle: .main))
+                warningBullet(String(localized: "account.delete.warning.messages", defaultValue: "Tous vos messages", bundle: .main))
+                warningBullet(String(localized: "account.delete.warning.media", defaultValue: "Tous vos medias partages", bundle: .main))
+                warningBullet(String(localized: "account.delete.warning.contacts", defaultValue: "Votre liste de contacts", bundle: .main))
+                warningBullet(String(localized: "account.delete.warning.preferences", defaultValue: "Vos preferences et parametres", bundle: .main))
             }
         }
         .padding(16)
@@ -155,20 +155,20 @@ struct DeleteAccountView: View {
 
     private var confirmationSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Confirmation", icon: "checkmark.shield.fill", color: "F59E0B")
+            sectionHeader(title: String(localized: "account.delete.section.confirmation", defaultValue: "Confirmation", bundle: .main), icon: "checkmark.shield.fill", color: "F59E0B")
 
             VStack(alignment: .leading, spacing: 10) {
-                Text("Tapez **SUPPRIMER MON COMPTE** pour confirmer")
+                Text(String(localized: "account.delete.confirmation.prompt", defaultValue: "Tapez **SUPPRIMER MON COMPTE** pour confirmer", bundle: .main))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.textPrimary)
 
                 HStack(spacing: 10) {
-                    TextField("SUPPRIMER MON COMPTE", text: $confirmationText)
+                    TextField(String(localized: "account.delete.confirmation.placeholder", defaultValue: "SUPPRIMER MON COMPTE", bundle: .main), text: $confirmationText)
                         .font(.system(size: 14, weight: .semibold, design: .monospaced))
                         .foregroundColor(theme.textPrimary)
                         .autocapitalization(.allCharacters)
                         .disableAutocorrection(true)
-                        .accessibilityLabel("Phrase de confirmation")
+                        .accessibilityLabel(String(localized: "account.delete.confirmation.label", defaultValue: "Phrase de confirmation", bundle: .main))
 
                     if confirmationText == requiredPhrase {
                         Image(systemName: "checkmark.circle.fill")
@@ -215,7 +215,7 @@ struct DeleteAccountView: View {
                 }
                 Image(systemName: "trash.fill")
                     .font(.system(size: 14, weight: .semibold))
-                Text("Supprimer definitivement mon compte")
+                Text(String(localized: "account.delete.button", defaultValue: "Supprimer definitivement mon compte", bundle: .main))
                     .font(.system(size: 15, weight: .bold))
             }
             .foregroundColor(.white)
@@ -231,8 +231,10 @@ struct DeleteAccountView: View {
             )
         }
         .disabled(confirmationText != requiredPhrase || isDeleting)
-        .accessibilityLabel("Supprimer definitivement mon compte")
-        .accessibilityHint(confirmationText == requiredPhrase ? "Appuyez pour confirmer la suppression" : "Tapez la phrase de confirmation d'abord")
+        .accessibilityLabel(String(localized: "account.delete.button", defaultValue: "Supprimer definitivement mon compte", bundle: .main))
+        .accessibilityHint(confirmationText == requiredPhrase
+            ? String(localized: "account.delete.button.hint.ready", defaultValue: "Appuyez pour confirmer la suppression", bundle: .main)
+            : String(localized: "account.delete.button.hint.type_phrase", defaultValue: "Tapez la phrase de confirmation d'abord", bundle: .main))
     }
 
     // MARK: - Actions
@@ -250,7 +252,7 @@ struct DeleteAccountView: View {
                 isDeleting = false
             } catch {
                 HapticFeedback.error()
-                errorMessage = "Erreur lors de la suppression du compte. Veuillez reessayer."
+                errorMessage = String(localized: "account.delete.error", defaultValue: "Erreur lors de la suppression du compte. Veuillez reessayer.", bundle: .main)
                 isDeleting = false
             }
         }
@@ -273,12 +275,12 @@ struct DeleteAccountView: View {
                         )
                     )
 
-                Text("Un email de confirmation vous a ete envoye")
+                Text(String(localized: "account.delete.email.title", defaultValue: "Un email de confirmation vous a ete envoye", bundle: .main))
                     .font(.system(size: 20, weight: .bold))
                     .foregroundColor(theme.textPrimary)
                     .multilineTextAlignment(.center)
 
-                Text("Verifiez votre boite de reception pour confirmer la suppression de votre compte.")
+                Text(String(localized: "account.delete.email.body", defaultValue: "Verifiez votre boite de reception pour confirmer la suppression de votre compte.", bundle: .main))
                     .font(.system(size: 15, weight: .medium))
                     .foregroundColor(theme.textSecondary)
                     .multilineTextAlignment(.center)
@@ -299,7 +301,7 @@ struct DeleteAccountView: View {
                 HapticFeedback.light()
                 dismiss()
             } label: {
-                Text("Compris")
+                Text(String(localized: "account.delete.email.ok", defaultValue: "Compris", bundle: .main))
                     .font(.system(size: 16, weight: .bold))
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
@@ -316,7 +318,7 @@ struct DeleteAccountView: View {
                     )
             }
             .padding(.horizontal, 24)
-            .accessibilityLabel("Compris")
+            .accessibilityLabel(String(localized: "account.delete.email.ok", defaultValue: "Compris", bundle: .main))
 
             Spacer()
         }

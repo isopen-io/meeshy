@@ -61,4 +61,49 @@ public final class E2EAPI: @unchecked Sendable {
             body: body
         )
     }
+
+    // MARK: - Per-conversation encryption toggle
+
+    public enum ConversationEncryptionMode: String, Codable, CaseIterable, Sendable {
+        case e2ee
+        case server
+        case hybrid
+    }
+
+    public struct ConversationEncryptionStatus: Codable, Sendable {
+        public let isEncrypted: Bool
+        public let mode: ConversationEncryptionMode?
+        public let enabledAt: Date?
+        public let enabledBy: String?
+        public let canTranslate: Bool
+    }
+
+    public struct EnableConversationEncryptionResult: Codable, Sendable {
+        public let conversationId: String
+        public let mode: ConversationEncryptionMode
+        public let enabledAt: Date
+        public let enabledBy: String
+    }
+
+    /// GET /api/v1/conversations/:id/encryption-status
+    public func fetchEncryptionStatus(conversationId: String) async throws -> ConversationEncryptionStatus {
+        let response: APIResponse<ConversationEncryptionStatus> = try await APIClient.shared.request(
+            endpoint: "/conversations/\(conversationId)/encryption-status",
+            method: "GET"
+        )
+        return response.data
+    }
+
+    /// POST /api/v1/conversations/:id/encryption (immutable once enabled)
+    public func enableEncryption(
+        conversationId: String,
+        mode: ConversationEncryptionMode
+    ) async throws -> EnableConversationEncryptionResult {
+        struct Body: Codable { let mode: String }
+        let response: APIResponse<EnableConversationEncryptionResult> = try await APIClient.shared.post(
+            endpoint: "/conversations/\(conversationId)/encryption",
+            body: Body(mode: mode.rawValue)
+        )
+        return response.data
+    }
 }

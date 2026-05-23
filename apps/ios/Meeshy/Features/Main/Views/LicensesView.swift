@@ -42,16 +42,16 @@ struct LicensesView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Retour")
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
-            Text("Licences")
+            Text(String(localized: "about.licenses.title", defaultValue: "Licences", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -70,9 +70,9 @@ struct LicensesView: View {
     private var scrollContent: some View {
         ScrollView(showsIndicators: false) {
             VStack(spacing: 12) {
-                sectionHeader(title: "Open Source", icon: "checkmark.seal.fill", color: accentColor)
+                sectionHeader(title: String(localized: "about.licenses.section.open_source", defaultValue: "Open Source", bundle: .main), icon: "checkmark.seal.fill", color: accentColor)
 
-                Text("Meeshy utilise les bibliotheques open source suivantes.")
+                Text(String(localized: "about.licenses.intro", defaultValue: "Meeshy utilise les bibliotheques open source suivantes.", bundle: .main))
                     .font(.system(size: 13, weight: .medium))
                     .foregroundColor(theme.textMuted)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -130,8 +130,8 @@ struct LicensesView: View {
                     )
             )
         }
-        .accessibilityLabel("\(license.name) par \(license.author), licence \(license.licenseType)")
-        .accessibilityHint("Ouvre le depot dans Safari")
+        .accessibilityLabel(String(localized: "about.licenses.card.label", defaultValue: "\(license.name) par \(license.author), licence \(license.licenseType)", bundle: .main))
+        .accessibilityHint(String(localized: "about.licenses.card.hint", defaultValue: "Ouvre le depot dans Safari", bundle: .main))
     }
 
     // MARK: - Helpers

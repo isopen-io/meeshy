@@ -18,11 +18,11 @@ struct SecurityVerificationView: View {
                         .foregroundColor(Color(hex: "4ECDC4"))
                         .padding(.top, 40)
 
-                    Text("Chiffrement de bout en bout")
+                    Text(String(localized: "security.verify.title", defaultValue: "Chiffrement de bout en bout", bundle: .main))
                         .font(.title2.bold())
                         .foregroundColor(theme.textPrimary)
 
-                    Text("Les messages avec \(conversationName) sont chiffrés de bout en bout.")
+                    Text(String(localized: "security.verify.description", defaultValue: "Les messages avec \(conversationName) sont chiffrés de bout en bout.", bundle: .main))
                         .font(.subheadline)
                         .foregroundColor(theme.textSecondary)
                         .multilineTextAlignment(.center)
@@ -41,7 +41,7 @@ struct SecurityVerificationView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { dismiss() }) {
-                        Text("Terminé").bold()
+                        Text(String(localized: "common.done", defaultValue: "Terminé", bundle: .main)).bold()
                             .foregroundColor(Color(hex: "4ECDC4"))
                     }
                 }
@@ -66,7 +66,7 @@ struct SecurityVerificationView: View {
         }
 
         VStack(spacing: 8) {
-            Text("Numéro de sécurité")
+            Text(String(localized: "security.verify.safetyNumber.label", defaultValue: "Numéro de sécurité", bundle: .main))
                 .font(.caption.weight(.medium))
                 .foregroundColor(theme.textMuted)
                 .textCase(.uppercase)
@@ -78,7 +78,7 @@ struct SecurityVerificationView: View {
                 .padding(.horizontal, 24)
         }
 
-        Text("Pour vérifier, comparez ce numéro avec celui affiché sur l'appareil de \(conversationName), ou scannez son code QR.")
+        Text(String(localized: "security.verify.howto", defaultValue: "Pour vérifier, comparez ce numéro avec celui affiché sur l'appareil de \(conversationName), ou scannez son code QR.", bundle: .main))
             .font(.caption)
             .foregroundColor(theme.textMuted)
             .multilineTextAlignment(.center)
@@ -94,11 +94,11 @@ struct SecurityVerificationView: View {
                 .font(.system(size: 40))
                 .foregroundColor(theme.textMuted)
 
-            Text("Vérification non disponible")
+            Text(String(localized: "security.verify.unavailable.title", defaultValue: "Vérification non disponible", bundle: .main))
                 .font(.headline)
                 .foregroundColor(theme.textSecondary)
 
-            Text("La vérification du numéro de sécurité sera disponible une fois que les deux participants auront échangé leurs clés de chiffrement.")
+            Text(String(localized: "security.verify.unavailable.description", defaultValue: "La vérification du numéro de sécurité sera disponible une fois que les deux participants auront échangé leurs clés de chiffrement.", bundle: .main))
                 .font(.caption)
                 .foregroundColor(theme.textMuted)
                 .multilineTextAlignment(.center)

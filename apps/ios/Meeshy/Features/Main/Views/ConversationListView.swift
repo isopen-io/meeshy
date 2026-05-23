@@ -596,11 +596,11 @@ struct ConversationListView: View {
                 )
                 .environmentObject(theme)
             }
-            .alert("Master PIN requis", isPresented: $showNoMasterPinAlert) {
-                Button("Configurer", role: .none) { router.push(.settings) }
-                Button("Annuler", role: .cancel) {}
+            .alert(String(localized: "conversation.list.master_pin_required.title", defaultValue: "Master PIN requis", bundle: .main), isPresented: $showNoMasterPinAlert) {
+                Button(String(localized: "conversation.list.master_pin_required.configure", defaultValue: "Configurer", bundle: .main), role: .none) { router.push(.settings) }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
             } message: {
-                Text("Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.")
+                Text(String(localized: "conversation.list.master_pin_required.message", defaultValue: "Configurez d'abord un master PIN dans Paramètres > Sécurité pour verrouiller des conversations.", bundle: .main))
             }
             .sheet(isPresented: $showWidgetPreview) {
                 WidgetPreviewView(onNewConversation: onNewConversation)
@@ -926,7 +926,7 @@ struct ShareLinkPickerSheet: View {
                         Image(systemName: "link.badge.plus")
                             .font(.system(size: 48))
                             .foregroundStyle(MeeshyColors.indigo300)
-                        Text("Aucune conversation eligible")
+                        Text(String(localized: "conversation.list.no_eligible_conversation", defaultValue: "Aucune conversation eligible", bundle: .main))
                             .font(.system(size: 16, weight: .medium))
                             .foregroundColor(theme.textSecondary)
                     }
@@ -965,11 +965,11 @@ struct ShareLinkPickerSheet: View {
                     .listStyle(.plain)
                 }
             }
-            .navigationTitle("Creer un lien de partage")
+            .navigationTitle(String(localized: "conversation.list.create_share_link.title", defaultValue: "Creer un lien de partage", bundle: .main))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Fermer") { dismiss() }
+                    Button(String(localized: "common.close", defaultValue: "Fermer", bundle: .main)) { dismiss() }
                 }
             }
         }

@@ -41,16 +41,16 @@ struct SupportView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Retour")
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
-            Text("Aide et support")
+            Text(String(localized: "support.title", defaultValue: "Aide et support", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -84,11 +84,11 @@ struct SupportView: View {
 
     private var helpSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Obtenir de l'aide", icon: "lifepreserver.fill", color: accentColor)
+            sectionHeader(title: String(localized: "support.help.title", defaultValue: "Obtenir de l'aide", bundle: .main), icon: "lifepreserver.fill", color: accentColor)
 
             VStack(spacing: 0) {
-                supportLink(icon: "book.fill", title: "Centre d'aide", url: "https://meeshy.me/help", color: accentColor)
-                supportLink(icon: "questionmark.circle.fill", title: "FAQ", url: "https://meeshy.me/faq", color: accentColor)
+                supportLink(icon: "book.fill", title: String(localized: "support.help.center", defaultValue: "Centre d'aide", bundle: .main), url: "https://meeshy.me/help", color: accentColor)
+                supportLink(icon: "questionmark.circle.fill", title: String(localized: "support.help.faq", defaultValue: "FAQ", bundle: .main), url: "https://meeshy.me/faq", color: accentColor)
             }
             .background(sectionBackground(tint: accentColor))
         }
@@ -98,11 +98,11 @@ struct SupportView: View {
 
     private var contactSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Nous contacter", icon: "envelope.fill", color: "3498DB")
+            sectionHeader(title: String(localized: "support.contact.title", defaultValue: "Nous contacter", bundle: .main), icon: "envelope.fill", color: "3498DB")
 
             VStack(spacing: 0) {
-                supportLink(icon: "envelope.fill", title: "Email support", url: "mailto:support@meeshy.me", color: "3498DB")
-                supportLink(icon: "at", title: "Twitter / X", url: "https://twitter.com/meeshy", color: "3498DB")
+                supportLink(icon: "envelope.fill", title: String(localized: "support.contact.email", defaultValue: "Email support", bundle: .main), url: "mailto:support@meeshy.me", color: "3498DB")
+                supportLink(icon: "at", title: String(localized: "support.contact.twitter", defaultValue: "Twitter / X", bundle: .main), url: "https://twitter.com/meeshy", color: "3498DB")
             }
             .background(sectionBackground(tint: "3498DB"))
         }
@@ -112,11 +112,11 @@ struct SupportView: View {
 
     private var reportSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Signaler un probleme", icon: "exclamationmark.bubble.fill", color: "E67E22")
+            sectionHeader(title: String(localized: "support.report.title", defaultValue: "Signaler un probleme", bundle: .main), icon: "exclamationmark.bubble.fill", color: "E67E22")
 
             VStack(spacing: 0) {
-                supportLink(icon: "ladybug.fill", title: "Signaler un bug", url: "mailto:bugs@meeshy.me?subject=Bug%20Report%20-%20Meeshy%20iOS", color: "E67E22")
-                supportLink(icon: "lightbulb.fill", title: "Suggerer une fonctionnalite", url: "mailto:features@meeshy.me?subject=Feature%20Suggestion%20-%20Meeshy%20iOS", color: "E67E22")
+                supportLink(icon: "ladybug.fill", title: String(localized: "support.report.bug", defaultValue: "Signaler un bug", bundle: .main), url: "mailto:bugs@meeshy.me?subject=Bug%20Report%20-%20Meeshy%20iOS", color: "E67E22")
+                supportLink(icon: "lightbulb.fill", title: String(localized: "support.report.feature", defaultValue: "Suggerer une fonctionnalite", bundle: .main), url: "mailto:features@meeshy.me?subject=Feature%20Suggestion%20-%20Meeshy%20iOS", color: "E67E22")
             }
             .background(sectionBackground(tint: "E67E22"))
         }
@@ -126,12 +126,12 @@ struct SupportView: View {
 
     private var infoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Informations", icon: "info.circle", color: "6B7280")
+            sectionHeader(title: String(localized: "support.info.title", defaultValue: "Informations", bundle: .main), icon: "info.circle", color: "6B7280")
 
             VStack(spacing: 0) {
-                infoRow(icon: "sparkles", title: "Version", value: appVersion, color: "6B7280")
-                infoRow(icon: "hammer.fill", title: "Build", value: buildNumber, color: "6B7280")
-                infoRow(icon: "apple.logo", title: "Plateforme", value: "iOS \(UIDevice.current.systemVersion)", color: "6B7280")
+                infoRow(icon: "sparkles", title: String(localized: "support.info.version", defaultValue: "Version", bundle: .main), value: appVersion, color: "6B7280")
+                infoRow(icon: "hammer.fill", title: String(localized: "support.info.build", defaultValue: "Build", bundle: .main), value: buildNumber, color: "6B7280")
+                infoRow(icon: "apple.logo", title: String(localized: "support.info.platform", defaultValue: "Plateforme", bundle: .main), value: "iOS \(UIDevice.current.systemVersion)", color: "6B7280")
             }
             .background(sectionBackground(tint: "6B7280"))
         }
@@ -191,7 +191,7 @@ struct SupportView: View {
             .padding(.vertical, 10)
         }
         .accessibilityLabel(title)
-        .accessibilityHint("Ouvre \(title)")
+        .accessibilityHint(String(localized: "support.a11y.opens", defaultValue: "Ouvre \(title)", bundle: .main))
     }
 
     private func infoRow(icon: String, title: String, value: String, color: String) -> some View {

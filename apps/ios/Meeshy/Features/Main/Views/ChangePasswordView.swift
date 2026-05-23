@@ -59,7 +59,7 @@ struct ChangePasswordView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
@@ -67,7 +67,7 @@ struct ChangePasswordView: View {
 
             Spacer()
 
-            Text("Mot de passe")
+            Text(String(localized: "auth.password.change.title", defaultValue: "Mot de passe", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -100,14 +100,14 @@ struct ChangePasswordView: View {
 
     private var currentPasswordSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Mot de passe actuel", icon: "lock.fill", color: "9B59B6")
+            sectionHeader(title: String(localized: "auth.password.change.current.section", defaultValue: "Mot de passe actuel", bundle: .main), icon: "lock.fill", color: "9B59B6")
 
             VStack(spacing: 0) {
                 secureField(
                     icon: "lock.fill",
-                    title: "Mot de passe actuel",
+                    title: String(localized: "auth.password.change.current.field", defaultValue: "Mot de passe actuel", bundle: .main),
                     text: $currentPassword,
-                    placeholder: "Entrez votre mot de passe",
+                    placeholder: String(localized: "auth.password.change.current.placeholder", defaultValue: "Entrez votre mot de passe", bundle: .main),
                     color: "9B59B6",
                     field: .current
                 )
@@ -127,14 +127,14 @@ struct ChangePasswordView: View {
 
     private var newPasswordSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            sectionHeader(title: "Nouveau mot de passe", icon: "key.fill", color: accentColor)
+            sectionHeader(title: String(localized: "auth.password.change.new.section", defaultValue: "Nouveau mot de passe", bundle: .main), icon: "key.fill", color: accentColor)
 
             VStack(spacing: 0) {
                 secureField(
                     icon: "key.fill",
-                    title: "Nouveau mot de passe",
+                    title: String(localized: "auth.password.change.new.field", defaultValue: "Nouveau mot de passe", bundle: .main),
                     text: $newPassword,
-                    placeholder: "Minimum 8 caracteres",
+                    placeholder: String(localized: "auth.password.change.new.placeholder", defaultValue: "Minimum 8 caracteres", bundle: .main),
                     color: accentColor,
                     field: .newPass
                 )
@@ -150,9 +150,9 @@ struct ChangePasswordView: View {
 
                 secureField(
                     icon: "checkmark.lock.fill",
-                    title: "Confirmer",
+                    title: String(localized: "auth.password.change.confirm.field", defaultValue: "Confirmer", bundle: .main),
                     text: $confirmPassword,
-                    placeholder: "Retapez le mot de passe",
+                    placeholder: String(localized: "auth.password.change.confirm.placeholder", defaultValue: "Retapez le mot de passe", bundle: .main),
                     color: accentColor,
                     field: .confirm
                 )
@@ -173,11 +173,11 @@ struct ChangePasswordView: View {
     private var validationHints: some View {
         VStack(alignment: .leading, spacing: 6) {
             validationRow(
-                text: "Minimum 8 caracteres",
+                text: String(localized: "auth.password.change.validation.length", defaultValue: "Minimum 8 caracteres", bundle: .main),
                 met: newPassword.count >= 8
             )
             validationRow(
-                text: "Les mots de passe correspondent",
+                text: String(localized: "auth.password.change.validation.match", defaultValue: "Les mots de passe correspondent", bundle: .main),
                 met: passwordsMatch && !newPassword.isEmpty
             )
         }
@@ -220,7 +220,7 @@ struct ChangePasswordView: View {
                             .scaleEffect(0.8)
                             .tint(.white)
                     }
-                    Text("Changer le mot de passe")
+                    Text(String(localized: "auth.password.change.submit", defaultValue: "Changer le mot de passe", bundle: .main))
                         .font(.system(size: 15, weight: .bold))
                 }
                 .foregroundColor(.white)
@@ -247,7 +247,7 @@ struct ChangePasswordView: View {
                 .font(.system(size: 48))
                 .foregroundColor(Color(hex: "4ADE80"))
 
-            Text("Mot de passe modifie")
+            Text(String(localized: "auth.password.change.success", defaultValue: "Mot de passe modifie", bundle: .main))
                 .font(.system(size: 16, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
         }
@@ -340,7 +340,7 @@ struct ChangePasswordView: View {
                 HapticFeedback.error()
                 switch error {
                 case .serverError(400, _):
-                    errorMessage = "Mot de passe actuel incorrect"
+                    errorMessage = String(localized: "auth.password.change.error.current", defaultValue: "Mot de passe actuel incorrect", bundle: .main)
                 default:
                     errorMessage = error.errorDescription
                 }
@@ -353,7 +353,7 @@ struct ChangePasswordView: View {
                 }
             } catch {
                 HapticFeedback.error()
-                errorMessage = "Une erreur est survenue"
+                errorMessage = String(localized: "common.error.generic", defaultValue: "Une erreur est survenue", bundle: .main)
             }
             isSaving = false
         }

@@ -39,7 +39,7 @@ struct UserStatsView: View {
 
             Spacer()
 
-            Text("Statistiques")
+            Text(String(localized: "user.stats.title", defaultValue: "Statistiques", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -73,16 +73,16 @@ struct UserStatsView: View {
     private var statsCards: some View {
         VStack(spacing: 12) {
             HStack(spacing: 12) {
-                statCard(value: "\(viewModel.stats?.totalMessages ?? 0)", label: "Messages", color: "FF6B6B", icon: "bubble.left.fill")
-                statCard(value: "\(viewModel.stats?.totalConversations ?? 0)", label: "Conversations", color: "4ECDC4", icon: "person.2.fill")
+                statCard(value: "\(viewModel.stats?.totalMessages ?? 0)", label: String(localized: "user.stats.messages", defaultValue: "Messages", bundle: .main), color: "FF6B6B", icon: "bubble.left.fill")
+                statCard(value: "\(viewModel.stats?.totalConversations ?? 0)", label: String(localized: "user.stats.conversations", defaultValue: "Conversations", bundle: .main), color: "4ECDC4", icon: "person.2.fill")
             }
             HStack(spacing: 12) {
-                statCard(value: "\(viewModel.stats?.totalTranslations ?? 0)", label: "Traductions", color: "9B59B6", icon: "globe")
-                statCard(value: "\(viewModel.stats?.languagesUsed ?? 0)", label: "Langues", color: "3498DB", icon: "character.book.closed.fill")
+                statCard(value: "\(viewModel.stats?.totalTranslations ?? 0)", label: String(localized: "user.stats.translations", defaultValue: "Traductions", bundle: .main), color: "9B59B6", icon: "globe")
+                statCard(value: "\(viewModel.stats?.languagesUsed ?? 0)", label: String(localized: "user.stats.languages", defaultValue: "Langues", bundle: .main), color: "3498DB", icon: "character.book.closed.fill")
             }
             HStack(spacing: 12) {
-                statCard(value: "\(viewModel.stats?.memberDays ?? 0)j", label: "Membre", color: "F8B500", icon: "calendar")
-                statCard(value: "\(viewModel.stats?.friendRequestsReceived ?? 0)", label: "Demandes", color: "E91E63", icon: "person.badge.plus")
+                statCard(value: "\(viewModel.stats?.memberDays ?? 0)j", label: String(localized: "user.stats.member", defaultValue: "Membre", bundle: .main), color: "F8B500", icon: "calendar")
+                statCard(value: "\(viewModel.stats?.friendRequestsReceived ?? 0)", label: String(localized: "user.stats.requests", defaultValue: "Demandes", bundle: .main), color: "E91E63", icon: "person.badge.plus")
             }
         }
     }
@@ -129,7 +129,7 @@ struct UserStatsView: View {
                 Image(systemName: "chart.xyaxis.line")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color(hex: "3498DB"))
-                Text("ACTIVITE")
+                Text(String(localized: "user.stats.activity", defaultValue: "ACTIVITE", bundle: .main))
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: "3498DB"))
                     .tracking(1.2)
@@ -158,7 +158,7 @@ struct UserStatsView: View {
                 Image(systemName: "trophy.fill")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color(hex: "F8B500"))
-                Text("BADGES")
+                Text(String(localized: "user.stats.badges", defaultValue: "BADGES", bundle: .main))
                     .font(.system(size: 11, weight: .bold, design: .rounded))
                     .foregroundColor(Color(hex: "F8B500"))
                     .tracking(1.2)

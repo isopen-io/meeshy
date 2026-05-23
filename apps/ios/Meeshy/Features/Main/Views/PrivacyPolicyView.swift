@@ -70,16 +70,16 @@ struct PrivacyPolicyView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Retour")
+            .accessibilityLabel(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
 
             Spacer()
 
-            Text("Confidentialite")
+            Text(String(localized: "legal.privacy.title", defaultValue: "Confidentialite", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
                 .accessibilityAddTraits(.isHeader)
@@ -118,12 +118,12 @@ struct PrivacyPolicyView: View {
     // MARK: - Language Picker
 
     private var languagePicker: some View {
-        Picker("Langue", selection: $selectedLanguage) {
-            Text("Francais").tag("fr")
-            Text("English").tag("en")
+        Picker(String(localized: "legal.privacy.language", defaultValue: "Langue", bundle: .main), selection: $selectedLanguage) {
+            Text(String(localized: "legal.privacy.language.fr", defaultValue: "Francais", bundle: .main)).tag("fr")
+            Text(String(localized: "legal.privacy.language.en", defaultValue: "English", bundle: .main)).tag("en")
         }
         .pickerStyle(.segmented)
-        .accessibilityLabel("Langue du document")
+        .accessibilityLabel(String(localized: "legal.privacy.language.a11y", defaultValue: "Langue du document", bundle: .main))
     }
 
     // MARK: - Last Updated

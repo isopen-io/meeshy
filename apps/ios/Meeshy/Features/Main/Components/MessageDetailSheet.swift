@@ -29,16 +29,16 @@ enum DetailTab: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .language: return "Langue"
-        case .views: return "Vues"
-        case .reactions: return "Reactions"
-        case .react: return "Reagir"
-        case .report: return "Signaler"
-        case .delete: return "Supprimer"
-        case .forward: return "Transferer"
-        case .sentiment: return "Sentiment"
-        case .transcription: return "Transcription"
-        case .edits: return "Historique"
+        case .language: return String(localized: "message-detail.tab.language", defaultValue: "Langue", bundle: .main)
+        case .views: return String(localized: "message-detail.tab.views", defaultValue: "Vues", bundle: .main)
+        case .reactions: return String(localized: "message-detail.tab.reactions", defaultValue: "Reactions", bundle: .main)
+        case .react: return String(localized: "message-detail.tab.react", defaultValue: "Reagir", bundle: .main)
+        case .report: return String(localized: "message-detail.tab.report", defaultValue: "Signaler", bundle: .main)
+        case .delete: return String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main)
+        case .forward: return String(localized: "message-detail.tab.forward", defaultValue: "Transferer", bundle: .main)
+        case .sentiment: return String(localized: "message-detail.tab.sentiment", defaultValue: "Sentiment", bundle: .main)
+        case .transcription: return String(localized: "message-detail.tab.transcription", defaultValue: "Transcription", bundle: .main)
+        case .edits: return String(localized: "message-detail.tab.history", defaultValue: "Historique", bundle: .main)
         }
     }
 
@@ -67,12 +67,12 @@ private enum ViewsFilter: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .sent: return "Envoye"
-        case .delivered: return "Distribue"
-        case .read: return "Lu"
-        case .notSeen: return "Pas vu"
-        case .listened: return "Ecoute"
-        case .watched: return "Vu"
+        case .sent: return String(localized: "message-detail.views.sent", defaultValue: "Envoye", bundle: .main)
+        case .delivered: return String(localized: "message-detail.views.delivered", defaultValue: "Distribue", bundle: .main)
+        case .read: return String(localized: "message-detail.views.read", defaultValue: "Lu", bundle: .main)
+        case .notSeen: return String(localized: "message-detail.views.not-seen", defaultValue: "Pas vu", bundle: .main)
+        case .listened: return String(localized: "message-detail.views.listened", defaultValue: "Ecoute", bundle: .main)
+        case .watched: return String(localized: "message-detail.views.watched", defaultValue: "Vu", bundle: .main)
         }
     }
 
@@ -452,7 +452,7 @@ struct MessageDetailSheet: View {
                 Image(systemName: "text.bubble.fill")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(originalColor)
-                Text("Original \u{2022} \(Self.languageName(for: originalLang))")
+                Text(String(format: String(localized: "message-detail.original", defaultValue: "Original \u{2022} %@", bundle: .main), Self.languageName(for: originalLang)))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(theme.textPrimary)
                 Spacer()
@@ -661,7 +661,7 @@ struct MessageDetailSheet: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundColor(isSelected ? langColor : theme.textMuted.opacity(0.5))
                 } else {
-                    Text("Traduire")
+                    Text(String(localized: "message-detail.translate", defaultValue: "Traduire", bundle: .main))
                         .font(.system(size: 11, weight: .medium))
                         .foregroundColor(langColor)
                         .padding(.horizontal, 8)
@@ -1419,7 +1419,7 @@ struct MessageDetailSheet: View {
                             HStack(spacing: 3) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 11))
-                                Text("complet")
+                                Text(String(localized: "message-detail.complete", defaultValue: "complet", bundle: .main))
                                     .font(.system(size: 10, weight: .semibold))
                             }
                             .foregroundColor(Color(hex: "2ECC71"))
@@ -1478,14 +1478,14 @@ struct MessageDetailSheet: View {
             Image(systemName: "wifi.slash")
                 .font(.system(size: 28, weight: .light))
                 .foregroundColor(theme.textMuted.opacity(0.4))
-            Text(readStatusError ?? "Impossible de charger les donnees")
+            Text(readStatusError ?? String(localized: "message-detail.load-error", defaultValue: "Impossible de charger les donnees", bundle: .main))
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(theme.textMuted)
             Button {
                 readStatusData = nil
                 Task { await loadReadStatus() }
             } label: {
-                Text("Reessayer")
+                Text(String(localized: "common.retry", defaultValue: "Reessayer", bundle: .main))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(.white)
                     .padding(.horizontal, 14)
@@ -1505,7 +1505,7 @@ struct MessageDetailSheet: View {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     reactionFilterCapsule(
-                        label: "Toutes",
+                        label: String(localized: "message-detail.reactions.all", defaultValue: "Toutes", bundle: .main),
                         count: reactionGroups.reduce(0) { $0 + $1.count },
                         isSelected: reactionFilter == "all"
                     ) {
@@ -1642,11 +1642,11 @@ struct MessageDetailSheet: View {
                     }
                 }
 
-            Text("Supprimer ce message ?")
+            Text(String(localized: "message-detail.delete.title", defaultValue: "Supprimer ce message ?", bundle: .main))
                 .font(.system(size: 18, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
 
-            Text("Cette action est irreversible")
+            Text(String(localized: "message-detail.delete.message", defaultValue: "Cette action est irreversible", bundle: .main))
                 .font(.system(size: 14))
                 .foregroundColor(theme.textMuted)
 
@@ -1656,7 +1656,7 @@ struct MessageDetailSheet: View {
                     onDelete?()
                     performDismiss()
                 } label: {
-                    Text("Supprimer")
+                    Text(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
                         .font(.system(size: 15, weight: .semibold))
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity, minHeight: 44)
@@ -1669,7 +1669,7 @@ struct MessageDetailSheet: View {
                 Button {
                     performDismiss()
                 } label: {
-                    Text("Annuler")
+                    Text(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(theme.textSecondary)
                         .frame(maxWidth: .infinity, minHeight: 44)
@@ -1690,7 +1690,7 @@ struct MessageDetailSheet: View {
 
     private var reportTabContent: some View {
         VStack(spacing: 16) {
-            Text("Pourquoi signalez-vous ce message ?")
+            Text(String(localized: "message-detail.report.title", defaultValue: "Pourquoi signalez-vous ce message ?", bundle: .main))
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(theme.textPrimary)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -1701,11 +1701,11 @@ struct MessageDetailSheet: View {
 
             if selectedReportType != nil {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("Details (optionnel)")
+                    Text(String(localized: "message-detail.report.details", defaultValue: "Details (optionnel)", bundle: .main))
                         .font(.system(size: 13, weight: .medium))
                         .foregroundColor(theme.textSecondary)
 
-                    TextField("Decrivez le probleme...", text: $reportReason, axis: .vertical)
+                    TextField(String(localized: "message-detail.report.placeholder", defaultValue: "Decrivez le probleme...", bundle: .main), text: $reportReason, axis: .vertical)
                         .font(.system(size: 14))
                         .lineLimit(3...6)
                         .padding(12)
@@ -1732,7 +1732,7 @@ struct MessageDetailSheet: View {
                         ProgressView()
                             .tint(.white)
                     } else {
-                        Text("Envoyer le signalement")
+                        Text(String(localized: "message-detail.report.send", defaultValue: "Envoyer le signalement", bundle: .main))
                             .font(.system(size: 15, weight: .semibold))
                     }
                 }
@@ -1804,7 +1804,7 @@ struct MessageDetailSheet: View {
                     .font(.system(size: 14))
                     .foregroundColor(theme.textMuted)
 
-                TextField("Rechercher une conversation", text: $forwardSearchText)
+                TextField(String(localized: "forward.search-placeholder", defaultValue: "Rechercher une conversation", bundle: .main), text: $forwardSearchText)
                     .font(.system(size: 14))
                     .autocorrectionDisabled()
 
@@ -1830,7 +1830,7 @@ struct MessageDetailSheet: View {
                     .tint(Color(hex: contactColor))
                     .padding(.vertical, 20)
             } else if filteredForwardConversations.isEmpty {
-                emptyStateView(icon: "bubble.left.and.bubble.right", text: "Aucune conversation", accent: Color(hex: contactColor))
+                emptyStateView(icon: "bubble.left.and.bubble.right", text: String(localized: "forward.empty", defaultValue: "Aucune conversation", bundle: .main), accent: Color(hex: contactColor))
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(filteredForwardConversations) { conv in
@@ -1869,7 +1869,7 @@ struct MessageDetailSheet: View {
                         .foregroundColor(theme.textMuted)
 
                     if conv.memberCount > 0 {
-                        Text("\u{2022} \(conv.memberCount) membres")
+                        Text(String(format: String(localized: "forward.members-count", defaultValue: "\u{2022} %d membres", bundle: .main), conv.memberCount))
                             .font(.system(size: 12))
                             .foregroundColor(theme.textMuted)
                     }
@@ -2134,7 +2134,7 @@ struct MessageDetailSheet: View {
                         Image(systemName: "person.2.fill")
                             .font(.system(size: 11, weight: .medium))
                             .foregroundColor(accent.opacity(0.6))
-                        Text("\(speakerCount) locuteurs detectes")
+                        Text(String(format: String(localized: "message-detail.transcription.speakers", defaultValue: "%d locuteurs detectes", bundle: .main), speakerCount))
                             .font(.system(size: 12, weight: .medium))
                             .foregroundColor(theme.textMuted)
                     }
@@ -2182,7 +2182,7 @@ struct MessageDetailSheet: View {
                     .font(.system(size: 28, weight: .light))
                     .foregroundColor(theme.textMuted.opacity(0.4))
 
-                Text("Aucune transcription")
+                Text(String(localized: "message-detail.transcription.empty", defaultValue: "Aucune transcription", bundle: .main))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
@@ -2199,7 +2199,7 @@ struct MessageDetailSheet: View {
                                 Image(systemName: "waveform.and.mic")
                                     .font(.system(size: 13, weight: .semibold))
                             }
-                            Text("Transcrire")
+                            Text(String(localized: "message-detail.transcription.transcribe", defaultValue: "Transcrire", bundle: .main))
                                 .font(.system(size: 13, weight: .bold))
                         }
                         .foregroundColor(accent)
@@ -2226,7 +2226,7 @@ struct MessageDetailSheet: View {
                 Image(systemName: "translate")
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(accent.opacity(0.6))
-                Text("Traductions audio")
+                Text(String(localized: "message-detail.audio-translations", defaultValue: "Traductions audio", bundle: .main))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(theme.textMuted)
             }
@@ -2250,7 +2250,7 @@ struct MessageDetailSheet: View {
                             HStack(spacing: 3) {
                                 Image(systemName: "person.wave.2")
                                     .font(.system(size: 9, weight: .medium))
-                                Text("Clone")
+                                Text(String(localized: "message-detail.audio.cloned", defaultValue: "Clone", bundle: .main))
                                     .font(.system(size: 10, weight: .bold))
                             }
                             .foregroundColor(langColor)
@@ -2466,11 +2466,11 @@ struct MessageDetailSheet: View {
     }
 
     private func sentimentLabel(_ score: Double) -> String {
-        if score < -0.6 { return "Tres negatif" }
-        if score < -0.2 { return "Negatif" }
-        if score < 0.2 { return "Neutre" }
-        if score < 0.6 { return "Positif" }
-        return "Tres positif"
+        if score < -0.6 { return String(localized: "sentiment.very-negative", defaultValue: "Tres negatif", bundle: .main) }
+        if score < -0.2 { return String(localized: "dashboard.sentiment.negative", defaultValue: "Negatif", bundle: .main) }
+        if score < 0.2 { return String(localized: "dashboard.sentiment.neutral", defaultValue: "Neutre", bundle: .main) }
+        if score < 0.6 { return String(localized: "dashboard.sentiment.positive", defaultValue: "Positif", bundle: .main) }
+        return String(localized: "sentiment.very-positive", defaultValue: "Tres positif", bundle: .main)
     }
 
     private func relativeDate(_ date: Date) -> String {

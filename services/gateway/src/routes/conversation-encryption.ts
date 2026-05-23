@@ -63,13 +63,13 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
   });
 
   /**
-   * GET /api/conversations/:conversationId/encryption-status
+   * GET /api/v1/conversations/:conversationId/encryption-status
    * Get encryption status for a conversation
    */
   fastify.get<{
     Params: EncryptionStatusParams;
   }>(
-    '/api/conversations/:conversationId/encryption-status',
+    '/conversations/:conversationId/encryption-status',
     {
       preValidation: [authMiddleware],
       preHandler: [validateParams(ConversationIdParamSchema)],
@@ -135,14 +135,14 @@ export default async function encryptionRoutes(fastify: FastifyInstance) {
   );
 
   /**
-   * POST /api/conversations/:conversationId/encryption
+   * POST /api/v1/conversations/:conversationId/encryption
    * Enable encryption for a conversation (immutable - cannot be disabled)
    */
   fastify.post<{
     Params: EncryptionStatusParams;
     Body: EnableEncryptionRequest;
   }>(
-    '/api/conversations/:conversationId/encryption',
+    '/conversations/:conversationId/encryption',
     {
       preValidation: [authMiddleware],
       preHandler: [validateParams(ConversationIdParamSchema), validateBody(SetEncryptionModeBodySchema)],

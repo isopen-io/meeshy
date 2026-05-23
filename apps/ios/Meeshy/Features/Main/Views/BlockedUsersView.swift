@@ -27,20 +27,20 @@ struct BlockedUsersView: View {
                 content
             }
         }
-        .alert("Debloquer", isPresented: Binding(
+        .alert(String(localized: "blocked.users.unblock.title", defaultValue: "Debloquer", bundle: .main), isPresented: Binding(
             get: { userToUnblock != nil },
             set: { if !$0 { userToUnblock = nil } }
         )) {
-            Button("Annuler", role: .cancel) {
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {
                 userToUnblock = nil
             }
-            Button("Debloquer", role: .destructive) {
+            Button(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main), role: .destructive) {
                 guard let user = userToUnblock else { return }
                 unblock(user)
             }
         } message: {
             if let user = userToUnblock {
-                Text("Voulez-vous debloquer \(user.name) ?")
+                Text(String(localized: "blocked.users.unblock.confirm", defaultValue: "Voulez-vous debloquer \(user.name) ?", bundle: .main))
             }
         }
         .task { await loadBlockedUsers() }
@@ -57,7 +57,7 @@ struct BlockedUsersView: View {
                 HStack(spacing: 4) {
                     Image(systemName: "chevron.left")
                         .font(.system(size: 14, weight: .semibold))
-                    Text("Retour")
+                    Text(String(localized: "common.back", defaultValue: "Retour", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                 }
                 .foregroundColor(Color(hex: accentColor))
@@ -65,7 +65,7 @@ struct BlockedUsersView: View {
 
             Spacer()
 
-            Text("Utilisateurs bloques")
+            Text(String(localized: "blocked.users.title", defaultValue: "Utilisateurs bloques", bundle: .main))
                 .font(.system(size: 17, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
@@ -135,8 +135,8 @@ struct BlockedUsersView: View {
             Spacer()
             EmptyStateView(
                 icon: "person.crop.circle.badge.checkmark",
-                title: "Aucun utilisateur bloque",
-                subtitle: "Les utilisateurs que vous bloquez apparaitront ici"
+                title: String(localized: "blocked.users.empty.title", defaultValue: "Aucun utilisateur bloque", bundle: .main),
+                subtitle: String(localized: "blocked.users.empty.subtitle", defaultValue: "Les utilisateurs que vous bloquez apparaitront ici", bundle: .main)
             )
             Spacer()
         }
@@ -156,7 +156,7 @@ struct BlockedUsersView: View {
                             HapticFeedback.medium()
                             userToUnblock = user
                         } label: {
-                            Label("Debloquer", systemImage: "person.crop.circle.badge.checkmark")
+                            Label(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main), systemImage: "person.crop.circle.badge.checkmark")
                         }
                         .tint(Color(hex: "4ECDC4"))
                     }
@@ -196,7 +196,7 @@ struct BlockedUsersView: View {
                 HapticFeedback.light()
                 userToUnblock = user
             } label: {
-                Text("Debloquer")
+                Text(String(localized: "blocked.users.unblock.action", defaultValue: "Debloquer", bundle: .main))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color(hex: accentColor))
                     .padding(.horizontal, 12)
@@ -206,7 +206,7 @@ struct BlockedUsersView: View {
                             .fill(Color(hex: accentColor).opacity(0.12))
                     )
             }
-            .accessibilityLabel("Debloquer \(user.name)")
+            .accessibilityLabel(String(localized: "blocked.users.unblock.a11y", defaultValue: "Debloquer \(user.name)", bundle: .main))
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
@@ -239,14 +239,14 @@ struct BlockedUsersView: View {
             do {
                 try await blockService?.unblockUser(userId: user.id)
                 HapticFeedback.success()
-                ToastManager.shared.showSuccess("Utilisateur debloque")
+                ToastManager.shared.showSuccess(String(localized: "blocked.users.unblock.success", defaultValue: "Utilisateur debloque", bundle: .main))
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     blockedUsers.removeAll { $0.id == user.id }
                 }
                 Self.logger.info("Unblocked user \(user.id)")
             } catch {
                 HapticFeedback.error()
-                ToastManager.shared.showError("Erreur lors du deblocage")
+                ToastManager.shared.showError(String(localized: "blocked.users.unblock.error", defaultValue: "Erreur lors du deblocage", bundle: .main))
                 Self.logger.error("Failed to unblock user: \(error.localizedDescription)")
             }
             isUnblocking = false

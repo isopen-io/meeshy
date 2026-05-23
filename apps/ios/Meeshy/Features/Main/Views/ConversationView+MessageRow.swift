@@ -62,7 +62,7 @@ extension ConversationView {
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(theme.textMuted)
 
-                TextField("Rechercher dans la conversation...", text: $headerState.searchQuery)
+                TextField(String(localized: "conversation.view.search.placeholder", defaultValue: "Rechercher dans la conversation...", bundle: .main), text: $headerState.searchQuery)
                     .font(.system(size: 15))
                     .foregroundColor(theme.textPrimary)
                     .focused($isSearchFocused)
@@ -81,7 +81,7 @@ extension ConversationView {
                             .font(.system(size: 16))
                             .foregroundColor(theme.textMuted)
                     }
-                    .accessibilityLabel("Effacer la recherche")
+                    .accessibilityLabel(String(localized: "conversation.view.search.clear", defaultValue: "Effacer la recherche", bundle: .main))
                 }
             }
             .padding(.horizontal, 10)
@@ -100,11 +100,11 @@ extension ConversationView {
             Button {
                 dismissSearch()
             } label: {
-                Text("Fermer")
+                Text(String(localized: "common.close", defaultValue: "Fermer", bundle: .main))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Fermer la recherche")
+            .accessibilityLabel(String(localized: "conversation.view.search.close", defaultValue: "Fermer la recherche", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -126,7 +126,7 @@ extension ConversationView {
                     Image(systemName: "magnifyingglass")
                         .font(.system(size: 36, weight: .light))
                         .foregroundColor(theme.textMuted.opacity(0.5))
-                    Text("Aucun résultat")
+                    Text(String(localized: "conversation.view.search.no_results", defaultValue: "Aucun résultat", bundle: .main))
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(theme.textMuted)
                 }
@@ -336,7 +336,7 @@ extension ConversationView {
                         HStack(spacing: 6) {
                             Image(systemName: "arrow.down.to.line")
                                 .font(.system(size: 12, weight: .bold))
-                            Text("Messages récents")
+                            Text(String(localized: "conversation.view.recent_messages", defaultValue: "Messages récents", bundle: .main))
                                 .font(.system(size: 12, weight: .semibold))
                         }
                         .foregroundColor(.white)
@@ -348,7 +348,7 @@ extension ConversationView {
                                 .shadow(color: Color(hex: accentColor).opacity(0.4), radius: 8, y: 2)
                         )
                     }
-                    .accessibilityLabel("Retourner aux messages recents")
+                    .accessibilityLabel(String(localized: "conversation.view.return_to_recent", defaultValue: "Retourner aux messages recents", bundle: .main))
                     Spacer()
                 }
                 .padding(.bottom, composerHeight + 8)
@@ -504,7 +504,7 @@ extension ConversationView {
                 .foregroundColor(Color(hex: "FF6B6B"))
                 .accessibilityHidden(true)
 
-            Text("Échec de l'envoi")
+            Text(String(localized: "conversation.view.send_failed", defaultValue: "Échec de l'envoi", bundle: .main))
                 .font(.system(size: 11, weight: .medium))
                 .foregroundColor(Color(hex: "FF6B6B"))
 
@@ -516,22 +516,22 @@ extension ConversationView {
                 HapticFeedback.light()
                 Task { await viewModel.retryMessage(messageId: msg.id) }
             } label: {
-                Text("Réessayer")
+                Text(String(localized: "conversation.view.retry", defaultValue: "Réessayer", bundle: .main))
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(Color(hex: accentColor))
             }
-            .accessibilityLabel("Reessayer l'envoi du message")
+            .accessibilityLabel(String(localized: "conversation.view.retry_send", defaultValue: "Reessayer l'envoi du message", bundle: .main))
 
             Button {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     viewModel.removeFailedMessage(messageId: msg.id)
                 }
             } label: {
-                Text("Supprimer")
+                Text(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(theme.textMuted)
             }
-            .accessibilityLabel("Supprimer le message en echec")
+            .accessibilityLabel(String(localized: "conversation.view.delete_failed", defaultValue: "Supprimer le message en echec", bundle: .main))
         }
         .frame(maxWidth: .infinity, alignment: .trailing)
         .padding(.horizontal, 16)
@@ -548,7 +548,9 @@ extension ConversationView {
 
     func replyCountPill(count: Int, isMe: Bool, parentMessageId: String) -> some View {
         let accent = Color(hex: accentColor)
-        let label = count == 1 ? "1 reponse" : "\(count) reponses"
+        let label = count == 1
+            ? String(localized: "conversation.view.reply.count.one", defaultValue: "1 reponse", bundle: .main)
+            : String(localized: "conversation.view.reply.count.many", defaultValue: "\(count) reponses", bundle: .main)
         return Button {
             HapticFeedback.light()
             if let firstReply = viewModel.messages.first(where: { $0.replyToId == parentMessageId }) {
@@ -574,7 +576,7 @@ extension ConversationView {
             )
         }
         .accessibilityLabel(label)
-        .accessibilityHint("Aller a la premiere reponse de ce message")
+        .accessibilityHint(String(localized: "conversation.view.go_to_first_reply", defaultValue: "Aller a la premiere reponse de ce message", bundle: .main))
     }
 }
 

@@ -445,7 +445,7 @@ struct RootView: View {
                     let conv = apiConv.toConversation(currentUserId: currentUserId)
                     router.navigateToConversation(conv)
                 } catch {
-                    ToastManager.shared.showError("Impossible de creer la conversation")
+                    ToastManager.shared.showError(String(localized: "root.create_conversation.error", defaultValue: "Impossible de creer la conversation", bundle: .main))
                 }
             }
         }
@@ -1148,13 +1148,13 @@ private struct PendingSettingsBannerInline: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
-                    Text("Modifications en attente (\(pendingCount))")
+                    Text("\(String(localized: "root.pending_changes", defaultValue: "Modifications en attente", bundle: .main)) (\(pendingCount))")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
-                    Text("Synchronisation au retour en ligne")
+                    Text(String(localized: "root.sync_on_reconnect", defaultValue: "Synchronisation au retour en ligne", bundle: .main))
                         .font(.system(size: 10, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)
@@ -1209,13 +1209,13 @@ private struct PendingStoryBannerInline: View {
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
-                    Text("Stories en attente (\(publishService.pendingCount))")
+                    Text("\(String(localized: "root.pending_stories", defaultValue: "Stories en attente", bundle: .main)) (\(publishService.pendingCount))")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(.white)
 
                     Spacer()
 
-                    Text("Publication au retour en ligne")
+                    Text(String(localized: "root.publish_on_reconnect", defaultValue: "Publication au retour en ligne", bundle: .main))
                         .font(.system(size: 10, weight: .regular))
                         .foregroundColor(.white.opacity(0.85))
                         .lineLimit(1)

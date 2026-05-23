@@ -209,6 +209,7 @@
 		CC1800000000002F18 /* MessageInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1800000000001F18 /* MessageInfoSheet.swift */; };
 		CC1900000000002F19 /* ForwardPickerSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1900000000001F19 /* ForwardPickerSheet.swift */; };
 		CC1900000000004F19 /* ConversationInfoSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1900000000003F19 /* ConversationInfoSheet.swift */; };
+		CC1A00000000004F1A /* ConversationEncryptionDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC1A00000000003F1A /* ConversationEncryptionDetailSheet.swift */; };
 		CC2000000000002F20 /* CameraView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2000000000001F20 /* CameraView.swift */; };
 		CC2100000000002F21 /* ReportMessageSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2100000000001F21 /* ReportMessageSheet.swift */; };
 		CC2200000000002F22 /* MessageDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC2200000000001F22 /* MessageDetailSheet.swift */; };
@@ -248,6 +249,7 @@
 		D143407BBF8B39883209BCFD /* OnboardingFlowView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B4592BA9A00EF9FA3BBEE07 /* OnboardingFlowView.swift */; };
 		D14C3755B0EF1D3FCE57FF8B /* ConversationListViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B3E242276EB00910AF9B59F7 /* ConversationListViewModelTests.swift */; };
 		D240F5AC635D4F38FD26A6A1 /* APIServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1DBCE13E5C724D3BCB34B45B /* APIServiceTests.swift */; };
+		E2EA0000000004F010 /* E2EAPIEncryptionTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2EA0000000003F010 /* E2EAPIEncryptionTests.swift */; };
 		D26BAE25A2C027F3CA414696 /* ConversationView+MessageRow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 631E4BD5FAADD58E16760AF9 /* ConversationView+MessageRow.swift */; };
 		D41332567A1DF21830750E35 /* AnonymousSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = B907F9065200B3DDB62876DB /* AnonymousSessionStore.swift */; };
 		D470C3569767DC3CE63400CC /* Foundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 225CCF2B034C164360E361C4 /* Foundation.framework */; };
@@ -559,6 +561,7 @@
 		1C90BB2C475926F97226B943 /* ConversationLockManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ConversationLockManagerTests.swift; sourceTree = "<group>"; };
 		1CDB5B41B9ABD50A0A92480A /* FeedStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedStore.swift; sourceTree = "<group>"; };
 		1DBCE13E5C724D3BCB34B45B /* APIServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = APIServiceTests.swift; sourceTree = "<group>"; };
+		E2EA0000000003F010 /* E2EAPIEncryptionTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = E2EAPIEncryptionTests.swift; sourceTree = "<group>"; };
 		1E712AFED49A3F55252FDA69 /* DiscoverTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiscoverTab.swift; sourceTree = "<group>"; };
 		1FB62C70416559B542F3329F /* OnboardingAnimations.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = OnboardingAnimations.swift; sourceTree = "<group>"; };
 		225CCF2B034C164360E361C4 /* Foundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Foundation.framework; path = Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS18.0.sdk/System/Library/Frameworks/Foundation.framework; sourceTree = DEVELOPER_DIR; };
@@ -756,6 +759,7 @@
 		CC1800000000001F18 /* MessageInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageInfoSheet.swift; sourceTree = "<group>"; };
 		CC1900000000001F19 /* ForwardPickerSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForwardPickerSheet.swift; sourceTree = "<group>"; };
 		CC1900000000003F19 /* ConversationInfoSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationInfoSheet.swift; sourceTree = "<group>"; };
+		CC1A00000000003F1A /* ConversationEncryptionDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationEncryptionDetailSheet.swift; sourceTree = "<group>"; };
 		CC2000000000001F20 /* CameraView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraView.swift; sourceTree = "<group>"; };
 		CC2100000000001F21 /* ReportMessageSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportMessageSheet.swift; sourceTree = "<group>"; };
 		CC2200000000001F22 /* MessageDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MessageDetailSheet.swift; sourceTree = "<group>"; };
@@ -1100,6 +1104,7 @@
 				CC1800000000001F18 /* MessageInfoSheet.swift */,
 				CC1900000000001F19 /* ForwardPickerSheet.swift */,
 				CC1900000000003F19 /* ConversationInfoSheet.swift */,
+				CC1A00000000003F1A /* ConversationEncryptionDetailSheet.swift */,
 				DD0100000000003F01 /* ConversationDashboardView.swift */,
 				CPREF0000000003F01 /* ConversationPreferencesTab.swift */,
 				INVFS0000000003F01 /* InviteFriendsSheet.swift */,
@@ -1921,6 +1926,7 @@
 				OAA0000000000001F02 /* OptimisticAttachmentAdopterTests.swift */,
 				5FEFAB456AD3F85FCBCDC078 /* PresenceManagerTests.swift */,
 				1DBCE13E5C724D3BCB34B45B /* APIServiceTests.swift */,
+				E2EA0000000003F010 /* E2EAPIEncryptionTests.swift */,
 				D5A1B2C3E4F506A7B8C9D0E3 /* DraftStoreTests.swift */,
 				DRRT01001001001001001 /* DraftStoreReplyTests.swift */,
 				DCDB000100010001000100E0 /* DependencyContainerTests.swift */,
@@ -2253,6 +2259,7 @@
 				CC1800000000002F18 /* MessageInfoSheet.swift in Sources */,
 				CC1900000000002F19 /* ForwardPickerSheet.swift in Sources */,
 				CC1900000000004F19 /* ConversationInfoSheet.swift in Sources */,
+				CC1A00000000004F1A /* ConversationEncryptionDetailSheet.swift in Sources */,
 				DD0100000000004F01 /* ConversationDashboardView.swift in Sources */,
 				CPREF0000000004F01 /* ConversationPreferencesTab.swift in Sources */,
 				INVFS0000000004F01 /* InviteFriendsSheet.swift in Sources */,
@@ -2550,6 +2557,7 @@
 				8343E26FB2A5EB5EE38821C6 /* MediaCompressorTests.swift in Sources */,
 				OAA0000000000002F02 /* OptimisticAttachmentAdopterTests.swift in Sources */,
 				D240F5AC635D4F38FD26A6A1 /* APIServiceTests.swift in Sources */,
+				E2EA0000000004F010 /* E2EAPIEncryptionTests.swift in Sources */,
 				D5A1B2C3E4F506A7B8C9D0E4 /* DraftStoreTests.swift in Sources */,
 				DRRT01001001001001002 /* DraftStoreReplyTests.swift in Sources */,
 				DCDB000100010001000100E1 /* DependencyContainerTests.swift in Sources */,

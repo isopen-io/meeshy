@@ -151,8 +151,8 @@ export function useNotificationsManagerRQ(options: UseNotificationsManagerRQOpti
 
       try {
         const soundFile = notification.type === 'user_mentioned'
-          ? '/sounds/mention.wav'
-          : '/sounds/notification.wav';
+          ? '/sounds/mention.ogg'
+          : '/sounds/notification.ogg';
         const volume = notification.type === 'user_mentioned' ? 0.7 : 0.6;
         const audio = new Audio(soundFile);
         audio.volume = volume;

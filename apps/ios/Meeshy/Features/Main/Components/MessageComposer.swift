@@ -62,8 +62,8 @@ struct MessageComposer: View {
                 .foregroundColor(.white.opacity(0.7))
                 .rotationEffect(.degrees(attachRotation))
                 .frame(width: 44, height: 44)
-                .accessibilityLabel(Text("Joindre"))
-                .accessibilityHint(Text("Ouvre le menu pour partager une photo, une video, un fichier ou un lieu"))
+                .accessibilityLabel(Text(String(localized: "composer.attach", defaultValue: "Joindre", bundle: .main)))
+                .accessibilityHint(Text(String(localized: "composer.attach.hint", defaultValue: "Ouvre le menu pour partager une photo, une video, un fichier ou un lieu", bundle: .main)))
                 .background(
                     Circle()
                         .fill(Color.white.opacity(0.1))
@@ -78,7 +78,7 @@ struct MessageComposer: View {
     private var textInputField: some View {
         ZStack(alignment: .leading) {
             if text.isEmpty {
-                Text("Message...")
+                Text(String(localized: "composer.placeholder", defaultValue: "Message...", bundle: .main))
                     .foregroundColor(.white.opacity(0.4))
                     .padding(.leading, 16)
             }
@@ -162,8 +162,8 @@ struct MessageComposer: View {
                 .scaleEffect(sendBounce ? 1.2 : 1)
             }
             .frame(width: 44, height: 44)
-            .accessibilityLabel(Text("Envoyer le message"))
-            .accessibilityHint(Text("Envoie le texte saisi dans la conversation"))
+            .accessibilityLabel(Text(String(localized: "composer.send", defaultValue: "Envoyer le message", bundle: .main)))
+            .accessibilityHint(Text(String(localized: "composer.send.hint", defaultValue: "Envoie le texte saisi dans la conversation", bundle: .main)))
             .transition(.scale.combined(with: .opacity))
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasText)
             .animation(.spring(response: 0.25, dampingFraction: 0.5), value: sendBounce)
@@ -187,8 +187,8 @@ struct MessageComposer: View {
                         .foregroundColor(.white.opacity(0.7))
                 }
             }
-            .accessibilityLabel(Text("Enregistrer un message vocal"))
-            .accessibilityHint(Text("Appui maintenu pour enregistrer un message audio"))
+            .accessibilityLabel(Text(String(localized: "composer.voice", defaultValue: "Enregistrer un message vocal", bundle: .main)))
+            .accessibilityHint(Text(String(localized: "composer.voice.hint", defaultValue: "Appui maintenu pour enregistrer un message audio", bundle: .main)))
             .transition(.scale.combined(with: .opacity))
             .animation(.spring(response: 0.3, dampingFraction: 0.6), value: hasText)
         }

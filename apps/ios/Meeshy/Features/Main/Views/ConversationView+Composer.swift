@@ -262,7 +262,7 @@ extension ConversationView {
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
-            .accessibilityLabel("Annuler la reponse")
+            .accessibilityLabel(String(localized: "conversation.view.composer.cancel_reply", defaultValue: "Annuler la reponse", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -275,7 +275,7 @@ extension ConversationView {
                 )
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Reponse a \(reply.isMe ? "vous" : reply.authorName): \(reply.previewText)")
+        .accessibilityLabel(String(localized: "conversation.view.composer.reply_to", defaultValue: "Reponse a \(reply.isMe ? "vous" : reply.authorName): \(reply.previewText)", bundle: .main))
     }
 
     // MARK: - Edit Banner
@@ -290,7 +290,7 @@ extension ConversationView {
                 .foregroundColor(Color(hex: "F8B500"))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Modifier le message")
+                Text(String(localized: "conversation.view.composer.edit_message", defaultValue: "Modifier le message", bundle: .main))
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(Color(hex: "F8B500"))
 
@@ -311,7 +311,7 @@ extension ConversationView {
                     .frame(width: 24, height: 24)
                     .background(Circle().fill(isDark ? Color.white.opacity(0.1) : Color.black.opacity(0.05)))
             }
-            .accessibilityLabel("Annuler la modification")
+            .accessibilityLabel(String(localized: "conversation.view.composer.cancel_edit", defaultValue: "Annuler la modification", bundle: .main))
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -324,7 +324,7 @@ extension ConversationView {
                 )
         )
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("Modification du message en cours")
+        .accessibilityLabel(String(localized: "conversation.view.composer.editing_in_progress", defaultValue: "Modification du message en cours", bundle: .main))
     }
 
     func submitEdit() {
@@ -593,7 +593,7 @@ extension ConversationView {
                                 .shadow(color: MeeshyColors.error.opacity(0.4), radius: 3, y: 1)
                         )
                 }
-                .accessibilityLabel("Supprimer \(labelForAttachment(attachment))")
+                .accessibilityLabel(String(localized: "conversation.view.composer.delete_attachment", defaultValue: "Supprimer \(labelForAttachment(attachment))", bundle: .main))
                 .offset(x: 5, y: -5)
             }
 

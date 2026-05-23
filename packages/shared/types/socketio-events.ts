@@ -133,6 +133,16 @@ export const SERVER_EVENTS = {
   CALL_SIGNAL: 'call:signal',
   CALL_MEDIA_TOGGLED: 'call:media-toggled',
   CALL_ERROR: 'call:error',
+  /**
+   * --- Call events RESERVED (no emitter yet) ---
+   * Declared for upcoming voice/video phases:
+   * - quality monitoring (CALL_QUALITY_ALERT, CALL_SCREEN_CAPTURE_ALERT)
+   * - in-call translation pipeline (CALL_TRANSLATED_SEGMENT,
+   *   CALL_TRANSLATION_REQUESTED/ENABLED, CALL_TRANSCRIPTION_RESULT)
+   * - state edge cases (CALL_MISSED, CALL_ALREADY_ANSWERED — iOS already
+   *   subscribes via MessageSocketManager but the gateway never emits)
+   * Keep names + types in sync until the emitters land.
+   */
   CALL_MISSED: 'call:missed',
   CALL_QUALITY_ALERT: 'call:quality-alert',
   CALL_TRANSLATED_SEGMENT: 'call:translated-segment',
@@ -178,7 +188,13 @@ export const SERVER_EVENTS = {
    */
   TRANSCRIPTION_READY: 'audio:transcription-ready',
 
-  // --- Message pinning ---
+  /**
+   * --- Message pinning (RESERVED — no emitter yet) ---
+   * Declared for future "pin message" feature. Gateway does not
+   * currently emit these and no client subscribes to them. Keep the
+   * constants + types in sync with the iOS roadmap so the feature
+   * can be wired without renaming.
+   */
   MESSAGE_PINNED: 'message:pinned',
   MESSAGE_UNPINNED: 'message:unpinned',
 
@@ -235,6 +251,13 @@ export const SERVER_EVENTS = {
 
   // --- User Preferences ---
   USER_PREFERENCES_UPDATED: 'user:preferences-updated',
+  USER_PREFERENCES_REORDERED: 'user:preferences-reordered',
+
+  // --- Conversation Categories ---
+  CATEGORY_CREATED: 'category:created',
+  CATEGORY_UPDATED: 'category:updated',
+  CATEGORY_DELETED: 'category:deleted',
+  CATEGORIES_REORDERED: 'categories:reordered',
 } as const;
 
 // Événements du client vers le serveur
@@ -549,7 +572,6 @@ export interface AudioTranslationEventData {
     readonly id: string;
     readonly targetLanguage: string;
     readonly url: string;
-    readonly path?: string;
     readonly transcription: string;
     readonly durationMs: number;
     readonly format: string;
@@ -711,9 +733,109 @@ export interface StoryTranslationUpdatedEventData {
   readonly translations: Record<string, string>;
 }
 
-export interface UserPreferencesUpdatedEventData {
+/**
+ * Snapshot complet des préférences user/conversation envoyé dans les
+ * événements `USER_PREFERENCES_UPDATED` (scope conversation). Reflète
+ * `UserConversationPreferences` côté Prisma.
+ *
+ * @see schema.prisma model UserConversationPreferences
+ */
+export interface ConversationPreferencesPayload {
+  readonly isPinned: boolean;
+  readonly isMuted: boolean;
+  readonly mentionsOnly: boolean;
+  readonly isArchived: boolean;
+  readonly tags: readonly string[];
+  readonly categoryId: string | null;
+  readonly orderInCategory: number | null;
+  readonly customName: string | null;
+  readonly reaction: string | null;
+  readonly deletedForUserAt: string | null;
+  readonly clearHistoryBefore: string | null;
+}
+
+/**
+ * Variante "préférences user-level" : émis par
+ * `me/preferences/{category}` factory. Le client doit refetch la
+ * catégorie nommée.
+ */
+export interface UserPreferencesCategoryUpdatedEventData {
   readonly userId: string;
   readonly category: string;
+}
+
+/**
+ * Variante "préférences scope conversation" : émis par
+ * `PUT/DELETE /user-preferences/conversations/:id`. Payload complet
+ * incluant `version` pour la résolution optimistic vs socket.
+ */
+export interface UserPreferencesConversationUpdatedEventData {
+  readonly userId: string;
+  readonly conversationId: string;
+  readonly version: number;
+  /** true si l'événement résulte d'un DELETE (reset aux defaults). */
+  readonly reset: boolean;
+  /** null si reset === true (le client applique ses defaults locaux). */
+  readonly preferences: ConversationPreferencesPayload | null;
+}
+
+/**
+ * Union des deux scopes possibles. La présence de `conversationId`
+ * discrimine côté client.
+ */
+export type UserPreferencesUpdatedEventData =
+  | UserPreferencesCategoryUpdatedEventData
+  | UserPreferencesConversationUpdatedEventData;
+
+/**
+ * Émis par `POST /user-preferences/conversations/reorder` après mise
+ * à jour batch de l'ordre dans une catégorie.
+ */
+export interface UserPreferencesReorderedEventData {
+  readonly userId: string;
+  readonly updates: ReadonlyArray<{
+    readonly conversationId: string;
+    readonly orderInCategory: number;
+  }>;
+}
+
+/**
+ * Snapshot d'une `UserConversationCategory` envoyé dans
+ * `CATEGORY_CREATED` / `CATEGORY_UPDATED`.
+ */
+export interface UserConversationCategoryPayload {
+  readonly id: string;
+  readonly userId: string;
+  readonly name: string;
+  readonly color: string | null;
+  readonly icon: string | null;
+  readonly order: number;
+  readonly isExpanded: boolean;
+  readonly createdAt: string;
+  readonly updatedAt: string;
+}
+
+export interface CategoryCreatedEventData {
+  readonly userId: string;
+  readonly category: UserConversationCategoryPayload;
+}
+
+export interface CategoryUpdatedEventData {
+  readonly userId: string;
+  readonly category: UserConversationCategoryPayload;
+}
+
+export interface CategoryDeletedEventData {
+  readonly userId: string;
+  readonly categoryId: string;
+}
+
+export interface CategoriesReorderedEventData {
+  readonly userId: string;
+  readonly updates: ReadonlyArray<{
+    readonly categoryId: string;
+    readonly order: number;
+  }>;
 }
 
 /**
@@ -848,6 +970,13 @@ export interface ServerToClientEvents {
 
   // User Preferences
   [SERVER_EVENTS.USER_PREFERENCES_UPDATED]: (data: UserPreferencesUpdatedEventData) => void;
+  [SERVER_EVENTS.USER_PREFERENCES_REORDERED]: (data: UserPreferencesReorderedEventData) => void;
+
+  // Conversation Categories
+  [SERVER_EVENTS.CATEGORY_CREATED]: (data: CategoryCreatedEventData) => void;
+  [SERVER_EVENTS.CATEGORY_UPDATED]: (data: CategoryUpdatedEventData) => void;
+  [SERVER_EVENTS.CATEGORY_DELETED]: (data: CategoryDeletedEventData) => void;
+  [SERVER_EVENTS.CATEGORIES_REORDERED]: (data: CategoriesReorderedEventData) => void;
 
   // Notifications
   [SERVER_EVENTS.NOTIFICATION_NEW]: (data: NotificationEventData) => void;

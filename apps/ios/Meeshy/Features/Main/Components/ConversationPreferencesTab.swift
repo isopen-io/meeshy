@@ -126,38 +126,38 @@ struct ConversationPreferencesTab: View {
         .adaptiveOnChange(of: viewModel.didDelete) { _, deleted in if deleted { dismiss() } }
         .adaptiveOnChange(of: viewModel.didLeave) { _, left in if left { dismiss() } }
         .confirmationDialog(
-            (viewModel.prefs.isArchived ?? false) ? "Désarchiver la conversation ?" : "Archiver la conversation ?",
+            (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive.title", defaultValue: "Désarchiver la conversation ?", bundle: .main) : String(localized: "conversation.prefs.archive.title", defaultValue: "Archiver la conversation ?", bundle: .main),
             isPresented: $showArchiveConfirm,
             titleVisibility: .visible
         ) {
-            Button((viewModel.prefs.isArchived ?? false) ? "Désarchiver" : "Archiver",
+            Button((viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Désarchiver", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archiver", bundle: .main),
                    role: (viewModel.prefs.isArchived ?? false) ? .none : .destructive) {
                 viewModel.toggleArchive()
             }
-            Button("Annuler", role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         }
-        .confirmationDialog("Quitter la conversation ?", isPresented: $showLeaveConfirm, titleVisibility: .visible) {
-            Button("Quitter", role: .destructive) {
+        .confirmationDialog(String(localized: "conversation.prefs.leave.title", defaultValue: "Quitter la conversation ?", bundle: .main), isPresented: $showLeaveConfirm, titleVisibility: .visible) {
+            Button(String(localized: "conversation.prefs.leave", defaultValue: "Quitter", bundle: .main), role: .destructive) {
                 Task { await viewModel.leave() }
             }
-            Button("Annuler", role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         } message: {
-            Text("Vous ne recevrez plus de messages. Votre historique restera lisible.")
+            Text(String(localized: "conversation.prefs.leave.message", defaultValue: "Vous ne recevrez plus de messages. Votre historique restera lisible.", bundle: .main))
         }
-        .confirmationDialog("Supprimer pour moi ?", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
-            Button("Supprimer", role: .destructive) {
+        .confirmationDialog(String(localized: "conversation.prefs.delete.title", defaultValue: "Supprimer pour moi ?", bundle: .main), isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button(String(localized: "common.delete", defaultValue: "Supprimer", bundle: .main), role: .destructive) {
                 Task { await viewModel.deleteForMe() }
             }
-            Button("Annuler", role: .cancel) {}
+            Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
         } message: {
-            Text("Cette conversation sera supprimée de votre liste. Les autres membres ne seront pas affectés.")
+            Text(String(localized: "conversation.prefs.delete.message", defaultValue: "Cette conversation sera supprimée de votre liste. Les autres membres ne seront pas affectés.", bundle: .main))
         }
     }
 
     // MARK: - Sections
 
     private var displaySection: some View {
-        settingsSection(title: "Mon affichage", icon: "paintbrush.fill", color: "A855F7") {
+        settingsSection(title: String(localized: "conversation.prefs.section.display", defaultValue: "Mon affichage", bundle: .main), icon: "paintbrush.fill", color: "A855F7") {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     Image(systemName: "pencil")
@@ -165,13 +165,13 @@ struct ConversationPreferencesTab: View {
                         .foregroundColor(Color(hex: "A855F7"))
                         .frame(width: 28, height: 28)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "A855F7").opacity(0.12)))
-                    Text("Nom personnalisé")
+                    Text(String(localized: "conversation.prefs.custom-name", defaultValue: "Nom personnalisé", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
                 }
 
                 HStack(spacing: 6) {
-                    TextField("Donner un surnom à cette conversation...", text: $customNameLocal)
+                    TextField(String(localized: "conversation.prefs.custom-name.placeholder", defaultValue: "Donner un surnom à cette conversation...", bundle: .main), text: $customNameLocal)
                         .textFieldStyle(.plain)
                         .font(.system(size: 15, weight: .medium))
                         .foregroundColor(theme.textPrimary)
@@ -208,12 +208,12 @@ struct ConversationPreferencesTab: View {
             Button {
                 showEmojiPicker = true
             } label: {
-                settingsRow(icon: "heart.fill", iconColor: "A855F7", title: "Réaction") {
+                settingsRow(icon: "heart.fill", iconColor: "A855F7", title: String(localized: "conversation.prefs.reaction", defaultValue: "Réaction", bundle: .main)) {
                     HStack(spacing: 6) {
                         if let r = viewModel.prefs.reaction, !r.isEmpty {
                             Text(r).font(.system(size: 24))
                         } else {
-                            Text("Aucune")
+                            Text(String(localized: "conversation.prefs.reaction.none", defaultValue: "Aucune", bundle: .main))
                                 .font(.system(size: 14))
                                 .foregroundColor(theme.textMuted)
                         }
@@ -238,9 +238,9 @@ struct ConversationPreferencesTab: View {
     }
 
     private var organizationSection: some View {
-        settingsSection(title: "Organisation", icon: "folder.fill", color: "3B82F6") {
+        settingsSection(title: String(localized: "conversation.prefs.section.organization", defaultValue: "Organisation", bundle: .main), icon: "folder.fill", color: "3B82F6") {
             // Pin toggle
-            settingsRow(icon: "pin.fill", iconColor: "3B82F6", title: "Épingler") {
+            settingsRow(icon: "pin.fill", iconColor: "3B82F6", title: String(localized: "conversation.prefs.pin", defaultValue: "Épingler", bundle: .main)) {
                 Toggle("", isOn: Binding(
                     get: { viewModel.prefs.isPinned ?? false },
                     set: { val in viewModel.setPinned(val) }
@@ -259,7 +259,7 @@ struct ConversationPreferencesTab: View {
                         .foregroundColor(Color(hex: "3B82F6"))
                         .frame(width: 28, height: 28)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "3B82F6").opacity(0.12)))
-                    Text("Catégorie")
+                    Text(String(localized: "conversation.prefs.category", defaultValue: "Catégorie", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
                 }
@@ -289,7 +289,7 @@ struct ConversationPreferencesTab: View {
                         .foregroundColor(Color(hex: "3B82F6"))
                         .frame(width: 28, height: 28)
                         .background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: "3B82F6").opacity(0.12)))
-                    Text("Tags")
+                    Text(String(localized: "conversation.prefs.tags", defaultValue: "Tags", bundle: .main))
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundColor(theme.textSecondary)
                 }
@@ -309,8 +309,8 @@ struct ConversationPreferencesTab: View {
     }
 
     private var notificationsSection: some View {
-        settingsSection(title: "Notifications", icon: "bell.fill", color: "FF6B6B") {
-            settingsRow(icon: "bell.slash.fill", iconColor: "FF6B6B", title: "Muet") {
+        settingsSection(title: String(localized: "conversation.prefs.section.notifications", defaultValue: "Notifications", bundle: .main), icon: "bell.fill", color: "FF6B6B") {
+            settingsRow(icon: "bell.slash.fill", iconColor: "FF6B6B", title: String(localized: "conversation.prefs.muted", defaultValue: "Muet", bundle: .main)) {
                 Toggle("", isOn: Binding(
                     get: { viewModel.prefs.isMuted ?? false },
                     set: { val in viewModel.setMuted(val) }
@@ -319,7 +319,7 @@ struct ConversationPreferencesTab: View {
                 .tint(Color(hex: "FF6B6B"))
             }
             Divider().padding(.leading, 54).opacity(0.3)
-            settingsRow(icon: "at", iconColor: "FF6B6B", title: "Mentions seulement") {
+            settingsRow(icon: "at", iconColor: "FF6B6B", title: String(localized: "conversation.prefs.mentions-only", defaultValue: "Mentions seulement", bundle: .main)) {
                 Toggle("", isOn: Binding(
                     get: { viewModel.prefs.mentionsOnly ?? false },
                     set: { val in viewModel.setMentionsOnly(val) }
@@ -333,14 +333,14 @@ struct ConversationPreferencesTab: View {
     }
 
     private var actionsSection: some View {
-        settingsSection(title: "Actions", icon: "ellipsis.circle.fill", color: "6B7280") {
+        settingsSection(title: String(localized: "conversation.prefs.section.actions", defaultValue: "Actions", bundle: .main), icon: "ellipsis.circle.fill", color: "6B7280") {
             Button {
                 showArchiveConfirm = true
             } label: {
                 settingsRow(
                     icon: (viewModel.prefs.isArchived ?? false) ? "archivebox.fill" : "archivebox",
                     iconColor: "F59E0B",
-                    title: (viewModel.prefs.isArchived ?? false) ? "Désarchiver" : "Archiver"
+                    title: (viewModel.prefs.isArchived ?? false) ? String(localized: "conversation.prefs.unarchive", defaultValue: "Désarchiver", bundle: .main) : String(localized: "conversation.prefs.archive", defaultValue: "Archiver", bundle: .main)
                 ) { EmptyView() }
                 .foregroundColor(Color(hex: "F59E0B"))
             }
@@ -351,7 +351,7 @@ struct ConversationPreferencesTab: View {
                 Button {
                     showLeaveConfirm = true
                 } label: {
-                    settingsRow(icon: "rectangle.portrait.and.arrow.right", iconColor: "F97316", title: "Quitter le groupe") {
+                    settingsRow(icon: "rectangle.portrait.and.arrow.right", iconColor: "F97316", title: String(localized: "conversation.prefs.leave-group", defaultValue: "Quitter le groupe", bundle: .main)) {
                         EmptyView()
                     }
                     .foregroundColor(Color(hex: "F97316"))
@@ -363,7 +363,7 @@ struct ConversationPreferencesTab: View {
             Button {
                 showDeleteConfirm = true
             } label: {
-                settingsRow(icon: "trash.fill", iconColor: "F87171", title: "Supprimer pour moi") {
+                settingsRow(icon: "trash.fill", iconColor: "F87171", title: String(localized: "conversation.prefs.delete-for-me", defaultValue: "Supprimer pour moi", bundle: .main)) {
                     EmptyView()
                 }
                 .foregroundColor(Color(hex: "F87171"))

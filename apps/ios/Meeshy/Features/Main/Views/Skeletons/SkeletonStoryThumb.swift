@@ -79,7 +79,7 @@ struct SkeletonStoryTrayRow: View {
             .padding(.vertical, 8)
         }
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel(Text("Chargement des stories"))
+        .accessibilityLabel(Text(String(localized: "skeleton.stories.loading", defaultValue: "Chargement des stories", bundle: .main)))
     }
 }
 

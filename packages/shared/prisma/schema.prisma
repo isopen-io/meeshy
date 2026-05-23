@@ -1808,6 +1808,12 @@ model UserConversationPreferences {
   /// Emoji reaction on conversation
   reaction String?
 
+  /// Monotonic version for optimistic-concurrency resolution between
+  /// client optimistic updates and socket-broadcast events. Server
+  /// increments on every successful upsert; clients drop incoming
+  /// payloads whose `version` is <= their local snapshot.
+  version Int @default(0)
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 

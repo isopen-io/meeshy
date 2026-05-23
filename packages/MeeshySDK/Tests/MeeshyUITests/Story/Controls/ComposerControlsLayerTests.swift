@@ -25,15 +25,10 @@ final class ComposerControlsLayerTests: XCTestCase {
         XCTAssertNil(vm.activeTool)
     }
 
-    func test_tapFABContenu_setsViewModelActiveTool_whenTileTapped() {
-        // Behavior contract: tap FAB → tap tile → viewModel.activeTool == tool.
-        // Verified by simulating the callback chain manually since we don't have
-        // a UI test harness for SwiftUI gestures in unit tests.
+    func test_tapFABMedia_setsViewModelActiveTool() {
         let vm = makeVM()
         var sm = BandStateMachine()
-        sm.tapFAB(.contenu)
-        sm.tapTile(.media)
-        // The layer's onTapTile callback does:  bandStateMachine.tapTile(tool); viewModel.selectTool(tool)
+        sm.tapFAB(.media)
         vm.selectTool(.media)
         XCTAssertEqual(vm.activeTool, .media)
         XCTAssertEqual(sm.state, .toolPanel(.media))
@@ -53,10 +48,8 @@ final class ComposerControlsLayerTests: XCTestCase {
 
     func test_slideChange_resetsBandStateMachine() {
         // Behavior contract: when currentSlideIndex changes, bandStateMachine.reset() runs.
-        // Direct unit test of the reset method (the .onChange wiring is covered by snapshot/UI
-        // tests; here we verify the reset itself is correct).
         var sm = BandStateMachine()
-        sm.tapFAB(.contenu)
+        sm.tapFAB(.media)
         sm.openFormatPanel(.text, id: "txt-1")
         sm.reset()
         XCTAssertEqual(sm.state, .hidden)

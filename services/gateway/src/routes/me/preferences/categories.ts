@@ -15,6 +15,39 @@ import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { logError } from '../../../utils/logger';
 import { errorResponseSchema } from '@meeshy/shared/types/api-schemas';
 import { createUnifiedAuthMiddleware } from '../../../middleware/auth';
+import { SERVER_EVENTS } from '@meeshy/shared/types/socketio-events';
+import type {
+  CategoriesReorderedEventData,
+  CategoryCreatedEventData,
+  CategoryDeletedEventData,
+  CategoryUpdatedEventData,
+  UserConversationCategoryPayload,
+} from '@meeshy/shared/types/socketio-events';
+import { broadcastToUser } from '../../../utils/socket-broadcast';
+
+interface CategoryRow {
+  id: string;
+  userId: string;
+  name: string;
+  color: string | null;
+  icon: string | null;
+  order: number;
+  isExpanded: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const toCategoryPayload = (row: CategoryRow): UserConversationCategoryPayload => ({
+  id: row.id,
+  userId: row.userId,
+  name: row.name,
+  color: row.color,
+  icon: row.icon,
+  order: row.order,
+  isExpanded: row.isExpanded,
+  createdAt: row.createdAt.toISOString(),
+  updatedAt: row.updatedAt.toISOString(),
+});
 
 interface CategoryBody {
   name: string;
@@ -355,6 +388,12 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
           }
         });
 
+        const createdPayload: CategoryCreatedEventData = {
+          userId,
+          category: toCategoryPayload(category as CategoryRow),
+        };
+        broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORY_CREATED, createdPayload);
+
         return reply.send({
           success: true,
           data: category
@@ -445,6 +484,12 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
           data: updateData
         });
 
+        const updatedPayload: CategoryUpdatedEventData = {
+          userId,
+          category: toCategoryPayload(updated as CategoryRow),
+        };
+        broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORY_UPDATED, updatedPayload);
+
         return reply.send({
           success: true,
           data: updated
@@ -534,6 +579,12 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
           })
         ]);
 
+        const deletedPayload: CategoryDeletedEventData = {
+          userId,
+          categoryId,
+        };
+        broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORY_DELETED, deletedPayload);
+
         return reply.send({
           success: true,
           message: 'Category deleted successfully'
@@ -596,6 +647,12 @@ export async function categoriesRoutes(fastify: FastifyInstance) {
             })
           )
         );
+
+        const reorderedPayload: CategoriesReorderedEventData = {
+          userId,
+          updates: updates.map(u => ({ categoryId: u.categoryId, order: u.order })),
+        };
+        broadcastToUser(fastify, userId, SERVER_EVENTS.CATEGORIES_REORDERED, reorderedPayload);
 
         return reply.send({
           success: true,

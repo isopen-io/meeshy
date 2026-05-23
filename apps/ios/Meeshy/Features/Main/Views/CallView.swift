@@ -105,8 +105,8 @@ struct CallView: View {
                                         .fill(.ultraThinMaterial)
                                 )
                         }
-                        .accessibilityLabel("Reduire l'appel")
-                        .accessibilityHint("Garde l'appel en cours dans une banniere flottante")
+                        .accessibilityLabel(String(localized: "call.minimize", defaultValue: "Reduire l'appel", bundle: .main))
+                        .accessibilityHint(String(localized: "call.minimize.hint", defaultValue: "Garde l'appel en cours dans une banniere flottante", bundle: .main))
                         Spacer()
                     }
                     Spacer()
@@ -167,14 +167,14 @@ struct CallView: View {
                 .padding(.bottom, 24)
 
             // Name
-            Text(callManager.remoteUsername ?? "Inconnu")
+            Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
                 .padding(.bottom, 8)
 
             // Status text
-            Text("Appel en cours...")
+            Text(String(localized: "call.outgoing.ringing", defaultValue: "Appel en cours...", bundle: .main))
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(.white.opacity(0.7))
                 .padding(.bottom, 8)
@@ -205,7 +205,7 @@ struct CallView: View {
             pulsingAvatar
                 .padding(.bottom, 24)
 
-            Text(callManager.remoteUsername ?? "Inconnu")
+            Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
                 .shadow(color: .black.opacity(0.3), radius: 4, y: 2)
@@ -214,7 +214,7 @@ struct CallView: View {
             HStack(spacing: 8) {
                 ProgressView()
                     .tint(MeeshyColors.indigo400)
-                Text("Connexion...")
+                Text(String(localized: "call.connecting", defaultValue: "Connexion...", bundle: .main))
                     .font(.system(size: 16, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
             }
@@ -278,7 +278,7 @@ struct CallView: View {
             avatarCircle(size: 120)
                 .padding(.bottom, 8)
 
-            Text(callManager.remoteUsername ?? "Inconnu")
+            Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(size: 28, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary)
 
@@ -299,13 +299,13 @@ struct CallView: View {
             // Status indicators
             HStack(spacing: 12) {
                 if callManager.isMuted {
-                    statusPill(icon: "mic.slash.fill", text: "Micro coupe", color: "FF2E63")
+                    statusPill(icon: "mic.slash.fill", text: String(localized: "call.status.muted", defaultValue: "Micro coupe", bundle: .main), color: "FF2E63")
                 }
                 if callManager.isSpeaker {
-                    statusPill(icon: "speaker.wave.3.fill", text: "Haut-parleur", color: "08D9D6")
+                    statusPill(icon: "speaker.wave.3.fill", text: String(localized: "call.status.speaker", defaultValue: "Haut-parleur", bundle: .main), color: "08D9D6")
                 }
                 if isConnectionDegraded {
-                    statusPill(icon: "wifi.exclamationmark", text: "Connexion instable", color: "FBBF24")
+                    statusPill(icon: "wifi.exclamationmark", text: String(localized: "call.status.unstable", defaultValue: "Connexion instable", bundle: .main), color: "FBBF24")
                 }
             }
         }
@@ -334,10 +334,10 @@ struct CallView: View {
 
     private var connectionQualityAccessibilityLabel: String {
         switch callManager.connectionQuality {
-        case .connected: return "Connexion bonne"
-        case .reconnecting, .checking, .new: return "Reconnexion"
-        case .disconnected, .failed, .closed: return "Connexion perdue"
-        default: return "Connexion en cours"
+        case .connected: return String(localized: "call.quality.good", defaultValue: "Connexion bonne", bundle: .main)
+        case .reconnecting, .checking, .new: return String(localized: "call.quality.reconnecting", defaultValue: "Reconnexion", bundle: .main)
+        case .disconnected, .failed, .closed: return String(localized: "call.quality.lost", defaultValue: "Connexion perdue", bundle: .main)
+        default: return String(localized: "call.quality.inProgress", defaultValue: "Connexion en cours", bundle: .main)
         }
     }
 
@@ -363,7 +363,7 @@ struct CallView: View {
                         VStack(spacing: 12) {
                             ProgressView()
                                 .tint(.white.opacity(0.5))
-                            Text("Connexion video...")
+                            Text(String(localized: "call.video.connecting", defaultValue: "Connexion video...", bundle: .main))
                                 .font(.system(size: 14, weight: .medium))
                                 .foregroundColor(.white.opacity(0.4))
                         }
@@ -481,7 +481,7 @@ struct CallView: View {
             avatarCircle(size: 100)
                 .opacity(0.6)
 
-            Text(callManager.remoteUsername ?? "Inconnu")
+            Text(callManager.remoteUsername ?? String(localized: "call.unknown", defaultValue: "Inconnu", bundle: .main))
                 .font(.system(size: 24, weight: .bold, design: .rounded))
                 .foregroundColor(theme.textPrimary.opacity(0.7))
 
@@ -516,7 +516,7 @@ struct CallView: View {
                     color: callManager.isMuted ? "FF2E63" : "FFFFFF",
                     bgColor: callManager.isMuted ? "FF2E63" : "FFFFFF",
                     isActive: callManager.isMuted,
-                    label: callManager.isMuted ? "Réactiver le micro" : "Couper le micro"
+                    label: callManager.isMuted ? String(localized: "call.control.unmute", defaultValue: "Réactiver le micro", bundle: .main) : String(localized: "call.control.mute", defaultValue: "Couper le micro", bundle: .main)
                 ) {
                     callManager.toggleMute()
                 }
@@ -527,7 +527,7 @@ struct CallView: View {
                     color: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
                     bgColor: callManager.isSpeaker ? "08D9D6" : "FFFFFF",
                     isActive: callManager.isSpeaker,
-                    label: callManager.isSpeaker ? "Désactiver le haut-parleur" : "Activer le haut-parleur"
+                    label: callManager.isSpeaker ? String(localized: "call.control.speakerOff", defaultValue: "Désactiver le haut-parleur", bundle: .main) : String(localized: "call.control.speakerOn", defaultValue: "Activer le haut-parleur", bundle: .main)
                 ) {
                     callManager.toggleSpeaker()
                 }
@@ -538,7 +538,7 @@ struct CallView: View {
                     color: hasActiveEffects ? "6366F1" : "FFFFFF",
                     bgColor: hasActiveEffects ? "6366F1" : "FFFFFF",
                     isActive: showEffectsToolbar || hasActiveEffects,
-                    label: "Effets"
+                    label: String(localized: "call.control.effects", defaultValue: "Effets", bundle: .main)
                 ) {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         showEffectsToolbar.toggle()
@@ -553,7 +553,7 @@ struct CallView: View {
                         color: "FFFFFF",
                         bgColor: "FFFFFF",
                         isActive: false,
-                        label: "Basculer la caméra avant/arrière"
+                        label: String(localized: "call.control.flipCamera", defaultValue: "Basculer la caméra avant/arrière", bundle: .main)
                     ) {
                         callManager.switchCamera()
                     }
@@ -569,7 +569,7 @@ struct CallView: View {
                         color: "A855F7",
                         bgColor: "A855F7",
                         isActive: !callManager.isVideoEnabled,
-                        label: callManager.isVideoEnabled ? "Désactiver la vidéo" : "Activer la vidéo"
+                        label: callManager.isVideoEnabled ? String(localized: "call.control.videoOff", defaultValue: "Désactiver la vidéo", bundle: .main) : String(localized: "call.control.videoOn", defaultValue: "Activer la vidéo", bundle: .main)
                     ) {
                         callManager.toggleVideo()
                     }
@@ -638,7 +638,7 @@ struct CallView: View {
         HStack(spacing: 6) {
             Image(systemName: callManager.isVideoEnabled ? "video.fill" : "phone.fill")
                 .font(.system(size: 12, weight: .semibold))
-            Text(callManager.isVideoEnabled ? "Appel video" : "Appel audio")
+            Text(callManager.isVideoEnabled ? String(localized: "call.type.video", defaultValue: "Appel video", bundle: .main) : String(localized: "call.type.audio", defaultValue: "Appel audio", bundle: .main))
                 .font(.system(size: 13, weight: .semibold))
         }
         .foregroundColor(MeeshyColors.indigo400)
@@ -700,13 +700,13 @@ struct CallView: View {
                         .font(.system(size: 24, weight: .medium))
                         .foregroundColor(hasActiveEffects ? MeeshyColors.indigo500 : .white.opacity(0.9))
                 }
-                Text("Filtres")
+                Text(String(localized: "call.filters", defaultValue: "Filtres", bundle: .main))
                     .font(.system(size: 11, weight: .medium))
                     .foregroundColor(.white.opacity(0.7))
             }
         }
         .pressable()
-        .accessibilityLabel("Filtres video")
+        .accessibilityLabel(String(localized: "call.filters.a11y", defaultValue: "Filtres video", bundle: .main))
     }
 
     private var endCallButton: some View {
@@ -731,7 +731,7 @@ struct CallView: View {
             }
         }
         .pressable()
-        .accessibilityLabel("Raccrocher")
+        .accessibilityLabel(String(localized: "call.end", defaultValue: "Raccrocher", bundle: .main))
     }
 
     private func statusPill(icon: String, text: String, color: String) -> some View {

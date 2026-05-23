@@ -217,7 +217,7 @@ extension UniversalComposerBar {
                 .foregroundColor(Color(hex: "9B59B6"))
 
             VStack(alignment: .leading, spacing: 2) {
-                Text("Contenu du presse-papier")
+                Text(String(localized: "composer.clipboard.title", defaultValue: "Contenu du presse-papier", bundle: .main))
                     .font(.system(size: 11, weight: .bold))
                     .foregroundColor(style == .dark ? .white : theme.textPrimary)
 
@@ -226,7 +226,7 @@ extension UniversalComposerBar {
                     .foregroundColor(style == .dark ? .white.opacity(0.6) : theme.textSecondary)
                     .lineLimit(2)
 
-                Text("\(clip.charCount) caract\u{00E8}res")
+                Text(String(localized: "composer.clipboard.charCount", defaultValue: "\(clip.charCount) caract\u{00E8}res", bundle: .main))
                     .font(.system(size: 9, weight: .medium))
                     .foregroundColor(Color(hex: "9B59B6"))
             }

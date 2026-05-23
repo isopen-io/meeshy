@@ -231,7 +231,7 @@ struct PostDetailView: View {
             Button {
                 Task { await viewModel.loadMoreComments(postId) }
             } label: {
-                Text("Charger plus")
+                Text(String(localized: "feed.post.detail.load_more", defaultValue: "Charger plus", bundle: .main))
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(MeeshyColors.indigo500)
             }
@@ -394,12 +394,12 @@ struct PostDetailView: View {
                 Button {
                     HapticFeedback.light()
                 } label: {
-                    Label("Copier le lien", systemImage: "link")
+                    Label(String(localized: "feed.post.detail.copy_link", defaultValue: "Copier le lien", bundle: .main), systemImage: "link")
                 }
                 Button(role: .destructive) {
                     HapticFeedback.light()
                 } label: {
-                    Label("Signaler", systemImage: "exclamationmark.triangle")
+                    Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
                 }
             } label: {
                 Image(systemName: "ellipsis")
@@ -429,7 +429,7 @@ struct PostDetailView: View {
                     onViewProfile: { selectedProfileUser = .from(feedPost: post) },
                     onMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
                     contextMenuItems: [
-                        AvatarContextMenuItem(label: "Voir le profil", icon: "person.fill") {
+                        AvatarContextMenuItem(label: String(localized: "feed.post.detail.view_profile", defaultValue: "Voir le profil", bundle: .main), icon: "person.fill") {
                             selectedProfileUser = .from(feedPost: post)
                         }
                     ]
@@ -494,14 +494,14 @@ struct PostDetailView: View {
                     Text(truncation.text + "... ")
                         .font(.system(size: 16))
                         .foregroundColor(theme.textPrimary)
-                    + Text("voir plus")
+                    + Text(String(localized: "feed.post.detail.see_more", defaultValue: "voir plus", bundle: .main))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(Color(hex: accentColor))
                 } else if truncation.isTruncated && isTextExpanded {
                     Text(effectiveContent + " ")
                         .font(.system(size: 16))
                         .foregroundColor(theme.textPrimary)
-                    + Text("voir moins")
+                    + Text(String(localized: "feed.post.detail.see_less", defaultValue: "voir moins", bundle: .main))
                         .font(.system(size: 16, weight: .semibold))
                         .foregroundColor(Color(hex: accentColor))
                 } else {
@@ -954,7 +954,7 @@ struct PostDetailView: View {
                         .foregroundColor(Color(hex: media.thumbnailColor))
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(media.fileName ?? "Document")
+                    Text(media.fileName ?? String(localized: "feed.post.detail.document", defaultValue: "Document", bundle: .main))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                         .lineLimit(1)
@@ -964,7 +964,7 @@ struct PostDetailView: View {
                         }
                         if let pages = media.pageCount {
                             Text("\u{2022}").foregroundColor(theme.textMuted)
-                            Text("\(pages) pages").font(.system(size: 12)).foregroundColor(theme.textMuted)
+                            Text("\(pages) \(String(localized: "feed.post.detail.pages", defaultValue: "pages", bundle: .main))").font(.system(size: 12)).foregroundColor(theme.textMuted)
                         }
                     }
                 }
@@ -991,7 +991,7 @@ struct PostDetailView: View {
                         .foregroundColor(Color(hex: media.thumbnailColor))
                 }
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(media.locationName ?? "Location")
+                    Text(media.locationName ?? String(localized: "feed.post.detail.location", defaultValue: "Location", bundle: .main))
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(theme.textPrimary)
                     if let lat = media.latitude, let lon = media.longitude {
@@ -1104,7 +1104,7 @@ struct PostDetailView: View {
 
     private var commentsHeader: some View {
         HStack(spacing: 8) {
-            Text("Commentaires")
+            Text(String(localized: "feed.post.detail.comments", defaultValue: "Commentaires", bundle: .main))
                 .font(.system(size: 14, weight: .bold))
                 .foregroundColor(theme.textPrimary)
 
