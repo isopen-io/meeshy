@@ -292,7 +292,7 @@ struct ConversationView: View {
     }
 
     var conversationSection: ConversationSection? {
-        guard let sectionId = conversation?.sectionId else { return nil }
+        guard let sectionId = conversation?.userState.sectionId else { return nil }
         // ConversationSection.allSections should be accessed via a fast dictionary in production apps,
         // but since we only have the Array here, we can lazily build a static dictionary.
         return Self.sectionLookup[sectionId]
@@ -325,7 +325,7 @@ struct ConversationView: View {
         self.anonymousSession = anonymousSession
         _viewModel = StateObject(wrappedValue: ConversationViewModel(
             conversationId: conversation?.id ?? "",
-            unreadCount: conversation?.unreadCount ?? 0,
+            unreadCount: conversation?.userState.unreadCount ?? 0,
             isDirect: conversation?.type == .direct,
             participantUserId: conversation?.participantUserId,
             memberJoinedAt: conversation?.currentUserJoinedAt,

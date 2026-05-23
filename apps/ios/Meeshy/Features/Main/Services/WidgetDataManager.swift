@@ -56,7 +56,7 @@ final class WidgetDataManager: NotificationWidgetSink {
 
     func publishConversations(_ conversations: [MeeshyConversation]) {
         let widgetConversations = conversations
-            .sorted { ($0.isPinned ? 0 : 1, $0.lastMessageAt) < ($1.isPinned ? 0 : 1, $1.lastMessageAt) }
+            .sorted { ($0.userState.isPinned ? 0 : 1, $0.lastMessageAt) < ($1.userState.isPinned ? 0 : 1, $1.lastMessageAt) }
             .reversed()
             .prefix(10)
             .map { conv in
@@ -66,8 +66,8 @@ final class WidgetDataManager: NotificationWidgetSink {
                     contactAvatar: conv.type == .group ? "person.3.fill" : "person.circle.fill",
                     lastMessage: formatLastMessage(conv),
                     timestamp: conv.lastMessageAt,
-                    isUnread: conv.unreadCount > 0,
-                    isPinned: conv.isPinned,
+                    isUnread: conv.userState.unreadCount > 0,
+                    isPinned: conv.userState.isPinned,
                     accentColor: conv.accentColor
                 )
             }
@@ -81,7 +81,7 @@ final class WidgetDataManager: NotificationWidgetSink {
 
     func publishFavoriteContacts(_ conversations: [MeeshyConversation]) {
         let favorites = conversations
-            .filter { $0.isPinned && $0.type == .direct }
+            .filter { $0.userState.isPinned && $0.type == .direct }
             .prefix(8)
             .map { conv in
                 WidgetFavoriteContact(
@@ -112,7 +112,7 @@ final class WidgetDataManager: NotificationWidgetSink {
     func updateConversations(_ conversations: [MeeshyConversation]) {
         publishConversations(conversations)
         publishFavoriteContacts(conversations)
-        let totalUnread = conversations.reduce(0) { $0 + $1.unreadCount }
+        let totalUnread = conversations.reduce(0) { $0 + $1.userState.unreadCount }
         publishUnreadCount(totalUnread)
         reloadTimelines()
     }

@@ -389,8 +389,8 @@ extension iPadRootView {
     func navigateToConversationById(_ conversationId: String, highlightMessageId: String? = nil, ensureUnread: Bool = false) {
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
             var conv = existing
-            if ensureUnread && conv.unreadCount == 0 {
-                conv.unreadCount = 1
+            if ensureUnread && conv.userState.unreadCount == 0 {
+                conv.userState.unreadCount = 1
             }
             if let messageId = highlightMessageId {
                 router.pendingHighlightMessageId = messageId
@@ -409,8 +409,8 @@ extension iPadRootView {
                 do {
                     let apiConv = try await ConversationService.shared.getById(conversationId)
                     var conv = apiConv.toConversation(currentUserId: currentUserId)
-                    if ensureUnread && conv.unreadCount == 0 {
-                        conv.unreadCount = 1
+                    if ensureUnread && conv.userState.unreadCount == 0 {
+                        conv.userState.unreadCount = 1
                     }
                     if let messageId = highlightMessageId {
                         router.pendingHighlightMessageId = messageId

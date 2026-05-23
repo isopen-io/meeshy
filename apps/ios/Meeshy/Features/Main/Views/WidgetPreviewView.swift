@@ -250,8 +250,8 @@ struct WidgetPreviewView: View {
                     }
                 }
 
-                if conv.unreadCount > 0 {
-                    Text("\(conv.unreadCount)")
+                if conv.userState.unreadCount > 0 {
+                    Text("\(conv.userState.unreadCount)")
                         .font(.system(size: 11, weight: .bold))
                         .foregroundColor(.white)
                         .frame(minWidth: 20, minHeight: 20)

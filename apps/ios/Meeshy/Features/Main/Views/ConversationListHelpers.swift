@@ -140,13 +140,13 @@ struct ConversationPreviewView: View {
                             .foregroundColor(isDark ? Color(hex: "EEF2FF") : Color(hex: "1E1B4B"))
                             .lineLimit(1)
 
-                        if conversation.isPinned {
+                        if conversation.userState.isPinned {
                             Image(systemName: "pin.fill")
                                 .font(.system(size: 9))
                                 .foregroundColor(MeeshyColors.error)
                         }
 
-                        if conversation.isMuted {
+                        if conversation.userState.isMuted {
                             Image(systemName: "bell.slash.fill")
                                 .font(.system(size: 9))
                                 .foregroundColor(isDark ? Color(hex: "818CF8").opacity(0.5) : Color(hex: "6366F1").opacity(0.4))
@@ -175,7 +175,7 @@ struct ConversationPreviewView: View {
 
                 Spacer()
 
-                if conversation.unreadCount > 0 {
+                if conversation.userState.unreadCount > 0 {
                     ZStack {
                         Circle()
                             .fill(
@@ -187,7 +187,7 @@ struct ConversationPreviewView: View {
                             )
                             .frame(width: 26, height: 26)
 
-                        Text("\(min(conversation.unreadCount, 99))")
+                        Text("\(min(conversation.userState.unreadCount, 99))")
                             .font(.system(size: 11, weight: .bold))
                             .foregroundColor(.white)
                     }

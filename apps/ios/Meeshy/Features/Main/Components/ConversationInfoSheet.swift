@@ -361,7 +361,7 @@ struct ConversationInfoSheet: View {
 
     @ViewBuilder
     private var muteIndicator: some View {
-        if conversation.isMuted {
+        if conversation.userState.isMuted {
             HStack(spacing: 4) {
                 Image(systemName: "bell.slash.fill")
                     .font(.system(size: 10))

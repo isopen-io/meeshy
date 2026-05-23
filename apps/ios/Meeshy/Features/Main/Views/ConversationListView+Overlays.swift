@@ -15,10 +15,10 @@ extension ConversationListView {
             Task { await conversationViewModel.togglePin(for: conversation.id) }
         } label: {
             Label(
-                conversation.isPinned
+                conversation.userState.isPinned
                     ? String(localized: "context.unpin", defaultValue: "D\u{00e9}s\u{00e9}pingler")
                     : String(localized: "context.pin", defaultValue: "\u{00c9}pingler"),
-                systemImage: conversation.isPinned ? "pin.slash.fill" : "pin.fill"
+                systemImage: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill"
             )
         }
 
@@ -28,17 +28,17 @@ extension ConversationListView {
             Task { await conversationViewModel.toggleMute(for: conversation.id) }
         } label: {
             Label(
-                conversation.isMuted
+                conversation.userState.isMuted
                     ? String(localized: "context.unmute", defaultValue: "R\u{00e9}activer les notifications")
                     : String(localized: "context.mute", defaultValue: "Mettre en silence"),
-                systemImage: conversation.isMuted ? "bell.fill" : "bell.slash.fill"
+                systemImage: conversation.userState.isMuted ? "bell.fill" : "bell.slash.fill"
             )
         }
 
         Divider()
 
         // Mark as read/unread
-        if conversation.unreadCount > 0 {
+        if conversation.userState.unreadCount > 0 {
             Button {
                 HapticFeedback.light()
                 Task { await conversationViewModel.markAsRead(conversationId: conversation.id) }
@@ -82,7 +82,7 @@ extension ConversationListView {
                     Text(emoji)
                 }
             }
-            if conversation.reaction != nil {
+            if conversation.userState.reaction != nil {
                 Divider()
                 Button(role: .destructive) {
                     HapticFeedback.light()
@@ -93,10 +93,10 @@ extension ConversationListView {
             }
         } label: {
             Label(
-                conversation.reaction != nil
-                    ? String(localized: "context.favorite_active", defaultValue: "Favori \(conversation.reaction!)")
+                conversation.userState.reaction != nil
+                    ? String(localized: "context.favorite_active", defaultValue: "Favori \(conversation.userState.reaction!)")
                     : String(localized: "context.favorite", defaultValue: "Favori"),
-                systemImage: conversation.reaction != nil ? "star.fill" : "star"
+                systemImage: conversation.userState.reaction != nil ? "star.fill" : "star"
             )
         }
 
@@ -105,7 +105,7 @@ extension ConversationListView {
         // Move to category
         Menu {
             ForEach(conversationViewModel.userCategories) { category in
-                let isCurrentCategory = conversation.sectionId == category.id
+                let isCurrentCategory = conversation.userState.sectionId == category.id
                 Button {
                     HapticFeedback.light()
                     if isCurrentCategory {

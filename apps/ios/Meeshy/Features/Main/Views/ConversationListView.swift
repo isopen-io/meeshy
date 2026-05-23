@@ -366,8 +366,8 @@ struct ConversationListView: View {
         let isLocked = lockManager.isLocked(conversation.id)
         return [
             SwipeAction(
-                icon: conversation.isPinned ? "pin.slash.fill" : "pin.fill",
-                label: conversation.isPinned
+                icon: conversation.userState.isPinned ? "pin.slash.fill" : "pin.fill",
+                label: conversation.userState.isPinned
                     ? String(localized: "swipe.unpin", defaultValue: "D\u{00e9}s\u{00e9}pingler")
                     : String(localized: "swipe.pin", defaultValue: "\u{00c9}pingler"),
                 color: Color(hex: "3B82F6")
@@ -375,8 +375,8 @@ struct ConversationListView: View {
                 Task { await conversationViewModel.togglePin(for: conversation.id) }
             },
             SwipeAction(
-                icon: conversation.isMuted ? "bell.fill" : "bell.slash.fill",
-                label: conversation.isMuted
+                icon: conversation.userState.isMuted ? "bell.fill" : "bell.slash.fill",
+                label: conversation.userState.isMuted
                     ? String(localized: "swipe.unmute", defaultValue: "Son")
                     : String(localized: "swipe.mute", defaultValue: "Silence"),
                 color: Color(hex: "6B7280")
@@ -405,7 +405,7 @@ struct ConversationListView: View {
 
     private func trailingSwipeActions(for conversation: Conversation) -> [SwipeAction] {
         let isArchived = !conversation.isActive
-        let isRead = conversation.unreadCount == 0
+        let isRead = conversation.userState.unreadCount == 0
         var actions: [SwipeAction] = [
             SwipeAction(
                 icon: isArchived ? "tray.and.arrow.up.fill" : "archivebox.fill",

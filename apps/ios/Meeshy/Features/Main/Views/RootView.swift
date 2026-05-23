@@ -863,8 +863,8 @@ struct RootView: View {
         // 1. Fast path: in-memory list (post-load happy path)
         if let existing = conversationViewModel.conversations.first(where: { $0.id == conversationId }) {
             var conv = existing
-            if ensureUnread && conv.unreadCount == 0 {
-                conv.unreadCount = 1
+            if ensureUnread && conv.userState.unreadCount == 0 {
+                conv.userState.unreadCount = 1
             }
             router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
             return
@@ -884,7 +884,7 @@ struct RootView: View {
             }()
             if let cached = cachedConversations?.first(where: { $0.id == conversationId }) {
                 var c = cached
-                if ensureUnread && c.unreadCount == 0 { c.unreadCount = 1 }
+                if ensureUnread && c.userState.unreadCount == 0 { c.userState.unreadCount = 1 }
                 router.navigateToConversation(c, highlightMessageId: highlightMessageId)
                 // Background refresh — keeps the displayed conversation in sync
                 // without blocking navigation. Failures are silent: the user
@@ -921,8 +921,8 @@ struct RootView: View {
                 do {
                     let apiConv = try await ConversationService.shared.getById(conversationId)
                     var conv = apiConv.toConversation(currentUserId: currentUserId)
-                    if ensureUnread && conv.unreadCount == 0 {
-                        conv.unreadCount = 1
+                    if ensureUnread && conv.userState.unreadCount == 0 {
+                        conv.userState.unreadCount = 1
                     }
                     router.navigateToConversation(conv, highlightMessageId: highlightMessageId)
                     return
