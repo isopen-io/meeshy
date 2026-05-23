@@ -55,8 +55,6 @@ import { userRoutes } from './routes/users';
 import meRoutes from './routes/me';
 import conversationPreferencesRoutes from './routes/conversation-preferences';
 import communityPreferencesRoutes from './routes/community-preferences';
-import conversationEncryptionRoutes from './routes/conversation-encryption';
-import encryptionKeysRoutes from './routes/encryption-keys';
 import signalProtocolRoutes from './routes/signal-protocol';
 import { translationRoutes } from './routes/translation-non-blocking';
 import { translationRoutes as translationBlockingRoutes } from './routes/translation';
@@ -987,16 +985,6 @@ All endpoints are prefixed with \`/api/v1\`. Breaking changes will be introduced
 
     // Register community preferences routes with /api prefix
     await this.server.register(communityPreferencesRoutes, { prefix: API_PREFIX });
-
-    // Register conversation encryption routes with /api prefix
-    // TEMPORAIREMENT COMMENTÉ - timeout au démarrage
-    // TODO: Investiguer et corriger le timeout dans conversation-encryption.ts
-    // await this.server.register(conversationEncryptionRoutes, { prefix: '' });
-
-    // Register encryption key exchange routes with /api prefix
-    // TEMPORAIREMENT COMMENTÉ - timeout au démarrage (getEncryptionService prend trop de temps)
-    // TODO: Investiguer et corriger le timeout dans encryption-keys.ts
-    // await this.server.register(encryptionKeysRoutes, { prefix: '' });
 
     // Register Signal Protocol routes for E2EE key generation
     await this.server.register(signalProtocolRoutes, { prefix: API_PREFIX });
