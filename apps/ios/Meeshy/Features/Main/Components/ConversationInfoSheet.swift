@@ -36,6 +36,12 @@ struct ConversationInfoSheet: View {
     @State private var showShareSheet = false
     @State private var showLeaveConfirmation = false
     @State private var showSecurityVerification = false
+    @State private var encryptionStatus: E2EAPI.ConversationEncryptionStatus?
+    @State private var isLoadingEncryptionStatus = false
+    @State private var isEnablingEncryption = false
+    @State private var showEnableEncryptionSheet = false
+    @State private var selectedEncryptionMode: E2EAPI.ConversationEncryptionMode = .e2ee
+    @State private var encryptionError: String?
 
     private static let logger = Logger(subsystem: "me.meeshy.app", category: "conversation-info")
 
@@ -908,45 +914,187 @@ struct ConversationInfoSheet: View {
 
     @ViewBuilder
     private var securitySection: some View {
-        if conversation.encryptionMode != nil {
-            Button {
-                HapticFeedback.light()
-                showSecurityVerification = true
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "lock.fill")
-                        .font(.system(size: 16))
-                        .foregroundColor(Color(hex: "4ECDC4"))
-                        .frame(width: 24)
-                    
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text("Chiffrement de bout en bout")
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundColor(theme.textPrimary)
+        let isEnabled = encryptionStatus?.isEncrypted == true || conversation.encryptionMode != nil
+        let modeLabel = encryptionStatus?.mode?.rawValue ?? conversation.encryptionMode
 
-                        Text("Appuyez pour vérifier le numéro de sécurité")
-                            .font(.caption)
+        Group {
+            if isEnabled {
+                Button {
+                    HapticFeedback.light()
+                    showSecurityVerification = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "lock.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(Color(hex: "4ECDC4"))
+                            .frame(width: 24)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Chiffrement actif — \(modeLabel?.uppercased() ?? "E2EE")")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(theme.textPrimary)
+
+                            Text("Appuyez pour vérifier le numéro de sécurité")
+                                .font(.caption)
+                                .foregroundColor(theme.textMuted)
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "chevron.right")
+                            .font(.system(size: 12, weight: .semibold))
                             .foregroundColor(theme.textMuted)
-                            .lineLimit(1)
                     }
-                    
-                    Spacer()
-                    
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(theme.textMuted)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(isDark ? theme.textPrimary.opacity(0.05) : theme.textPrimary.opacity(0.03))
+                    )
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 14)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(isDark ? theme.textPrimary.opacity(0.05) : theme.textPrimary.opacity(0.03))
-                )
+            } else {
+                Button {
+                    HapticFeedback.light()
+                    selectedEncryptionMode = .e2ee
+                    showEnableEncryptionSheet = true
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "lock.shield")
+                            .font(.system(size: 16))
+                            .foregroundColor(Color(hex: accentColor))
+                            .frame(width: 24)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Activer le chiffrement")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(theme.textPrimary)
+
+                            Text("Conversation non chiffrée — activation irréversible")
+                                .font(.caption)
+                                .foregroundColor(theme.textMuted)
+                                .lineLimit(1)
+                        }
+
+                        Spacer()
+
+                        if isLoadingEncryptionStatus {
+                            ProgressView().scaleEffect(0.7)
+                        } else {
+                            Image(systemName: "chevron.right")
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(theme.textMuted)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(isDark ? theme.textPrimary.opacity(0.05) : theme.textPrimary.opacity(0.03))
+                    )
+                }
+                .disabled(isLoadingEncryptionStatus)
             }
-            .padding(.horizontal, 20)
-            .padding(.bottom, 12)
-            .opacity(appearAnimation ? 1 : 0)
-            .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appearAnimation)
+        }
+        .padding(.horizontal, 20)
+        .padding(.bottom, 12)
+        .opacity(appearAnimation ? 1 : 0)
+        .animation(.spring(response: 0.5, dampingFraction: 0.8).delay(0.04), value: appearAnimation)
+        .task {
+            await loadEncryptionStatus()
+        }
+        .sheet(isPresented: $showEnableEncryptionSheet) {
+            enableEncryptionSheet
+        }
+    }
+
+    @ViewBuilder
+    private var enableEncryptionSheet: some View {
+        NavigationStack {
+            Form {
+                Section {
+                    Picker("Mode", selection: $selectedEncryptionMode) {
+                        Text("End-to-End (Signal)").tag(E2EAPI.ConversationEncryptionMode.e2ee)
+                        Text("Serveur (AES-256-GCM)").tag(E2EAPI.ConversationEncryptionMode.server)
+                        Text("Hybride (E2EE + Serveur)").tag(E2EAPI.ConversationEncryptionMode.hybrid)
+                    }
+                    .pickerStyle(.inline)
+                } footer: {
+                    Text("E2EE désactive la traduction automatique. Server et Hybride conservent la traduction. L'activation est irréversible.")
+                        .font(.caption)
+                }
+
+                if let encryptionError {
+                    Section {
+                        Text(encryptionError)
+                            .foregroundColor(.red)
+                            .font(.caption)
+                    }
+                }
+
+                Section {
+                    Button {
+                        Task { await activateEncryption() }
+                    } label: {
+                        HStack {
+                            Spacer()
+                            if isEnablingEncryption {
+                                ProgressView().tint(.white)
+                            } else {
+                                Image(systemName: "lock.fill")
+                                Text("Activer le chiffrement").fontWeight(.semibold)
+                            }
+                            Spacer()
+                        }
+                    }
+                    .listRowBackground(Color(hex: accentColor))
+                    .foregroundColor(.white)
+                    .disabled(isEnablingEncryption)
+                }
+            }
+            .navigationTitle("Sécurité")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Annuler") { showEnableEncryptionSheet = false }
+                        .disabled(isEnablingEncryption)
+                }
+            }
+        }
+    }
+
+    private func loadEncryptionStatus() async {
+        guard !isLoadingEncryptionStatus, encryptionStatus == nil else { return }
+        isLoadingEncryptionStatus = true
+        defer { isLoadingEncryptionStatus = false }
+        do {
+            encryptionStatus = try await E2EAPI.shared.fetchEncryptionStatus(conversationId: conversation.id)
+        } catch {
+            Self.logger.error("Failed to load encryption status: \(error.localizedDescription)")
+        }
+    }
+
+    private func activateEncryption() async {
+        isEnablingEncryption = true
+        encryptionError = nil
+        defer { isEnablingEncryption = false }
+        do {
+            let result = try await E2EAPI.shared.enableEncryption(
+                conversationId: conversation.id,
+                mode: selectedEncryptionMode
+            )
+            encryptionStatus = E2EAPI.ConversationEncryptionStatus(
+                isEncrypted: true,
+                mode: result.mode,
+                enabledAt: result.enabledAt,
+                enabledBy: result.enabledBy,
+                canTranslate: result.mode != .e2ee
+            )
+            showEnableEncryptionSheet = false
+            HapticFeedback.success()
+        } catch {
+            encryptionError = error.localizedDescription
+            HapticFeedback.error()
         }
     }
 
