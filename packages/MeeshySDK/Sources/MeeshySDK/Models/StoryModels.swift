@@ -972,7 +972,8 @@ extension StorySlide {
         let loopVideoDuration = effects.mediaObjects?.first(where: { $0.isBackground && $0.loop })?.duration
         let loopAudioDuration = effects.audioPlayerObjects?.first(where: { $0.isBackground == true && $0.loop == true })?.duration
 
-        if let L = loopVideoDuration ?? Double(loopAudioDuration ?? 0), L > 0 {
+        let L = loopVideoDuration ?? Double(loopAudioDuration ?? 0)
+        if L > 0 {
             if bound <= baseDuration {
                 let repetitions = max(1, floor(baseDuration / L))
                 bound = repetitions * L
