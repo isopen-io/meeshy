@@ -993,16 +993,20 @@ struct PostDetailView: View {
             .onTapGesture { openMediaFullscreen(media) }
 
         case .video:
-            // Route through VideoMediaView so post-detail videos respect the
-            // download policy. SharedAVPlayerManager.load() no longer streams
-            // on cache miss — an unwrapped InlineVideoPlayerView would
-            // silently render an empty player.
-            VideoMediaView(
-                attachment: media.toMessageAttachment(),
-                accentColor: accentColor,
-                isDark: theme.mode.isDark,
-                onExpandFullscreen: { openMediaFullscreen(media) }
-            )
+            let attachment = media.toMessageAttachment()
+            VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: attachment,
+                    style: .inline,
+                    controls: .inlineDefault,
+                    accentColor: accentColor,
+                    frame: .card,
+                    availability: availability,
+                    performance: .inline,
+                    onDownload: onDownload,
+                    onExpand: { openMediaFullscreen(media) }
+                )
+            }
             .frame(maxWidth: .infinity)
             .clipShape(RoundedRectangle(cornerRadius: 12))
 
