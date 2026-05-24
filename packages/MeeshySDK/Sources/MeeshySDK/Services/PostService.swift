@@ -10,6 +10,13 @@ public struct PostShareResult: Decodable, Sendable {
     public let shareCount: Int
     public let shortUrl: String?
     public let token: String?
+
+    public init(shared: Bool, shareCount: Int, shortUrl: String?, token: String?) {
+        self.shared = shared
+        self.shareCount = shareCount
+        self.shortUrl = shortUrl
+        self.token = token
+    }
 }
 
 // MARK: - Protocol

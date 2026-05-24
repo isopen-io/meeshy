@@ -279,6 +279,9 @@
 		DD33EE44FF55AA66BB770022 /* ConversationListViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD33EE44FF55AA66BB770021 /* ConversationListViewModel.swift */; };
 		DD55EE66FF7788990011AA22 /* AudioPostComposerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CC44DD55EE66FF7788990011 /* AudioPostComposerView.swift */; };
 		DD9981C0D89B4E730BB0B70C /* ThemedMessageBubble.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E243312C4FE9B69E3D649F7 /* ThemedMessageBubble.swift */; };
+		59B4750D99F14408899F63E5 /* BubbleAnimations.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9FE78C4D05DE49F89B91AC03 /* BubbleAnimations.swift */; };
+		197C3C02D90946A0916C79B9 /* MessageOverlayLayoutEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 636285FB181A4C0ABE57AC0C /* MessageOverlayLayoutEngine.swift */; };
+		412538DB4B8040F99E49F40E /* MessageOverlayLayoutEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 931AA0F3F0BB4DA4A5292189 /* MessageOverlayLayoutEngineTests.swift */; };
 		DDE8B064EF5D6FAE5ACA40CF /* ConversationOptionsViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DC6B1EFE559FE8634F4D330 /* ConversationOptionsViewModel.swift */; };
 		DELA002A002A002A002A0002 /* DeleteAccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DELA001A001A001A001A0001 /* DeleteAccountView.swift */; };
 		DFTP000100010001000100B1 /* DiffableTypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFTP000100010001000100F1 /* DiffableTypes.swift */; };
@@ -638,6 +641,9 @@
 		85C42CC906C9AF05B0B3427E /* ThreadRepliesLoaderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThreadRepliesLoaderTests.swift; sourceTree = "<group>"; };
 		8D6759DBEFCC294911F97F5C /* AchievementBadgeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementBadgeView.swift; sourceTree = "<group>"; };
 		8E243312C4FE9B69E3D649F7 /* ThemedMessageBubble.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemedMessageBubble.swift; sourceTree = "<group>"; };
+		9FE78C4D05DE49F89B91AC03 /* BubbleAnimations.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = BubbleAnimations.swift; sourceTree = "<group>"; };
+		636285FB181A4C0ABE57AC0C /* MessageOverlayLayoutEngine.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageOverlayLayoutEngine.swift; sourceTree = "<group>"; };
+		931AA0F3F0BB4DA4A5292189 /* MessageOverlayLayoutEngineTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyTests/Unit/Views/Bubble/MessageOverlayLayoutEngineTests.swift; sourceTree = SOURCE_ROOT; };
 		917EA2F73850B030DA882892 /* SharePickerViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = SharePickerViewModel.swift; sourceTree = "<group>"; };
 		99E33F2E248AC68E29338C1E /* StoryInteractionService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = StoryInteractionService.swift; sourceTree = "<group>"; };
 		9CA4E994A3234A78A90BB16F /* StoryViewerView+Canvas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "StoryViewerView+Canvas.swift"; sourceTree = "<group>"; };
@@ -1355,6 +1361,8 @@
 				553CE480C5B7C55136F3B3B4 /* ConversationView+AttachmentHandlers.swift */,
 				RPCC0001000100010001000 /* ReplyContextCleaner.swift */,
 				8E243312C4FE9B69E3D649F7 /* ThemedMessageBubble.swift */,
+				9FE78C4D05DE49F89B91AC03 /* BubbleAnimations.swift */,
+				636285FB181A4C0ABE57AC0C /* MessageOverlayLayoutEngine.swift */,
 				161B698A5C7ABD5B61A9F071 /* BubbleStandardLayout+Media.swift */,
 				56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */,
 				ABE2501A2F8D4343B50DA1FF /* VideoAvailabilityResolver.swift */,
@@ -1594,6 +1602,7 @@
 			children = (
 				BBLM0001000100010001REF /* BubbleContentMatrixTests.swift */,
 				BFMT0001000100010001REF /* BubbleFooterModelTests.swift */,
+				931AA0F3F0BB4DA4A5292189 /* MessageOverlayLayoutEngineTests.swift */,
 				BBLE0001000100010001REF /* BubbleEquatableTests.swift */,
 				BBLI0001000100010001REF /* ThemedMessageBubbleEquatableTests.swift */,
 				BBLW0001000100010001REF /* BubbleExpandableTextStateTests.swift */,
@@ -2342,6 +2351,8 @@
 				A089B898BAA69C0AB7FA044C /* ConversationView+AttachmentHandlers.swift in Sources */,
 				RPCC0001000100010001001 /* ReplyContextCleaner.swift in Sources */,
 				DD9981C0D89B4E730BB0B70C /* ThemedMessageBubble.swift in Sources */,
+				59B4750D99F14408899F63E5 /* BubbleAnimations.swift in Sources */,
+				197C3C02D90946A0916C79B9 /* MessageOverlayLayoutEngine.swift in Sources */,
 				CF236AB810E070AE44B8AE2F /* BubbleStandardLayout+Media.swift in Sources */,
 				BBLC0001000100010001BLD /* BubbleContent.swift in Sources */,
 				BBLB0001000100010001BLD /* BubbleContentBuilder.swift in Sources */,
@@ -2656,6 +2667,7 @@
 				STNF0001000100010001002 /* StoryNotificationFlowTests.swift in Sources */,
 				BBLM0001000100010001BLD /* BubbleContentMatrixTests.swift in Sources */,
 				BFMT0001000100010001BLD /* BubbleFooterModelTests.swift in Sources */,
+				412538DB4B8040F99E49F40E /* MessageOverlayLayoutEngineTests.swift in Sources */,
 				MDLT0001000100010001BLD /* MessageDayLabelTests.swift in Sources */,
 				MDGT0001000100010001BLD /* MessageDayGroupingTests.swift in Sources */,
 				BBLE0001000100010001BLD /* BubbleEquatableTests.swift in Sources */,
