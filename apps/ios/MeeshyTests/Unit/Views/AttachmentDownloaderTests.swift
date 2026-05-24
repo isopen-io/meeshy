@@ -1,7 +1,7 @@
 import XCTest
 import SwiftUI
 import MeeshySDK
-@testable import MeeshyUI
+@testable import Meeshy
 
 /// Sprint 3 RC3.2 — the download badge / `AttachmentDownloader` must resolve
 /// local-cache state per media type and never surface a download affordance
@@ -18,6 +18,17 @@ final class AttachmentDownloaderTests: XCTestCase {
             mimeType: "image/jpeg",
             fileUrl: fileUrl,
             uploadedBy: "user-test"
+        )
+    }
+
+    private func makeBadge(
+        attachment: MeeshyMessageAttachment,
+        deliveryStatus: MeeshyMessage.DeliveryStatus
+    ) -> DownloadBadgeView {
+        DownloadBadgeView(
+            attachment: attachment,
+            accentColor: "#6366F1",
+            messageDeliveryStatus: deliveryStatus
         )
     }
 
@@ -58,8 +69,41 @@ final class AttachmentDownloaderTests: XCTestCase {
         XCTAssertFalse(downloader.isCached, "A file:// attachment whose file is absent must not be reported as cached")
     }
 
-    // TODO migrate-test: DownloadBadgeView tests (test_downloadBadge_*) cannot live in
-    // MeeshyUITests because DownloadBadgeView is defined in the app target (apps/ios/Meeshy)
-    // and depends on the app-side Message.DeliveryStatus typealias + app-specific hidesForLocalOrOptimisticMedia
-    // computed property. These 4 tests remain covered by the app's MeeshyTests target.
+    // MARK: - DownloadBadgeView visibility
+
+    func test_downloadBadge_forSendingMessage_isHidden() {
+        let badge = makeBadge(
+            attachment: makeImageAttachment(fileUrl: "https://cdn.example.com/photo.jpg"),
+            deliveryStatus: .sending
+        )
+        XCTAssertTrue(badge.hidesForLocalOrOptimisticMedia,
+                      "The download badge must be hidden while the carrier message is .sending")
+    }
+
+    func test_downloadBadge_forInvisibleMessage_isHidden() {
+        let badge = makeBadge(
+            attachment: makeImageAttachment(fileUrl: "https://cdn.example.com/photo.jpg"),
+            deliveryStatus: .invisible
+        )
+        XCTAssertTrue(badge.hidesForLocalOrOptimisticMedia,
+                      "The download badge must be hidden during the .invisible optimistic phase")
+    }
+
+    func test_downloadBadge_forLocalFileAttachment_isHidden() {
+        let badge = makeBadge(
+            attachment: makeImageAttachment(fileUrl: "file:///var/mobile/tmp/camera_1.jpg"),
+            deliveryStatus: .sent
+        )
+        XCTAssertTrue(badge.hidesForLocalOrOptimisticMedia,
+                      "The download badge must be hidden for local file:// media")
+    }
+
+    func test_downloadBadge_forConfirmedServerMedia_isVisible() {
+        let badge = makeBadge(
+            attachment: makeImageAttachment(fileUrl: "https://cdn.example.com/photo.jpg"),
+            deliveryStatus: .sent
+        )
+        XCTAssertFalse(badge.hidesForLocalOrOptimisticMedia,
+                       "The download badge must remain available for confirmed remote media")
+    }
 }
