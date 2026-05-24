@@ -2215,17 +2215,13 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Consume View-Once Message
 
+    /// View-once consumption. Delegates to `commandHandler` with the
+    /// resolved server id — the handler runs the network call and the
+    /// persistence write under one optimistic transaction. Returns `true`
+    /// on success so the view can advance its UI (reveal + auto-dismiss
+    /// timer); `false` keeps the bubble blurred.
     func consumeViewOnce(messageId: String) async -> Bool {
-        do {
-            let result = try await messageService.consumeViewOnce(
-                conversationId: conversationId, messageId: serverId(for: messageId)
-            )
-            try? await messagePersistence.updateViewOnceCount(localId: messageId, count: result.viewOnceCount)
-            return true
-        } catch {
-            self.error = error.localizedDescription
-            return false
-        }
+        await commandHandler.consumeViewOnce(messageId: messageId, serverId: serverId(for: messageId))
     }
 
     func evictViewOnceMedia(message: Message) {

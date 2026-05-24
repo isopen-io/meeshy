@@ -229,7 +229,7 @@
 		CEE3D363209C096087B36241 /* SecurityVerificationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A356FD5DE5874BCEFB9139C4 /* SecurityVerificationView.swift */; };
 		CEQ000000002F01 /* CallEventQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEQ000000001F01 /* CallEventQueue.swift */; };
 		CEQT000000002F01 /* CallEventQueueTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CEQT000000001F01 /* CallEventQueueTests.swift */; };
-		CF236AB810E070AE44B8AE2F /* ThemedMessageBubble+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161B698A5C7ABD5B61A9F071 /* ThemedMessageBubble+Media.swift */; };
+		CF236AB810E070AE44B8AE2F /* BubbleStandardLayout+Media.swift in Sources */ = {isa = PBXBuildFile; fileRef = 161B698A5C7ABD5B61A9F071 /* BubbleStandardLayout+Media.swift */; };
 		CHPW002A002A002A002A0002 /* ChangePasswordView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CHPW001A001A001A001A0001 /* ChangePasswordView.swift */; };
 		CL6001A001A001A001A00001 /* CommunityLinksView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CL6002A002A002A002A00002 /* CommunityLinksView.swift */; };
 		CLRT0001000100010001002 /* ComposerLanguageResolverTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CLRT0001000100010001001 /* ComposerLanguageResolverTests.swift */; };
@@ -558,7 +558,7 @@
 		13A020468B6C8367F8121928 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		13BCD5ADC318DEED40437A0F /* TaskTimeoutTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = TaskTimeoutTests.swift; sourceTree = "<group>"; };
 		147B06F4C6BA47BCD48D03C6 /* PresenceManagerTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = apps/ios/MeeshyTests/Unit/Services/PresenceManagerTests.swift; sourceTree = SOURCE_ROOT; };
-		161B698A5C7ABD5B61A9F071 /* ThemedMessageBubble+Media.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "ThemedMessageBubble+Media.swift"; sourceTree = "<group>"; };
+		161B698A5C7ABD5B61A9F071 /* BubbleStandardLayout+Media.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = "Bubble/BubbleStandardLayout+Media.swift"; sourceTree = "<group>"; };
 		17F9BAE1DE897740FE5B367B /* FeedListView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedListView.swift; sourceTree = "<group>"; };
 		17FD2C4BEA6C9C218634F16B /* CallTranscriptionService.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = CallTranscriptionService.swift; sourceTree = "<group>"; };
 		18D41D2818B5E73E616A792D /* MeeshyWidgets.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MeeshyWidgets.swift; sourceTree = "<group>"; };
@@ -1355,7 +1355,7 @@
 				553CE480C5B7C55136F3B3B4 /* ConversationView+AttachmentHandlers.swift */,
 				RPCC0001000100010001000 /* ReplyContextCleaner.swift */,
 				8E243312C4FE9B69E3D649F7 /* ThemedMessageBubble.swift */,
-				161B698A5C7ABD5B61A9F071 /* ThemedMessageBubble+Media.swift */,
+				161B698A5C7ABD5B61A9F071 /* BubbleStandardLayout+Media.swift */,
 				56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */,
 				ABE2501A2F8D4343B50DA1FF /* VideoAvailabilityResolver.swift */,
 				BDC4F50D912C4CFBA6887850 /* VideoLegacySupport.swift */,
@@ -2342,7 +2342,7 @@
 				A089B898BAA69C0AB7FA044C /* ConversationView+AttachmentHandlers.swift in Sources */,
 				RPCC0001000100010001001 /* ReplyContextCleaner.swift in Sources */,
 				DD9981C0D89B4E730BB0B70C /* ThemedMessageBubble.swift in Sources */,
-				CF236AB810E070AE44B8AE2F /* ThemedMessageBubble+Media.swift in Sources */,
+				CF236AB810E070AE44B8AE2F /* BubbleStandardLayout+Media.swift in Sources */,
 				BBLC0001000100010001BLD /* BubbleContent.swift in Sources */,
 				BBLB0001000100010001BLD /* BubbleContentBuilder.swift in Sources */,
 				BBLS0001000100010001BLD /* BubbleStyle.swift in Sources */,

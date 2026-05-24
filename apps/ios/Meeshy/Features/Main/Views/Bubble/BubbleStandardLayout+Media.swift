@@ -1,12 +1,25 @@
-// MARK: - Bubble visual media grid + carousel
+// MARK: - BubbleStandardLayout — visual media grid, carousel + satellites
 //
-// Was: extension on `ThemedMessageBubble` providing the visual grid and the
-// inline carousel (Task-14 pivot moved the rendering into
-// `BubbleStandardLayout`, but the helpers stay alongside the orchestrator
-// rather than crowding the new layout file).
+// Companion file to `BubbleStandardLayout.swift`. Holds the visual-media
+// concerns that crowd the orchestrator body :
 //
-// File kept under its legacy name + pbxproj entry; only the extended type
-// changed (now `BubbleStandardLayout`).
+//   1. `extension BubbleStandardLayout` :
+//      - `visualMediaGrid` : 1/2/3/4+ grid layout dispatcher
+//      - `makeGridCell(_:overflowCount:solo:)` : cell factory
+//      - `carouselView` : façade instantiating `BubbleCarouselView`
+//      - `downloadBadge(_:)` : per-attachment download chip
+//      - `mediaWithReplyContainer(reply:)` : visual + quoted reply combo
+//
+//   2. Satellite structs (fileprivate / standalone) :
+//      - `BubbleGridCell` : 1 grid slot (image or video)
+//      - `BubbleGridImageView` / `BubbleGridVideoThumbnailView`
+//      - `AttachmentBlurOverlayView`
+//      - `BubbleCarouselView` : standalone pager, swipe between slides
+//
+// History : was originally `ThemedMessageBubble+Media.swift` (extension on
+// `ThemedMessageBubble`). Task-14 pivot of the bubble-decompose refactor
+// moved rendering into `BubbleStandardLayout` ; this file was renamed
+// alongside that pivot to match what it actually extends.
 
 import SwiftUI
 import Combine
@@ -126,7 +139,7 @@ extension BubbleStandardLayout {
             footer: resolvedFooter().0,
             isDark: isDark,
             containerWidth: gridMaxWidth,
-            hidesFooterDuringPlayback: hasPlayingInlineVideo
+            hasPlayingInlineVideo: hasPlayingInlineVideo
         )
     }
 
@@ -561,10 +574,12 @@ struct BubbleCarouselView: View {
     var footer: BubbleFooterModel = .empty
     var isDark: Bool = false
     var containerWidth: CGFloat = 260
-    /// Lorsque vrai, on ne rend pas le footer (heure d'envoi + delivery)
-    /// pour éviter la collision avec les contrôles overlay de la vidéo en
-    /// lecture inline.
-    var hidesFooterDuringPlayback: Bool = false
+    /// Mirror of `BubbleStandardLayout.hasPlayingInlineVideo` — passed in
+    /// by `carouselView` so the carousel hides its `BubbleFooter` overlay
+    /// (timestamp + delivery state) while one of its video slides is the
+    /// active inline player. Avoids collision with the overlay controls
+    /// drawn over the video. Defaults to `false` for non-bubble callers.
+    var hasPlayingInlineVideo: Bool = false
 
     @State private var currentPageID: String?
 
@@ -598,7 +613,7 @@ struct BubbleCarouselView: View {
         // Timestamp + delivery state — overlay footer, masqué pendant la
         // lecture d'une vidéo inline pour libérer le bottom-trailing.
         .overlay(alignment: .bottomTrailing) {
-            if !hidesFooterDuringPlayback {
+            if !hasPlayingInlineVideo {
                 BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
                     .equatable()
                     .padding(8)
