@@ -22,8 +22,18 @@ extension BubbleStandardLayout {
 
         switch items.count {
         case 1:
-            makeGridCell(items[0], solo: true)
-                .frame(width: gridMaxWidth, height: items[0].type == .video ? 200 : 240)
+            let item = items[0]
+            if item.type == .video {
+                // Video: let aspect ratio drive height (capped at 1.6× width
+                // for portrait). Replaces the legacy hardcoded `height: 200`
+                // that squashed portrait 9:16 sources.
+                makeGridCell(item, solo: true)
+                    .frame(width: gridMaxWidth)
+                    .frame(maxHeight: item.videoHeight(forWidth: gridMaxWidth))
+            } else {
+                makeGridCell(item, solo: true)
+                    .frame(width: gridMaxWidth, height: 240)
+            }
 
         case 2:
             HStack(spacing: gridSpacing) {
@@ -112,7 +122,8 @@ extension BubbleStandardLayout {
             contactColor: contactColor,
             messageDeliveryStatus: message.deliveryStatus,
             footer: resolvedFooter().0,
-            isDark: isDark
+            isDark: isDark,
+            containerWidth: gridMaxWidth
         )
     }
 
@@ -260,20 +271,25 @@ fileprivate struct BubbleGridCell: View {
         .overlay { downloadBadgeOverlay }
     }
 
-    /// Inline video player path. `VideoMediaView` owns the play affordance,
-    /// the download badge (corner pill via `InlineVideoPlayerView`), and the
-    /// fullscreen expand button surfaced by the overlay controls. The bubble
-    /// only forwards the expand callback so `fullscreenAttachment` is set
-    /// from the same single source of truth as the carousel/grid path.
+    /// Inline video player path. `VideoAvailabilityResolver` resolves download
+    /// policy and passes `VideoAvailability` to `MeeshyVideoPlayer`, which owns
+    /// the play affordance, download badge, and fullscreen expand button.
     private var videoBody: some View {
         ZStack {
             Color.black
-            VideoMediaView(
-                attachment: attachment,
-                accentColor: contactColor,
-                isDark: false,
-                onExpandFullscreen: { fullscreenAttachment = attachment }
-            )
+            VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: attachment,
+                    style: .inline,
+                    controls: .inlineDefault,
+                    accentColor: contactColor,
+                    frame: .bubble,
+                    availability: availability,
+                    performance: .inline,
+                    onDownload: onDownload,
+                    onExpand: { fullscreenAttachment = attachment }
+                )
+            }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             overflowOverlay
             viewCountBadge
@@ -536,10 +552,18 @@ struct BubbleCarouselView: View {
     let messageDeliveryStatus: Message.DeliveryStatus
     var footer: BubbleFooterModel = .empty
     var isDark: Bool = false
+    var containerWidth: CGFloat = 260
 
     @State private var currentPageID: String?
 
-    private let carouselHeight: CGFloat = 300
+    private func carouselHeight(width: CGFloat) -> CGFloat {
+        let cap = width * 1.6
+        let heights = items.map { att -> CGFloat in
+            let r = att.videoAspectRatio ?? (16.0 / 9.0)
+            return min(width / r, cap)
+        }
+        return heights.max() ?? width * 9 / 16
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -551,7 +575,7 @@ struct BubbleCarouselView: View {
             ) { _, attachment in
                 carouselPage(attachment)
             }
-            .frame(height: carouselHeight)
+            .frame(height: carouselHeight(width: containerWidth))
 
             carouselTopBar
         }
@@ -676,7 +700,7 @@ struct BubbleCarouselView: View {
                 EmptyView()
             }
         }
-        .frame(height: carouselHeight)
+        .frame(height: carouselHeight(width: containerWidth))
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
@@ -724,16 +748,19 @@ struct BubbleCarouselView: View {
 
     @ViewBuilder
     private func carouselVideoCell(_ attachment: MessageAttachment) -> some View {
-        // Go through VideoMediaView so the inline carousel respects the
-        // download policy (auto-DL when allowed, download badge otherwise).
-        VideoMediaView(
-            attachment: attachment,
-            accentColor: contactColor,
-            isDark: isDark,
-            onExpandFullscreen: {
-                fullscreenAttachment = attachment
-            }
-        )
+        VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+            MeeshyVideoPlayer(
+                attachment: attachment,
+                style: .inline,
+                controls: .inlineDefault,
+                accentColor: contactColor,
+                frame: .bubble,
+                availability: availability,
+                performance: .carousel,
+                onDownload: onDownload,
+                onExpand: { fullscreenAttachment = attachment }
+            )
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
