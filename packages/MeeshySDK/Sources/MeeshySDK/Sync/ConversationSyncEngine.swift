@@ -886,11 +886,21 @@ public final class ConversationSyncEngine: ConversationSyncEngineProviding, @unc
 
     private func handleReadStatusUpdated(_ event: ReadStatusUpdateEvent) async {
         let userId = await currentUserId()
-        Self.logger.info("[RT-DIAG] handleReadStatusUpdated conv=\(event.conversationId, privacy: .public)")
+        Self.logger.info("[RT-DIAG] handleReadStatusUpdated conv=\(event.conversationId, privacy: .public) type=\(event.type, privacy: .public)")
 
         // Update conversation unread count (userId is preferred, fallback to participantId)
         let eventUserId = event.userId ?? event.participantId
-        if eventUserId == userId {
+
+        // CRITICAL: only zero unreadCount on a true 'read' event. The gateway
+        // also emits this event with type=='received' when the delivery cursor
+        // advances (e.g. our own AppDelegate.willPresent → PushDeliveryReceiptService.ack
+        // → POST /mark-as-received). A 'received' event means "the message
+        // reached this device" — NOT "the user opened the conversation".
+        // Wiping unreadCount on 'received' caused the badge flicker the user
+        // saw: handleUnreadUpdated bumps it to 1 when the message lands, then
+        // a 'received' read-status:updated arrives moments later and wipes
+        // it to 0 even though the conversation is still unread.
+        if eventUserId == userId && event.type == "read" {
             await cache.conversations.update(for: "list") { conversations in
                 var updated = conversations
                 if let idx = updated.firstIndex(where: { $0.id == event.conversationId }) {

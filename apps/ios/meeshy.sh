@@ -42,6 +42,15 @@ ok()   { echo -e "${GREEN}[$(date +%H:%M:%S)]${NC} $1"; }
 warn() { echo -e "${YELLOW}[$(date +%H:%M:%S)]${NC} $1"; }
 err()  { echo -e "${RED}[$(date +%H:%M:%S)]${NC} $1"; }
 
+# Shared SPM cache flag for every xcodebuild invocation (build, archive,
+# resolve). Computed once so all entry points see the same checkouts and
+# Package.resolved view. Empty array if no cache detected (xcodebuild falls
+# back to $DERIVED_DATA/SourcePackages).
+XCODE_PKG_FLAGS=()
+if [ -n "$XCODE_PKG_CACHE" ] && [ -d "$XCODE_PKG_CACHE" ]; then
+    XCODE_PKG_FLAGS=(-clonedSourcePackagesDirPath "$XCODE_PKG_CACHE")
+fi
+
 # ─── Globals ─────────────────────────────────────────────────────────────────
 DEVICE_ID=""
 DEVICE_NAME=""
@@ -228,6 +237,12 @@ do_device_deploy() {
 }
 
 do_device_deploy_only() {
+    # Aligned with do_build (sim): wait for concurrent builds, share SPM cache
+    # with Xcode GUI, fail loud on stale slice. Otherwise a parallel
+    # meeshy.sh run can corrupt $DERIVED_DATA's shared module cache while we're
+    # building for device, and the device install ships an inconsistent .app.
+    wait_for_existing_build
+
     local dev_product="$APP_NAME"
     [ "$CONFIGURATION" = "Debug" ] && dev_product="$APP_NAME Dev"
     local device_app_path="$DERIVED_DATA/Products/$CONFIGURATION-iphoneos/$dev_product.app"
@@ -236,10 +251,14 @@ do_device_deploy_only() {
     local ncpu
     ncpu=$(sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
+    [ "${#XCODE_PKG_FLAGS[@]}" -gt 0 ] && log "Using Xcode package cache: ${XCODE_PKG_CACHE##*/}"
+
     # NOTE: Entitlement stripping removed — paid Apple Developer account now active.
     # Associated Domains, Push Notifications, etc. are fully supported.
 
     log "Building for ${BOLD}$PHYSICAL_DEVICE_NAME${NC}..."
+    local build_start
+    build_start=$(date +%s)
 
     set +e
     xcodebuild \
@@ -248,6 +267,7 @@ do_device_deploy_only() {
         -configuration "$CONFIGURATION" \
         -destination "platform=iOS,name=$PHYSICAL_DEVICE_NAME" \
         -derivedDataPath "$DERIVED_DATA" \
+        "${XCODE_PKG_FLAGS[@]}" \
         -allowProvisioningUpdates \
         -allowProvisioningDeviceRegistration \
         -skipPackagePluginValidation \
@@ -261,17 +281,34 @@ do_device_deploy_only() {
 
     if [ "$build_rc" -ne 0 ]; then
         err "Build FAILED"
-        grep -E "error:" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation\|dylib\|Entitlements file.*modified" | head -30 || tail -20 "$build_log"
+        grep -E "error:|BUILD FAILED" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation\|dylib\|Entitlements file.*modified" | head -30 || tail -20 "$build_log"
         cp "$build_log" /tmp/meeshy_device_last_failure.log
+        err "Full log: /tmp/meeshy_device_last_failure.log"
         rm -f "$build_log"
         exit 1
     fi
-    ok "Build succeeded"
+
+    # Surface warnings even on success so we know what the compiler is unhappy about.
+    grep -E "warning:" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation" | head -10 | while IFS= read -r line; do
+        warn "$line"
+    done
+
     rm -f "$build_log"
+    ok "Build succeeded"
 
     # ── Install on device ──
     if [ ! -d "$device_app_path" ]; then
         err "App bundle not found at: $device_app_path"
+        exit 1
+    fi
+
+    # Anti-stale guard: bundle must be newer than build start, otherwise
+    # xcodebuild was a no-op and we'd ship an old .app to the device.
+    local app_mtime
+    app_mtime=$(stat -f "%m" "$device_app_path" 2>/dev/null || echo 0)
+    if [ "$app_mtime" -lt "$build_start" ]; then
+        err "App bundle is older than build start ($(date -r "$app_mtime" +%H:%M:%S) < $(date -r "$build_start" +%H:%M:%S)) — xcodebuild produced no new artifact. Stale slice would be installed."
+        err "Try: ./meeshy.sh clean && ./meeshy.sh device"
         exit 1
     fi
 
@@ -507,11 +544,7 @@ do_build() {
     local build_start
     build_start=$(date +%s)
 
-    local pkg_flags=()
-    if [ -n "$XCODE_PKG_CACHE" ] && [ -d "$XCODE_PKG_CACHE" ]; then
-        pkg_flags=(-clonedSourcePackagesDirPath "$XCODE_PKG_CACHE")
-        log "Using Xcode package cache: ${XCODE_PKG_CACHE##*/}"
-    fi
+    [ "${#XCODE_PKG_FLAGS[@]}" -gt 0 ] && log "Using Xcode package cache: ${XCODE_PKG_CACHE##*/}"
 
     local mac_flags=()
     if [ "$PLATFORM" = "mac" ]; then
@@ -523,37 +556,57 @@ do_build() {
         )
     fi
 
+    # Full log file (same pattern as do_device_deploy_only) so silent failures
+    # are visible. -quiet was hiding compile errors that didn't match the
+    # error:/warning:/BUILD FAILED regex, causing do_install to ship an old .app.
+    local build_log="/tmp/meeshy_sim_build_$$.log"
+
+    set +e
     xcodebuild \
         -project "$PROJECT" \
         -scheme "$SCHEME" \
         -configuration "$CONFIGURATION" \
         -destination "$(build_destination)" \
         -derivedDataPath "$DERIVED_DATA" \
-        "${pkg_flags[@]}" \
+        "${XCODE_PKG_FLAGS[@]}" \
         "${mac_flags[@]}" \
-        -quiet \
         CODE_SIGN_ALLOW_ENTITLEMENTS_MODIFICATION=YES \
-        build 2>&1 | while IFS= read -r line; do
-            if echo "$line" | grep -qE "(error:|warning:|BUILD FAILED)"; then
-                err "$line"
-            fi
-        done
+        build >"$build_log" 2>&1
+    local status=$?
+    set -e
 
-    local status=${PIPESTATUS[0]}
     local build_end
     build_end=$(date +%s)
     local duration=$((build_end - build_start))
 
     if [ "$status" -ne 0 ]; then
         err "Build FAILED after ${duration}s"
+        grep -E "error:|BUILD FAILED" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation\|dylib\|Entitlements file.*modified" | head -30 || tail -20 "$build_log"
+        cp "$build_log" /tmp/meeshy_sim_last_failure.log
+        err "Full log: /tmp/meeshy_sim_last_failure.log"
+        rm -f "$build_log"
         exit 1
     fi
 
+    # Surface warnings even on success so we know what the compiler is unhappy about.
+    grep -E "warning:" "$build_log" | grep -v "IDEFoundation\|Xcode3Core\|DVTFoundation" | head -10 | while IFS= read -r line; do
+        warn "$line"
+    done
+
+    rm -f "$build_log"
     ok "Build succeeded in ${BOLD}${duration}s${NC}"
 
-    # Verify .app
+    # Verify .app — must be fresher than the build started, otherwise xcodebuild
+    # was a no-op against a stale slice and do_install would ship the old bundle.
     if [ ! -d "$(app_path)" ]; then
         err "App bundle not found at: $(app_path)"
+        exit 1
+    fi
+    local app_mtime
+    app_mtime=$(stat -f "%m" "$(app_path)" 2>/dev/null || echo 0)
+    if [ "$app_mtime" -lt "$build_start" ]; then
+        err "App bundle is older than build start ($(date -r "$app_mtime" +%H:%M:%S) < $(date -r "$build_start" +%H:%M:%S)) — xcodebuild produced no new artifact. Stale slice would be installed."
+        err "Try: ./meeshy.sh clean && ./meeshy.sh run"
         exit 1
     fi
 
@@ -693,6 +746,7 @@ do_release_check() {
         | sed 's/^/    /' || true
 
     log "Building Release for generic iOS (this exercises -O -wmo)…"
+    [ "${#XCODE_PKG_FLAGS[@]}" -gt 0 ] && log "Using Xcode package cache: ${XCODE_PKG_CACHE##*/}"
     set +e
     xcodebuild \
         -project "$PROJECT" \
@@ -700,6 +754,7 @@ do_release_check() {
         -configuration Release \
         -destination 'generic/platform=iOS' \
         -derivedDataPath "$check_derived" \
+        "${XCODE_PKG_FLAGS[@]}" \
         -skipPackagePluginValidation \
         -skipMacroValidation \
         CODE_SIGNING_ALLOWED=NO \
@@ -820,7 +875,8 @@ do_archive() {
     [ "$archive_config" = "Debug" ] && archive_config="Release"
 
     log "Resolving package dependencies..."
-    xcodebuild -resolvePackageDependencies -project "$PROJECT" 2>/dev/null
+    [ "${#XCODE_PKG_FLAGS[@]}" -gt 0 ] && log "Using Xcode package cache: ${XCODE_PKG_CACHE##*/}"
+    xcodebuild -resolvePackageDependencies -project "$PROJECT" "${XCODE_PKG_FLAGS[@]}" 2>/dev/null
     ok "Dependencies resolved"
 
     local app_label="$APP_NAME"
@@ -838,6 +894,7 @@ do_archive() {
         -configuration "$archive_config" \
         -archivePath "$archive_path" \
         -destination "generic/platform=iOS" \
+        "${XCODE_PKG_FLAGS[@]}" \
         ONLY_ACTIVE_ARCH=NO \
         2>&1 | if command -v xcpretty &>/dev/null; then xcpretty; else cat; fi
 
@@ -971,7 +1028,8 @@ do_distribute() {
 
     # ── Resolve dependencies ──
     log "Resolving package dependencies..."
-    xcodebuild -resolvePackageDependencies -project "$PROJECT" 2>/dev/null
+    [ "${#XCODE_PKG_FLAGS[@]}" -gt 0 ] && log "Using Xcode package cache: ${XCODE_PKG_CACHE##*/}"
+    xcodebuild -resolvePackageDependencies -project "$PROJECT" "${XCODE_PKG_FLAGS[@]}" 2>/dev/null
     ok "Dependencies resolved"
 
     # ── Archive with distribution signing (B1) ──
@@ -987,6 +1045,7 @@ do_distribute() {
         -configuration "$dist_config" \
         -archivePath "$archive_path" \
         -destination "generic/platform=iOS" \
+        "${XCODE_PKG_FLAGS[@]}" \
         -allowProvisioningUpdates \
         ONLY_ACTIVE_ARCH=NO \
         CODE_SIGN_STYLE=Automatic \
@@ -1075,11 +1134,6 @@ do_test() {
 
     mkdir -p "$TEST_OUTPUT_DIR"
 
-    local pkg_flags=()
-    if [ -n "$XCODE_PKG_CACHE" ] && [ -d "$XCODE_PKG_CACHE" ]; then
-        pkg_flags=(-clonedSourcePackagesDirPath "$XCODE_PKG_CACHE")
-    fi
-
     log "Running unit tests..."
     xcodebuild test \
         -project "$PROJECT" \
@@ -1087,7 +1141,7 @@ do_test() {
         -destination "$destination" \
         -configuration Debug \
         -derivedDataPath "$DERIVED_DATA" \
-        "${pkg_flags[@]}" \
+        "${XCODE_PKG_FLAGS[@]}" \
         -enableCodeCoverage "$([ "$COVERAGE" = true ] && echo YES || echo NO)" \
         -resultBundlePath "$TEST_OUTPUT_DIR/unit-tests.xcresult" \
         -only-testing:MeeshyTests \
@@ -1103,7 +1157,7 @@ do_test() {
             -destination "$destination" \
             -configuration Debug \
             -derivedDataPath "$DERIVED_DATA" \
-            "${pkg_flags[@]}" \
+            "${XCODE_PKG_FLAGS[@]}" \
             -resultBundlePath "$TEST_OUTPUT_DIR/ui-tests.xcresult" \
             -only-testing:MeeshyUITests \
             2>&1 | if command -v xcpretty &>/dev/null; then xcpretty --test --color; else cat; fi || true
@@ -1143,9 +1197,9 @@ do_setup() {
         warn "xcpretty not found. Install: gem install xcpretty"
     fi
 
-    # Resolve SPM deps
+    # Resolve SPM deps — share Xcode GUI cache when present so we don't re-clone.
     log "Resolving Swift Package dependencies..."
-    xcodebuild -resolvePackageDependencies -project "$PROJECT"
+    xcodebuild -resolvePackageDependencies -project "$PROJECT" "${XCODE_PKG_FLAGS[@]}"
     ok "Dependencies resolved"
 
     # Make scripts executable
