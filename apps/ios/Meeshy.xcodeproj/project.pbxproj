@@ -153,7 +153,6 @@
 		ANYCD00000000002001 /* AnyCodable.swift in Sources */ = {isa = PBXBuildFile; fileRef = ANYCD00000000001001 /* AnyCodable.swift */; };
 		APREPS02000000000000F002 /* AttachmentPreparationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = APREPS01000000000000F001 /* AttachmentPreparationService.swift */; };
 		APREPT02000000000000F002 /* AttachmentPreparationServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = APREPT01000000000000F001 /* AttachmentPreparationServiceTests.swift */; };
-		ATDLT0001000100010001001 /* AttachmentDownloaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */; };
 		ATTLT002000000000000F002 /* AttachmentLoadingTile.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */; };
 		ATUP00200000000001F00 /* AttachmentUploader.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATUP00100000000001F00 /* AttachmentUploader.swift */; };
 		ATUT00200000000001F00 /* AttachmentUploaderTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = ATUT00100000000001F00 /* AttachmentUploaderTests.swift */; };
@@ -683,7 +682,6 @@
 		ANYCD00000000001001 /* AnyCodable.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AnyCodable.swift; sourceTree = "<group>"; };
 		APREPS01000000000000F001 /* AttachmentPreparationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentPreparationService.swift; sourceTree = "<group>"; };
 		APREPT01000000000000F001 /* AttachmentPreparationServiceTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AttachmentPreparationServiceTests.swift; sourceTree = "<group>"; };
-		ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentDownloaderTests.swift; sourceTree = "<group>"; };
 		ATTLT001000000000000F001 /* AttachmentLoadingTile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentLoadingTile.swift; sourceTree = "<group>"; };
 		ATUP00100000000001F00 /* AttachmentUploader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AttachmentUploader.swift; sourceTree = "<group>"; };
 		ATUT00100000000001F00 /* AttachmentUploaderTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AttachmentUploaderTests.swift; sourceTree = "<group>"; };
@@ -1692,7 +1690,6 @@
 				CVLT0001000100010001000 /* ConversationViewLifecycleTests.swift */,
 				CVRC0001000100010001000 /* ConversationReplyContextTests.swift */,
 				AMVRT0001000100010001000 /* AudioMediaViewRenderTests.swift */,
-				ATDLT0001000100010001000 /* AttachmentDownloaderTests.swift */,
 				CMPAU0001000100010001000 /* ConversationComposerStateTests.swift */,
 				CLRT0001000100010001001 /* ComposerLanguageResolverTests.swift */,
 				26375B0D72C248DB90C4AE91 /* ThemedBackButtonTests.swift */,
@@ -2548,7 +2545,6 @@
 				CVLT0001000100010001001 /* ConversationViewLifecycleTests.swift in Sources */,
 				CVRC0001000100010001001 /* ConversationReplyContextTests.swift in Sources */,
 				AMVRT0001000100010001001 /* AudioMediaViewRenderTests.swift in Sources */,
-				ATDLT0001000100010001001 /* AttachmentDownloaderTests.swift in Sources */,
 				CMPAU0001000100010001001 /* ConversationComposerStateTests.swift in Sources */,
 				SKLN0005000100010001BLD /* SkeletonVisibilityResolverTests.swift in Sources */,
 				TDTH0001000100010001001 /* TypingDotTimerHarness.swift in Sources */,
