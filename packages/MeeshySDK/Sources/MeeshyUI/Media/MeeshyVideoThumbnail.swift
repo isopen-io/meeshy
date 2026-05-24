@@ -13,10 +13,6 @@ import MeeshySDK
 // Use in lists / grids / chips where playback is delegated : mini reply
 // chip, composer attachment preview, profile media grid, overflow tile,
 // carousel slides that aren't currently visible (memory eviction).
-//
-// `VideoThumbnailView` is kept as a backward-compatible typealias until the
-// legacy players (`InlineVideoPlayerView`, `VideoPlayerView`) are deleted
-// in Phase 5 of the video unification.
 
 /// Static, cached video poster image with optional play + duration badges.
 public struct MeeshyVideoThumbnail: View {
@@ -55,23 +51,6 @@ public struct MeeshyVideoThumbnail: View {
         self.showDurationBadge = showDurationBadge
         self.cornerRadius = cornerRadius
         self.onTap = onTap
-    }
-
-    // MARK: - Legacy init (backward compat, used by InlineVideoPlayerView + VideoPlayerView)
-    //
-    // Kept until those files are deleted in Phase 5. New code MUST use the
-    // attachment-driven init.
-
-    public init(videoUrlString: String, accentColor: String) {
-        self.attachment = nil
-        self.videoUrlString = videoUrlString
-        self.accentColor = accentColor
-        self.thumbnailColor = accentColor
-        self.durationFormatted = nil
-        self.showPlayBadge = false
-        self.showDurationBadge = false
-        self.cornerRadius = 0
-        self.onTap = nil
     }
 
     // MARK: - Body
@@ -241,11 +220,3 @@ public struct MeeshyVideoThumbnail: View {
     }
 }
 
-// MARK: - Backward-compat typealias
-//
-// `VideoThumbnailView` is the legacy name used by `InlineVideoPlayerView` and
-// `VideoPlayerView`, both scheduled for deletion in Phase 5 of the video
-// player unification. Keeping the typealias avoids forcing a rewrite of
-// those files in Phase 2 — they continue compiling unchanged until
-// Phase 5 removes them altogether.
-public typealias VideoThumbnailView = MeeshyVideoThumbnail

@@ -90,8 +90,8 @@
 		970E34DC55D66F311B7D7CE0 /* LiveActivities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 02E6EEF0A507F120A2363E15 /* LiveActivities.swift */; };
 		9F0935CAA94371C402BE2B6E /* ConversationMediaViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */; };
 		9FF7A7A00F08572B06233C38 /* VoIPDedupRing.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25B766551B70B2E446A2A4EE /* VoIPDedupRing.swift */; };
-		A03677E9C71C0E46C561B950 /* VideoMediaView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 772963640D83ECDEE321E0F6 /* VideoMediaView.swift */; };
 		571D8BA6C0844CA0B2ADDB1B /* VideoAvailabilityResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = ABE2501A2F8D4343B50DA1FF /* VideoAvailabilityResolver.swift */; };
+		0EBDC9C3A9104D7D9543A208 /* VideoLegacySupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = BDC4F50D912C4CFBA6887850 /* VideoLegacySupport.swift */; };
 		A089B898BAA69C0AB7FA044C /* ConversationView+AttachmentHandlers.swift in Sources */ = {isa = PBXBuildFile; fileRef = 553CE480C5B7C55136F3B3B4 /* ConversationView+AttachmentHandlers.swift */; };
 		A09DDAFA06FAFA1D6FBC4ED8 /* FeedStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CDB5B41B9ABD50A0A92480A /* FeedStore.swift */; };
 		A0A1E3761BAF8160622BAA4E /* CommentListViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1327FB6FC92A35211C196E1 /* CommentListViewController.swift */; };
@@ -618,8 +618,8 @@
 		73E4ECF08EDFD91908B42081 /* ContactsListTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContactsListTab.swift; sourceTree = "<group>"; };
 		748FC5520967BD43D7FB9582 /* MessageStore.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = MessageStore.swift; sourceTree = "<group>"; };
 		750FE2A49FB88DF459390587 /* ThemedConversationRow.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = ThemedConversationRow.swift; sourceTree = "<group>"; };
-		772963640D83ECDEE321E0F6 /* VideoMediaView.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoMediaView.swift; sourceTree = "<group>"; };
 		ABE2501A2F8D4343B50DA1FF /* VideoAvailabilityResolver.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoAvailabilityResolver.swift; sourceTree = "<group>"; };
+		BDC4F50D912C4CFBA6887850 /* VideoLegacySupport.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = VideoLegacySupport.swift; sourceTree = "<group>"; };
 		7789A854759F389975CB9906 /* FeedViewModelTests.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = FeedViewModelTests.swift; sourceTree = "<group>"; };
 		77988CFAAC714C1730B6ABD3 /* AudioPlayerManager.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = AudioPlayerManager.swift; sourceTree = "<group>"; };
 		7B489B1DA15CF189E770686F /* UserProfileViewModel.swift */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = sourcecode.swift; path = UserProfileViewModel.swift; sourceTree = "<group>"; };
@@ -1334,8 +1334,8 @@
 				8E243312C4FE9B69E3D649F7 /* ThemedMessageBubble.swift */,
 				161B698A5C7ABD5B61A9F071 /* ThemedMessageBubble+Media.swift */,
 				56FAE7930C60B05A39A5DAF2 /* ConversationMediaViews.swift */,
-				772963640D83ECDEE321E0F6 /* VideoMediaView.swift */,
 				ABE2501A2F8D4343B50DA1FF /* VideoAvailabilityResolver.swift */,
+				BDC4F50D912C4CFBA6887850 /* VideoLegacySupport.swift */,
 				GALLERY001A001A001A00001 /* ConversationMediaGalleryView.swift */,
 				AUDFS001A001A001A0000001 /* AudioFullscreenView.swift */,
 				2B68A3F235224E0F01B3D8C1 /* ConversationHelperViews.swift */,
@@ -2347,8 +2347,8 @@
 				BBLP0001000100010001BLD /* BubbleEphemeralLifecycle.swift in Sources */,
 				BBLU0001000100010001BLD /* BubbleBlurRevealLifecycle.swift in Sources */,
 				9F0935CAA94371C402BE2B6E /* ConversationMediaViews.swift in Sources */,
-				A03677E9C71C0E46C561B950 /* VideoMediaView.swift in Sources */,
 				571D8BA6C0844CA0B2ADDB1B /* VideoAvailabilityResolver.swift in Sources */,
+				0EBDC9C3A9104D7D9543A208 /* VideoLegacySupport.swift in Sources */,
 				GALLERY001B001B001B00002 /* ConversationMediaGalleryView.swift in Sources */,
 				AUDFS001B001B001B0000002 /* AudioFullscreenView.swift in Sources */,
 				E73445377212602BE34F97F6 /* ConversationHelperViews.swift in Sources */,
