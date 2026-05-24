@@ -404,12 +404,22 @@ struct BubbleStandardLayout: View {
             case .video:
                 if !attachment.fileUrl.isEmpty {
                     let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
-                    GatedVideoFullscreenPlayer(
-                        attachment: attachment,
-                        accentColor: contactColor,
-                        caption: caption,
-                        mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames
-                    )
+                    VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                        MeeshyVideoPlayer(
+                            attachment: attachment,
+                            style: .fullscreen,
+                            controls: .fullscreenDefault,
+                            accentColor: contactColor,
+                            frame: .flat,
+                            availability: availability,
+                            performance: .fullscreen,
+                            author: makeFullscreenVideoAuthor(),
+                            caption: caption,
+                            mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
+                            onDownload: onDownload,
+                            onClose: { fullscreenAttachment = nil }
+                        )
+                    }
                 } else {
                     Color.black.onAppear { fullscreenAttachment = nil }
                 }
@@ -1029,6 +1039,18 @@ struct BubbleStandardLayout: View {
                 isViewOnce: content.isViewOnce
             ),
             consumeViewOnce: onConsumeViewOnce
+        )
+    }
+
+    // MARK: - Fullscreen video author chip
+
+    private func makeFullscreenVideoAuthor() -> MeeshyVideoPlayer.VideoAuthor? {
+        let name = message.senderName ?? ""
+        guard !name.isEmpty else { return nil }
+        return MeeshyVideoPlayer.VideoAuthor(
+            displayName: name,
+            avatarUrl: message.senderAvatarURL,
+            userId: message.senderUserId ?? message.senderId
         )
     }
 }
