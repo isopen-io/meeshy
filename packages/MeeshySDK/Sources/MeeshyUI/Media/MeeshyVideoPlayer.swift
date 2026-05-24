@@ -73,8 +73,14 @@ public struct MeeshyVideoPlayer: View {
             }
         }
 
-        public static let bubble = Frame(maxAspectRatio: 1.6, maxHeight: nil,  cornerRadius: 0,  border: nil)
-        public static let card   = Frame(maxAspectRatio: 1.6, maxHeight: nil,  cornerRadius: 12, border: nil)
+        // `maxAspectRatio = nil` → la hauteur suit purement le ratio source
+        // (width = largeur disponible, height = width / videoAspectRatio).
+        // Bubble/card respectent intégralement le format de la vidéo, jusqu'à
+        // un 9:16 portrait qui occupera ~60% d'un écran iPhone. C'est voulu.
+        public static let bubble = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 0,  border: nil)
+        public static let card   = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 12, border: nil)
+        // Mini reste plafonné à 1:1 + 120pt (preview chip, pas de raison de
+        // déborder en hauteur pour un thumbnail).
         public static let mini   = Frame(maxAspectRatio: 1.0, maxHeight: 120,  cornerRadius: 8,  border: nil)
         public static let flat   = Frame(maxAspectRatio: nil, maxHeight: nil,  cornerRadius: 0,  border: nil)
     }

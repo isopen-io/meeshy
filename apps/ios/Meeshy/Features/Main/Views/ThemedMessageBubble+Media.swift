@@ -24,12 +24,14 @@ extension BubbleStandardLayout {
         case 1:
             let item = items[0]
             if item.type == .video {
-                // Video: let aspect ratio drive height (capped at 1.6× width
-                // for portrait). Replaces the legacy hardcoded `height: 200`
-                // that squashed portrait 9:16 sources.
+                // Video : the cell fills the bubble width, and the renderer's
+                // own `.aspectRatio(videoAspectRatio, .fit)` drives the height
+                // intrinsically from the source ratio — no cap. Portrait 9:16
+                // becomes tall (≈ width × 1.78), landscape 16:9 becomes short
+                // (≈ width × 0.56). Replaces the legacy hardcoded `height: 200`
+                // that squashed portrait sources.
                 makeGridCell(item, solo: true)
                     .frame(width: gridMaxWidth)
-                    .frame(maxHeight: item.videoHeight(forWidth: gridMaxWidth))
             } else {
                 makeGridCell(item, solo: true)
                     .frame(width: gridMaxWidth, height: 240)
@@ -557,10 +559,14 @@ struct BubbleCarouselView: View {
     @State private var currentPageID: String?
 
     private func carouselHeight(width: CGFloat) -> CGFloat {
-        let cap = width * 1.6
+        // Pager height = max(width / ratio) — pure aspect ratio respect, no
+        // cap. A portrait 9:16 slide in the mix dictates the pager height
+        // (≈ width × 1.78); landscape slides are letterboxed inside that
+        // height with their natural aspect. Voulu pour respecter le format
+        // de chaque vidéo.
         let heights = items.map { att -> CGFloat in
             let r = att.videoAspectRatio ?? (16.0 / 9.0)
-            return min(width / r, cap)
+            return width / r
         }
         return heights.max() ?? width * 9 / 16
     }
