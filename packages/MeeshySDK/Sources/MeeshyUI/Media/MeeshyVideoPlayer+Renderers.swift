@@ -265,8 +265,18 @@ internal struct _InlineRenderer: View {
 
 internal struct _MiniRenderer: View {
     let player: MeeshyVideoPlayer
+
     var body: some View {
-        Color.gray // Implemented in Task 9
+        MeeshyVideoThumbnail(
+            attachment: player.attachment,
+            accentColor: player.accentColor,
+            showPlayBadge: true,
+            showDurationBadge: player.controls.contains(.duration),
+            cornerRadius: player.frame.cornerRadius,
+            onTap: player.onExpand
+        )
+        .aspectRatio(player.attachment.videoAspectRatio ?? 1.0, contentMode: .fit)
+        .applyVideoFrame(player.frame)
     }
 }
 
