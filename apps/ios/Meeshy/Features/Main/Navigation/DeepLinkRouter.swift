@@ -12,6 +12,7 @@ enum DeepLinkDestination {
     case magicLink(token: String)
     case share(text: String?, url: String?)
     case userLinks
+    case postDetail(postId: String)
     case external(URL)
 }
 
@@ -24,15 +25,17 @@ enum DeepLinkParser {
     /// Parse any URL into a deep link destination.
     ///
     /// Handles:
-    /// - `https://meeshy.me/me`          -> own profile
-    /// - `https://meeshy.me/u/{username}` -> user profile
-    /// - `https://meeshy.me/c/{id}`       -> conversation
-    /// - `meeshy://me`                    -> own profile
-    /// - `meeshy://u/{username}`          -> user profile
-    /// - `meeshy://c/{id}`               -> conversation
-    /// - `meeshy://share?text=...`        -> share text content
-    /// - `meeshy://share?url=...`         -> share URL content
-    /// - Everything else                  -> open externally
+    /// - `https://meeshy.me/me`              -> own profile
+    /// - `https://meeshy.me/u/{username}`    -> user profile
+    /// - `https://meeshy.me/c/{id}`          -> conversation
+    /// - `https://meeshy.me/feeds/post/{id}` -> post detail
+    /// - `meeshy://me`                       -> own profile
+    /// - `meeshy://u/{username}`             -> user profile
+    /// - `meeshy://c/{id}`                   -> conversation
+    /// - `meeshy://post/{id}`                -> post detail
+    /// - `meeshy://share?text=...`           -> share text content
+    /// - `meeshy://share?url=...`            -> share URL content
+    /// - Everything else                     -> open externally
     static func parse(_ url: URL) -> DeepLinkDestination {
         if url.scheme == "meeshy" {
             return parseCustomScheme(url)
@@ -97,6 +100,16 @@ enum DeepLinkParser {
             if components.count >= 2 { return .userProfile(username: components[1]) }
         case "c":
             if components.count >= 2 { return .conversation(id: components[1]) }
+        case "post":
+            // meeshy://post/{postId} — direct shortcut to a post detail view.
+            if components.count >= 2 { return .postDetail(postId: components[1]) }
+        case "feeds":
+            // meeshy://feeds/post/{postId} — mirror of the web Universal Link
+            // path so the custom scheme accepts the same shape as the
+            // production URL recipients see in clipboards / email previews.
+            if components.count >= 3, components[1] == "post" {
+                return .postDetail(postId: components[2])
+            }
         default:
             break
         }
@@ -125,6 +138,15 @@ enum DeepLinkParser {
            let queryItems = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems,
            let token = queryItems.first(where: { $0.name == "token" })?.value {
             return .magicLink(token: token)
+        }
+
+        // https://meeshy.me/feeds/post/{postId} -> post detail.
+        // Claimed as a Universal Link in apple-app-site-association so iOS
+        // opens this directly inside the app whenever it's installed; the
+        // Next.js rewrite serves the same path on the web for non-iOS
+        // recipients (or when the app rejects the link).
+        if components.count >= 3, components[0] == "feeds", components[1] == "post" {
+            return .postDetail(postId: components[2])
         }
 
         if components.count >= 2 {
@@ -156,6 +178,7 @@ enum DeepLink: Equatable {
     case chatLink(identifier: String)
     case magicLink(token: String)
     case conversation(id: String)
+    case postDetail(postId: String)
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
@@ -205,6 +228,17 @@ final class DeepLinkRouter: ObservableObject {
         case "c", "conversation":
             guard let conversationId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
             pendingDeepLink = .conversation(id: conversationId)
+            return true
+
+        case "feeds":
+            // `/feeds/post/{postId}` — Universal Link surface for the public
+            // share URL minted by the gateway (`FRONTEND_URL/feeds/post/<id>`).
+            // The recipient lands directly inside PostDetailView when the app
+            // is installed; the same path is served by the Next.js rewrite
+            // for non-iOS recipients.
+            guard pathComponents.count >= 3, pathComponents[1] == "post" else { return false }
+            guard let postId = nonEmptyIdentifier(at: 2, in: pathComponents) else { return false }
+            pendingDeepLink = .postDetail(postId: postId)
             return true
 
         default:
@@ -259,6 +293,20 @@ final class DeepLinkRouter: ObservableObject {
         case "conversation":
             guard let conversationId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
             pendingDeepLink = .conversation(id: conversationId)
+            return true
+
+        case "post":
+            // meeshy://post/{postId} — direct custom-scheme shortcut.
+            guard let postId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            pendingDeepLink = .postDetail(postId: postId)
+            return true
+
+        case "feeds":
+            // meeshy://feeds/post/{postId} — mirror of the Universal Link
+            // shape so any pasted form of the share URL works identically.
+            guard !pathComponents.isEmpty, pathComponents[0] == "post" else { return false }
+            guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+            pendingDeepLink = .postDetail(postId: postId)
             return true
 
         default:

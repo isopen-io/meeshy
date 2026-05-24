@@ -571,4 +571,131 @@ final class DeepLinkEquatableTests: XCTestCase {
         XCTAssertNotEqual(DeepLink.magicLink(token: "x"), DeepLink.joinLink(identifier: "x"))
         XCTAssertNotEqual(DeepLink.chatLink(identifier: "x"), DeepLink.joinLink(identifier: "x"))
     }
+
+    func test_postDetail_equality() {
+        XCTAssertEqual(DeepLink.postDetail(postId: "p1"), DeepLink.postDetail(postId: "p1"))
+        XCTAssertNotEqual(DeepLink.postDetail(postId: "p1"), DeepLink.postDetail(postId: "p2"))
+        XCTAssertNotEqual(DeepLink.postDetail(postId: "x"), DeepLink.conversation(id: "x"))
+    }
+}
+
+// MARK: - DeepLinkParser Post Detail Tests
+
+final class DeepLinkParserPostDetailTests: XCTestCase {
+
+    func test_parse_webUrl_feedsPost_returnsPostDetail() {
+        let url = URL(string: "https://meeshy.me/feeds/post/abc123def456")!
+        let result = DeepLinkParser.parse(url)
+        guard case .postDetail(let postId) = result else {
+            XCTFail("Expected .postDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "abc123def456")
+    }
+
+    func test_parse_webUrl_feedsPost_wwwSubdomain() {
+        let url = URL(string: "https://www.meeshy.me/feeds/post/post789")!
+        let result = DeepLinkParser.parse(url)
+        guard case .postDetail(let postId) = result else {
+            XCTFail("Expected .postDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "post789")
+    }
+
+    func test_parse_webUrl_feedsPost_appSubdomain() {
+        let url = URL(string: "https://app.meeshy.me/feeds/post/post000")!
+        let result = DeepLinkParser.parse(url)
+        guard case .postDetail(let postId) = result else {
+            XCTFail("Expected .postDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "post000")
+    }
+
+    func test_parse_webUrl_feedsList_noPostId_returnsExternal() {
+        let url = URL(string: "https://meeshy.me/feeds")!
+        let result = DeepLinkParser.parse(url)
+        guard case .external = result else {
+            XCTFail("Expected .external for /feeds without post id, got \(result)")
+            return
+        }
+    }
+
+    func test_parse_customScheme_post_returnsPostDetail() {
+        let url = URL(string: "meeshy://post/postXYZ")!
+        let result = DeepLinkParser.parse(url)
+        guard case .postDetail(let postId) = result else {
+            XCTFail("Expected .postDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "postXYZ")
+    }
+
+    func test_parse_customScheme_feedsPost_returnsPostDetail() {
+        let url = URL(string: "meeshy://feeds/post/postABC")!
+        let result = DeepLinkParser.parse(url)
+        guard case .postDetail(let postId) = result else {
+            XCTFail("Expected .postDetail, got \(result)")
+            return
+        }
+        XCTAssertEqual(postId, "postABC")
+    }
+}
+
+// MARK: - DeepLinkRouter Post Detail Tests
+
+@MainActor
+final class DeepLinkRouterPostDetailTests: XCTestCase {
+
+    private func makeSUT() -> DeepLinkRouter { DeepLinkRouter() }
+
+    func test_handle_feedsPost_setsPendingDeepLink() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/feeds/post/postShareToken")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .postDetail(postId: "postShareToken"))
+    }
+
+    func test_handle_feedsPost_emptyId_returnsFalse() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/feeds/post/")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertFalse(handled)
+        XCTAssertNil(sut.pendingDeepLink)
+    }
+
+    func test_handle_feedsWithoutPost_returnsFalse() {
+        let sut = makeSUT()
+        let url = URL(string: "https://meeshy.me/feeds/explore/today")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertFalse(handled)
+    }
+
+    func test_handle_customScheme_post_setsPendingDeepLink() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://post/postCustom")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .postDetail(postId: "postCustom"))
+    }
+
+    func test_handle_customScheme_feedsPost_setsPendingDeepLink() {
+        let sut = makeSUT()
+        let url = URL(string: "meeshy://feeds/post/postMirror")!
+
+        let handled = sut.handle(url: url)
+
+        XCTAssertTrue(handled)
+        XCTAssertEqual(sut.pendingDeepLink, .postDetail(postId: "postMirror"))
+    }
 }

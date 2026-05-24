@@ -586,6 +586,12 @@ struct RootView: View {
             // infinite loop to the user.
             navigateToConversationById(id)
 
+        case .postDetail(let postId):
+            // PostDetailView lazy-loads the post itself, so we can push
+            // immediately with `initialPost: nil`. The route case already
+            // exists for in-app feed taps; the deep link just reuses it.
+            router.push(.postDetail(postId))
+
         case .magicLink:
             break
         }

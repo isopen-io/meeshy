@@ -237,6 +237,9 @@ final class Router: ObservableObject {
                     self.push(.links)
                 }
 
+            case .postDetail(let postId):
+                push(.postDetail(postId))
+
             case .external:
                 break
             }

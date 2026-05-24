@@ -47,6 +47,10 @@ extension iPadRootView {
             // recreating the same empty view — perceived as an infinite
             // loop.
             navigateToConversationById(id)
+        case .postDetail(let postId):
+            // iPad surfaces the post detail in the right column, matching
+            // the existing post-notification handling above.
+            rightPanelRoute = .postDetail(postId)
         case .magicLink:
             break
         }
