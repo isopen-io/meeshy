@@ -295,6 +295,13 @@ fileprivate struct BubbleGridCell: View {
     /// Inline video player path. `VideoAvailabilityResolver` resolves download
     /// policy and passes `VideoAvailability` to `MeeshyVideoPlayer`, which owns
     /// the play affordance, download badge, and fullscreen expand button.
+    ///
+    /// PAS de `.frame(maxWidth: .infinity, maxHeight: .infinity)` sur le
+    /// `VideoAvailabilityResolver` : ça écraserait la contrainte d'`.aspectRatio`
+    /// posée par le `_InlineRenderer` interne, et la bulle s'aplatirait en
+    /// paysage au moment du tap-play. Le ratio est piloté EXCLUSIVEMENT par
+    /// le renderer du SDK qui reporte sa frame naturelle (`width × W/ratio`)
+    /// à ce ZStack, lequel se sizes dessus.
     private var videoBody: some View {
         ZStack {
             Color.black
@@ -311,7 +318,6 @@ fileprivate struct BubbleGridCell: View {
                     onExpand: { fullscreenAttachment = attachment }
                 )
             }
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
             overflowOverlay
             viewCountBadge
         }

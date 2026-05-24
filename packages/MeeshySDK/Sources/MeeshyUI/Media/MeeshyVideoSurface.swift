@@ -36,6 +36,25 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
         }
     }
 
+    /// Force la UIView à accepter le frame proposé par SwiftUI au lieu de
+    /// retomber sur la `naturalSize` de l'`AVPlayerLayer`. Sans cet override,
+    /// un `.aspectRatio(ratio, .fit)` au-dessus du surface est ignoré dès
+    /// qu'un `AVPlayer` est attaché : SwiftUI lit l'intrinsic landscape
+    /// `1280×720` de l'asset et écrase la contrainte de ratio portrait,
+    /// ce qui aplatissait la bulle vidéo 9:16 en 16:9 au moment du tap-play.
+    ///
+    /// Si une dimension du proposal est `nil` ou `.infinity`, on renvoie
+    /// `nil` pour laisser SwiftUI utiliser l'`intrinsicContentSize`
+    /// (`noIntrinsicMetric`) — la UIView accepte alors la frame du parent
+    /// sans réintroduire la naturalSize de l'AVPlayerLayer.
+    func sizeThatFits(_ proposal: ProposedViewSize, uiView: _SurfaceUIView, context: Context) -> CGSize? {
+        guard let w = proposal.width, let h = proposal.height,
+              w.isFinite, h.isFinite, w > 0, h > 0 else {
+            return nil
+        }
+        return CGSize(width: w, height: h)
+    }
+
     final class _SurfaceUIView: UIView {
         override class var layerClass: AnyClass { AVPlayerLayer.self }
         var playerLayer: AVPlayerLayer {
@@ -43,6 +62,12 @@ internal struct MeeshyVideoSurface: UIViewRepresentable {
                 preconditionFailure("MeeshyVideoSurface layer must be AVPlayerLayer")
             }
             return layer
+        }
+
+        /// Pas d'intrinsic content size — la frame doit venir exclusivement
+        /// du parent SwiftUI (driven par `.aspectRatio` ou `.frame`).
+        override var intrinsicContentSize: CGSize {
+            CGSize(width: UIView.noIntrinsicMetric, height: UIView.noIntrinsicMetric)
         }
     }
 }

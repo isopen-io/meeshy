@@ -216,6 +216,13 @@ public final class SharedAVPlayerManager: ObservableObject {
                 self.watchStartTime = nil
                 self.isPlaying = false
                 self.seek(to: 0)
+                // Clear `activeURL` + tear down player + release `AVAudioSession`.
+                // Sans ce stop, `isThisActive` reste `true` dans `_InlineRenderer`,
+                // la surface reste mountée sur la dernière frame de la vidéo et
+                // l'utilisateur ne revient jamais au thumbnail + play badge.
+                // Le re-tap relancera `load(urlString:)` qui hit le cache disk
+                // (lecture instantanée — pas de re-download).
+                self.stop()
             }
             .store(in: &cancellables)
     }

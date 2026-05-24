@@ -65,23 +65,44 @@ internal struct _InlineRenderer: View {
     @State private var controlsTimer: Timer?
     @ObservedObject private var manager = SharedAVPlayerManager.shared
 
+    /// Aspect ratio DISPLAY (post-rotation) résolu async depuis le
+    /// `preferredTransform` de l'AVAsset. iOS stocke les vidéos portrait
+    /// shootées au téléphone comme `1280×720` paysage + transform de
+    /// rotation 90° ; `attachment.width/height` reflètent le storage
+    /// (paysage), pas l'affichage (portrait). Le thumbnail PNG, lui, est
+    /// pré-tourné et reflète le display orientation — c'est pourquoi la
+    /// bulle thumbnail apparaît portrait alors que `videoAspectRatio` dit
+    /// paysage. Cette state aligne le cadre du surface sur la même
+    /// orientation que le thumbnail, supprimant le saut entre les états.
+    @State private var displayAspectRatio: CGFloat?
+
     private var isThisActive: Bool {
         manager.activeURL == player.attachment.fileUrl && manager.player != nil
     }
 
+    /// Ratio source-de-vérité unique pour cette bulle. `displayAspectRatio`
+    /// async prend précédence dès qu'il est résolu ; sinon fallback sur le
+    /// `videoAspectRatio` de l'attachment (storage), puis 16:9.
+    private var bubbleAspectRatio: CGFloat {
+        displayAspectRatio ?? player.attachment.videoAspectRatio ?? (16.0 / 9.0)
+    }
+
     var body: some View {
+        // `.aspectRatio(.fit)` est posé au niveau du ZStack OUTER : c'est la
+        // seule contrainte qui drive la taille de la bulle, identique entre
+        // les branches thumbnail et active. `Color.black` en premier enfant
+        // garantit que le ZStack assert une taille même quand les autres
+        // enfants n'ont pas d'intrinsic size (MeeshyVideoSurface est un
+        // UIViewRepresentable sans intrinsic, _InlineOverlayControls n'a pas
+        // de frame explicite). Le ratio outer + le sizeThatFits override sur
+        // MeeshyVideoSurface garantissent que la surface accepte exactement
+        // la frame proposée par le ratio, sans retomber sur la naturalSize
+        // de l'AVPlayerLayer.
         ZStack {
-            // Baseline backdrop — always present so the ZStack asserts a
-            // consistent size before SwiftUI sees the UIViewRepresentable
-            // surface (which has no intrinsic size). Without this the frame
-            // shrinks when the active branch mounts the surface because
-            // nothing else fills. Invisible inside the bubble (bubble bg
-            // is already black) but mandatory for layout stability.
             Color.black
 
             if isThisActive, let p = manager.player {
                 MeeshyVideoSurface(player: p, gravity: .resizeAspect, isMuted: false)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onTapGesture { toggleControls() }
                 if showControls {
                     _InlineOverlayControls(
@@ -99,15 +120,40 @@ internal struct _InlineRenderer: View {
                     showPlayBadge: false,
                     showDurationBadge: player.controls.contains(.duration)
                 )
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 playButton
             }
         }
-        .aspectRatio(player.attachment.videoAspectRatio ?? (16.0 / 9.0), contentMode: .fit)
+        .aspectRatio(bubbleAspectRatio, contentMode: .fit)
         .applyVideoFrame(player.frame)
+        .task(id: player.attachment.fileUrl) {
+            await resolveDisplayAspectRatio()
+        }
         .onDisappear { teardown() }
         .animation(.easeInOut(duration: 0.2), value: showControls)
         .animation(.easeInOut(duration: 0.15), value: isThisActive)
+    }
+
+    /// Charge l'AVAsset et applique son `preferredTransform` à la `naturalSize`
+    /// pour obtenir l'orientation d'affichage réelle. Couvre le cas iPhone
+    /// portrait stocké en paysage + rotation 90°.
+    @MainActor
+    private func resolveDisplayAspectRatio() async {
+        guard displayAspectRatio == nil else { return }
+        guard let url = MeeshyConfig.resolveMediaURL(player.attachment.fileUrl) else { return }
+        let asset = AVURLAsset(url: url)
+        do {
+            let tracks = try await asset.loadTracks(withMediaType: .video)
+            guard let track = tracks.first else { return }
+            let naturalSize = try await track.load(.naturalSize)
+            let transform = try await track.load(.preferredTransform)
+            let display = naturalSize.applying(transform)
+            let w = abs(display.width)
+            let h = abs(display.height)
+            guard w > 0, h > 0 else { return }
+            displayAspectRatio = w / h
+        } catch {
+            // Le fallback `attachment.videoAspectRatio ?? 16/9` reste actif.
+        }
     }
 
     private var playButton: some View {
