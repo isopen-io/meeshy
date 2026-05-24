@@ -93,6 +93,17 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     nonisolated(unsafe) var avPlayerLayer: AVPlayerLayer?
     nonisolated(unsafe) var avPlayerLooper: AVPlayerLooper?
 
+    /// `true` quand `configure(kind:)` a stampé `contentLayer.contents` avec
+    /// une image FINALE (warm L1 cache hit OU bytes téléchargés via HTTP),
+    /// pas juste un placeholder ThumbHash. Lu par
+    /// `StoryCanvasUIView.scheduleContentReadyEvaluation(.image)` pour
+    /// court-circuiter le KVO observer : quand le NSCache rend la même
+    /// instance UIImage entre le warm-hit synchrone et le re-stamp async,
+    /// `contents` ne change pas d'identité et l'observer ne fire jamais —
+    /// d'où le loader infini à 0% sur les stories image (régression du
+    /// commit a60f636b5 / 2026-05-20).
+    @MainActor public private(set) var hasFinalContentStamped: Bool = false
+
     public override nonisolated init() { super.init() }
     public override nonisolated init(layer: Any) { super.init(layer: layer) }
 
@@ -100,6 +111,7 @@ public final class StoryBackgroundLayer: CALayer, @unchecked Sendable {
     public required nonisolated init?(coder: NSCoder) {
         fatalError("StoryBackgroundLayer does not support NSCoder")
     }
+
 }
 
 // MARK: - Configure
@@ -149,6 +161,11 @@ extension StoryBackgroundLayer {
         avPlayerLayer = nil
         avPlayerLooper = nil
         contentLayer = nil
+        // Reset readiness flag — sera re-armé par les fast-paths (warm hit /
+        // HTTP load) en `case .image`. Couleur / gradient n'utilisent pas ce
+        // flag (ils ont leur propre chemin `.solidColor` / `.gradient` dans
+        // `scheduleContentReadyEvaluation`).
+        hasFinalContentStamped = false
 
         switch kind {
         case .solidColor(let color):
@@ -187,6 +204,7 @@ extension StoryBackgroundLayer {
                let cached = CacheCoordinator.warmedImage(for: warm.absoluteString)?.cgImage {
                 img.contents = cached
                 hasVisual = true
+                hasFinalContentStamped = true
             }
 
             // Synchronous thumbHash placeholder (si pas de hit cache chaud).
@@ -229,11 +247,12 @@ extension StoryBackgroundLayer {
             let imageCacheReader = imageCache
             let urlResolver = resolver
             if directURL != nil || imageCacheReader != nil || urlResolver != nil {
-                Task { @MainActor [weak img] in
+                Task { @MainActor [weak self, weak img] in
                     // (1) Fast-path cache (preview / disque).
                     if let imageCacheReader,
                        let cached = await imageCacheReader.cachedImage(for: postMediaId) {
                         img?.contents = cached.cgImage
+                        self?.hasFinalContentStamped = true
                         return
                     }
                     // (2) URL directe embarquée, sinon (3) resolver distant.
@@ -242,10 +261,12 @@ extension StoryBackgroundLayer {
                         if let data = try? Data(contentsOf: url),
                            let uiImage = UIImage(data: data) {
                             img?.contents = uiImage.cgImage
+                            self?.hasFinalContentStamped = true
                         }
                     } else if let data = try? await CacheCoordinator.shared.images.data(for: url.absoluteString),
                               let uiImage = UIImage(data: data) {
                         img?.contents = uiImage.cgImage
+                        self?.hasFinalContentStamped = true
                     }
                 }
                 break

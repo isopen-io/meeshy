@@ -1724,13 +1724,28 @@ extension StoryItem {
     /// Reconstructs a renderable `StorySlide` from a published `StoryItem`.
     /// Resolves `content` via the Prisme Linguistique chain when available.
     /// Used by `StoryReaderRepresentable` to feed the canvas.
+    ///
+    /// `slide.mediaURL` est un champ LEGACY pour les stories antérieures à
+    /// `effects.mediaObjects` (où l'asset bg était directement dans
+    /// `StoryItem.media[0]`). Quand `effects.mediaObjects` existe — i.e. la
+    /// story moderne où chaque asset porte sa position / scale / isBackground
+    /// — il faut LAISSER `slide.mediaURL = nil` ; sinon `StoryRenderer
+    /// .renderBackground` tombe dans son chemin legacy
+    /// `if let urlString = slide.mediaURL` qui passe `slide.id` (= post id)
+    /// comme `postMediaId` au `StoryBackgroundLayer`. Le resolver ne sait
+    /// pas mapper un post id à une URL CDN (il indexe sur PostMedia.id),
+    /// donc le BG layer reste vide et le loader infini masque tout — y
+    /// compris le foreground correctement stampé par `StoryMediaLayer`.
     public func toRenderableSlide(preferredLanguages: [String]) -> StorySlide {
         let resolvedContent = self.resolvedContent(preferredLanguage: preferredLanguages.first)
                               ?? self.content
         let effects = self.storyEffects ?? StoryEffects()
+        let legacyMediaURL: String? = effects.mediaObjects?.isEmpty == false
+            ? nil
+            : self.media.first?.url
         return StorySlide(
             id: self.id,
-            mediaURL: self.media.first?.url,
+            mediaURL: legacyMediaURL,
             content: resolvedContent,
             effects: effects
         )

@@ -278,19 +278,26 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
 
         let loader = imageLoader
         let postMediaId = media.postMediaId
-        currentLoadTask = Task { @MainActor [weak self] in
+        // Strong capture de `self` dans la Task. `[weak self]` faisait que la
+        // layer se désallouait entre le `await` et le stamp `contents` —
+        // `rebuildLayers()` à 60 Hz détache la layer du parent et, à chaque
+        // cache miss du `StoryRendererCache`, ARC libère l'ancien layer avant
+        // que la Task n'arrive au stamp. Le `guard let self` retournait sans
+        // jamais stamper le bitmap → l'image foreground restait invisible.
+        // Le cycle Task→self→Task se ferme dès le `return` de la Task :
+        // pas de leak persistant.
+        currentLoadTask = Task { @MainActor in
             // (1) Fast-path image cache (composer preview / disk-backed reader).
             if let imageCache,
                let cached = await imageCache.cachedImage(for: postMediaId)?.cgImage {
-                guard let self, !Task.isCancelled else { return }
+                guard !Task.isCancelled else { return }
                 self.contents = cached
                 return
             }
             // (2) Network URL through the disk-cache-backed loader.
             guard let url = resolvedURL else { return }
             let loaded = await loader.image(for: url.absoluteString)
-            guard let self,
-                  !Task.isCancelled,
+            guard !Task.isCancelled,
                   let cgImage = loaded?.cgImage else { return }
             self.contents = cgImage
         }
