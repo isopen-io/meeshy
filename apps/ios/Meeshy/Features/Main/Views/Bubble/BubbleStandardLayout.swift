@@ -404,6 +404,7 @@ struct BubbleStandardLayout: View {
             case .video:
                 if !attachment.fileUrl.isEmpty {
                     let caption = message.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : message.content
+                    let resolvedShareURL = MeeshyConfig.resolveMediaURL(attachment.fileUrl)
                     VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
                         MeeshyVideoPlayer(
                             attachment: attachment,
@@ -415,8 +416,15 @@ struct BubbleStandardLayout: View {
                             performance: .fullscreen,
                             author: makeFullscreenVideoAuthor(),
                             caption: caption,
+                            fileName: attachment.originalName,
                             mentionDisplayNames: mentionDisplayNames.isEmpty ? nil : mentionDisplayNames,
                             onDownload: onDownload,
+                            onShare: resolvedShareURL.map { url in
+                                {
+                                    shareURL = url
+                                    showShareSheet = true
+                                }
+                            },
                             onClose: { fullscreenAttachment = nil }
                         )
                     }

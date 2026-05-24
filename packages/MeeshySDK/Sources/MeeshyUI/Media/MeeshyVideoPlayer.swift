@@ -129,9 +129,11 @@ public struct MeeshyVideoPlayer: View {
     public let performance: PerformanceOptions
     public let author: VideoAuthor?
     public let caption: String?
+    public let fileName: String?
     public let mentionDisplayNames: [String: String]?
     public let onDownload: (() -> Void)?
     public let onExpand: (() -> Void)?
+    public let onShare: (() -> Void)?
     public let onClose: (() -> Void)?
     public let onSaveSuccess: (() -> Void)?
 
@@ -145,9 +147,11 @@ public struct MeeshyVideoPlayer: View {
         performance: PerformanceOptions? = nil,
         author: VideoAuthor? = nil,
         caption: String? = nil,
+        fileName: String? = nil,
         mentionDisplayNames: [String: String]? = nil,
         onDownload: (() -> Void)? = nil,
         onExpand: (() -> Void)? = nil,
+        onShare: (() -> Void)? = nil,
         onClose: (() -> Void)? = nil,
         onSaveSuccess: (() -> Void)? = nil
     ) {
@@ -160,9 +164,11 @@ public struct MeeshyVideoPlayer: View {
         self.performance = performance ?? Self.inferPerformance(for: style)
         self.author = author
         self.caption = caption
+        self.fileName = fileName
         self.mentionDisplayNames = mentionDisplayNames
         self.onDownload = onDownload
         self.onExpand = onExpand
+        self.onShare = onShare
         self.onClose = onClose
         self.onSaveSuccess = onSaveSuccess
     }

@@ -50,52 +50,44 @@ internal struct _FlatRenderer: View {
 }
 
 // MARK: - Inline Renderer
+//
+// Plays through `SharedAVPlayerManager` (single active inline at a time).
+// While playing the surface fills the bubble area — no `Color.black` letterbox
+// underneath because the aspect-ratio constraint matches the video natively
+// (height = width × min(1/ratio, maxAspectRatio)). The overlay controls are
+// drawn ON the video as a layered top/center/bottom stack (legacy parity
+// with `VideoPlayerOverlayControls`).
 
 internal struct _InlineRenderer: View {
     let player: MeeshyVideoPlayer
 
-    @State private var avPlayer: AVPlayer?
-    @State private var hasStartedPlayback = false
-    @State private var showControls = true
+    @State private var showControls: Bool = true
     @State private var controlsTimer: Timer?
-    @State private var statusObserver: NSKeyValueObservation?
-    @StateObject private var controller = VideoPlaybackController()
-    @ObservedObject private var sharedManager = SharedAVPlayerManager.shared
+    @ObservedObject private var manager = SharedAVPlayerManager.shared
 
-    private var isUsingSharedManager: Bool { player.performance.sharedPlayer }
-    private var effectivePlayer: AVPlayer? {
-        if isUsingSharedManager {
-            return sharedManager.player
-        }
-        return avPlayer
-    }
     private var isThisActive: Bool {
-        if isUsingSharedManager {
-            return sharedManager.activeURL == player.attachment.fileUrl
-        }
-        return hasStartedPlayback
+        manager.activeURL == player.attachment.fileUrl && manager.player != nil
     }
 
     var body: some View {
         ZStack {
-            Color.black
-            if let p = effectivePlayer, isThisActive {
+            if isThisActive, let p = manager.player {
                 MeeshyVideoSurface(player: p, gravity: .resizeAspect, isMuted: false)
                     .onTapGesture { toggleControls() }
                 if showControls {
-                    VStack {
-                        Spacer()
-                        _OverlayControlsBar(
-                            player: p,
-                            accentColor: player.accentColor,
-                            controls: player.controls,
-                            onExpand: player.onExpand
-                        )
-                        .padding(.bottom, 10)
-                    }
+                    _InlineOverlayControls(
+                        manager: manager,
+                        accentColor: player.accentColor,
+                        controls: player.controls,
+                        onExpand: player.onExpand
+                    )
                     .transition(.opacity)
                 }
             } else {
+                // Thumbnail phase — keep a black backdrop so the play button
+                // pops on any thumbnail color. While playing we drop the
+                // backdrop entirely so the video fills width-bubble fully.
+                Color.black
                 MeeshyVideoThumbnail(
                     attachment: player.attachment,
                     accentColor: player.accentColor,
@@ -105,9 +97,8 @@ internal struct _InlineRenderer: View {
                 playButton
             }
         }
-        .aspectRatio(player.attachment.videoAspectRatio ?? (16.0/9.0), contentMode: .fit)
+        .aspectRatio(player.attachment.videoAspectRatio ?? (16.0 / 9.0), contentMode: .fit)
         .applyVideoFrame(player.frame)
-        .onAppear { preloadIfNeeded() }
         .onDisappear { teardown() }
         .animation(.easeInOut(duration: 0.2), value: showControls)
         .animation(.easeInOut(duration: 0.15), value: isThisActive)
@@ -208,41 +199,16 @@ internal struct _InlineRenderer: View {
 
     private func startPlayback() {
         HapticFeedback.light()
-        if isUsingSharedManager {
-            sharedManager.attachmentId = player.attachment.id
-            sharedManager.load(urlString: player.attachment.fileUrl)
-            sharedManager.play()
-            hasStartedPlayback = true
-        } else {
-            preloadIfNeeded()
-            avPlayer?.playImmediately(atRate: 1.0)
-            hasStartedPlayback = true
-        }
+        manager.attachmentId = player.attachment.id
+        manager.load(urlString: player.attachment.fileUrl)
+        manager.play()
         scheduleControlsHide()
-    }
-
-    private func preloadIfNeeded() {
-        guard !isUsingSharedManager,
-              avPlayer == nil,
-              player.performance.preloadOnAppear || hasStartedPlayback,
-              let url = MeeshyConfig.resolveMediaURL(player.attachment.fileUrl) else { return }
-        let item = AVPlayerItem(url: url)
-        item.preferredForwardBufferDuration = player.performance.preferredForwardBufferDuration
-        let p = AVPlayer(playerItem: item)
-        p.automaticallyWaitsToMinimizeStalling = player.performance.waitsToMinimizeStalling
-        avPlayer = p
     }
 
     private func teardown() {
         controlsTimer?.invalidate(); controlsTimer = nil
-        statusObserver?.invalidate(); statusObserver = nil
-        if isUsingSharedManager {
-            if sharedManager.activeURL == player.attachment.fileUrl {
-                sharedManager.pause()
-            }
-        } else {
-            avPlayer?.pause()
-            avPlayer = nil
+        if manager.activeURL == player.attachment.fileUrl {
+            manager.pause()
         }
     }
 
@@ -261,7 +227,7 @@ internal struct _InlineRenderer: View {
     }
 }
 
-// MARK: - Mini Renderer (Task 9 — stub here)
+// MARK: - Mini Renderer
 
 internal struct _MiniRenderer: View {
     let player: MeeshyVideoPlayer
@@ -281,83 +247,110 @@ internal struct _MiniRenderer: View {
 }
 
 // MARK: - Fullscreen Renderer
+//
+// Routes through `SharedAVPlayerManager` so PIP + global play coordination
+// keep working. Legacy parity : filename in top bar, big center play/pause
+// + skip ±10s, custom seek bar with thumb + time current/total, speed row,
+// swipe-down dismiss (with PIP handoff), pinch-zoom aspect toggle, real
+// save and share buttons, availability gate (downloads if not ready).
 
 internal struct _FullscreenRenderer: View {
     let player: MeeshyVideoPlayer
 
-    @State private var avPlayer: AVPlayer?
-    @State private var gravity: AVLayerVideoGravity = .resizeAspect
+    @State private var showControls: Bool = true
+    @State private var controlsTimer: Timer?
+    @State private var videoGravity: AVLayerVideoGravity = .resizeAspect
     @State private var saveState: SaveState = .idle
+    @State private var dismissOffset: CGFloat = 0
     @State private var watchStartTime: Date?
     @State private var endObserver: NSObjectProtocol?
+    @ObservedObject private var manager = SharedAVPlayerManager.shared
 
-    enum SaveState { case idle, saving, saved, failed }
+    internal enum SaveState { case idle, saving, saved, failed }
 
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            if let p = avPlayer {
-                MeeshyVideoSurface(player: p, gravity: gravity, isMuted: false)
-                    .ignoresSafeArea()
-                    .onTapGesture(count: 2) {
-                        gravity = (gravity == .resizeAspect) ? .resizeAspectFill : .resizeAspect
-                        HapticFeedback.light()
-                    }
+
+            switch player.availability {
+            case .ready:
+                if isActive {
+                    playerContent
+                } else {
+                    loadingState
+                }
+            case .needsDownload, .downloading:
+                downloadOverlay
             }
-            chromeOverlay
         }
-        .onAppear { setup() }
-        .onDisappear { teardown() }
+        .offset(y: dismissOffset)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: dismissOffset)
+        .onAppear { watchStartTime = Date() }
+        .onDisappear { onDisappearTeardown() }
+        .statusBarHidden(true)
     }
 
-    private var chromeOverlay: some View {
+    private var isActive: Bool {
+        manager.player != nil && manager.activeURL == player.attachment.fileUrl
+    }
+
+    // MARK: Player content (active)
+
+    private var playerContent: some View {
+        ZStack {
+            if let p = manager.player {
+                MeeshyVideoSurface(player: p, gravity: videoGravity, isMuted: false)
+                    .ignoresSafeArea()
+                    .onTapGesture { toggleControls() }
+                    .gesture(swipeDownGesture)
+                    .gesture(pinchGesture)
+            }
+            if showControls {
+                _FullscreenOverlayControls(
+                    manager: manager,
+                    accentColor: player.accentColor,
+                    controls: player.controls,
+                    fileName: player.fileName,
+                    onClose: { closePlayer() },
+                    onSave: { saveToPhotos() },
+                    onShare: player.onShare,
+                    saveState: saveState
+                )
+                .transition(.opacity)
+                authorAndCaptionOverlay
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: showControls)
+        .onAppear { observeEnd() }
+    }
+
+    @ViewBuilder
+    private var authorAndCaptionOverlay: some View {
         VStack {
-            topBar
-            Spacer()
-            bottomBar
-        }
-    }
-
-    private var topBar: some View {
-        HStack {
-            if player.controls.contains(.close) {
-                Button { player.onClose?() } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 28))
-                        .foregroundColor(.white.opacity(0.8))
-                        .padding()
+            if player.controls.contains(.author), let author = player.author {
+                HStack {
+                    authorChip(author)
+                        .padding(.top, 56)
+                        .padding(.leading, 16)
+                    Spacer()
                 }
             }
-            if player.controls.contains(.author), let author = player.author {
-                authorChip(author)
-            }
             Spacer()
-            if player.controls.contains(.save) { saveButton }
-            if player.controls.contains(.share) { shareButton }
-        }
-    }
-
-    private var bottomBar: some View {
-        VStack(spacing: 8) {
             if let caption = player.caption, !caption.isEmpty {
                 Text(caption)
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundColor(.white)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
-                    .lineLimit(3)
-            }
-            if let p = avPlayer {
-                _OverlayControlsBar(
-                    player: p,
-                    accentColor: player.accentColor,
-                    controls: player.controls.subtracting([.expand, .close, .save, .share, .author]),
-                    onExpand: nil
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 24)
+                    .padding(.vertical, 10)
+                    .background(.ultraThinMaterial)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 140)
+                    .lineLimit(4)
             }
         }
+        .allowsHitTesting(false)
     }
 
     private func authorChip(_ author: MeeshyVideoPlayer.VideoAuthor) -> some View {
@@ -383,79 +376,186 @@ internal struct _FullscreenRenderer: View {
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .background(Capsule().fill(.ultraThinMaterial.opacity(0.7)))
-            .padding(.leading, 4)
-            .padding(.top, 8)
         }
     }
 
-    private var saveButton: some View {
-        Button { saveToPhotos() } label: {
-            Group {
-                switch saveState {
-                case .idle:   Image(systemName: "arrow.down.to.line")
-                case .saving: ProgressView().tint(.white)
-                case .saved:  Image(systemName: "checkmark")
-                case .failed: Image(systemName: "xmark")
+    // MARK: Loading state (ready but manager not loaded yet)
+
+    private var loadingState: some View {
+        ProgressView()
+            .tint(.white)
+            .onAppear {
+                manager.attachmentId = player.attachment.id
+                manager.load(urlString: player.attachment.fileUrl)
+                manager.play()
+            }
+    }
+
+    // MARK: Download overlay (availability != ready)
+
+    @ViewBuilder
+    private var downloadOverlay: some View {
+        ZStack {
+            if player.attachment.thumbHash != nil ||
+               (player.attachment.thumbnailUrl?.isEmpty == false) {
+                ProgressiveCachedImage(
+                    thumbHash: player.attachment.thumbHash,
+                    thumbnailUrl: player.attachment.thumbnailUrl,
+                    fullUrl: player.attachment.thumbnailUrl ?? ""
+                ) {
+                    Color.black
+                }
+                .aspectRatio(contentMode: .fill)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .clipped()
+                .blur(radius: 18)
+                .overlay(Color.black.opacity(0.45))
+                .ignoresSafeArea()
+            }
+
+            VStack(spacing: 16) {
+                Button {
+                    player.onDownload?()
+                    HapticFeedback.light()
+                } label: {
+                    ZStack {
+                        Circle().fill(.ultraThinMaterial).frame(width: 88, height: 88)
+                        Circle().fill(Color(hex: player.accentColor).opacity(0.9)).frame(width: 72, height: 72)
+                        downloadOverlayIcon
+                    }
+                    .shadow(color: .black.opacity(0.5), radius: 12, y: 4)
+                }
+                .disabled({
+                    if case .downloading = player.availability { return true }
+                    return false
+                }())
+
+                Text(downloadOverlayMessage)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white.opacity(0.85))
+                    .multilineTextAlignment(.center)
+
+                Button {
+                    closePlayer()
+                    HapticFeedback.light()
+                } label: {
+                    Text(String(localized: "media.video.close", defaultValue: "Fermer", bundle: .module))
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.7))
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 8)
+                        .background(Capsule().fill(Color.white.opacity(0.12)))
+                }
+                .padding(.top, 8)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var downloadOverlayIcon: some View {
+        switch player.availability {
+        case .ready:
+            EmptyView()
+        case .needsDownload:
+            Image(systemName: "arrow.down.to.line")
+                .font(.system(size: 30, weight: .bold))
+                .foregroundColor(.white)
+        case .downloading(let progress):
+            if progress > 0 {
+                Circle()
+                    .trim(from: 0, to: progress)
+                    .stroke(Color.white, style: StrokeStyle(lineWidth: 4, lineCap: .round))
+                    .rotationEffect(.degrees(-90))
+                    .frame(width: 44, height: 44)
+                    .animation(.linear(duration: 0.2), value: progress)
+            } else {
+                ProgressView().tint(.white).scaleEffect(1.2)
+            }
+        }
+    }
+
+    private var downloadOverlayMessage: String {
+        switch player.availability {
+        case .ready:         return ""
+        case .needsDownload: return String(localized: "media.video.downloadToPlay", defaultValue: "Telechargez pour lire la video", bundle: .module)
+        case .downloading:   return String(localized: "media.video.downloadingHint", defaultValue: "La lecture demarrera apres le telechargement", bundle: .module)
+        }
+    }
+
+    // MARK: Gestures
+
+    private var swipeDownGesture: some Gesture {
+        DragGesture(minimumDistance: 30)
+            .onChanged { value in
+                guard value.translation.height > 0 else { return }
+                dismissOffset = value.translation.height
+            }
+            .onEnded { value in
+                if value.translation.height > 150 {
+                    if manager.isPlaying { manager.startPip() }
+                    closePlayer()
+                } else {
+                    dismissOffset = 0
                 }
             }
-            .font(.system(size: 18, weight: .semibold))
-            .foregroundColor(.white.opacity(0.9))
-            .frame(width: 40, height: 40)
-            .background(Circle().fill(Color.white.opacity(0.2)))
-            .padding(.trailing, 8)
-            .padding(.top, 8)
-        }
-        .disabled(saveState == .saving || saveState == .saved)
     }
 
-    private var shareButton: some View {
-        Button {
-            HapticFeedback.light()
-            // Share is delegated to the host. Reuse onExpand callback to
-            // signal "host should present share sheet" without expanding ABI.
-            player.onExpand?()
-        } label: {
-            Image(systemName: "square.and.arrow.up")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(.white.opacity(0.9))
-                .frame(width: 40, height: 40)
-                .background(Circle().fill(Color.white.opacity(0.2)))
-                .padding(.trailing, 12)
-                .padding(.top, 8)
-        }
+    private var pinchGesture: some Gesture {
+        MagnificationGesture()
+            .onEnded { scale in
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                    videoGravity = scale > 1 ? .resizeAspectFill : .resizeAspect
+                }
+                HapticFeedback.light()
+            }
     }
 
-    private func setup() {
-        guard let url = MeeshyConfig.resolveMediaURL(player.attachment.fileUrl) else { return }
-        let item = AVPlayerItem(url: url)
-        item.preferredForwardBufferDuration = player.performance.preferredForwardBufferDuration
-        let p = AVPlayer(playerItem: item)
-        p.automaticallyWaitsToMinimizeStalling = player.performance.waitsToMinimizeStalling
-        avPlayer = p
-        watchStartTime = Date()
+    // MARK: Lifecycle
+
+    private func observeEnd() {
+        guard endObserver == nil, let item = manager.player?.currentItem else { return }
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime,
             object: item, queue: .main
         ) { _ in
-            // Watch report fires asynchronously via teardown() on disappear.
+            Task { @MainActor in reportWatch(complete: true) }
         }
-        p.playImmediately(atRate: 1.0)
     }
 
-    private func teardown() {
-        avPlayer?.pause()
-        if let obs = endObserver { NotificationCenter.default.removeObserver(obs); endObserver = nil }
+    private func onDisappearTeardown() {
+        controlsTimer?.invalidate(); controlsTimer = nil
+        if let obs = endObserver {
+            NotificationCenter.default.removeObserver(obs)
+            endObserver = nil
+        }
         reportWatch(complete: false)
-        avPlayer = nil
         watchStartTime = nil
     }
 
+    private func closePlayer() {
+        player.onClose?()
+    }
+
+    private func toggleControls() {
+        withAnimation { showControls.toggle() }
+        if showControls { scheduleControlsHide() }
+    }
+
+    private func scheduleControlsHide() {
+        controlsTimer?.invalidate()
+        controlsTimer = Timer.scheduledTimer(withTimeInterval: 4.0, repeats: false) { _ in
+            Task { @MainActor in
+                withAnimation { showControls = false }
+            }
+        }
+    }
+
     private func reportWatch(complete: Bool) {
-        guard let start = watchStartTime, let p = avPlayer else { return }
+        guard let start = watchStartTime else { return }
         let watched = Date().timeIntervalSince(start)
         guard complete || watched >= 3 else { return }
-        let currentSec = p.currentTime().seconds
-        let totalSec = p.currentItem?.duration.seconds ?? 0
+        let currentSec = manager.currentTime
+        let totalSec = manager.duration
         let attId = player.attachment.id
         Task {
             let body = AttachmentStatusBody(
@@ -476,13 +576,18 @@ internal struct _FullscreenRenderer: View {
         HapticFeedback.light()
         Task {
             do {
-                let (data, _) = try await URLSession.shared.data(from: url)
-                let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("save_\(UUID().uuidString).mp4")
-                try data.write(to: tmp)
-                let ok = await PhotoLibraryManager.shared.saveVideo(at: tmp)
-                try? FileManager.default.removeItem(at: tmp)
+                // Pull from URLSession.download (streams to disk) — avoids
+                // double-loading a 200MB file into memory like .data(from:) would.
+                let (tempURL, _) = try await URLSession.shared.download(from: url)
+                let tempFile = FileManager.default.temporaryDirectory
+                    .appendingPathComponent("save_\(UUID().uuidString).mp4")
+                try FileManager.default.moveItem(at: tempURL, to: tempFile)
+                let ok = await PhotoLibraryManager.shared.saveVideo(at: tempFile)
+                try? FileManager.default.removeItem(at: tempFile)
                 await MainActor.run {
-                    saveState = ok ? .saved : .failed
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        saveState = ok ? .saved : .failed
+                    }
                     if ok {
                         HapticFeedback.success()
                         player.onSaveSuccess?()
@@ -490,14 +595,16 @@ internal struct _FullscreenRenderer: View {
                         HapticFeedback.error()
                     }
                     DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
-                        saveState = .idle
+                        withAnimation { saveState = .idle }
                     }
                 }
             } catch {
                 await MainActor.run {
-                    saveState = .failed
+                    withAnimation { saveState = .failed }
                     HapticFeedback.error()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveState = .idle }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        withAnimation { saveState = .idle }
+                    }
                 }
             }
         }

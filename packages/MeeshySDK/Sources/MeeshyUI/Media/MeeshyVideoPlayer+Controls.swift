@@ -2,107 +2,436 @@ import SwiftUI
 import AVFoundation
 import Combine
 
-/// Private overlay bar : play/pause + scrubber + duration + expand
-/// (composed from `controls: ControlSet`). Replaces the legacy
-/// `VideoPlayerOverlayControls` standalone struct.
-internal struct _OverlayControlsBar: View {
-    let player: AVPlayer
+// MARK: - Layered Overlay Controls (inline)
+//
+// Legacy `VideoPlayerOverlayControls` style : scrim top + scrim bottom,
+// top bar (expand + speed), big center play/pause + skip ±10s, bottom
+// custom seek bar + time current/total. All controls drawn ON the video,
+// transparent — never a separate capsule under it.
+
+internal struct _InlineOverlayControls: View {
+    @ObservedObject var manager: SharedAVPlayerManager
     let accentColor: String
     let controls: MeeshyVideoPlayer.ControlSet
     let onExpand: (() -> Void)?
 
-    @State private var currentTime: Double = 0
-    @State private var duration: Double = 0
-    @State private var isScrubbing: Bool = false
-    @State private var timeObserver: Any?
+    @State private var isSeeking = false
+    @State private var seekValue: Double = 0
+
+    private var accent: Color { Color(hex: accentColor) }
+
+    private var progress: Double {
+        guard manager.duration > 0 else { return 0 }
+        return isSeeking ? seekValue : manager.currentTime / manager.duration
+    }
 
     var body: some View {
-        HStack(spacing: 10) {
-            if controls.contains(.playPause) { playPauseButton }
-            if controls.contains(.scrubber) { scrubber }
-            if controls.contains(.duration) { timeLabel }
-            if controls.contains(.expand) { expandButton }
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 6)
-        .background(Capsule().fill(.ultraThinMaterial.opacity(0.7)))
-        .onAppear { startObserving() }
-        .onDisappear { stopObserving() }
-    }
-
-    private var playPauseButton: some View {
-        Button {
-            if player.timeControlStatus == .playing {
-                player.pause()
-            } else {
-                player.playImmediately(atRate: 1.0)
+        ZStack {
+            scrimGradients
+            VStack {
+                topBar
+                Spacer()
+                centerControls
+                Spacer()
+                bottomBar
             }
-            HapticFeedback.light()
-        } label: {
-            Image(systemName: player.timeControlStatus == .playing ? "pause.fill" : "play.fill")
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 26, height: 26)
+            .padding(.horizontal, 8)
+            .padding(.top, 6)
+            .padding(.bottom, 8)
         }
+        .buttonStyle(BouncyControlButtonStyle())
+        .allowsHitTesting(true)
     }
 
-    private var scrubber: some View {
-        Slider(value: Binding(
-            get: { currentTime },
-            set: { newValue in
-                isScrubbing = true
-                currentTime = newValue
-            }
-        ), in: 0...max(duration, 0.01)) { editing in
-            if !editing {
-                let target = CMTime(seconds: currentTime, preferredTimescale: 600)
-                player.seek(to: target) { _ in isScrubbing = false }
-            }
+    // MARK: - Scrim
+
+    private var scrimGradients: some View {
+        VStack {
+            LinearGradient(
+                colors: [Color.black.opacity(0.55), Color.clear],
+                startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: 50)
+            Spacer()
+            LinearGradient(
+                colors: [Color.clear, Color.black.opacity(0.6)],
+                startPoint: .top, endPoint: .bottom
+            )
+            .frame(height: 60)
         }
-        .tint(Color(hex: accentColor))
+        .allowsHitTesting(false)
     }
 
-    private var timeLabel: some View {
-        Text("\(formatTime(currentTime)) / \(formatTime(duration))")
-            .font(.system(size: 10, weight: .semibold, design: .monospaced))
-            .foregroundColor(.white)
-    }
+    // MARK: - Top Bar (expand + speed)
 
-    private var expandButton: some View {
-        Button {
-            onExpand?()
-            HapticFeedback.light()
-        } label: {
-            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                .font(.system(size: 12, weight: .bold))
-                .foregroundColor(.white)
-                .frame(width: 26, height: 26)
-        }
-    }
-
-    private func formatTime(_ seconds: Double) -> String {
-        guard seconds.isFinite, !seconds.isNaN else { return "0:00" }
-        let total = Int(seconds.rounded(.down))
-        return String(format: "%d:%02d", total / 60, total % 60)
-    }
-
-    private func startObserving() {
-        let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
-        timeObserver = player.addPeriodicTimeObserver(forInterval: interval, queue: .main) { time in
-            if !isScrubbing {
-                currentTime = time.seconds
+    private var topBar: some View {
+        HStack {
+            if controls.contains(.expand), let onExpand {
+                Button {
+                    onExpand()
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 12, weight: .semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color.white.opacity(0.2)))
+                }
             }
-            if let item = player.currentItem {
-                let dur = item.duration.seconds
-                if dur.isFinite, !dur.isNaN { duration = dur }
+            Spacer()
+            if controls.contains(.speed) {
+                Button {
+                    manager.cycleSpeed()
+                    HapticFeedback.light()
+                } label: {
+                    Text(manager.playbackSpeed.label)
+                        .font(.system(size: 11, weight: .bold, design: .monospaced))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(accent))
+                }
             }
         }
     }
 
-    private func stopObserving() {
-        if let obs = timeObserver {
-            player.removeTimeObserver(obs)
-            timeObserver = nil
+    // MARK: - Center Controls (skip + play/pause)
+
+    private var centerControls: some View {
+        HStack(spacing: 28) {
+            Button {
+                manager.skip(seconds: -10)
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: "gobackward.10")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle().fill(.ultraThinMaterial)
+                            .overlay(Circle().fill(accent.opacity(0.18)))
+                    )
+            }
+
+            Button {
+                manager.togglePlayPause()
+                HapticFeedback.light()
+            } label: {
+                ZStack {
+                    Circle().fill(.ultraThinMaterial).frame(width: 42, height: 42)
+                    Circle().fill(accent.opacity(0.45)).frame(width: 42, height: 42)
+                    Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundColor(.white)
+                        .offset(x: manager.isPlaying ? 0 : 2)
+                }
+            }
+
+            Button {
+                manager.skip(seconds: 10)
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: "goforward.10")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.white)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        Circle().fill(.ultraThinMaterial)
+                            .overlay(Circle().fill(accent.opacity(0.18)))
+                    )
+            }
         }
+    }
+
+    // MARK: - Bottom Bar (seek + time)
+
+    private var bottomBar: some View {
+        VStack(spacing: 4) {
+            if controls.contains(.scrubber) {
+                seekBar
+            }
+            if controls.contains(.duration) {
+                HStack {
+                    Text(formatMediaDuration(isSeeking ? seekValue * manager.duration : manager.currentTime))
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
+                    Spacer()
+                    Text(formatMediaDuration(manager.duration))
+                        .font(.system(size: 9, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.8))
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+    }
+
+    // MARK: - Custom Seek Bar (draggable thumb)
+
+    private var seekBar: some View {
+        GeometryReader { geo in
+            let trackHeight: CGFloat = 3
+            let thumbSize: CGFloat = 12
+            let filledWidth = geo.size.width * progress
+
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.3)).frame(height: trackHeight)
+                Capsule().fill(accent).frame(width: max(0, filledWidth), height: trackHeight)
+                Circle().fill(Color.white).frame(width: thumbSize, height: thumbSize)
+                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                    .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))
+            }
+            .frame(height: max(trackHeight, thumbSize))
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        isSeeking = true
+                        seekValue = max(0, min(1, value.location.x / geo.size.width))
+                    }
+                    .onEnded { value in
+                        let fraction = max(0, min(1, value.location.x / geo.size.width))
+                        manager.seek(to: fraction * manager.duration)
+                        isSeeking = false
+                        seekValue = 0
+                    }
+            )
+        }
+        .frame(height: 12)
+    }
+}
+
+// MARK: - Fullscreen Layered Overlay Controls
+//
+// Bigger taps, filename top bar, large center buttons, speed row + caption
+// at the bottom. Drawn ON the video. Used by `_FullscreenRenderer`.
+
+internal struct _FullscreenOverlayControls: View {
+    @ObservedObject var manager: SharedAVPlayerManager
+    let accentColor: String
+    let controls: MeeshyVideoPlayer.ControlSet
+    let fileName: String?
+    let onClose: (() -> Void)?
+    let onSave: (() -> Void)?
+    let onShare: (() -> Void)?
+    let saveState: _FullscreenRenderer.SaveState
+
+    @State private var isSeeking = false
+    @State private var seekValue: Double = 0
+
+    private var accent: Color { Color(hex: accentColor) }
+
+    private var progress: Double {
+        guard manager.duration > 0 else { return 0 }
+        return isSeeking ? seekValue : manager.currentTime / manager.duration
+    }
+
+    private let fullscreenSpeeds: [PlaybackSpeed] = [.x1_0, .x1_25, .x1_5, .x1_75, .x2_0]
+
+    var body: some View {
+        ZStack {
+            scrimGradients
+            VStack(spacing: 0) {
+                topBar
+                    .padding(.top, 8)
+                    .padding(.horizontal, 16)
+                Spacer()
+                centerControls
+                Spacer()
+                bottomStack
+                    .padding(.bottom, 16)
+            }
+        }
+        .buttonStyle(BouncyControlButtonStyle())
+    }
+
+    private var scrimGradients: some View {
+        VStack(spacing: 0) {
+            LinearGradient(colors: [Color.black.opacity(0.7), Color.clear], startPoint: .top, endPoint: .bottom)
+                .frame(height: 80)
+            Spacer()
+            LinearGradient(colors: [Color.clear, Color.black.opacity(0.7)], startPoint: .top, endPoint: .bottom)
+                .frame(height: 180)
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(false)
+    }
+
+    private var topBar: some View {
+        HStack(spacing: 12) {
+            if controls.contains(.close) {
+                Button {
+                    onClose?()
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(.white)
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color.white.opacity(0.2)))
+                }
+            }
+            if let fileName, !fileName.isEmpty {
+                Text(fileName)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .truncationMode(.middle)
+            }
+            Spacer()
+            if controls.contains(.share), onShare != nil {
+                Button {
+                    onShare?()
+                    HapticFeedback.light()
+                } label: {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white.opacity(0.9))
+                        .frame(width: 36, height: 36)
+                        .background(Circle().fill(Color.white.opacity(0.2)))
+                }
+            }
+            if controls.contains(.save) {
+                Button {
+                    onSave?()
+                } label: {
+                    Group {
+                        switch saveState {
+                        case .idle:   Image(systemName: "arrow.down.to.line")
+                        case .saving: ProgressView().tint(.white)
+                        case .saved:  Image(systemName: "checkmark")
+                        case .failed: Image(systemName: "xmark")
+                        }
+                    }
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white.opacity(0.9))
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(Color.white.opacity(0.2)))
+                }
+                .disabled(saveState == .saving || saveState == .saved)
+            }
+        }
+    }
+
+    private var centerControls: some View {
+        HStack(spacing: 48) {
+            Button {
+                manager.skip(seconds: -10)
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: "gobackward.10")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            Button {
+                manager.togglePlayPause()
+                HapticFeedback.light()
+            } label: {
+                ZStack {
+                    Circle().fill(Color.white.opacity(0.2)).frame(width: 64, height: 64)
+                    Image(systemName: manager.isPlaying ? "pause.fill" : "play.fill")
+                        .font(.system(size: 32, weight: .bold))
+                        .foregroundColor(.white)
+                        .offset(x: manager.isPlaying ? 0 : 3)
+                }
+            }
+            Button {
+                manager.skip(seconds: 10)
+                HapticFeedback.light()
+            } label: {
+                Image(systemName: "goforward.10")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+        }
+    }
+
+    private var bottomStack: some View {
+        VStack(spacing: 8) {
+            if controls.contains(.scrubber) {
+                seekBar
+                    .padding(.horizontal, 16)
+            }
+            if controls.contains(.duration) {
+                HStack {
+                    Text(formatMediaDuration(isSeeking ? seekValue * manager.duration : manager.currentTime))
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.75))
+                    Spacer()
+                    Text(formatMediaDuration(manager.duration))
+                        .font(.system(size: 12, weight: .semibold, design: .monospaced))
+                        .foregroundColor(.white.opacity(0.75))
+                }
+                .padding(.horizontal, 16)
+            }
+            if controls.contains(.speed) {
+                speedRow
+                    .padding(.horizontal, 16)
+            }
+        }
+    }
+
+    private var seekBar: some View {
+        GeometryReader { geo in
+            let trackHeight: CGFloat = 4
+            let thumbSize: CGFloat = 14
+            let filledWidth = geo.size.width * progress
+
+            ZStack(alignment: .leading) {
+                Capsule().fill(Color.white.opacity(0.3)).frame(height: trackHeight)
+                Capsule().fill(accent).frame(width: max(0, filledWidth), height: trackHeight)
+                Circle().fill(Color.white).frame(width: thumbSize, height: thumbSize)
+                    .shadow(color: .black.opacity(0.3), radius: 2, y: 1)
+                    .offset(x: max(0, min(filledWidth - thumbSize / 2, geo.size.width - thumbSize)))
+            }
+            .frame(height: max(trackHeight, thumbSize))
+            .contentShape(Rectangle())
+            .gesture(
+                DragGesture(minimumDistance: 0)
+                    .onChanged { value in
+                        isSeeking = true
+                        seekValue = max(0, min(1, value.location.x / geo.size.width))
+                    }
+                    .onEnded { value in
+                        let fraction = max(0, min(1, value.location.x / geo.size.width))
+                        manager.seek(to: fraction * manager.duration)
+                        isSeeking = false
+                        seekValue = 0
+                    }
+            )
+        }
+        .frame(height: 14)
+    }
+
+    private var speedRow: some View {
+        HStack(spacing: 8) {
+            ForEach(fullscreenSpeeds, id: \.rawValue) { speed in
+                Button {
+                    manager.setSpeed(speed)
+                    HapticFeedback.light()
+                } label: {
+                    Text(speed.label)
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(manager.playbackSpeed == speed ? .black : .white.opacity(0.7))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 6)
+                        .background(
+                            Capsule().fill(
+                                manager.playbackSpeed == speed ? accent : Color.white.opacity(0.15)
+                            )
+                        )
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Bouncy press feedback (legacy parity)
+
+private struct BouncyControlButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.86 : 1.0)
+            .opacity(configuration.isPressed ? 0.85 : 1.0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
     }
 }
