@@ -201,42 +201,61 @@ struct FeedView: View {
     private func togglePostBookmark(postId: String) {
         guard !postBookmarkInFlightIds.contains(postId) else { return }
         let wasBookmarked = postBookmarkedIds.contains(postId)
-        // Optimistic flip — keep the heart pattern: change UI immediately,
-        // confirm via API, rollback only on failure.
+        // Optimistic flip — UI changes instantly, network confirms after.
         if wasBookmarked {
             postBookmarkedIds.remove(postId)
         } else {
             postBookmarkedIds.insert(postId)
         }
         postBookmarkInFlightIds.insert(postId)
+        // Snapshot of the post for the bookmarks-cache pre-population on add.
+        let postSnapshot = viewModel.posts.first(where: { $0.id == postId })
         Task {
             defer {
                 Task { @MainActor in
                     postBookmarkInFlightIds.remove(postId)
                 }
             }
-            // Phase 1: route through the existing ViewModel call so the
-            // bookmarks-cache + toast wiring still fires. Rollback on a
-            // local Toast-only signal is impossible (the VM swallows the
-            // error) — wrap the call in our own try block via a defensive
-            // REST hit to detect failure deterministically.
+            // Pre-populate the bookmarks cache optimistically so the Favoris
+            // tab shows the post the moment the user opens it. Mirror the
+            // pre-fix behaviour from FeedViewModel.bookmarkPost.
+            let snapshotCache: [FeedPost]? = await {
+                if wasBookmarked { return nil } // remove path handles cache below
+                guard let p = postSnapshot else { return [] }
+                let key = "bookmarks"
+                let r = await CacheCoordinator.shared.feed.load(for: key)
+                let current: [FeedPost]
+                switch r {
+                case .fresh(let v, _), .stale(let v, _): current = v
+                case .expired, .empty: current = []
+                }
+                if !current.contains(where: { $0.id == postId }) {
+                    var updated = current
+                    updated.insert(p, at: 0)
+                    try? await CacheCoordinator.shared.feed.save(updated, for: key)
+                }
+                return current
+            }()
+
             let success = await callBookmarkAPI(postId: postId, bookmark: !wasBookmarked)
             if success {
-                // Refresh the bookmarks cache so the Favoris tab reflects
-                // both add and remove paths. The VM already inserts on
-                // bookmarkPost; we trigger a remove on unbookmark too.
                 if wasBookmarked {
                     await pruneBookmarkFromCache(postId: postId)
+                    ToastManager.shared.showSuccess(String(localized: "Retire des favoris", defaultValue: "Retire des favoris"))
                 } else {
-                    // VM already inserted on add — nothing to do here.
+                    ToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
                 }
             } else {
-                // Rollback UI flip.
+                // Rollback both the UI flip and the cache pre-population.
                 if wasBookmarked {
                     postBookmarkedIds.insert(postId)
                 } else {
                     postBookmarkedIds.remove(postId)
+                    if let snap = snapshotCache {
+                        try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
+                    }
                 }
+                ToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
             }
         }
     }
@@ -268,9 +287,10 @@ struct FeedView: View {
     @MainActor
     private func togglePostRepost(postId: String) {
         guard !postRepostInFlightIds.contains(postId) else { return }
-        // Reposts are append-only on the backend (each call creates a new
-        // post) — we only surface a transient checkmark to confirm the
-        // action landed, but the optimistic state itself is binary.
+        // Reposts are append-only on the backend — the optimistic state
+        // only persists if the server confirmed the create. Bypass the
+        // ViewModel call because it swallows errors via Toast and leaves
+        // no signal we can rollback against.
         postRepostedIds.insert(postId)
         postRepostInFlightIds.insert(postId)
         Task {
@@ -279,7 +299,18 @@ struct FeedView: View {
                     postRepostInFlightIds.remove(postId)
                 }
             }
-            await viewModel.repostPost(postId)
+            do {
+                _ = try await PostService.shared.repost(
+                    postId: postId,
+                    targetType: nil,
+                    content: nil,
+                    isQuote: false
+                )
+                ToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+            } catch {
+                postRepostedIds.remove(postId)
+                ToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
+            }
         }
     }
 

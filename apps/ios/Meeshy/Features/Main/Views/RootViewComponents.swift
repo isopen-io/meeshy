@@ -251,8 +251,29 @@ struct ThemedFeedOverlay: View {
         let wasBookmarked = postBookmarkedIds.contains(postId)
         if wasBookmarked { postBookmarkedIds.remove(postId) } else { postBookmarkedIds.insert(postId) }
         postBookmarkInFlightIds.insert(postId)
+        let postSnapshot = viewModel.posts.first(where: { $0.id == postId })
         Task {
             defer { Task { @MainActor in postBookmarkInFlightIds.remove(postId) } }
+            // Pre-populate the bookmarks cache so the Favoris tab reflects
+            // the add instantly. Mirror the pre-fix FeedViewModel logic.
+            let snapshotCache: [FeedPost]? = await {
+                if wasBookmarked { return nil }
+                guard let p = postSnapshot else { return [] }
+                let key = "bookmarks"
+                let r = await CacheCoordinator.shared.feed.load(for: key)
+                let current: [FeedPost]
+                switch r {
+                case .fresh(let v, _), .stale(let v, _): current = v
+                case .expired, .empty: current = []
+                }
+                if !current.contains(where: { $0.id == postId }) {
+                    var updated = current
+                    updated.insert(p, at: 0)
+                    try? await CacheCoordinator.shared.feed.save(updated, for: key)
+                }
+                return current
+            }()
+
             let ok: Bool = await {
                 do {
                     let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
@@ -263,14 +284,36 @@ struct ThemedFeedOverlay: View {
                 } catch { return false }
             }()
             if !ok {
-                if wasBookmarked { postBookmarkedIds.insert(postId) } else { postBookmarkedIds.remove(postId) }
-                ToastManager.shared.showError("Erreur lors de l'enregistrement")
+                if wasBookmarked {
+                    postBookmarkedIds.insert(postId)
+                } else {
+                    postBookmarkedIds.remove(postId)
+                    if let snap = snapshotCache {
+                        try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
+                    }
+                }
+                ToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
             } else {
+                if wasBookmarked {
+                    await pruneBookmarkFromCache(postId: postId)
+                }
                 ToastManager.shared.showSuccess(wasBookmarked
                     ? String(localized: "Retire des favoris", defaultValue: "Retire des favoris")
                     : String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
             }
         }
+    }
+
+    private func pruneBookmarkFromCache(postId: String) async {
+        let key = "bookmarks"
+        let result = await CacheCoordinator.shared.feed.load(for: key)
+        let current: [FeedPost]
+        switch result {
+        case .fresh(let v, _), .stale(let v, _): current = v
+        case .expired, .empty: return
+        }
+        let updated = current.filter { $0.id != postId }
+        try? await CacheCoordinator.shared.feed.save(updated, for: key)
     }
 
     @MainActor
@@ -280,7 +323,18 @@ struct ThemedFeedOverlay: View {
         postRepostInFlightIds.insert(postId)
         Task {
             defer { Task { @MainActor in postRepostInFlightIds.remove(postId) } }
-            await viewModel.repostPost(postId)
+            do {
+                _ = try await PostService.shared.repost(
+                    postId: postId,
+                    targetType: nil,
+                    content: nil,
+                    isQuote: false
+                )
+                ToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+            } catch {
+                postRepostedIds.remove(postId)
+                ToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
+            }
         }
     }
 
