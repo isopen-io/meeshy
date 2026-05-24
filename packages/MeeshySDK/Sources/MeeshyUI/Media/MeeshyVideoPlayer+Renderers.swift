@@ -280,12 +280,227 @@ internal struct _MiniRenderer: View {
     }
 }
 
-// MARK: - Fullscreen Renderer (Task 10 — stub here)
+// MARK: - Fullscreen Renderer
 
 internal struct _FullscreenRenderer: View {
     let player: MeeshyVideoPlayer
+
+    @State private var avPlayer: AVPlayer?
+    @State private var gravity: AVLayerVideoGravity = .resizeAspect
+    @State private var saveState: SaveState = .idle
+    @State private var watchStartTime: Date?
+    @State private var endObserver: NSObjectProtocol?
+
+    enum SaveState { case idle, saving, saved, failed }
+
     var body: some View {
-        Color.gray // Implemented in Task 10
+        ZStack {
+            Color.black.ignoresSafeArea()
+            if let p = avPlayer {
+                MeeshyVideoSurface(player: p, gravity: gravity, isMuted: false)
+                    .ignoresSafeArea()
+                    .onTapGesture(count: 2) {
+                        gravity = (gravity == .resizeAspect) ? .resizeAspectFill : .resizeAspect
+                        HapticFeedback.light()
+                    }
+            }
+            chromeOverlay
+        }
+        .onAppear { setup() }
+        .onDisappear { teardown() }
+    }
+
+    private var chromeOverlay: some View {
+        VStack {
+            topBar
+            Spacer()
+            bottomBar
+        }
+    }
+
+    private var topBar: some View {
+        HStack {
+            if player.controls.contains(.close) {
+                Button { player.onClose?() } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(.white.opacity(0.8))
+                        .padding()
+                }
+            }
+            if player.controls.contains(.author), let author = player.author {
+                authorChip(author)
+            }
+            Spacer()
+            if player.controls.contains(.save) { saveButton }
+            if player.controls.contains(.share) { shareButton }
+        }
+    }
+
+    private var bottomBar: some View {
+        VStack(spacing: 8) {
+            if let caption = player.caption, !caption.isEmpty {
+                Text(caption)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 20)
+                    .lineLimit(3)
+            }
+            if let p = avPlayer {
+                _OverlayControlsBar(
+                    player: p,
+                    accentColor: player.accentColor,
+                    controls: player.controls.subtracting([.expand, .close, .save, .share, .author]),
+                    onExpand: nil
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 24)
+            }
+        }
+    }
+
+    private func authorChip(_ author: MeeshyVideoPlayer.VideoAuthor) -> some View {
+        Button {
+            author.onTap?()
+            HapticFeedback.light()
+        } label: {
+            HStack(spacing: 6) {
+                if let avatarUrl = author.avatarUrl,
+                   let url = MeeshyConfig.resolveMediaURL(avatarUrl) {
+                    AsyncImage(url: url) { img in
+                        img.resizable().aspectRatio(contentMode: .fill)
+                    } placeholder: {
+                        Circle().fill(Color.white.opacity(0.3))
+                    }
+                    .frame(width: 24, height: 24)
+                    .clipShape(Circle())
+                }
+                Text(author.displayName)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(.white)
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(.ultraThinMaterial.opacity(0.7)))
+            .padding(.leading, 4)
+            .padding(.top, 8)
+        }
+    }
+
+    private var saveButton: some View {
+        Button { saveToPhotos() } label: {
+            Group {
+                switch saveState {
+                case .idle:   Image(systemName: "arrow.down.to.line")
+                case .saving: ProgressView().tint(.white)
+                case .saved:  Image(systemName: "checkmark")
+                case .failed: Image(systemName: "xmark")
+                }
+            }
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundColor(.white.opacity(0.9))
+            .frame(width: 40, height: 40)
+            .background(Circle().fill(Color.white.opacity(0.2)))
+            .padding(.trailing, 8)
+            .padding(.top, 8)
+        }
+        .disabled(saveState == .saving || saveState == .saved)
+    }
+
+    private var shareButton: some View {
+        Button {
+            HapticFeedback.light()
+            // Share is delegated to the host. Reuse onExpand callback to
+            // signal "host should present share sheet" without expanding ABI.
+            player.onExpand?()
+        } label: {
+            Image(systemName: "square.and.arrow.up")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(.white.opacity(0.9))
+                .frame(width: 40, height: 40)
+                .background(Circle().fill(Color.white.opacity(0.2)))
+                .padding(.trailing, 12)
+                .padding(.top, 8)
+        }
+    }
+
+    private func setup() {
+        guard let url = MeeshyConfig.resolveMediaURL(player.attachment.fileUrl) else { return }
+        let item = AVPlayerItem(url: url)
+        item.preferredForwardBufferDuration = player.performance.preferredForwardBufferDuration
+        let p = AVPlayer(playerItem: item)
+        p.automaticallyWaitsToMinimizeStalling = player.performance.waitsToMinimizeStalling
+        avPlayer = p
+        watchStartTime = Date()
+        endObserver = NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: item, queue: .main
+        ) { _ in
+            // Watch report fires asynchronously via teardown() on disappear.
+        }
+        p.playImmediately(atRate: 1.0)
+    }
+
+    private func teardown() {
+        avPlayer?.pause()
+        if let obs = endObserver { NotificationCenter.default.removeObserver(obs); endObserver = nil }
+        reportWatch(complete: false)
+        avPlayer = nil
+        watchStartTime = nil
+    }
+
+    private func reportWatch(complete: Bool) {
+        guard let start = watchStartTime, let p = avPlayer else { return }
+        let watched = Date().timeIntervalSince(start)
+        guard complete || watched >= 3 else { return }
+        let currentSec = p.currentTime().seconds
+        let totalSec = p.currentItem?.duration.seconds ?? 0
+        let attId = player.attachment.id
+        Task {
+            let body = AttachmentStatusBody(
+                action: "watched",
+                playPositionMs: Int((currentSec.isNaN ? 0 : currentSec) * 1000),
+                durationMs: Int((totalSec.isNaN || totalSec.isInfinite ? 0 : totalSec) * 1000),
+                complete: complete
+            )
+            let _: APIResponse<[String: String]>? = try? await APIClient.shared.post(
+                endpoint: "/attachments/\(attId)/status", body: body
+            )
+        }
+    }
+
+    private func saveToPhotos() {
+        guard let url = MeeshyConfig.resolveMediaURL(player.attachment.fileUrl) else { return }
+        saveState = .saving
+        HapticFeedback.light()
+        Task {
+            do {
+                let (data, _) = try await URLSession.shared.data(from: url)
+                let tmp = FileManager.default.temporaryDirectory.appendingPathComponent("save_\(UUID().uuidString).mp4")
+                try data.write(to: tmp)
+                let ok = await PhotoLibraryManager.shared.saveVideo(at: tmp)
+                try? FileManager.default.removeItem(at: tmp)
+                await MainActor.run {
+                    saveState = ok ? .saved : .failed
+                    if ok {
+                        HapticFeedback.success()
+                        player.onSaveSuccess?()
+                    } else {
+                        HapticFeedback.error()
+                    }
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+                        saveState = .idle
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    saveState = .failed
+                    HapticFeedback.error()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 2) { saveState = .idle }
+                }
+            }
+        }
     }
 }
 
