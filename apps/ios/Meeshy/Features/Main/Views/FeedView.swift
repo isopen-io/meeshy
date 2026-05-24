@@ -71,9 +71,12 @@ struct FeedView: View {
     // them locally — toggled on tap, cleared on API failure.
     @State private var postBookmarkedIds: Set<String> = []
     @State private var postBookmarkInFlightIds: Set<String> = []
+    @State private var postBookmarkDelta: [String: Int] = [:]
     @State private var postRepostedIds: Set<String> = []
     @State private var postRepostInFlightIds: Set<String> = []
+    @State private var postRepostDelta: [String: Int] = [:]
     @State private var postShareInFlightIds: Set<String> = []
+    @State private var postShareDelta: [String: Int] = [:]
 
     // Impression tracking
     @State private var pendingImpressionIds = Set<String>()
@@ -242,8 +245,10 @@ struct FeedView: View {
         // Optimistic flip — UI changes instantly, network confirms after.
         if wasBookmarked {
             postBookmarkedIds.remove(postId)
+            postBookmarkDelta[postId, default: 0] -= 1
         } else {
             postBookmarkedIds.insert(postId)
+            postBookmarkDelta[postId, default: 0] += 1
         }
         postBookmarkInFlightIds.insert(postId)
         Task {
@@ -290,8 +295,10 @@ struct FeedView: View {
                 // Rollback both the UI flip and the cache pre-population.
                 if wasBookmarked {
                     postBookmarkedIds.insert(postId)
+                    postBookmarkDelta[postId, default: 0] += 1
                 } else {
                     postBookmarkedIds.remove(postId)
+                    postBookmarkDelta[postId, default: 0] -= 1
                     if let snap = snapshotCache {
                         try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
                     }
@@ -333,6 +340,7 @@ struct FeedView: View {
         // ViewModel call because it swallows errors via Toast and leaves
         // no signal we can rollback against.
         postRepostedIds.insert(postId)
+        postRepostDelta[postId, default: 0] += 1
         postRepostInFlightIds.insert(postId)
         Task {
             defer {
@@ -350,6 +358,7 @@ struct FeedView: View {
                 ToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
             } catch {
                 postRepostedIds.remove(postId)
+                postRepostDelta[postId, default: 0] -= 1
                 ToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
             }
         }
@@ -359,6 +368,10 @@ struct FeedView: View {
     private func sharePostWithLink(postId: String) {
         guard !postShareInFlightIds.contains(postId) else { return }
         postShareInFlightIds.insert(postId)
+        // Optimistic share counter bump — the gateway always increments
+        // shareCount on POST /posts/:id/share regardless of mint success,
+        // so we mirror that even when we fall back to the raw URL.
+        postShareDelta[postId, default: 0] += 1
         Task {
             defer {
                 Task { @MainActor in
@@ -370,6 +383,9 @@ struct FeedView: View {
                 shareableLink = ShareableLink(url: url)
             } else if let raw = ShareableLink.fallback(forPostId: postId) {
                 shareableLink = raw
+            } else {
+                // Both REST and fallback failed → undo the optimistic bump.
+                postShareDelta[postId, default: 0] -= 1
             }
         }
     }
@@ -599,6 +615,9 @@ struct FeedView: View {
             isHeartInFlight: postHeartInFlightIds.contains(post.id),
             isBookmarked: postBookmarkedIds.contains(post.id),
             isBookmarkInFlight: postBookmarkInFlightIds.contains(post.id),
+            displayRepostCount: max(0, post.repostCount + (postRepostDelta[post.id] ?? 0)),
+            displayBookmarkCount: max(0, post.bookmarkCount + (postBookmarkDelta[post.id] ?? 0)),
+            displayShareCount: max(0, post.shareCount + (postShareDelta[post.id] ?? 0)),
             isReposted: postRepostedIds.contains(post.id),
             isRepostInFlight: postRepostInFlightIds.contains(post.id),
             isShareInFlight: postShareInFlightIds.contains(post.id),
@@ -817,17 +836,44 @@ struct FeedView: View {
             for id in newLiked where !postLikedIds.contains(id) && postLikeDelta[id] == nil {
                 postLikedIds.insert(id)
             }
+            // Seed bookmark/repost flags from the server-enriched fields
+            // on each loaded post (PostFeedService now provides
+            // isBookmarkedByMe + isRepostedByMe alongside isLikedByMe).
+            // Preserves in-flight optimistic state.
+            for post in viewModel.posts {
+                if post.isBookmarkedByMe && !postBookmarkInFlightIds.contains(post.id) {
+                    postBookmarkedIds.insert(post.id)
+                }
+                if post.isRepostedByMe && !postRepostInFlightIds.contains(post.id) {
+                    postRepostedIds.insert(post.id)
+                }
+            }
+            // Defensive fallback for backends that haven't been upgraded yet
+            // — pull bookmark IDs from the local cache so the filled icon
+            // still appears for older sessions or when the server payload
+            // is stale.
             await hydrateBookmarkSeeding()
             viewModel.subscribeToSocketEvents()
         }
         .adaptiveOnChange(of: viewModel.posts) { _, newPosts in
-            // Merge liked state when new pages arrive. Only seed posts not yet
-            // tracked to avoid overwriting optimistic state from in-flight toggles.
+            // Merge liked / bookmarked / reposted state when new pages
+            // arrive. Only seed posts not yet tracked to avoid overwriting
+            // optimistic state from in-flight toggles.
             for post in newPosts where postLikeDelta[post.id] == nil && !postHeartInFlightIds.contains(post.id) {
                 if post.isLiked {
                     postLikedIds.insert(post.id)
                 } else {
                     postLikedIds.remove(post.id)
+                }
+            }
+            for post in newPosts where postBookmarkDelta[post.id] == nil && !postBookmarkInFlightIds.contains(post.id) {
+                if post.isBookmarkedByMe {
+                    postBookmarkedIds.insert(post.id)
+                }
+            }
+            for post in newPosts where postRepostDelta[post.id] == nil && !postRepostInFlightIds.contains(post.id) {
+                if post.isRepostedByMe {
+                    postRepostedIds.insert(post.id)
                 }
             }
         }

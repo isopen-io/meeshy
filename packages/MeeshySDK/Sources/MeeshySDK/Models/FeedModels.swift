@@ -314,8 +314,23 @@ public struct FeedPost: Identifiable, Sendable {
     public let timestamp: Date
     public var likes: Int
     public var isLiked: Bool = false
+    /// Whether the current user has bookmarked this post. Server-enriched
+    /// via `PostFeedService.getFeed` — drives the filled amber bookmark
+    /// icon on first render without needing the cache-hydrate fallback.
+    public var isBookmarkedByMe: Bool = false
+    /// Whether the current user has reposted this post (any of their posts
+    /// has `repostOfId == this.id`). Drives the filled green repost icon.
+    public var isRepostedByMe: Bool = false
     public var comments: [FeedComment] = []
     public var commentCount: Int = 0
+    /// Server-issued repost count — total reposts of this post. Distinct from
+    /// `isReposted` which (when present, currently absent server-side) would
+    /// indicate whether the *current user* has reposted.
+    public var repostCount: Int = 0
+    /// Server-issued bookmark count.
+    public var bookmarkCount: Int = 0
+    /// Server-issued share count (every `POST /posts/:id/share` increments it).
+    public var shareCount: Int = 0
     public var repost: RepostContent? = nil
     public var repostAuthor: String? = nil
     public var isQuote: Bool = false

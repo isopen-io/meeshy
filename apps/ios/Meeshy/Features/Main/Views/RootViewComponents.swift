@@ -178,9 +178,12 @@ struct ThemedFeedOverlay: View {
     @State private var postHeartInFlightIds: Set<String> = []
     @State private var postBookmarkedIds: Set<String> = []
     @State private var postBookmarkInFlightIds: Set<String> = []
+    @State private var postBookmarkDelta: [String: Int] = [:]
     @State private var postRepostedIds: Set<String> = []
     @State private var postRepostInFlightIds: Set<String> = []
+    @State private var postRepostDelta: [String: Int] = [:]
     @State private var postShareInFlightIds: Set<String> = []
+    @State private var postShareDelta: [String: Int] = [:]
     @State private var shareableLink: ShareableLink?
     @State private var editingPost: FeedPost?
 
@@ -281,7 +284,13 @@ struct ThemedFeedOverlay: View {
     private func togglePostBookmark(postId: String) {
         guard !postBookmarkInFlightIds.contains(postId) else { return }
         let wasBookmarked = postBookmarkedIds.contains(postId)
-        if wasBookmarked { postBookmarkedIds.remove(postId) } else { postBookmarkedIds.insert(postId) }
+        if wasBookmarked {
+            postBookmarkedIds.remove(postId)
+            postBookmarkDelta[postId, default: 0] -= 1
+        } else {
+            postBookmarkedIds.insert(postId)
+            postBookmarkDelta[postId, default: 0] += 1
+        }
         postBookmarkInFlightIds.insert(postId)
         Task {
             defer { Task { @MainActor in postBookmarkInFlightIds.remove(postId) } }
@@ -320,8 +329,10 @@ struct ThemedFeedOverlay: View {
             if !ok {
                 if wasBookmarked {
                     postBookmarkedIds.insert(postId)
+                    postBookmarkDelta[postId, default: 0] += 1
                 } else {
                     postBookmarkedIds.remove(postId)
+                    postBookmarkDelta[postId, default: 0] -= 1
                     if let snap = snapshotCache {
                         try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
                     }
@@ -354,6 +365,7 @@ struct ThemedFeedOverlay: View {
     private func togglePostRepost(postId: String) {
         guard !postRepostInFlightIds.contains(postId) else { return }
         postRepostedIds.insert(postId)
+        postRepostDelta[postId, default: 0] += 1
         postRepostInFlightIds.insert(postId)
         Task {
             defer { Task { @MainActor in postRepostInFlightIds.remove(postId) } }
@@ -367,6 +379,7 @@ struct ThemedFeedOverlay: View {
                 ToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
             } catch {
                 postRepostedIds.remove(postId)
+                postRepostDelta[postId, default: 0] -= 1
                 ToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
             }
         }
@@ -376,6 +389,7 @@ struct ThemedFeedOverlay: View {
     private func sharePostWithLink(postId: String) {
         guard !postShareInFlightIds.contains(postId) else { return }
         postShareInFlightIds.insert(postId)
+        postShareDelta[postId, default: 0] += 1
         Task {
             defer { Task { @MainActor in postShareInFlightIds.remove(postId) } }
             if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
@@ -383,6 +397,8 @@ struct ThemedFeedOverlay: View {
                 shareableLink = ShareableLink(url: url)
             } else if let raw = ShareableLink.fallback(forPostId: postId) {
                 shareableLink = raw
+            } else {
+                postShareDelta[postId, default: 0] -= 1
             }
         }
     }
@@ -466,6 +482,9 @@ struct ThemedFeedOverlay: View {
                             isHeartInFlight: postHeartInFlightIds.contains(post.id),
                             isBookmarked: postBookmarkedIds.contains(post.id),
                             isBookmarkInFlight: postBookmarkInFlightIds.contains(post.id),
+                            displayRepostCount: max(0, post.repostCount + (postRepostDelta[post.id] ?? 0)),
+                            displayBookmarkCount: max(0, post.bookmarkCount + (postBookmarkDelta[post.id] ?? 0)),
+                            displayShareCount: max(0, post.shareCount + (postShareDelta[post.id] ?? 0)),
                             isReposted: postRepostedIds.contains(post.id),
                             isRepostInFlight: postRepostInFlightIds.contains(post.id),
                             isShareInFlight: postShareInFlightIds.contains(post.id),
@@ -543,6 +562,15 @@ struct ThemedFeedOverlay: View {
             for id in newLiked where !postLikedIds.contains(id) && postLikeDelta[id] == nil {
                 postLikedIds.insert(id)
             }
+            // Seed bookmark/repost from server-enriched fields.
+            for post in viewModel.posts {
+                if post.isBookmarkedByMe && !postBookmarkInFlightIds.contains(post.id) {
+                    postBookmarkedIds.insert(post.id)
+                }
+                if post.isRepostedByMe && !postRepostInFlightIds.contains(post.id) {
+                    postRepostedIds.insert(post.id)
+                }
+            }
             await hydrateBookmarkSeeding()
             viewModel.subscribeToSocketEvents()
             await storyViewModel.loadStories()
@@ -554,6 +582,16 @@ struct ThemedFeedOverlay: View {
                     postLikedIds.insert(post.id)
                 } else {
                     postLikedIds.remove(post.id)
+                }
+            }
+            for post in newPosts where postBookmarkDelta[post.id] == nil && !postBookmarkInFlightIds.contains(post.id) {
+                if post.isBookmarkedByMe {
+                    postBookmarkedIds.insert(post.id)
+                }
+            }
+            for post in newPosts where postRepostDelta[post.id] == nil && !postRepostInFlightIds.contains(post.id) {
+                if post.isRepostedByMe {
+                    postRepostedIds.insert(post.id)
                 }
             }
         }

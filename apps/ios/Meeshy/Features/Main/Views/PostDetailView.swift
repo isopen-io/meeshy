@@ -462,21 +462,27 @@ struct PostDetailView: View {
             if let post = displayPost, post.isLiked {
                 postLikedIds.insert(postId)
             }
-            // Seed bookmark state from the shared "bookmarks" cache so the
-            // filled bookmark icon appears on first render when the user has
-            // already saved this post. Cache-first — no network round-trip
-            // (BookmarksViewModel refreshes the cache when the user opens
-            // the Favoris tab).
+            // Seed bookmark + repost state. Primary source: the server-
+            // enriched fields on the loaded post (PostFeedService provides
+            // isBookmarkedByMe + isRepostedByMe on the feed and detail
+            // payloads). Defensive fallback: the local "bookmarks" cache.
             if !isBookmarkInFlight {
-                let cached = await CacheCoordinator.shared.feed.load(for: "bookmarks")
-                let bookmarks: [FeedPost]
-                switch cached {
-                case .fresh(let v, _), .stale(let v, _): bookmarks = v
-                case .expired, .empty: bookmarks = []
-                }
-                if bookmarks.contains(where: { $0.id == postId }) {
+                if let p = displayPost, p.isBookmarkedByMe {
                     isPostBookmarked = true
+                } else {
+                    let cached = await CacheCoordinator.shared.feed.load(for: "bookmarks")
+                    let bookmarks: [FeedPost]
+                    switch cached {
+                    case .fresh(let v, _), .stale(let v, _): bookmarks = v
+                    case .expired, .empty: bookmarks = []
+                    }
+                    if bookmarks.contains(where: { $0.id == postId }) {
+                        isPostBookmarked = true
+                    }
                 }
+            }
+            if !isRepostInFlight, let p = displayPost, p.isRepostedByMe {
+                isPostReposted = true
             }
             await viewModel.loadComments(postId)
             viewModel.subscribeToSocket(postId)

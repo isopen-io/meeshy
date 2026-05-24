@@ -19,6 +19,12 @@ struct FeedPostCard: View {
     /// Card has no persisted bookmark flag on FeedPost — parent tracks via Set.
     var isBookmarked: Bool = false
     var isBookmarkInFlight: Bool = false
+    /// Display counters for repost / bookmark / share. Parent applies the
+    /// optimistic delta (post.{repost,bookmark,share}Count + local flip)
+    /// so the icon and number flip together on tap.
+    var displayRepostCount: Int? = nil
+    var displayBookmarkCount: Int? = nil
+    var displayShareCount: Int? = nil
     /// Optimistic repost state owned by the parent.
     var isReposted: Bool = false
     var isRepostInFlight: Bool = false
@@ -610,12 +616,20 @@ struct FeedPostCard: View {
                 showRepostOptions = true
                 HapticFeedback.light()
             } label: {
-                Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
-                    .font(.system(size: 17))
-                    .foregroundColor(isReposted ? MeeshyColors.success : theme.textSecondary)
-                    .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
+                HStack(spacing: 6) {
+                    Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
+                        .font(.system(size: 17))
+                        .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
+                    let count = displayRepostCount ?? post.repostCount
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(.system(size: 13, weight: .medium))
+                            .contentTransition(.numericText())
+                    }
+                }
+                .foregroundColor(isReposted ? MeeshyColors.success : theme.textSecondary)
+                .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
             }
             .disabled(isRepostInFlight)
             .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
@@ -632,12 +646,20 @@ struct FeedPostCard: View {
                 onBookmark?(post.id)
                 HapticFeedback.light()
             } label: {
-                Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
-                    .font(.system(size: 17))
-                    .foregroundColor(isBookmarked ? MeeshyColors.warning : theme.textSecondary)
-                    .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
-                    .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
-                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
+                HStack(spacing: 6) {
+                    Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
+                        .font(.system(size: 17))
+                        .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
+                    let count = displayBookmarkCount ?? post.bookmarkCount
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(.system(size: 13, weight: .medium))
+                            .contentTransition(.numericText())
+                    }
+                }
+                .foregroundColor(isBookmarked ? MeeshyColors.warning : theme.textSecondary)
+                .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
             .disabled(isBookmarkInFlight)
             .accessibilityLabel(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main))
@@ -649,17 +671,25 @@ struct FeedPostCard: View {
                 onShare?(post.id)
                 HapticFeedback.light()
             } label: {
-                ZStack {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.system(size: 17))
-                        .foregroundColor(theme.textSecondary)
-                        .opacity(isShareInFlight ? 0 : 1)
-                    if isShareInFlight {
-                        ProgressView()
-                            .scaleEffect(0.6)
-                            .progressViewStyle(.circular)
+                HStack(spacing: 6) {
+                    ZStack {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 17))
+                            .opacity(isShareInFlight ? 0 : 1)
+                        if isShareInFlight {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .progressViewStyle(.circular)
+                        }
+                    }
+                    let count = displayShareCount ?? post.shareCount
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(.system(size: 13, weight: .medium))
+                            .contentTransition(.numericText())
                     }
                 }
+                .foregroundColor(theme.textSecondary)
                 .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
             }
             .disabled(isShareInFlight)
@@ -850,6 +880,12 @@ extension FeedPostCard: Equatable {
             && lhs.isReposted == rhs.isReposted
             && lhs.isRepostInFlight == rhs.isRepostInFlight
             && lhs.isShareInFlight == rhs.isShareInFlight
+            && lhs.displayRepostCount == rhs.displayRepostCount
+            && lhs.displayBookmarkCount == rhs.displayBookmarkCount
+            && lhs.displayShareCount == rhs.displayShareCount
+            && lhs.post.repostCount == rhs.post.repostCount
+            && lhs.post.bookmarkCount == rhs.post.bookmarkCount
+            && lhs.post.shareCount == rhs.post.shareCount
             && lhs.post.commentCount == rhs.post.commentCount
             && lhs.post.content == rhs.post.content
             && lhs.post.translatedContent == rhs.post.translatedContent
