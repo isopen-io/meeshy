@@ -586,6 +586,13 @@ struct RootView: View {
             // infinite loop to the user.
             navigateToConversationById(id)
 
+        case .post(let id):
+            // Open the post detail directly. The screen owns its own
+            // cache-first fetch, so we don't need to pre-validate here —
+            // an unknown id will surface the "post not found" empty state
+            // instead of an opaque blank screen.
+            router.push(.postDetail(id))
+
         case .magicLink:
             break
         }

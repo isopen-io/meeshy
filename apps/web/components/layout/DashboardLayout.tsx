@@ -16,6 +16,7 @@ import {
   Users,
   UserPlus,
   Link as LinkIcon,
+  Newspaper,
   ChevronDown,
   Shield,
   Sun,
@@ -225,6 +226,13 @@ export function DashboardLayout({
                     <Link href="/conversations" className="flex items-center cursor-pointer">
                       <MessageSquare className="mr-2 h-4 w-4" />
                       <span>{t('navigation.conversations')}</span>
+                    </Link>
+                  </DropdownMenuItem>
+
+                  <DropdownMenuItem asChild>
+                    <Link href="/feeds" className="flex items-center cursor-pointer">
+                      <Newspaper className="mr-2 h-4 w-4" />
+                      <span>{t('navigation.feeds') || 'Feeds'}</span>
                     </Link>
                   </DropdownMenuItem>
 

@@ -57,7 +57,7 @@ struct PostDetailView: View {
             }
         }()
 
-        let fallbackUrlString = "\(ShareableLink.webBaseURL)/v2/feeds/post/\(post.id)"
+        let fallbackUrlString = "\(ShareableLink.webBaseURL)/feeds/post/\(post.id)"
         let resolvedString = trackingShortUrl ?? fallbackUrlString
         guard let resolvedUrl = URL(string: resolvedString) else {
             ToastManager.shared.showError("Lien indisponible")

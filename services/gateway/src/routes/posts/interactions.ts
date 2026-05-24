@@ -354,7 +354,7 @@ export function registerInteractionRoutes(
   //   - generateLink: when truthy, mint a TrackingLink owned by the caller so
   //     they can paste an attributable `meeshy.me/l/<token>` URL into any
   //     external share sheet. The link points at the post detail route on the
-  //     web frontend (`FRONTEND_URL`/v2/feeds/post/<postId>`); subsequent
+  //     web frontend (`FRONTEND_URL`/feeds/post/<postId>`); subsequent
   //     redirects are counted into the existing `trackingLinkClick` analytics.
   //
   // Response always carries `{ shared, shareCount }`; if `generateLink` was
@@ -391,7 +391,7 @@ export function registerInteractionRoutes(
         const baseUrl = (process.env.FRONTEND_URL || 'https://meeshy.me').replace(/\/+$/, '');
         try {
           const link = await trackingLinkService.createTrackingLink({
-            originalUrl: `${baseUrl}/v2/feeds/post/${postId}`,
+            originalUrl: `${baseUrl}/feeds/post/${postId}`,
             name: `Post ${postId.slice(0, 8)}`,
             source: platform,
             medium: 'share',
