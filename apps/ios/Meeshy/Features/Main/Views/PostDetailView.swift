@@ -1037,7 +1037,7 @@ struct PostDetailView: View {
             } label: {
                 Image(systemName: isPostReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
                     .font(.system(size: 17))
-                    .foregroundColor(isPostReposted ? MeeshyColors.indigo500 : theme.textSecondary)
+                    .foregroundColor(isPostReposted ? MeeshyColors.success : theme.textSecondary)
                     .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
                     .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostReposted)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
@@ -1062,7 +1062,7 @@ struct PostDetailView: View {
             } label: {
                 Image(systemName: isPostBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.system(size: 17))
-                    .foregroundColor(isPostBookmarked ? MeeshyColors.indigo500 : theme.textSecondary)
+                    .foregroundColor(isPostBookmarked ? MeeshyColors.warning : theme.textSecondary)
                     .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
                     .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostBookmarked)
                     .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
