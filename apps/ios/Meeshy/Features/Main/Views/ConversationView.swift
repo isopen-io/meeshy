@@ -39,6 +39,24 @@ struct ConversationOverlayState {
     var detailSheetMessage: Message? = nil
     var detailSheetInitialTab: DetailTab? = nil
     var quickReactionMessageId: String? = nil
+
+    // MARK: - Context overlay (iMessage-style long-press)
+    /// Phase of the new long-press overlay (`MessageContextOverlay`).
+    /// `.closed` = idle, `.opening`/`.open`/`.closing` = transitions and live state.
+    var contextOverlayPhase: OverlayPhase = .closed
+    /// Message currently elevated by the context overlay. Frozen at long-press
+    /// time so subsequent message updates don't shift the visible bubble.
+    var contextOverlayMessage: Message? = nil
+    /// Source frame captured at long-press time. Used by the layout engine
+    /// to compute lift / menu placement; the overlay reads this snapshot
+    /// rather than tracking the live frame (which can shift during scroll).
+    var contextOverlayTargetFrame: CGRect? = nil
+    /// Output of `MessageOverlayLayoutEngine.compute` — pre-computed once
+    /// at opening so the algorithm doesn't re-run on every drag tick.
+    var contextOverlayLayoutOutput: OverlayLayoutOutput? = nil
+    /// Interactive swipe-down dismiss progress (pixels). Resets to 0 when
+    /// the gesture is cancelled or the overlay closes.
+    var contextOverlayDragOffset: CGFloat = 0
     /// Bubble cell frame (window coordinates) of the message whose
     /// add-reaction button opened the quick-reaction bar. Anchors the bar's
     /// placement; `nil` falls back to the legacy bottom-pinned position.
@@ -213,6 +231,12 @@ struct ConversationView: View {
     // Overlay & Detail state
     @State var overlayState = ConversationOverlayState()
 
+    /// Per-cell screen-frame map populated by `MessageFramePreferenceKey`
+    /// publishes from each `BubbleSwipeContainer`. The long-press handler
+    /// looks up the target message's frame here at gesture fire time and
+    /// freezes it into `overlayState.contextOverlayTargetFrame`.
+    @State var frameTracker = MessageFrameTracker()
+
     // Scroll, Media & Swipe state
     @State var scrollState = ConversationScrollState()
     @State var composerHeight: CGFloat = 130
@@ -310,7 +334,7 @@ struct ConversationView: View {
         viewModel.topActiveMembersList(accentColor: accentColor)
     }
 
-    private var isCurrentUserAdminOrMod: Bool {
+    var isCurrentUserAdminOrMod: Bool {
         let convRole = conversation?.currentUserRole?.uppercased() ?? ""
         let platformRole = AuthManager.shared.currentUser?.role?.uppercased() ?? ""
         let modRoles: Set<String> = ["ADMIN", "MODERATOR", "BIGBOSS"]
@@ -632,6 +656,9 @@ struct ConversationView: View {
             }
             .overlay { overlayMenuContent }
             .overlay { replyThreadOverlayContent }
+            .onPreferenceChange(MessageFramePreferenceKey.self) { frames in
+                frameTracker.update(frames)
+            }
             .sheet(isPresented: $overlayState.showReplyThread) {
                 if let parentId = overlayState.replyThreadParentId,
                    let parent = viewModel.messages.first(where: { $0.id == parentId }) {
@@ -947,9 +974,10 @@ struct ConversationView: View {
                     composerState.forwardMessage = msg
                 },
                 onLongPress: { messageId in
-                    // Open the contextual options menu — same overlay used by
-                    // the legacy SwiftUI list path. Bypasses the gesture if
-                    // overlay-disabled (e.g. while a sheet is presented).
+                    // Preserve l'overlay menu existant (MessageOverlayMenu panel).
+                    // L'infrastructure frame-tracking + LayoutEngine reste en place
+                    // et sera utilisée ensuite pour lifter la bulle dans le flow
+                    // du menu existant (sans remplacer le menu lui-même).
                     guard overlayState.longPressEnabled else { return }
                     guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
                     overlayState.overlayMessage = msg

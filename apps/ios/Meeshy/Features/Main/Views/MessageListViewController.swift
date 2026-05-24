@@ -447,6 +447,7 @@ final class MessageListViewController: UIViewController {
             cell.contentConfiguration = UIHostingConfiguration {
                 BubbleSwipeContainer(
                     isMine: isMine,
+                    messageId: messageId,
                     messageCreatedAt: message.createdAt,
                     onSwipeReply: { swipeReplyHandler?(messageId) },
                     onSwipeForward: { swipeForwardHandler?(messageId) },
