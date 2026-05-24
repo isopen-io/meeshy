@@ -931,6 +931,14 @@ L'app iOS (`apps/ios/`) ne contient que :
 - Les Views/ecrans de l'app
 - Les models purement locaux a l'app (ex: `SearchResultItem`, etats UI)
 - La navigation, le theming, et la configuration app
+- **L'orchestration UX produit** : View wrappers qui cascadent cache → downloader → policy, Views qui encodent des décisions Meeshy ("quand auto-DL", "comment cascader fallbacks"). Exemples : `VideoAvailabilityResolver`, `AttachmentDownloader`, `VideoMediaView`. Ces composants APPELLENT les services SDK mais ENCODENT des règles produit — donc app, pas SDK.
+
+### Corollaire : ne PAS mettre dans le SDK
+Avant de migrer un composant vers le SDK, appliquer le **test du grain** (cf. `packages/MeeshySDK/CLAUDE.md` § REGLE CRITIQUE — SDK Purity) :
+- Composant atomique aux paramètres opaques → SDK
+- Composant qui orchestre + décide → APP
+
+Précédent : 2026-05-24 j'ai migré `AttachmentDownloader` au SDK sous prétexte de réutilisabilité. Rollback (commit `83e55297c`) — c'est de l'orchestration UX produit, pas un atome. "Réutilisable" n'est PAS un critère suffisant ; l'**atomicité** l'est.
 
 ## Quality Gate
 Codex will review your output once you are done. Self-evaluate and ensure consistent, coherent code before marking any task as complete.
