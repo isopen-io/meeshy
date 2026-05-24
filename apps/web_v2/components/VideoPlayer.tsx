@@ -20,9 +20,11 @@ export interface VideoPlayerProps {
   className?: string;
 }
 
-/**
- * Format seconds to MM:SS or HH:MM:SS
- */
+const PLAYBACK_SPEEDS = [1, 1.25, 1.5, 1.75, 2, 2.5, 3] as const;
+type PlaybackSpeed = (typeof PLAYBACK_SPEEDS)[number];
+
+const CONTROLS_HIDE_DELAY_MS = 2500;
+
 function formatDuration(seconds: number): string {
   const hrs = Math.floor(seconds / 3600);
   const mins = Math.floor((seconds % 3600) / 60);
@@ -39,119 +41,187 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
     const internalRef = useRef<HTMLVideoElement>(null);
     const videoRef = (ref as React.RefObject<HTMLVideoElement>) || internalRef;
     const containerRef = useRef<HTMLDivElement>(null);
+    const progressRef = useRef<HTMLDivElement>(null);
+    const hideControlsTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const [isPlaying, setIsPlaying] = useState(false);
-    const [showControls, setShowControls] = useState(false);
+    const [hasStarted, setHasStarted] = useState(false);
+    const [overlayVisible, setOverlayVisible] = useState(true);
     const [currentTime, setCurrentTime] = useState(0);
     const [videoDuration, setVideoDuration] = useState(duration || 0);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [isSeeking, setIsSeeking] = useState(false);
+    const [seekHover, setSeekHover] = useState(false);
+    const [playbackSpeed, setPlaybackSpeed] = useState<PlaybackSpeed>(1);
 
-    // Update duration when video metadata loads
+    const progress = videoDuration > 0 ? (currentTime / videoDuration) * 100 : 0;
+    const progressPct = Math.round(progress);
+
+    const scheduleHideControls = useCallback(() => {
+      if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+      hideControlsTimer.current = setTimeout(() => {
+        setOverlayVisible(false);
+      }, CONTROLS_HIDE_DELAY_MS);
+    }, []);
+
+    const revealControls = useCallback(() => {
+      setOverlayVisible(true);
+      if (isPlaying) scheduleHideControls();
+    }, [isPlaying, scheduleHideControls]);
+
+    useEffect(() => {
+      return () => {
+        if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+      };
+    }, []);
+
     const handleLoadedMetadata = useCallback(() => {
       if (videoRef.current) {
         setVideoDuration(videoRef.current.duration);
       }
     }, [videoRef]);
 
-    // Update current time during playback
     const handleTimeUpdate = useCallback(() => {
       if (videoRef.current && !isSeeking) {
         setCurrentTime(videoRef.current.currentTime);
       }
     }, [videoRef, isSeeking]);
 
-    // Handle play
     const handlePlay = useCallback(() => {
       setIsPlaying(true);
-      setShowControls(true);
+      setHasStarted(true);
+      setOverlayVisible(true);
+      scheduleHideControls();
       onPlay?.();
-    }, [onPlay]);
+    }, [onPlay, scheduleHideControls]);
 
-    // Handle pause
     const handlePause = useCallback(() => {
       setIsPlaying(false);
+      setOverlayVisible(true);
+      if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
       onPause?.();
     }, [onPause]);
 
-    // Handle ended
     const handleEnded = useCallback(() => {
       setIsPlaying(false);
-      setShowControls(false);
-      onEnded?.();
-    }, [onEnded]);
-
-    // Toggle play/pause
-    const togglePlay = useCallback(() => {
+      setHasStarted(false);
+      setOverlayVisible(true);
+      setCurrentTime(0);
       if (videoRef.current) {
-        if (isPlaying) {
-          videoRef.current.pause();
-        } else {
-          videoRef.current.play();
-        }
+        videoRef.current.currentTime = 0;
+      }
+      if (hideControlsTimer.current) clearTimeout(hideControlsTimer.current);
+      onEnded?.();
+    }, [onEnded, videoRef]);
+
+    const togglePlay = useCallback(() => {
+      if (!videoRef.current) return;
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play().catch(() => {});
       }
     }, [videoRef, isPlaying]);
 
-    // Start playback (from thumbnail view)
     const startPlayback = useCallback(() => {
-      if (videoRef.current) {
-        setShowControls(true);
-        videoRef.current.play();
-      }
+      if (!videoRef.current) return;
+      videoRef.current.play().catch(() => {});
     }, [videoRef]);
 
-    // Handle progress bar click
-    const handleProgressClick = useCallback(
-      (e: React.MouseEvent<HTMLDivElement>) => {
-        if (videoRef.current) {
-          const rect = e.currentTarget.getBoundingClientRect();
-          const percent = (e.clientX - rect.left) / rect.width;
-          const newTime = percent * videoDuration;
-          videoRef.current.currentTime = newTime;
-          setCurrentTime(newTime);
-        }
+    const cycleSpeed = useCallback(() => {
+      const idx = PLAYBACK_SPEEDS.indexOf(playbackSpeed);
+      const next = PLAYBACK_SPEEDS[(idx + 1) % PLAYBACK_SPEEDS.length];
+      setPlaybackSpeed(next);
+      if (videoRef.current) {
+        videoRef.current.playbackRate = next;
+      }
+      revealControls();
+    }, [playbackSpeed, videoRef, revealControls]);
+
+    const seekFromClientX = useCallback(
+      (clientX: number) => {
+        if (!videoRef.current || !progressRef.current || videoDuration <= 0) return;
+        const rect = progressRef.current.getBoundingClientRect();
+        const percent = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+        const newTime = percent * videoDuration;
+        videoRef.current.currentTime = newTime;
+        setCurrentTime(newTime);
       },
-      [videoRef, videoDuration]
+      [videoRef, videoDuration],
     );
 
-    // Handle fullscreen toggle
+    const handleProgressMouseDown = useCallback(
+      (e: React.MouseEvent<HTMLDivElement>) => {
+        e.preventDefault();
+        setIsSeeking(true);
+        seekFromClientX(e.clientX);
+      },
+      [seekFromClientX],
+    );
+
+    useEffect(() => {
+      if (!isSeeking) return;
+      const onMove = (e: MouseEvent) => seekFromClientX(e.clientX);
+      const onUp = () => setIsSeeking(false);
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+      return () => {
+        document.removeEventListener('mousemove', onMove);
+        document.removeEventListener('mouseup', onUp);
+      };
+    }, [isSeeking, seekFromClientX]);
+
+    const handleTouchStart = useCallback(
+      (e: React.TouchEvent<HTMLDivElement>) => {
+        setIsSeeking(true);
+        seekFromClientX(e.touches[0].clientX);
+      },
+      [seekFromClientX],
+    );
+
+    const handleTouchMove = useCallback(
+      (e: React.TouchEvent<HTMLDivElement>) => {
+        if (isSeeking) seekFromClientX(e.touches[0].clientX);
+      },
+      [isSeeking, seekFromClientX],
+    );
+
+    const handleTouchEnd = useCallback(() => {
+      setIsSeeking(false);
+    }, []);
+
     const toggleFullscreen = useCallback(() => {
       if (!containerRef.current) return;
-
       if (!document.fullscreenElement) {
-        containerRef.current.requestFullscreen().catch(() => {
-          // Fullscreen not supported
-        });
+        containerRef.current.requestFullscreen().catch(() => {});
       } else {
         document.exitFullscreen();
       }
     }, []);
 
-    // Listen for fullscreen changes
     useEffect(() => {
-      const handleFullscreenChange = () => {
-        setIsFullscreen(!!document.fullscreenElement);
-      };
-
-      document.addEventListener('fullscreenchange', handleFullscreenChange);
-      return () => {
-        document.removeEventListener('fullscreenchange', handleFullscreenChange);
-      };
+      const onChange = () => setIsFullscreen(!!document.fullscreenElement);
+      document.addEventListener('fullscreenchange', onChange);
+      return () => document.removeEventListener('fullscreenchange', onChange);
     }, []);
 
-    const progress = videoDuration > 0 ? (currentTime / videoDuration) * 100 : 0;
+    const thumbSize = isSeeking ? 28 : seekHover ? 25 : 14;
+    const thumbScale = isSeeking ? 'scale-100' : seekHover ? 'scale-100' : 'scale-0 group-hover/progress:scale-100';
 
     return (
       <div
         ref={containerRef}
         className={cn(
           'relative overflow-hidden bg-[var(--gp-background)] transition-colors duration-300',
-          'rounded-xl',
+          'rounded-xl group/player',
           isFullscreen ? 'w-full h-full' : 'aspect-video',
-          className
+          className,
         )}
+        onMouseMove={revealControls}
+        onClick={() => {
+          if (hasStarted) revealControls();
+        }}
       >
-        {/* Video Element */}
         <video
           ref={videoRef}
           src={src}
@@ -165,13 +235,12 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
           playsInline
         />
 
-        {/* Thumbnail Overlay (shown when not playing and controls hidden) */}
-        {!showControls && (
+        {/* IDLE / END STATE: thumbnail + center play */}
+        {!hasStarted && (
           <div
             className="absolute inset-0 flex items-center justify-center cursor-pointer group"
             onClick={startPlayback}
           >
-            {/* Poster image fallback */}
             {poster && (
               <img
                 src={poster}
@@ -183,37 +252,30 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
               />
             )}
 
-            {/* Gradient overlay */}
             <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
 
-            {/* Play Button */}
             <div
               className={cn(
                 'relative z-10 w-16 h-16 rounded-full flex items-center justify-center',
-                'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
-                'shadow-[var(--gp-shadow-lg)]',
+                'bg-white/15 backdrop-blur-xl backdrop-saturate-150',
+                'border border-white/25',
+                'shadow-[0_8px_32px_rgba(0,0,0,0.35)]',
                 'transition-all duration-300 ease-out',
-                'group-hover:scale-110 group-hover:bg-[var(--gp-surface-elevated)]'
+                'group-hover:scale-110 group-hover:bg-white/25',
               )}
             >
-              <svg
-                className="w-7 h-7 text-[var(--gp-terracotta)] ml-1"
-                fill="currentColor"
-                viewBox="0 0 24 24"
-              >
+              <svg className="w-7 h-7 text-white ml-1 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
                 <path d="M8 5v14l11-7z" />
               </svg>
             </div>
 
-            {/* Duration Badge */}
             {(duration || videoDuration > 0) && (
               <div
                 className={cn(
                   'absolute bottom-3 right-3 z-10',
-                  'px-2 py-1 rounded-md',
-                  'bg-black/70 backdrop-blur-sm',
-                  'text-white text-sm font-medium',
-                  'font-[var(--gp-font-body)]'
+                  'px-2.5 py-1 rounded-full',
+                  'bg-black/40 backdrop-blur-md border border-white/10',
+                  'text-white text-xs font-semibold tabular-nums',
                 )}
               >
                 {formatDuration(duration || videoDuration)}
@@ -222,112 +284,164 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
           </div>
         )}
 
-        {/* Video Controls (shown when playing or controls are visible) */}
-        {showControls && (
+        {/* PLAYING/PAUSED STATE: FAB-style controls */}
+        {hasStarted && (
           <div
             className={cn(
-              'absolute inset-0 flex flex-col justify-end',
-              'bg-gradient-to-t from-black/70 via-transparent to-transparent',
+              'absolute inset-0 flex flex-col justify-between pointer-events-none',
+              'bg-gradient-to-t from-black/55 via-transparent to-black/25',
               'transition-opacity duration-300',
-              isPlaying ? 'opacity-0 hover:opacity-100' : 'opacity-100'
+              overlayVisible || !isPlaying || isSeeking ? 'opacity-100' : 'opacity-0',
             )}
           >
-            {/* Center Play/Pause Button */}
+            {/* Top-right: Speed FAB */}
+            <div className="flex justify-end p-3 pointer-events-auto">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  cycleSpeed();
+                }}
+                className={cn(
+                  'min-w-[44px] h-9 px-3 rounded-full',
+                  'flex items-center justify-center',
+                  'bg-white/15 backdrop-blur-xl backdrop-saturate-150',
+                  'border border-white/25',
+                  'shadow-[0_4px_16px_rgba(0,0,0,0.3)]',
+                  'text-white text-xs font-bold tabular-nums',
+                  'transition-all duration-200',
+                  'hover:bg-white/25 hover:scale-105 active:scale-95',
+                )}
+                aria-label={`Vitesse de lecture ${playbackSpeed}x`}
+              >
+                {playbackSpeed}x
+              </button>
+            </div>
+
+            {/* Center: play/pause FAB (visible only when paused) */}
             <div
-              className="absolute inset-0 flex items-center justify-center cursor-pointer"
-              onClick={togglePlay}
+              className="absolute inset-0 flex items-center justify-center pointer-events-auto"
+              onClick={(e) => {
+                e.stopPropagation();
+                togglePlay();
+              }}
             >
               {!isPlaying && (
                 <div
                   className={cn(
-                    'w-16 h-16 rounded-full flex items-center justify-center',
-                    'bg-[var(--gp-surface-elevated)]/90 backdrop-blur-sm',
-                    'shadow-[var(--gp-shadow-lg)]',
+                    'w-16 h-16 rounded-full flex items-center justify-center cursor-pointer',
+                    'bg-white/15 backdrop-blur-xl backdrop-saturate-150',
+                    'border border-white/25',
+                    'shadow-[0_8px_32px_rgba(0,0,0,0.4)]',
                     'transition-all duration-300 ease-out',
-                    'hover:scale-110 hover:bg-[var(--gp-surface-elevated)]'
+                    'hover:scale-110 hover:bg-white/25',
                   )}
                 >
-                  <svg
-                    className="w-7 h-7 text-[var(--gp-terracotta)] ml-1"
-                    fill="currentColor"
-                    viewBox="0 0 24 24"
-                  >
+                  <svg className="w-7 h-7 text-white ml-1 drop-shadow-md" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M8 5v14l11-7z" />
                   </svg>
                 </div>
               )}
             </div>
 
-            {/* Bottom Controls Bar */}
-            <div className="relative z-10 p-3 space-y-2">
-              {/* Progress Bar */}
+            {/* Bottom controls bar */}
+            <div className="relative z-10 p-3 space-y-2 pointer-events-auto" onClick={(e) => e.stopPropagation()}>
+              {/* Progress bar with chunky thumb + % label */}
               <div
-                className="relative h-1 bg-[var(--gp-surface)]/30 rounded-full cursor-pointer group/progress"
-                onClick={handleProgressClick}
-                onMouseDown={() => setIsSeeking(true)}
-                onMouseUp={() => setIsSeeking(false)}
-                onMouseLeave={() => setIsSeeking(false)}
+                ref={progressRef}
+                className="relative h-7 flex items-center cursor-pointer group/progress select-none"
+                onMouseDown={handleProgressMouseDown}
+                onMouseEnter={() => setSeekHover(true)}
+                onMouseLeave={() => setSeekHover(false)}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
+                role="slider"
+                aria-label="Video progress"
+                aria-valuemin={0}
+                aria-valuemax={videoDuration || 0}
+                aria-valuenow={currentTime}
               >
-                {/* Progress Fill */}
-                <div
-                  className="absolute inset-y-0 left-0 bg-[var(--gp-terracotta)] rounded-full transition-all"
-                  style={{ width: `${progress}%` }}
-                />
-                {/* Progress Handle */}
-                <div
-                  className={cn(
-                    'absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full',
-                    'bg-[var(--gp-surface-elevated)] shadow-[var(--gp-shadow-md)]',
-                    'transition-transform duration-150',
-                    'opacity-0 group-hover/progress:opacity-100',
-                    'scale-0 group-hover/progress:scale-100'
-                  )}
-                  style={{ left: `calc(${progress}% - 6px)` }}
-                />
+                <div className="relative w-full h-1.5 bg-white/25 rounded-full overflow-visible">
+                  <div
+                    className="absolute inset-y-0 left-0 bg-white rounded-full"
+                    style={{ width: `${progress}%` }}
+                  />
+                  {/* Chunky thumb with % label */}
+                  <div
+                    className={cn(
+                      'absolute top-1/2 -translate-x-1/2 -translate-y-1/2',
+                      'rounded-full flex items-center justify-center',
+                      'bg-white/95 backdrop-blur-md border border-white/40',
+                      'shadow-[0_4px_14px_rgba(0,0,0,0.45)]',
+                      'transition-[width,height,opacity] duration-150 ease-out',
+                      thumbScale,
+                    )}
+                    style={{
+                      left: `${progress}%`,
+                      width: `${thumbSize}px`,
+                      height: `${thumbSize}px`,
+                    }}
+                  >
+                    {(isSeeking || seekHover) && (
+                      <span
+                        className={cn(
+                          'text-[9px] font-bold tabular-nums leading-none',
+                          'text-black',
+                          'transition-opacity duration-150',
+                        )}
+                      >
+                        {progressPct}%
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
 
-              {/* Control Buttons */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {/* Play/Pause Button */}
+              {/* Bottom row: play/pause + time + fullscreen */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
                   <button
                     onClick={togglePlay}
                     className={cn(
-                      'w-8 h-8 flex items-center justify-center rounded-full',
-                      'text-white hover:bg-white/20',
-                      'transition-colors duration-200'
+                      'w-9 h-9 flex items-center justify-center rounded-full',
+                      'bg-white/15 backdrop-blur-xl backdrop-saturate-150',
+                      'border border-white/25',
+                      'shadow-[0_4px_12px_rgba(0,0,0,0.3)]',
+                      'text-white hover:bg-white/25 hover:scale-105 active:scale-95',
+                      'transition-all duration-200',
                     )}
                     aria-label={isPlaying ? 'Pause' : 'Play'}
                   >
                     {isPlaying ? (
-                      <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z" />
                       </svg>
                     ) : (
-                      <svg className="w-5 h-5 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 ml-0.5" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M8 5v14l11-7z" />
                       </svg>
                     )}
                   </button>
 
-                  {/* Time Display */}
-                  <span className="text-white text-sm font-medium tabular-nums">
+                  <span className="text-white text-xs font-semibold tabular-nums drop-shadow-md">
                     {formatDuration(currentTime)} / {formatDuration(videoDuration)}
                   </span>
                 </div>
 
-                {/* Fullscreen Button */}
                 <button
                   onClick={toggleFullscreen}
                   className={cn(
-                    'w-8 h-8 flex items-center justify-center rounded-full',
-                    'text-white hover:bg-white/20',
-                    'transition-colors duration-200'
+                    'w-9 h-9 flex items-center justify-center rounded-full',
+                    'bg-white/15 backdrop-blur-xl backdrop-saturate-150',
+                    'border border-white/25',
+                    'shadow-[0_4px_12px_rgba(0,0,0,0.3)]',
+                    'text-white hover:bg-white/25 hover:scale-105 active:scale-95',
+                    'transition-all duration-200',
                   )}
                   aria-label={isFullscreen ? 'Exit fullscreen' : 'Enter fullscreen'}
                 >
                   {isFullscreen ? (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -336,7 +450,7 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
                       />
                     </svg>
                   ) : (
-                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -352,7 +466,7 @@ const VideoPlayer = forwardRef<HTMLVideoElement, VideoPlayerProps>(
         )}
       </div>
     );
-  }
+  },
 );
 
 VideoPlayer.displayName = 'VideoPlayer';
