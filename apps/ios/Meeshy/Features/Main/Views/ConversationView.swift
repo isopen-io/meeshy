@@ -1430,7 +1430,7 @@ struct ConversationView: View {
                 message: msg,
                 contactColor: accentColor,
                 conversationId: viewModel.conversationId,
-                messageBubbleFrame: .zero,
+                messageBubbleFrame: frameTracker.frame(for: msg.id) ?? .zero,
                 isPresented: $overlayState.showOverlayMenu,
                 canDelete: msg.isMe || isCurrentUserAdminOrMod,
                 canEdit: msg.isMe || isCurrentUserAdminOrMod,

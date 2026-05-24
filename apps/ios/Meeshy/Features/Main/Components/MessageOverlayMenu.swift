@@ -136,6 +136,20 @@ struct MessageOverlayMenu: View {
             let clampedDrag = min(0, max(maxExpandUp, dragOffset))
             let panelHeight = panelBaseHeight - clampedDrag
 
+            // Si une frame source nous est passée (frameTracker côté
+            // ConversationView), le preview sort du flux du VStack et se
+            // place au-dessus du `dismissBackground` à la position exacte
+            // de la bulle dans la conversation. Sinon, on reste sur le
+            // comportement legacy "preview centré dans le VStack".
+            let useSourceFrame = messageBubbleFrame != .zero
+            let panelTopY = screenH - panelHeight
+            let emojiBarReservedHeight: CGFloat = 80   // hauteur empirique de la barre d'emojis + gap
+            let previewBottomLimit = panelTopY - emojiBarReservedHeight - 16
+            let bubbleRect = messageBubbleFrame
+            let needsLift = useSourceFrame && bubbleRect.maxY > previewBottomLimit
+            let liftAmount: CGFloat = needsLift ? (bubbleRect.maxY - previewBottomLimit) : 0
+            let previewMidY = bubbleRect.midY - liftAmount
+
             ZStack {
                 dismissBackground
 
@@ -151,26 +165,26 @@ struct MessageOverlayMenu: View {
                         .contentShape(Rectangle())
                         .onTapGesture { dismiss() }
 
-                    // Apercu du message — animation composite : zoom-spring
-                    // depuis le coin natif de la bulle (haut-droite pour les
-                    // messages envoyes, haut-gauche pour les recus) + leger
-                    // glissement vertical. La bulle se detache visuellement
-                    // de sa rangee, flotte vers l'avant puis se pose. Le
-                    // `Spacer(minLength: 44)` du cote oppose colle la bulle
-                    // a son bord natif (cf. cap 0.70 dans `messagePreview`).
-                    HStack(spacing: 0) {
-                        if message.isMe { Spacer(minLength: 44) }
-                        messagePreview
-                        if !message.isMe { Spacer(minLength: 44) }
+                    if !useSourceFrame {
+                        // Legacy : Apercu centré dans le VStack — animation
+                        // composite (zoom-spring depuis le coin natif de la
+                        // bulle + leger glissement vertical). Conservé pour
+                        // les call sites qui ne fournissent pas encore la
+                        // source frame.
+                        HStack(spacing: 0) {
+                            if message.isMe { Spacer(minLength: 44) }
+                            messagePreview
+                            if !message.isMe { Spacer(minLength: 44) }
+                        }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.horizontal, 4)
+                        .opacity(isVisible ? 1 : 0)
+                        .offset(y: isVisible ? 0 : -28)
+                        .scaleEffect(
+                            isVisible ? 1.0 : 0.86,
+                            anchor: message.isMe ? .topTrailing : .topLeading
+                        )
                     }
-                    .fixedSize(horizontal: false, vertical: true)
-                    .padding(.horizontal, 4)
-                    .opacity(isVisible ? 1 : 0)
-                    .offset(y: isVisible ? 0 : -28)
-                    .scaleEffect(
-                        isVisible ? 1.0 : 0.86,
-                        anchor: message.isMe ? .topTrailing : .topLeading
-                    )
 
                     // Barre d'emojis rapides — meme alignement horizontal
                     // que la bulle. Le composant partage `EmojiReactionPicker`
@@ -192,6 +206,25 @@ struct MessageOverlayMenu: View {
                     detailPanel(safeBottom: safeBottom)
                         .frame(height: panelHeight)
                         .offset(y: isVisible ? 0 : panelBaseHeight + 40)
+                }
+
+                if useSourceFrame {
+                    // Preview positionné à la frame source — la bulle reste
+                    // exactement à sa position dans la conversation. Si elle
+                    // serait masquée par la barre d'emojis ou le panneau, on
+                    // la lifte juste assez pour la rendre visible. L'animation
+                    // interpole de `bubbleRect.midY` (position initiale = even
+                    // si pas de lift, ça démarre à la source) vers
+                    // `previewMidY` (final = position liftée si besoin).
+                    // `.allowsHitTesting(false)` laisse les taps passer vers
+                    // le `dismissBackground` derrière (qui ferme l'overlay).
+                    messagePreview
+                        .position(
+                            x: bubbleRect.midX,
+                            y: isVisible ? previewMidY : bubbleRect.midY
+                        )
+                        .opacity(isVisible ? 1 : 0)
+                        .allowsHitTesting(false)
                 }
             }
         }
