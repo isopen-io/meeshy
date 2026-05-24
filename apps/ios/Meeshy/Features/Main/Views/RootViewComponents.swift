@@ -182,6 +182,7 @@ struct ThemedFeedOverlay: View {
     @State private var postRepostInFlightIds: Set<String> = []
     @State private var postShareInFlightIds: Set<String> = []
     @State private var shareableLink: ShareableLink?
+    @State private var editingPost: FeedPost?
 
     private struct LikeRESTPayload: Decodable { let liked: Bool? }
     private struct BookmarkRESTPayload: Decodable { let bookmarked: Bool? }
@@ -501,6 +502,9 @@ struct ThemedFeedOverlay: View {
                             onReport: post.authorId != AuthManager.shared.currentUser?.id ? { postId in
                                 Task { await viewModel.reportPost(postId) }
                             } : nil,
+                            onEdit: post.authorId == AuthManager.shared.currentUser?.id ? { post in
+                                editingPost = post
+                            } : nil,
                             authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
                             onAuthorMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
                             moodLookup: { userId in
@@ -580,6 +584,15 @@ struct ThemedFeedOverlay: View {
             // Same TrackingLink share sheet as FeedView — every external
             // touchpoint funnels through `meeshy.me/l/<token>`.
             ShareSheet(activityItems: [link.url])
+        }
+        .sheet(item: $editingPost) { post in
+            EditPostSheet(
+                originalContent: post.content,
+                onSave: { newContent in
+                    await viewModel.updatePost(post.id, content: newContent)
+                },
+                onDismiss: { editingPost = nil }
+            )
         }
         .fullScreenCover(isPresented: $showStoryViewer) {
             StoryViewerContainer(

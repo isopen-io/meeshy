@@ -541,6 +541,43 @@ class FeedViewModel: ObservableObject {
         }
     }
 
+    /// Updates the body content of an authored post. Optimistic UX:
+    /// the new text is written into `posts[idx]` immediately, translations
+    /// are cleared (the gateway re-translates in background and pushes
+    /// `post:updated` via socket). Rolls back the snapshot on API failure.
+    /// No-op if the post isn't found in the current feed.
+    func updatePost(_ postId: String, content: String) async {
+        guard let idx = posts.firstIndex(where: { $0.id == postId }) else { return }
+        let snapshot = posts[idx]
+        // Apply optimistic mutation: new content + clear translations so the
+        // bubble re-renders with the new source text immediately.
+        var optimistic = snapshot
+        optimistic.content = content
+        optimistic.translatedContent = nil
+        optimistic.translations = nil
+        posts[idx] = optimistic
+        debouncedCacheSave()
+        do {
+            let updated = try await postService.update(postId: postId, content: content, visibility: nil, moodEmoji: nil)
+            // Re-hydrate from the server response so the gateway-authoritative
+            // fields (updatedAt, isEdited, sanitized content, …) replace the
+            // optimistic in-memory copy. Preserves the resolved translation
+            // for the user's preferred language chain.
+            if let newIdx = posts.firstIndex(where: { $0.id == postId }) {
+                posts[newIdx] = updated.toFeedPost(preferredLanguages: preferredLanguages)
+                debouncedCacheSave()
+            }
+            ToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
+        } catch {
+            // Rollback the optimistic snapshot.
+            if let rollbackIdx = posts.firstIndex(where: { $0.id == postId }) {
+                posts[rollbackIdx] = snapshot
+                debouncedCacheSave()
+            }
+            ToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
+        }
+    }
+
     func pinPost(_ postId: String) async {
         do {
             try await postService.pinPost(postId: postId)

@@ -261,6 +261,26 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
+    /// Updates the loaded post's body content. Optimistic UX mirrors
+    /// FeedViewModel.updatePost: flip the in-memory post immediately, clear
+    /// translations so the bubble re-renders, rollback on API failure.
+    func updatePost(content: String) async {
+        guard let snapshot = post else { return }
+        var optimistic = snapshot
+        optimistic.content = content
+        optimistic.translatedContent = nil
+        optimistic.translations = nil
+        self.post = optimistic
+        do {
+            let updated = try await postService.update(postId: snapshot.id, content: content, visibility: nil, moodEmoji: nil)
+            self.post = updated.toFeedPost(preferredLanguages: preferredLanguages)
+            ToastManager.shared.showSuccess(String(localized: "Post modifie", defaultValue: "Post modifie"))
+        } catch {
+            self.post = snapshot
+            ToastManager.shared.showError(String(localized: "Erreur lors de la modification", defaultValue: "Erreur lors de la modification"))
+        }
+    }
+
     /// Reports the loaded post as inappropriate. Mirrors `FeedViewModel.reportPost`
     /// — uses ReportService directly so PostDetailView doesn't have to dual-wire.
     func reportPost(_ postId: String) async {

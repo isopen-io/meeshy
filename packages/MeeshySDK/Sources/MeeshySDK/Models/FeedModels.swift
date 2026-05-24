@@ -307,7 +307,10 @@ public struct FeedPost: Identifiable, Sendable {
     public let authorColor: String
     public let authorAvatarURL: String?
     public let type: String?
-    public let content: String
+    /// Mutable so optimistic edit flows (FeedViewModel.updatePost) can
+    /// rewrite the body without reconstructing the whole struct. All
+    /// other identity / authorship fields stay immutable.
+    public var content: String
     public let timestamp: Date
     public var likes: Int
     public var isLiked: Bool = false

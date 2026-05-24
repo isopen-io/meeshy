@@ -93,6 +93,7 @@ struct PostDetailView: View {
     @State private var isRepostInFlight: Bool = false
     @State private var isShareInFlight: Bool = false
     @State private var showRepostOptions: Bool = false
+    @State private var isEditing: Bool = false
 
     private var detailIsLiked: Bool { postLikedIds.contains(postId) }
     private var detailLikeCount: Int {
@@ -557,6 +558,17 @@ struct PostDetailView: View {
             // TrackingLink owned by the current user.
             ShareSheet(activityItems: [link.url])
         }
+        .sheet(isPresented: $isEditing) {
+            if let post = displayPost {
+                EditPostSheet(
+                    originalContent: post.content,
+                    onSave: { newContent in
+                        await viewModel.updatePost(content: newContent)
+                    },
+                    onDismiss: { isEditing = false }
+                )
+            }
+        }
         .fullScreenCover(isPresented: $showFullscreenGallery) {
             if let post = displayPost {
                 let attachments = post.media
@@ -598,6 +610,14 @@ struct PostDetailView: View {
                     Task { await mintShareLink(action: .presentShareSheet) }
                 } label: {
                     Label(String(localized: "feed.post.detail.share", defaultValue: "Partager", bundle: .main), systemImage: "square.and.arrow.up")
+                }
+                if displayPost?.authorId == AuthManager.shared.currentUser?.id {
+                    Button {
+                        isEditing = true
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                    }
                 }
                 Button(role: .destructive) {
                     HapticFeedback.light()

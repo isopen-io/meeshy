@@ -38,6 +38,7 @@ struct FeedPostCard: View {
     var onDelete: ((String) -> Void)? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
+    var onEdit: ((FeedPost) -> Void)? = nil
 
     // Mood data passed from parent to avoid @EnvironmentObject in leaf view
     var authorMoodEmoji: String? = nil
@@ -424,6 +425,14 @@ struct FeedPostCard: View {
                         HapticFeedback.light()
                     } label: {
                         Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
+                    }
+                }
+                if onEdit != nil {
+                    Button {
+                        onEdit?(post)
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
                     }
                 }
                 if onDelete != nil {
@@ -842,7 +851,9 @@ extension FeedPostCard: Equatable {
             && lhs.isRepostInFlight == rhs.isRepostInFlight
             && lhs.isShareInFlight == rhs.isShareInFlight
             && lhs.post.commentCount == rhs.post.commentCount
+            && lhs.post.content == rhs.post.content
             && lhs.post.translatedContent == rhs.post.translatedContent
+            && (lhs.post.translations?.count ?? 0) == (rhs.post.translations?.count ?? 0)
             && lhs.isCommentsExpanded == rhs.isCommentsExpanded
             && lhs.authorMoodEmoji == rhs.authorMoodEmoji
     }

@@ -57,6 +57,7 @@ struct FeedView: View {
     /// the share button on a post — the `.sheet` further down presents the
     /// system share UI as soon as this is non-nil and clears it on dismiss.
     @State private var shareableLink: ShareableLink?
+    @State private var editingPost: FeedPost?
 
     // Post reaction state — hoisted to parent so socket events update all cards without
     // mutating FeedPost values (pure socket-driven path, mirrors FeedCommentsSheet pattern).
@@ -651,6 +652,9 @@ struct FeedView: View {
             onPin: isOwnPost ? { postId in
                 Task { await viewModel.pinPost(postId) }
             } : nil,
+            onEdit: isOwnPost ? { post in
+                editingPost = post
+            } : nil,
             authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
             onAuthorMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
             moodLookup: { userId in
@@ -1125,6 +1129,15 @@ struct FeedView: View {
             // `meeshy.me/l/<token>` URL so every external touchpoint funnels
             // through the user's TrackingLink for attribution.
             ShareSheet(activityItems: [link.url])
+        }
+        .sheet(item: $editingPost) { post in
+            EditPostSheet(
+                originalContent: post.content,
+                onSave: { newContent in
+                    await viewModel.updatePost(post.id, content: newContent)
+                },
+                onDismiss: { editingPost = nil }
+            )
         }
         .adaptiveOnChange(of: selectedPhotoItems) { _, items in
             handleFeedPhotoSelection(items)
