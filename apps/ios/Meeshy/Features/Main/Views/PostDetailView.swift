@@ -461,6 +461,22 @@ struct PostDetailView: View {
             if let post = displayPost, post.isLiked {
                 postLikedIds.insert(postId)
             }
+            // Seed bookmark state from the shared "bookmarks" cache so the
+            // filled bookmark icon appears on first render when the user has
+            // already saved this post. Cache-first — no network round-trip
+            // (BookmarksViewModel refreshes the cache when the user opens
+            // the Favoris tab).
+            if !isBookmarkInFlight {
+                let cached = await CacheCoordinator.shared.feed.load(for: "bookmarks")
+                let bookmarks: [FeedPost]
+                switch cached {
+                case .fresh(let v, _), .stale(let v, _): bookmarks = v
+                case .expired, .empty: bookmarks = []
+                }
+                if bookmarks.contains(where: { $0.id == postId }) {
+                    isPostBookmarked = true
+                }
+            }
             await viewModel.loadComments(postId)
             viewModel.subscribeToSocket(postId)
             // Join the post room for real-time reaction events (single focused post).
@@ -585,6 +601,7 @@ struct PostDetailView: View {
                 }
                 Button(role: .destructive) {
                     HapticFeedback.light()
+                    Task { await viewModel.reportPost(postId) }
                 } label: {
                     Label(String(localized: "feed.post.detail.report", defaultValue: "Signaler", bundle: .main), systemImage: "exclamationmark.triangle")
                 }

@@ -245,15 +245,48 @@ struct ThemedFeedOverlay: View {
         } catch { return false }
     }
 
+    /// Hydrates `postBookmarkedIds` from the shared "bookmarks" cache so the
+    /// filled icon shows up correctly on first render — symmetric with the
+    /// FeedView helper. Cache-first; on empty/expired triggers a background
+    /// refresh so the next mount is hydrated.
+    private func hydrateBookmarkSeeding() async {
+        let cached = await CacheCoordinator.shared.feed.load(for: "bookmarks")
+        let bookmarks: [FeedPost]
+        switch cached {
+        case .fresh(let v, _), .stale(let v, _):
+            bookmarks = v
+        case .expired, .empty:
+            Task(priority: .utility) {
+                do {
+                    let resp = try await PostService.shared.getBookmarks(cursor: nil, limit: 50)
+                    let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                    let posts = resp.data.map { $0.toFeedPost(preferredLanguages: langs) }
+                    try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+                    await MainActor.run {
+                        for p in posts where !postBookmarkInFlightIds.contains(p.id) {
+                            postBookmarkedIds.insert(p.id)
+                        }
+                    }
+                } catch { }
+            }
+            return
+        }
+        for p in bookmarks where !postBookmarkInFlightIds.contains(p.id) {
+            postBookmarkedIds.insert(p.id)
+        }
+    }
+
     @MainActor
     private func togglePostBookmark(postId: String) {
         guard !postBookmarkInFlightIds.contains(postId) else { return }
         let wasBookmarked = postBookmarkedIds.contains(postId)
         if wasBookmarked { postBookmarkedIds.remove(postId) } else { postBookmarkedIds.insert(postId) }
         postBookmarkInFlightIds.insert(postId)
-        let postSnapshot = viewModel.posts.first(where: { $0.id == postId })
         Task {
             defer { Task { @MainActor in postBookmarkInFlightIds.remove(postId) } }
+            // Capture inside the Task to avoid a race where a `post:updated`
+            // socket mutates viewModel.posts between tap and cache save.
+            let postSnapshot = await MainActor.run { viewModel.posts.first(where: { $0.id == postId }) }
             // Pre-populate the bookmarks cache so the Favoris tab reflects
             // the add instantly. Mirror the pre-fix FeedViewModel logic.
             let snapshotCache: [FeedPost]? = await {
@@ -506,6 +539,7 @@ struct ThemedFeedOverlay: View {
             for id in newLiked where !postLikedIds.contains(id) && postLikeDelta[id] == nil {
                 postLikedIds.insert(id)
             }
+            await hydrateBookmarkSeeding()
             viewModel.subscribeToSocketEvents()
             await storyViewModel.loadStories()
             await statusViewModel.loadStatuses()

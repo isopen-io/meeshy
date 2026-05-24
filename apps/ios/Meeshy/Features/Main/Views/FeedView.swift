@@ -117,6 +117,43 @@ struct FeedView: View {
         Set(posts.compactMap { $0.isLiked ? $0.id : nil })
     }
 
+    // MARK: - Post Bookmark Seeding
+
+    /// Hydrates `postBookmarkedIds` from the shared "bookmarks" cache so the
+    /// filled icon shows up correctly on first render for posts the user has
+    /// already bookmarked. Cache-first, never hits the network — the actual
+    /// bookmarks list is refreshed by `BookmarksViewModel` when the user
+    /// opens the Favoris tab. Preserves any optimistic state already in
+    /// flight by only inserting new IDs.
+    private func hydrateBookmarkSeeding() async {
+        let cached = await CacheCoordinator.shared.feed.load(for: "bookmarks")
+        let bookmarks: [FeedPost]
+        switch cached {
+        case .fresh(let v, _), .stale(let v, _):
+            bookmarks = v
+        case .expired, .empty:
+            // Fire-and-forget a background refresh so the next render is
+            // hydrated correctly without blocking the current mount.
+            Task(priority: .utility) {
+                do {
+                    let resp = try await PostService.shared.getBookmarks(cursor: nil, limit: 50)
+                    let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                    let posts = resp.data.map { $0.toFeedPost(preferredLanguages: langs) }
+                    try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+                    await MainActor.run {
+                        for p in posts where !postBookmarkInFlightIds.contains(p.id) {
+                            postBookmarkedIds.insert(p.id)
+                        }
+                    }
+                } catch { /* offline / 5xx — bookmarks stay unseeded, no UX harm */ }
+            }
+            return
+        }
+        for p in bookmarks where !postBookmarkInFlightIds.contains(p.id) {
+            postBookmarkedIds.insert(p.id)
+        }
+    }
+
     // MARK: - Post Heart Toggle (socket-driven)
 
     @MainActor
@@ -208,14 +245,17 @@ struct FeedView: View {
             postBookmarkedIds.insert(postId)
         }
         postBookmarkInFlightIds.insert(postId)
-        // Snapshot of the post for the bookmarks-cache pre-population on add.
-        let postSnapshot = viewModel.posts.first(where: { $0.id == postId })
         Task {
             defer {
                 Task { @MainActor in
                     postBookmarkInFlightIds.remove(postId)
                 }
             }
+            // Capture the post snapshot INSIDE the Task on the MainActor —
+            // outside-capture would freeze a value that a `post:updated`
+            // socket event might invalidate between the tap and the cache
+            // save (race window ~100ms).
+            let postSnapshot = await MainActor.run { viewModel.posts.first(where: { $0.id == postId }) }
             // Pre-populate the bookmarks cache optimistically so the Favoris
             // tab shows the post the moment the user opens it. Mirror the
             // pre-fix behaviour from FeedViewModel.bookmarkPost.
@@ -773,6 +813,7 @@ struct FeedView: View {
             for id in newLiked where !postLikedIds.contains(id) && postLikeDelta[id] == nil {
                 postLikedIds.insert(id)
             }
+            await hydrateBookmarkSeeding()
             viewModel.subscribeToSocketEvents()
         }
         .adaptiveOnChange(of: viewModel.posts) { _, newPosts in

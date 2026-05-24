@@ -261,12 +261,14 @@ class PostDetailViewModel: ObservableObject {
         }
     }
 
-    func bookmarkPost() async {
-        guard let post else { return }
+    /// Reports the loaded post as inappropriate. Mirrors `FeedViewModel.reportPost`
+    /// — uses ReportService directly so PostDetailView doesn't have to dual-wire.
+    func reportPost(_ postId: String) async {
         do {
-            try await postService.bookmark(postId: post.id)
+            try await ReportService.shared.reportPost(postId: postId, reportType: "inappropriate", reason: nil)
+            ToastManager.shared.showSuccess(String(localized: "Signalement envoye", defaultValue: "Signalement envoye"))
         } catch {
-            ToastManager.shared.showError("Erreur lors de l'enregistrement")
+            ToastManager.shared.showError(String(localized: "Erreur lors du signalement", defaultValue: "Erreur lors du signalement"))
         }
     }
 
