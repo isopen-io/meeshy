@@ -25,6 +25,11 @@ struct BubbleSwipeContainer<Content: View>: View {
     /// Used by the swipe indicator to display a "day month / hh:mm" stamp
     /// before the user has dragged past the reply threshold.
     let messageCreatedAt: Date
+    /// `true` while the long-press overlay is presenting this exact cell —
+    /// the live row fades to `opacity: 0` so only the elevated copy in the
+    /// overlay is visible. Frame publication continues so the overlay can
+    /// keep the bubble pinned to its real position.
+    var isHiddenForOverlay: Bool = false
     let onSwipeReply: () -> Void
     let onSwipeForward: () -> Void
     /// Long press triggers the message's contextual options (reply, forward,
@@ -71,6 +76,8 @@ struct BubbleSwipeContainer<Content: View>: View {
                         )
                     }
                 )
+                .opacity(isHiddenForOverlay ? 0 : 1)
+                .animation(BubbleAnimations.overlayRevealCrossfade, value: isHiddenForOverlay)
                 .simultaneousGesture(dragGesture)
                 // Long press surfaces via `simultaneousGesture` so it
                 // cooperates with the inner reaction "+" tap. The parent
