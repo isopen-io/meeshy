@@ -19,6 +19,9 @@ import MeeshyUI
 /// banding past the zone (15% resistance) and haptic feedback at commit.
 struct BubbleSwipeContainer<Content: View>: View {
     let isMine: Bool
+    /// Identifier published via `MessageFramePreferenceKey` so the long-press
+    /// overlay can locate this cell's screen frame at gesture fire time.
+    let messageId: String
     /// Used by the swipe indicator to display a "day month / hh:mm" stamp
     /// before the user has dragged past the reply threshold.
     let messageCreatedAt: Date
@@ -60,16 +63,25 @@ struct BubbleSwipeContainer<Content: View>: View {
 
             content()
                 .offset(x: offset)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(
+                            key: MessageFramePreferenceKey.self,
+                            value: [messageId: proxy.frame(in: .global)]
+                        )
+                    }
+                )
                 .simultaneousGesture(dragGesture)
                 // Long press surfaces via `simultaneousGesture` so it
                 // cooperates with the inner reaction "+" tap. The parent
-                // (ConversationView) renders a custom overlay with a
-                // light-blur backdrop, the bubble re-rendered at the
-                // center with a spring scale, and a compact action menu
-                // sliding up from the bottom — that's what `onLongPress`
-                // is wired to.
+                // (ConversationView) renders a custom overlay that keeps
+                // the bubble at its source position (looked up via
+                // MessageFramePreferenceKey above), with adaptive lift
+                // and a compact action menu — that's what `onLongPress`
+                // is wired to. Duration tightened from 0.45 → 0.35 to
+                // match iMessage/WhatsApp reactivity.
                 .simultaneousGesture(
-                    LongPressGesture(minimumDuration: 0.45)
+                    LongPressGesture(minimumDuration: 0.35)
                         .onEnded { _ in
                             HapticFeedback.medium()
                             onLongPress()
