@@ -1484,7 +1484,13 @@ struct ConversationView: View {
                 onShowThread: {
                     overlayState.replyThreadParentId = msg.id
                     overlayState.showReplyThread = true
-                }
+                },
+                isDirect: isDirect,
+                preferredTranslation: viewModel.preferredTranslation(for: msg.id),
+                mentionDisplayNames: viewModel.mentionDisplayNames,
+                currentUserId: AuthManager.shared.currentUser?.id ?? "",
+                userRegionalLanguage: AuthManager.shared.currentUser?.regionalLanguage,
+                userCustomDestinationLanguage: AuthManager.shared.currentUser?.customDestinationLanguage
             )
             .transition(.opacity).zIndex(999)
         }

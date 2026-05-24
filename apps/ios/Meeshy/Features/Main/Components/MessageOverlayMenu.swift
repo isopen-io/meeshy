@@ -32,6 +32,17 @@ struct MessageOverlayMenu: View {
     var onDeleteAttachment: ((String) -> Void)?
     var onShowThread: (() -> Void)?
 
+    // Full bubble-rendering context — when `messageBubbleFrame != .zero`, the
+    // overlay renders a REAL `ThemedMessageBubble` at the source position
+    // instead of the custom `messagePreview` (which had drifted from the
+    // in-conversation rendering). Defaults stay safe for legacy call sites.
+    var isDirect: Bool = false
+    var preferredTranslation: MessageTranslation? = nil
+    var mentionDisplayNames: [String: String] = [:]
+    var currentUserId: String = ""
+    var userRegionalLanguage: String? = nil
+    var userCustomDestinationLanguage: String? = nil
+
     private var theme: ThemeManager { ThemeManager.shared }
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -143,12 +154,27 @@ struct MessageOverlayMenu: View {
             // comportement legacy "preview centré dans le VStack".
             let useSourceFrame = messageBubbleFrame != .zero
             let panelTopY = screenH - panelHeight
-            let emojiBarReservedHeight: CGFloat = 80   // hauteur empirique de la barre d'emojis + gap
-            let previewBottomLimit = panelTopY - emojiBarReservedHeight - 16
+            let emojiBarReservedHeight: CGFloat = 80
             let bubbleRect = messageBubbleFrame
-            let needsLift = useSourceFrame && bubbleRect.maxY > previewBottomLimit
-            let liftAmount: CGFloat = needsLift ? (bubbleRect.maxY - previewBottomLimit) : 0
-            let previewMidY = bubbleRect.midY - liftAmount
+
+            // 1) Décide si la bulle doit lifter vers le haut (cas "bulle basse").
+            //    previewBottomLimit = ligne sous laquelle la bulle serait
+            //    masquée par la barre d'emojis OU le panneau.
+            let previewBottomLimit = panelTopY - emojiBarReservedHeight - 16
+            let needsBubbleLift = useSourceFrame && bubbleRect.maxY > previewBottomLimit
+            let bubbleLift: CGFloat = needsBubbleLift ? (bubbleRect.maxY - previewBottomLimit) : 0
+            let previewMidY = bubbleRect.midY - bubbleLift
+            let bubbleFinalMaxY = bubbleRect.maxY - bubbleLift
+
+            // 2) Décide si le cluster (emoji bar + panel) doit REMONTER vers
+            //    la bulle (cas "bulle haute" — message court / position élevée).
+            //    Objectif : visuellement rapprocher le menu de la bulle au lieu
+            //    de laisser un grand vide. Ne lifte que si la bulle elle-même
+            //    n'a pas été liftée (sinon double mouvement).
+            let clusterDesiredPanelTopY = bubbleFinalMaxY + emojiBarReservedHeight + 24
+            let clusterLift: CGFloat = (useSourceFrame && !needsBubbleLift)
+                ? max(0, panelTopY - clusterDesiredPanelTopY)
+                : 0
 
             ZStack {
                 dismissBackground
@@ -190,6 +216,8 @@ struct MessageOverlayMenu: View {
                     // que la bulle. Le composant partage `EmojiReactionPicker`
                     // embarque sa propre cascade gauche→droite via
                     // `WaveTileModifier` (cf. `emojiQuickBar`).
+                    // `-clusterLift` rapproche la barre de la bulle quand le
+                    // message est haut sur l'écran (bulle courte).
                     HStack(spacing: 0) {
                         if message.isMe { Spacer(minLength: 0) }
                         emojiQuickBar
@@ -198,33 +226,61 @@ struct MessageOverlayMenu: View {
                     .padding(.horizontal, 14)
                     .opacity(isVisible ? 1 : 0)
                     .scaleEffect(isVisible ? 1.0 : 0.7, anchor: .center)
-                    .offset(y: isVisible ? 0 : 18)
+                    .offset(y: isVisible ? -clusterLift : 18)
 
                     // Le panneau de detail monte depuis le bas — meme spring
                     // que les autres elements pour qu'ils convergent en un
-                    // bloc visuellement lie au repos.
+                    // bloc visuellement lie au repos. Idem `-clusterLift` ici
+                    // pour que panneau et emoji bar restent solidaires lors
+                    // du rapprochement vers la bulle.
                     detailPanel(safeBottom: safeBottom)
                         .frame(height: panelHeight)
-                        .offset(y: isVisible ? 0 : panelBaseHeight + 40)
+                        .offset(y: isVisible ? -clusterLift : panelBaseHeight + 40)
                 }
 
                 if useSourceFrame {
                     // Preview positionné à la frame source — la bulle reste
                     // exactement à sa position dans la conversation. Si elle
                     // serait masquée par la barre d'emojis ou le panneau, on
-                    // la lifte juste assez pour la rendre visible. L'animation
-                    // interpole de `bubbleRect.midY` (position initiale = even
-                    // si pas de lift, ça démarre à la source) vers
-                    // `previewMidY` (final = position liftée si besoin).
-                    // `.allowsHitTesting(false)` laisse les taps passer vers
-                    // le `dismissBackground` derrière (qui ferme l'overlay).
-                    messagePreview
-                        .position(
-                            x: bubbleRect.midX,
-                            y: isVisible ? previewMidY : bubbleRect.midY
+                    // la lifte juste assez pour la rendre visible.
+                    //
+                    // FIDÉLITÉ : on rend un VRAI `ThemedMessageBubble` avec
+                    // les mêmes paramètres que la cellule live de la liste,
+                    // donc le rendu (texte, traductions, drapeaux, médias,
+                    // réactions, footer) est rigoureusement identique. Le
+                    // wrapping HStack + Spacer reproduit l'alignement isMe
+                    // (right) / received (left) de la cellule.
+                    HStack(spacing: 0) {
+                        if message.isMe { Spacer(minLength: 44) }
+                        ThemedMessageBubble(
+                            message: message,
+                            contactColor: contactColor,
+                            isDirect: isDirect,
+                            isDark: isDark,
+                            transcription: transcription,
+                            translatedAudios: translatedAudios,
+                            textTranslations: textTranslations,
+                            preferredTranslation: preferredTranslation,
+                            showAvatar: !isDirect,
+                            isLastInGroup: true,
+                            isLastReceivedMessage: true,
+                            isLastSentMessage: true,
+                            mentionDisplayNames: mentionDisplayNames,
+                            currentUserId: currentUserId,
+                            userLanguages: (
+                                regional: userRegionalLanguage,
+                                custom: userCustomDestinationLanguage
+                            )
                         )
-                        .opacity(isVisible ? 1 : 0)
-                        .allowsHitTesting(false)
+                        if !message.isMe { Spacer(minLength: 44) }
+                    }
+                    .frame(width: geometry.size.width)
+                    .position(
+                        x: geometry.size.width / 2,
+                        y: isVisible ? previewMidY : bubbleRect.midY
+                    )
+                    .opacity(isVisible ? 1 : 0)
+                    .allowsHitTesting(false)
                 }
             }
         }
