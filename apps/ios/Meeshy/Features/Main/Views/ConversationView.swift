@@ -654,7 +654,6 @@ struct ConversationView: View {
                 ForwardPickerSheet(message: msgToForward, sourceConversationId: conversation?.id ?? "", accentColor: accentColor) { composerState.forwardMessage = nil }
                     .presentationDetents([.medium, .large])
             }
-            .overlay { messageContextOverlayContent }
             .overlay { overlayMenuContent }
             .overlay { replyThreadOverlayContent }
             .onPreferenceChange(MessageFramePreferenceKey.self) { frames in
@@ -975,13 +974,14 @@ struct ConversationView: View {
                     composerState.forwardMessage = msg
                 },
                 onLongPress: { messageId in
-                    // iMessage-style overlay : bubble reste à sa position d'origine
-                    // (lift si pas de room dessous), backdrop blur+dim, capsule
-                    // d'actions horizontale. La frame est lue depuis frameTracker
-                    // (publiée par chaque BubbleSwipeContainer). Si l'action choisie
-                    // est "Réagir", on enchaîne sur MessageOverlayMenu (panel emoji
-                    // picker) après le dismiss de cet overlay.
-                    openContextOverlay(for: messageId)
+                    // Preserve l'overlay menu existant (MessageOverlayMenu panel).
+                    // L'infrastructure frame-tracking + LayoutEngine reste en place
+                    // et sera utilisée ensuite pour lifter la bulle dans le flow
+                    // du menu existant (sans remplacer le menu lui-même).
+                    guard overlayState.longPressEnabled else { return }
+                    guard let msg = viewModel.messages.first(where: { $0.id == messageId }) else { return }
+                    overlayState.overlayMessage = msg
+                    overlayState.showOverlayMenu = true
                 },
                 onAddReaction: { messageId, bubbleFrame in
                     // Spring-open the emoji bar anchored to the tapped bubble
