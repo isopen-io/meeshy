@@ -176,9 +176,14 @@ public struct MeeshyVideoPlayer: View {
         }
     }
 
-    // Body dispatch implemented in MeeshyVideoPlayer+Renderers.swift (Task 7).
-    // Placeholder body so this file compiles standalone.
     public var body: some View {
-        Color.clear
+        Group {
+            switch style {
+            case .flat:       _FlatRenderer(player: self)
+            case .inline:     _InlineRenderer(player: self)
+            case .mini:       _MiniRenderer(player: self)
+            case .fullscreen: _FullscreenRenderer(player: self)
+            }
+        }
     }
 }
