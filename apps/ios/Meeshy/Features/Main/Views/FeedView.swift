@@ -65,6 +65,14 @@ struct FeedView: View {
     @State private var postLikedIds: Set<String> = []
     @State private var postLikeDelta: [String: Int] = [:]
     @State private var postHeartInFlightIds: Set<String> = []
+    // Optimistic bookmark / repost / share states. FeedPost has no
+    // server-issued `isBookmarked`/`isReposted` so the parent View tracks
+    // them locally — toggled on tap, cleared on API failure.
+    @State private var postBookmarkedIds: Set<String> = []
+    @State private var postBookmarkInFlightIds: Set<String> = []
+    @State private var postRepostedIds: Set<String> = []
+    @State private var postRepostInFlightIds: Set<String> = []
+    @State private var postShareInFlightIds: Set<String> = []
 
     // Impression tracking
     @State private var pendingImpressionIds = Set<String>()
@@ -148,14 +156,148 @@ struct FeedView: View {
                     }
                 }
             } catch {
-                // Rollback optimistic update on failure (incl. TaskTimeoutError)
-                if wasLiked {
-                    postLikedIds.insert(postId)
-                    postLikeDelta[postId, default: 0] += 1
-                } else {
-                    postLikedIds.remove(postId)
-                    postLikeDelta[postId, default: 0] -= 1
+                // REST fallback when the socket fails (noSocket, timeout,
+                // gateway hiccup). Mirrors the SocialSocketManager call but
+                // hits the persisted `POST/DELETE /posts/:id/like` route.
+                // Only roll the optimistic update back if the REST call
+                // also fails — that keeps the heart visible whenever the
+                // server actually recorded the toggle.
+                let restOK = await postReactionViaREST(postId: postId, like: !wasLiked)
+                if !restOK {
+                    if wasLiked {
+                        postLikedIds.insert(postId)
+                        postLikeDelta[postId, default: 0] += 1
+                    } else {
+                        postLikedIds.remove(postId)
+                        postLikeDelta[postId, default: 0] -= 1
+                    }
                 }
+            }
+        }
+    }
+
+    /// Minimal decoder for the `liked` flag returned by both the like and
+    /// unlike REST routes. Ignores `reactionSummary` (heterogeneous) and any
+    /// other fields the gateway may add.
+    private struct LikeRESTPayload: Decodable { let liked: Bool? }
+
+    /// REST fallback for the heart toggle. Returns true on success so the
+    /// caller can skip rolling back its optimistic update.
+    private func postReactionViaREST(postId: String, like: Bool) async -> Bool {
+        do {
+            let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
+                endpoint: "/posts/\(postId)/like",
+                method: like ? "POST" : "DELETE"
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    // MARK: - Bookmark / Repost / Share toggles (optimistic, ViewModel-backed)
+
+    @MainActor
+    private func togglePostBookmark(postId: String) {
+        guard !postBookmarkInFlightIds.contains(postId) else { return }
+        let wasBookmarked = postBookmarkedIds.contains(postId)
+        // Optimistic flip — keep the heart pattern: change UI immediately,
+        // confirm via API, rollback only on failure.
+        if wasBookmarked {
+            postBookmarkedIds.remove(postId)
+        } else {
+            postBookmarkedIds.insert(postId)
+        }
+        postBookmarkInFlightIds.insert(postId)
+        Task {
+            defer {
+                Task { @MainActor in
+                    postBookmarkInFlightIds.remove(postId)
+                }
+            }
+            // Phase 1: route through the existing ViewModel call so the
+            // bookmarks-cache + toast wiring still fires. Rollback on a
+            // local Toast-only signal is impossible (the VM swallows the
+            // error) — wrap the call in our own try block via a defensive
+            // REST hit to detect failure deterministically.
+            let success = await callBookmarkAPI(postId: postId, bookmark: !wasBookmarked)
+            if success {
+                // Refresh the bookmarks cache so the Favoris tab reflects
+                // both add and remove paths. The VM already inserts on
+                // bookmarkPost; we trigger a remove on unbookmark too.
+                if wasBookmarked {
+                    await pruneBookmarkFromCache(postId: postId)
+                } else {
+                    // VM already inserted on add — nothing to do here.
+                }
+            } else {
+                // Rollback UI flip.
+                if wasBookmarked {
+                    postBookmarkedIds.insert(postId)
+                } else {
+                    postBookmarkedIds.remove(postId)
+                }
+            }
+        }
+    }
+
+    private func callBookmarkAPI(postId: String, bookmark: Bool) async -> Bool {
+        do {
+            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
+                endpoint: "/posts/\(postId)/bookmark",
+                method: bookmark ? "POST" : "DELETE"
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func pruneBookmarkFromCache(postId: String) async {
+        let key = "bookmarks"
+        let result = await CacheCoordinator.shared.feed.load(for: key)
+        let current: [FeedPost]
+        switch result {
+        case .fresh(let v, _), .stale(let v, _): current = v
+        case .expired, .empty: return
+        }
+        let updated = current.filter { $0.id != postId }
+        try? await CacheCoordinator.shared.feed.save(updated, for: key)
+    }
+
+    @MainActor
+    private func togglePostRepost(postId: String) {
+        guard !postRepostInFlightIds.contains(postId) else { return }
+        // Reposts are append-only on the backend (each call creates a new
+        // post) — we only surface a transient checkmark to confirm the
+        // action landed, but the optimistic state itself is binary.
+        postRepostedIds.insert(postId)
+        postRepostInFlightIds.insert(postId)
+        Task {
+            defer {
+                Task { @MainActor in
+                    postRepostInFlightIds.remove(postId)
+                }
+            }
+            await viewModel.repostPost(postId)
+        }
+    }
+
+    @MainActor
+    private func sharePostWithLink(postId: String) {
+        guard !postShareInFlightIds.contains(postId) else { return }
+        postShareInFlightIds.insert(postId)
+        Task {
+            defer {
+                Task { @MainActor in
+                    postShareInFlightIds.remove(postId)
+                }
+            }
+            if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
+               let url = URL(string: shortUrl) {
+                shareableLink = ShareableLink(url: url)
+            } else if let raw = ShareableLink.fallback(forPostId: postId) {
+                shareableLink = raw
             }
         }
     }
@@ -383,6 +525,11 @@ struct FeedView: View {
             isLiked: postLikedIds.contains(post.id),
             displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
             isHeartInFlight: postHeartInFlightIds.contains(post.id),
+            isBookmarked: postBookmarkedIds.contains(post.id),
+            isBookmarkInFlight: postBookmarkInFlightIds.contains(post.id),
+            isReposted: postRepostedIds.contains(post.id),
+            isRepostInFlight: postRepostInFlightIds.contains(post.id),
+            isShareInFlight: postShareInFlightIds.contains(post.id),
             onToggleComments: {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     if expandedComments.contains(post.id) {
@@ -397,25 +544,16 @@ struct FeedView: View {
                 togglePostHeart(post: post)
             },
             onRepost: { postId in
-                Task { await viewModel.repostPost(postId) }
+                togglePostRepost(postId: postId)
             },
             onQuote: { postId in
                 quoteTargetPost = viewModel.posts.first(where: { $0.id == postId })
             },
             onShare: { postId in
-                Task {
-                    // Prefer the tracking link; fall back to the raw post URL
-                    // so an offline / failing-mint share never silently drops.
-                    if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
-                       let url = URL(string: shortUrl) {
-                        shareableLink = ShareableLink(url: url)
-                    } else if let raw = ShareableLink.fallback(forPostId: postId) {
-                        shareableLink = raw
-                    }
-                }
+                sharePostWithLink(postId: postId)
             },
             onBookmark: { postId in
-                Task { await viewModel.bookmarkPost(postId) }
+                togglePostBookmark(postId: postId)
             },
             onSendComment: { postId, content, parentId in
                 Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }

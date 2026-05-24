@@ -86,6 +86,14 @@ struct PostDetailView: View {
     @State private var postLikeDelta: [String: Int] = [:]
     @State private var postHeartInFlightIds: Set<String> = []
 
+    // Bookmark / repost / share optimistic state — same pattern as FeedView.
+    @State private var isPostBookmarked: Bool = false
+    @State private var isBookmarkInFlight: Bool = false
+    @State private var isPostReposted: Bool = false
+    @State private var isRepostInFlight: Bool = false
+    @State private var isShareInFlight: Bool = false
+    @State private var showRepostOptions: Bool = false
+
     private var detailIsLiked: Bool { postLikedIds.contains(postId) }
     private var detailLikeCount: Int {
         guard let post = displayPost else { return 0 }
@@ -124,14 +132,122 @@ struct PostDetailView: View {
                     )
                 }
             } catch {
-                // Rollback optimistic update on failure
-                if wasLiked {
-                    postLikedIds.insert(postId)
-                    postLikeDelta[postId, default: 0] += 1
-                } else {
-                    postLikedIds.remove(postId)
-                    postLikeDelta[postId, default: 0] -= 1
+                // REST fallback when socket fails (noSocket / timeout). Only
+                // rollback the optimistic flip when REST also fails — keeps
+                // the heart visible whenever the server actually persisted.
+                let restOK = await postLikeViaREST(like: !wasLiked)
+                if !restOK {
+                    if wasLiked {
+                        postLikedIds.insert(postId)
+                        postLikeDelta[postId, default: 0] += 1
+                    } else {
+                        postLikedIds.remove(postId)
+                        postLikeDelta[postId, default: 0] -= 1
+                    }
                 }
+            }
+        }
+    }
+
+    private struct LikeRESTPayload: Decodable { let liked: Bool? }
+    private struct BookmarkRESTPayload: Decodable { let bookmarked: Bool? }
+
+    private func postLikeViaREST(like: Bool) async -> Bool {
+        do {
+            let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
+                endpoint: "/posts/\(postId)/like",
+                method: like ? "POST" : "DELETE"
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    // MARK: - Bookmark / Repost / Share (post detail)
+
+    @MainActor
+    private func toggleDetailBookmark() {
+        guard !isBookmarkInFlight else { return }
+        let wasBookmarked = isPostBookmarked
+        isPostBookmarked.toggle()
+        isBookmarkInFlight = true
+        Task {
+            defer { Task { @MainActor in isBookmarkInFlight = false } }
+            let ok: Bool = await {
+                do {
+                    let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
+                        endpoint: "/posts/\(postId)/bookmark",
+                        method: wasBookmarked ? "DELETE" : "POST"
+                    )
+                    return true
+                } catch { return false }
+            }()
+            if !ok {
+                isPostBookmarked = wasBookmarked
+                ToastManager.shared.showError("Erreur lors de l'enregistrement")
+            } else {
+                ToastManager.shared.showSuccess(wasBookmarked
+                    ? String(localized: "Retire des favoris", defaultValue: "Retire des favoris")
+                    : String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+            }
+        }
+    }
+
+    @MainActor
+    private func toggleDetailRepost(quote: Bool) {
+        guard !isRepostInFlight else { return }
+        isPostReposted = true
+        isRepostInFlight = true
+        Task {
+            defer { Task { @MainActor in isRepostInFlight = false } }
+            do {
+                _ = try await PostService.shared.repost(
+                    postId: postId,
+                    targetType: nil,
+                    content: nil,
+                    isQuote: quote
+                )
+                ToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+            } catch {
+                isPostReposted = false
+                ToastManager.shared.showError("Erreur lors du repost")
+            }
+        }
+    }
+
+    @MainActor
+    private func sharePostFromDetail() {
+        guard !isShareInFlight else { return }
+        isShareInFlight = true
+        Task {
+            defer { Task { @MainActor in isShareInFlight = false } }
+            // Mint a tracking link; fall back to the raw post URL when the
+            // gateway can't issue a TrackingLink (offline / 5xx).
+            do {
+                struct SharePayload: Decodable {
+                    let shared: Bool?
+                    let shareCount: Int?
+                    let shortUrl: String?
+                    let token: String?
+                }
+                let body = try JSONSerialization.data(withJSONObject: ["generateLink": true])
+                let resp: APIResponse<SharePayload> = try await APIClient.shared.request(
+                    endpoint: "/posts/\(postId)/share",
+                    method: "POST",
+                    body: body
+                )
+                if let s = resp.data.shortUrl, let url = URL(string: s) {
+                    shareableLink = ShareableLink(url: url)
+                    return
+                }
+            } catch {
+                // fall through to raw fallback
+            }
+            if let raw = ShareableLink.fallback(forPostId: postId) {
+                shareableLink = raw
+            } else {
+                ToastManager.shared.showError("Erreur lors du partage")
             }
         }
     }
@@ -914,24 +1030,66 @@ struct PostDetailView: View {
 
             Spacer()
 
+            // Repost
             Button {
-                Task { await viewModel.bookmarkPost() }
+                showRepostOptions = true
                 HapticFeedback.light()
             } label: {
-                Image(systemName: "bookmark")
+                Image(systemName: isPostReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
                     .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundColor(isPostReposted ? MeeshyColors.indigo500 : theme.textSecondary)
+                    .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostReposted)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
+            }
+            .disabled(isRepostInFlight)
+            .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
+                Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) {
+                    toggleDetailRepost(quote: false)
+                }
+                Button(String(localized: "feed.post.quote", defaultValue: "Citer", bundle: .main)) {
+                    toggleDetailRepost(quote: true)
+                }
+                Button(String(localized: "common.cancel", defaultValue: "Annuler", bundle: .main), role: .cancel) {}
             }
 
             Spacer()
 
+            // Bookmark
             Button {
+                toggleDetailBookmark()
                 HapticFeedback.light()
             } label: {
-                Image(systemName: "square.and.arrow.up")
+                Image(systemName: isPostBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundColor(isPostBookmarked ? MeeshyColors.indigo500 : theme.textSecondary)
+                    .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isPostBookmarked)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
+            .disabled(isBookmarkInFlight)
+
+            Spacer()
+
+            // Share
+            Button {
+                sharePostFromDetail()
+                HapticFeedback.light()
+            } label: {
+                ZStack {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 17))
+                        .foregroundColor(theme.textSecondary)
+                        .opacity(isShareInFlight ? 0 : 1)
+                    if isShareInFlight {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .progressViewStyle(.circular)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
+            }
+            .disabled(isShareInFlight)
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 10)

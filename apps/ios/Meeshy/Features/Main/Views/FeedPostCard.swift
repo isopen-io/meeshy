@@ -15,6 +15,15 @@ struct FeedPostCard: View {
     var displayLikeCount: Int? = nil
     /// True while a socket reaction request is in-flight — disables the button.
     var isHeartInFlight: Bool = false
+    /// Optimistic bookmark state owned by the parent (FeedView/PostDetailView).
+    /// Card has no persisted bookmark flag on FeedPost — parent tracks via Set.
+    var isBookmarked: Bool = false
+    var isBookmarkInFlight: Bool = false
+    /// Optimistic repost state owned by the parent.
+    var isReposted: Bool = false
+    var isRepostInFlight: Bool = false
+    /// True while a share request is in-flight (mint short link).
+    var isShareInFlight: Bool = false
     var onToggleComments: (() -> Void)? = nil
     var onLike: ((String) -> Void)? = nil
     var onRepost: ((String) -> Void)? = nil
@@ -592,10 +601,14 @@ struct FeedPostCard: View {
                 showRepostOptions = true
                 HapticFeedback.light()
             } label: {
-                Image(systemName: "arrow.2.squarepath")
+                Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
                     .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundColor(isReposted ? MeeshyColors.indigo500 : theme.textSecondary)
+                    .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
             }
+            .disabled(isRepostInFlight)
             .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
             .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(post.id) }
@@ -610,10 +623,14 @@ struct FeedPostCard: View {
                 onBookmark?(post.id)
                 HapticFeedback.light()
             } label: {
-                Image(systemName: "bookmark")
+                Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
                     .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
+                    .foregroundColor(isBookmarked ? MeeshyColors.indigo500 : theme.textSecondary)
+                    .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
+                    .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
+            .disabled(isBookmarkInFlight)
             .accessibilityLabel(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main))
 
             Spacer()
@@ -623,10 +640,20 @@ struct FeedPostCard: View {
                 onShare?(post.id)
                 HapticFeedback.light()
             } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
+                ZStack {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.system(size: 17))
+                        .foregroundColor(theme.textSecondary)
+                        .opacity(isShareInFlight ? 0 : 1)
+                    if isShareInFlight {
+                        ProgressView()
+                            .scaleEffect(0.6)
+                            .progressViewStyle(.circular)
+                    }
+                }
+                .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
             }
+            .disabled(isShareInFlight)
             .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
         }
         .padding(.top, 4)
@@ -809,6 +836,11 @@ extension FeedPostCard: Equatable {
             && lhs.isLiked == rhs.isLiked
             && lhs.displayLikeCount == rhs.displayLikeCount
             && lhs.isHeartInFlight == rhs.isHeartInFlight
+            && lhs.isBookmarked == rhs.isBookmarked
+            && lhs.isBookmarkInFlight == rhs.isBookmarkInFlight
+            && lhs.isReposted == rhs.isReposted
+            && lhs.isRepostInFlight == rhs.isRepostInFlight
+            && lhs.isShareInFlight == rhs.isShareInFlight
             && lhs.post.commentCount == rhs.post.commentCount
             && lhs.post.translatedContent == rhs.post.translatedContent
             && lhs.isCommentsExpanded == rhs.isCommentsExpanded
