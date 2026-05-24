@@ -176,6 +176,21 @@ struct ThemedFeedOverlay: View {
     @State private var postLikedIds: Set<String> = []
     @State private var postLikeDelta: [String: Int] = [:]
     @State private var postHeartInFlightIds: Set<String> = []
+    @State private var postBookmarkedIds: Set<String> = []
+    @State private var postBookmarkInFlightIds: Set<String> = []
+    @State private var postRepostedIds: Set<String> = []
+    @State private var postRepostInFlightIds: Set<String> = []
+    @State private var postShareInFlightIds: Set<String> = []
+    @State private var shareableLink: ShareableLink?
+
+    private struct LikeRESTPayload: Decodable { let liked: Bool? }
+    private struct BookmarkRESTPayload: Decodable { let bookmarked: Bool? }
+    private struct SharePayload: Decodable {
+        let shared: Bool?
+        let shareCount: Int?
+        let shortUrl: String?
+        let token: String?
+    }
 
     @MainActor
     private func togglePostHeart(post: FeedPost) {
@@ -193,23 +208,93 @@ struct ThemedFeedOverlay: View {
                 postLikeDelta[postId, default: 0] += 1
             }
             do {
-                if wasLiked {
-                    _ = try await SocialSocketManager.shared.removePostReaction(
-                        postId: postId, emoji: StoryViewerView.heartEmoji
-                    )
-                } else {
-                    _ = try await SocialSocketManager.shared.addPostReaction(
-                        postId: postId, emoji: StoryViewerView.heartEmoji
-                    )
+                try await withTaskTimeout(seconds: 12) {
+                    if wasLiked {
+                        _ = try await SocialSocketManager.shared.removePostReaction(
+                            postId: postId, emoji: StoryViewerView.heartEmoji
+                        )
+                    } else {
+                        _ = try await SocialSocketManager.shared.addPostReaction(
+                            postId: postId, emoji: StoryViewerView.heartEmoji
+                        )
+                    }
                 }
             } catch {
-                if wasLiked {
-                    postLikedIds.insert(postId)
-                    postLikeDelta[postId, default: 0] += 1
-                } else {
-                    postLikedIds.remove(postId)
-                    postLikeDelta[postId, default: 0] -= 1
+                // REST fallback: only rollback if REST also fails.
+                let ok = await postLikeViaREST(postId: postId, like: !wasLiked)
+                if !ok {
+                    if wasLiked {
+                        postLikedIds.insert(postId)
+                        postLikeDelta[postId, default: 0] += 1
+                    } else {
+                        postLikedIds.remove(postId)
+                        postLikeDelta[postId, default: 0] -= 1
+                    }
                 }
+            }
+        }
+    }
+
+    private func postLikeViaREST(postId: String, like: Bool) async -> Bool {
+        do {
+            let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
+                endpoint: "/posts/\(postId)/like",
+                method: like ? "POST" : "DELETE"
+            )
+            return true
+        } catch { return false }
+    }
+
+    @MainActor
+    private func togglePostBookmark(postId: String) {
+        guard !postBookmarkInFlightIds.contains(postId) else { return }
+        let wasBookmarked = postBookmarkedIds.contains(postId)
+        if wasBookmarked { postBookmarkedIds.remove(postId) } else { postBookmarkedIds.insert(postId) }
+        postBookmarkInFlightIds.insert(postId)
+        Task {
+            defer { Task { @MainActor in postBookmarkInFlightIds.remove(postId) } }
+            let ok: Bool = await {
+                do {
+                    let _: APIResponse<BookmarkRESTPayload> = try await APIClient.shared.request(
+                        endpoint: "/posts/\(postId)/bookmark",
+                        method: wasBookmarked ? "DELETE" : "POST"
+                    )
+                    return true
+                } catch { return false }
+            }()
+            if !ok {
+                if wasBookmarked { postBookmarkedIds.insert(postId) } else { postBookmarkedIds.remove(postId) }
+                ToastManager.shared.showError("Erreur lors de l'enregistrement")
+            } else {
+                ToastManager.shared.showSuccess(wasBookmarked
+                    ? String(localized: "Retire des favoris", defaultValue: "Retire des favoris")
+                    : String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+            }
+        }
+    }
+
+    @MainActor
+    private func togglePostRepost(postId: String) {
+        guard !postRepostInFlightIds.contains(postId) else { return }
+        postRepostedIds.insert(postId)
+        postRepostInFlightIds.insert(postId)
+        Task {
+            defer { Task { @MainActor in postRepostInFlightIds.remove(postId) } }
+            await viewModel.repostPost(postId)
+        }
+    }
+
+    @MainActor
+    private func sharePostWithLink(postId: String) {
+        guard !postShareInFlightIds.contains(postId) else { return }
+        postShareInFlightIds.insert(postId)
+        Task {
+            defer { Task { @MainActor in postShareInFlightIds.remove(postId) } }
+            if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
+               let url = URL(string: shortUrl) {
+                shareableLink = ShareableLink(url: url)
+            } else if let raw = ShareableLink.fallback(forPostId: postId) {
+                shareableLink = raw
             }
         }
     }
@@ -291,20 +376,25 @@ struct ThemedFeedOverlay: View {
                             isLiked: postLikedIds.contains(post.id),
                             displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
                             isHeartInFlight: postHeartInFlightIds.contains(post.id),
+                            isBookmarked: postBookmarkedIds.contains(post.id),
+                            isBookmarkInFlight: postBookmarkInFlightIds.contains(post.id),
+                            isReposted: postRepostedIds.contains(post.id),
+                            isRepostInFlight: postRepostInFlightIds.contains(post.id),
+                            isShareInFlight: postShareInFlightIds.contains(post.id),
                             onLike: { _ in
                                 togglePostHeart(post: post)
                             },
                             onRepost: { postId in
-                                Task { await viewModel.repostPost(postId) }
+                                togglePostRepost(postId: postId)
                             },
                             onQuote: { postId in
                                 quoteOriginalPost = viewModel.posts.first(where: { $0.id == postId })
                             },
                             onShare: { postId in
-                                Task { await viewModel.sharePost(postId) }
+                                sharePostWithLink(postId: postId)
                             },
                             onBookmark: { postId in
-                                Task { await viewModel.bookmarkPost(postId) }
+                                togglePostBookmark(postId: postId)
                             },
                             onSendComment: { postId, content, parentId in
                                 Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
@@ -397,6 +487,11 @@ struct ThemedFeedOverlay: View {
         }
         .onDisappear {
             viewModel.unsubscribeFromSocketEvents()
+        }
+        .sheet(item: $shareableLink) { link in
+            // Same TrackingLink share sheet as FeedView — every external
+            // touchpoint funnels through `meeshy.me/l/<token>`.
+            ShareSheet(activityItems: [link.url])
         }
         .fullScreenCover(isPresented: $showStoryViewer) {
             StoryViewerContainer(
