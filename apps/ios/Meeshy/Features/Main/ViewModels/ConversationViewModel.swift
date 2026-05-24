@@ -2118,10 +2118,10 @@ class ConversationViewModel: ObservableObject {
         case everyone
     }
 
+    /// Pure predicate — delegated to `commandHandler` so the policy
+    /// (own message + within the 2h window) lives in one place.
     func canDeleteForEveryone(_ message: Message, window: TimeInterval = 2 * 3600) -> Bool {
-        guard message.isMe else { return false }
-        guard let sentAt = message.createdAt as Date? else { return false }
-        return Date().timeIntervalSince(sentAt) <= window
+        commandHandler.canDeleteForEveryone(message, window: window)
     }
 
     func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
@@ -2352,15 +2352,11 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    /// Server-side delivery confirmation. Fully delegated to the command
+    /// handler — the legacy variant did the exact same call with an
+    /// equally permissive error path.
     func markAsReceived() {
-        let convId = conversationId
-        Task {
-            do {
-                try await conversationService.markAsReceived(conversationId: convId)
-            } catch {
-                // Non-critical — server will still count as received on next sync
-            }
-        }
+        commandHandler.markAsReceived()
     }
 
 
@@ -2401,87 +2397,28 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Search Messages
+    // MARK: - Search Messages (delegated to ConversationSearchHandler)
 
+    /// First-page search. Delegates to `searchHandler`, then mirrors the
+    /// store-side state back onto the legacy `@Published` so the views
+    /// keep observing the ViewModel directly during the incremental
+    /// split. The local `searchNextCursor` legacy field becomes dead
+    /// weight (cursor lives in the handler) but is left assigned to
+    /// `nil` for any reader that still peeks at it.
     func searchMessages(query: String) async {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 2 else {
-            searchResults = []
-            currentSearchQuery = nil
-            isSearching = false
-            return
-        }
-
-        isSearching = true
-        currentSearchQuery = trimmed
+        await searchHandler.searchMessages(query: query)
+        searchResults = stateStore.searchResults
+        currentSearchQuery = stateStore.currentSearchQuery
+        searchHasMore = stateStore.searchHasMore
+        isSearching = stateStore.isSearching
         searchNextCursor = nil
-
-        do {
-            let response = try await messageService.search(
-                conversationId: conversationId, query: trimmed, limit: 20
-            )
-
-            searchResults = response.data.map { buildSearchResult($0, query: trimmed) }
-            searchNextCursor = response.cursorPagination?.nextCursor
-            searchHasMore = response.cursorPagination?.hasMore ?? false
-        } catch {
-            searchResults = []
-        }
-
-        isSearching = false
     }
 
     func loadMoreSearchResults(query: String) async {
-        guard searchHasMore, let cursor = searchNextCursor, !isSearching else { return }
-        isSearching = true
-
-        do {
-            let response = try await messageService.searchWithCursor(
-                conversationId: conversationId, query: query, cursor: cursor
-            )
-
-            let newResults = response.data.map { buildSearchResult($0, query: query) }
-            searchResults.append(contentsOf: newResults)
-            searchNextCursor = response.cursorPagination?.nextCursor
-            searchHasMore = response.cursorPagination?.hasMore ?? false
-        } catch {
-            // Ignore pagination errors
-        }
-
-        isSearching = false
-    }
-
-    private func buildSearchResult(_ apiMsg: APIMessage, query: String) -> SearchResultItem {
-        let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
-        let content = apiMsg.content ?? ""
-        let queryLower = query.lowercased()
-
-        // Check if the match is in original content
-        if content.lowercased().contains(queryLower) {
-            return SearchResultItem(
-                id: apiMsg.id, conversationId: apiMsg.conversationId,
-                content: content, matchedText: content, matchType: "content",
-                senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-            )
-        }
-
-        // Match is in a translation — find which one
-        if let translations = apiMsg.translations {
-            for t in translations where t.translatedContent.lowercased().contains(queryLower) {
-                return SearchResultItem(
-                    id: apiMsg.id, conversationId: apiMsg.conversationId,
-                    content: content, matchedText: t.translatedContent, matchType: "translation",
-                    senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-                )
-            }
-        }
-
-        // Fallback (shouldn't happen but safe)
-        return SearchResultItem(
-            id: apiMsg.id, conversationId: apiMsg.conversationId,
-            content: content, matchedText: content, matchType: "content",
-            senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-        )
+        await searchHandler.loadMoreSearchResults(query: query)
+        searchResults = stateStore.searchResults
+        searchHasMore = stateStore.searchHasMore
+        isSearching = stateStore.isSearching
     }
 
     // MARK: - Jump to Message (load messages around a specific message)

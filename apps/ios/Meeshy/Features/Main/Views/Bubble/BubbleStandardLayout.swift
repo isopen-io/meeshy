@@ -103,7 +103,11 @@ struct BubbleStandardLayout: View {
     // `$activeURL` qui ne ticke pas (change uniquement sur load/stop).
     @State private var inlineVideoActiveURL: String = ""
 
-    private var hasPlayingInlineVideo: Bool {
+    /// Whether an inline AVPlayer is currently mounted on this bubble.
+    /// Read by the extension in `ThemedMessageBubble+Media.swift` to hide
+    /// the footer and the media-time overlay during playback — defaults
+    /// to internal so cross-file extensions on this struct can observe it.
+    var hasPlayingInlineVideo: Bool {
         guard !inlineVideoActiveURL.isEmpty else { return false }
         return visualAttachments.contains { $0.type == .video && $0.fileUrl == inlineVideoActiveURL }
     }
