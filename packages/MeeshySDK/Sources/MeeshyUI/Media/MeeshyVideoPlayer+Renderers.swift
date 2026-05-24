@@ -71,8 +71,17 @@ internal struct _InlineRenderer: View {
 
     var body: some View {
         ZStack {
+            // Baseline backdrop — always present so the ZStack asserts a
+            // consistent size before SwiftUI sees the UIViewRepresentable
+            // surface (which has no intrinsic size). Without this the frame
+            // shrinks when the active branch mounts the surface because
+            // nothing else fills. Invisible inside the bubble (bubble bg
+            // is already black) but mandatory for layout stability.
+            Color.black
+
             if isThisActive, let p = manager.player {
                 MeeshyVideoSurface(player: p, gravity: .resizeAspect, isMuted: false)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onTapGesture { toggleControls() }
                 if showControls {
                     _InlineOverlayControls(
@@ -84,16 +93,13 @@ internal struct _InlineRenderer: View {
                     .transition(.opacity)
                 }
             } else {
-                // Thumbnail phase — keep a black backdrop so the play button
-                // pops on any thumbnail color. While playing we drop the
-                // backdrop entirely so the video fills width-bubble fully.
-                Color.black
                 MeeshyVideoThumbnail(
                     attachment: player.attachment,
                     accentColor: player.accentColor,
                     showPlayBadge: false,
                     showDurationBadge: player.controls.contains(.duration)
                 )
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 playButton
             }
         }
