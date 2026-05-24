@@ -512,6 +512,20 @@ class ConversationViewModel: ObservableObject {
     private var storeObservation: AnyCancellable?
     private var socketHandler: ConversationSocketHandler?
 
+    // MARK: - Split Orchestrators (incremental migration scaffold)
+    //
+    // The 3000-line legacy here is being progressively split into focused
+    // handlers under `ViewModels/Conversation/`. For now the legacy keeps
+    // owning `@Published var messages` and friends; the handlers mirror that
+    // state into `stateStore.messages` so that the delegated methods
+    // (currently `searchMessages`, `prefetchRecentMedia`, …) work against
+    // the same source of truth. See `[[project_conversation_vm_split_staged]]`.
+    private let stateStore: ConversationStateStore
+    private let commandHandler: ConversationCommandHandler
+    private let mediaHandler: ConversationMediaHandler
+    private let searchHandler: ConversationSearchHandler
+    private let translationResolver: TranslationResolver
+
     // MARK: - GRDB Persistence (additive — parallel data source alongside @Published messages)
 
     /// GRDB-backed observable store for UICollectionView bridge.
@@ -675,6 +689,31 @@ class ConversationViewModel: ObservableObject {
         self.messageSocket = messageSocket
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
+
+        // Split-handler scaffolding — see ConversationStateStore et al.
+        // Built before MessageStore/socket so subsequent delegations always
+        // have a non-nil handler to call. The handlers don't drive any state
+        // yet; they mirror the legacy @Published values via the messages
+        // sink below so `searchHandler` / `mediaHandler` / `translationResolver`
+        // can read off `stateStore.messages` without forking the source of truth.
+        let stateStore = ConversationStateStore()
+        self.stateStore = stateStore
+        self.commandHandler = ConversationCommandHandler(
+            state: stateStore,
+            conversationId: conversationId,
+            messageService: messageService,
+            persistence: dependencies.persistence,
+            authManager: authManager,
+            messageSocket: messageSocket,
+            reportService: reportService
+        )
+        self.mediaHandler = ConversationMediaHandler(state: stateStore)
+        self.searchHandler = ConversationSearchHandler(
+            state: stateStore,
+            conversationId: conversationId,
+            messageService: messageService
+        )
+        self.translationResolver = TranslationResolver(state: stateStore, authManager: authManager)
         let store = MessageStore(
             conversationId: conversationId,
             persistence: dependencies.persistence
@@ -717,6 +756,7 @@ class ConversationViewModel: ObservableObject {
         subscribeToMessageStore()
         subscribeToQueueReconciliation()
         subscribeToLanguagePreferenceChanges()
+        mirrorMessagesIntoStateStore()
         // Cross-conversation unread aggregator powers the back-button pill.
         // Seed `currentConversationUnreadCount` BEFORE wiring the CombineLatest
         // so the initial `totalConversationsUnread` value (delivered as soon
@@ -874,6 +914,23 @@ class ConversationViewModel: ObservableObject {
                     // scoped to the optimistic message+reaction lifecycle.
                     break
                 }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Mirror the legacy `@Published var messages` into the new
+    /// `ConversationStateStore.messages` so the split handlers
+    /// (`searchHandler`, `mediaHandler`, `translationResolver`) can read
+    /// off the shared store while the legacy ViewModel still owns the
+    /// canonical source. Removed once the migration of the message
+    /// pipeline (init/load/send/edit/delete) into `commandHandler` is
+    /// complete and the legacy `@Published messages` retired.
+    private func mirrorMessagesIntoStateStore() {
+        stateStore.messages = messages
+        $messages
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snapshot in
+                self?.stateStore.messages = snapshot
             }
             .store(in: &cancellables)
     }
@@ -1124,77 +1181,20 @@ class ConversationViewModel: ObservableObject {
         accessRevoked = true
     }
 
-    // MARK: - Media Prefetch
+    // MARK: - Media Prefetch (delegated to ConversationMediaHandler)
 
-    private var mediaPrefetchTask: Task<Void, Never>?
     private var mediaPrefetchDebounce: Task<Void, Never>?
 
-    /// Prefetch media for the most recent messages with attachments.
-    /// Debounced to avoid thrashing from rapid socket updates.
+    /// Prefetch media for the most recent messages with attachments. The
+    /// debounce stays here (300 ms collapses bursts of socket updates) and
+    /// the actual cache warming is delegated to `mediaHandler`, which owns
+    /// the in-flight task / cancellation contract.
     func prefetchRecentMedia() {
         mediaPrefetchDebounce?.cancel()
-        mediaPrefetchDebounce = Task {
+        mediaPrefetchDebounce = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else { return }
-            executePrefetchRecentMedia()
-        }
-    }
-
-    private func executePrefetchRecentMedia() {
-        mediaPrefetchTask?.cancel()
-        let snapshot = Array(messages.suffix(30).filter { !$0.attachments.isEmpty })
-        mediaPrefetchTask = Task(priority: .utility) {
-            guard !snapshot.isEmpty else { return }
-
-            let imageStore = await CacheCoordinator.shared.images
-
-            // Parallel prefetch: images/thumbnails/audio in TaskGroup
-            await withTaskGroup(of: Void.self) { group in
-                for message in snapshot {
-                    for attachment in message.attachments {
-                        guard !Task.isCancelled else { return }
-
-                        switch attachment.type {
-                        case .image:
-                            if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            }
-                            if !attachment.fileUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            }
-
-                        case .video:
-                            if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            } else if !attachment.fileUrl.isEmpty,
-                                      let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl) {
-                                group.addTask { _ = await StoryMediaLoader.shared.videoThumbnail(url: resolved) }
-                            }
-
-                        case .audio:
-                            if !attachment.fileUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                                group.addTask { _ = try? await CacheCoordinator.shared.audio.data(for: resolved) }
-                            }
-
-                        default:
-                            break
-                        }
-                    }
-                }
-            }
-
-            // Video preroll: fire-and-forget, non-blocking
-            if let firstVideoAtt = snapshot.flatMap(\.attachments).first(where: { $0.type == .video }),
-               !firstVideoAtt.fileUrl.isEmpty,
-               let resolved = MeeshyConfig.resolveMediaURL(firstVideoAtt.fileUrl) {
-                Task(priority: .utility) {
-                    await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
-                }
-            }
+            guard let self, !Task.isCancelled else { return }
+            self.mediaHandler.prefetchRecentMedia()
         }
     }
 
