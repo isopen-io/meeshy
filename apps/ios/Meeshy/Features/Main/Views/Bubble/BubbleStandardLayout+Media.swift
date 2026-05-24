@@ -1,12 +1,25 @@
-// MARK: - Bubble visual media grid + carousel
+// MARK: - BubbleStandardLayout — visual media grid, carousel + satellites
 //
-// Was: extension on `ThemedMessageBubble` providing the visual grid and the
-// inline carousel (Task-14 pivot moved the rendering into
-// `BubbleStandardLayout`, but the helpers stay alongside the orchestrator
-// rather than crowding the new layout file).
+// Companion file to `BubbleStandardLayout.swift`. Holds the visual-media
+// concerns that crowd the orchestrator body :
 //
-// File kept under its legacy name + pbxproj entry; only the extended type
-// changed (now `BubbleStandardLayout`).
+//   1. `extension BubbleStandardLayout` :
+//      - `visualMediaGrid` : 1/2/3/4+ grid layout dispatcher
+//      - `makeGridCell(_:overflowCount:solo:)` : cell factory
+//      - `carouselView` : façade instantiating `BubbleCarouselView`
+//      - `downloadBadge(_:)` : per-attachment download chip
+//      - `mediaWithReplyContainer(reply:)` : visual + quoted reply combo
+//
+//   2. Satellite structs (fileprivate / standalone) :
+//      - `BubbleGridCell` : 1 grid slot (image or video)
+//      - `BubbleGridImageView` / `BubbleGridVideoThumbnailView`
+//      - `AttachmentBlurOverlayView`
+//      - `BubbleCarouselView` : standalone pager, swipe between slides
+//
+// History : was originally `ThemedMessageBubble+Media.swift` (extension on
+// `ThemedMessageBubble`). Task-14 pivot of the bubble-decompose refactor
+// moved rendering into `BubbleStandardLayout` ; this file was renamed
+// alongside that pivot to match what it actually extends.
 
 import SwiftUI
 import Combine
@@ -22,8 +35,20 @@ extension BubbleStandardLayout {
 
         switch items.count {
         case 1:
-            makeGridCell(items[0], solo: true)
-                .frame(width: gridMaxWidth, height: items[0].type == .video ? 200 : 240)
+            let item = items[0]
+            if item.type == .video {
+                // Video : the cell fills the bubble width, and the renderer's
+                // own `.aspectRatio(videoAspectRatio, .fit)` drives the height
+                // intrinsically from the source ratio — no cap. Portrait 9:16
+                // becomes tall (≈ width × 1.78), landscape 16:9 becomes short
+                // (≈ width × 0.56). Replaces the legacy hardcoded `height: 200`
+                // that squashed portrait sources.
+                makeGridCell(item, solo: true)
+                    .frame(width: gridMaxWidth)
+            } else {
+                makeGridCell(item, solo: true)
+                    .frame(width: gridMaxWidth, height: 240)
+            }
 
         case 2:
             HStack(spacing: gridSpacing) {
@@ -112,7 +137,9 @@ extension BubbleStandardLayout {
             contactColor: contactColor,
             messageDeliveryStatus: message.deliveryStatus,
             footer: resolvedFooter().0,
-            isDark: isDark
+            isDark: isDark,
+            containerWidth: gridMaxWidth,
+            hasPlayingInlineVideo: hasPlayingInlineVideo
         )
     }
 
@@ -170,15 +197,20 @@ extension BubbleStandardLayout {
             visualMediaGrid
                 .background(Color.black)
                 .overlay(alignment: .bottomTrailing) {
-                    BubbleFooter(
-                        model: resolvedFooter().0,
-                        actions: .none,
-                        style: .overlay,
-                        isDark: isDark
-                    )
-                    .equatable()
-                    .padding(8)
-                    .transition(.opacity)
+                    // Footer caché pendant la lecture d'une vidéo inline —
+                    // évite la collision avec les contrôles overlay au
+                    // bottom de la vidéo.
+                    if !hasPlayingInlineVideo {
+                        BubbleFooter(
+                            model: resolvedFooter().0,
+                            actions: .none,
+                            style: .overlay,
+                            isDark: isDark
+                        )
+                        .equatable()
+                        .padding(8)
+                        .transition(.opacity)
+                    }
                 }
         }
         .compositingGroup()
@@ -260,21 +292,32 @@ fileprivate struct BubbleGridCell: View {
         .overlay { downloadBadgeOverlay }
     }
 
-    /// Inline video player path. `VideoMediaView` owns the play affordance,
-    /// the download badge (corner pill via `InlineVideoPlayerView`), and the
-    /// fullscreen expand button surfaced by the overlay controls. The bubble
-    /// only forwards the expand callback so `fullscreenAttachment` is set
-    /// from the same single source of truth as the carousel/grid path.
+    /// Inline video player path. `VideoAvailabilityResolver` resolves download
+    /// policy and passes `VideoAvailability` to `MeeshyVideoPlayer`, which owns
+    /// the play affordance, download badge, and fullscreen expand button.
+    ///
+    /// PAS de `.frame(maxWidth: .infinity, maxHeight: .infinity)` sur le
+    /// `VideoAvailabilityResolver` : ça écraserait la contrainte d'`.aspectRatio`
+    /// posée par le `_InlineRenderer` interne, et la bulle s'aplatirait en
+    /// paysage au moment du tap-play. Le ratio est piloté EXCLUSIVEMENT par
+    /// le renderer du SDK qui reporte sa frame naturelle (`width × W/ratio`)
+    /// à ce ZStack, lequel se sizes dessus.
     private var videoBody: some View {
         ZStack {
             Color.black
-            VideoMediaView(
-                attachment: attachment,
-                accentColor: contactColor,
-                isDark: false,
-                onExpandFullscreen: { fullscreenAttachment = attachment }
-            )
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: attachment,
+                    style: .inline,
+                    controls: .inlineDefault,
+                    accentColor: contactColor,
+                    frame: .bubble,
+                    availability: availability,
+                    performance: .inline,
+                    onDownload: onDownload,
+                    onExpand: { fullscreenAttachment = attachment }
+                )
+            }
             overflowOverlay
             viewCountBadge
         }
@@ -536,10 +579,28 @@ struct BubbleCarouselView: View {
     let messageDeliveryStatus: Message.DeliveryStatus
     var footer: BubbleFooterModel = .empty
     var isDark: Bool = false
+    var containerWidth: CGFloat = 260
+    /// Mirror of `BubbleStandardLayout.hasPlayingInlineVideo` — passed in
+    /// by `carouselView` so the carousel hides its `BubbleFooter` overlay
+    /// (timestamp + delivery state) while one of its video slides is the
+    /// active inline player. Avoids collision with the overlay controls
+    /// drawn over the video. Defaults to `false` for non-bubble callers.
+    var hasPlayingInlineVideo: Bool = false
 
     @State private var currentPageID: String?
 
-    private let carouselHeight: CGFloat = 300
+    private func carouselHeight(width: CGFloat) -> CGFloat {
+        // Pager height = max(width / ratio) — pure aspect ratio respect, no
+        // cap. A portrait 9:16 slide in the mix dictates the pager height
+        // (≈ width × 1.78); landscape slides are letterboxed inside that
+        // height with their natural aspect. Voulu pour respecter le format
+        // de chaque vidéo.
+        let heights = items.map { att -> CGFloat in
+            let r = att.videoAspectRatio ?? (16.0 / 9.0)
+            return width / r
+        }
+        return heights.max() ?? width * 9 / 16
+    }
 
     var body: some View {
         ZStack(alignment: .top) {
@@ -551,17 +612,18 @@ struct BubbleCarouselView: View {
             ) { _, attachment in
                 carouselPage(attachment)
             }
-            .frame(height: carouselHeight)
+            .frame(height: carouselHeight(width: containerWidth))
 
             carouselTopBar
         }
-        // Timestamp + delivery state — same unified `.overlay` footer as the
-        // static `visualMediaGrid`, so a carousel-mode message still surfaces
-        // its send time and pending clock instead of dropping the footer.
+        // Timestamp + delivery state — overlay footer, masqué pendant la
+        // lecture d'une vidéo inline pour libérer le bottom-trailing.
         .overlay(alignment: .bottomTrailing) {
-            BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
-                .equatable()
-                .padding(8)
+            if !hasPlayingInlineVideo {
+                BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
+                    .equatable()
+                    .padding(8)
+            }
         }
         .onAppear {
             let startIndex = max(0, min(carouselIndex, items.count - 1))
@@ -676,7 +738,7 @@ struct BubbleCarouselView: View {
                 EmptyView()
             }
         }
-        .frame(height: carouselHeight)
+        .frame(height: carouselHeight(width: containerWidth))
         .clipped()
         .contentShape(Rectangle())
         .onTapGesture {
@@ -724,16 +786,19 @@ struct BubbleCarouselView: View {
 
     @ViewBuilder
     private func carouselVideoCell(_ attachment: MessageAttachment) -> some View {
-        // Go through VideoMediaView so the inline carousel respects the
-        // download policy (auto-DL when allowed, download badge otherwise).
-        VideoMediaView(
-            attachment: attachment,
-            accentColor: contactColor,
-            isDark: isDark,
-            onExpandFullscreen: {
-                fullscreenAttachment = attachment
-            }
-        )
+        VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+            MeeshyVideoPlayer(
+                attachment: attachment,
+                style: .inline,
+                controls: .inlineDefault,
+                accentColor: contactColor,
+                frame: .bubble,
+                availability: availability,
+                performance: .carousel,
+                onDownload: onDownload,
+                onExpand: { fullscreenAttachment = attachment }
+            )
+        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 

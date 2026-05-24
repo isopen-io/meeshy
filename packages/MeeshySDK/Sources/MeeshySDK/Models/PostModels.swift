@@ -122,6 +122,8 @@ public struct APIPost: Decodable, Sendable {
     public let storyEffects: StoryEffects?
     public let translations: [String: APIPostTranslationEntry]?
     public let isLikedByMe: Bool?
+    public let isBookmarkedByMe: Bool?
+    public let isRepostedByMe: Bool?
     public let isViewedByMe: Bool?
     public let currentUserReactions: [String]?
     public let mentionedUsers: [MentionedUser]?
@@ -272,6 +274,15 @@ extension APIPost {
                         media: feedMedia,
                         originalLanguage: originalLanguage, translations: postTranslations, translatedContent: postTranslatedContent)
         feedPost.isLiked = isLikedByMe ?? false
+        feedPost.isBookmarkedByMe = isBookmarkedByMe ?? false
+        feedPost.isRepostedByMe = isRepostedByMe ?? false
+        // Map the three remaining server-issued counters. The init signature
+        // doesn't expose them (kept stable for legacy callers), so we set
+        // them post-construction. Missing fields default to 0 — which is
+        // honest for pre-migration backends.
+        feedPost.repostCount = repostCount ?? 0
+        feedPost.bookmarkCount = bookmarkCount ?? 0
+        feedPost.shareCount = shareCount ?? 0
         return feedPost
     }
 

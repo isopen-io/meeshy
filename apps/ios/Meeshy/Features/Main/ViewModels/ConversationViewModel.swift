@@ -512,6 +512,20 @@ class ConversationViewModel: ObservableObject {
     private var storeObservation: AnyCancellable?
     private var socketHandler: ConversationSocketHandler?
 
+    // MARK: - Split Orchestrators (incremental migration scaffold)
+    //
+    // The 3000-line legacy here is being progressively split into focused
+    // handlers under `ViewModels/Conversation/`. For now the legacy keeps
+    // owning `@Published var messages` and friends; the handlers mirror that
+    // state into `stateStore.messages` so that the delegated methods
+    // (currently `searchMessages`, `prefetchRecentMedia`, …) work against
+    // the same source of truth. See `[[project_conversation_vm_split_staged]]`.
+    private let stateStore: ConversationStateStore
+    private let commandHandler: ConversationCommandHandler
+    private let mediaHandler: ConversationMediaHandler
+    private let searchHandler: ConversationSearchHandler
+    private let translationResolver: TranslationResolver
+
     // MARK: - GRDB Persistence (additive — parallel data source alongside @Published messages)
 
     /// GRDB-backed observable store for UICollectionView bridge.
@@ -675,6 +689,31 @@ class ConversationViewModel: ObservableObject {
         self.messageSocket = messageSocket
         // Eagerly create GRDB persistence so messageStore is available at first paint.
         self.messagePersistence = dependencies.persistence
+
+        // Split-handler scaffolding — see ConversationStateStore et al.
+        // Built before MessageStore/socket so subsequent delegations always
+        // have a non-nil handler to call. The handlers don't drive any state
+        // yet; they mirror the legacy @Published values via the messages
+        // sink below so `searchHandler` / `mediaHandler` / `translationResolver`
+        // can read off `stateStore.messages` without forking the source of truth.
+        let stateStore = ConversationStateStore()
+        self.stateStore = stateStore
+        self.commandHandler = ConversationCommandHandler(
+            state: stateStore,
+            conversationId: conversationId,
+            messageService: messageService,
+            persistence: dependencies.persistence,
+            authManager: authManager,
+            messageSocket: messageSocket,
+            reportService: reportService
+        )
+        self.mediaHandler = ConversationMediaHandler(state: stateStore)
+        self.searchHandler = ConversationSearchHandler(
+            state: stateStore,
+            conversationId: conversationId,
+            messageService: messageService
+        )
+        self.translationResolver = TranslationResolver(state: stateStore, authManager: authManager)
         let store = MessageStore(
             conversationId: conversationId,
             persistence: dependencies.persistence
@@ -717,6 +756,7 @@ class ConversationViewModel: ObservableObject {
         subscribeToMessageStore()
         subscribeToQueueReconciliation()
         subscribeToLanguagePreferenceChanges()
+        mirrorMessagesIntoStateStore()
         // Cross-conversation unread aggregator powers the back-button pill.
         // Seed `currentConversationUnreadCount` BEFORE wiring the CombineLatest
         // so the initial `totalConversationsUnread` value (delivered as soon
@@ -874,6 +914,23 @@ class ConversationViewModel: ObservableObject {
                     // scoped to the optimistic message+reaction lifecycle.
                     break
                 }
+            }
+            .store(in: &cancellables)
+    }
+
+    /// Mirror the legacy `@Published var messages` into the new
+    /// `ConversationStateStore.messages` so the split handlers
+    /// (`searchHandler`, `mediaHandler`, `translationResolver`) can read
+    /// off the shared store while the legacy ViewModel still owns the
+    /// canonical source. Removed once the migration of the message
+    /// pipeline (init/load/send/edit/delete) into `commandHandler` is
+    /// complete and the legacy `@Published messages` retired.
+    private func mirrorMessagesIntoStateStore() {
+        stateStore.messages = messages
+        $messages
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] snapshot in
+                self?.stateStore.messages = snapshot
             }
             .store(in: &cancellables)
     }
@@ -1124,77 +1181,20 @@ class ConversationViewModel: ObservableObject {
         accessRevoked = true
     }
 
-    // MARK: - Media Prefetch
+    // MARK: - Media Prefetch (delegated to ConversationMediaHandler)
 
-    private var mediaPrefetchTask: Task<Void, Never>?
     private var mediaPrefetchDebounce: Task<Void, Never>?
 
-    /// Prefetch media for the most recent messages with attachments.
-    /// Debounced to avoid thrashing from rapid socket updates.
+    /// Prefetch media for the most recent messages with attachments. The
+    /// debounce stays here (300 ms collapses bursts of socket updates) and
+    /// the actual cache warming is delegated to `mediaHandler`, which owns
+    /// the in-flight task / cancellation contract.
     func prefetchRecentMedia() {
         mediaPrefetchDebounce?.cancel()
-        mediaPrefetchDebounce = Task {
+        mediaPrefetchDebounce = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(300))
-            guard !Task.isCancelled else { return }
-            executePrefetchRecentMedia()
-        }
-    }
-
-    private func executePrefetchRecentMedia() {
-        mediaPrefetchTask?.cancel()
-        let snapshot = Array(messages.suffix(30).filter { !$0.attachments.isEmpty })
-        mediaPrefetchTask = Task(priority: .utility) {
-            guard !snapshot.isEmpty else { return }
-
-            let imageStore = await CacheCoordinator.shared.images
-
-            // Parallel prefetch: images/thumbnails/audio in TaskGroup
-            await withTaskGroup(of: Void.self) { group in
-                for message in snapshot {
-                    for attachment in message.attachments {
-                        guard !Task.isCancelled else { return }
-
-                        switch attachment.type {
-                        case .image:
-                            if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            }
-                            if !attachment.fileUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            }
-
-                        case .video:
-                            if let thumbUrl = attachment.thumbnailUrl, !thumbUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(thumbUrl)?.absoluteString {
-                                group.addTask { _ = await imageStore.image(for: resolved) }
-                            } else if !attachment.fileUrl.isEmpty,
-                                      let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl) {
-                                group.addTask { _ = await StoryMediaLoader.shared.videoThumbnail(url: resolved) }
-                            }
-
-                        case .audio:
-                            if !attachment.fileUrl.isEmpty,
-                               let resolved = MeeshyConfig.resolveMediaURL(attachment.fileUrl)?.absoluteString {
-                                group.addTask { _ = try? await CacheCoordinator.shared.audio.data(for: resolved) }
-                            }
-
-                        default:
-                            break
-                        }
-                    }
-                }
-            }
-
-            // Video preroll: fire-and-forget, non-blocking
-            if let firstVideoAtt = snapshot.flatMap(\.attachments).first(where: { $0.type == .video }),
-               !firstVideoAtt.fileUrl.isEmpty,
-               let resolved = MeeshyConfig.resolveMediaURL(firstVideoAtt.fileUrl) {
-                Task(priority: .utility) {
-                    await StoryMediaLoader.shared.preloadAndCachePlayer(url: resolved)
-                }
-            }
+            guard let self, !Task.isCancelled else { return }
+            self.mediaHandler.prefetchRecentMedia()
         }
     }
 
@@ -2118,10 +2118,10 @@ class ConversationViewModel: ObservableObject {
         case everyone
     }
 
+    /// Pure predicate — delegated to `commandHandler` so the policy
+    /// (own message + within the 2h window) lives in one place.
     func canDeleteForEveryone(_ message: Message, window: TimeInterval = 2 * 3600) -> Bool {
-        guard message.isMe else { return false }
-        guard let sentAt = message.createdAt as Date? else { return false }
-        return Date().timeIntervalSince(sentAt) <= window
+        commandHandler.canDeleteForEveryone(message, window: window)
     }
 
     func deleteMessage(messageId: String, mode: DeleteMode = .everyone) async {
@@ -2215,17 +2215,13 @@ class ConversationViewModel: ObservableObject {
 
     // MARK: - Consume View-Once Message
 
+    /// View-once consumption. Delegates to `commandHandler` with the
+    /// resolved server id — the handler runs the network call and the
+    /// persistence write under one optimistic transaction. Returns `true`
+    /// on success so the view can advance its UI (reveal + auto-dismiss
+    /// timer); `false` keeps the bubble blurred.
     func consumeViewOnce(messageId: String) async -> Bool {
-        do {
-            let result = try await messageService.consumeViewOnce(
-                conversationId: conversationId, messageId: serverId(for: messageId)
-            )
-            try? await messagePersistence.updateViewOnceCount(localId: messageId, count: result.viewOnceCount)
-            return true
-        } catch {
-            self.error = error.localizedDescription
-            return false
-        }
+        await commandHandler.consumeViewOnce(messageId: messageId, serverId: serverId(for: messageId))
     }
 
     func evictViewOnceMedia(message: Message) {
@@ -2352,15 +2348,11 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
+    /// Server-side delivery confirmation. Fully delegated to the command
+    /// handler — the legacy variant did the exact same call with an
+    /// equally permissive error path.
     func markAsReceived() {
-        let convId = conversationId
-        Task {
-            do {
-                try await conversationService.markAsReceived(conversationId: convId)
-            } catch {
-                // Non-critical — server will still count as received on next sync
-            }
-        }
+        commandHandler.markAsReceived()
     }
 
 
@@ -2401,87 +2393,28 @@ class ConversationViewModel: ObservableObject {
         }
     }
 
-    // MARK: - Search Messages
+    // MARK: - Search Messages (delegated to ConversationSearchHandler)
 
+    /// First-page search. Delegates to `searchHandler`, then mirrors the
+    /// store-side state back onto the legacy `@Published` so the views
+    /// keep observing the ViewModel directly during the incremental
+    /// split. The local `searchNextCursor` legacy field becomes dead
+    /// weight (cursor lives in the handler) but is left assigned to
+    /// `nil` for any reader that still peeks at it.
     func searchMessages(query: String) async {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard trimmed.count >= 2 else {
-            searchResults = []
-            currentSearchQuery = nil
-            isSearching = false
-            return
-        }
-
-        isSearching = true
-        currentSearchQuery = trimmed
+        await searchHandler.searchMessages(query: query)
+        searchResults = stateStore.searchResults
+        currentSearchQuery = stateStore.currentSearchQuery
+        searchHasMore = stateStore.searchHasMore
+        isSearching = stateStore.isSearching
         searchNextCursor = nil
-
-        do {
-            let response = try await messageService.search(
-                conversationId: conversationId, query: trimmed, limit: 20
-            )
-
-            searchResults = response.data.map { buildSearchResult($0, query: trimmed) }
-            searchNextCursor = response.cursorPagination?.nextCursor
-            searchHasMore = response.cursorPagination?.hasMore ?? false
-        } catch {
-            searchResults = []
-        }
-
-        isSearching = false
     }
 
     func loadMoreSearchResults(query: String) async {
-        guard searchHasMore, let cursor = searchNextCursor, !isSearching else { return }
-        isSearching = true
-
-        do {
-            let response = try await messageService.searchWithCursor(
-                conversationId: conversationId, query: query, cursor: cursor
-            )
-
-            let newResults = response.data.map { buildSearchResult($0, query: query) }
-            searchResults.append(contentsOf: newResults)
-            searchNextCursor = response.cursorPagination?.nextCursor
-            searchHasMore = response.cursorPagination?.hasMore ?? false
-        } catch {
-            // Ignore pagination errors
-        }
-
-        isSearching = false
-    }
-
-    private func buildSearchResult(_ apiMsg: APIMessage, query: String) -> SearchResultItem {
-        let senderName = apiMsg.sender?.displayName ?? apiMsg.sender?.username ?? "?"
-        let content = apiMsg.content ?? ""
-        let queryLower = query.lowercased()
-
-        // Check if the match is in original content
-        if content.lowercased().contains(queryLower) {
-            return SearchResultItem(
-                id: apiMsg.id, conversationId: apiMsg.conversationId,
-                content: content, matchedText: content, matchType: "content",
-                senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-            )
-        }
-
-        // Match is in a translation — find which one
-        if let translations = apiMsg.translations {
-            for t in translations where t.translatedContent.lowercased().contains(queryLower) {
-                return SearchResultItem(
-                    id: apiMsg.id, conversationId: apiMsg.conversationId,
-                    content: content, matchedText: t.translatedContent, matchType: "translation",
-                    senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-                )
-            }
-        }
-
-        // Fallback (shouldn't happen but safe)
-        return SearchResultItem(
-            id: apiMsg.id, conversationId: apiMsg.conversationId,
-            content: content, matchedText: content, matchType: "content",
-            senderName: senderName, senderAvatar: apiMsg.sender?.avatar, createdAt: apiMsg.createdAt
-        )
+        await searchHandler.loadMoreSearchResults(query: query)
+        searchResults = stateStore.searchResults
+        searchHasMore = stateStore.searchHasMore
+        isSearching = stateStore.isSearching
     }
 
     // MARK: - Jump to Message (load messages around a specific message)

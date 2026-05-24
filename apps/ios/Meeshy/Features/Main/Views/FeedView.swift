@@ -57,6 +57,7 @@ struct FeedView: View {
     /// the share button on a post — the `.sheet` further down presents the
     /// system share UI as soon as this is non-nil and clears it on dismiss.
     @State private var shareableLink: ShareableLink?
+    @State private var editingPost: FeedPost?
 
     // Post reaction state — hoisted to parent so socket events update all cards without
     // mutating FeedPost values (pure socket-driven path, mirrors FeedCommentsSheet pattern).
@@ -65,6 +66,17 @@ struct FeedView: View {
     @State private var postLikedIds: Set<String> = []
     @State private var postLikeDelta: [String: Int] = [:]
     @State private var postHeartInFlightIds: Set<String> = []
+    // Optimistic bookmark / repost / share states. FeedPost has no
+    // server-issued `isBookmarked`/`isReposted` so the parent View tracks
+    // them locally — toggled on tap, cleared on API failure.
+    @State private var postBookmarkedIds: Set<String> = []
+    @State private var postBookmarkInFlightIds: Set<String> = []
+    @State private var postBookmarkDelta: [String: Int] = [:]
+    @State private var postRepostedIds: Set<String> = []
+    @State private var postRepostInFlightIds: Set<String> = []
+    @State private var postRepostDelta: [String: Int] = [:]
+    @State private var postShareInFlightIds: Set<String> = []
+    @State private var postShareDelta: [String: Int] = [:]
 
     // Impression tracking
     @State private var pendingImpressionIds = Set<String>()
@@ -109,6 +121,43 @@ struct FeedView: View {
         Set(posts.compactMap { $0.isLiked ? $0.id : nil })
     }
 
+    // MARK: - Post Bookmark Seeding
+
+    /// Hydrates `postBookmarkedIds` from the shared "bookmarks" cache so the
+    /// filled icon shows up correctly on first render for posts the user has
+    /// already bookmarked. Cache-first, never hits the network — the actual
+    /// bookmarks list is refreshed by `BookmarksViewModel` when the user
+    /// opens the Favoris tab. Preserves any optimistic state already in
+    /// flight by only inserting new IDs.
+    private func hydrateBookmarkSeeding() async {
+        let cached = await CacheCoordinator.shared.feed.load(for: "bookmarks")
+        let bookmarks: [FeedPost]
+        switch cached {
+        case .fresh(let v, _), .stale(let v, _):
+            bookmarks = v
+        case .expired, .empty:
+            // Fire-and-forget a background refresh so the next render is
+            // hydrated correctly without blocking the current mount.
+            Task(priority: .utility) {
+                do {
+                    let resp = try await PostService.shared.getBookmarks(cursor: nil, limit: 50)
+                    let langs = AuthManager.shared.currentUser?.preferredContentLanguages ?? []
+                    let posts = resp.data.map { $0.toFeedPost(preferredLanguages: langs) }
+                    try? await CacheCoordinator.shared.feed.save(posts, for: "bookmarks")
+                    await MainActor.run {
+                        for p in posts where !postBookmarkInFlightIds.contains(p.id) {
+                            postBookmarkedIds.insert(p.id)
+                        }
+                    }
+                } catch { /* offline / 5xx — bookmarks stay unseeded, no UX harm */ }
+            }
+            return
+        }
+        for p in bookmarks where !postBookmarkInFlightIds.contains(p.id) {
+            postBookmarkedIds.insert(p.id)
+        }
+    }
+
     // MARK: - Post Heart Toggle (socket-driven)
 
     @MainActor
@@ -148,14 +197,195 @@ struct FeedView: View {
                     }
                 }
             } catch {
-                // Rollback optimistic update on failure (incl. TaskTimeoutError)
-                if wasLiked {
-                    postLikedIds.insert(postId)
-                    postLikeDelta[postId, default: 0] += 1
-                } else {
-                    postLikedIds.remove(postId)
-                    postLikeDelta[postId, default: 0] -= 1
+                // REST fallback when the socket fails (noSocket, timeout,
+                // gateway hiccup). Mirrors the SocialSocketManager call but
+                // hits the persisted `POST/DELETE /posts/:id/like` route.
+                // Only roll the optimistic update back if the REST call
+                // also fails — that keeps the heart visible whenever the
+                // server actually recorded the toggle.
+                let restOK = await postReactionViaREST(postId: postId, like: !wasLiked)
+                if !restOK {
+                    if wasLiked {
+                        postLikedIds.insert(postId)
+                        postLikeDelta[postId, default: 0] += 1
+                    } else {
+                        postLikedIds.remove(postId)
+                        postLikeDelta[postId, default: 0] -= 1
+                    }
                 }
+            }
+        }
+    }
+
+    /// Minimal decoder for the `liked` flag returned by both the like and
+    /// unlike REST routes. Ignores `reactionSummary` (heterogeneous) and any
+    /// other fields the gateway may add.
+    private struct LikeRESTPayload: Decodable { let liked: Bool? }
+
+    /// REST fallback for the heart toggle. Returns true on success so the
+    /// caller can skip rolling back its optimistic update.
+    private func postReactionViaREST(postId: String, like: Bool) async -> Bool {
+        do {
+            let _: APIResponse<LikeRESTPayload> = try await APIClient.shared.request(
+                endpoint: "/posts/\(postId)/like",
+                method: like ? "POST" : "DELETE"
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    // MARK: - Bookmark / Repost / Share toggles (optimistic, ViewModel-backed)
+
+    @MainActor
+    private func togglePostBookmark(postId: String) {
+        guard !postBookmarkInFlightIds.contains(postId) else { return }
+        let wasBookmarked = postBookmarkedIds.contains(postId)
+        // Optimistic flip — UI changes instantly, network confirms after.
+        if wasBookmarked {
+            postBookmarkedIds.remove(postId)
+            postBookmarkDelta[postId, default: 0] -= 1
+        } else {
+            postBookmarkedIds.insert(postId)
+            postBookmarkDelta[postId, default: 0] += 1
+        }
+        postBookmarkInFlightIds.insert(postId)
+        Task {
+            defer {
+                Task { @MainActor in
+                    postBookmarkInFlightIds.remove(postId)
+                }
+            }
+            // Capture the post snapshot INSIDE the Task on the MainActor —
+            // outside-capture would freeze a value that a `post:updated`
+            // socket event might invalidate between the tap and the cache
+            // save (race window ~100ms).
+            let postSnapshot = await MainActor.run { viewModel.posts.first(where: { $0.id == postId }) }
+            // Pre-populate the bookmarks cache optimistically so the Favoris
+            // tab shows the post the moment the user opens it. Mirror the
+            // pre-fix behaviour from FeedViewModel.bookmarkPost.
+            let snapshotCache: [FeedPost]? = await {
+                if wasBookmarked { return nil } // remove path handles cache below
+                guard let p = postSnapshot else { return [] }
+                let key = "bookmarks"
+                let r = await CacheCoordinator.shared.feed.load(for: key)
+                let current: [FeedPost]
+                switch r {
+                case .fresh(let v, _), .stale(let v, _): current = v
+                case .expired, .empty: current = []
+                }
+                if !current.contains(where: { $0.id == postId }) {
+                    var updated = current
+                    updated.insert(p, at: 0)
+                    try? await CacheCoordinator.shared.feed.save(updated, for: key)
+                }
+                return current
+            }()
+
+            let success = await callBookmarkAPI(postId: postId, bookmark: !wasBookmarked)
+            if success {
+                if wasBookmarked {
+                    await pruneBookmarkFromCache(postId: postId)
+                    ToastManager.shared.showSuccess(String(localized: "Retire des favoris", defaultValue: "Retire des favoris"))
+                } else {
+                    ToastManager.shared.showSuccess(String(localized: "Ajoute aux favoris", defaultValue: "Ajoute aux favoris"))
+                }
+            } else {
+                // Rollback both the UI flip and the cache pre-population.
+                if wasBookmarked {
+                    postBookmarkedIds.insert(postId)
+                    postBookmarkDelta[postId, default: 0] += 1
+                } else {
+                    postBookmarkedIds.remove(postId)
+                    postBookmarkDelta[postId, default: 0] -= 1
+                    if let snap = snapshotCache {
+                        try? await CacheCoordinator.shared.feed.save(snap, for: "bookmarks")
+                    }
+                }
+                ToastManager.shared.showError(String(localized: "Erreur lors de l'enregistrement", defaultValue: "Erreur lors de l'enregistrement"))
+            }
+        }
+    }
+
+    private func callBookmarkAPI(postId: String, bookmark: Bool) async -> Bool {
+        do {
+            let _: APIResponse<[String: Bool]> = try await APIClient.shared.request(
+                endpoint: "/posts/\(postId)/bookmark",
+                method: bookmark ? "POST" : "DELETE"
+            )
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func pruneBookmarkFromCache(postId: String) async {
+        let key = "bookmarks"
+        let result = await CacheCoordinator.shared.feed.load(for: key)
+        let current: [FeedPost]
+        switch result {
+        case .fresh(let v, _), .stale(let v, _): current = v
+        case .expired, .empty: return
+        }
+        let updated = current.filter { $0.id != postId }
+        try? await CacheCoordinator.shared.feed.save(updated, for: key)
+    }
+
+    @MainActor
+    private func togglePostRepost(postId: String) {
+        guard !postRepostInFlightIds.contains(postId) else { return }
+        // Reposts are append-only on the backend — the optimistic state
+        // only persists if the server confirmed the create. Bypass the
+        // ViewModel call because it swallows errors via Toast and leaves
+        // no signal we can rollback against.
+        postRepostedIds.insert(postId)
+        postRepostDelta[postId, default: 0] += 1
+        postRepostInFlightIds.insert(postId)
+        Task {
+            defer {
+                Task { @MainActor in
+                    postRepostInFlightIds.remove(postId)
+                }
+            }
+            do {
+                _ = try await PostService.shared.repost(
+                    postId: postId,
+                    targetType: nil,
+                    content: nil,
+                    isQuote: false
+                )
+                ToastManager.shared.showSuccess(String(localized: "Repartage", defaultValue: "Repartage"))
+            } catch {
+                postRepostedIds.remove(postId)
+                postRepostDelta[postId, default: 0] -= 1
+                ToastManager.shared.showError(String(localized: "Erreur lors du repost", defaultValue: "Erreur lors du repost"))
+            }
+        }
+    }
+
+    @MainActor
+    private func sharePostWithLink(postId: String) {
+        guard !postShareInFlightIds.contains(postId) else { return }
+        postShareInFlightIds.insert(postId)
+        // Optimistic share counter bump — the gateway always increments
+        // shareCount on POST /posts/:id/share regardless of mint success,
+        // so we mirror that even when we fall back to the raw URL.
+        postShareDelta[postId, default: 0] += 1
+        Task {
+            defer {
+                Task { @MainActor in
+                    postShareInFlightIds.remove(postId)
+                }
+            }
+            if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
+               let url = URL(string: shortUrl) {
+                shareableLink = ShareableLink(url: url)
+            } else if let raw = ShareableLink.fallback(forPostId: postId) {
+                shareableLink = raw
+            } else {
+                // Both REST and fallback failed → undo the optimistic bump.
+                postShareDelta[postId, default: 0] -= 1
             }
         }
     }
@@ -383,6 +613,14 @@ struct FeedView: View {
             isLiked: postLikedIds.contains(post.id),
             displayLikeCount: max(0, post.likes + (postLikeDelta[post.id] ?? 0)),
             isHeartInFlight: postHeartInFlightIds.contains(post.id),
+            isBookmarked: postBookmarkedIds.contains(post.id),
+            isBookmarkInFlight: postBookmarkInFlightIds.contains(post.id),
+            displayRepostCount: max(0, post.repostCount + (postRepostDelta[post.id] ?? 0)),
+            displayBookmarkCount: max(0, post.bookmarkCount + (postBookmarkDelta[post.id] ?? 0)),
+            displayShareCount: max(0, post.shareCount + (postShareDelta[post.id] ?? 0)),
+            isReposted: postRepostedIds.contains(post.id),
+            isRepostInFlight: postRepostInFlightIds.contains(post.id),
+            isShareInFlight: postShareInFlightIds.contains(post.id),
             onToggleComments: {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     if expandedComments.contains(post.id) {
@@ -397,25 +635,16 @@ struct FeedView: View {
                 togglePostHeart(post: post)
             },
             onRepost: { postId in
-                Task { await viewModel.repostPost(postId) }
+                togglePostRepost(postId: postId)
             },
             onQuote: { postId in
                 quoteTargetPost = viewModel.posts.first(where: { $0.id == postId })
             },
             onShare: { postId in
-                Task {
-                    // Prefer the tracking link; fall back to the raw post URL
-                    // so an offline / failing-mint share never silently drops.
-                    if let shortUrl = await viewModel.sharePost(postId, generateLink: true),
-                       let url = URL(string: shortUrl) {
-                        shareableLink = ShareableLink(url: url)
-                    } else if let raw = ShareableLink.fallback(forPostId: postId) {
-                        shareableLink = raw
-                    }
-                }
+                sharePostWithLink(postId: postId)
             },
             onBookmark: { postId in
-                Task { await viewModel.bookmarkPost(postId) }
+                togglePostBookmark(postId: postId)
             },
             onSendComment: { postId, content, parentId in
                 Task { await viewModel.sendComment(postId: postId, content: content, parentId: parentId) }
@@ -441,6 +670,9 @@ struct FeedView: View {
             } : nil,
             onPin: isOwnPost ? { postId in
                 Task { await viewModel.pinPost(postId) }
+            } : nil,
+            onEdit: isOwnPost ? { post in
+                editingPost = post
             } : nil,
             authorMoodEmoji: statusViewModel.statusForUser(userId: post.authorId)?.moodEmoji,
             onAuthorMoodTap: statusViewModel.moodTapHandler(for: post.authorId),
@@ -604,16 +836,44 @@ struct FeedView: View {
             for id in newLiked where !postLikedIds.contains(id) && postLikeDelta[id] == nil {
                 postLikedIds.insert(id)
             }
+            // Seed bookmark/repost flags from the server-enriched fields
+            // on each loaded post (PostFeedService now provides
+            // isBookmarkedByMe + isRepostedByMe alongside isLikedByMe).
+            // Preserves in-flight optimistic state.
+            for post in viewModel.posts {
+                if post.isBookmarkedByMe && !postBookmarkInFlightIds.contains(post.id) {
+                    postBookmarkedIds.insert(post.id)
+                }
+                if post.isRepostedByMe && !postRepostInFlightIds.contains(post.id) {
+                    postRepostedIds.insert(post.id)
+                }
+            }
+            // Defensive fallback for backends that haven't been upgraded yet
+            // — pull bookmark IDs from the local cache so the filled icon
+            // still appears for older sessions or when the server payload
+            // is stale.
+            await hydrateBookmarkSeeding()
             viewModel.subscribeToSocketEvents()
         }
         .adaptiveOnChange(of: viewModel.posts) { _, newPosts in
-            // Merge liked state when new pages arrive. Only seed posts not yet
-            // tracked to avoid overwriting optimistic state from in-flight toggles.
+            // Merge liked / bookmarked / reposted state when new pages
+            // arrive. Only seed posts not yet tracked to avoid overwriting
+            // optimistic state from in-flight toggles.
             for post in newPosts where postLikeDelta[post.id] == nil && !postHeartInFlightIds.contains(post.id) {
                 if post.isLiked {
                     postLikedIds.insert(post.id)
                 } else {
                     postLikedIds.remove(post.id)
+                }
+            }
+            for post in newPosts where postBookmarkDelta[post.id] == nil && !postBookmarkInFlightIds.contains(post.id) {
+                if post.isBookmarkedByMe {
+                    postBookmarkedIds.insert(post.id)
+                }
+            }
+            for post in newPosts where postRepostDelta[post.id] == nil && !postRepostInFlightIds.contains(post.id) {
+                if post.isRepostedByMe {
+                    postRepostedIds.insert(post.id)
                 }
             }
         }
@@ -915,6 +1175,15 @@ struct FeedView: View {
             // `meeshy.me/l/<token>` URL so every external touchpoint funnels
             // through the user's TrackingLink for attribution.
             ShareSheet(activityItems: [link.url])
+        }
+        .sheet(item: $editingPost) { post in
+            EditPostSheet(
+                originalContent: post.content,
+                onSave: { newContent in
+                    await viewModel.updatePost(post.id, content: newContent)
+                },
+                onDismiss: { editingPost = nil }
+            )
         }
         .adaptiveOnChange(of: selectedPhotoItems) { _, items in
             handleFeedPhotoSelection(items)

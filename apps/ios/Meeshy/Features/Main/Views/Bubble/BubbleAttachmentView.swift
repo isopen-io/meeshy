@@ -33,11 +33,22 @@ struct BubbleAttachmentView: View {
             )
 
         case .video:
-            VideoPlayerView(
-                attachment: attachment,
-                context: .messageBubble,
-                accentColor: accentHex
-            )
+            // Dead path in practice — videos route through visualMediaGrid in
+            // BubbleStandardLayout. Keep a sound fallback that uses the
+            // unified MeeshyVideoPlayer so we don't ship a UX regression
+            // if a routing change ever lands a video in this branch.
+            VideoAvailabilityResolver(attachment: attachment) { availability, onDownload in
+                MeeshyVideoPlayer(
+                    attachment: attachment,
+                    style: .inline,
+                    controls: .inlineDefault,
+                    accentColor: accentHex,
+                    frame: .bubble,
+                    availability: availability,
+                    performance: .inline,
+                    onDownload: onDownload
+                )
+            }
 
         case .audio:
             AudioPlayerView(

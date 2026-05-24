@@ -15,6 +15,21 @@ struct FeedPostCard: View {
     var displayLikeCount: Int? = nil
     /// True while a socket reaction request is in-flight — disables the button.
     var isHeartInFlight: Bool = false
+    /// Optimistic bookmark state owned by the parent (FeedView/PostDetailView).
+    /// Card has no persisted bookmark flag on FeedPost — parent tracks via Set.
+    var isBookmarked: Bool = false
+    var isBookmarkInFlight: Bool = false
+    /// Display counters for repost / bookmark / share. Parent applies the
+    /// optimistic delta (post.{repost,bookmark,share}Count + local flip)
+    /// so the icon and number flip together on tap.
+    var displayRepostCount: Int? = nil
+    var displayBookmarkCount: Int? = nil
+    var displayShareCount: Int? = nil
+    /// Optimistic repost state owned by the parent.
+    var isReposted: Bool = false
+    var isRepostInFlight: Bool = false
+    /// True while a share request is in-flight (mint short link).
+    var isShareInFlight: Bool = false
     var onToggleComments: (() -> Void)? = nil
     var onLike: ((String) -> Void)? = nil
     var onRepost: ((String) -> Void)? = nil
@@ -29,6 +44,7 @@ struct FeedPostCard: View {
     var onDelete: ((String) -> Void)? = nil
     var onReport: ((String) -> Void)? = nil
     var onPin: ((String) -> Void)? = nil
+    var onEdit: ((FeedPost) -> Void)? = nil
 
     // Mood data passed from parent to avoid @EnvironmentObject in leaf view
     var authorMoodEmoji: String? = nil
@@ -417,6 +433,14 @@ struct FeedPostCard: View {
                         Label(String(localized: "feed.post.pin", defaultValue: "Epingler", bundle: .main), systemImage: "pin")
                     }
                 }
+                if onEdit != nil {
+                    Button {
+                        onEdit?(post)
+                        HapticFeedback.light()
+                    } label: {
+                        Label(String(localized: "feed.post.edit", defaultValue: "Modifier", bundle: .main), systemImage: "pencil")
+                    }
+                }
                 if onDelete != nil {
                     Divider()
                     Button(role: .destructive) {
@@ -592,10 +616,22 @@ struct FeedPostCard: View {
                 showRepostOptions = true
                 HapticFeedback.light()
             } label: {
-                Image(systemName: "arrow.2.squarepath")
-                    .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
+                HStack(spacing: 6) {
+                    Image(systemName: isReposted ? "arrow.2.squarepath.circle.fill" : "arrow.2.squarepath")
+                        .font(.system(size: 17))
+                        .scaleEffect(isRepostInFlight ? 0.85 : 1.0)
+                    let count = displayRepostCount ?? post.repostCount
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(.system(size: 13, weight: .medium))
+                            .contentTransition(.numericText())
+                    }
+                }
+                .foregroundColor(isReposted ? MeeshyColors.success : theme.textSecondary)
+                .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isReposted)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isRepostInFlight)
             }
+            .disabled(isRepostInFlight)
             .accessibilityLabel(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main))
             .confirmationDialog("Repartager", isPresented: $showRepostOptions) {
                 Button(String(localized: "feed.post.repost", defaultValue: "Repartager", bundle: .main)) { onRepost?(post.id) }
@@ -610,10 +646,22 @@ struct FeedPostCard: View {
                 onBookmark?(post.id)
                 HapticFeedback.light()
             } label: {
-                Image(systemName: "bookmark")
-                    .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
+                HStack(spacing: 6) {
+                    Image(systemName: isBookmarked ? "bookmark.fill" : "bookmark")
+                        .font(.system(size: 17))
+                        .scaleEffect(isBookmarkInFlight ? 0.85 : 1.0)
+                    let count = displayBookmarkCount ?? post.bookmarkCount
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(.system(size: 13, weight: .medium))
+                            .contentTransition(.numericText())
+                    }
+                }
+                .foregroundColor(isBookmarked ? MeeshyColors.warning : theme.textSecondary)
+                .animation(.spring(response: 0.35, dampingFraction: 0.55), value: isBookmarked)
+                .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isBookmarkInFlight)
             }
+            .disabled(isBookmarkInFlight)
             .accessibilityLabel(String(localized: "feed.post.save", defaultValue: "Enregistrer", bundle: .main))
 
             Spacer()
@@ -623,10 +671,28 @@ struct FeedPostCard: View {
                 onShare?(post.id)
                 HapticFeedback.light()
             } label: {
-                Image(systemName: "square.and.arrow.up")
-                    .font(.system(size: 17))
-                    .foregroundColor(theme.textSecondary)
+                HStack(spacing: 6) {
+                    ZStack {
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 17))
+                            .opacity(isShareInFlight ? 0 : 1)
+                        if isShareInFlight {
+                            ProgressView()
+                                .scaleEffect(0.6)
+                                .progressViewStyle(.circular)
+                        }
+                    }
+                    let count = displayShareCount ?? post.shareCount
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(.system(size: 13, weight: .medium))
+                            .contentTransition(.numericText())
+                    }
+                }
+                .foregroundColor(theme.textSecondary)
+                .animation(.easeInOut(duration: 0.2), value: isShareInFlight)
             }
+            .disabled(isShareInFlight)
             .accessibilityLabel(String(localized: "feed.post.share", defaultValue: "Partager", bundle: .main))
         }
         .padding(.top, 4)
@@ -809,8 +875,21 @@ extension FeedPostCard: Equatable {
             && lhs.isLiked == rhs.isLiked
             && lhs.displayLikeCount == rhs.displayLikeCount
             && lhs.isHeartInFlight == rhs.isHeartInFlight
+            && lhs.isBookmarked == rhs.isBookmarked
+            && lhs.isBookmarkInFlight == rhs.isBookmarkInFlight
+            && lhs.isReposted == rhs.isReposted
+            && lhs.isRepostInFlight == rhs.isRepostInFlight
+            && lhs.isShareInFlight == rhs.isShareInFlight
+            && lhs.displayRepostCount == rhs.displayRepostCount
+            && lhs.displayBookmarkCount == rhs.displayBookmarkCount
+            && lhs.displayShareCount == rhs.displayShareCount
+            && lhs.post.repostCount == rhs.post.repostCount
+            && lhs.post.bookmarkCount == rhs.post.bookmarkCount
+            && lhs.post.shareCount == rhs.post.shareCount
             && lhs.post.commentCount == rhs.post.commentCount
+            && lhs.post.content == rhs.post.content
             && lhs.post.translatedContent == rhs.post.translatedContent
+            && (lhs.post.translations?.count ?? 0) == (rhs.post.translations?.count ?? 0)
             && lhs.isCommentsExpanded == rhs.isCommentsExpanded
             && lhs.authorMoodEmoji == rhs.authorMoodEmoji
     }

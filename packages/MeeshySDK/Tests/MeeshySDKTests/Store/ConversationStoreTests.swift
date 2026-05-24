@@ -139,7 +139,8 @@ final class ConversationStoreTests: XCTestCase {
         try await store.apply(.setPinned(true), for: "conv-1")
         let after = await store.conversation(id: "conv-1")!
         XCTAssertTrue(after.userState.isPinned, "Optimistic state must stay on transient failure")
-        XCTAssertEqual(await outbox.pendingCount(for: "conv-1"), 1, "Task stays in outbox for retry")
+        let pendingAfterTransient = await outbox.pendingCount(for: "conv-1")
+        XCTAssertEqual(pendingAfterTransient, 1, "Task stays in outbox for retry")
         XCTAssertGreaterThan(after.userState.pendingMutationCount, 0)
     }
 
@@ -154,7 +155,8 @@ final class ConversationStoreTests: XCTestCase {
         let after = await store.conversation(id: "conv-1")!
         XCTAssertTrue(after.userState.isLocked)
         XCTAssertEqual(after.userState.version, 7, "Local-only must NOT bump version")
-        XCTAssertEqual(await outbox.pendingCount(for: "conv-1"), 0, "Local-only must NOT enter outbox")
+        let pendingAfterLocal = await outbox.pendingCount(for: "conv-1")
+        XCTAssertEqual(pendingAfterLocal, 0, "Local-only must NOT enter outbox")
         XCTAssertEqual(prefs.calls.count, 0, "Local-only must NOT call the network")
     }
 

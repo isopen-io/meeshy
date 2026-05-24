@@ -114,8 +114,10 @@ final class ConversationStateOutboxTests: XCTestCase {
         let outbox = makeOutbox()
         _ = await outbox.enqueue(.setPinned(true), for: "conv-A")
         _ = await outbox.enqueue(.setPinned(true), for: "conv-B")
-        XCTAssertEqual(await outbox.pendingCount(for: "conv-A"), 1)
-        XCTAssertEqual(await outbox.pendingCount(for: "conv-B"), 1)
+        let countA = await outbox.pendingCount(for: "conv-A")
+        let countB = await outbox.pendingCount(for: "conv-B")
+        XCTAssertEqual(countA, 1)
+        XCTAssertEqual(countB, 1)
     }
 
     // MARK: - Flush + retry
@@ -152,7 +154,8 @@ final class ConversationStateOutboxTests: XCTestCase {
         let outbox = makeOutbox()
         _ = await outbox.enqueue(.setPinned(true), for: "c1")
         await outbox.flush { _ in .failedPermanent(reason: "validation") }
-        XCTAssertTrue(await outbox.allPending().isEmpty)
+        let remaining = await outbox.allPending()
+        XCTAssertTrue(remaining.isEmpty)
     }
 
     func test_flush_skipsTasksWhoseRetryIsInTheFuture() async {
@@ -171,8 +174,10 @@ final class ConversationStateOutboxTests: XCTestCase {
             await dispatched.append(task.id)
             return .completed
         }
-        XCTAssertEqual(await dispatched.snapshot(), [])
-        XCTAssertEqual(await outbox.allPending().count, 1)
+        let snap0 = await dispatched.snapshot()
+        let pending0 = await outbox.allPending()
+        XCTAssertEqual(snap0, [])
+        XCTAssertEqual(pending0.count, 1)
 
         // Advance past the backoff window.
         clock.advance(by: 10)
@@ -180,8 +185,10 @@ final class ConversationStateOutboxTests: XCTestCase {
             await dispatched.append(task.id)
             return .completed
         }
-        XCTAssertEqual(await dispatched.snapshot().count, 1)
-        XCTAssertTrue(await outbox.allPending().isEmpty)
+        let snap1 = await dispatched.snapshot()
+        let pending1 = await outbox.allPending()
+        XCTAssertEqual(snap1.count, 1)
+        XCTAssertTrue(pending1.isEmpty)
     }
 
     // MARK: - Concurrency: overwrite during dispatch

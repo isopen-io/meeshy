@@ -441,11 +441,17 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
 
     /// Called when a notification arrives while the app is in the foreground.
     ///
-    /// Policy:
-    /// - If the user is currently viewing the referenced conversation, suppress the
-    ///   system banner entirely — the conversation view already shows the message.
-    /// - Otherwise, show the native banner AND list entry, mirroring iOS behaviour
-    ///   elsewhere. The in-app toast still plays for cross-cutting events.
+    /// Policy (2026-05-24, simplified): the Socket.IO connection is the
+    /// authoritative signal.
+    /// - **Socket connected** → the in-app toast (driven by Socket.IO
+    ///   `notification:new`) will fire. Suppress the iOS banner, list entry
+    ///   and sound to avoid double-display. We keep `.badge` so the unread
+    ///   counter on the app icon stays correct.
+    /// - **Socket disconnected** → no in-app toast will fire. Show the full
+    ///   system banner so the user is notified by *something*. This covers
+    ///   both the foreground-but-offline case and the background case (iOS
+    ///   tears the socket down ~30s after the app leaves the foreground, so
+    ///   "socket connected" is effectively a proxy for "app is reading").
     func userNotificationCenter(
         _ center: UNUserNotificationCenter,
         willPresent notification: UNNotification,
@@ -478,39 +484,21 @@ extension AppDelegate: @preconcurrency UNUserNotificationCenterDelegate {
         let type = userInfo["type"] as? String ?? "unknown"
         let conversationId = userInfo["conversationId"] as? String
         let postId = userInfo["postId"] as? String
-        let activeConversationId = NotificationManager.shared.activeConversationId
-        let activePostId = NotificationManager.shared.activePostId
 
-        logger.info("Foreground notification: type=\(type) conversation=\(conversationId ?? "-") postId=\(postId ?? "-")")
+        let socketConnected = MessageSocketManager.shared.isConnected
+        logger.info("Foreground notification: type=\(type) conversation=\(conversationId ?? "-") postId=\(postId ?? "-") socketConnected=\(socketConnected)")
 
-        // Muting logic: suppress the banner if the user is already viewing
-        // the relevant conversation or post.
-        if let conversationId, conversationId == activeConversationId {
-            completionHandler([])
+        if socketConnected {
+            // Socket is alive → the in-app toast will fire from the matching
+            // `notification:new` socket event. Suppress the native banner to
+            // avoid double-display. Keep .badge so the app icon counter stays
+            // correct.
+            completionHandler([.badge])
             return
         }
 
-        if let postId, postId == activePostId {
-            completionHandler([])
-            return
-        }
-
-        // Friend events fly through TWO parallel channels by design on the
-        // gateway: a Socket.IO `notification:new` event (drives the in-app
-        // toast via NotificationManager) AND an APNs push (drives the
-        // native banner + list entry). In foreground that doubles the
-        // visual surface — the user sees the Meeshy toast AND the system
-        // banner for the same event. Suppress the system banner here when
-        // the socket is connected; the in-app toast already covers the
-        // user. Sound + badge stay so the event still feels notified.
-        // When the socket is disconnected, fall through to the default so
-        // the user still sees the banner — that's the only signal left.
-        let isFriendEvent = type == "friend_request" || type == "friend_accepted"
-        if isFriendEvent && MessageSocketManager.shared.isConnected {
-            completionHandler([.sound, .badge])
-            return
-        }
-
+        // Socket is down → no in-app toast will fire. Surface the full system
+        // banner so the user is notified by *something*.
         completionHandler([.banner, .list, .sound, .badge])
     }
 

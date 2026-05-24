@@ -30,7 +30,7 @@ Ramener à **5 composants** (4 visibles + 1 atome SwiftUI) :
 2. `MeeshyVideoSurface` (SwiftUI, internal) — atome `UIViewRepresentable` hostant `AVPlayerLayer` directement (pas `VideoPlayer` SwiftUI).
 3. `MeeshyVideoCanvasLayer` (CALayer subclass, public) — atome pour Story canvas. Compose `AVPlayerLayer` + `AVPlayerLooper` + observers. Consommé par `StoryMediaLayer` / `StoryBackgroundLayer`.
 4. `MeeshyVideoThumbnail` (SwiftUI, public) — preview static (image cached OU first-frame via `AVAssetImageGenerator`), play badge + duration badge optionnels, `onTap` callback. Aucun `AVPlayer` instancié.
-5. `VideoAvailabilityResolver` (SwiftUI helper, public, **SDK**) — view wrapper qui résout `VideoAvailability` via `CacheCoordinator.video.isCached` + `AttachmentDownloader` + `MediaDownloadPolicyEngine` et fournit `(availability, onDownload)` à son content builder. Vit dans `packages/MeeshySDK/Sources/MeeshyUI/Media/` pour être réutilisable par tout consommateur du SDK. Remplace `VideoMediaView` et `GatedVideoFullscreenPlayer` côté app. **Prérequis** : `AttachmentDownloader` doit être migré de `apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift` vers `packages/MeeshySDK/Sources/MeeshyUI/Networking/AttachmentDownloader.swift` (transparent : `MessageAttachment` app = `typealias MeeshyMessageAttachment` SDK, aucun call site ne change).
+5. `VideoAvailabilityResolver` (SwiftUI helper, **app-side**) — view wrapper qui résout `VideoAvailability` via `CacheCoordinator.video.isCached` + `AttachmentDownloader` + `MediaDownloadPolicyEngine` et fournit `(availability, onDownload)` à son content builder. Vit dans `apps/ios/Meeshy/Features/Main/Views/VideoAvailabilityResolver.swift`. Remplace `VideoMediaView` et `GatedVideoFullscreenPlayer` (orchestration UX produit, pas atome SDK générique). `AttachmentDownloader` **reste app-side** (`apps/ios/Meeshy/Features/Main/Views/ConversationMediaViews.swift`) car c'est de la composition Meeshy-specific des building blocks SDK — le SDK doit rester pur (atomes + services low-level, pas d'orchestration UX).
 
 Objectifs annexes :
 - Aspect ratio piloté par le **format réel de la vidéo** (`attachment.width` / `attachment.height`), avec cap configurable (`1.6 × width` par défaut). Plus aucune hauteur fixe parent.
@@ -359,24 +359,21 @@ Comportement :
 - Duration badge optionnel (capsule monospaced en bas-droite).
 - `onTap` callback.
 
-### 4.6 `VideoAvailabilityResolver` (SDK : `packages/MeeshySDK/Sources/MeeshyUI/Media/`)
+### 4.6 `VideoAvailabilityResolver` (app-side : `apps/ios/Meeshy/Features/Main/Views/`)
 
 ```swift
-public struct VideoAvailabilityResolver<Content: View>: View {
-    public let attachment: MeeshyMessageAttachment
-    public let content: (VideoAvailability, @escaping () -> Void) -> Content
+struct VideoAvailabilityResolver<Content: View>: View {
+    let attachment: MessageAttachment           // = MeeshyMessageAttachment via typealias
+    let content: (VideoAvailability, @escaping () -> Void) -> Content
 
     @State private var resolvedAvailability: VideoAvailability = .needsDownload
     @StateObject private var downloader = AttachmentDownloader()
-
-    public init(
-        attachment: MeeshyMessageAttachment,
-        @ViewBuilder content: @escaping (VideoAvailability, @escaping () -> Void) -> Content
-    )
 }
 ```
 
-**Dépendance prérequise** : `AttachmentDownloader` doit vivre au SDK (`packages/MeeshySDK/Sources/MeeshyUI/Networking/AttachmentDownloader.swift`). La migration est transparente — `MessageAttachment` côté app est `typealias MeeshyMessageAttachment` (SDK), donc tous les call sites existants de `AttachmentDownloader` (6 sites côté app : `ConversationMediaViews.swift`, `VideoMediaView.swift`, `ConversationMediaGalleryView.swift`) continuent de compiler sans modification.
+**Pourquoi app-side et pas SDK** : ce wrapper orchestre les building blocks SDK (`CacheCoordinator`, `MediaDownloadPolicyEngine`, `NetworkConditionMonitor`, `MediaDownloadPreferencesStore`) pour exprimer une décision UX produit Meeshy — quand auto-DL, quels stores cibler, comment cascader cache → downloader → policy. C'est de la composition applicative, pas un atome générique. Le SDK reste pur (atomes + services low-level) ; l'app compose.
+
+`AttachmentDownloader` reste lui aussi app-side (`ConversationMediaViews.swift:208`) pour la même raison — il connaît les `CacheStoreKind` Meeshy et résout via `MeeshyConfig.resolveMediaURL`.
 
 Comportement :
 - `.task(id: attachment.fileUrl)` : résout `availability` via `CacheCoordinator.video.isCached`.
