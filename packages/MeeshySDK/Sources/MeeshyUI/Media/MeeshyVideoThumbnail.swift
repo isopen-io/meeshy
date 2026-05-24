@@ -137,18 +137,21 @@ public struct MeeshyVideoThumbnail: View {
     }
 
     private func durationBadge(_ formatted: String) -> some View {
+        // Bottom-LEADING : on garde le coin droit libre pour le footer de
+        // la bulle (heure d'envoi + delivery state) qui est posé en
+        // .bottomTrailing. Évite le conflit visuel.
         VStack {
             Spacer()
             HStack {
-                Spacer()
                 Text(formatted)
                     .font(.system(size: 10, weight: .semibold, design: .monospaced))
                     .foregroundColor(.white)
                     .padding(.horizontal, 5)
                     .padding(.vertical, 2)
                     .background(Capsule().fill(Color.black.opacity(0.6)))
+                Spacer()
             }
-            .padding(.trailing, 4)
+            .padding(.leading, 4)
             .padding(.bottom, 4)
         }
     }

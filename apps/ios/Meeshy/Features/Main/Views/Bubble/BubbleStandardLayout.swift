@@ -93,6 +93,21 @@ struct BubbleStandardLayout: View {
     @ObservedObject var blurController: BubbleBlurRevealController
     @ObservedObject var ephemeralController: BubbleEphemeralController
 
+    // MARK: - Playback tracking
+    //
+    // `inlineVideoActiveURL` réplique localement la `SharedAVPlayerManager.activeURL`
+    // pour qu'on puisse cacher le footer (heure d'envoi + delivery state)
+    // pendant qu'une des vidéos de cette bulle est en lecture. On évite
+    // `@ObservedObject SharedAVPlayerManager.shared` : ça re-renderait la
+    // bulle 10×/sec via le periodic time observer. Ici on s'abonne juste à
+    // `$activeURL` qui ne ticke pas (change uniquement sur load/stop).
+    @State private var inlineVideoActiveURL: String = ""
+
+    private var hasPlayingInlineVideo: Bool {
+        guard !inlineVideoActiveURL.isEmpty else { return false }
+        return visualAttachments.contains { $0.type == .video && $0.fileUrl == inlineVideoActiveURL }
+    }
+
     // MARK: - Adaptive sizing (iPad regular size class needs a tighter cap)
 
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -374,6 +389,11 @@ struct BubbleStandardLayout: View {
         .padding(.bottom, bottomSpacing)
         .accessibilityElement(children: .combine)
         .accessibilityLabel(messageAccessibilityLabel)
+        .onReceive(SharedAVPlayerManager.shared.$activeURL) { newURL in
+            // Local mirror — toggles `hasPlayingInlineVideo` to drive the
+            // footer overlay visibility. Doesn't re-render on time ticks.
+            inlineVideoActiveURL = newURL
+        }
         .sheet(isPresented: $showShareSheet) {
             if let url = shareURL {
                 ShareSheet(activityItems: [url])
@@ -472,17 +492,12 @@ struct BubbleStandardLayout: View {
                         .compositingGroup()
                         .clipShape(RoundedRectangle(cornerRadius: 16))
                         .overlay(alignment: .bottomTrailing) {
-                            if !content.hasTextOrNonMediaContent {
-                                // Sur une bulle 100% media, le footer est posé en
-                                // overlay sur la grille. La grille porte un
-                                // `.onTapGesture` (ouverture plein écran) — sans
-                                // hit-area dédiée au check, le tap glisse dessous
-                                // et la sheet "Vues" devient inaccessible. On
-                                // injecte donc le callback `onShowReadStatus` :
-                                // `BubbleFooter.deliveryView` enveloppe alors la
-                                // coche dans un `Button(.plain)` 22pt, qui prend
-                                // la priorité au hit-test car l'overlay est
-                                // au-dessus du gesture parent.
+                            // Footer caché pendant la lecture d'une vidéo
+                            // inline : on libère le coin droit pour les
+                            // contrôles overlay (time current/total) et on
+                            // évite que l'heure d'envoi se superpose à la
+                            // vidéo en plein flow.
+                            if !content.hasTextOrNonMediaContent && !hasPlayingInlineVideo {
                                 let (model, fullActions) = resolvedFooter(includesTranslationControls: false)
                                 BubbleFooter(
                                     model: model,

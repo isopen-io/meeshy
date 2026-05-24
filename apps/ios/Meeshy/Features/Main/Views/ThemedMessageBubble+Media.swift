@@ -125,7 +125,8 @@ extension BubbleStandardLayout {
             messageDeliveryStatus: message.deliveryStatus,
             footer: resolvedFooter().0,
             isDark: isDark,
-            containerWidth: gridMaxWidth
+            containerWidth: gridMaxWidth,
+            hidesFooterDuringPlayback: hasPlayingInlineVideo
         )
     }
 
@@ -183,15 +184,20 @@ extension BubbleStandardLayout {
             visualMediaGrid
                 .background(Color.black)
                 .overlay(alignment: .bottomTrailing) {
-                    BubbleFooter(
-                        model: resolvedFooter().0,
-                        actions: .none,
-                        style: .overlay,
-                        isDark: isDark
-                    )
-                    .equatable()
-                    .padding(8)
-                    .transition(.opacity)
+                    // Footer caché pendant la lecture d'une vidéo inline —
+                    // évite la collision avec les contrôles overlay au
+                    // bottom de la vidéo.
+                    if !hasPlayingInlineVideo {
+                        BubbleFooter(
+                            model: resolvedFooter().0,
+                            actions: .none,
+                            style: .overlay,
+                            isDark: isDark
+                        )
+                        .equatable()
+                        .padding(8)
+                        .transition(.opacity)
+                    }
                 }
         }
         .compositingGroup()
@@ -555,6 +561,10 @@ struct BubbleCarouselView: View {
     var footer: BubbleFooterModel = .empty
     var isDark: Bool = false
     var containerWidth: CGFloat = 260
+    /// Lorsque vrai, on ne rend pas le footer (heure d'envoi + delivery)
+    /// pour éviter la collision avec les contrôles overlay de la vidéo en
+    /// lecture inline.
+    var hidesFooterDuringPlayback: Bool = false
 
     @State private var currentPageID: String?
 
@@ -585,13 +595,14 @@ struct BubbleCarouselView: View {
 
             carouselTopBar
         }
-        // Timestamp + delivery state — same unified `.overlay` footer as the
-        // static `visualMediaGrid`, so a carousel-mode message still surfaces
-        // its send time and pending clock instead of dropping the footer.
+        // Timestamp + delivery state — overlay footer, masqué pendant la
+        // lecture d'une vidéo inline pour libérer le bottom-trailing.
         .overlay(alignment: .bottomTrailing) {
-            BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
-                .equatable()
-                .padding(8)
+            if !hidesFooterDuringPlayback {
+                BubbleFooter(model: footer, actions: .none, style: .overlay, isDark: isDark)
+                    .equatable()
+                    .padding(8)
+            }
         }
         .onAppear {
             let startIndex = max(0, min(carouselIndex, items.count - 1))
