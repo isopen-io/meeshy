@@ -1,4 +1,4 @@
-import AVFoundation
+@preconcurrency import AVFoundation
 import QuartzCore
 import Foundation
 
@@ -13,8 +13,10 @@ public final class MeeshyVideoCanvasLayer: CALayer {
 
     /// The AVPlayerLayer that renders the video. Public so callers can
     /// observe `isReadyForDisplay` if needed.
-    // nonisolated(unsafe): accessed from nonisolated designated initializers;
-    // always created before any concurrent access.
+    // nonisolated(unsafe): the property's storage is treated as nonisolated;
+    // the `@preconcurrency import AVFoundation` above defangs the strict
+    // Swift 6 isolation check on `AVPlayerLayer()` so the initializer can
+    // run from the (nonisolated) CALayer override inits.
     public nonisolated(unsafe) let avPlayerLayer = AVPlayerLayer()
 
     private var queuePlayer: AVQueuePlayer?
