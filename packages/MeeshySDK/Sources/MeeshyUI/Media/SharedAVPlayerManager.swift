@@ -121,6 +121,20 @@ public final class SharedAVPlayerManager: ObservableObject {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
+    /// Libère le player POUR cette URL si elle est encore active. No-op si
+    /// une autre URL a pris la main entre temps (safe race protection : par
+    /// ex. l'utilisateur scrolle vite et une nouvelle bulle a déjà appelé
+    /// `load`).
+    ///
+    /// Utilisé par `_InlineRenderer.teardown()` sur `.onDisappear` pour
+    /// libérer le surface au scroll out → la bulle retombe sur le thumbnail
+    /// au scroll back. Distinct de `pause()` : ce dernier conserve le
+    /// player + activeURL, donc surface remounté sur frame figée.
+    public func release(urlString: String) {
+        guard activeURL == urlString else { return }
+        stop()
+    }
+
     // MARK: - Picture-in-Picture
 
     /// Attach PIP to a given AVPlayerLayer. Call this from the UIViewRepresentable that hosts the player.
