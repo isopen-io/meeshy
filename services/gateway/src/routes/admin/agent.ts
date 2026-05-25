@@ -200,9 +200,61 @@ const stdErrorsWithNotFound = {
   404: errorResponseSchema,
 } as const;
 
+type InvalidationStatus = {
+  redisPublishOk: boolean;
+  redisSubscribersNotified: number;
+  httpInvalidateOk: boolean;
+  anyChannelSucceeded: boolean;
+};
+
 // ── Routes ──────────────────────────────────────────────────────────────────
 
 export async function agentAdminRoutes(fastify: FastifyInstance) {
+  const agentHost = process.env.AGENT_HOST;
+  const agentHttpPort = process.env.AGENT_HTTP_PORT || '3200';
+  const agentClient = agentHost ? new AgentHttpClient(`http://${agentHost}:${agentHttpPort}`) : null;
+
+  // Belt-and-suspenders cache invalidation: publish on Redis (low-latency for
+  // healthy paths) AND POST directly to the agent service (resilient when the
+  // pub/sub channel is briefly down). Both are best-effort and never throw —
+  // the route still succeeds, but the caller gets a status object so the
+  // admin UI can surface partial failures.
+  async function broadcastInvalidation(payload: { conversationId?: string; global?: boolean }): Promise<InvalidationStatus> {
+    const status: InvalidationStatus = {
+      redisPublishOk: false,
+      redisSubscribersNotified: 0,
+      httpInvalidateOk: false,
+      anyChannelSucceeded: false,
+    };
+
+    const [pub, http] = await Promise.allSettled([
+      getCacheStore().publish('agent:config-invalidated', JSON.stringify(payload)),
+      agentClient
+        ? agentClient.invalidateCache(payload)
+        : Promise.reject(new Error('AGENT_HOST not configured')),
+    ]);
+
+    if (pub.status === 'fulfilled') {
+      status.redisPublishOk = true;
+      status.redisSubscribersNotified = typeof pub.value === 'number' ? pub.value : 0;
+    }
+    if (http.status === 'fulfilled') {
+      status.httpInvalidateOk = true;
+    } else if (agentClient) {
+      // Only warn if we tried HTTP and it failed — missing AGENT_HOST is
+      // expected in some deployments and not worth a warning per request.
+      fastify.log.warn({ err: http.reason }, '[AgentConfig] HTTP cache invalidation failed');
+    }
+    // "Succeeded" means at least one agent instance actually received the
+    // invalidation. Redis PUBLISH returning 0 means the publish itself was
+    // accepted but no subscriber was listening (agent down / not yet
+    // connected / network partition), which is functionally a miss — the
+    // cache will stay stale until TTL or the next mutation. Counting that
+    // as success would make the toast lie to the admin.
+    status.anyChannelSucceeded = status.redisSubscribersNotified > 0 || status.httpInvalidateOk;
+    return status;
+  }
+
   // GET /stats
   fastify.get('/stats', {
     onRequest: [fastify.authenticate, requireAgentAdmin],
@@ -1675,10 +1727,6 @@ export async function agentAdminRoutes(fastify: FastifyInstance) {
   });
 
   // ── Delivery Queue Proxy (Agent HTTP) ─────────────────────────────────────
-
-  const agentHost = process.env.AGENT_HOST;
-  const agentHttpPort = process.env.AGENT_HTTP_PORT || '3200';
-  const agentClient = agentHost ? new AgentHttpClient(`http://${agentHost}:${agentHttpPort}`) : null;
 
   const ensureAgentClient = (reply: FastifyReply): AgentHttpClient | null => {
     if (!agentClient) {
