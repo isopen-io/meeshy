@@ -26,7 +26,7 @@ struct ShareableLink: Identifiable {
     /// lands on the post; only the attribution analytics are skipped.
     /// Mirrors the `originalUrl` the gateway uses when minting the link.
     static func fallback(forPostId postId: String) -> ShareableLink? {
-        URL(string: "\(webBaseURL)/v2/feeds/post/\(postId)").map { ShareableLink(url: $0) }
+        URL(string: "\(webBaseURL)/feeds/post/\(postId)").map { ShareableLink(url: $0) }
     }
 }
 

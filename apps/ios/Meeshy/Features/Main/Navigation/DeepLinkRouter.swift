@@ -9,6 +9,7 @@ enum DeepLinkDestination {
     case ownProfile
     case userProfile(username: String)
     case conversation(id: String)
+    case post(id: String)
     case magicLink(token: String)
     case share(text: String?, url: String?)
     case userLinks
@@ -24,15 +25,19 @@ enum DeepLinkParser {
     /// Parse any URL into a deep link destination.
     ///
     /// Handles:
-    /// - `https://meeshy.me/me`          -> own profile
-    /// - `https://meeshy.me/u/{username}` -> user profile
-    /// - `https://meeshy.me/c/{id}`       -> conversation
-    /// - `meeshy://me`                    -> own profile
-    /// - `meeshy://u/{username}`          -> user profile
-    /// - `meeshy://c/{id}`               -> conversation
-    /// - `meeshy://share?text=...`        -> share text content
-    /// - `meeshy://share?url=...`         -> share URL content
-    /// - Everything else                  -> open externally
+    /// - `https://meeshy.me/me`                   -> own profile
+    /// - `https://meeshy.me/u/{username}`          -> user profile
+    /// - `https://meeshy.me/c/{id}`                -> conversation
+    /// - `https://meeshy.me/feeds/post/{id}`       -> post detail
+    /// - `https://meeshy.me/p/{id}`                -> post detail (short)
+    /// - `meeshy://me`                             -> own profile
+    /// - `meeshy://u/{username}`                   -> user profile
+    /// - `meeshy://c/{id}`                         -> conversation
+    /// - `meeshy://p/{id}`                         -> post detail
+    /// - `meeshy://feeds/post/{id}`                -> post detail
+    /// - `meeshy://share?text=...`                 -> share text content
+    /// - `meeshy://share?url=...`                  -> share URL content
+    /// - Everything else                           -> open externally
     static func parse(_ url: URL) -> DeepLinkDestination {
         if url.scheme == "meeshy" {
             return parseCustomScheme(url)
@@ -97,6 +102,13 @@ enum DeepLinkParser {
             if components.count >= 2 { return .userProfile(username: components[1]) }
         case "c":
             if components.count >= 2 { return .conversation(id: components[1]) }
+        case "p":
+            if components.count >= 2 { return .post(id: components[1]) }
+        case "feeds":
+            // meeshy://feeds/post/<id>
+            if components.count >= 3, components[1] == "post" {
+                return .post(id: components[2])
+            }
         default:
             break
         }
@@ -127,10 +139,16 @@ enum DeepLinkParser {
             return .magicLink(token: token)
         }
 
+        // https://meeshy.me/feeds/post/<id>
+        if components.count >= 3, components[0] == "feeds", components[1] == "post" {
+            return .post(id: components[2])
+        }
+
         if components.count >= 2 {
             switch components[0] {
             case "u": return .userProfile(username: components[1])
             case "c": return .conversation(id: components[1])
+            case "p": return .post(id: components[1])
             default: break
             }
         }
@@ -156,6 +174,7 @@ enum DeepLink: Equatable {
     case chatLink(identifier: String)
     case magicLink(token: String)
     case conversation(id: String)
+    case post(id: String)
 }
 
 // MARK: - Deep Link Router (ObservableObject for join/conversation deep links)
@@ -205,6 +224,18 @@ final class DeepLinkRouter: ObservableObject {
         case "c", "conversation":
             guard let conversationId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
             pendingDeepLink = .conversation(id: conversationId)
+            return true
+
+        case "p":
+            guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+            pendingDeepLink = .post(id: postId)
+            return true
+
+        case "feeds":
+            // /feeds/post/<id> — the canonical post share URL minted by the gateway.
+            guard pathComponents.count >= 3, pathComponents[1] == "post" else { return false }
+            guard let postId = nonEmptyIdentifier(at: 2, in: pathComponents) else { return false }
+            pendingDeepLink = .post(id: postId)
             return true
 
         default:
@@ -259,6 +290,18 @@ final class DeepLinkRouter: ObservableObject {
         case "conversation":
             guard let conversationId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
             pendingDeepLink = .conversation(id: conversationId)
+            return true
+
+        case "p":
+            guard let postId = nonEmptyIdentifier(at: 0, in: pathComponents) else { return false }
+            pendingDeepLink = .post(id: postId)
+            return true
+
+        case "feeds":
+            // meeshy://feeds/post/<id> — mirrors the universal-link shape.
+            guard !pathComponents.isEmpty, pathComponents[0] == "post" else { return false }
+            guard let postId = nonEmptyIdentifier(at: 1, in: pathComponents) else { return false }
+            pendingDeepLink = .post(id: postId)
             return true
 
         default:
