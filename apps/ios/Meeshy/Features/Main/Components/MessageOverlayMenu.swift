@@ -205,6 +205,17 @@ struct MessageOverlayMenu: View {
             let useSourceFrame = messageBubbleFrame != .zero
             let bubbleRect = messageBubbleFrame
 
+            // Bubble preview scale — proportionnel pour les bulles trop hautes
+            // (reply + grid attachement, vidéo, etc.). On cap visuellement à
+            // ~320pt de hauteur tout en préservant exactement l'aspect ratio
+            // (.scaleEffect uniforme). Scale floor à 0.55 pour rester lisible.
+            let maxPreviewHeight: CGFloat = 320
+            let bubblePreviewScale: CGFloat = bubbleRect.height > maxPreviewHeight
+                ? max(0.55, maxPreviewHeight / bubbleRect.height)
+                : 1.0
+            let scaledBubbleWidth = bubbleRect.width * bubblePreviewScale
+            let scaledBubbleHeight = bubbleRect.height * bubblePreviewScale
+
             // Mesures du cluster — gaps tightement contrôlés. Heights basées
             // sur les rendus réels mesurés en simulateur.
             let quickActionsCount = quickActions.count
@@ -214,7 +225,7 @@ struct MessageOverlayMenu: View {
             let emojiBarHeight: CGFloat = 44
             let clusterClearance: CGFloat = 12
             let clusterTotalHeight = quickActionMenuHeight + quickActionToBubbleGap
-                                   + bubbleRect.height
+                                   + scaledBubbleHeight
                                    + bubbleToEmojiGap + emojiBarHeight
 
             // Hauteur naturelle du panel (base avant resize manuel)
@@ -233,11 +244,13 @@ struct MessageOverlayMenu: View {
             let clampedClusterTopY = max(minClusterTopY, min(desiredClusterTopY, maxClusterTopY))
             let clusterBottomY = clampedClusterTopY + clusterTotalHeight
 
-            // Positions Y centrales de chaque élément du cluster (pour .position)
+            // Positions Y centrales de chaque élément du cluster (pour .position).
+            // Utilise scaledBubbleHeight pour respecter le scale-down visuel
+            // du preview (vidéos / grilles d'images / reply + grid → cap 320pt).
             let quickActionMenuCenterY = clampedClusterTopY + quickActionMenuHeight / 2
             let bubbleTopY = clampedClusterTopY + quickActionMenuHeight + quickActionToBubbleGap
-            let bubbleFinalMidY = bubbleTopY + bubbleRect.height / 2
-            let emojiBarCenterY = bubbleTopY + bubbleRect.height + bubbleToEmojiGap + emojiBarHeight / 2
+            let bubbleFinalMidY = bubbleTopY + scaledBubbleHeight / 2
+            let emojiBarCenterY = bubbleTopY + scaledBubbleHeight + bubbleToEmojiGap + emojiBarHeight / 2
 
             // Position X de la bulle = source frame midX (respect exact de la
             // position dans la conversation). Action bar et emoji bar suivent
@@ -372,6 +385,13 @@ struct MessageOverlayMenu: View {
                     // (left) de la cellule. Positionnement par .position()
                     // au centre Y final calculé plus haut (clamp safeTop ↔
                     // panel.top).
+                    // Bubble preview rendu à la largeur source (proportions
+                    // intactes du contenu) PUIS .scaleEffect uniforme pour
+                    // réduire visuellement les bulles trop grosses (vidéo,
+                    // grilles d'images, reply + grid). L'outer frame avec les
+                    // dimensions scaled informe le layout SwiftUI de la taille
+                    // visible — la position du cluster (action bar / emoji
+                    // bar) reste cohérente.
                     ThemedMessageBubble(
                         message: message,
                         contactColor: contactColor,
@@ -392,7 +412,9 @@ struct MessageOverlayMenu: View {
                             custom: userCustomDestinationLanguage
                         )
                     )
-                    .frame(width: bubbleRect.width, alignment: .leading)
+                    .frame(width: bubbleRect.width, height: bubbleRect.height, alignment: .leading)
+                    .scaleEffect(bubblePreviewScale, anchor: .center)
+                    .frame(width: scaledBubbleWidth, height: scaledBubbleHeight)
                     .position(
                         x: bubbleRect.midX,
                         y: isVisible ? bubbleFinalMidY : bubbleRect.midY
