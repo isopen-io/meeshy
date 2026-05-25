@@ -71,6 +71,9 @@ extension ContextAction {
     static func delete(label: String = "Supprimer") -> ContextAction {
         .init(kind: .delete, label: label, icon: "trash.fill", role: .destructive)
     }
+    static func edit(label: String = "Éditer") -> ContextAction {
+        .init(kind: .edit, label: label, icon: "pencil", role: .standard)
+    }
 }
 
 /// Single action button inside the context menu capsule. Press feedback is

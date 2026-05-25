@@ -1490,7 +1490,11 @@ struct ConversationView: View {
                 mentionDisplayNames: viewModel.mentionDisplayNames,
                 currentUserId: AuthManager.shared.currentUser?.id ?? "",
                 userRegionalLanguage: AuthManager.shared.currentUser?.regionalLanguage,
-                userCustomDestinationLanguage: AuthManager.shared.currentUser?.customDestinationLanguage
+                userCustomDestinationLanguage: AuthManager.shared.currentUser?.customDestinationLanguage,
+                onShowTranslate: {
+                    overlayState.detailSheetMessage = msg
+                    overlayState.detailSheetInitialTab = .language
+                }
             )
             .transition(.opacity).zIndex(999)
         }
