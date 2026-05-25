@@ -71,6 +71,9 @@ extension ContextAction {
     static func delete(label: String = "Supprimer") -> ContextAction {
         .init(kind: .delete, label: label, icon: "trash.fill", role: .destructive)
     }
+    static func edit(label: String = "Éditer") -> ContextAction {
+        .init(kind: .edit, label: label, icon: "pencil", role: .standard)
+    }
 }
 
 /// Single action button inside the context menu capsule. Press feedback is
@@ -152,30 +155,65 @@ struct ContextActionMenu: View {
     let onAction: (ContextAction.Kind) -> Void
 
     var body: some View {
-        HStack(spacing: 6) {
-            ForEach(actions) { action in
+        let accent = palette.primaryColor
+        HStack(spacing: 4) {
+            ForEach(Array(actions.enumerated()), id: \.element.id) { index, action in
                 ContextActionButton(
                     action: action,
-                    accentColor: palette.primaryColor,
+                    accentColor: accent,
                     onTap: { onAction(action.kind) }
                 )
+                if index < actions.count - 1 {
+                    Capsule()
+                        .fill(accent.opacity(0.18))
+                        .frame(width: 1, height: 22)
+                }
             }
         }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.regularMaterial, in: Capsule())
-        .overlay(
-            Capsule().strokeBorder(Color.white.opacity(0.06), lineWidth: 0.5)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(.ultraThinMaterial)
         )
-        .shadow(color: .black.opacity(0.12), radius: 16, x: 0, y: 4)
+        .background(
+            Capsule()
+                .fill(
+                    LinearGradient(
+                        colors: [
+                            accent.opacity(0.18),
+                            accent.opacity(0.06)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .overlay(
+            Capsule()
+                .strokeBorder(
+                    LinearGradient(
+                        colors: [
+                            accent.opacity(0.45),
+                            accent.opacity(0.15)
+                        ],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 0.8
+                )
+        )
+        .shadow(color: accent.opacity(0.20), radius: 12, x: 0, y: 4)
+        .shadow(color: .black.opacity(0.18), radius: 18, x: 0, y: 8)
         .accessibilityElement(children: .contain)
     }
 
     static let buttonWidth: CGFloat = 54
     static let buttonHeight: CGFloat = 48
-    static let buttonSpacing: CGFloat = 6
-    static let horizontalPadding: CGFloat = 10
-    static let verticalPadding: CGFloat = 8
+    static let buttonSpacing: CGFloat = 4
+    static let separatorWidth: CGFloat = 1
+    static let horizontalPadding: CGFloat = 8
+    static let verticalPadding: CGFloat = 6
 
     /// Deterministic size given an action count. No `PreferenceKey` needed —
     /// the engine pre-computes the menu frame from this estimate so the
@@ -183,7 +221,7 @@ struct ContextActionMenu: View {
     static func estimatedSize(actionCount: Int) -> CGSize {
         let count = max(1, actionCount)
         let width = CGFloat(count) * buttonWidth
-            + CGFloat(count - 1) * buttonSpacing
+            + CGFloat(count - 1) * (buttonSpacing * 2 + separatorWidth)
             + horizontalPadding * 2
         let height = buttonHeight + verticalPadding * 2
         return CGSize(width: width, height: height)

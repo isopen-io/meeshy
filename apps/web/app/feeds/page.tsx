@@ -10,13 +10,13 @@ import { RepostModal } from '@/components/v2/RepostModal';
 import { AudioPostComposer } from '@/components/v2/AudioPostComposer';
 import { Skeleton } from '@/components/v2/Skeleton';
 
-// Stories (dedicated hooks from stories feature)
+// Stories
 import { useStoriesFeedQuery, useCreateStoryMutation, useDeleteStoryMutation, useRecordStoryViewMutation } from '@/hooks/social/use-stories';
 import { useStoriesRealtime } from '@/hooks/social/use-stories-realtime';
 import { postToStoryItem, postToStoryData } from '@/lib/story-transforms';
 import { useStoryPreferences } from '@/stores/user-preferences-store';
 
-// Posts (real API integration)
+// Posts (real API integration — same hooks as v2)
 import { useFeedQuery, useFeedPosts, usePrefetchPost } from '@/hooks/queries/use-feed-query';
 import { useCreatePostMutation, useLikePostMutation, useUnlikePostMutation, useSharePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useTranslatePostMutation, useDeletePostMutation, usePinPostMutation, useRepostMutation, useUpdatePostMutation } from '@/hooks/queries/use-post-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
@@ -53,41 +53,29 @@ function postToTranslations(post: Post) {
 }
 
 // ─── Mock Data (Statuses - to be replaced in future phase) ──────────────
+//
+// Mood/status entries are still mocked client-side because the gateway
+// surface for ephemeral statuses isn't wired into the web composer yet.
+// Stories and Posts below are 100% real.
 
 const mockStatuses: StatusItem[] = [
   {
-    id: 'st1', author: { name: 'Marie D.' }, moodEmoji: '\uD83C\uDF89', content: 'Trop contente !',
+    id: 'st1', author: { name: 'Marie D.' }, moodEmoji: '🎉', content: 'Trop contente !',
     originalLanguage: 'fr',
     translations: [{ languageCode: 'en', languageName: 'English', content: 'So happy!' }],
     expiresAt: new Date(Date.now() + 2400000).toISOString(), isOwn: true,
   },
   {
-    id: 'st2', author: { name: 'Yuki T.' }, moodEmoji: '\u2615', content: '\u30B3\u30FC\u30D2\u30FC\u30BF\u30A4\u30E0',
+    id: 'st2', author: { name: 'Yuki T.' }, moodEmoji: '☕', content: 'コーヒータイム',
     originalLanguage: 'ja',
-    translations: [{ languageCode: 'fr', languageName: 'Francais', content: "C'est l'heure du caf\u00e9" }],
+    translations: [{ languageCode: 'fr', languageName: 'Francais', content: "C'est l'heure du café" }],
     expiresAt: new Date(Date.now() + 1800000).toISOString(), isOwn: false,
-  },
-  {
-    id: 'st3', author: { name: 'Carlos M.' }, moodEmoji: '\uD83D\uDD25', content: 'En mode focus',
-    originalLanguage: 'fr', expiresAt: new Date(Date.now() + 3000000).toISOString(), isOwn: false,
-  },
-  {
-    id: 'st4', author: { name: 'Li Wei' }, moodEmoji: '\uD83D\uDCDA',
-    originalLanguage: 'zh',
-    translations: [{ languageCode: 'fr', languageName: 'Francais', content: 'En train de lire' }],
-    expiresAt: new Date(Date.now() + 1200000).toISOString(), isOwn: false,
-  },
-  {
-    id: 'st5', author: { name: 'Sophie M.' }, moodEmoji: '\uD83C\uDFB5', content: 'Coding with music',
-    originalLanguage: 'en',
-    translations: [{ languageCode: 'fr', languageName: 'Francais', content: 'Je code en musique' }],
-    expiresAt: new Date(Date.now() + 2000000).toISOString(), isOwn: false,
   },
 ];
 
 // ─── Page ────────────────────────────────────────────────────────────────
 
-export default function V2FeedsPage() {
+export default function FeedsPage() {
   const router = useRouter();
   const toastCtx = useToast();
   const showToast = useCallback(
@@ -102,23 +90,18 @@ export default function V2FeedsPage() {
   const userLanguage = usePreferredLanguage();
   const { preferences: storyPrefs } = useStoryPreferences();
 
-  // ─── Posts (real data) ────────────────────────────────────────────────
+  // ─── Posts ────────────────────────────────────────────────────────────
   const feedQuery = useFeedQuery();
   const posts = useFeedPosts(feedQuery);
   const prefetchPost = usePrefetchPost();
 
   /**
-   * Web-idiomatic equivalent of iOS CacheResult<T> (.fresh/.stale/.empty).
-   *
-   * React Query surfaces three useful signals:
-   *  - `data`          → cached pages exist (fresh or stale)
-   *  - `isFetching`    → background refetch in flight
-   *  - `dataUpdatedAt` → timestamp of last successful fetch
-   *
-   * Rules:
-   *  - 'empty'  → no data yet (cold cache); show skeleton
-   *  - 'fresh'  → data is < 30s old; show it as-is
-   *  - 'stale'  → data is ≥ 30s old; show with "Updating…" hint
+   * Cache-state classification mirroring iOS' `CacheResult<T>`
+   * (.fresh / .stale / .empty). The thresholds are deliberately loose:
+   * < 30s = fresh (no UI hint), ≥ 30s = stale (silent revalidate + label),
+   * no data = empty (skeleton). Keeping this co-located with the
+   * `isFetching` check lets us draw the "Updating…" pill only when the
+   * data on screen is genuinely older than the current refetch.
    */
   const cacheState: 'fresh' | 'stale' | 'empty' = useMemo(() => {
     if (!feedQuery.data) return 'empty';
@@ -126,7 +109,6 @@ export default function V2FeedsPage() {
     return ageSec < 30 ? 'fresh' : 'stale';
   }, [feedQuery.data, feedQuery.dataUpdatedAt]);
 
-  // Socket.IO → React Query cache sync for posts
   usePostSocketCacheSync();
 
   // Post mutations
@@ -147,7 +129,6 @@ export default function V2FeedsPage() {
   const [repostingPost, setRepostingPost] = useState<{ id: string; author?: string; content?: string } | null>(null);
   const [audioComposerOpen, setAudioComposerOpen] = useState(false);
 
-
   // New posts banner
   const [newPostsCount, setNewPostsCount] = useState(0);
   const prevPostsLengthRef = useRef(posts.length);
@@ -159,7 +140,7 @@ export default function V2FeedsPage() {
     prevPostsLengthRef.current = posts.length;
   }, [posts.length]);
 
-  // Infinite scroll
+  // Infinite scroll sentinel
   const loadMoreRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -177,7 +158,7 @@ export default function V2FeedsPage() {
     return () => observer.disconnect();
   }, [feedQuery.hasNextPage, feedQuery.isFetchingNextPage, feedQuery.fetchNextPage]);
 
-  // ─── Stories (real data) ──────────────────────────────────────────────
+  // ─── Stories ──────────────────────────────────────────────────────────
   const { data: stories, isLoading: storiesLoading } = useStoriesFeedQuery();
   const createStoryMutation = useCreateStoryMutation();
   const deleteStoryMutation = useDeleteStoryMutation();
@@ -190,62 +171,73 @@ export default function V2FeedsPage() {
   const viewedStoryIdsRef = useRef(new Set<string>());
 
   const storyItems = useMemo(
-    () => (stories ?? []).map(s => postToStoryItem(s, currentUserId, viewedStoryIdsRef.current)),
+    () => (stories ?? []).map((s) => postToStoryItem(s, currentUserId, viewedStoryIdsRef.current)),
     [stories, currentUserId],
   );
 
-  const storyDataList = useMemo(
-    () => (stories ?? []).map(postToStoryData),
-    [stories],
+  const storyDataList = useMemo(() => (stories ?? []).map(postToStoryData), [stories]);
+
+  const handleStoryPress = useCallback(
+    (storyId: string) => {
+      const idx = storyDataList.findIndex((s) => s.id === storyId);
+      if (idx >= 0) {
+        setStoryViewerIndex(idx);
+        setStoryViewerOpen(true);
+      }
+    },
+    [storyDataList],
   );
 
-  const handleStoryPress = useCallback((storyId: string) => {
-    const idx = storyDataList.findIndex(s => s.id === storyId);
-    if (idx >= 0) {
-      setStoryViewerIndex(idx);
-      setStoryViewerOpen(true);
-    }
-  }, [storyDataList]);
+  const handleStoryPublish = useCallback(
+    (story: { content?: string; storyEffects: Record<string, unknown>; visibility: StoryVisibility; mediaIds?: string[] }) => {
+      setStoryComposerOpen(false);
+      createStoryMutation.mutate(
+        {
+          content: story.content,
+          storyEffects: story.storyEffects,
+          visibility: story.visibility,
+          mediaIds: story.mediaIds,
+          originalLanguage: userLanguage,
+        },
+        {
+          onSuccess: () => {
+            const mediaCount = story.mediaIds?.length ?? 0;
+            const desc = mediaCount > 0
+              ? `Votre story est visible par vos amis (${mediaCount} media).`
+              : 'Votre story est visible par vos amis.';
+            showToast('Story publiée !', 'success', desc);
+          },
+          onError: () => showToast('Erreur', 'error', 'Impossible de publier la story.'),
+        },
+      );
+    },
+    [createStoryMutation, userLanguage, showToast],
+  );
 
-  const handleStoryPublish = useCallback((story: { content?: string; storyEffects: Record<string, unknown>; visibility: StoryVisibility; mediaIds?: string[] }) => {
-    setStoryComposerOpen(false);
-    createStoryMutation.mutate({
-      content: story.content,
-      storyEffects: story.storyEffects,
-      visibility: story.visibility,
-      mediaIds: story.mediaIds,
-      originalLanguage: userLanguage,
-    }, {
-      onSuccess: () => {
-        const mediaCount = story.mediaIds?.length ?? 0;
-        const desc = mediaCount > 0
-          ? `Votre story est visible par vos amis (${mediaCount} media).`
-          : 'Votre story est visible par vos amis.';
-        showToast('Story publi\u00e9e !', 'success', desc);
-      },
-      onError: () => {
-        showToast('Erreur', 'error', 'Impossible de publier la story.');
-      },
-    });
-  }, [createStoryMutation, userLanguage, showToast]);
+  const handleStoryView = useCallback(
+    (storyId: string) => {
+      viewedStoryIdsRef.current.add(storyId);
+      recordView(storyId);
+    },
+    [recordView],
+  );
 
-  const handleStoryView = useCallback((storyId: string) => {
-    viewedStoryIdsRef.current.add(storyId);
-    recordView(storyId);
-  }, [recordView]);
-
-  const handleStoryDelete = useCallback((storyId: string) => {
-    deleteStoryMutation.mutate(storyId, {
-      onSuccess: () => showToast('Story supprim\u00e9e', 'success'),
-      onError: () => showToast('Erreur', 'error', 'Impossible de supprimer la story.'),
-    });
-  }, [deleteStoryMutation, showToast]);
+  const handleStoryDelete = useCallback(
+    (storyId: string) => {
+      deleteStoryMutation.mutate(storyId, {
+        onSuccess: () => showToast('Story supprimée', 'success'),
+        onError: () => showToast('Erreur', 'error', 'Impossible de supprimer la story.'),
+      });
+    },
+    [deleteStoryMutation, showToast],
+  );
 
   const handleStoryViewerClose = useCallback(() => setStoryViewerOpen(false), []);
   const handleStoryComposerClose = useCallback(() => setStoryComposerOpen(false), []);
-  const handleStoryReply = useCallback((_id: string, text: string) => {
-    showToast('R\u00e9ponse envoy\u00e9e', 'success', text);
-  }, [showToast]);
+  const handleStoryReply = useCallback(
+    (_id: string, text: string) => showToast('Réponse envoyée', 'success', text),
+    [showToast],
+  );
 
   // ─── Post handlers ────────────────────────────────────────────────────
 
@@ -254,7 +246,7 @@ export default function V2FeedsPage() {
       createPostMutation.mutate(
         { content: data.content, type: data.type, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
         {
-          onSuccess: () => showToast('Publi\u00e9 !', 'success', 'Votre post a \u00e9t\u00e9 partag\u00e9.'),
+          onSuccess: () => showToast('Publié !', 'success', 'Votre post a été partagé.'),
           onError: () => showToast('Erreur', 'error', 'Impossible de publier le post.'),
         },
       );
@@ -262,157 +254,202 @@ export default function V2FeedsPage() {
     [createPostMutation, showToast],
   );
 
-  const handleLike = useCallback((postId: string, isCurrentlyLiked: boolean) => {
-    if (isCurrentlyLiked) {
-      unlikeMutation.mutate({ postId });
-    } else {
-      likeMutation.mutate({ postId });
-    }
-  }, [likeMutation, unlikeMutation]);
+  const handleLike = useCallback(
+    (postId: string, isCurrentlyLiked: boolean) => {
+      if (isCurrentlyLiked) {
+        unlikeMutation.mutate({ postId });
+      } else {
+        likeMutation.mutate({ postId });
+      }
+    },
+    [likeMutation, unlikeMutation],
+  );
 
-  const handleReact = useCallback((postId: string, emoji: string, currentUserReactions: readonly string[]) => {
-    if (currentUserReactions.includes(emoji)) {
-      unlikeMutation.mutate({ postId, emoji });
-    } else {
-      likeMutation.mutate({ postId, emoji });
-    }
-  }, [likeMutation, unlikeMutation]);
+  const handleReact = useCallback(
+    (postId: string, emoji: string, currentUserReactions: readonly string[]) => {
+      if (currentUserReactions.includes(emoji)) {
+        unlikeMutation.mutate({ postId, emoji });
+      } else {
+        likeMutation.mutate({ postId, emoji });
+      }
+    },
+    [likeMutation, unlikeMutation],
+  );
 
-  const handleComment = useCallback((postId: string) => {
-    router.push(`/feeds/post/${postId}`);
-  }, [router]);
+  const handleComment = useCallback((postId: string) => router.push(`/feeds/post/${postId}`), [router]);
 
-  const handleShare = useCallback(async (postId: string) => {
-    try {
-      // Share with the canonical (v1) URL so links pasted out remain stable
-      // even if the v2 prefix is eventually retired. The gateway mints the
-      // same path when generating tracking links.
-      await navigator.clipboard.writeText(`${window.location.origin}/feeds/post/${postId}`);
-      shareMutation.mutate({ postId });
-      showToast('Lien copi\u00e9 !', 'success');
-    } catch {
-      showToast('Erreur', 'error', 'Impossible de copier le lien.');
-    }
-  }, [shareMutation, showToast]);
+  const handleShare = useCallback(
+    async (postId: string) => {
+      try {
+        await navigator.clipboard.writeText(`${window.location.origin}/feeds/post/${postId}`);
+        shareMutation.mutate({ postId });
+        showToast('Lien copié !', 'success');
+      } catch {
+        showToast('Erreur', 'error', 'Impossible de copier le lien.');
+      }
+    },
+    [shareMutation, showToast],
+  );
 
-  const handleBookmark = useCallback((postId: string, isCurrentlyBookmarked: boolean) => {
-    if (isCurrentlyBookmarked) {
-      unbookmarkMutation.mutate(postId);
-    } else {
-      bookmarkMutation.mutate(postId);
-    }
-  }, [bookmarkMutation, unbookmarkMutation]);
+  const handleBookmark = useCallback(
+    (postId: string, isCurrentlyBookmarked: boolean) => {
+      if (isCurrentlyBookmarked) {
+        unbookmarkMutation.mutate(postId);
+      } else {
+        bookmarkMutation.mutate(postId);
+      }
+    },
+    [bookmarkMutation, unbookmarkMutation],
+  );
 
-  const handleTranslate = useCallback((postId: string) => {
-    translateMutation.mutate({ postId, targetLanguage: userLanguage });
-  }, [translateMutation, userLanguage]);
+  const handleTranslate = useCallback(
+    (postId: string) => translateMutation.mutate({ postId, targetLanguage: userLanguage }),
+    [translateMutation, userLanguage],
+  );
 
-  const handleDeletePost = useCallback((postId: string) => {
-    deletePostMutation.mutate(postId, {
-      onSuccess: () => showToast('Post supprim\u00e9', 'success'),
-    });
-  }, [deletePostMutation, showToast]);
+  const handleDeletePost = useCallback(
+    (postId: string) => {
+      deletePostMutation.mutate(postId, {
+        onSuccess: () => showToast('Post supprimé', 'success'),
+      });
+    },
+    [deletePostMutation, showToast],
+  );
 
-  const handlePinPost = useCallback((postId: string, isPinned: boolean) => {
-    pinPostMutation.mutate({ postId, pin: !isPinned });
-  }, [pinPostMutation]);
+  const handlePinPost = useCallback(
+    (postId: string, isPinned: boolean) => pinPostMutation.mutate({ postId, pin: !isPinned }),
+    [pinPostMutation],
+  );
 
-  const handleEditPost = useCallback((postId: string) => {
-    const post = posts.find((p) => p.id === postId);
-    if (post) setEditingPost({ id: post.id, content: post.content ?? '', visibility: post.visibility });
-  }, [posts]);
+  const handleEditPost = useCallback(
+    (postId: string) => {
+      const post = posts.find((p) => p.id === postId);
+      if (post) setEditingPost({ id: post.id, content: post.content ?? '', visibility: post.visibility });
+    },
+    [posts],
+  );
 
-  const handleSaveEdit = useCallback((data: { content: string; visibility: string }) => {
-    if (!editingPost) return;
-    updatePostMutation.mutate(
-      { postId: editingPost.id, data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' } },
-      {
-        onSuccess: () => { setEditingPost(null); showToast('Post modifi\u00e9', 'success'); },
-        onError: () => showToast('Erreur', 'error'),
-      },
-    );
-  }, [editingPost, updatePostMutation, showToast]);
+  const handleSaveEdit = useCallback(
+    (data: { content: string; visibility: string }) => {
+      if (!editingPost) return;
+      updatePostMutation.mutate(
+        {
+          postId: editingPost.id,
+          data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
+        },
+        {
+          onSuccess: () => {
+            setEditingPost(null);
+            showToast('Post modifié', 'success');
+          },
+          onError: () => showToast('Erreur', 'error'),
+        },
+      );
+    },
+    [editingPost, updatePostMutation, showToast],
+  );
 
-  const handleRepostOpen = useCallback((postId: string) => {
-    const post = posts.find((p) => p.id === postId);
-    if (post) setRepostingPost({ id: post.id, author: post.author?.displayName ?? post.author?.username, content: post.content ?? undefined });
-  }, [posts]);
+  const handleRepostOpen = useCallback(
+    (postId: string) => {
+      const post = posts.find((p) => p.id === postId);
+      if (post) setRepostingPost({ id: post.id, author: post.author?.displayName ?? post.author?.username, content: post.content ?? undefined });
+    },
+    [posts],
+  );
 
   const handleRepost = useCallback(() => {
     if (!repostingPost) return;
     repostMutation.mutate(
       { postId: repostingPost.id, data: { isQuote: false } },
       {
-        onSuccess: () => { setRepostingPost(null); showToast('Repost\u00e9 !', 'success'); },
+        onSuccess: () => {
+          setRepostingPost(null);
+          showToast('Reposté !', 'success');
+        },
         onError: () => showToast('Erreur', 'error'),
       },
     );
   }, [repostingPost, repostMutation, showToast]);
 
-  const handleQuote = useCallback((content: string) => {
-    if (!repostingPost) return;
-    repostMutation.mutate(
-      { postId: repostingPost.id, data: { content, isQuote: true } },
-      {
-        onSuccess: () => { setRepostingPost(null); showToast('Cit\u00e9 !', 'success'); },
-        onError: () => showToast('Erreur', 'error'),
-      },
-    );
-  }, [repostingPost, repostMutation, showToast]);
+  const handleQuote = useCallback(
+    (content: string) => {
+      if (!repostingPost) return;
+      repostMutation.mutate(
+        { postId: repostingPost.id, data: { content, isQuote: true } },
+        {
+          onSuccess: () => {
+            setRepostingPost(null);
+            showToast('Cité !', 'success');
+          },
+          onError: () => showToast('Erreur', 'error'),
+        },
+      );
+    },
+    [repostingPost, repostMutation, showToast],
+  );
 
   const handleDismissNewPosts = useCallback(() => {
     setNewPostsCount(0);
     window.scrollTo({ top: 0, behavior: 'smooth' });
   }, []);
 
-  const handleAudioPublish = useCallback(async (data: { audioFile: File; transcription: MobileTranscription | null; content?: string }) => {
-    try {
-      const tusService = new TusUploadService();
-      const results = await tusService.uploadFiles(
-        [data.audioFile],
-        [{ uploadcontext: 'post' }],
-      );
-      const mediaId = results[0]?.id;
-      if (!mediaId) throw new Error('Upload failed');
+  const handleAudioPublish = useCallback(
+    async (data: { audioFile: File; transcription: MobileTranscription | null; content?: string }) => {
+      try {
+        const tusService = new TusUploadService();
+        const results = await tusService.uploadFiles([data.audioFile], [{ uploadcontext: 'post' }]);
+        const mediaId = results[0]?.id;
+        if (!mediaId) throw new Error('Upload failed');
 
-      createPostMutation.mutate(
-        {
-          content: data.content,
-          type: 'POST',
-          visibility: 'PUBLIC',
-          mediaIds: [mediaId],
-          mobileTranscription: data.transcription ?? undefined,
-        },
-        {
-          onSuccess: () => {
-            setAudioComposerOpen(false);
-            showToast('Audio post publi\u00e9 !', 'success');
+        createPostMutation.mutate(
+          {
+            content: data.content,
+            type: 'POST',
+            visibility: 'PUBLIC',
+            mediaIds: [mediaId],
+            mobileTranscription: data.transcription ?? undefined,
           },
-          onError: () => showToast('Erreur', 'error', 'Impossible de publier.'),
-        },
-      );
-    } catch {
-      showToast('Erreur upload', 'error', 'Impossible d\'uploader l\'audio.');
-    }
-  }, [createPostMutation, showToast]);
+          {
+            onSuccess: () => {
+              setAudioComposerOpen(false);
+              showToast('Audio post publié !', 'success');
+            },
+            onError: () => showToast('Erreur', 'error', 'Impossible de publier.'),
+          },
+        );
+      } catch {
+        showToast('Erreur upload', 'error', "Impossible d'uploader l'audio.");
+      }
+    },
+    [createPostMutation, showToast],
+  );
 
-  // ─── Status handlers (mock) ───────────────────────────────────────────
+  // ─── Status (mock) ────────────────────────────────────────────────────
   const [statusComposerOpen, setStatusComposerOpen] = useState(false);
 
-  const handleStatusPress = useCallback((statusId: string) => {
-    showToast('Status', 'info', `Status ${statusId} s\u00e9lectionn\u00e9`);
-  }, [showToast]);
+  const handleStatusPress = useCallback(
+    (statusId: string) => showToast('Status', 'info', `Status ${statusId} sélectionné`),
+    [showToast],
+  );
 
-  const handleStatusPublish = useCallback((status: { moodEmoji: string; content?: string }) => {
-    setStatusComposerOpen(false);
-    showToast('Mood publi\u00e9 !', 'success', `${status.moodEmoji} ${status.content || ''}`);
-  }, [showToast]);
+  const handleStatusPublish = useCallback(
+    (status: { moodEmoji: string; content?: string }) => {
+      setStatusComposerOpen(false);
+      showToast('Mood publié !', 'success', `${status.moodEmoji} ${status.content || ''}`);
+    },
+    [showToast],
+  );
 
   // ─── Render ──────────────────────────────────────────────────────────
 
   return (
     <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors duration-300">
-      <PageHeader title="D\u00e9couvrir Meeshy" />
+      <PageHeader
+        title="Découvrir Meeshy"
+        hideNotificationButton
+        hideProfileButton
+        onBack={() => router.back()}
+      />
 
       <main className="max-w-2xl mx-auto px-6 py-8">
         {/* Story Tray */}
@@ -454,7 +491,7 @@ export default function V2FeedsPage() {
           </button>
         </div>
 
-        {/* Stale data indicator — shown when cached data is being refreshed in background */}
+        {/* Stale indicator — only when cached data is older than 30s AND a refetch is in flight */}
         {cacheState === 'stale' && feedQuery.isFetching && (
           <div className="flex items-center justify-center gap-2 py-1 mb-2 text-xs text-[var(--gp-text-muted)]" data-testid="stale-indicator">
             <div className="w-3 h-3 border border-[var(--gp-text-muted)] border-t-transparent rounded-full animate-spin" />
@@ -462,7 +499,7 @@ export default function V2FeedsPage() {
           </div>
         )}
 
-        {/* Feed loading state — skeleton ONLY on empty cache (cold start) */}
+        {/* Skeletons ONLY on cold cache */}
         {cacheState === 'empty' && feedQuery.isLoading && (
           <div className="space-y-6">
             {[1, 2, 3].map((i) => (
@@ -481,7 +518,7 @@ export default function V2FeedsPage() {
           </div>
         )}
 
-        {/* Feed error */}
+        {/* Error state */}
         {feedQuery.isError && (
           <div className="text-center py-12">
             <p className="text-[var(--gp-text-muted)] mb-4">Unable to load feed.</p>
@@ -505,61 +542,54 @@ export default function V2FeedsPage() {
         {/* Posts */}
         {feedQuery.isSuccess && (
           <div className="space-y-6">
-            {posts.map((post) => (
-              <div
-                key={post.id}
-                onMouseEnter={() => prefetchPost(post.id)}
-              >
-                {(() => {
-                  const postReactions = post.currentUserReactions ?? [];
-                  const isLiked = postReactions.includes('❤️') || (post.isLikedByMe ?? false);
-                  const isBookmarked = !!post.bookmarkedAt;
-                  const userReaction = postReactions[0];
-                  return (
-                    <PostCard
-                      author={{
-                        name: post.author?.displayName ?? post.author?.username ?? 'Unknown',
-                        avatar: post.author?.avatar ?? undefined,
-                      }}
-                      lang={post.originalLanguage ?? 'unknown'}
-                      content={post.content ?? ''}
-                      translations={postToTranslations(post)}
-                      userLanguage={userLanguage}
-                      time={formatRelativeTime(post.createdAt)}
-                      likes={post.likeCount}
-                      comments={post.commentCount}
-                      isLiked={isLiked}
-                      isBookmarked={isBookmarked}
-                      isAuthor={post.authorId === currentUserId}
-                      isPinned={post.isPinned}
-                      reactionSummary={post.reactionSummary ?? undefined}
-                      userReaction={userReaction}
-                      media={post.media}
-                      onLike={() => handleLike(post.id, isLiked)}
-                      onReact={(emoji) => handleReact(post.id, emoji, postReactions)}
-                      onComment={() => handleComment(post.id)}
-                      onShare={() => handleShare(post.id)}
-                      onBookmark={() => handleBookmark(post.id, isBookmarked)}
-                      onTranslate={() => handleTranslate(post.id)}
-                      onRepost={() => handleRepostOpen(post.id)}
-                      onEdit={() => handleEditPost(post.id)}
-                      onDelete={() => handleDeletePost(post.id)}
-                      onPin={() => handlePinPost(post.id, post.isPinned)}
-                      onClick={() => router.push(`/feeds/post/${post.id}`)}
-                    />
-                  );
-                })()}
-              </div>
-            ))}
+            {posts.map((post) => {
+              const postReactions = post.currentUserReactions ?? [];
+              const isLiked = postReactions.includes('❤️') || (post.isLikedByMe ?? false);
+              const isBookmarked = !!post.bookmarkedAt;
+              const userReaction = postReactions[0];
+              return (
+                <div key={post.id} onMouseEnter={() => prefetchPost(post.id)}>
+                  <PostCard
+                    author={{
+                      name: post.author?.displayName ?? post.author?.username ?? 'Unknown',
+                      avatar: post.author?.avatar ?? undefined,
+                    }}
+                    lang={post.originalLanguage ?? 'unknown'}
+                    content={post.content ?? ''}
+                    translations={postToTranslations(post)}
+                    userLanguage={userLanguage}
+                    time={formatRelativeTime(post.createdAt)}
+                    likes={post.likeCount}
+                    comments={post.commentCount}
+                    isLiked={isLiked}
+                    isBookmarked={isBookmarked}
+                    isAuthor={post.authorId === currentUserId}
+                    isPinned={post.isPinned}
+                    reactionSummary={post.reactionSummary ?? undefined}
+                    userReaction={userReaction}
+                    media={post.media}
+                    onLike={() => handleLike(post.id, isLiked)}
+                    onReact={(emoji) => handleReact(post.id, emoji, postReactions)}
+                    onComment={() => handleComment(post.id)}
+                    onShare={() => handleShare(post.id)}
+                    onBookmark={() => handleBookmark(post.id, isBookmarked)}
+                    onTranslate={() => handleTranslate(post.id)}
+                    onRepost={() => handleRepostOpen(post.id)}
+                    onEdit={() => handleEditPost(post.id)}
+                    onDelete={() => handleDeletePost(post.id)}
+                    onPin={() => handlePinPost(post.id, post.isPinned)}
+                    onClick={() => router.push(`/feeds/post/${post.id}`)}
+                  />
+                </div>
+              );
+            })}
 
-            {/* Empty state */}
             {posts.length === 0 && !feedQuery.isLoading && (
               <div className="text-center py-12">
                 <p className="text-[var(--gp-text-muted)]">No posts yet. Be the first to share something!</p>
               </div>
             )}
 
-            {/* Infinite scroll sentinel */}
             <div ref={loadMoreRef} className="h-10">
               {feedQuery.isFetchingNextPage && (
                 <div className="flex justify-center py-4">

@@ -123,4 +123,39 @@ public struct ConversationUserState: Codable, Hashable, Sendable {
     public var hasUnreadIndicator: Bool { unreadCount > 0 }
     public var hasPendingSync: Bool { pendingMutationCount > 0 }
     public var isVisible: Bool { deletedForUserAt == nil && !isArchived }
+
+    // MARK: - Codable (lenient decoder)
+
+    /// Custom decoder that falls back to the init defaults for any
+    /// missing key. Legacy `/conversations` payloads (cached before the
+    /// Phase 4 unification added `version`, `isLocked`, `hasDraft`,
+    /// `lastSyncedAt`, etc.) must continue to decode cleanly — refusing
+    /// them would invalidate every persisted GRDB row written by a prior
+    /// build. The synthesized decoder cannot express this because every
+    /// non-Optional stored property is required by default.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.init(
+            unreadCount: try c.decodeIfPresent(Int.self, forKey: .unreadCount) ?? 0,
+            lastReadAt: try c.decodeIfPresent(Date.self, forKey: .lastReadAt),
+            lastDeliveredAt: try c.decodeIfPresent(Date.self, forKey: .lastDeliveredAt),
+            isPinned: try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false,
+            isMuted: try c.decodeIfPresent(Bool.self, forKey: .isMuted) ?? false,
+            mentionsOnly: try c.decodeIfPresent(Bool.self, forKey: .mentionsOnly) ?? false,
+            isArchived: try c.decodeIfPresent(Bool.self, forKey: .isArchived) ?? false,
+            deletedForUserAt: try c.decodeIfPresent(Date.self, forKey: .deletedForUserAt),
+            clearHistoryBefore: try c.decodeIfPresent(Date.self, forKey: .clearHistoryBefore),
+            customName: try c.decodeIfPresent(String.self, forKey: .customName),
+            reaction: try c.decodeIfPresent(String.self, forKey: .reaction),
+            tags: try c.decodeIfPresent([String].self, forKey: .tags) ?? [],
+            sectionId: try c.decodeIfPresent(String.self, forKey: .sectionId),
+            orderInCategory: try c.decodeIfPresent(Int.self, forKey: .orderInCategory),
+            isLocked: try c.decodeIfPresent(Bool.self, forKey: .isLocked) ?? false,
+            hasDraft: try c.decodeIfPresent(Bool.self, forKey: .hasDraft) ?? false,
+            draftPreview: try c.decodeIfPresent(String.self, forKey: .draftPreview),
+            version: try c.decodeIfPresent(Int.self, forKey: .version) ?? 0,
+            lastSyncedAt: try c.decodeIfPresent(Date.self, forKey: .lastSyncedAt),
+            pendingMutationCount: try c.decodeIfPresent(Int.self, forKey: .pendingMutationCount) ?? 0
+        )
+    }
 }

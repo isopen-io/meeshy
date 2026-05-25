@@ -4,8 +4,22 @@ import { useState, useCallback, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { usePostQuery } from '@/hooks/queries/use-post-query';
 import { useCommentsInfiniteQuery, useCommentsList } from '@/hooks/queries/use-comments-query';
-import { useLikePostMutation, useUnlikePostMutation, useBookmarkPostMutation, useUnbookmarkPostMutation, useDeletePostMutation, useSharePostMutation, useUpdatePostMutation, useRepostMutation } from '@/hooks/queries/use-post-mutations';
-import { useCreateCommentMutation, useDeleteCommentMutation, useLikeCommentMutation, useUnlikeCommentMutation } from '@/hooks/queries/use-comment-mutations';
+import {
+  useLikePostMutation,
+  useUnlikePostMutation,
+  useBookmarkPostMutation,
+  useUnbookmarkPostMutation,
+  useDeletePostMutation,
+  useSharePostMutation,
+  useUpdatePostMutation,
+  useRepostMutation,
+} from '@/hooks/queries/use-post-mutations';
+import {
+  useCreateCommentMutation,
+  useDeleteCommentMutation,
+  useLikeCommentMutation,
+  useUnlikeCommentMutation,
+} from '@/hooks/queries/use-comment-mutations';
 import { usePostSocketCacheSync } from '@/hooks/queries/use-post-socket-cache-sync';
 import { usePreferredLanguage } from '@/hooks/use-post-translation';
 import { PostDetail } from '@/components/v2/PostDetail';
@@ -16,6 +30,15 @@ import { Skeleton } from '@/components/v2/Skeleton';
 import { useAuthStore } from '@/stores/auth-store';
 import { postsService } from '@/services/posts.service';
 
+/**
+ * Post detail page (v1 canonical path).
+ *
+ * Mounted at `/feeds/post/[postId]` — the URL minted by the gateway
+ * for share intents and parsed by the iOS universal-link handler.
+ * The v2 mirror at `/v2/feeds/post/[postId]` is kept for backwards
+ * compatibility with already-distributed tracking links but new links
+ * are minted against this path.
+ */
 export default function PostDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -49,11 +72,12 @@ export default function PostDetailPage() {
   const likeCommentMutation = useLikeCommentMutation();
   const unlikeCommentMutation = useUnlikeCommentMutation();
 
-  // Editor state
   const [editorOpen, setEditorOpen] = useState(false);
   const [repostModalOpen, setRepostModalOpen] = useState(false);
 
-  // View tracking — record view on mount
+  // Fire-and-forget view increment on first mount.
+  // Failures are intentionally silent: an unreachable counter must not
+  // block the user from reading the post.
   useEffect(() => {
     if (postId) {
       postsService.viewPost(postId).catch(() => {});
@@ -63,7 +87,7 @@ export default function PostDetailPage() {
   if (postQuery.isLoading) {
     return (
       <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
-        <PageHeader title="Post" onBack={() => router.back()} />
+        <PageHeader title="Post" onBack={() => router.back()} hideNotificationButton hideProfileButton />
         <div className="max-w-2xl mx-auto px-6 py-8 space-y-4">
           <Skeleton className="h-48 rounded-2xl" />
           <Skeleton className="h-32 rounded-2xl" />
@@ -75,7 +99,7 @@ export default function PostDetailPage() {
   if (postQuery.isError || !postQuery.data) {
     return (
       <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
-        <PageHeader title="Post" onBack={() => router.back()} />
+        <PageHeader title="Post" onBack={() => router.back()} hideNotificationButton hideProfileButton />
         <div className="max-w-2xl mx-auto px-6 py-16 text-center">
           <p className="text-[var(--gp-text-muted)]">Post not found or an error occurred.</p>
         </div>
@@ -88,11 +112,12 @@ export default function PostDetailPage() {
 
   const handleShare = async () => {
     try {
-      // Share with the canonical (v1) URL — see comment in feeds/page.tsx.
       await navigator.clipboard.writeText(`${window.location.origin}/feeds/post/${post.id}`);
       shareMutation.mutate({ postId: post.id });
       showToast('Link copied!', 'success');
-    } catch { /* silent */ }
+    } catch {
+      /* clipboard denied / unavailable — silent */
+    }
   };
 
   const handleDeletePost = () => {
@@ -105,7 +130,10 @@ export default function PostDetailPage() {
 
   const handleSaveEdit = (data: { content: string; visibility: string }) => {
     updateMutation.mutate(
-      { postId: post.id, data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' } },
+      {
+        postId: post.id,
+        data: { content: data.content, visibility: data.visibility as 'PUBLIC' | 'FRIENDS' | 'PRIVATE' },
+      },
       {
         onSuccess: () => {
           setEditorOpen(false);
@@ -144,7 +172,7 @@ export default function PostDetailPage() {
 
   return (
     <div className="h-full overflow-auto bg-[var(--gp-background)] transition-colors">
-      <PageHeader title="Post" onBack={() => router.back()} />
+      <PageHeader title="Post" onBack={() => router.back()} hideNotificationButton hideProfileButton />
       <main className="px-6 py-8">
         <PostDetail
           post={post}
@@ -172,7 +200,6 @@ export default function PostDetailPage() {
         />
       </main>
 
-      {/* Post Editor */}
       <PostEditor
         open={editorOpen}
         initialContent={post.content ?? ''}
@@ -182,7 +209,6 @@ export default function PostDetailPage() {
         saving={updateMutation.isPending}
       />
 
-      {/* Repost Modal */}
       <RepostModal
         open={repostModalOpen}
         originalAuthor={post.author?.displayName ?? post.author?.username}

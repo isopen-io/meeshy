@@ -16,7 +16,7 @@ const AASA = {
           { "/": "/links", "comment": "User links hub" },
           { "/": "/auth/magic-link", "comment": "Passwordless auth" },
           { "/": "/share", "comment": "Share content" },
-          { "/": "/feeds/post/*", "comment": "Post detail links" },
+          { "/": "/feeds/post/*", "comment": "Post detail (canonical)" },
           { "/": "/post/*", "comment": "Post detail short URL" },
           { "/": "/p/*", "comment": "Post detail shortest URL" },
           { "/": "/story/*", "comment": "Story share links" },

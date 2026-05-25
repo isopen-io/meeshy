@@ -332,6 +332,15 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
         videoLoadGeneration &+= 1
         let generation = videoLoadGeneration
 
+        // Attache l'AVPlayer DÈS MAINTENANT avec l'URL distante. Sans ça,
+        // toute lecture immédiate (tests, indicateurs UI, accessibilité)
+        // verrait `avPlayer == nil` jusqu'à ce que la tâche async ait
+        // résolu le cache local. La task de cache continue tourner en
+        // arrière-plan et swap vers un fichier local s'il devient
+        // disponible — c'est une optimisation, pas une condition
+        // préalable à l'existence du player.
+        attachPlayer(url: remoteURL, mode: mode, loop: media.loop)
+
         currentVideoLoadTask = Task { @MainActor [weak self] in
             // Garantit une URL file:// avant de toucher AVURLAsset — sinon
             // certaines surfaces (export, AVAudioFile) rejettent le HTTPS
@@ -343,7 +352,12 @@ public final class StoryMediaLayer: CALayer, @unchecked Sendable {
             // autre `configureVideo` peuvent avoir incrémenté la génération.
             // Touch la layer SEULEMENT si le token correspond toujours.
             guard self.videoLoadGeneration == generation else { return }
-            self.attachPlayer(url: localURL, mode: mode, loop: media.loop)
+            // Swap UNIQUEMENT si le cache a fourni une vraie URL locale
+            // différente — sinon le player déjà attaché continue de jouer
+            // l'URL distante sans re-trigger un cold start.
+            if localURL != remoteURL {
+                self.attachPlayer(url: localURL, mode: mode, loop: media.loop)
+            }
         }
     }
 

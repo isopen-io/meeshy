@@ -40,4 +40,22 @@ public struct StoryVideoCaptionMetadata: Equatable, Sendable {
         self.transcriptionText = transcriptionText
         self.languageCode = languageCode
     }
+
+    /// Equality by **content** — two metadatas are equal when their
+    /// captions describe the same segments (start, end, text) in the
+    /// same order, regardless of the random `VideoCaption.id` minted at
+    /// transcription time. Without this, every re-transcription would
+    /// produce a "different" metadata even when nothing semantically
+    /// changed, breaking SwiftUI's `.onChange` diffing and tripping
+    /// optimistic-update reconciliation.
+    public static func == (lhs: StoryVideoCaptionMetadata, rhs: StoryVideoCaptionMetadata) -> Bool {
+        guard lhs.languageCode == rhs.languageCode,
+              lhs.transcriptionText == rhs.transcriptionText,
+              lhs.captions.count == rhs.captions.count else {
+            return false
+        }
+        return zip(lhs.captions, rhs.captions).allSatisfy { a, b in
+            a.start == b.start && a.end == b.end && a.text == b.text
+        }
+    }
 }

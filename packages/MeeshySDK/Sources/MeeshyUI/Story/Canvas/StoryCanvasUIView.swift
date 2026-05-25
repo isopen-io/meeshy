@@ -2627,7 +2627,11 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         // Texte
         if let idx = slide.effects.textObjects.firstIndex(where: { $0.id == id }) {
             var texts = slide.effects.textObjects
-            guard texts[idx].zIndex < topZ
+            // Skip only when BOTH the z-index AND the array position
+            // already reflect the "front" state — `||` would always
+            // continue because `nextTopZ()` returns `currentMax + 1`,
+            // so `zIndex < topZ` is always true.
+            guard texts[idx].zIndex < topZ - 1
                   || idx != texts.count - 1 else { return }
             texts[idx].zIndex = topZ
             let item = texts.remove(at: idx)
@@ -2640,7 +2644,8 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         if var medias = slide.effects.mediaObjects,
            let idx = medias.firstIndex(where: { $0.id == id }),
            medias[idx].isBackground == false {
-            guard medias[idx].zIndex < topZ
+            // Same `< topZ - 1` rationale as in the texts branch above.
+            guard medias[idx].zIndex < topZ - 1
                   || idx != medias.count - 1 else { return }
             medias[idx].zIndex = topZ
             let item = medias.remove(at: idx)
@@ -2652,7 +2657,8 @@ extension StoryCanvasUIView: UIContextMenuInteractionDelegate {
         // Sticker
         if var stickers = slide.effects.stickerObjects,
            let idx = stickers.firstIndex(where: { $0.id == id }) {
-            guard stickers[idx].zIndex < topZ
+            // Same `< topZ - 1` rationale as in the texts branch above.
+            guard stickers[idx].zIndex < topZ - 1
                   || idx != stickers.count - 1 else { return }
             stickers[idx].zIndex = topZ
             let item = stickers.remove(at: idx)

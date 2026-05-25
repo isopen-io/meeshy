@@ -9,6 +9,7 @@ enum DeepLinkDestination {
     case ownProfile
     case userProfile(username: String)
     case conversation(id: String)
+    case post(id: String)
     case magicLink(token: String)
     case share(text: String?, url: String?)
     case userLinks

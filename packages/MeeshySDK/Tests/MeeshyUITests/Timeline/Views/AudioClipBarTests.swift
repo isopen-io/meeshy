@@ -33,6 +33,16 @@ final class AudioClipBarTests: XCTestCase {
     }
 
     func test_mutedFlag_includedInValue() {
-        XCTAssertTrue(makeSUT(muted: true).accessibilityValueDescription.lowercased().contains("muet"))
+        // The muted suffix is localized — fr=", muet", en=", muted",
+        // es/pt-BR=", silenciado", de=", stummgeschaltet". Asserting on
+        // any single token would pin the test to a runtime locale, which
+        // varies between simulators. Compare the muted vs unmuted
+        // descriptions instead so the test stays locale-agnostic.
+        let muted = makeSUT(muted: true).accessibilityValueDescription
+        let unmuted = makeSUT(muted: false).accessibilityValueDescription
+        XCTAssertNotEqual(muted, unmuted,
+                          "Muted flag must surface in the accessibility description")
+        XCTAssertTrue(muted.count > unmuted.count,
+                      "Muted description must be the longer one — got muted='\(muted)' unmuted='\(unmuted)'")
     }
 }

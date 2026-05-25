@@ -308,8 +308,15 @@ final class ConversationStoreTests: XCTestCase {
         await store.hydrate(makeConv(version: 1))
         prefs.stubbedResponse = APIConversationPreferences(version: 2)
 
-        let exp = expectation(description: "publisher receives optimistic + ACK")
-        exp.expectedFulfillmentCount = 1
+        // Per Instant App Principles (CLAUDE.md → Optimistic Updates),
+        // `apply` is expected to push at least two snapshots: the
+        // optimistic in-flight update (still at the local version) and
+        // the server-confirmed ACK (at the ACK version). We don't pin
+        // the exact count — the store is free to coalesce or to emit
+        // intermediate states for persistence — but the publisher MUST
+        // reach the ACK version eventually.
+        let exp = expectation(description: "publisher reaches ACK version")
+        exp.assertForOverFulfill = false
         var received: [Bool] = []
 
         guard let pub = store.publisher(for: "conv-1") else {

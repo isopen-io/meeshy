@@ -936,10 +936,14 @@ extension StorySlide {
         }
 
         for media in effects.mediaObjects ?? [] {
-            // Looped background video is handled in the rounding step below —
-            // it intentionally doesn't extend the bound here (the user-set
-            // slide.duration is the authoritative target for looped content).
-            if media.isBackground && media.loop { continue }
+            // Backgrounds NEVER extend the slide. Looped backgrounds are
+            // handled in the rounding step below; non-looped backgrounds
+            // are clipped (longer → exporter truncates to slide.duration)
+            // or padded (shorter → exporter pads tail frames) by the
+            // render pipeline. The user-authored slide.duration is the
+            // single authoritative length for everything behind the
+            // foreground layer.
+            if media.isBackground { continue }
             let start = media.startTime ?? 0
             let dur = media.duration ?? media.intrinsicDuration ?? 0
             if dur > 0 { bound = max(bound, start + dur) }
@@ -974,13 +978,14 @@ extension StorySlide {
 
         let L = loopVideoDuration ?? Double(loopAudioDuration ?? 0)
         if L > 0 {
-            if bound <= baseDuration {
-                let repetitions = max(1, floor(baseDuration / L))
-                bound = repetitions * L
-            } else {
-                let repetitions = ceil(bound / L)
-                bound = repetitions * L
-            }
+            // Spec §3.6: "the loop never freezes on a partial cycle". When
+            // the loop period doesn't divide the slide duration evenly we
+            // round UP to the next full repetition, even if that extends
+            // past the user-authored slide.duration. Rounding DOWN would
+            // truncate the slide below the duration the author chose.
+            let target = max(bound, baseDuration)
+            let repetitions = max(1, ceil(target / L))
+            bound = repetitions * L
         }
 
         return bound

@@ -30,7 +30,7 @@ final class PostServiceTests: XCTestCase {
             isEdited: false, media: nil, comments: nil, repostOf: nil,
             originalRepostOfId: nil, isQuote: nil,
             moodEmoji: nil, audioUrl: nil, audioDuration: nil, storyEffects: nil,
-            translations: nil, isLikedByMe: nil,
+            translations: nil, isLikedByMe: nil, isBookmarkedByMe: nil, isRepostedByMe: nil,
             isViewedByMe: nil, currentUserReactions: nil, mentionedUsers: nil, viaUsername: nil
         )
     }
