@@ -206,9 +206,18 @@ public final class ConversationAudioCoordinator: ObservableObject {
     }
 
     private func wireAuthLogoutHook() {
-        // S'abonner au publisher logout d'AuthManager (à exposer si non
-        // public). Sur logout : close() → stop engine + clear queue + clear
-        // NowPlaying.
+        // AuthManager n'expose pas de publisher logout dédié. Solution :
+        // observer la propriété @Published `$isAuthenticated` existante.
+        // Quand elle passe à false → close() + clear NowPlaying.
+        // Évite d'ajouter un PassthroughSubject côté SDK (préserve la règle
+        // « zéro modif SDK » §3.3).
+        AuthManager.shared.$isAuthenticated
+            .removeDuplicates()
+            .dropFirst()                      // ignore l'état initial
+            .filter { !$0 }                    // déclenche uniquement sur logout
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.close() }
+            .store(in: &cancellables)
     }
 
     private func advanceQueue() {
@@ -233,7 +242,15 @@ public func play(current: QueuedAudio, tail: [QueuedAudio], ...) {
 
 **Throttling NowPlaying** : `MPNowPlayingInfoCenter` est throttlé à 1Hz côté système. Inutile de push à chaque tick 50ms. Le coordinator garde un sample interne `lastNowPlayingPush: Date?` et ne pousse que si `Date().timeIntervalSince(last) >= 0.25s` (limite à 4Hz, marge confortable sous le throttle système).
 
-**Initialisation au démarrage** : `MeeshyApp.init()` (ou `AppDelegate.didFinishLaunching`) appelle `_ = ConversationAudioCoordinator.shared` pour forcer l'init paresseuse et déclencher l'enregistrement `PlaybackCoordinator.shared.register(...)` au démarrage de l'app, pas au premier tap utilisateur.
+**Initialisation au démarrage** : `MeeshyApp.init()` est synchrone et non-`@MainActor`, donc accéder à `ConversationAudioCoordinator.shared` (`@MainActor`) y poserait un warning Swift 6. Solution : forcer l'init paresseuse dans le `.task` de `AdaptiveRootView` (ou équivalent root view qui exécute déjà en `@MainActor`) :
+
+```swift
+.task {
+    _ = ConversationAudioCoordinator.shared  // déclenche register PlaybackCoordinator
+}
+```
+
+Évite le coût `PlaybackCoordinator.shared.register(self)` au premier tap utilisateur, et reste compatible Swift 6.
 
 #### 3.4.2 Nouveau — `AudioQueueBuilder.swift`
 
@@ -271,18 +288,25 @@ Règles de filtrage :
 Ajouts limités au strict nécessaire :
 
 - `private var listenedAttachmentIds: Set<String>` — hydraté depuis le serveur (status `listened` complete=true) et mis à jour à chaque `reportListenProgress`
-- `var currentConversationName: String` — déjà disponible via `currentConversation?.name`, expose un computed si manquant
-- `var currentConversationArtworkURL: String?` — idem depuis `currentConversation?.avatarUrl`
-- `func playAudio(attachmentId: String)` — single entry point appelé par `ActiveAudioBubble.onPlayTap`. Construit `QueuedAudio` pour current + tail via `AudioQueueBuilder.build`, puis `ConversationAudioCoordinator.shared.play(current:tail:conversationName:conversationArtworkURL:)`. Le coordinator gère le reste.
+- `var currentConversationName: String` — computed qui lit `CacheCoordinator.shared.conversations` via le `conversationId` que le VM détient déjà ; fallback `""` si cache vide (race à l'ouverture cold start)
+- `var currentConversationArtworkURL: String?` — idem, lit `conversation.avatarUrl` depuis le cache
+- `var currentAccentColorHex: String` — déjà calculable via `conversation.accentColor` (cf. `MeeshyConversation` SDK), forwarded ici pour les sous-vues bulle
+- `func playAudio(attachmentId: String)` — single entry point appelé par `InactiveAudioBubble.onPlayTap`. Construit `QueuedAudio` pour current + tail via `AudioQueueBuilder.build`, puis `ConversationAudioCoordinator.shared.play(current:tail:conversationName:conversationArtworkURL:)`. Le coordinator gère le reste.
 - Hook realtime dans le handler `message:new` existant → si l'audio reçu appartient à la conv et que le coordinator joue cette conv, `coordinator.appendUpcoming(QueuedAudio.from(message))`
+
+**Source de données conversation metadata** : le `ConversationViewModel` actuel détient `conversationId: String` mais pas un objet `MeeshyConversation` complet. Les sources canoniques sont :
+- `CacheCoordinator.shared.conversations.get(id: conversationId)` (cache GRDB, hydraté au démarrage de la conv)
+- En fallback : `ConversationListViewModel.conversations.first(where: { $0.id == conversationId })` si la liste est en mémoire
+
+Le VM expose les computed via cette résolution. Si cold start avec cache vide, le mini-player affichera initialement un nom/artwork vide puis se mettra à jour quand le cache se peuple (1 re-render via `@Published activeContext` quand le coordinator est appelé avec les valeurs résolues).
 
 Le VM ne détient PLUS la queue. Il ne détient PLUS de closure `onPlaybackFinished`. Il ne survit pas hors-conv et c'est OK : tout est dans le coordinator.
 
-#### 3.4.4 Nouveau — `ActiveAudioBubble.swift` + `InactiveAudioBubble.swift`
+#### 3.4.4 Nouveau — `AudioBubbleRouter` + `ActiveAudioBubble` + `InactiveAudioBubble`
 
-Fichier : `apps/ios/Meeshy/Features/Main/Views/Bubble/ActiveAudioBubble.swift` + `InactiveAudioBubble.swift`
+Fichiers : `apps/ios/Meeshy/Features/Main/Views/Bubble/AudioBubbleRouter.swift`, `ActiveAudioBubble.swift`, `InactiveAudioBubble.swift`
 
-Le `AudioMediaView` (wrapper conv qui rend une bulle audio) switch entre les deux :
+Le `AudioMediaView` (wrapper conv qui rend une bulle audio) délègue à `AudioBubbleRouter`. **Contrat Bubble du `apps/ios/CLAUDE.md` respecté** : les sous-vues `Active`/`InactiveAudioBubble` n'ont AUCUN `@ObservedObject` sur un singleton global. Seul le `AudioBubbleRouter` parent observe le coordinator, lit les `@Published`, et passe des `let` primitifs Equatable aux sous-vues.
 
 ```swift
 struct AudioMediaView: View {
@@ -290,66 +314,96 @@ struct AudioMediaView: View {
     let viewModel: ConversationViewModel
 
     var body: some View {
-        AudioBubbleRouter(attachmentId: attachment.id) { isActive in
-            if isActive {
-                ActiveAudioBubble(attachment: attachment, viewModel: viewModel)
-            } else {
-                InactiveAudioBubble(attachment: attachment, viewModel: viewModel)
-            }
+        AudioBubbleRouter(
+            attachmentId: attachment.id,
+            attachment: attachment,
+            viewModel: viewModel
+        )
+    }
+}
+
+// AudioBubbleRouter : seul point d'observation du coordinator pour les
+// bulles audio. Lit les @Published, les transforme en let primitifs, et
+// dispatche vers Active ou Inactive sub-view. C'est le PARENT du contrat
+// Bubble, pas une Bubble sub-view elle-même — l'observation y est légitime.
+struct AudioBubbleRouter: View {
+    let attachmentId: String
+    let attachment: MeeshyMessageAttachment
+    let viewModel: ConversationViewModel
+    @ObservedObject private var coordinator = ConversationAudioCoordinator.shared
+
+    var body: some View {
+        let isActive = coordinator.activeContext?.attachmentId == attachmentId
+        if isActive {
+            ActiveAudioBubble(
+                attachment: attachment,
+                isPlaying: coordinator.isPlaying,
+                progress: coordinator.progress,
+                currentTime: coordinator.currentTime,
+                duration: coordinator.duration,
+                speed: coordinator.speed,
+                accentColorHex: viewModel.currentAccentColorHex,
+                onTogglePlayPause: { coordinator.togglePlayPause() },
+                onSeek: { coordinator.seek(toFraction: $0) },
+                onSpeedCycle: { coordinator.cycleSpeed() }
+            )
+        } else {
+            InactiveAudioBubble(
+                attachment: attachment,
+                accentColorHex: viewModel.currentAccentColorHex,
+                onPlayTap: { viewModel.playAudio(attachmentId: attachmentId) }
+            )
         }
     }
 }
 
-// AudioBubbleRouter : observe MINIMAL — uniquement activeContext?.attachmentId,
-// pas isPlaying / currentTime / progress. Ne re-render que quand l'audio actif
-// change (≤ 1 fois/audio dans la queue).
-private struct AudioBubbleRouter<Content: View>: View {
-    let attachmentId: String
-    @ViewBuilder let content: (Bool) -> Content
-    @ObservedObject private var coordinator = ConversationAudioCoordinator.shared
+// InactiveAudioBubble : Equatable sub-view. Inputs primitifs (String hex,
+// closure). Aucun ObservedObject. Affiche état neutre (ready).
+struct InactiveAudioBubble: View, Equatable {
+    let attachment: MeeshyMessageAttachment
+    let accentColorHex: String
+    let onPlayTap: () -> Void
 
-    var body: some View {
-        content(coordinator.activeContext?.attachmentId == attachmentId)
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        // Closures non-Equatable : on diff sur les inputs data uniquement.
+        lhs.attachment.id == rhs.attachment.id
+            && lhs.accentColorHex == rhs.accentColorHex
     }
+
+    var body: some View { /* waveform statique + play button + durée meta */ }
 }
 
-// InactiveAudioBubble : ZERO ObservedObject sur coordinator. Tout est `let`
-// figé. Affiche le bouton play en état "ready", waveform statique, durée
-// from metadata. Tap → viewModel.playAudio(attachmentId:).
-struct InactiveAudioBubble: View {
+// ActiveAudioBubble : Equatable sub-view aussi (sur les inputs primitifs).
+// Re-rendue UNIQUEMENT quand un de ses let bouge (1 bulle/conv à la fois).
+struct ActiveAudioBubble: View, Equatable {
     let attachment: MeeshyMessageAttachment
-    let viewModel: ConversationViewModel
+    let isPlaying: Bool
+    let progress: Double
+    let currentTime: TimeInterval
+    let duration: TimeInterval
+    let speed: PlaybackSpeed
+    let accentColorHex: String
+    let onTogglePlayPause: () -> Void
+    let onSeek: (Double) -> Void
+    let onSpeedCycle: () -> Void
 
-    var body: some View {
-        AudioPlayerView(
-            attachment: attachment,
-            context: .conversationMessage,
-            usesSharedManager: false  // path SDK actuel inchangé visuellement
-        )
-        // … wiring du onPlayTap vers viewModel.playAudio
+    static func == (lhs: Self, rhs: Self) -> Bool {
+        lhs.attachment.id == rhs.attachment.id
+            && lhs.isPlaying == rhs.isPlaying
+            && lhs.progress == rhs.progress
+            && lhs.currentTime == rhs.currentTime
+            && lhs.duration == rhs.duration
+            && lhs.speed == rhs.speed
+            && lhs.accentColorHex == rhs.accentColorHex
     }
-}
 
-// ActiveAudioBubble : @ObservedObject sur coordinator. Affiche le state
-// live (isPlaying, progress, currentTime, speed). Une seule cellule à la
-// fois est dans cet état, donc les 20Hz de re-render ne touchent qu'une
-// bulle visible.
-struct ActiveAudioBubble: View {
-    let attachment: MeeshyMessageAttachment
-    let viewModel: ConversationViewModel
-    @ObservedObject private var coordinator = ConversationAudioCoordinator.shared
-
-    var body: some View {
-        // Custom render qui lit coordinator.isPlaying, progress, currentTime
-        // Layout visuel identique à AudioPlayerView pour cohérence
-        // Tap → coordinator.togglePlayPause()
-        // Speed chip → coordinator.setSpeed(...)
-        // Scrub waveform → coordinator.seek(toFraction:)
-    }
+    var body: some View { /* waveform live + play/pause + seek + speed chip */ }
 }
 ```
 
-Décision clé : on n'ajoute PAS de `usesSharedManager` à `AudioPlayerView` du SDK. Le SDK ne sait rien. L'app re-rend une UI dédiée pour la bulle active, qui visuellement ressemble à `AudioPlayerView`. Si on veut éviter la duplication visuelle, on peut **extraire les helpers de rendu** (waveform bars, play button label, speed chip, percentage chip) en composants partagés app-side qui sont consommés par les deux bulles. Mais c'est une optimisation Phase 8 si jamais on identifie le besoin.
+**Anti-duplication visuelle** : `Active` et `Inactive` partagent l'apparence visuelle d'`AudioPlayerView` SDK. Pour éviter la divergence silencieuse lors de futures évolutions du SDK, la Phase 1.5 du plan d'implémentation extrait 4 helpers app-side partagés (`AudioWaveformBars`, `AudioPlayButton`, `AudioTimeRow`, `AudioSpeedChip`) que les deux bulles consomment. Ces helpers reproduisent fidèlement le look de `AudioPlayerView` ; si le SDK l'évolue, on adapte les helpers en un point unique.
+
+**Décision documentée dans `apps/ios/decisions.md`** : conformément à la règle Bubble (CLAUDE.md), les sous-vues `Active`/`InactiveAudioBubble` n'observent jamais le coordinator. L'exception au pattern « Bubble sub-views Equatable » n'est PAS introduite — le `AudioBubbleRouter` n'est PAS une Bubble sub-view, c'est le wrapper parent dans la chaîne `BubbleStandardLayout → BubbleAttachmentView → AudioMediaView → AudioBubbleRouter → ActiveAudioBubble | InactiveAudioBubble`.
 
 #### 3.4.5 Modif — `MeeshyApp.swift` + `BackgroundTransitionCoordinator.swift`
 
@@ -396,7 +450,7 @@ func prepareForBackground() async {
 }
 ```
 
-Et symétriquement dans `MediaLifecycleBridge.prepareForForeground()` (s'il existe) : pas besoin de re-activer la session si le coordinator l'a maintenue.
+Le symétrique côté foreground est `MediaLifecycleBridge.resumeFromBackground()` (vérifié L176). Modification analogue : si le coordinator était actif pendant le background, ne pas re-activer la session puisqu'elle l'est déjà ; sinon comportement actuel préservé.
 
 #### 3.4.6 Nouveau — `ConversationAudioCoordinator+NowPlaying.swift`
 
@@ -575,23 +629,36 @@ AuthManager.logout()
 
 ### 4.7 Conversation supprimée pendant lecture
 
+**Localisation du hook** : aucun handler centralisé `conversation:deleted` iOS n'existe à ce jour. Vérifié par grep. Trois options :
+
+1. **Recommandée** : le coordinator se branche directement sur `SocialSocketManager.shared` (publisher dédié à créer si pas déjà publié) et écoute `conversation:deleted`. Lifecycle = coordinator singleton, donc reçoit même si aucun `ConversationView` n'est monté.
+2. Le coordinator écoute `ConversationListViewModel.shared.didDeleteConversationPublisher` (à créer côté liste).
+3. Un nouveau singleton léger `ConversationLifecycleObserver.shared` centralise les events lifecycle (deleted, archived, blocked).
+
+Le spec retient l'option 1 : ajouter un `conversationDeletedPublisher: AnyPublisher<String, Never>` à `SocialSocketManager` (publish déjà émis pour d'autres consumers), le coordinator s'y abonne dans `wireSocketLifecycleHooks()`.
+
 ```
-SocialSocketManager → "conversation:deleted" → ConversationViewModel handler global
-    └─ if ConversationAudioCoordinator.shared.activeContext?.conversationId == deletedConvId:
-          ConversationAudioCoordinator.shared.close()
+SocialSocketManager → conversationDeletedPublisher emits convId
+    └─ ConversationAudioCoordinator (via sink dans cancellables):
+       if activeContext?.conversationId == convId:
+          self.close()
 ```
 
 ### 4.8 Message audio supprimé/édité pendant lecture
 
-```
-SocialSocketManager → "message:deleted" ou "message:updated":
-    └─ if active attachment is referenced AND payload indicates removal/replacement:
-          ConversationAudioCoordinator.shared.close()
-          OR coordinator.advanceQueue() si on veut sauter au suivant directement
+Même principe que 4.7 : le coordinator s'abonne à `MessageSocketManager.shared.messageDeletedPublisher` (déjà émis L1845 du fichier) et `messageUpdatedPublisher`.
 
-(Décision : close() — comportement le plus prévisible. L'utilisateur peut
-relancer manuellement la queue depuis la conv s'il le souhaite.)
 ```
+MessageSocketManager → messageDeletedPublisher emits messageId
+    └─ ConversationAudioCoordinator:
+       if activeContext?.messageId == messageId:
+          self.close()
+       else if queue.contains(where: { $0.messageId == messageId }):
+          queue.removeAll(where: { $0.messageId == messageId })
+          queueCount publish
+```
+
+**Décision** : `close()` sur active match (comportement prévisible) ; **filtrage silencieux** de la queue sur upcoming match (l'utilisateur ne voit rien, juste un audio sauté).
 
 ---
 
@@ -673,18 +740,21 @@ Uses **`MockAudioPlaybackEngine`** conformant à `AudioPlaybackEngineDriving` (z
 
 | Phase | Description | Tests | Commit prévu |
 |---|---|---|---|
-| 0 | Setup branche + baseline tests verts + `MockAudioPlaybackEngine` | — | — |
-| 1 | `AudioQueueBuilder` + `QueuedAudio` + `ActiveAudioContext` | 10 tests RED→GREEN | `feat(ios/audio): pure queue logic + types` |
-| 2 | `AudioPlaybackEngineDriving` protocol + conformance `AudioPlaybackManager` | build only | `feat(ios/audio): engine driving protocol` |
-| 3 | `ConversationAudioCoordinator` (sans NowPlaying, sans mini-player) | 12 tests RED→GREEN | `feat(ios/audio): shared coordinator with queue` |
-| 4 | `ConversationViewModel.playAudio` + `listenedAttachmentIds` + hook realtime | tests VM ajoutés | `feat(ios/audio): VM drives coordinator` |
-| 5 | `AudioBubbleRouter` + `ActiveAudioBubble` + `InactiveAudioBubble` wrapping `AudioPlayerView` | 4 router tests + smoke manuel scroll | `feat(ios/audio): active/inactive bubble split for zero re-render` |
-| 6 | Modif `MediaLifecycleBridge.prepareForBackground` + `MeeshyApp.scenePhase` guard | 5 tests RED→GREEN | `feat(ios/audio): keep playback on scene background` |
-| 7 | `MiniAudioPlayerBar` + intégration `AdaptiveRootView` | 7 tests RED→GREEN + smoke navigation | `feat(ios/audio): floating mini-player` |
-| 8 | `ConversationAudioCoordinator+NowPlaying` extension + MPRemoteCommandCenter | smoke manuel lock-screen | `feat(ios/audio): MPNowPlaying + RemoteCommandCenter` |
-| 9 | QA checklist complète + polish | — | `chore(ios/audio): QA pass` |
+| 0 | Setup branche + baseline tests verts + **prototype `MockAudioPlaybackEngine` + `assign(to: &$isPlaying)`** dans un test isolé pour valider P-v2-4 du review | 1 test prototype | `chore(ios/audio): mock engine prototype` |
+| 1 | `AudioQueueBuilder` + `QueuedAudio` + `ActiveAudioContext` (types purs) | 10 tests RED→GREEN | `feat(ios/audio): pure queue logic + types` |
+| 1.5 | **Extraction 4 helpers app-side** (`AudioWaveformBars`, `AudioPlayButton`, `AudioTimeRow`, `AudioSpeedChip`) consommés par Active+Inactive bubbles, évite duplication visuelle vs `AudioPlayerView` SDK | snapshot smoke | `refactor(ios/audio): shared bubble render helpers` |
+| 2 | `AudioPlaybackEngineDriving` protocol + retroactive conformance `AudioPlaybackManager` | build only | `feat(ios/audio): engine driving protocol` |
+| 3 | `ConversationAudioCoordinator` (sans NowPlaying, sans mini-player) + hook `$isAuthenticated` + hooks sockets (`conversationDeletedPublisher`, `messageDeletedPublisher`) | 12 tests RED→GREEN | `feat(ios/audio): shared coordinator with queue` |
+| 4 | `ConversationViewModel.playAudio` + `listenedAttachmentIds` + computed `currentConversation*` lus depuis `CacheCoordinator.shared.conversations` + hook realtime `message:new` | tests VM ajoutés | `feat(ios/audio): VM drives coordinator` |
+| 5 | `AudioBubbleRouter` + `ActiveAudioBubble` + `InactiveAudioBubble` (sub-views Equatable, ZERO ObservedObject, contrat Bubble respecté) | 4 router tests + smoke manuel scroll | `feat(ios/audio): bubble router split for zero re-render` |
+| 6 | Modif `MediaLifecycleBridge.prepareForBackground` + `resumeFromBackground` + `MeeshyApp.scenePhase` guard + init coordinator dans `.task` root view | 5 tests RED→GREEN | `feat(ios/audio): keep playback on scene background` |
+| 7 | `MiniAudioPlayerBar` + intégration `AdaptiveRootView` + auto-fade 5s logic | 7 tests RED→GREEN + smoke navigation | `feat(ios/audio): floating mini-player` |
+| 8 | `ConversationAudioCoordinator+NowPlaying` extension + MPRemoteCommandCenter + throttle 0.25s | smoke manuel lock-screen + AirPods | `feat(ios/audio): MPNowPlaying + RemoteCommandCenter` |
+| 9 | QA checklist complète + polish + `apps/ios/decisions.md` entry (retroactive conformance + Bubble exception) | — | `chore(ios/audio): QA pass + decisions log` |
 
 **Ordre revisé** : Phase 7 (mini-player) AVANT Phase 8 (NowPlaying) pour permettre le QA visuel intra-app de la queue avant d'ajouter les contrôles système.
+
+**Estimation** : 5.5 à 7 jours pour un dev iOS confirmé, hors review et hors hotfix. Phase 8 est la plus longue (~1.5j à cause du QA manuel lock-screen / control center / AirPods / CarPlay simulé).
 
 ---
 
@@ -778,7 +848,13 @@ Tests manuels à exécuter avant de marquer fini :
 | 11 | Mini-player Phase 7 AVANT NowPlaying Phase 8 | QA intra-app de la queue avant d'ajouter les contrôles système |
 | 12 | Auto-fade 5s après queue vide ET pause | Évite mini-player vissé en bas d'écran. Pause = reste visible ; vide = fade |
 | 13 | Pas de tests automatisés sur `MPNowPlayingInfoCenter` | Singleton système non mockable. QA manuelle dans la checklist |
-| 14 | Logout / conv supprimée / message supprimé → `close()` | Comportement prévisible. L'utilisateur peut relancer manuellement |
+| 14 | Logout / conv supprimée / message supprimé actif → `close()` | Comportement prévisible. L'utilisateur peut relancer manuellement |
+| 15 | Logout via observation `AuthManager.$isAuthenticated`, pas un publisher dédié | `didLogoutPublisher` n'existe pas (vérifié post-review). `$isAuthenticated` est déjà `@Published`, donc on s'y abonne directement. Évite une modif SDK |
+| 16 | Sub-views bulles Equatable avec `let` primitifs, observation au parent `AudioBubbleRouter` | Respect strict du contrat Bubble (`apps/ios/CLAUDE.md`). Aucun `@ObservedObject` sur singleton dans Active/Inactive |
+| 17 | Phase 1.5 d'extraction de helpers visuels app-side | Évite la divergence silencieuse avec `AudioPlayerView` SDK lors de futures évolutions |
+| 18 | Source canonique conv metadata = `CacheCoordinator.shared.conversations` | Le VM ne stocke pas l'objet `MeeshyConversation` complet, juste l'id. Cache GRDB est le SoT |
+| 19 | Init forcée du coordinator dans `.task` root view, pas `MeeshyApp.init()` | Compatible Swift 6 (`@MainActor` singleton non accessible depuis init synchrone) |
+| 20 | Handlers lifecycle (conv/message delete) sur publishers `SocialSocketManager` / `MessageSocketManager` | Aucun handler centralisé existant à ce jour — on étend les publishers existants. Le coordinator s'y abonne globalement |
 
 ---
 
@@ -810,4 +886,12 @@ Tests manuels à exécuter avant de marquer fini :
 
 **SDK touché** : ZÉRO fichier modifié. Le SDK reste 100% intact. Le test bundle SDK cassé n'est pas un blocage.
 
-**Total** : 5 fichiers app modifiés, 13 nouveaux (dont 6 tests + 1 mock).
+**Total** : 5 fichiers app modifiés, 13 nouveaux (dont 6 tests + 1 mock + 4 helpers de rendu).
+
+**Vérifications complémentaires** (à effectuer en Phase 0 avant le premier code) :
+
+1. `AuthManager.$isAuthenticated` est-il bien `@Published` et observable depuis l'app ? Si non, modif SDK minimale ciblée à acter avant Phase 3
+2. `SocialSocketManager` publie-t-il déjà `conversation:deleted` via un Combine publisher accessible ? Si non, ajout de `conversationDeletedPublisher: AnyPublisher<String, Never>` à acter avant Phase 3
+3. `MessageSocketManager.messageDeletedPublisher` existe-t-il ? Vérifier que `message:deleted` (vu L1845 par le reviewer) est exposé via Combine
+4. `CacheCoordinator.shared.conversations.get(id:)` est-elle l'API correcte ? Lire la signature avant Phase 4
+5. Prototyper `assign(to: &$isPlaying)` avec un `MockAudioPlaybackEngine` conformant en Phase 0 pour valider l'approche
